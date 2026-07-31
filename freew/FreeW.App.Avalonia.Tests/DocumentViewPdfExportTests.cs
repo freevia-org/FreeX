@@ -404,6 +404,55 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_PreservesFloatingShapePatternForegroundBackgroundOutlineAndText() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 240;
+            document.Page.HeightPt = 180;
+
+            var shape = Shape.TextBoxWith("Pattern text", 84, 42, "#FFFFFF");
+            shape.ExtendedFill = ShapeFill.Patterned("pct50", "#C00000", "#FFFFFF");
+            shape.OutlineColorHex = "#000000";
+            shape.OutlineWidthPt = 1.5;
+            shape.OutlineDash = "dash";
+            shape.RotationAngle = 21;
+            shape.Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 48,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 42,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromShape(shape));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(800, 1200));
+
+            var group = view.BuildPdfContent().Pages
+                .SelectMany(page => page.Ops)
+                .OfType<PdfRotationGroup>()
+                .Single();
+            var fill = group.Ops.OfType<PdfFillRectPattern>().Single();
+            var outline = group.Ops.OfType<PdfStrokeRect>().Single();
+
+            fill.Pattern.Kind.Should().Be(PdfPatternKind.DownDiagonal);
+            fill.Pattern.Foreground.Should().Be(new PdfColor(0xC0, 0x00, 0x00));
+            fill.Pattern.Background.Should().Be(new PdfColor(0xFF, 0xFF, 0xFF));
+            fill.Pattern.TileWidth.Should().BeApproximately(8 / (96.0 / 72.0), 0.001);
+            outline.Dash!.Segments.Should().Equal(4, 3);
+            string.Concat(group.Ops.OfType<PdfText>().Select(op => op.Text)).Should().Contain("Pattern text");
+
+            var pdfBytes = SkiaPdfWriter.WriteToBytes(view.BuildPdfContent());
+            pdfBytes.Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_RendersFloatingImagesAtTheirPageSpacePixels() =>
         Session.Dispatch(() =>
         {

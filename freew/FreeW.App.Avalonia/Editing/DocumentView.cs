@@ -3871,6 +3871,7 @@ public sealed class DocumentView : Control
         double height)
     {
         var fillColor = ResolvePdfShapeFillFallback(plan.Fill);
+        var pattern = BuildPdfShapePattern(plan.Fill);
         PdfColor? outlineColor = plan.Outline.IsVisible ? ParseColor(plan.Outline.ColorHex) : null;
         var strokeWidth = Math.Max(0.1, plan.Outline.WidthDip / PxPerPoint);
         var dash = BuildPdfShapeDash(plan.Outline.DashStyle);
@@ -3887,6 +3888,10 @@ public sealed class DocumentView : Control
                 else if (fillColor is { } ellipseFill)
                 {
                     ops.Add(new PdfFillEllipse(x, y, width, height, ellipseFill));
+                }
+                else if (pattern is { } ellipsePattern)
+                {
+                    ops.Add(new PdfFillEllipsePattern(x, y, width, height, ellipsePattern));
                 }
 
                 if (outlineColor is { } ellipseOutline)
@@ -3912,6 +3917,10 @@ public sealed class DocumentView : Control
                         strokeWidth,
                         dash));
                 }
+                else if (pattern is { } pathPattern)
+                {
+                    ops.Add(new PdfPathPattern(contours, pathPattern, outlineColor, strokeWidth, dash));
+                }
                 else if (fillColor is not null || outlineColor is not null)
                 {
                     ops.Add(new PdfPath(contours, fillColor, outlineColor, strokeWidth, dash));
@@ -3929,6 +3938,10 @@ public sealed class DocumentView : Control
                 else if (fillColor is { } rectangleFill)
                 {
                     ops.Add(new PdfFillRect(x, y, width, height, rectangleFill));
+                }
+                else if (pattern is { } rectanglePattern)
+                {
+                    ops.Add(new PdfFillRectPattern(x, y, width, height, rectanglePattern));
                 }
 
                 if (outlineColor is { } rectangleOutline)
@@ -4032,10 +4045,22 @@ public sealed class DocumentView : Control
         fill.Kind switch
         {
             DrawingObjectFillKind.Solid => ParseColor(fill.ColorHex),
-            DrawingObjectFillKind.Pattern => ParseColor(fill.PatternBackgroundColorHex ?? fill.PatternForegroundColorHex),
+            DrawingObjectFillKind.Pattern => null,
             DrawingObjectFillKind.Gradient => ParseColor(fill.GradientStops.FirstOrDefault()?.ColorHex),
             _ => null,
         };
+
+    private static PdfPatternFill? BuildPdfShapePattern(DrawingObjectFillPlan fill)
+    {
+        if (fill.Kind != DrawingObjectFillKind.Pattern)
+            return null;
+
+        return PdfPatternFill.FromPreset(
+            fill.PatternPreset,
+            ParseColor(fill.PatternForegroundColorHex ?? "#4472C4"),
+            ParseColor(fill.PatternBackgroundColorHex ?? "#FFFFFF"),
+            unitScale: 1 / PxPerPoint);
+    }
 
     private static PdfDashPattern? BuildPdfShapeDash(string? dashStyle) =>
         dashStyle?.Trim().ToLowerInvariant() switch

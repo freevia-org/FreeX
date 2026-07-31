@@ -40,6 +40,74 @@ public sealed record PdfLinearGradient(
     double EndY,
     IReadOnlyList<PdfGradientStop> Stops);
 
+/// <summary>Host-neutral visual families used by DrawingML preset pattern fills.</summary>
+public enum PdfPatternKind
+{
+    Horizontal,
+    Vertical,
+    DownDiagonal,
+    UpDiagonal,
+    Cross,
+    Dot,
+    Brick,
+    DiagonalCross,
+}
+
+/// <summary>
+/// A tiled, two-colour pattern fill. Preset family bucketing intentionally follows the WPF live
+/// renderer; <paramref name="UnitScale"/> converts its 8x8 (or 12x8 brick) DIP tile into the
+/// coordinate space used by the caller, normally PDF points.
+/// </summary>
+public sealed record PdfPatternFill(
+    PdfPatternKind Kind,
+    PdfColor Foreground,
+    PdfColor Background,
+    double UnitScale = 1)
+{
+    public double TileWidth => (Kind == PdfPatternKind.Brick ? 12 : 8) * UnitScale;
+    public double TileHeight => 8 * UnitScale;
+    public double StrokeWidth => (Kind == PdfPatternKind.Brick ? 0.5 : 1) * UnitScale;
+
+    public static PdfPatternFill FromPreset(
+        string? preset,
+        PdfColor foreground,
+        PdfColor background,
+        double unitScale = 1)
+    {
+        if (!double.IsFinite(unitScale) || unitScale <= 0)
+            unitScale = 1;
+
+        var kind = preset switch
+        {
+            "horz" or "ltHorz" or "medGray" or "dkHorz" or "pct5" or "pct10" or "pct20"
+                => PdfPatternKind.Horizontal,
+            "vert" or "ltVert" or "dkVert" or "pct25" or "pct30"
+                => PdfPatternKind.Vertical,
+            "diagStripe" or "ltDnDiag" or "dkDnDiag" or "dnDiag" or "pct50"
+                => PdfPatternKind.DownDiagonal,
+            "ltUpDiag" or "dkUpDiag" or "upDiag" or "pct60" or "pct70"
+                => PdfPatternKind.UpDiagonal,
+            "cross" or "ltGrid" or "dkGrid" or "pct75" or "pct80"
+                => PdfPatternKind.Cross,
+            "dotGrid" or "dotDmnd" or "smGrid" or "pct90"
+                => PdfPatternKind.Dot,
+            "horzBrick" or "divot" or "weave"
+                => PdfPatternKind.Brick,
+            _ => PdfPatternKind.DiagonalCross,
+        };
+
+        return new PdfPatternFill(kind, foreground, background, unitScale);
+    }
+}
+
+/// <summary>Fills an axis-aligned rectangle with a shared tiled pattern.</summary>
+public sealed record PdfFillRectPattern(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    PdfPatternFill Pattern) : PdfDrawOp;
+
 /// <summary>
 /// Fills an axis-aligned rectangle with a linear gradient. <paramref name="FallbackColor"/> is
 /// used by callers/backends that cannot render the gradient.
@@ -77,6 +145,14 @@ public sealed record PdfStrokeRectLinearGradient(
 
 /// <summary>Fills an axis-aligned ellipse inside the supplied rectangular bounds.</summary>
 public sealed record PdfFillEllipse(double X, double Y, double Width, double Height, PdfColor Color) : PdfDrawOp;
+
+/// <summary>Fills an axis-aligned ellipse with a shared tiled pattern.</summary>
+public sealed record PdfFillEllipsePattern(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    PdfPatternFill Pattern) : PdfDrawOp;
 
 /// <summary>Fills an axis-aligned ellipse inside the supplied rectangular bounds with a linear gradient.</summary>
 public sealed record PdfFillEllipseLinearGradient(
@@ -197,6 +273,14 @@ public sealed record PdfPathContour(
 public sealed record PdfPath(
     IReadOnlyList<PdfPathContour> Contours,
     PdfColor? FillColor,
+    PdfColor? StrokeColor,
+    double StrokeWidth,
+    PdfDashPattern? StrokeDash = null) : PdfDrawOp;
+
+/// <summary>Draws arbitrary contours with a shared tiled pattern and optional solid outline.</summary>
+public sealed record PdfPathPattern(
+    IReadOnlyList<PdfPathContour> Contours,
+    PdfPatternFill Pattern,
     PdfColor? StrokeColor,
     double StrokeWidth,
     PdfDashPattern? StrokeDash = null) : PdfDrawOp;

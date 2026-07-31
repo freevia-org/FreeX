@@ -190,6 +190,17 @@ public static class SkiaPdfWriter
                 break;
             }
 
+            case PdfFillRectPattern fill:
+            {
+                var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fill.Y, fill.Height);
+                DrawPattern(canvas, fillPaint, fill.Pattern, () => canvas.DrawRect(new SKRect(
+                    (float)fill.X,
+                    top,
+                    (float)(fill.X + fill.Width),
+                    top + (float)fill.Height), fillPaint));
+                break;
+            }
+
             case PdfStrokeRect stroke:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, stroke.Y, stroke.Height);
@@ -237,6 +248,17 @@ public static class SkiaPdfWriter
                     (float)(fillEllipse.X + fillEllipse.Width),
                     top + (float)fillEllipse.Height), fillPaint);
                 fillPaint.Shader = null;
+                break;
+            }
+
+            case PdfFillEllipsePattern fillEllipse:
+            {
+                var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fillEllipse.Y, fillEllipse.Height);
+                DrawPattern(canvas, fillPaint, fillEllipse.Pattern, () => canvas.DrawOval(new SKRect(
+                    (float)fillEllipse.X,
+                    top,
+                    (float)(fillEllipse.X + fillEllipse.Width),
+                    top + (float)fillEllipse.Height), fillPaint));
                 break;
             }
 
@@ -337,6 +359,23 @@ public static class SkiaPdfWriter
                     strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
                     using var pathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
                     strokePaint.PathEffect = pathStrokeDash;
+                    canvas.DrawPath(skPath, strokePaint);
+                    strokePaint.PathEffect = null;
+                }
+
+                break;
+            }
+
+            case PdfPathPattern pdfPath:
+            {
+                using var skPath = ToSkPath(pdfPath.Contours, pageHeight);
+                DrawPattern(canvas, fillPaint, pdfPath.Pattern, () => canvas.DrawPath(skPath, fillPaint));
+                if (pdfPath.StrokeColor is { } stroke)
+                {
+                    strokePaint.Color = ToSkColor(stroke);
+                    strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
+                    using var patternPathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
+                    strokePaint.PathEffect = patternPathStrokeDash;
                     canvas.DrawPath(skPath, strokePaint);
                     strokePaint.PathEffect = null;
                 }
@@ -547,6 +586,70 @@ public static class SkiaPdfWriter
             colors,
             positions,
             SKShaderTileMode.Clamp);
+    }
+
+    private static void DrawPattern(SKCanvas canvas, SKPaint paint, PdfPatternFill pattern, Action draw)
+    {
+        using var bitmap = CreatePatternBitmap(pattern);
+        using var shader = SKShader.CreateBitmap(bitmap, SKShaderTileMode.Repeat, SKShaderTileMode.Repeat);
+        paint.Shader = shader;
+        draw();
+        paint.Shader = null;
+    }
+
+    private static SKBitmap CreatePatternBitmap(PdfPatternFill pattern)
+    {
+        var width = Math.Max(1, (int)Math.Round(pattern.TileWidth));
+        var height = Math.Max(1, (int)Math.Round(pattern.TileHeight));
+        var scaleX = width / pattern.TileWidth;
+        var scaleY = height / pattern.TileHeight;
+        var unit = pattern.UnitScale * Math.Min(scaleX, scaleY);
+        var midX = width / 2f;
+        var midY = height / 2f;
+        var bitmap = new SKBitmap(width, height);
+        using (var canvas = new SKCanvas(bitmap))
+        using (var background = new SKPaint { Color = ToSkColor(pattern.Background), Style = SKPaintStyle.Fill, IsAntialias = true })
+        using (var foreground = new SKPaint { Color = ToSkColor(pattern.Foreground), Style = SKPaintStyle.Stroke, StrokeWidth = (float)(pattern.StrokeWidth * Math.Min(scaleX, scaleY)), IsAntialias = true })
+        {
+            canvas.DrawRect(new SKRect(0, 0, width, height), background);
+            switch (pattern.Kind)
+            {
+                case PdfPatternKind.Horizontal:
+                    canvas.DrawLine(0, midY, width, midY, foreground);
+                    break;
+                case PdfPatternKind.Vertical:
+                    canvas.DrawLine(midX, 0, midX, height, foreground);
+                    break;
+                case PdfPatternKind.DownDiagonal:
+                    canvas.DrawLine(0, 0, width, height, foreground);
+                    break;
+                case PdfPatternKind.UpDiagonal:
+                    canvas.DrawLine(0, height, width, 0, foreground);
+                    break;
+                case PdfPatternKind.Cross:
+                    canvas.DrawLine(0, midY, width, midY, foreground);
+                    canvas.DrawLine(midX, 0, midX, height, foreground);
+                    break;
+                case PdfPatternKind.Dot:
+                    foreground.Style = SKPaintStyle.Fill;
+                    canvas.DrawCircle(midX, midY, (float)(unit / 2), foreground);
+                    break;
+                case PdfPatternKind.Brick:
+                    canvas.DrawLine(0, 0, width, 0, foreground);
+                    canvas.DrawLine(6 * (float)unit, 4 * (float)unit, width, 4 * (float)unit, foreground);
+                    canvas.DrawLine(0, 4 * (float)unit, 3 * (float)unit, 4 * (float)unit, foreground);
+                    canvas.DrawLine(6 * (float)unit, 0, 6 * (float)unit, 4 * (float)unit, foreground);
+                    canvas.DrawLine(0, 4 * (float)unit, 0, height, foreground);
+                    canvas.DrawLine(width, 4 * (float)unit, width, height, foreground);
+                    break;
+                case PdfPatternKind.DiagonalCross:
+                    canvas.DrawLine(0, 0, width, height, foreground);
+                    canvas.DrawLine(width, 0, 0, height, foreground);
+                    break;
+            }
+        }
+
+        return bitmap;
     }
 
     private static SKPathEffect? CreateDashEffect(PdfDashPattern? dash)

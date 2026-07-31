@@ -123,6 +123,75 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsReusedTiledPatternForShapeFillsAndPathOutlines()
+    {
+        var pattern = PdfPatternFill.FromPreset(
+            "pct10",
+            new PdfColor(0xC0, 0x00, 0x00),
+            new PdfColor(0xFF, 0xFF, 0xFF));
+        var path = new PdfPathPattern(
+            [new PdfPathContour(
+                new PdfPathPoint(70, 10),
+                [
+                    PdfPathSegment.LineTo(new PdfPathPoint(90, 10)),
+                    PdfPathSegment.LineTo(new PdfPathPoint(90, 30)),
+                ],
+                Closed: true)],
+            pattern,
+            new PdfColor(0x00, 0x00, 0x00),
+            1.5,
+            new PdfDashPattern([2, 1]));
+        var page = new PdfContentPage(120, 80, new PdfDrawOp[]
+        {
+            new PdfFillRectPattern(10, 20, 40, 30, pattern),
+            new PdfFillEllipsePattern(55, 20, 30, 20, pattern),
+            path,
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument([page])))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("/PatternType 1");
+        pdf.Should().Contain("/Pattern cs\n/P1 scn");
+        pdf.Should().Contain("[2 1] 0 d");
+        pdf.Split("/PatternType 1", StringSplitOptions.None).Should().HaveCount(2, "the shared tile must be emitted once and reused");
+        pdf.Should().Contain("0.753 0 0 RG");
+        pdf.Should().Contain("1 1 1 rg");
+    }
+
+    [Theory]
+    [InlineData("pct10", PdfPatternKind.Horizontal)]
+    [InlineData("pct50", PdfPatternKind.DownDiagonal)]
+    [InlineData("pct90", PdfPatternKind.Dot)]
+    [InlineData("horzBrick", PdfPatternKind.Brick)]
+    [InlineData("diagCross", PdfPatternKind.DiagonalCross)]
+    public void PatternPresetMapping_FollowsWpfVisualFamilies(string preset, PdfPatternKind expected)
+    {
+        PdfPatternFill.FromPreset(preset, PdfColor.Black, new PdfColor(0xFF, 0xFF, 0xFF)).Kind.Should().Be(expected);
+    }
+
+    [Fact]
+    public void Write_AppliesCenteredRotationAndFlipToPatternFill()
+    {
+        var pattern = PdfPatternFill.FromPreset("pct50", PdfColor.Black, new PdfColor(0xFF, 0xFF, 0xFF));
+        var page = new PdfContentPage(160, 100, new PdfDrawOp[]
+        {
+            new PdfRotationGroup(
+                80,
+                50,
+                90,
+                [new PdfFillRectPattern(60, 40, 40, 20, pattern)],
+                FlipH: true),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument([page])))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("0 1 1 0 30 -30 cm");
+        pdf.Should().Contain("/Pattern cs\n/P1 scn");
+    }
+
+    [Fact]
     public void Write_PdfLineRoundTripsCorrectCoordinates()
     {
         var page = new PdfContentPage(612, 792, new PdfDrawOp[]

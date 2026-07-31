@@ -165,6 +165,36 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void RenderPagesToPng_PaintsPatternForegroundOverBackgroundAndKeepsOutline()
+    {
+        var pattern = PdfPatternFill.FromPreset(
+            "pct10",
+            new PdfColor(0xC0, 0x00, 0x00),
+            new PdfColor(0xFF, 0xFF, 0xFF));
+        var page = new PdfContentPage(120, 80, new PdfDrawOp[]
+        {
+            new PdfFillRectPattern(10, 20, 80, 40, pattern),
+            new PdfStrokeRect(10, 20, 80, 40, PdfColor.Black, 2, new PdfDashPattern([3, 2])),
+        });
+
+        using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(new PdfContentDocument([page])).Single());
+        var redPixels = 0;
+        var whitePixels = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        for (var x = 0; x < bitmap.Width; x++)
+        {
+            var pixel = bitmap.GetPixel(x, y);
+            if (pixel.Red > 120 && pixel.Green < 100 && pixel.Blue < 100)
+                redPixels++;
+            if (pixel.Red > 245 && pixel.Green > 245 && pixel.Blue > 245)
+                whitePixels++;
+        }
+
+        redPixels.Should().BeGreaterThan(20);
+        whitePixels.Should().BeGreaterThan(20);
+    }
+
+    [Fact]
     public void ApplyColorEffects_TransformsDecodedImagePixels()
     {
         using var bitmap = new SKBitmap(1, 1);
