@@ -58,7 +58,11 @@ internal static class PresentationModelCloneHelper
 
     internal static TableRow CloneTableRow(TableRow source)
     {
-        var copy = new TableRow { HeightEmu = source.HeightEmu };
+        var copy = new TableRow
+        {
+            HeightEmu = source.HeightEmu,
+            HeightRule = source.HeightRule,
+        };
         foreach (var cell in source.Cells)
             copy.Cells.Add(CloneTableCell(cell));
 

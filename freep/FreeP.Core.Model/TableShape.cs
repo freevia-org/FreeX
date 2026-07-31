@@ -10,6 +10,16 @@ public enum TableCellAnchor
     Bottom = 2
 }
 
+/// <summary>
+/// How an externally-authored row height is constrained. A null value means the
+/// existing table-row behavior applies; rich RTF uses the two explicit values.
+/// </summary>
+public enum TableRowHeightRule
+{
+    AtLeast = 0,
+    Exact = 1,
+}
+
 /// <summary>One of the four editable sides of a table cell border.</summary>
 public enum TableCellBorderSide
 {
@@ -89,6 +99,13 @@ public sealed class TableRow
 {
     /// <summary>Row height in EMU.</summary>
     public long HeightEmu { get; set; }
+
+    /// <summary>
+    /// Optional height constraint retained from a rich-text source. RTF's positive
+    /// <c>\trrh</c> value maps to <see cref="TableRowHeightRule.AtLeast"/> and
+    /// its negative value maps to <see cref="TableRowHeightRule.Exact"/>.
+    /// </summary>
+    public TableRowHeightRule? HeightRule { get; set; }
 
     /// <summary>Cells in this row, one per column (even merged cells occupy a slot).</summary>
     public List<TableCell> Cells { get; } = new();

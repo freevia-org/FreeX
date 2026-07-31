@@ -984,7 +984,6 @@ public static class ExternalRichTextClipboardPlanner
                 case "clvmrg": _pendingCellStyle.VerticalMergeContinuation = true; break;
                 case "trleft":
                 case "trgaph":
-                case "trrh":
                 case "trqc":
                 case "trql":
                 case "trqr":
@@ -995,6 +994,18 @@ public static class ExternalRichTextClipboardPlanner
                 case "cltxlrtb":
                 case "cltxtbrl":
                 case "clshdrawnil":
+                    break;
+                case "trrh":
+                    if (CurrentTableCapture() is { CurrentRow: { } row }
+                        && parameter is { } rowHeightTwips
+                        && rowHeightTwips != 0)
+                    {
+                        long heightTwips = Math.Abs((long)rowHeightTwips);
+                        row.HeightEmu = Math.Clamp(heightTwips * 635L, 0L, 63_500_000_000L);
+                        row.HeightRule = rowHeightTwips > 0
+                            ? TableRowHeightRule.AtLeast
+                            : TableRowHeightRule.Exact;
+                    }
                     break;
             }
         }

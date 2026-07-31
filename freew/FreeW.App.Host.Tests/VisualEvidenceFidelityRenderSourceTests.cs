@@ -180,6 +180,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("[\"reviewMarkup\"] = \"false\"");
         source.Should().Contain("[\"wpfRenderTargetBitmapReason\"] = wpfRenderTargetFailure");
         source.Should().Contain("const double FootnoteTrailingReserveDip = 15.0;");
+        source.Should().Contain("const double BackstageBodyTopReserveDip = 1.5;");
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
         source.Should().Contain("return RenderNoteRegionPlan(notePlan, pageWDip, marginLeft, marginRight);");
         source.Should().Contain("static RenderTargetBitmap? RenderNoteRegionPlan(");

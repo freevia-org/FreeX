@@ -522,9 +522,9 @@ public sealed class ExternalRichTextClipboardTests
     {
         const string rtf =
             @"{\rtf1\ansi
-\trowd\itap1\cellx2000\cellx4000
+\trowd\itap1\trrh-480\cellx2000\cellx4000
 \intbl Outer A\cell
-\trowd\itap2\nesttableprops\cellx1000\cellx2000
+\trowd\itap2\nesttableprops\trrh720\cellx1000\cellx2000
 \intbl Inner B\nestcell
 \intbl Inner C\nestcell
 \nestrow
@@ -541,6 +541,8 @@ public sealed class ExternalRichTextClipboardTests
         var outerRun = payload.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
             .Single(run => run.InlineTable is not null);
         outerRun.InlineTable!.Table.Rows.Should().HaveCount(1);
+        outerRun.InlineTable.Table.Rows[0].HeightEmu.Should().Be(304_800);
+        outerRun.InlineTable.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
         outerRun.InlineTable.Table.Rows[0].Cells.Should().HaveCount(2);
         outerRun.InlineTable.Table.Rows[0].Cells[0].TextBody!
             .Paragraphs[0].Runs[0].Text.Should().Be("Outer A");
@@ -548,6 +550,8 @@ public sealed class ExternalRichTextClipboardTests
             .Paragraphs.SelectMany(paragraph => paragraph.Runs)
             .Single(run => run.InlineTable is not null);
         innerRun.InlineTable!.Table.Rows.Should().HaveCount(1);
+        innerRun.InlineTable.Table.Rows[0].HeightEmu.Should().Be(457_200);
+        innerRun.InlineTable.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.AtLeast);
         innerRun.InlineTable.Table.Rows[0].Cells.Select(cell =>
                 cell.TextBody!.Paragraphs[0].Runs[0].Text)
             .Should().Equal("Inner B", "Inner C");
@@ -564,6 +568,9 @@ public sealed class ExternalRichTextClipboardTests
             .Single(run => run.InlineTable is not null)
             .InlineTable!.Table.Rows[0].Cells[1].TextBody!
             .Paragraphs[0].Runs[0].Text.Should().Be("Inner C");
+        reopened.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
     }
 
     [Fact]
