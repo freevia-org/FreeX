@@ -48,6 +48,24 @@ public sealed class SChartsInteractChartDragRefreshOnRejectionTests
         refreshCallCount.Should().Be(2, "both the success path and the rejection path must call RefreshShell");
     }
 
+    [Fact]
+    public void ChartPointerCaptureLoss_RefreshesShellToDiscardLivePreview()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DrawingObjectInteraction.cs"));
+
+        var wireStart = source.IndexOf("private void WireChartDragMoveRelease(", System.StringComparison.Ordinal);
+        var start = source.IndexOf("container.PointerCaptureLost += (_, _) =>", wireStart, System.StringComparison.Ordinal);
+        start.Should().BeGreaterThan(-1, "chart drag cancellation should still be wired through PointerCaptureLost");
+        var end = source.IndexOf("};", start, System.StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        var body = source[start..(end + 2)];
+
+        body.Should().Contain("_chartDragSession = null");
+        body.Should().Contain("container.Cursor = Cursor.Default");
+        body.Should().Contain("RefreshShell(string.Empty)",
+            "capture cancellation must rebuild the overlay from committed chart bounds");
+    }
+
     private static int CountOccurrences(string haystack, string needle)
     {
         var count = 0;

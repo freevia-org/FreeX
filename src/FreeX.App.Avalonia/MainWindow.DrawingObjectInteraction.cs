@@ -1145,7 +1145,14 @@ public sealed partial class MainWindow
         container.PointerCaptureLost += (_, _) =>
         {
             if (_chartDragSession is { } session && ReferenceEquals(session.Container, container))
+            {
                 _chartDragSession = null;
+                container.Cursor = Cursor.Default;
+                // Capture can be revoked without PointerReleased (window deactivation, an overlay
+                // rebuild, or platform cancellation). Discard the live preview just as the shared
+                // drawing-object path does from OnLostMouseCapture.
+                RefreshShell(string.Empty);
+            }
         };
     }
 
