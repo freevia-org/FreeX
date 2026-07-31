@@ -10167,7 +10167,27 @@ public sealed partial class MainWindow : Window
             previousReferenceStart = recoveredLength > 0 ? recoveredStart : null;
             previousReferenceLength = recoveredLength > 0 ? recoveredLength : null;
         }
-        if (!FormulaRangeEntryPlanner.TryApplyRangeSelection(
+
+        // Match WPF's formula-point behavior for a single PivotTable value cell. Excel's
+        // "Use GetPivotData functions for PivotTable references" option changes only this
+        // point-selection case; ordinary ranges and non-pivot cells remain plain references.
+        var getPivotDataPlan = range.Start == range.End && GenerateGetPivotData
+            ? GetPivotDataFormulaPlanner.Create(
+                _session.Workbook,
+                _session.Workbook.GetSheet(formulaCell.Value.Sheet)!,
+                _session.Workbook.GetSheet(_session.ActiveSheet.Id)!,
+                range.Start)
+            : null;
+        var applied = getPivotDataPlan is not null
+            ? FormulaRangeEntryPlanner.TryApplySelectionText(
+                text,
+                selectionStart,
+                selectionLength,
+                previousReferenceStart,
+                previousReferenceLength,
+                getPivotDataPlan.FunctionCall,
+                out var edit)
+            : FormulaRangeEntryPlanner.TryApplyRangeSelection(
                 text,
                 selectionStart,
                 selectionLength,
@@ -10176,9 +10196,10 @@ public sealed partial class MainWindow : Window
                 range,
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
-                out var edit,
+                out edit,
                 _session.ActiveSheet.Name,
-                _formulaSheetSpanEntryState))
+                _formulaSheetSpanEntryState);
+        if (!applied)
         {
             return false;
         }
@@ -29850,6 +29871,32 @@ public sealed partial class MainWindow : Window
             _cachedUseR1C1ReferenceStyle = value;
             _cachedUseR1C1ReferenceStyleStorePath = storePath;
             _cachedUseR1C1ReferenceStyleWriteTimeUtc = writeTimeUtc;
+            return value;
+        }
+    }
+
+    private static bool? _cachedGenerateGetPivotData;
+    private static DateTime _cachedGenerateGetPivotDataWriteTimeUtc;
+    private static string? _cachedGenerateGetPivotDataStorePath;
+
+    private static bool GenerateGetPivotData
+    {
+        get
+        {
+            var storePath = AppOptionsStore.StorePath;
+            var writeTimeUtc = File.Exists(storePath) ? File.GetLastWriteTimeUtc(storePath) : DateTime.MinValue;
+
+            if (_cachedGenerateGetPivotData is { } cached &&
+                _cachedGenerateGetPivotDataStorePath == storePath &&
+                _cachedGenerateGetPivotDataWriteTimeUtc == writeTimeUtc)
+            {
+                return cached;
+            }
+
+            var value = AppOptionsStore.Load().GenerateGetPivotData;
+            _cachedGenerateGetPivotData = value;
+            _cachedGenerateGetPivotDataStorePath = storePath;
+            _cachedGenerateGetPivotDataWriteTimeUtc = writeTimeUtc;
             return value;
         }
     }
