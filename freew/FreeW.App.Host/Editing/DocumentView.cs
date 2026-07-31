@@ -13133,7 +13133,7 @@ public sealed class DocumentView : RichTextBox
             FontSize = Math.Max(
                 1,
                 text.Kind == ChartSceneTextKind.AxisTitle && usesWordQuickLayoutColumnAxisTitles
-                    ? text.FontSize * 1.2
+                    ? text.FontSize * (text.RotationDegrees == 0 ? 1.2 : 1.52)
                     : text.FontSize),
             Foreground = new SolidColorBrush(ParseSceneColor(text.ColorHex)),
             TextTrimming = TextTrimming.CharacterEllipsis
@@ -13152,6 +13152,12 @@ public sealed class DocumentView : RichTextBox
             ChartSceneTextAnchor.Center or ChartSceneTextAnchor.CenterRight => text.Y - height / 2,
             _ => text.Y
         };
+        if (usesWordQuickLayoutColumnAxisTitles
+            && text.Kind == ChartSceneTextKind.AxisTitle
+            && text.RotationDegrees != 0)
+            // WPF rotates around the measured TextBlock center; Word's vertical chart-title
+            // footprint is wider and sits inside the plot reservation rather than outside it.
+            x += 17;
         Canvas.SetLeft(label, x);
         Canvas.SetTop(label, y);
         if (text.RotationDegrees != 0)

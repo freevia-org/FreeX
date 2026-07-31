@@ -151,8 +151,11 @@ public sealed class ChartRenderingTests
         var canvas = DocumentView.BuildChartSceneCanvas(scene);
         var labels = canvas.Children.OfType<TextBlock>().ToList();
 
-        Assert.Equal(24, Assert.Single(labels, text => text.Text == "Quarter").FontSize);
-        Assert.Equal(24, Assert.Single(labels, text => text.Text == "USD").FontSize);
+        var categoryTitle = Assert.Single(labels, text => text.Text == "Quarter");
+        var valueTitle = Assert.Single(labels, text => text.Text == "USD");
+        Assert.Equal(24, categoryTitle.FontSize);
+        Assert.Equal(30.4, valueTitle.FontSize, 3);
+        Assert.True(Canvas.GetLeft(valueTitle) > 0);
         Assert.Equal(24, Assert.Single(labels, text => text.Text == chart.Title).FontSize);
         Assert.All(labels.Where(text => text.Text == "Q1"), text => Assert.Equal(9, text.FontSize));
     }
