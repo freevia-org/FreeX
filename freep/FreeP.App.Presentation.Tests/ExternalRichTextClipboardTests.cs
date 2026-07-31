@@ -141,7 +141,7 @@ public sealed class ExternalRichTextClipboardTests
     {
         const string xaml = """
             <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-              <BlockUIContainer><Image Source="Images/first.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/first.png" Width="96" Height="48" /></BlockUIContainer>
               <BlockUIContainer><Image Source="Images/second.jpg" /></BlockUIContainer>
             </FlowDocument>
             """;
@@ -157,8 +157,12 @@ public sealed class ExternalRichTextClipboardTests
         payload!.GetImagePayloads().Should().HaveCount(2);
         payload.GetImagePayloads()[0].Bytes.Should().Equal(first);
         payload.GetImagePayloads()[0].ContentType.Should().Be("image/png");
+        payload.GetImagePayloads()[0].WidthEmu.Should().Be(914400);
+        payload.GetImagePayloads()[0].HeightEmu.Should().Be(457200);
         payload.GetImagePayloads()[1].Bytes.Should().Equal(second);
         payload.GetImagePayloads()[1].ContentType.Should().Be("image/jpeg");
+        payload.GetImagePayloads()[1].WidthEmu.Should().BeNull();
+        payload.GetImagePayloads()[1].HeightEmu.Should().BeNull();
         payload.ImageBytes.Should().Equal(first);
         payload.ImageContentType.Should().Be("image/png");
     }

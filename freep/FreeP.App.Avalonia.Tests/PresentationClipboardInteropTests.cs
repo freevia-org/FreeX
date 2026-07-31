@@ -674,7 +674,7 @@ Header\cell Value\cell\row}")),
                 XamlPackageBytes: CreateXamlPackage(
                     """
                     <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-                      <BlockUIContainer><Image Source="Images/pasted.png" /></BlockUIContainer>
+                      <BlockUIContainer><Image Source="Images/pasted.png" Width="96" Height="48" /></BlockUIContainer>
                     </FlowDocument>
                     """,
                     ("Images/pasted.png", imageBytes))),
@@ -689,6 +689,8 @@ Header\cell Value\cell\row}")),
         picture.Kind.Should().Be(SlideShapeKind.Picture);
         picture.Picture!.ContentType.Should().Be("image/png");
         picture.Picture.Bytes.Should().Equal(imageBytes);
+        picture.ExtentCxEmu.Should().Be(914400);
+        picture.ExtentCyEmu.Should().Be(457200);
     }
 
     [Fact]
