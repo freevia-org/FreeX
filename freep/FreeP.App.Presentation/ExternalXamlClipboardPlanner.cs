@@ -331,7 +331,12 @@ public static class ExternalXamlClipboardPlanner
         {
             if (node is XText text)
             {
-                AddText(text.Value, paragraph, style, ref outputCharacters);
+                AddText(
+                    text.Value,
+                    paragraph,
+                    style,
+                    ref outputCharacters,
+                    preserveWhitespace: ShouldPreserveWhitespace(element));
                 continue;
             }
 
@@ -365,7 +370,12 @@ public static class ExternalXamlClipboardPlanner
         if (element.Name.LocalName == "Run"
             && element.Attribute("Text") is { } textAttribute)
         {
-            AddText(textAttribute.Value, paragraph, style, ref outputCharacters);
+            AddText(
+                textAttribute.Value,
+                paragraph,
+                style,
+                ref outputCharacters,
+                preserveWhitespace: true);
         }
 
         if (element.Name.LocalName == "LineBreak")
@@ -377,19 +387,43 @@ public static class ExternalXamlClipboardPlanner
         foreach (var node in element.Nodes())
         {
             if (node is XText text)
-                AddText(text.Value, paragraph, style, ref outputCharacters);
+                AddText(
+                    text.Value,
+                    paragraph,
+                    style,
+                    ref outputCharacters,
+                    preserveWhitespace: ShouldPreserveWhitespace(element));
             else if (node is XElement child && child.Name.LocalName != "Paragraph")
                 ReadInlineElement(child, paragraph, style, resources, ref outputCharacters);
         }
+    }
+
+    private static bool ShouldPreserveWhitespace(XElement element)
+    {
+        if (element.AncestorsAndSelf().Any(ancestor =>
+                string.Equals(
+                    (string?)ancestor.Attribute(XNamespace.Xml + "space"),
+                    "preserve",
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        // Pretty-printed Paragraph/FlowDocument whitespace is structural indentation.
+        // Inline leaf content, however, can legitimately contain authored spaces.
+        return !element.Elements().Any()
+            && element.Name.LocalName is "Run" or "Span" or "Bold" or "Italic" or "Underline" or "Hyperlink";
     }
 
     private static void AddText(
         string text,
         Paragraph paragraph,
         XamlTextStyle style,
-        ref int outputCharacters)
+        ref int outputCharacters,
+        bool preserveWhitespace = false)
     {
-        if (string.IsNullOrEmpty(text) || string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrEmpty(text)
+            || (!preserveWhitespace && string.IsNullOrWhiteSpace(text)))
             return;
 
         AddRun(text, paragraph, style, ref outputCharacters);
