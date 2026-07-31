@@ -62,10 +62,28 @@ internal static class XlsxExternalLinkReferencePreserver
                 ?? [],
             StringComparer.OrdinalIgnoreCase);
 
+        // R101-io-external-link-preserver-duplicate-rid: mirrors XlsxExternalLinkMetadataReader's
+        // seenRelationshipIds guard on the read side. Nothing in ECMA-376 (CT_ExternalReference,
+        // §18.13 externalReference) requires r:id to be unique across sibling <externalReference>
+        // elements -- only that it be present -- so a source workbook.xml can (and, observed in the
+        // wild, does) carry two <externalReference> elements with the IDENTICAL r:id, each its own
+        // ordinal '[n]' slot. The read side already treats the second occurrence of a repeated
+        // r:id as its own (blank-placeholder) slot rather than resolving it again. Before this fix,
+        // the save side disagreed: EnsureRelationshipForPackagePart resolves the same sourceRelId to
+        // the same targetRelId both times, and the old post-hoc ".Any(...targetRelId)" dedup below
+        // then silently skipped emitting the second <externalReference> element entirely --
+        // collapsing two ordinal slots into one and shifting every later '[n]' index down by one.
+        // Track which sourceRelIds have already been consumed and divert a repeat into the same
+        // placeholder-reservation branch used for a blank/unresolvable r:id, so it still reserves
+        // its own ordinal slot (unbacked by a Relationship, exactly like the read side's blank
+        // placeholder for the same case) instead of disappearing.
+        var seenSourceRelIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var sourceReference in sourceExternalReferences)
         {
             var sourceRelId = sourceReference.Attribute(relNs + "id")?.Value.Trim();
             if (string.IsNullOrWhiteSpace(sourceRelId) ||
+                !seenSourceRelIds.Add(sourceRelId) ||
                 !sourceWorkbookRels.TryGetValue(sourceRelId, out var externalLinkPath))
             {
                 // Excel's '[n]' formula syntax addresses external references by their fixed ordinal
@@ -102,14 +120,20 @@ internal static class XlsxExternalLinkReferencePreserver
                 externalLinkPath,
                 "http://schemas.openxmlformats.org/officeDocument/2006/relationships/externalLink");
             reservedRelIds.Add(targetRelId);
-            if (!targetExternalReferences
-                    .Elements(workbookNs + "externalReference")
-                    .Any(reference => string.Equals(reference.Attribute(relNs + "id")?.Value, targetRelId, StringComparison.OrdinalIgnoreCase)))
-            {
-                targetExternalReferences.Add(new XElement(
-                    workbookNs + "externalReference",
-                    new XAttribute(relNs + "id", targetRelId)));
-            }
+            // R101: always emit one <externalReference> per distinct source ordinal slot now that
+            // seenSourceRelIds above already diverts a repeated sourceRelId away from this branch --
+            // this branch only ever runs once per distinct sourceRelId. Two DIFFERENT sourceRelIds
+            // that both happen to resolve to the same externalLinkPath (so EnsureRelationshipForPackagePart
+            // reuses the same target Relationship/targetRelId for both, per its dedup-by-target-path
+            // contract) must still each get their own <externalReference> element -- the source had
+            // two real ordinal slots there, and the read side (XlsxExternalLinkMetadataReader) will
+            // resolve both independently since its own seenRelationshipIds guard keys on the
+            // (distinct) sourceRelId, not on the resolved target path. A prior post-hoc dedup here
+            // that skipped re-adding an element for an already-seen targetRelId collapsed that case
+            // into a single ordinal slot; removed.
+            targetExternalReferences.Add(new XElement(
+                workbookNs + "externalReference",
+                new XAttribute(relNs + "id", targetRelId)));
         }
 
         if (!targetExternalReferences.HasElements)

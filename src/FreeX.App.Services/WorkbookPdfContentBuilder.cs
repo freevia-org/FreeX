@@ -138,8 +138,8 @@ public static class WorkbookPdfContentBuilder
         // whenever a Header/Footer margin exceeded the Top/Bottom margin -- the header text (drawn
         // independently below at headerY = pageH - headerEdgePt - 8) visually overlapped the first
         // printed row.
-        var bodyTopEdgePt    = Math.Max(mT, headerEdgePt);
-        var bodyBottomEdgePt = Math.Max(mB, footerEdgePt);
+        var bodyTopEdgePt    = PageGeometryRules.ResolveBodyEdge(mT, headerEdgePt);
+        var bodyBottomEdgePt = PageGeometryRules.ResolveBodyEdge(mB, footerEdgePt);
 
         // Content rect: page minus margins. y-origin is bottom-left in PDF space.
         var contentLeft   = mL;
@@ -652,7 +652,7 @@ public static class WorkbookPdfContentBuilder
         var heightFitScale = totalRowHeightPt > 0 && totalRowHeightPt > availableHeight
             ? availableHeight / totalRowHeightPt
             : 1.0;
-        var uniformFitScale = Math.Min(widthFitScale, heightFitScale);
+        var uniformFitScale = PageGeometryRules.ResolveUniformScale(widthFitScale, heightFitScale);
 
         if (uniformFitScale < 1.0)
         {

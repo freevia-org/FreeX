@@ -23,23 +23,12 @@ public static partial class BuiltInFunctions
                 total += value;
                 continue;
             }
-            // R93-AREAS-union-value-model: a union reference argument (e.g. the
-            // "(A1:A2,B1:B2)" in SUM((A1:A2,B1:B2))) evaluates to a UnionValue rather than a
-            // RangeValue -- sum every cell across every area, same rules as a plain range
-            // (text/blanks ignored, an error cell short-circuits the whole SUM).
-            if (arg is UnionValue union)
-            {
-                foreach (var area in union.Areas)
-                {
-                    foreach (var cell in area.Flatten())
-                    {
-                        if (cell is ErrorValue cellErr) return cellErr;
-                        if (cell is BlankValue or TextValue) continue;
-                        total += ToNumber(cell);
-                    }
-                }
-                continue;
-            }
+            // NOTE (R101): a UnionValue argument can never reach this loop -- the aggregate-flatten
+            // choke point in FormulaEvaluator.Functions.cs (the `!isStructured && isAggregate &&
+            // value is UnionValue union` branch) unwraps every UnionValue into individual flattened
+            // scalars in expandedArgs before SUM's delegate is invoked, since SUM is in
+            // AggregateFunctions (isAggregate is always true for it). A dedicated UnionValue branch
+            // here was proven dead code and removed; see R101_DeadUnionBranchTests.
             if (arg is BlankValue or TextValue) continue; // SUM ignores text and blanks in ranges
             total += ToNumber(arg);
         }
@@ -104,21 +93,9 @@ public static partial class BuiltInFunctions
                 count++;
                 continue;
             }
-            // R93-AREAS-union-value-model: see the identical Sum() case above.
-            if (arg is UnionValue union)
-            {
-                foreach (var area in union.Areas)
-                {
-                    foreach (var cell in area.Flatten())
-                    {
-                        if (cell is ErrorValue cellErr) return cellErr;
-                        if (cell is BlankValue or TextValue) continue;
-                        total += ToNumber(cell);
-                        count++;
-                    }
-                }
-                continue;
-            }
+            // NOTE (R101): see the identical dead-UnionValue-branch removal note in Sum() above --
+            // AVERAGE is also in AggregateFunctions, so its UnionValue arguments are already
+            // flattened before this loop runs.
             if (arg is BlankValue or TextValue) continue;
             total += ToNumber(arg);
             count++;

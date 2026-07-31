@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -121,8 +122,8 @@ public static class SheetPdfPageSetupResolver
         double RowSize(uint row) => ResolveRowHeightPixels(sheet, row);
         double ColumnSize(uint col) => ResolveColumnWidthPixels(sheet, col);
 
-        var rowScale = ComputeScaleFraction(detail.BaseRowsPerPage, detail.Capacity.RowsPerPage);
-        var columnScale = ComputeScaleFraction(detail.BaseColumnsPerPage, detail.Capacity.ColumnsPerPage);
+        var rowScale = PagePaginationPlanner.ComputeScaleFraction(detail.BaseRowsPerPage, detail.Capacity.RowsPerPage);
+        var columnScale = PagePaginationPlanner.ComputeScaleFraction(detail.BaseColumnsPerPage, detail.Capacity.ColumnsPerPage);
 
         var rowTitleSize = ComputeRepeatRangeSize(sheet.PrintTitleRows, CellAddress.MaxRow, sheet.IsRowEffectivelyHidden, RowSize);
         var columnTitleSize = ComputeRepeatRangeSize(sheet.PrintTitleColumns, CellAddress.MaxCol, sheet.IsColEffectivelyHidden, ColumnSize);
@@ -189,8 +190,8 @@ public static class SheetPdfPageSetupResolver
         // capacity (rows/cols per page) disagreed with both Excel and the WPF print path -- and with
         // WorkbookPdfContentBuilder.BuildPageWithPageSetup's own actual content rect below, which
         // already only insets by the plain margins (mT/mB) and discards headerBandPt/footerBandPt.
-        var bodyTopPx    = Math.Max(marginTopPx, headerBandPx);
-        var bodyBottomPx = Math.Max(marginBottomPx, footerBandPx);
+        var bodyTopPx    = PageGeometryRules.ResolveBodyEdge(marginTopPx, headerBandPx);
+        var bodyBottomPx = PageGeometryRules.ResolveBodyEdge(marginBottomPx, footerBandPx);
 
         var printableWidthPx  = Math.Max(1.0, pageWidthPx  - marginLeftPx - marginRightPx);
         var printableHeightPx = Math.Max(1.0, pageHeightPx - bodyTopPx - bodyBottomPx);
@@ -245,8 +246,8 @@ public static class SheetPdfPageSetupResolver
                     var wide = scaleToFit.FitToPagesWide!.Value;
                     var bodyColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)wide));
                     baseColsPerPage = Math.Max(1u, bodyColsPerPage + titleCols);
-                    var uniformScale = ComputeScaleFraction(naturalColsPerPage, baseColsPerPage);
-                    baseRowsPerPage = ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
+                    var uniformScale = PagePaginationPlanner.ComputeScaleFraction(naturalColsPerPage, baseColsPerPage);
+                    baseRowsPerPage = PagePaginationPlanner.ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
                 }
             }
             else if (tallConstrained && !wideConstrained)
@@ -258,8 +259,8 @@ public static class SheetPdfPageSetupResolver
                     var tall = scaleToFit.FitToPagesTall!.Value;
                     var bodyRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)tall));
                     baseRowsPerPage = Math.Max(1u, bodyRowsPerPage + titleRows);
-                    var uniformScale = ComputeScaleFraction(naturalRowsPerPage, baseRowsPerPage);
-                    baseColsPerPage = ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
+                    var uniformScale = PagePaginationPlanner.ComputeScaleFraction(naturalRowsPerPage, baseRowsPerPage);
+                    baseColsPerPage = PagePaginationPlanner.ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
                 }
             }
             else if (wideConstrained && tallConstrained)
@@ -293,12 +294,12 @@ public static class SheetPdfPageSetupResolver
                     rowsIfTallOnly = Math.Max(1u, bodyRowsPerPage + titleRows);
                 }
 
-                var widthScale = ComputeScaleFraction(naturalColsPerPage, colsIfWideOnly);
-                var heightScale = ComputeScaleFraction(naturalRowsPerPage, rowsIfTallOnly);
-                var uniformScale = Math.Min(widthScale, heightScale);
+                var widthScale = PagePaginationPlanner.ComputeScaleFraction(naturalColsPerPage, colsIfWideOnly);
+                var heightScale = PagePaginationPlanner.ComputeScaleFraction(naturalRowsPerPage, rowsIfTallOnly);
+                var uniformScale = PageGeometryRules.ResolveUniformScale(widthScale, heightScale);
 
-                baseColsPerPage = ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
-                baseRowsPerPage = ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
+                baseColsPerPage = PagePaginationPlanner.ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
+                baseRowsPerPage = PagePaginationPlanner.ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
             }
             else
             {
@@ -507,28 +508,6 @@ public static class SheetPdfPageSetupResolver
     /// </summary>
     private static uint UnboundedAxisCapacity(uint start, uint end) =>
         end >= start ? (uint)Math.Min(uint.MaxValue - 1L, (long)(end - start) + 2L) : 1u;
-
-    /// <summary>
-    /// The "s" shrink fraction implied by going from <paramref name="naturalItemsPerPage"/> (the
-    /// natural, unscaled per-page item count) to <paramref name="constrainedItemsPerPage"/>:
-    /// <c>s = natural / constrained</c> -- mirrors <c>PagePaginationPlanner.ComputeScaleFraction</c>.
-    /// </summary>
-    private static double ComputeScaleFraction(uint naturalItemsPerPage, uint constrainedItemsPerPage) =>
-        constrainedItemsPerPage == 0 ? 1.0 : naturalItemsPerPage / (double)constrainedItemsPerPage;
-
-    /// <summary>
-    /// Applies the uniform shrink fraction derived from the constrained axis to the free axis's
-    /// natural capacity, clamped to the same [10, 400] scale-percent range Excel supports for an
-    /// explicit scale -- mirrors <c>PagePaginationPlanner.ApplyUniformScaleToFreeAxis</c>.
-    /// </summary>
-    private static uint ApplyUniformScaleToFreeAxis(uint naturalItemsPerPage, double scaleFraction)
-    {
-        if (scaleFraction <= 0 || !double.IsFinite(scaleFraction))
-            return naturalItemsPerPage;
-
-        var percent = Math.Clamp(scaleFraction * 100.0, 10.0, 400.0);
-        return Math.Max(1u, (uint)Math.Floor(naturalItemsPerPage * (100d / percent)));
-    }
 
     /// <summary>
     /// Counts the rows/columns in a repeat (print titles) range, clipped to <paramref name="maxItem"/>.
