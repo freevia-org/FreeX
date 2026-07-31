@@ -1,7 +1,11 @@
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Automation;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using FluentAssertions;
 using FreeX.App.Presentation.InteractionValidation;
 using FreeX.Core.Model;
@@ -181,6 +185,44 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
 
             window.RaiseInlineCellEditorKeyDownForTest(Press(Key.Escape));
             window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task FormulaBarCancelButton_AfterPointModeSelection_ClearsRangeStateAndReturnsFocusToWorksheet()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateWindowWithCleanSheet(out var sheet);
+            window.Show();
+            try
+            {
+                var formulaCell = new CellAddress(sheet.Id, 1, 1);
+                sheet.SetCell(formulaCell, new TextValue("original"));
+                window.Session.SelectCell(formulaCell);
+                window.FormulaBoxTextForTest = "original";
+                window.BeginFormulaEditForTest(formulaCell, "=");
+                window.RaiseFormulaBoxKeyDownForTest(Press(Key.F8, KeyModifiers.Shift));
+                window.RaiseFormulaBoxKeyDownForTest(Press(Key.Right));
+                window.RaiseFormulaBoxKeyDownForTest(Press(Key.Down));
+
+                window.FormulaBoxTextForTest.Should().Be("=B1,B2");
+                var cancelButton = window.GetVisualDescendants()
+                    .OfType<Button>()
+                    .Single(button => AutomationProperties.GetAutomationId(button) == "FormulaBarCancelButton");
+                cancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelButton));
+
+                window.FormulaBoxTextForTest.Should().Be("original");
+                window.Session.FormulaEditAddress.Should().BeNull();
+                window.FormulaPointModeForTest.Should().BeFalse();
+                window.FormulaRangeEntrySelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
+                window.Session.SelectedRange.Should().Be(new GridRange(formulaCell, formulaCell));
+                window.SheetGridHostForTest.IsFocused.Should().BeTrue();
+            }
+            finally
+            {
+                window.Close();
+            }
         }, CancellationToken.None);
     }
 

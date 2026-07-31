@@ -447,6 +447,13 @@ public sealed partial class MainWindowFormulaBarSyncTests
             PumpDispatcher();
         }
 
+        public void ClickFormulaBarCancelButton()
+        {
+            var button = (Button)_window.FindName("FormulaBarCancelButton");
+            button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            PumpDispatcher();
+        }
+
         public void EditActiveCellInFormulaBar()
         {
             _editActiveCellInFormulaBar.Invoke(_window, null);

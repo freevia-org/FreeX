@@ -100,4 +100,33 @@ public sealed partial class MainWindowFormulaBarSyncTests
             harness.SheetGridFocused.Should().BeTrue();
         });
     }
+
+    [Fact]
+    public void FormulaBarCancelButton_AfterPointModeSelection_ClearsRangeStateAndReturnsFocusToGrid()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            harness.SetCellText(1, 1, "original");
+            harness.SelectActiveCell(1, 1);
+            harness.SetFormulaEditCell(1, 1);
+            harness.FocusFormulaBar();
+            harness.SetFormulaBarText("=");
+            harness.SetFormulaBarCaretIndex(1);
+            harness.ToggleFormulaRangeEntrySelectionMode(ModifierKeys.Shift);
+            harness.PressFormulaBarKey(Key.Right).Should().BeTrue();
+            harness.PressFormulaBarKey(Key.Down).Should().BeTrue();
+
+            harness.FormulaBarText.Should().Be("=B1,B2");
+            harness.ClickFormulaBarCancelButton();
+
+            harness.FormulaBarText.Should().Be("original");
+            harness.FormulaRangeEntryMode.Should().BeFalse();
+            harness.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(harness.CurrentSheetId, 1, 1),
+                new CellAddress(harness.CurrentSheetId, 1, 1)));
+            harness.SheetGridFocused.Should().BeTrue();
+        });
+    }
 }

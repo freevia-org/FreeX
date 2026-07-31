@@ -3729,12 +3729,7 @@ public sealed partial class MainWindow : Window
             "M4,4 L12,12 M12,4 L4,12",
             Brush(192, 0, 0),
             1.55,
-            () =>
-        {
-            _session.CancelFormulaEdit();
-            _formulaBoxEditOriginalText = null;
-            RefreshShell("Ready");
-        }));
+            CancelCellEditAndRestoreCommittedText));
         formulaButtons.Children.Add(CreateFormulaBarPathButton(
             FormulaBarChromePlanner.EnterEditButton,
             "M3,8 L6,11 L13,4",
@@ -9791,7 +9786,10 @@ public sealed partial class MainWindow : Window
 
     private void CancelCellEditAndRestoreCommittedText()
     {
+        var formulaEditAddress = _session.FormulaEditAddress;
         _session.CancelFormulaEdit();
+        if (formulaEditAddress is { } address)
+            _session.SelectCell(address);
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
         ClearInlineCellEditorState();
