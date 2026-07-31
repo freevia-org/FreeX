@@ -82,6 +82,18 @@ internal sealed record RibbonHostCallbacks(
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
     /// </summary>
     Action<double?, double> ApplyZoom,
+    /// <summary>Whether the normal Print Layout surface is active (excluding Outline/Page Edit overlays).</summary>
+    Func<bool>? IsPrintLayoutActive = null,
+    /// <summary>Whether the normal Web Layout surface is active.</summary>
+    Func<bool>? IsWebLayoutActive = null,
+    /// <summary>Whether the normal Draft surface is active.</summary>
+    Func<bool>? IsDraftViewActive = null,
+    /// <summary>Whether the Navigation pane is currently visible.</summary>
+    Func<bool>? IsNavigationPaneVisible = null,
+    /// <summary>Whether the Reviewing pane is currently visible.</summary>
+    Func<bool>? IsReviewingPaneVisible = null,
+    /// <summary>Whether the Reveal Formatting pane is currently visible.</summary>
+    Func<bool>? IsRevealFormattingVisible = null,
     Action? OpenSymbolPickerDialog = null,
     Action? CaptureScreenClip = null,
     /// <summary>Home &gt; Paragraph &gt; Tabs. Optional; registry no-ops when null.</summary>
