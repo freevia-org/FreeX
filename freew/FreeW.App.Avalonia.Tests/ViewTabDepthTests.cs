@@ -392,6 +392,90 @@ public sealed class ViewTabDepthTests
     }
 
     [Fact]
+    public void View_and_review_stateful_commands_follow_live_host_predicates()
+    {
+        var viewMode = DocumentViewMode.PrintLayout;
+        var navigationVisible = false;
+        var revealVisible = false;
+        var reviewingVisible = false;
+        var callbacks = NoopCallbacks() with
+        {
+            SetPrintLayout = () => viewMode = DocumentViewMode.PrintLayout,
+            SetWebLayout = () => viewMode = DocumentViewMode.WebLayout,
+            SetDraftView = () => viewMode = DocumentViewMode.Draft,
+            ToggleNavigationPane = () => navigationVisible = !navigationVisible,
+            ToggleRevealFormatting = () => revealVisible = !revealVisible,
+            ToggleReviewingPane = () => reviewingVisible = !reviewingVisible,
+            IsPrintLayoutActive = () => viewMode == DocumentViewMode.PrintLayout,
+            IsWebLayoutActive = () => viewMode == DocumentViewMode.WebLayout,
+            IsDraftViewActive = () => viewMode == DocumentViewMode.Draft,
+            IsNavigationPaneVisible = () => navigationVisible,
+            IsRevealFormattingVisible = () => revealVisible,
+            IsReviewingPaneVisible = () => reviewingVisible,
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        AssertChecked(registry, "freew.print-layout", expected: true);
+        AssertChecked(registry, "freew.web-layout", expected: false);
+        Execute(registry, "freew.web-layout");
+        AssertChecked(registry, "freew.print-layout", expected: false);
+        AssertChecked(registry, "freew.web-layout", expected: true);
+
+        Execute(registry, "freew.draft-view");
+        AssertChecked(registry, "freew.web-layout", expected: false);
+        AssertChecked(registry, "freew.draft-view", expected: true);
+
+        AssertChecked(registry, "freew.nav-pane", expected: false);
+        Execute(registry, "freew.nav-pane");
+        AssertChecked(registry, "freew.nav-pane", expected: true);
+        AssertChecked(registry, "freew.navigationpane", expected: true);
+
+        AssertChecked(registry, "freew.reveal-formatting", expected: false);
+        Execute(registry, "freew.reveal-formatting");
+        AssertChecked(registry, "freew.reveal-formatting", expected: true);
+
+        AssertChecked(registry, "freew.reviewing-pane", expected: false);
+        Execute(registry, "freew.reviewing-pane");
+        AssertChecked(registry, "freew.reviewing-pane", expected: true);
+    }
+
+    [Fact]
+    public async Task MainWindow_view_and_pane_commands_report_lifecycle_state()
+    {
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            try
+            {
+                var registry = window.RibbonRegistryForTests!;
+                registry.Should().NotBeNull();
+                var refreshesBefore = window.RibbonStateRefreshCountForTests;
+
+                AssertChecked(registry, "freew.print-layout", expected: true);
+                Execute(registry, "freew.web-layout");
+                AssertChecked(registry, "freew.print-layout", expected: false);
+                AssertChecked(registry, "freew.web-layout", expected: true);
+
+                Execute(registry, "freew.nav-pane");
+                AssertChecked(registry, "freew.nav-pane", expected: true);
+                Execute(registry, "freew.reveal-formatting");
+                AssertChecked(registry, "freew.reveal-formatting", expected: true);
+                Execute(registry, "freew.reviewing-pane");
+                AssertChecked(registry, "freew.reviewing-pane", expected: true);
+                window.RibbonStateRefreshCountForTests.Should().BeGreaterThan(refreshesBefore,
+                    "a rendered ribbon command must synchronize peer toggle visuals after execution");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+
+        if (!ran)
+            return;
+    }
+
+    [Fact]
     public void Window_group_exists_on_view_tab()
     {
         var definition = FreeWRibbon.BuildDefinition();
@@ -413,6 +497,19 @@ public sealed class ViewTabDepthTests
         command!.Execute(RibbonCommandContext.Empty);
 
         invoked.Should().Be(1);
+    }
+
+    private static void Execute(IRibbonCommandRegistry registry, string id)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+    }
+
+    private static void AssertChecked(IRibbonCommandRegistry registry, string id, bool expected)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+        command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject
+            .GetState().IsChecked.Should().Be(expected, $"{id} should report live checked state");
     }
 
     // ── Gridlines toggle (flag) ──────────────────────────────────────────────

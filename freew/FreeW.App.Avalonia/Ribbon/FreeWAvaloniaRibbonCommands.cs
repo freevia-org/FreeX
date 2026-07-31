@@ -480,9 +480,15 @@ internal static class FreeWAvaloniaRibbonCommands
         var printPreviewCommand = new ActionRibbonCommand(callbacks.OpenPrintPreview ?? (() => { }));
         r.Register("freew.print-preview", printPreviewCommand);
 
-        var printLayoutCommand = new ActionRibbonCommand(callbacks.SetPrintLayout);
-        var webLayoutCommand = new ActionRibbonCommand(callbacks.SetWebLayout);
-        var draftViewCommand = new ActionRibbonCommand(callbacks.SetDraftView);
+        var printLayoutCommand = new ToggleActionCommand(
+            callbacks.SetPrintLayout,
+            callbacks.IsPrintLayoutActive ?? (() => false));
+        var webLayoutCommand = new ToggleActionCommand(
+            callbacks.SetWebLayout,
+            callbacks.IsWebLayoutActive ?? (() => false));
+        var draftViewCommand = new ToggleActionCommand(
+            callbacks.SetDraftView,
+            callbacks.IsDraftViewActive ?? (() => false));
         // Outline is a distinct host surface. A host that does not provide it must not silently
         // route the command to Draft; production MainWindow supplies the real toggle and state query.
         var outlineViewCommand = new ToggleActionCommand(
@@ -500,10 +506,14 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.printlayout", printLayoutCommand);
         r.Register("freew.weblayout", webLayoutCommand);
         r.Register("freew.draftview", draftViewCommand);
-        var navigationPaneCommand = new ActionRibbonCommand(callbacks.ToggleNavigationPane);
+        var navigationPaneCommand = new ToggleActionCommand(
+            callbacks.ToggleNavigationPane,
+            callbacks.IsNavigationPaneVisible ?? (() => false));
         r.Register("freew.nav-pane",          navigationPaneCommand);
         r.Register("freew.navigationpane",    navigationPaneCommand);
-        r.Register("freew.reveal-formatting", new ActionRibbonCommand(callbacks.ToggleRevealFormatting));
+        r.Register("freew.reveal-formatting", new ToggleActionCommand(
+            callbacks.ToggleRevealFormatting,
+            callbacks.IsRevealFormattingVisible ?? (() => false)));
         r.Register("freew.zoom-in",           new ActionRibbonCommand(() => callbacks.ApplyZoom(null, +0.1)));
         r.Register("freew.zoom-out",          new ActionRibbonCommand(() => callbacks.ApplyZoom(null, -0.1)));
         r.Register("freew.zoom-100",          new ActionRibbonCommand(() => callbacks.ApplyZoom(1.0, 0)));
@@ -535,7 +545,9 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.split-window",      splitCommand);
 
         // ── Review ───────────────────────────────────────────────────────────
-        var reviewingPaneCommand = new ActionRibbonCommand(callbacks.ToggleReviewingPane);
+        var reviewingPaneCommand = new ToggleActionCommand(
+            callbacks.ToggleReviewingPane,
+            callbacks.IsReviewingPaneVisible ?? (() => false));
         r.Register("freew.reviewing-pane", reviewingPaneCommand);
         r.Register("freew.reviewingpane", reviewingPaneCommand);
         // AV-REVIEW: Track Changes uses the same selection transition as the WPF command: enabling it

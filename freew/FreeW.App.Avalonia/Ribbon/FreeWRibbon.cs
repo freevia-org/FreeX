@@ -365,5 +365,17 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>View &gt; Read Mode page color choice.</summary>
     Action<string>? ApplyReadModePageColor = null,
     /// <summary>Insert &gt; Header/Footer text prompt. Returns null for Cancel, including the existing seed.</summary>
-    Func<bool, string, Task<string?>>? AskHeaderFooterText = null);
+    Func<bool, string, Task<string?>>? AskHeaderFooterText = null,
+    /// <summary>View &gt; Print Layout checked state.</summary>
+    Func<bool>? IsPrintLayoutActive = null,
+    /// <summary>View &gt; Web Layout checked state.</summary>
+    Func<bool>? IsWebLayoutActive = null,
+    /// <summary>View &gt; Draft checked state.</summary>
+    Func<bool>? IsDraftViewActive = null,
+    /// <summary>View &gt; Navigation Pane checked state.</summary>
+    Func<bool>? IsNavigationPaneVisible = null,
+    /// <summary>Home &gt; Reveal Formatting checked state.</summary>
+    Func<bool>? IsRevealFormattingVisible = null,
+    /// <summary>Review &gt; Reviewing Pane checked state.</summary>
+    Func<bool>? IsReviewingPaneVisible = null);
 
