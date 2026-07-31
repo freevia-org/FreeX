@@ -11,6 +11,7 @@ internal static class XlsxPackageMetadataMerger
     private const string PackageRelationshipType = SpreadsheetRelationshipPrefix + "package";
     private const string PivotCacheDefinitionRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheDefinition";
     private const string PivotCacheRecordsRelationshipType = SpreadsheetRelationshipPrefix + "pivotCacheRecords";
+    private const string HyperlinkRelationshipType = SpreadsheetRelationshipPrefix + "hyperlink";
     private const string CustomXmlRelationshipType = SpreadsheetRelationshipPrefix + "customXml";
     private const string CustomXmlPropertiesRelationshipType = SpreadsheetRelationshipPrefix + "customXmlProps";
     private const string CustomXmlPropertiesContentType = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
@@ -983,6 +984,22 @@ internal static class XlsxPackageMetadataMerger
             return false;
 
         if (IsExternalRelationship(relationship))
+            return true;
+
+        // R107-io-internal-hyperlink-rel: a HYPERLINK relationship's Target is a hyperlink
+        // destination, never a package part -- for an internal ("Place in This Document") target it
+        // is a document location such as "Sheet1!A1" or "#'My Sheet'!A1", written WITHOUT a
+        // TargetMode attribute (OPC's default Internal). The package-part survival check below
+        // resolves that text as a relative part path (yielding e.g. "xl/drawings/Sheet1!A1"), finds
+        // nothing at it, and drops the relationship -- and when it was the part's only relationship,
+        // CreateFilteredRelationshipPart then omits the whole .rels part. That silently orphaned the
+        // <a:hlinkClick r:id="..."/> still present in a preserved-verbatim drawing part (Duplicate
+        // Sheet on a sheet holding a shape/text box/picture with an internal hyperlink left the
+        // UNTOUCHED original sheet's drawing pointing at a relationship that no longer existed).
+        // The external sibling never hit this only because IsExternalRelationship short-circuits
+        // above; TargetMode is irrelevant to whether a hyperlink target is a package part, so both
+        // modes are preserved the same way here.
+        if (string.Equals(NormalizeRelationshipType(relationship), HyperlinkRelationshipType, StringComparison.OrdinalIgnoreCase))
             return true;
 
         var targetPart = XlsxPackagePath.ResolveRelationshipTarget(RelationshipPartToSourcePart(relationshipPartPath), target);

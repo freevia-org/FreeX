@@ -183,9 +183,9 @@ public static class InCanvasRichClipboardPlanner
     }
 
     /// <summary>
-    /// Creates the body used by the slide-level fallback when inline images are emitted as
-    /// separate picture shapes. The rich editor keeps the replacement character and image
-    /// payload together; a slide text box must not receive that marker as visible text.
+    /// Creates the body used by the slide-level fallback when inline images or objects are
+    /// emitted as separate shapes. The rich editor keeps replacement characters and payloads
+    /// together; a slide text box must not receive those markers as visible text.
     /// </summary>
     public static TextBody CloneBodyForSlideFallback(TextBody source)
     {
@@ -223,6 +223,7 @@ public static class InCanvasRichClipboardPlanner
             paragraph.Runs.AddRange(cleanedRuns);
         }
 
+        TextBodyRunMutationPlanner.MergeAdjacentRunsWithSameFormat(body);
         return body;
     }
 

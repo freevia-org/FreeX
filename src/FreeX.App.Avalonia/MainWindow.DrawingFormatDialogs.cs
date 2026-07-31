@@ -498,8 +498,14 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(preview, "ShapeGradientPreview");
         AutomationProperties.SetName(preview, UiText.Get("ShapeGradient_PreviewLabel"));
 
-        var startSwatch = new Border { Width = 30, Height = 24, BorderBrush = HeaderForeground, BorderThickness = new Thickness(1) };
-        var endSwatch = new Border { Width = 30, Height = 24, BorderBrush = HeaderForeground, BorderThickness = new Thickness(1) };
+        var startSwatch = CreateGradientColorButton(
+            "ShapeGradientStartColorButton",
+            "ShapeGradient_ChooseStartColorAutomationName",
+            "ShapeGradient_ChooseStartColorHelpText");
+        var endSwatch = CreateGradientColorButton(
+            "ShapeGradientEndColorButton",
+            "ShapeGradient_ChooseEndColorAutomationName",
+            "ShapeGradient_ChooseEndColorHelpText");
         var startBox = CreateGradientTextBox(FormatRgb(startColor));
         var endBox = CreateGradientTextBox(FormatRgb(endColor));
         AutomationProperties.SetAutomationId(startBox, "ShapeGradientStartColorBox");
@@ -608,8 +614,8 @@ public sealed partial class MainWindow
         preview.Margin = new Thickness(0, 13, 0, 4);
         stopGrid.Children.Add(preview);
 
-        startSwatch.PointerPressed += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_StartColorLabel"), c => startColor = c);
-        endSwatch.PointerPressed += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_EndColorLabel"), c => endColor = c);
+        startSwatch.Click += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_StartColorLabel"), c => startColor = c);
+        endSwatch.Click += async (_, _) => await ChooseGradientColorAsync(UiText.Get("ShapeGradient_EndColorLabel"), c => endColor = c);
 
         var gradientGroup = new GroupBox
         {
@@ -667,7 +673,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private static void AddGradientStopRow(Grid grid, int row, string label, Border swatch, TextBox box, string stopText)
+    private static void AddGradientStopRow(Grid grid, int row, string label, Control swatch, TextBox box, string stopText)
     {
         var labelBlock = new TextBlock
         {
@@ -737,6 +743,28 @@ public sealed partial class MainWindow
         };
         ApplyDrawingTextBoxChrome(box);
         return box;
+    }
+
+    private static Button CreateGradientColorButton(
+        string automationId,
+        string automationNameKey,
+        string helpTextKey)
+    {
+        var button = new Button
+        {
+            Width = 30,
+            Height = 24,
+            MinWidth = 30,
+            Padding = new Thickness(0),
+            BorderBrush = HeaderForeground,
+            BorderThickness = new Thickness(1),
+            HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+        };
+        AutomationProperties.SetAutomationId(button, automationId);
+        AutomationProperties.SetName(button, UiText.Get(automationNameKey));
+        AutomationProperties.SetHelpText(button, UiText.Get(helpTextKey));
+        return button;
     }
 
     private static Button CreateGradientDialogButton(string text, bool isDefault)

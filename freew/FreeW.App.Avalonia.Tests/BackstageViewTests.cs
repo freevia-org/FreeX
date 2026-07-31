@@ -177,6 +177,25 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public async Task BackstageView_Open_matches_WPF_tab_labels_and_selected_content()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+
+            view.TryActivateEntry("Open").Should().BeTrue();
+
+            var tabs = view.GetLogicalDescendants().OfType<TabControl>().Single();
+            var items = tabs.Items.Cast<TabItem>().ToArray();
+
+            items.Select(item => item.Header).Should().Equal("Documents", "Folders");
+            items.Select(item => item.Content).Should().OnlyContain(content => content == null);
+            tabs.SelectedIndex.Should().Be(0);
+            tabs.SelectedItem.Should().Be(items[0]);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task BackstageView_back_button_is_focusable_and_closes_through_shared_frame()
     {
         await Session.Dispatch(() =>

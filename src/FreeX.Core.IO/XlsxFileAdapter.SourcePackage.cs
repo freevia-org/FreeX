@@ -134,7 +134,7 @@ public sealed partial class XlsxFileAdapter
         // by XlsxWorksheetMetadataPreserver.Preserve) -- see
         // XlsxWorksheetHyperlinkRelationshipPruner's doc comment for why this cannot run any
         // earlier (e.g. inline in XlsxPackageMetadataMerger.MergeRelationshipParts).
-        XlsxWorksheetHyperlinkRelationshipPruner.PruneOrphanedExternalRelationships(sourceArchive, generatedArchive, context);
+        XlsxWorksheetHyperlinkRelationshipPruner.PruneOrphanedHyperlinkRelationships(sourceArchive, generatedArchive, context);
         XlsxRichTextFontNormalizer.NormalizePackage(generatedArchive);
         XlsxSharedStringPackageGraphNormalizer.NormalizePackage(generatedArchive);
         XlsxDocumentThumbnailPackageGraphNormalizer.NormalizePackage(generatedArchive);
