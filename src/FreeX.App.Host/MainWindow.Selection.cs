@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Services;
 using FreeX.App.UI;
@@ -29,7 +30,7 @@ public partial class MainWindow
         // row footprint, exactly like drag-select/Shift-extend/Ctrl-click already do via this same
         // helper -- Excel never allows a header click to select only part of a merged cell
         // (R99-render-header-select-merge-expand).
-        var expandedRange = ExpandRangeToFullyContainMerges(sheet, range);
+        var expandedRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(sheet, range);
         SheetGrid.SelectedRange = expandedRange;
         CellAddressBox.Text = expandedRange.Start.Row == expandedRange.End.Row
             ? $"{row}:{row}"
@@ -1559,33 +1560,8 @@ public partial class MainWindow
     // Grows `range` until it fully contains every merged region it partially overlaps, since
     // absorbing one merge can bring a new merge into partial overlap
     // (R51-render-merged-cell-edit-nav-3-4).
-    private static GridRange ExpandRangeToFullyContainMerges(Sheet? sheet, GridRange range)
-    {
-        if (sheet is not { MergedRegions.Count: > 0 })
-            return range;
-
-        bool expanded;
-        do
-        {
-            expanded = false;
-            foreach (var merge in sheet.MergedRegions)
-            {
-                if (merge.Start.Sheet != range.Start.Sheet)
-                    continue;
-                if (!range.Overlaps(merge) || range.Contains(merge))
-                    continue;
-
-                range = new GridRange(
-                    new CellAddress(range.Start.Sheet,
-                        Math.Min(range.Start.Row, merge.Start.Row), Math.Min(range.Start.Col, merge.Start.Col)),
-                    new CellAddress(range.Start.Sheet,
-                        Math.Max(range.End.Row, merge.End.Row), Math.Max(range.End.Col, merge.End.Col)));
-                expanded = true;
-            }
-        } while (expanded);
-
-        return range;
-    }
+    private static GridRange ExpandRangeToFullyContainMerges(Sheet? sheet, GridRange range) =>
+        MergedSelectionRangePlanner.ExpandToFullyContainMerges(sheet, range);
 
     // Live dimension readout Excel shows in the Name Box while a mouse-drag selection is in
     // progress (e.g. "4R x 3C" for a 4-row-by-3-column drag from B2 to D5), reverting to the plain

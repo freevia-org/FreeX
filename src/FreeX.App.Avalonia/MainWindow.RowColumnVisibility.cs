@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -127,7 +128,7 @@ public sealed partial class MainWindow
             return;
 
         ClearSelectedDrawingObject();
-        range = ExpandRangeToFullyContainMerges(_session.ActiveSheet, range);
+        range = MergedSelectionRangePlanner.ExpandToFullyContainMerges(_session.ActiveSheet, range);
         _session.SelectRange(range);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
@@ -152,7 +153,7 @@ public sealed partial class MainWindow
             return;
 
         ClearSelectedDrawingObject();
-        newRange = ExpandRangeToFullyContainMerges(_session.ActiveSheet, newRange);
+        newRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(_session.ActiveSheet, newRange);
         var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
         _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();
@@ -178,7 +179,7 @@ public sealed partial class MainWindow
             return;
 
         ClearSelectedDrawingObject();
-        range = ExpandRangeToFullyContainMerges(_session.ActiveSheet, range);
+        range = MergedSelectionRangePlanner.ExpandToFullyContainMerges(_session.ActiveSheet, range);
         _session.SelectRange(range);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
@@ -205,42 +206,11 @@ public sealed partial class MainWindow
             return;
 
         ClearSelectedDrawingObject();
-        newRange = ExpandRangeToFullyContainMerges(_session.ActiveSheet, newRange);
+        newRange = MergedSelectionRangePlanner.ExpandToFullyContainMerges(_session.ActiveSheet, newRange);
         var ranges = new List<GridRange>(_session.SelectedRanges) { newRange };
         _session.SelectRanges(newRange, ranges, newRange.Start);
         RefreshTableContextualTab();
         ApplyFormatPainterAfterTargetSelection();
-    }
-
-    // A whole-row or whole-column header selection must absorb every merged region it partially
-    // intersects. One expansion can expose another adjacent merge, so repeat until stable to match
-    // the WPF host's header-selection behavior (R99-render-header-select-merge-expand).
-    private static GridRange ExpandRangeToFullyContainMerges(Sheet sheet, GridRange range)
-    {
-        if (sheet.MergedRegions.Count == 0)
-            return range;
-
-        bool expanded;
-        do
-        {
-            expanded = false;
-            foreach (var merge in sheet.MergedRegions)
-            {
-                if (merge.Start.Sheet != range.Start.Sheet)
-                    continue;
-                if (!range.Overlaps(merge) || range.Contains(merge))
-                    continue;
-
-                range = new GridRange(
-                    new CellAddress(range.Start.Sheet,
-                        Math.Min(range.Start.Row, merge.Start.Row), Math.Min(range.Start.Col, merge.Start.Col)),
-                    new CellAddress(range.Start.Sheet,
-                        Math.Max(range.End.Row, merge.End.Row), Math.Max(range.End.Col, merge.End.Col)));
-                expanded = true;
-            }
-        } while (expanded);
-
-        return range;
     }
 
     /// <summary>
