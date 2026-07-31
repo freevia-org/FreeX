@@ -3721,6 +3721,25 @@ public sealed class GestureHandlerAltSnapTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void DoubleClickPolicy_ZoomNavigationIsTerminalBeforeSelection()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "AvaloniaCanvasGestureHandler.cs")).Replace("\r\n", "\n");
+        var start = source.IndexOf(
+            "if (shape?.Kind == SlideShapeKind.Zoom &&",
+            StringComparison.Ordinal);
+        var end = source.IndexOf("// Text editing", start, StringComparison.Ordinal);
+
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        source[start..end].Should().Contain("e.Handled = true;\n                return;");
+    }
+
     // ── Helper: build a handler with one shape ────────────────────────────────
 
     private static (AvaloniaCanvasGestureHandler handler, EditingSession editor, SlideShape shape)

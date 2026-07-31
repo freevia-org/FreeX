@@ -41,6 +41,23 @@ public sealed class CanvasEditingTests
             })
             .Should().BeFalse();
     }
+
+    [Fact]
+    public void DoubleClickPolicy_ZoomNavigationIsTerminalBeforeSelection()
+    {
+        var source = ReadWorkspaceFile(
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "CanvasGestureHandler.cs").Replace("\r\n", "\n");
+        var start = source.IndexOf(
+            "if (shape?.Kind == SlideShapeKind.Zoom &&",
+            StringComparison.Ordinal);
+        var end = source.IndexOf("// Text editing", start, StringComparison.Ordinal);
+
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        source[start..end].Should().Contain("e.Handled = true;\n                return;");
+    }
     // ── SlideTransform ────────────────────────────────────────────────────────────
 
     [Fact]

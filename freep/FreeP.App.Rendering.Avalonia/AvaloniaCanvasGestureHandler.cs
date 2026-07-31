@@ -266,6 +266,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
             {
                 _editor.SelectSlide(targetSlideIndex);
                 e.Handled = true;
+                return;
             }
 
             // Text editing remains the responsibility of InCanvasTextEditor. A textless
