@@ -569,6 +569,77 @@ public sealed class ChartSmartArtContextualTabTests
     }
 
     [Fact]
+    public Task EditChartData_primary_action_routes_selected_chart_and_reverts_accepted_data() =>
+        Session.Dispatch(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingChart();
+            var chart = ((Paragraph)doc.Blocks[bi]).Runs[ri].Chart!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            Chart? seed = null;
+            var replacement = Chart.Create(
+                ChartKind.Line,
+                ["Apr", "May", "Jun"],
+                [9, 8, 7],
+                "Forecast",
+                "Updated");
+            var callbacks = NoopCallbacks() with
+            {
+                OpenChartEditDataDialog = () =>
+                {
+                    seed = view.SelectedFloatingChart();
+                    view.ReplaceSelectedChartData(replacement);
+                },
+            };
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+            registry.TryGet(new RibbonCommandId("freew.chart-edit-data"), out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+
+            seed.Should().BeSameAs(chart);
+            chart.Kind.Should().Be(ChartKind.Line);
+            chart.Categories.Should().Equal("Apr", "May", "Jun");
+            chart.Series[0].Values.Should().Equal(9.0, 8.0, 7.0);
+
+            view.Undo();
+            chart.Kind.Should().Be(ChartKind.Column);
+            chart.Categories.Should().Equal("Q1", "Q2", "Q3");
+            chart.Series[0].Values.Should().Equal(1.0, 2.0, 3.0);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task EditChartData_cancelled_primary_action_leaves_selected_chart_unchanged() =>
+        Session.Dispatch(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingChart();
+            var chart = ((Paragraph)doc.Blocks[bi]).Runs[ri].Chart!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            var invoked = 0;
+            var callbacks = NoopCallbacks() with
+            {
+                OpenChartEditDataDialog = () =>
+                {
+                    invoked++;
+                    view.SelectedFloatingChart().Should().BeSameAs(chart);
+                },
+            };
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+            registry.TryGet(new RibbonCommandId("freew.chart-edit-data"), out var command).Should().BeTrue();
+            command!.Execute(RibbonCommandContext.Empty);
+
+            invoked.Should().Be(1);
+            chart.Kind.Should().Be(ChartKind.Column);
+            chart.Categories.Should().Equal("Q1", "Q2", "Q3");
+            chart.Series[0].Values.Should().Equal(1.0, 2.0, 3.0);
+        }, CancellationToken.None);
+
+    [Fact]
     public async Task ChartSize_command_resizes_selected_chart_and_reverts_on_undo()
     {
         double? widthAfter = null, heightAfter = null, widthUndone = null, heightUndone = null;

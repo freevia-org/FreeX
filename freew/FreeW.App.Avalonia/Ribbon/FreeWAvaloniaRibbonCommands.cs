@@ -2236,10 +2236,13 @@ internal static class FreeWAvaloniaRibbonCommands
             editor, "Chart", callbacks.OpenChartTitleDialog, editor.ToggleChartTitle));
         r.Register("freew.chart-axis-titles", new SelectedFloatingDialogCommand(
             editor, "Chart", callbacks.OpenChartAxisTitlesDialog, editor.ToggleChartAxisTitles));
-        r.Register("freew.chart-edit-data", new ValueRibbonCommand(value =>
+        r.Register("freew.chart-edit-data", new ContextRibbonCommand(context =>
         {
-            if (TryBuildChartDataPreset(value, out var chart))
+            if (TryBuildChartDataPreset(context.SelectedValue, out var chart))
                 editor.ReplaceSelectedChartData(chart);
+            else if (string.IsNullOrWhiteSpace(context.SelectedValue)
+                     && editor.SelectedFloatingChart() is not null)
+                callbacks.OpenChartEditDataDialog?.Invoke();
         }));
         r.Register("freew.chart-size", new ValueRibbonCommand(value =>
         {

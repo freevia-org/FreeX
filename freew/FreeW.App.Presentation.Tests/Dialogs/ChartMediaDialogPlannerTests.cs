@@ -67,6 +67,25 @@ public sealed class ChartMediaDialogPlannerTests
     }
 
     [Fact]
+    public void InsertChartInitialStatePreservesTheSelectedChartData()
+    {
+        var seed = Chart.Create(
+            ChartKind.Bar,
+            ["North", "South"],
+            [12.5, 8.25],
+            "Revenue",
+            "Regional revenue");
+
+        var state = InsertChartDialogPlanner.BuildInitialState(seed, CultureInfo.InvariantCulture);
+
+        state.Kind.Should().Be(ChartKind.Bar);
+        state.Title.Should().Be("Regional revenue");
+        state.SeriesNames.Should().Equal("Revenue");
+        state.Rows.Select(row => row.Category).Should().Equal("North", "South");
+        state.Rows.Select(row => row.SeriesValues.Single()).Should().Equal("12.5", "8.25");
+    }
+
+    [Fact]
     public void SmartArtPlannerPreservesWpfSeedFlatteningAndValidation()
     {
         var seed = new SmartArt { Kind = SmartArtKind.Hierarchy };

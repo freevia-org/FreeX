@@ -300,6 +300,8 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenImagePositionDialog = null,
     /// <summary>Insert &gt; Chart. Optional owner-modal chart-data route.</summary>
     Action? OpenInsertChartDialog = null,
+    /// <summary>Chart Design &gt; Edit Data. Optional owner-modal seeded chart-data route.</summary>
+    Action? OpenChartEditDataDialog = null,
     /// <summary>Chart Design &gt; Chart Title. Optional owner-modal title route.</summary>
     Action? OpenChartTitleDialog = null,
     /// <summary>Chart Design &gt; Axis Titles. Optional owner-modal title route.</summary>
