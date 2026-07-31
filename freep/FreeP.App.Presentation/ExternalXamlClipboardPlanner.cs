@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using Free.Shared.AppServices;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -87,11 +88,12 @@ public static class ExternalXamlClipboardPlanner
 
             var body = new TextBody();
             var outputCharacters = 0;
+            var tableCellStyles = new List<InCanvasRichClipboardTableCellStyle>();
             bool containsTable = blockElements.Any(element => element.Name.LocalName == "Table");
             foreach (var element in blockElements)
             {
                 if (element.Name.LocalName == "Table")
-                    ReadTable(element, body, ref outputCharacters);
+                    ReadTable(element, body, tableCellStyles, ref outputCharacters);
                 else
                     ReadParagraph(element, body, ref outputCharacters);
 
@@ -110,6 +112,7 @@ public static class ExternalXamlClipboardPlanner
                 ImageBytes: firstImage?.Bytes,
                 ImageContentType: firstImage?.ContentType,
                 ContainsTable: containsTable,
+                TableCellStyles: tableCellStyles.Count == 0 ? null : tableCellStyles,
                 ImagePayloads: images);
         }
         catch
@@ -133,6 +136,7 @@ public static class ExternalXamlClipboardPlanner
     private static void ReadTable(
         XElement table,
         TextBody body,
+        List<InCanvasRichClipboardTableCellStyle> tableCellStyles,
         ref int outputCharacters)
     {
         var rows = table
@@ -161,6 +165,7 @@ public static class ExternalXamlClipboardPlanner
                     AddRun("\t", paragraph, default, ref outputCharacters);
 
                 var cell = cells[cellIndex];
+                tableCellStyles.Add(ReadTableCellStyle(cell));
                 var cellParagraphs = cell
                     .Descendants()
                     .Where(element => element.Name.LocalName == "Paragraph"
@@ -183,6 +188,40 @@ public static class ExternalXamlClipboardPlanner
 
             body.Paragraphs.Add(paragraph);
         }
+    }
+
+    private static InCanvasRichClipboardTableCellStyle ReadTableCellStyle(XElement cell)
+    {
+        int? fillRgb = TryReadRgb(AttributeValue(cell, "Background"));
+        var padding = ReadThickness(AttributeValue(cell, "Padding"));
+        var borderThickness = ReadThickness(AttributeValue(cell, "BorderThickness"));
+        int? borderRgb = TryReadRgb(AttributeValue(cell, "BorderBrush"));
+        InCanvasRichClipboardTableBorder? MakeBorder(double thicknessDip) =>
+            borderRgb is { } rgb && thicknessDip > 0
+                ? new InCanvasRichClipboardTableBorder(rgb, thicknessDip * 0.75)
+                : null;
+
+        var vertical = AttributeValue(cell, "VerticalContentAlignment")
+            ?? AttributeValue(cell, "VerticalAlignment");
+        TableCellAnchor? anchor = vertical?.ToLowerInvariant() switch
+        {
+            "center" => TableCellAnchor.Middle,
+            "bottom" => TableCellAnchor.Bottom,
+            "top" => TableCellAnchor.Top,
+            _ => null,
+        };
+
+        return new InCanvasRichClipboardTableCellStyle(
+            FillRgb: fillRgb,
+            Left: MakeBorder(borderThickness.Left),
+            Right: MakeBorder(borderThickness.Right),
+            Top: MakeBorder(borderThickness.Top),
+            Bottom: MakeBorder(borderThickness.Bottom),
+            Anchor: anchor,
+            InsetLeftPt: padding.Left * 0.75,
+            InsetRightPt: padding.Right * 0.75,
+            InsetTopPt: padding.Top * 0.75,
+            InsetBottomPt: padding.Bottom * 0.75);
     }
 
     private static void ReadInlineNodes(
@@ -281,6 +320,7 @@ public static class ExternalXamlClipboardPlanner
             Underline = style.Underline,
             Strikethrough = style.Strikethrough,
             Color = style.Color,
+            Hyperlink = style.Hyperlink,
         });
     }
 
@@ -331,6 +371,22 @@ public static class ExternalXamlClipboardPlanner
         var foreground = AttributeValue(element, "Foreground");
         if (TryParseColor(foreground, out var color))
             style = style with { Color = color };
+
+        if (localName.Equals("Hyperlink", StringComparison.OrdinalIgnoreCase)
+            || !string.IsNullOrWhiteSpace(AttributeValue(element, "NavigateUri")))
+        {
+            var target = AttributeValue(element, "NavigateUri");
+            var tooltip = AttributeValue(element, "ToolTip")
+                ?? AttributeValue(element, "Tooltip");
+            var hyperlink = ExternalUriLauncher.TryCreateAllowedUri(target ?? string.Empty, out var uri)
+                ? new Hyperlink
+                {
+                    Url = uri.AbsoluteUri,
+                    Tooltip = string.IsNullOrWhiteSpace(tooltip) ? null : tooltip,
+                }
+                : null;
+            style = style with { Hyperlink = hyperlink };
+        }
 
         return style;
     }
@@ -397,6 +453,32 @@ public static class ExternalXamlClipboardPlanner
         }
 
         return false;
+    }
+
+    private static int? TryReadRgb(string? value)
+    {
+        if (!TryParseColor(value, out var color) || color is null)
+            return null;
+
+        var rgb = color.Resolved;
+        return (rgb.R << 16) | (rgb.G << 8) | rgb.B;
+    }
+
+    private static (double Left, double Top, double Right, double Bottom) ReadThickness(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return default;
+
+        var values = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(item => TryParseDip(item, out var dip) ? Math.Max(0, dip) : 0)
+            .ToArray();
+        return values.Length switch
+        {
+            1 => (values[0], values[0], values[0], values[0]),
+            2 => (values[0], values[1], values[0], values[1]),
+            4 => (values[0], values[1], values[2], values[3]),
+            _ => default,
+        };
     }
 
     private static (byte[]? Bytes, string? ContentType) ResolveImage(
@@ -478,5 +560,6 @@ public static class ExternalXamlClipboardPlanner
         bool Strikethrough,
         bool BoldSet,
         bool ItalicSet,
-        ThemeAwareColor? Color);
+        ThemeAwareColor? Color,
+        Hyperlink? Hyperlink);
 }

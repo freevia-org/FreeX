@@ -21,7 +21,7 @@ public sealed class WpfRichTextClipboardAdapterTests
         data.SetData(
             DataFormats.XamlPackage,
             new MemoryStream(CreateXamlPackage(
-                "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Bold>Package</Bold><Italic> text</Italic></Paragraph></FlowDocument>")),
+                "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Hyperlink NavigateUri=\"https://example.test/package\" ToolTip=\"Package link\"><Bold>Package</Bold></Hyperlink><Italic> text</Italic></Paragraph></FlowDocument>")),
             autoConvert: false);
         data.SetData(DataFormats.Rtf, Encoding.ASCII.GetBytes(@"{\rtf1\ansi\b ignored\b0}"));
         data.SetText("plain fallback");
@@ -31,6 +31,8 @@ public sealed class WpfRichTextClipboardAdapterTests
 
         InCanvasTextEditPlanner.ExtractPlainText(updated!).Should().Be("Package text");
         updated!.Paragraphs[0].Runs[0].Bold.Should().BeTrue();
+        updated.Paragraphs[0].Runs[0].Hyperlink!.Url.Should().Be("https://example.test/package");
+        updated.Paragraphs[0].Runs[0].Hyperlink!.Tooltip.Should().Be("Package link");
         updated.Paragraphs[0].Runs[1].Italic.Should().BeTrue();
     }
 
