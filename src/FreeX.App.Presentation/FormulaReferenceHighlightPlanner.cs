@@ -9,7 +9,8 @@ public sealed record FormulaReferenceHighlight(
     string Text,
     string? SheetName,
     GridRange? Range,
-    string? SheetEndName = null);
+    string? SheetEndName = null,
+    string? ExternalWorkbookName = null);
 
 /// <summary>
 /// Decoded sheet qualifier metadata shared by formula highlighting and formula reference editing.
@@ -19,7 +20,8 @@ public readonly record struct FormulaReferenceSheetQualifier(
     string StartSheetName,
     string? EndSheetName,
     int AfterQualifier,
-    int TextLength)
+    int TextLength,
+    string? ExternalWorkbookName = null)
 {
     public bool IsSpan => !string.IsNullOrWhiteSpace(EndSheetName);
 }
@@ -61,6 +63,13 @@ public static class FormulaReferenceHighlightPlanner
                 continue;
             }
 
+            if (TryReadReference(text, index, currentSheetId, resolveSheetId, highlights.Count % PaletteSize, resolveSheetIndex, out var highlight, out var nextIndex))
+            {
+                highlights.Add(highlight);
+                index = nextIndex;
+                continue;
+            }
+
             if (TryReadStructuredReference(text, index, resolveStructuredReference, highlights.Count % PaletteSize, out var structuredHighlight, out var structuredNextIndex))
             {
                 highlights.Add(structuredHighlight);
@@ -71,13 +80,6 @@ public static class FormulaReferenceHighlightPlanner
             if (text[index] == '[')
             {
                 index = SkipStructuredReferenceSelector(text, index);
-                continue;
-            }
-
-            if (TryReadReference(text, index, currentSheetId, resolveSheetId, highlights.Count % PaletteSize, resolveSheetIndex, out var highlight, out var nextIndex))
-            {
-                highlights.Add(highlight);
-                index = nextIndex;
                 continue;
             }
 
@@ -197,6 +199,7 @@ public static class FormulaReferenceHighlightPlanner
         var referenceStart = start;
         string? sheetName = null;
         string? sheetEndName = null;
+        string? externalWorkbookName = null;
         var sheetId = currentSheetId;
         var canRenderReference = true;
         var cellStart = start;
@@ -205,11 +208,21 @@ public static class FormulaReferenceHighlightPlanner
         {
             sheetName = qualifier.StartSheetName;
             sheetEndName = qualifier.EndSheetName;
+            externalWorkbookName = qualifier.ExternalWorkbookName;
             referenceStart = start;
             cellStart = qualifier.AfterQualifier;
-            var resolvedStartSheetId = resolveSheetId?.Invoke(sheetName);
+            var resolvedStartSheetId = externalWorkbookName is null
+                ? resolveSheetId?.Invoke(sheetName)
+                : null;
             sheetId = resolvedStartSheetId ?? currentSheetId;
-            if (sheetEndName is not null)
+            if (externalWorkbookName is not null)
+            {
+                // The source workbook is not loaded into this presentation context yet. Keep
+                // the full external token highlighted, but do not project its coordinates onto
+                // a same-named local sheet or draw a false local grid overlay.
+                canRenderReference = false;
+            }
+            else if (sheetEndName is not null)
             {
                 var endSheetId = resolveSheetId?.Invoke(sheetEndName);
                 canRenderReference = resolvedStartSheetId is not null && endSheetId is not null &&
@@ -236,7 +249,7 @@ public static class FormulaReferenceHighlightPlanner
             }
 
             nextIndex = wholeEnd;
-            if (!canRenderReference)
+            if (!canRenderReference && externalWorkbookName is null)
                 return false;
 
             highlight = new FormulaReferenceHighlight(
@@ -245,8 +258,9 @@ public static class FormulaReferenceHighlightPlanner
                 paletteIndex,
                 text[referenceStart..wholeEnd],
                 sheetName,
-                wholeRange,
-                sheetEndName);
+                canRenderReference ? wholeRange : null,
+                sheetEndName,
+                externalWorkbookName);
             return true;
         }
 
@@ -284,7 +298,7 @@ public static class FormulaReferenceHighlightPlanner
         }
 
         nextIndex = referenceEnd;
-        if (!canRenderReference)
+        if (!canRenderReference && externalWorkbookName is null)
             return false;
 
         var range = new GridRange(firstCell, secondCell);
@@ -294,8 +308,9 @@ public static class FormulaReferenceHighlightPlanner
             paletteIndex,
             text[referenceStart..referenceEnd],
             sheetName,
-            range,
-            sheetEndName);
+            canRenderReference ? range : null,
+            sheetEndName,
+            externalWorkbookName);
         return true;
     }
 
@@ -310,8 +325,25 @@ public static class FormulaReferenceHighlightPlanner
         out FormulaReferenceSheetQualifier qualifier)
     {
         qualifier = default;
+        if (start < 0 || start >= text.Length)
+            return false;
+
+        var qualifierStart = start;
+        string? externalWorkbookName = null;
+        if (TryReadExternalWorkbookPrefix(text, start, out var workbookName, out var afterWorkbook))
+        {
+            externalWorkbookName = workbookName;
+            start = afterWorkbook;
+        }
+
         if (!TryReadSheetNamePart(text, start, out var firstName, out var afterFirst, out var firstWasQuoted))
             return false;
+
+        if (externalWorkbookName is null && TrySplitExternalWorkbookName(firstName, out var embeddedWorkbook, out var embeddedSheet))
+        {
+            externalWorkbookName = embeddedWorkbook;
+            firstName = embeddedSheet;
+        }
 
         string? endName = null;
         var afterName = afterFirst;
@@ -351,7 +383,47 @@ public static class FormulaReferenceHighlightPlanner
             firstName,
             endName,
             afterQualifier,
-            afterQualifier - start);
+            afterQualifier - qualifierStart,
+            externalWorkbookName);
+        return true;
+    }
+
+    private static bool TryReadExternalWorkbookPrefix(
+        string text,
+        int start,
+        out string workbookName,
+        out int afterPrefix)
+    {
+        workbookName = "";
+        afterPrefix = start;
+        if (start >= text.Length || text[start] != '[')
+            return false;
+
+        var close = text.IndexOf(']', start + 1);
+        if (close <= start + 1)
+            return false;
+
+        workbookName = text[(start + 1)..close];
+        afterPrefix = close + 1;
+        return true;
+    }
+
+    private static bool TrySplitExternalWorkbookName(
+        string sheetName,
+        out string workbookName,
+        out string remainingSheetName)
+    {
+        workbookName = "";
+        remainingSheetName = sheetName;
+        if (!sheetName.StartsWith("[", StringComparison.Ordinal))
+            return false;
+
+        var close = sheetName.IndexOf(']');
+        if (close <= 1 || close == sheetName.Length - 1)
+            return false;
+
+        workbookName = sheetName[1..close];
+        remainingSheetName = sheetName[(close + 1)..];
         return true;
     }
 
@@ -422,70 +494,6 @@ public static class FormulaReferenceHighlightPlanner
         var endIndex = resolveSheetIndex(endSheetId);
         return currentIndex is { } current && startIndex is { } first && endIndex is { } last &&
             current >= Math.Min(first, last) && current <= Math.Max(first, last);
-    }
-
-    private static bool TryReadSheetQualifier(string text, int start, out string sheetName, out int afterQualifier)
-    {
-        sheetName = "";
-        afterQualifier = start;
-
-        if (start >= text.Length)
-            return false;
-
-        if (text[start] == '\'')
-            return TryReadQuotedSheetQualifier(text, start, out sheetName, out afterQualifier);
-
-        var index = start;
-        while (index < text.Length && IsUnquotedSheetNameChar(text[index]))
-            index++;
-
-        if (index == start || index >= text.Length || text[index] != '!')
-            return false;
-
-        sheetName = text[start..index];
-        afterQualifier = index + 1;
-        return true;
-    }
-
-    private static bool TryReadQuotedSheetQualifier(string text, int start, out string sheetName, out int afterQualifier)
-    {
-        sheetName = "";
-        afterQualifier = start;
-
-        // Walk forward from the opening quote, scanning for the closing '! sequence.
-        // A doubled '' inside the name is an escaped single quote — it does NOT end the name.
-        var index = start + 1;
-        while (index < text.Length)
-        {
-            if (text[index] == '\'')
-            {
-                if (index + 1 < text.Length && text[index + 1] == '\'')
-                {
-                    // Escaped quote — skip both characters and continue.
-                    index += 2;
-                    continue;
-                }
-
-                if (index + 1 < text.Length && text[index + 1] == '!')
-                {
-                    // Found closing '! — the raw slice is text[(start+1)..index].
-                    // Replace escaped '' with ' to get the actual sheet name.
-                    var rawSlice = text[(start + 1)..index];
-                    sheetName = rawSlice.Contains("''", StringComparison.Ordinal)
-                        ? rawSlice.Replace("''", "'")
-                        : rawSlice;
-                    afterQualifier = index + 2;
-                    return sheetName.Length > 0;
-                }
-
-                // Bare quote not followed by ' or ! — invalid token.
-                return false;
-            }
-
-            index++;
-        }
-
-        return false;
     }
 
     private static bool TryReadCell(
