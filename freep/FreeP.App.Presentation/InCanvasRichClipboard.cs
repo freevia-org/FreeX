@@ -182,6 +182,45 @@ public static class InCanvasRichClipboardPlanner
             payload.Body);
     }
 
+    /// <summary>
+    /// Creates the body used by the slide-level fallback when inline images are emitted as
+    /// separate picture shapes. The rich editor keeps the replacement character and image
+    /// payload together; a slide text box must not receive that marker as visible text.
+    /// </summary>
+    public static TextBody CloneBodyForSlideFallback(TextBody source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var body = TextBodyModelCloner.CloneTextBody(source)!;
+
+        foreach (var paragraph in body.Paragraphs)
+        {
+            var cleanedRuns = new List<Run>(paragraph.Runs.Count);
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.InlineImage is null && !run.Text.Contains('\uFFFC', StringComparison.Ordinal))
+                {
+                    cleanedRuns.Add(run);
+                    continue;
+                }
+
+                var text = run.Text.Replace("\uFFFC", string.Empty, StringComparison.Ordinal);
+                if (text.Length == 0)
+                    continue;
+
+                run.Text = text;
+                run.InlineImage = null;
+                run.InlineImageWidthEmu = null;
+                run.InlineImageHeightEmu = null;
+                cleanedRuns.Add(run);
+            }
+
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(cleanedRuns);
+        }
+
+        return body;
+    }
+
     public static byte[] Serialize(InCanvasRichClipboardPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);

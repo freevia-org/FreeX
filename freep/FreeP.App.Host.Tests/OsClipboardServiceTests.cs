@@ -585,6 +585,10 @@ public sealed class OsClipboardServiceTests
         editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
         editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
             .Should().Contain(run => run.Text.Contains("Caption ", StringComparison.Ordinal));
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .Should().NotContain(text => text.Contains('\uFFFC', StringComparison.Ordinal));
     }
 
     [StaFact]

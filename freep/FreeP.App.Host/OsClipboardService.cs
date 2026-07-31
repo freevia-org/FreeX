@@ -416,14 +416,18 @@ public sealed class OsClipboardService
                     editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
                     editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
+                var slideBody = payload.GetImagePayloads().Count > 0
+                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
+                    : payload.Body;
                 var table = payload.ContainsTable
                     ? editor.InsertTableFromClipboard(
-                        payload.Body,
+                        slideBody,
                         payload.TableColumnWidthsEmu,
                         payload.TableCellStyles)
                     : null;
-                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
-                    editor.InsertTextBox(payload.Body);
+                if (table is null
+                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
+                    editor.InsertTextBox(slideBody);
                 return source;
             }
 
@@ -446,14 +450,18 @@ public sealed class OsClipboardService
                     editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
                     editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
+                var slideBody = payload.GetImagePayloads().Count > 0
+                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
+                    : payload.Body;
                 var table = payload.ContainsTable
                     ? editor.InsertTableFromClipboard(
-                        payload.Body,
+                        slideBody,
                         payload.TableColumnWidthsEmu,
                         payload.TableCellStyles)
                     : null;
-                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
-                    editor.InsertTextBox(payload.Body);
+                if (table is null
+                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
+                    editor.InsertTextBox(slideBody);
                 return source;
             }
 
