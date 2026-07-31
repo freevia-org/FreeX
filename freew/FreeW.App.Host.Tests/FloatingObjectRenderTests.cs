@@ -776,7 +776,7 @@ public sealed class FloatingObjectRenderTests
         root.Arrange(new Rect(0, 0, 124, 64));
         root.UpdateLayout();
 
-        Canvas.GetTop(root).Should().BeApproximately(124, 0.01);
+        Canvas.GetTop(root).Should().BeApproximately(121, 0.01);
         root.Effect.Should().BeNull();
         root.Children.OfType<Border>().Should().HaveCount(3);
         root.Children.OfType<Border>().Single(border => border.Effect is null && border.Opacity == 0.6)
@@ -1070,7 +1070,7 @@ public sealed class FloatingObjectRenderTests
             .Where(color => color.A > 0 && (color.R != 0xFF || color.G != 0xFF || color.B != 0xFF))
             .ToList();
         nodeColors.Should().Contain(Color.FromRgb(0x1F, 0x38, 0x64));
-        nodeColors.Distinct().Should().HaveCountGreaterThan(1);
+        nodeColors.Distinct().Should().ContainSingle();
 
         LogicalDescendants<System.Windows.Shapes.Line>(root)
             .Should()

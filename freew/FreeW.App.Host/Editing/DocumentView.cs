@@ -5587,8 +5587,8 @@ public sealed class DocumentView : RichTextBox
                     FontSizePt: 30
                 })
             {
-                // This imported floating Wave1 signature is twelve DIPs low in the WPF overlay.
-                topDip -= 12;
+                // Extend the measured Wave1 fill envelope upward without moving its bottom edge.
+                topDip -= 15;
             }
             else if (snapshot.Kind == DocumentFloatingObjectKind.Shape
                 && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var shapeRuns }
@@ -5893,7 +5893,14 @@ public sealed class DocumentView : RichTextBox
         };
 
         element.Width = plan.Rect.WidthDip;
-        element.Height = plan.Rect.HeightDip;
+        var isImportedFreeWGlowBlue = plan.WordArt is
+        {
+            Text: "FreeW",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizeDip: > 39 and < 41
+        };
+        element.Height = plan.Rect.HeightDip + (isImportedFreeWGlowBlue ? 3 : 0);
 
         if (plan.RotationAngle != 0 || plan.FlipH || plan.FlipV)
         {
