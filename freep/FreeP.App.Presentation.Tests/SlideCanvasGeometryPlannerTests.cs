@@ -192,7 +192,7 @@ public sealed class SlideCanvasGeometryPlannerTests
             source.Should().Contain("CanvasGesturePlanner.PlanMove");
             source.Should().Contain("SlideCanvasGeometryPlanner.EmuBoundsToScreen");
             source.Should().Contain("SlideCanvasGeometryPlanner.ScreenRectBetween");
-            source.Should().Contain("SlideCanvasGeometryPlanner.ShapeBoundsToScreen");
+            source.Should().Contain("SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen");
             source.Should().NotContain("BoundsToScreenRect");
             source.Should().NotContain("SnapEngine.Snap(");
         }
