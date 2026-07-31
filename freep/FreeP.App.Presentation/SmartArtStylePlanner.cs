@@ -94,6 +94,15 @@ public sealed class SmartArtStylePlan
 
 public static class SmartArtStylePlanner
 {
+    internal static SrgbColor ResolveNeutralConnector(PresentationTheme theme)
+    {
+        var lt2 = theme.ColorScheme[ThemeColorSlot.Lt2];
+        if (lt2 == SrgbColor.FromRgb(0xE8E8E8))
+            return SrgbColor.FromRgb(0xAAB6C1);
+
+        return ThemeColorTransform.ApplyShade(lt2, 0.72);
+    }
+
     public static SmartArtStylePlan Build(
         SmartArtFamily family,
         SmartArtQuickStyleMetadata? quickStyle,

@@ -528,8 +528,9 @@ public sealed class SmartArtLayoutTests
         var data = MakeData(SmartArtFamily.Cycle, "Idea", "Plan", "Execute", "Review", "Improve");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/cycle2";
         data.IsLiveLayoutSupported = true;
+        var theme = DefaultTheme();
 
-        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, theme);
 
         shapes.Should().NotBeNull("cycle2 is admitted through its bounded native geometry");
         shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
@@ -544,9 +545,13 @@ public sealed class SmartArtLayoutTests
                 shape.OffsetXEmu >= FrameX && shape.OffsetYEmu >= FrameY
                 && shape.OffsetXEmu + shape.ExtentCxEmu <= FrameX + FrameCx
                 && shape.OffsetYEmu + shape.ExtentCyEmu <= FrameY + FrameCy);
-        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
-            .Select(shape => shape.RotationDeg)
+        var arrows = shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow).ToArray();
+        arrows.Select(shape => shape.RotationDeg)
             .Should().OnlyContain(rotation => Math.Abs(rotation) > 0.1);
+        arrows.Select(shape => shape.Fill)
+            .Should().AllBeOfType<ShapeFill.Solid>();
+        arrows.Select(shape => ((ShapeFill.Solid)shape.Fill!).Color.Resolved)
+            .Should().OnlyContain(color => color == SmartArtStylePlanner.ResolveNeutralConnector(theme));
     }
 
     [Fact]

@@ -160,7 +160,7 @@ public static class SmartArtLayoutEngine
             return LayoutTitledMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
         if (IsCycle2Layout(data.LayoutUniqueId))
-            return LayoutCycle2(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+            return LayoutCycle2(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan, theme);
 
         if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy3Layout(data.LayoutUniqueId))
             return LayoutHierarchy3(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
@@ -2461,7 +2461,8 @@ public static class SmartArtLayoutEngine
     private static IReadOnlyList<SlideShape>? LayoutCycle2(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
-        SmartArtStylePlan stylePlan)
+        SmartArtStylePlan stylePlan,
+        PresentationTheme theme)
     {
         if (nodes.Count is < 2 or > 7)
             return null;
@@ -2480,7 +2481,10 @@ public static class SmartArtLayoutEngine
         double angleStep = 360.0 / nodes.Count;
         var centers = new (double X, double Y)[nodes.Count];
         var shapes = new List<SlideShape>(nodes.Count * 2);
-        var arrowStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Cycle);
+        var arrowStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Cycle) with
+        {
+            Fill = new ThemeAwareColor(SmartArtStylePlanner.ResolveNeutralConnector(theme))
+        };
         uint id = 860;
 
         // Arrows are emitted first so their heads remain behind the ellipse nodes.
