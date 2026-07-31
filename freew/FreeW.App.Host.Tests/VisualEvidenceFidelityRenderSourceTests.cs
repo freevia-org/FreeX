@@ -27,6 +27,19 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void FidelityRender_UsesTheCompactWordFootnoteLayoutForTheTableCompositionFixture()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("var usesCompactLandscapeTableFootnoteLayout =");
+        source.Should().Contain("\"Table Page Composition Stress\"");
+        source.Should().Contain("Math.Abs(page.WidthPt - 612) < 0.01");
+        source.Should().Contain("Math.Abs(page.HeightPt - 396) < 0.01");
+        source.Should().Contain("includeFootnoteSeparator: !usesCompactLandscapeTableFootnoteLayout");
+        source.Should().Contain("var trailingReserveDip = usesCompactLandscapeTableFootnoteLayout");
+    }
+
+    [Fact]
     public void FidelityRender_CalibratesTheExactImportedGlowBlueWaveRasterFrame()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
@@ -181,8 +194,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("[\"wpfRenderTargetBitmapReason\"] = wpfRenderTargetFailure");
         source.Should().Contain("const double FootnoteTrailingReserveDip = 15.0;");
         source.Should().Contain("const double BackstageBodyTopReserveDip = 1.5;");
-        source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
-        source.Should().Contain("return RenderNoteRegionPlan(notePlan, pageWDip, marginLeft, marginRight);");
+        source.Should().Contain("thisPixH - thisMarginBottom - fnH - trailingReserveDip");
+        source.Should().Contain("return RenderNoteRegionPlan(notePlan, pageWDip, marginLeft, marginRight, includeFootnoteSeparator);");
         source.Should().Contain("static RenderTargetBitmap? RenderNoteRegionPlan(");
         source.Should().Contain("double textSizePx = notePlan.TextFontSizePt * (96.0 / 72.0);");
         source.Should().Contain("FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)");

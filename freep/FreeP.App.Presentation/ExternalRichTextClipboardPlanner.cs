@@ -213,6 +213,10 @@ public static class ExternalRichTextClipboardPlanner
             public required int Level { get; init; }
             public TableShape Table { get; } = new();
             public TableRow? CurrentRow { get; set; }
+            public double? RowInsetLeftPt { get; set; }
+            public double? RowInsetRightPt { get; set; }
+            public double? RowInsetTopPt { get; set; }
+            public double? RowInsetBottomPt { get; set; }
             public int CurrentCellIndex { get; set; }
             public List<long> RightEdgesTwips { get; } = new();
             public List<InCanvasRichClipboardTableCellStyle> CellStyles { get; } = new();
@@ -987,6 +991,23 @@ public static class ExternalRichTextClipboardPlanner
                 case "trqc":
                 case "trql":
                 case "trqr":
+                    break;
+                case "trpaddl":
+                    if (CurrentTableCapture() is { } leftCapture && parameter is { } leftPadding)
+                        leftCapture.RowInsetLeftPt = ToCellInsetPoints(leftPadding);
+                    break;
+                case "trpaddr":
+                    if (CurrentTableCapture() is { } rightCapture && parameter is { } rightPadding)
+                        rightCapture.RowInsetRightPt = ToCellInsetPoints(rightPadding);
+                    break;
+                case "trpaddt":
+                    if (CurrentTableCapture() is { } topCapture && parameter is { } topPadding)
+                        topCapture.RowInsetTopPt = ToCellInsetPoints(topPadding);
+                    break;
+                case "trpaddb":
+                    if (CurrentTableCapture() is { } bottomCapture && parameter is { } bottomPadding)
+                        bottomCapture.RowInsetBottomPt = ToCellInsetPoints(bottomPadding);
+                    break;
                 case "clpadfl":
                 case "clpadfr":
                 case "clpadft":
@@ -1474,6 +1495,10 @@ public static class ExternalRichTextClipboardPlanner
             if (capture.CurrentRow is null)
             {
                 capture.CurrentRow = new TableRow();
+                capture.RowInsetLeftPt = null;
+                capture.RowInsetRightPt = null;
+                capture.RowInsetTopPt = null;
+                capture.RowInsetBottomPt = null;
                 capture.CurrentCellIndex = 0;
                 capture.RightEdgesTwips.Clear();
                 capture.CellStyles.Clear();
@@ -1558,6 +1583,10 @@ public static class ExternalRichTextClipboardPlanner
                 };
                 if (index < capture.CellStyles.Count)
                     ApplyCapturedCellStyle(cell, capture.CellStyles[index]);
+                cell.InsetLeftPt ??= capture.RowInsetLeftPt;
+                cell.InsetRightPt ??= capture.RowInsetRightPt;
+                cell.InsetTopPt ??= capture.RowInsetTopPt;
+                cell.InsetBottomPt ??= capture.RowInsetBottomPt;
                 capture.CurrentRow.Cells.Add(cell);
             }
         }

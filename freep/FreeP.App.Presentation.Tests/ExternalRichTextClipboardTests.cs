@@ -522,7 +522,8 @@ public sealed class ExternalRichTextClipboardTests
     {
         const string rtf =
             @"{\rtf1\ansi
-\trowd\itap1\trrh-480\cellx2000\cellx4000
+\trowd\itap1\trrh-480\trpaddl120\trpaddr240\trpaddt60\trpaddb80
+\clpadl300\cellx2000\cellx4000
 \intbl Outer A\cell
 \trowd\itap2\nesttableprops\trrh720\cellx1000\cellx2000
 \intbl Inner B\nestcell
@@ -544,6 +545,15 @@ public sealed class ExternalRichTextClipboardTests
         outerRun.InlineTable.Table.Rows[0].HeightEmu.Should().Be(304_800);
         outerRun.InlineTable.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
         outerRun.InlineTable.Table.Rows[0].Cells.Should().HaveCount(2);
+        var outerCells = outerRun.InlineTable.Table.Rows[0].Cells;
+        outerCells[0].InsetLeftPt.Should().Be(15);
+        outerCells[0].InsetRightPt.Should().Be(12);
+        outerCells[0].InsetTopPt.Should().Be(3);
+        outerCells[0].InsetBottomPt.Should().Be(4);
+        outerCells[1].InsetLeftPt.Should().Be(6);
+        outerCells[1].InsetRightPt.Should().Be(12);
+        outerCells[1].InsetTopPt.Should().Be(3);
+        outerCells[1].InsetBottomPt.Should().Be(4);
         outerRun.InlineTable.Table.Rows[0].Cells[0].TextBody!
             .Paragraphs[0].Runs[0].Text.Should().Be("Outer A");
         var innerRun = outerRun.InlineTable.Table.Rows[0].Cells[1].TextBody!
@@ -571,6 +581,12 @@ public sealed class ExternalRichTextClipboardTests
         reopened.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
             .Single(run => run.InlineTable is not null)
             .InlineTable!.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
+        var reopenedOuterCells = reopened.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].Cells;
+        reopenedOuterCells[0].InsetLeftPt.Should().Be(15);
+        reopenedOuterCells[1].InsetLeftPt.Should().Be(6);
+        reopenedOuterCells[1].InsetRightPt.Should().Be(12);
     }
 
     [Fact]
