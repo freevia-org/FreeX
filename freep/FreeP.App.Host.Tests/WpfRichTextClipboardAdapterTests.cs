@@ -81,10 +81,12 @@ public sealed class WpfRichTextClipboardAdapterTests
                           <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
                           <FontFamily x:Key="BodyFont">Aptos</FontFamily>
                           <sys:Double x:Key="BodySize">18</sys:Double>
-                          <Style x:Key="ListText">
+                          <Style x:Key="ListBase">
                             <Setter Property="Foreground" Value="{StaticResource Accent}" />
                             <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
                             <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                          </Style>
+                          <Style x:Key="ListText" BasedOn="{StaticResource ListBase}">
                             <Setter Property="FontWeight" Value="Bold" />
                           </Style>
                         </ResourceDictionary>
