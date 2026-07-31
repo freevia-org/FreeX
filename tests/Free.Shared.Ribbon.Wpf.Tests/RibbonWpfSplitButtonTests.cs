@@ -43,6 +43,25 @@ public sealed class RibbonWpfSplitButtonTests
         });
     }
 
+    [Theory]
+    [InlineData(RibbonCommandLayoutKind.Medium, 20d)]
+    [InlineData(RibbonCommandLayoutKind.Small, 14d)]
+    public void SplitButton_UsesFixedDropdownZoneMetrics(RibbonCommandLayoutKind layout, double dropdownWidth)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("paste", new RecordingCommand());
+            var root = BuildRibbon(registry, layout: layout);
+            Layout(root, 420, 130);
+
+            var dropdown = FindButton(root, "paste.Dropdown");
+
+            dropdown.Width.Should().Be(dropdownWidth);
+            dropdown.ContextMenu.Should().NotBeNull();
+        });
+    }
+
     [Fact]
     public void CollapsedSplitButton_FlattensPrimaryAndSkipsDuplicateMenuEntry()
     {
@@ -99,7 +118,10 @@ public sealed class RibbonWpfSplitButtonTests
         });
     }
 
-    private static FrameworkElement BuildRibbon(IRibbonCommandRegistry registry, RibbonMenu? menu = null) =>
+    private static FrameworkElement BuildRibbon(
+        IRibbonCommandRegistry registry,
+        RibbonMenu? menu = null,
+        RibbonCommandLayoutKind layout = RibbonCommandLayoutKind.Medium) =>
         RibbonWpfRenderer.BuildTabContent(
             new RibbonDefinitionBuilder()
                 .Tab("home", "Home", "H", tab => tab
@@ -110,7 +132,7 @@ public sealed class RibbonWpfSplitButtonTests
                             new RibbonMenuItem("Paste Special", "pasteSpecial")
                         }), control => control with
                         {
-                            PreferredLayout = RibbonCommandLayoutKind.Medium,
+                            PreferredLayout = layout,
                             KeyTip = "P"
                         })))
                 .Build()

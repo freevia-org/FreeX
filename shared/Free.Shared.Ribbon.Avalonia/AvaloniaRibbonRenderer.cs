@@ -1484,7 +1484,8 @@ public static class AvaloniaRibbonRenderer
             { PreferredLayout: RibbonCommandLayoutKind.Small } => BuildIconControl(control, registry, afterExecute, palette),
             _ => BuildMediumControl(control, registry, afterExecute, palette),
         };
-        SetKeyTip(element, control.KeyTip);
+        if (control is not RibbonSplitButton)
+            SetKeyTip(element, control.KeyTip);
         return element;
     }
 
@@ -1637,6 +1638,9 @@ public static class AvaloniaRibbonRenderer
     // WPF BuildMediumControl: small icon (16px) + label in a horizontal row.
     private static Control BuildMediumControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
     {
+        if (control is RibbonSplitButton splitButton)
+            return BuildMediumSplitControl(splitButton, registry, afterExecute, palette);
+
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         content.Children.Add(NewIcon(control, RibbonVisualMetrics.MediumIconSize, HorizontalAlignment.Center));
         content.Children.Add(new TextBlock
@@ -1662,9 +1666,65 @@ public static class AvaloniaRibbonRenderer
         return button;
     }
 
+    private static Control BuildMediumSplitControl(
+        RibbonSplitButton control,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute,
+        AvaloniaRibbonPalette palette)
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        content.Children.Add(NewIcon(control, RibbonVisualMetrics.MediumIconSize, HorizontalAlignment.Center));
+        content.Children.Add(new TextBlock
+        {
+            Text = control.Label,
+            FontSize = 12,
+            FontFamily = RibbonFontFamily,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0, 2, 0),
+        });
+
+        var primary = new Button
+        {
+            Content = content,
+            Tag = control.CommandId.Value,
+            MinWidth = 84,
+            Height = RibbonVisualMetrics.SmallRowHeight,
+            Padding = new Thickness(4, 2),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        WireControl(primary, control, registry, afterExecute, palette, attachMenu: false);
+
+        var dropdown = new Button
+        {
+            Content = Chevron(palette),
+            Tag = $"{control.CommandId.Value}.Dropdown",
+            Width = 20,
+            MinWidth = 20,
+            Height = RibbonVisualMetrics.SmallRowHeight,
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        WireControl(dropdown, control, registry, afterExecute, palette);
+        SetKeyTip(dropdown, control.KeyTip);
+
+        var split = new Grid { MinWidth = 104 };
+        split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        Grid.SetColumn(primary, 0);
+        Grid.SetColumn(dropdown, 1);
+        split.Children.Add(primary);
+        split.Children.Add(dropdown);
+        return split;
+    }
+
     // WPF BuildIconControl: Small layout is ICON-ONLY (~18px) — no label. With a menu, append a chevron.
     private static Control BuildIconControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
     {
+        if (control is RibbonSplitButton splitButton)
+            return BuildIconSplitControl(splitButton, registry, afterExecute, palette);
+
         var hasMenu = HasMenu(control);
         Control content;
         if (hasMenu)
@@ -1689,6 +1749,48 @@ public static class AvaloniaRibbonRenderer
         ((ContentControl)button).Content = content;
         WireControl(button, control, registry, afterExecute, palette);
         return button;
+    }
+
+    private static Control BuildIconSplitControl(
+        RibbonSplitButton control,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute,
+        AvaloniaRibbonPalette palette)
+    {
+        var primary = new Button
+        {
+            Content = NewIcon(control, RibbonVisualMetrics.SmallIconSize, HorizontalAlignment.Center),
+            Tag = control.CommandId.Value,
+            Width = 30,
+            Height = RibbonVisualMetrics.SmallRowHeight,
+            Padding = new Thickness(1, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        WireControl(primary, control, registry, afterExecute, palette, attachMenu: false);
+
+        var dropdown = new Button
+        {
+            Content = Chevron(new Thickness(0), palette),
+            Tag = $"{control.CommandId.Value}.Dropdown",
+            Width = 14,
+            MinWidth = 14,
+            Height = RibbonVisualMetrics.SmallRowHeight,
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        WireControl(dropdown, control, registry, afterExecute, palette);
+        SetKeyTip(dropdown, control.KeyTip);
+
+        var split = new Grid { Width = 44, MinWidth = 44 };
+        split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+        Grid.SetColumn(primary, 0);
+        Grid.SetColumn(dropdown, 1);
+        split.Children.Add(primary);
+        split.Children.Add(dropdown);
+        return split;
     }
 
     private static Control BuildComboControl(RibbonComboBox combo, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
@@ -1882,9 +1984,10 @@ public static class AvaloniaRibbonRenderer
         RibbonControl control,
         IRibbonCommandRegistry? registry,
         Action? afterExecute,
-        AvaloniaRibbonPalette palette)
+        AvaloniaRibbonPalette palette,
+        bool attachMenu = true)
     {
-        if (BuildMenu(control) is { } menu && element is Button menuButton)
+        if (attachMenu && BuildMenu(control) is { } menu && element is Button menuButton)
         {
             menuButton.Flyout = menu.BuildFlyout(registry, afterExecute);
         }
