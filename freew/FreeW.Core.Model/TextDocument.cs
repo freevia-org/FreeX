@@ -3062,6 +3062,12 @@ public sealed class TextDocument
     public bool UseWordApplicationDefaultLineSpacing { get; set; }
 
     /// <summary>
+    /// Whether the imported package omitted <c>w:docDefaults/w:rPrDefault</c> and therefore uses Word's
+    /// application run defaults. False for model-authored documents and packages with explicit run defaults.
+    /// </summary>
+    public bool UseWordApplicationDefaultRunFormatting { get; set; }
+
+    /// <summary>
     /// The single modelled FreeW multilevel-list definition. Its per-level number formats map to the
     /// fixed FreeW multilevel numbering definition in word/numbering.xml.
     /// </summary>

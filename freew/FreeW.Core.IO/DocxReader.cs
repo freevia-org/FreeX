@@ -42,7 +42,12 @@ public static class DocxReader
             // Word applies its application paragraph default when the package cascade contains no
             // w:spacing/@w:line token. Keep that import provenance separate from model-authored documents,
             // whose implicit paragraph default intentionally follows the host's natural single-line box.
-            UseWordApplicationDefaultLineSpacing = true
+            UseWordApplicationDefaultLineSpacing = true,
+            UseWordApplicationDefaultRunFormatting = true,
+            // Current Word resolves a package with no w:rPrDefault size to a 12-point application
+            // default. Keep model-authored FreeW documents at their existing 11-point default; an
+            // explicit package size read below still overrides this import fallback.
+            DefaultRun = RunFormatting.Default with { FontFamily = "Calibri", FontSizePt = 12 }
         };
         OpcDocumentProperties.ReadCoreProperties(
             archive,
@@ -6545,6 +6550,7 @@ public static class DocxReader
         var ddRPr = docDefaults?.Element(W + "rPrDefault")?.Element(W + "rPr");
         if (ddRPr is not null)
         {
+            document.UseWordApplicationDefaultRunFormatting = false;
             var defaultRun = ReadRunFormatting(ddRPr);
             // Merge: keep the existing DefaultRun value for any field that docDefaults does not override.
             document.DefaultRun = document.DefaultRun with
