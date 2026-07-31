@@ -3700,6 +3700,27 @@ public sealed class GestureHandlerAltSnapTests
     private static Task Run(Action action) =>
         AvaloniaInteractionTestSession.Run(action);
 
+    [Fact]
+    public void DoubleClickPolicy_TextlessShapesContinueSelection_TextShapesDeferToEditor()
+    {
+        AvaloniaCanvasGestureHandler.ShouldContinueDoubleClickSelection(
+            new SlideShape { Kind = SlideShapeKind.AutoShape })
+            .Should().BeTrue();
+        AvaloniaCanvasGestureHandler.ShouldContinueDoubleClickSelection(
+            new SlideShape
+            {
+                Kind = SlideShapeKind.AutoShape,
+                TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new Paragraph { Runs = { new Run { Text = "Edit me" } } }
+                    }
+                }
+            })
+            .Should().BeFalse();
+    }
+
     // ── Helper: build a handler with one shape ────────────────────────────────
 
     private static (AvaloniaCanvasGestureHandler handler, EditingSession editor, SlideShape shape)

@@ -268,8 +268,10 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
                 e.Handled = true;
             }
 
-            // Text editing remains the responsibility of InCanvasTextEditor.
-            return;
+            // Text editing remains the responsibility of InCanvasTextEditor. A textless
+            // double-click must continue through the normal selection path, matching WPF.
+            if (!ShouldContinueDoubleClickSelection(shape))
+                return;
         }
 
         // Handle single selection: check handles first.
@@ -351,6 +353,9 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
         e.Handled = true;
     }
+
+    internal static bool ShouldContinueDoubleClickSelection(SlideShape? shape) =>
+        shape?.TextBody is null;
 
     // ── Pointer move ───────────────────────────────────────────────────────────
 

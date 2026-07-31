@@ -21,6 +21,26 @@ namespace FreeP.App.Host.Tests;
 /// </summary>
 public sealed class CanvasEditingTests
 {
+    [Fact]
+    public void DoubleClickPolicy_TextlessShapesContinueSelection_TextShapesDeferToEditor()
+    {
+        CanvasGestureHandler.ShouldContinueDoubleClickSelection(
+            new SlideShape { Kind = SlideShapeKind.AutoShape })
+            .Should().BeTrue();
+        CanvasGestureHandler.ShouldContinueDoubleClickSelection(
+            new SlideShape
+            {
+                Kind = SlideShapeKind.AutoShape,
+                TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new Paragraph { Runs = { new Run { Text = "Edit me" } } }
+                    }
+                }
+            })
+            .Should().BeFalse();
+    }
     // ── SlideTransform ────────────────────────────────────────────────────────────
 
     [Fact]

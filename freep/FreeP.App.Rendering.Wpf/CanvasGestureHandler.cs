@@ -177,6 +177,11 @@ public sealed class CanvasGestureHandler
                 e.Handled = true;
                 return;
             }
+
+            // Text editing remains the responsibility of InCanvasTextEditor. Keep text-bearing
+            // shapes out of the normal selection path while allowing textless shapes to select.
+            if (!ShouldContinueDoubleClickSelection(shape))
+                return;
         }
 
         // Determine what was hit first for the existing selection (handles take priority)
@@ -274,6 +279,9 @@ public sealed class CanvasGestureHandler
 
         e.Handled = true;
     }
+
+    internal static bool ShouldContinueDoubleClickSelection(SlideShape? shape) =>
+        shape?.TextBody is null;
 
     // ── Mouse move ────────────────────────────────────────────────────────────────────────────
 
