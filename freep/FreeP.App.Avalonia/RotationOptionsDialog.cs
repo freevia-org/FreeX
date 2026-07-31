@@ -73,7 +73,7 @@ internal sealed class RotationOptionsDialog : Window
     }
 
     private double InitialRotation() => _editor.SelectedShapeIds
-        .Select(id => _editor.CurrentSlide?.Shapes.FirstOrDefault(shape => shape.Id == id))
+        .Select(id => _editor.CurrentSlide is { } slide ? ShapeTreeLookup.Find(slide, id) : null)
         .FirstOrDefault(shape => shape is not null)?.RotationDeg ?? 0;
 
     private static string Format(double value) => value.ToString("G", CultureInfo.CurrentCulture);

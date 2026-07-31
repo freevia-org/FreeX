@@ -495,7 +495,7 @@ internal sealed class AvaloniaPresentationClipboardService(
 
         foreach (var shapeId in selectedShapeIds)
         {
-            if (editor.CurrentSlide?.Shapes.Any(shape => shape.Id == shapeId) == true)
+            if (editor.CurrentSlide is { } slide && ShapeTreeLookup.Find(slide, shapeId) is not null)
                 editor.Select(shapeId, addToSelection: true);
         }
     }

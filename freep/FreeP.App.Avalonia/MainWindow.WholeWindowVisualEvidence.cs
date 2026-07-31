@@ -157,7 +157,10 @@ public sealed partial class MainWindow
             .ToArray() ?? [];
         var contextualIds = definition.ContextualTabs.Select(tab => tab.Id).ToHashSet(StringComparer.Ordinal);
         var visibleContextualTabs = visibleTabs.Where(contextualIds.Contains).ToArray();
-        var selectedShape = Editor.CurrentSlide?.Shapes.FirstOrDefault(shape => Editor.SelectedShapeIds.Contains(shape.Id));
+        var selectedShape = Editor.CurrentSlide is { } currentSlide
+            ? ShapeTreeLookup.Enumerate(currentSlide)
+                .FirstOrDefault(shape => Editor.SelectedShapeIds.Contains(shape.Id))
+            : null;
         var root = Content as Visual ?? this;
         var statusRoot = _statusText.GetVisualAncestors().OfType<Border>().FirstOrDefault() as Visual ?? _statusText;
         var ribbonRoot = _ribbonControl?.GetVisualAncestors().OfType<Border>().FirstOrDefault() as Visual ?? _ribbonControl;
