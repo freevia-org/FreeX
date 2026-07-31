@@ -64,6 +64,39 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesBaselineAlignmentAndStyleInheritance()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="ScriptText">
+                    <Setter Property="BaselineAlignment" Value="Superscript" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph>
+                <Run Text="base" />
+                <Run BaselineAlignment="Superscript" Text="up" />
+                <Span BaselineAlignment="Subscript">down</Span>
+                <Run BaselineAlignment="Baseline" Text="normal" />
+              </Paragraph>
+              <Paragraph Style="{StaticResource ScriptText}">styled up</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs[0].Runs.Select(run => run.BaselineOffset)
+            .Should().Equal(null, 10_000, -10_000, null);
+        paragraphs[1].Runs.Single().BaselineOffset.Should().Be(10_000);
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_ResolvesSolidColorBrushResources()
     {
         const string xaml = """

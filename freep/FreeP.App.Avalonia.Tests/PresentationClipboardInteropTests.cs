@@ -661,6 +661,32 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task XamlPackage_preserves_baseline_alignment()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage("""
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                      <Paragraph>
+                        <Run Text="base" />
+                        <Run BaselineAlignment="Superscript" Text="up" />
+                        <Run BaselineAlignment="Subscript" Text="down" />
+                      </Paragraph>
+                    </FlowDocument>
+                    """)),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single().Runs
+            .Select(run => run.BaselineOffset)
+            .Should().Equal(null, 10_000, -10_000);
+    }
+
+    [Fact]
     public async Task External_Rtf_table_preserves_solid_cell_style()
     {
         var clipboard = new FakeSystemClipboard

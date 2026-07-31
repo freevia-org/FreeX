@@ -19,6 +19,10 @@ public static class ExternalXamlClipboardPlanner
     public const int MaxXmlBytes = 8 * 1024 * 1024;
     public const int MaxOutputCharacters = 1_000_000;
     public const int MaxTableCellsPerRow = 4096;
+    // Keep XamlPackage script runs on the same compact offset used by the
+    // shared editor commands. The source format only exposes the semantic
+    // alignment, not a numeric DrawingML percentage.
+    private const int XamlScriptBaselineOffset = 10_000;
     private const long EmuPerDip = 9525;
 
     public static InCanvasRichClipboardPayload? TryParseXamlPackage(byte[]? bytes)
@@ -450,6 +454,7 @@ public static class ExternalXamlClipboardPlanner
             ItalicSet = style.ItalicSet,
             Underline = style.Underline,
             Strikethrough = style.Strikethrough,
+            BaselineOffset = style.BaselineOffset,
             Color = style.Color,
             Hyperlink = style.Hyperlink,
         });
@@ -509,6 +514,9 @@ public static class ExternalXamlClipboardPlanner
                 Underline = decorations.Contains("Underline", StringComparison.OrdinalIgnoreCase),
                 Strikethrough = decorations.Contains("Strikethrough", StringComparison.OrdinalIgnoreCase),
             };
+
+        if (TryReadBaselineOffset(AttributeValue(element, "BaselineAlignment"), out var baselineOffset))
+            style = style with { BaselineOffset = baselineOffset };
 
         var localName = element.Name.LocalName;
         if (localName.Equals("Bold", StringComparison.OrdinalIgnoreCase))
@@ -603,6 +611,11 @@ public static class ExternalXamlClipboardPlanner
                     Underline = decorations.Contains("Underline", StringComparison.OrdinalIgnoreCase),
                     Strikethrough = decorations.Contains("Strikethrough", StringComparison.OrdinalIgnoreCase),
                 };
+
+            case "baselinealignment":
+                return TryReadBaselineOffset(value, out var baselineOffset)
+                    ? style with { BaselineOffset = baselineOffset }
+                    : style;
 
             case "foreground":
                 var foreground = ResolveColorResource(value, resources.Colors);
@@ -779,6 +792,28 @@ public static class ExternalXamlClipboardPlanner
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
         && double.IsFinite(result);
 
+    private static bool TryReadBaselineOffset(string? value, out int? baselineOffset)
+    {
+        baselineOffset = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "superscript":
+                baselineOffset = XamlScriptBaselineOffset;
+                return true;
+            case "subscript":
+                baselineOffset = -XamlScriptBaselineOffset;
+                return true;
+            case "baseline":
+            case "normal":
+                return true;
+            default:
+                return false;
+        }
+    }
+
     private static long? ReadImageExtentEmu(XElement element, string attributeName)
     {
         if (!TryParseDip(AttributeValue(element, attributeName), out var dip)
@@ -928,7 +963,8 @@ public static class ExternalXamlClipboardPlanner
         bool BoldSet,
         bool ItalicSet,
         ThemeAwareColor? Color,
-        Hyperlink? Hyperlink);
+        Hyperlink? Hyperlink,
+        int? BaselineOffset = null);
 
     private sealed record XamlStyleResource(
         string? BasedOn,
