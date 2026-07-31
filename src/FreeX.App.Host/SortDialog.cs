@@ -23,6 +23,9 @@ public sealed partial class SortDialog : Window
     private readonly IReadOnlyList<SortColumnChoice> _rowChoices;
     private readonly IReadOnlyList<SortColorChoice> _cellColorChoices;
     private readonly IReadOnlyList<SortColorChoice> _fontColorChoices;
+    private readonly Workbook? _iconWorkbook;
+    private readonly Sheet? _iconSheet;
+    private readonly GridRange? _iconRange;
     private readonly CheckBox _headerCheck;
     private readonly DataGridComboBoxColumn _sortByColumn;
     private readonly DataGrid _levelsGrid;
@@ -50,7 +53,10 @@ public sealed partial class SortDialog : Window
         IEnumerable<SortColorChoice>? colorChoices = null,
         IEnumerable<SortColorChoice>? cellColorChoices = null,
         IEnumerable<SortColorChoice>? fontColorChoices = null,
-        bool hasHeaders = true)
+        bool hasHeaders = true,
+        Workbook? iconWorkbook = null,
+        Sheet? iconSheet = null,
+        GridRange? iconRange = null)
     {
         _levels = new ObservableCollection<SortDialogLevel>(NormalizeLevels(levels));
         _columnChoices = NormalizeColumnChoices(columnChoices);
@@ -58,6 +64,9 @@ public sealed partial class SortDialog : Window
         _rowChoices = NormalizeColumnChoices(rowChoices);
         _cellColorChoices = NormalizeColorChoices(cellColorChoices ?? colorChoices);
         _fontColorChoices = NormalizeColorChoices(fontColorChoices ?? colorChoices);
+        _iconWorkbook = iconWorkbook;
+        _iconSheet = iconSheet;
+        _iconRange = iconRange;
         _options = new SortDialogOptions();
         ResultSortKeys = BuildSortKeys(_levels);
         ResultHasHeaders = hasHeaders;
@@ -93,8 +102,8 @@ public sealed partial class SortDialog : Window
         });
         Grid.SetRow(headerRow, 0);
         root.Children.Add(headerRow);
-        _headerCheck.Checked += (_, _) => UpdateColumnChoices();
-        _headerCheck.Unchecked += (_, _) => UpdateColumnChoices();
+        _headerCheck.Checked += (_, _) => { UpdateColumnChoices(); RefreshAllIconChoices(); };
+        _headerCheck.Unchecked += (_, _) => { UpdateColumnChoices(); RefreshAllIconChoices(); };
         foreach (var level in _levels)
             AttachLevel(level);
         _levels.CollectionChanged += (_, e) =>
@@ -147,6 +156,7 @@ public sealed partial class SortDialog : Window
         });
         _levelsGrid.Columns.Add(CreateOrderColumn());
         _levelsGrid.Columns.Add(CreateColorColumn());
+        _levelsGrid.Columns.Add(CreateIconColumn());
         Grid.SetRow(_levelsGrid, 1);
         root.Children.Add(_levelsGrid);
 
@@ -291,10 +301,18 @@ public sealed partial class SortDialog : Window
     private void AttachLevel(SortDialogLevel level)
     {
         ApplyColorChoices(level);
+        ApplyIconChoices(level);
         level.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(SortDialogLevel.SortOn))
+            {
                 ApplyColorChoices(level);
+                ApplyIconChoices(level);
+            }
+            else if (e.PropertyName == nameof(SortDialogLevel.ColumnOffset))
+            {
+                ApplyIconChoices(level);
+            }
         };
     }
 
@@ -305,6 +323,36 @@ public sealed partial class SortDialog : Window
             _cellColorChoices,
             _fontColorChoices,
             PlannerText));
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="ApplyColorChoices"/> for "Sort On: Cell Icon", but the icon set a column
+    /// carries is column-specific (unlike the whole-range color scan), so the choices are rescanned
+    /// from <see cref="SortDialogPlanner.BuildIconChoices"/> against the level's own
+    /// <see cref="SortDialogLevel.ColumnOffset"/> every time the sort-on mode or the target column
+    /// changes, instead of being precomputed once like <see cref="_cellColorChoices"/>.
+    /// </summary>
+    private void ApplyIconChoices(SortDialogLevel level)
+    {
+        if (_iconWorkbook is null || _iconSheet is null || _iconRange is not { } range ||
+            SortDialogPlanner.SortOnFromLabel(level.SortOn, PlannerText) != SortOn.CellIcon)
+        {
+            level.SetIconChoices([new SortIconChoice("")]);
+            return;
+        }
+
+        level.SetIconChoices(SortDialogPlanner.BuildIconChoices(
+            _iconWorkbook,
+            _iconSheet,
+            range,
+            level.ColumnOffset,
+            _headerCheck.IsChecked == true));
+    }
+
+    private void RefreshAllIconChoices()
+    {
+        foreach (var level in _levels)
+            ApplyIconChoices(level);
     }
 
     private void ReplaceLevels(IEnumerable<SortDialogLevel> levels)
@@ -345,6 +393,34 @@ public sealed partial class SortDialog : Window
         combo.SetValue(ItemsControl.DisplayMemberPathProperty, nameof(SortColorChoice.Label));
         combo.SetValue(Selector.SelectedValuePathProperty, nameof(SortColorChoice.Label));
         combo.SetBinding(Selector.SelectedValueProperty, new Binding(nameof(SortDialogLevel.TargetColor))
+        {
+            Mode = BindingMode.TwoWay,
+            UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged
+        });
+        combo.SetValue(UIElement.IsHitTestVisibleProperty, !isReadOnly);
+        combo.SetValue(Control.IsTabStopProperty, !isReadOnly);
+        return new DataTemplate { VisualTree = combo };
+    }
+
+    private static DataGridTemplateColumn CreateIconColumn()
+    {
+        var column = new DataGridTemplateColumn
+        {
+            Header = UiText.Get("Sort_Icon"),
+            Width = new DataGridLength(115)
+        };
+        column.CellTemplate = CreateIconTemplate(isReadOnly: true);
+        column.CellEditingTemplate = CreateIconTemplate(isReadOnly: false);
+        return column;
+    }
+
+    private static DataTemplate CreateIconTemplate(bool isReadOnly)
+    {
+        var combo = new FrameworkElementFactory(typeof(ComboBox));
+        combo.SetBinding(ItemsControl.ItemsSourceProperty, new Binding(nameof(SortDialogLevel.IconChoices)));
+        combo.SetValue(ItemsControl.DisplayMemberPathProperty, nameof(SortIconChoice.Label));
+        combo.SetValue(Selector.SelectedValuePathProperty, nameof(SortIconChoice.Label));
+        combo.SetBinding(Selector.SelectedValueProperty, new Binding(nameof(SortDialogLevel.TargetIcon))
         {
             Mode = BindingMode.TwoWay,
             UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged

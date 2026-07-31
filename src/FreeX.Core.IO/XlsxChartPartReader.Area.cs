@@ -90,6 +90,49 @@ public static partial class XlsxChartPartReader
             }
         }
 
+        // R110-io-chart-series-embedded-area: mirrors XlsxChartPartReader.Bar.cs's
+        // TryReadBarLineComboChart fallback — when all val/cat formulas across the area+line combo
+        // series are named ranges or all cross-sheet cell refs, `ranges` stays empty and this
+        // function used to unconditionally return false, silently dropping the whole combo chart.
+        var allAreaComboSeriesElements = areaCharts.Concat(lineCharts)
+            .SelectMany(c => c.Elements(ChartNs + "ser"))
+            .ToList();
+        var areaComboEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allAreaComboSeriesElements, sheetId)
+                                    ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(allAreaComboSeriesElements, sheetId, sheetNameResolver);
+        if (areaComboEmbeddedData is not null)
+        {
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
+            result.FirstRowIsHeader = hasTitleRange;
+            result.FirstColIsCategories = hasCategoryRange;
+            result.EmbeddedSeriesData = areaComboEmbeddedData;
+            result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
+                .Where(index => index >= 0)
+                .Distinct()
+                .Order()
+                .ToList();
+            result.ComboLineSeriesIndexes = result.ComboLineSeriesIndexes
+                .Where(index => index >= 0)
+                .Distinct()
+                .Order()
+                .ToList();
+            result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
+            result.UseComboLineForSecondarySeries = result.ComboLineSeriesIndexes.Count > 0;
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                allAreaComboSeriesElements,
+                sheetId,
+                sheetNameResolver);
+            ApplyVerbatimSeriesFormulasIfNeeded(allAreaComboSeriesElements, sheetId, sheetNameResolver, result);
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
+        }
+
         if (ranges.Count == 0)
         {
             chart = new ChartModel();
@@ -176,6 +219,38 @@ public static partial class XlsxChartPartReader
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
+        }
+
+        // R110-io-chart-series-embedded-area: mirrors XlsxChartPartReader.Bar.cs's
+        // TryReadBarChart fallback — see the identical block/comment in TryReadAreaLineComboChart above.
+        var allAreaSeriesElements = areaCharts.SelectMany(c => c.Elements(ChartNs + "ser")).ToList();
+        var areaEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allAreaSeriesElements, sheetId)
+                               ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(allAreaSeriesElements, sheetId, sheetNameResolver);
+        if (areaEmbeddedData is not null)
+        {
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
+            result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
+                .Distinct()
+                .Order()
+                .ToList();
+            result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
+            result.FirstRowIsHeader = hasTitleRange;
+            result.FirstColIsCategories = hasCategoryRange;
+            result.EmbeddedSeriesData = areaEmbeddedData;
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                allAreaSeriesElements,
+                sheetId,
+                sheetNameResolver);
+            ApplyVerbatimSeriesFormulasIfNeeded(allAreaSeriesElements, sheetId, sheetNameResolver, result);
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
         }
 
         if (ranges.Count == 0)

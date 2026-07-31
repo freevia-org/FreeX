@@ -588,11 +588,28 @@ public sealed class Workbook
         if (IsReservedToken(name))
             return "Named range name is invalid: 'C', 'c', 'R', and 'r' are reserved single-letter names.";
 
+        if (HasReservedExcelPrefix(name))
+            return "Named range name is invalid: names starting with '_xlnm.' or '_xlchart.' are reserved for Excel's built-in defined names.";
+
         if (CellAddress.TryParse(name, SheetId.New(), out _) || IsR1C1Reference(name))
             return "Named range name is invalid: it cannot look like a cell reference.";
 
         return null;
     }
+
+    // Excel reserves the "_xlnm." prefix for its own built-in defined names (Print_Area,
+    // Print_Titles, _FilterDatabase, Criteria, Database, Extract, Consolidate_Area, etc. — see
+    // ECMA-376 ST_DefinedNames) and "_xlchart." for chart-sheet-scoped built-ins; the New Name /
+    // Name Manager dialogs refuse to let a user create an ordinary name that impersonates that
+    // namespace. FreeX.Core.IO's XlsxNamedRangeMapper.IsExcelReservedDefinedName treats ANY name
+    // with either prefix as reserved/Excel-internal at IO time and unconditionally skips emitting
+    // a <definedName> element for it on save (and skips loading one on read) — so without this
+    // guard here, a name like "_xlnm.Foo" could be created and used live in formulas but would be
+    // silently and permanently dropped on the very next save. Matches
+    // DefinedNameValidator.Validate used by the Avalonia shell.
+    private static bool HasReservedExcelPrefix(string name) =>
+        name.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase) ||
+        name.StartsWith("_xlchart.", StringComparison.OrdinalIgnoreCase);
 
     // Excel reserves the single-letter names "C"/"c" (current column) and "R"/"r" (current row)
     // as defined-name identifiers; they cannot be used even though they otherwise satisfy the

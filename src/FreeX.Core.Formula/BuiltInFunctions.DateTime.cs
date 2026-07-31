@@ -490,7 +490,11 @@ public static partial class BuiltInFunctions
         // (so "36:00:00" -> 0.5, "25:30:00" -> 0.0625).
         if (hasTimeComponent && TryParseElapsedHmsText(text, out var elapsedFraction))
             return new NumberValue(elapsedFraction);
-        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+        // Use the same current-culture-aware parse DATEVALUE uses (CreateExcelTwoDigitYearCulture),
+        // not a hardcoded InvariantCulture: a date+time string with a day-of-month > 12 (e.g.
+        // "14/3/2024 15:30" under a D/M/Y locale) or a '.'-separated date (e.g. de-DE) must resolve
+        // per the system's regional short-date order, matching real Excel and DATEVALUE/CellEntryParser.
+        if (DateTime.TryParse(text, CreateExcelTwoDigitYearCulture(),
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(dt.TimeOfDay.TotalDays);
         return ErrorValue.Value;

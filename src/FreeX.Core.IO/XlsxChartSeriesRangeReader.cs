@@ -451,13 +451,20 @@ internal static class XlsxChartSeriesRangeReader
     /// Returns true when the val or cat formula of every series in <paramref name="seriesElements"/>
     /// that has a formula is a named range (not a direct cell address). When this returns true,
     /// the embedded numCache/strCache values should be used for rendering.
+    /// <paramref name="valueContainerName"/>/<paramref name="categoryContainerName"/> default to
+    /// "val"/"cat" (Bar/Line/Area/Pie) but can be overridden to "yVal"/"xVal" for Scatter/Bubble,
+    /// whose series carry their point data in those containers instead.
     /// </summary>
-    public static bool AllValCatFormulasAreNamedRanges(IReadOnlyList<XElement> seriesElements, SheetId sheetId)
+    public static bool AllValCatFormulasAreNamedRanges(
+        IReadOnlyList<XElement> seriesElements,
+        SheetId sheetId,
+        string valueContainerName = "val",
+        string categoryContainerName = "cat")
     {
         var anyNamedRange = false;
         foreach (var series in seriesElements)
         {
-            foreach (var containerName in new[] { "val", "cat" })
+            foreach (var containerName in new[] { valueContainerName, categoryContainerName })
             {
                 var formula = ReadFirstFormula(series, containerName);
                 if (string.IsNullOrWhiteSpace(formula))
@@ -483,12 +490,16 @@ internal static class XlsxChartSeriesRangeReader
     /// Returns null when formulas are direct cell references (normal cell-lookup path) or when
     /// the named-range formulas have no embedded cache (e.g. full-column refs like Sheet1!$B:$B
     /// that lack a numCache — use the verbatim-formula path instead).
+    /// <paramref name="valueContainerName"/>/<paramref name="categoryContainerName"/> default to
+    /// "val"/"cat" but can be overridden to "yVal"/"xVal" for Scatter/Bubble series.
     /// </summary>
     public static List<ChartEmbeddedSeriesData>? TryReadEmbeddedSeriesData(
         IReadOnlyList<XElement> seriesElements,
-        SheetId sheetId)
+        SheetId sheetId,
+        string valueContainerName = "val",
+        string categoryContainerName = "cat")
     {
-        if (!AllValCatFormulasAreNamedRanges(seriesElements, sheetId))
+        if (!AllValCatFormulasAreNamedRanges(seriesElements, sheetId, valueContainerName, categoryContainerName))
             return null;
 
         var result = new List<ChartEmbeddedSeriesData>(seriesElements.Count);
@@ -497,8 +508,8 @@ internal static class XlsxChartSeriesRangeReader
             var series = seriesElements[i];
             var seriesIndex = ReadSeriesIndex(series, i);
             var seriesName = ReadEmbeddedStringCacheFirstValue(series, "tx");
-            var categories = ReadEmbeddedStringCacheValues(series, "cat");
-            var values = ReadEmbeddedNumericCacheValues(series, "val");
+            var categories = ReadEmbeddedStringCacheValues(series, categoryContainerName);
+            var values = ReadEmbeddedNumericCacheValues(series, valueContainerName);
             result.Add(new ChartEmbeddedSeriesData(seriesIndex, seriesName, categories, values));
         }
 
@@ -523,11 +534,15 @@ internal static class XlsxChartSeriesRangeReader
     ///   <item>Any formula is a named range (handled by <see cref="TryReadEmbeddedSeriesData"/>).</item>
     ///   <item>No series has non-empty numCache values.</item>
     /// </list>
+    /// <paramref name="valueContainerName"/>/<paramref name="categoryContainerName"/> default to
+    /// "val"/"cat" but can be overridden to "yVal"/"xVal" for Scatter/Bubble series.
     /// </summary>
     public static List<ChartEmbeddedSeriesData>? TryReadCrossSheetEmbeddedData(
         IEnumerable<XElement> seriesElements,
         SheetId chartSheetId,
-        IReadOnlyDictionary<string, SheetId>? sheetNameResolver)
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
+        string valueContainerName = "val",
+        string categoryContainerName = "cat")
     {
         if (sheetNameResolver is null)
             return null;
@@ -537,7 +552,7 @@ internal static class XlsxChartSeriesRangeReader
 
         foreach (var series in seriesList)
         {
-            foreach (var containerName in new[] { "val", "cat" })
+            foreach (var containerName in new[] { valueContainerName, categoryContainerName })
             {
                 var formula = ReadFirstFormula(series, containerName);
                 if (string.IsNullOrWhiteSpace(formula))
@@ -563,8 +578,8 @@ internal static class XlsxChartSeriesRangeReader
             var series = seriesList[i];
             var seriesIndex = ReadSeriesIndex(series, i);
             var seriesName = ReadEmbeddedStringCacheFirstValue(series, "tx");
-            var categories = ReadEmbeddedStringCacheValues(series, "cat");
-            var values = ReadEmbeddedNumericCacheValues(series, "val");
+            var categories = ReadEmbeddedStringCacheValues(series, categoryContainerName);
+            var values = ReadEmbeddedNumericCacheValues(series, valueContainerName);
             result.Add(new ChartEmbeddedSeriesData(seriesIndex, seriesName, categories, values));
         }
 

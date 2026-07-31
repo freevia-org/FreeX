@@ -93,6 +93,13 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, deletedRowsShiftRegion)) is { } deleteSplitsArrayRejection)
             return deleteSplitsArrayRejection;
 
+        // R110-formula-structuredref-rowcoldelete-ref: computed over the live (not-yet-mutated)
+        // sheet.StructuredTables before anything below touches it, so every DeleteRowsOp built for
+        // a FormulaRewriter pass in this method can carry the same "these tables are fully gone"
+        // list and convert any remaining Table[...] reference to them into #REF! instead of leaving
+        // it to dangle as #NAME? -- mirrors DeleteSheetOp's DeletedTableNames handling.
+        var deletedTableNames = RowColumnShiftHelpers.FindStructuredTablesRemovedByRowDelete(sheet, _startRow, _count);
+
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         var (deletedSnapshot, shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endRow);
@@ -175,7 +182,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
         RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         RowColumnShiftHelpers.ShiftChartRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
-        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count));
+        RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames));
         RowColumnShiftHelpers.ShiftAddressBearingRowsDown(ctx.Workbook, sheet, _addressStateSnapshot, _startRow, _count);
 
         _mergeSnapshot = sheet.MergedRegions.ToList();
@@ -220,14 +227,14 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         _formulaSnapshot.Clear();
         RowColumnShiftHelpers.RewriteAllFormulas(
-            ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _formulaSnapshot);
+            ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames), _formulaSnapshot);
         _namedFormulaSnapshot.Clear();
         _scopedNamedFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
+        RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames), _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
         _cfFormulaSnapshot.Clear();
         _cfThresholdSnapshot.Clear();
         _dvFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new DeleteRowsOp(sheet.Name, _startRow, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
         // R92-commands-undo-structural-format-5-1: mirror InsertRowsCommand's RebandTable call
         // (R90-io-table-style-banding-5-3) on the delete side. MoveCellsForDelete above relocates

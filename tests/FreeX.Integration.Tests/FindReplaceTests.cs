@@ -668,6 +668,72 @@ public class FindReplaceTests
         sheet.GetCell(a1)!.Value.Should().Be(new TextValue("bar"));
         sheet.GetCell(a2)!.Value.Should().Be(new TextValue("barbar"));
     }
+
+    [Fact]
+    public void R110_TryReplaceAll_FormatOnlyBlankSearchAndReplace_AppliesReplacementFormatWithoutChangingText()
+    {
+        // Excel's format-only Replace: blank "Find what"/"Replace with", a Format criterion on
+        // Find (here: Bold) and a different Format on Replace (here: a red fill). Replace All must
+        // reformat every Find-format match, leave the cell text untouched, and report a non-zero
+        // count -- see the finding's evidence at FindReplaceService.cs:543 (TryCreateReplacementText
+        // used to bail out unconditionally on an empty searchText, so TryCreateReplacementCell
+        // always failed for these matches and no ApplyStyleCommand was ever emitted).
+        var (wb, sheet, commandBus) = Setup();
+        var boldStyle = wb.RegisterStyle(new CellStyle { Bold = true });
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var a2 = new CellAddress(sheet.Id, 2, 1);
+        sheet.SetCell(a1, new TextValue("Alpha"));
+        sheet.GetCell(a1)!.StyleId = boldStyle;
+        sheet.SetCell(a2, new TextValue("Beta")); // not bold -- must stay untouched
+
+        var result = FindReplaceService.TryReplaceAll(
+            wb,
+            commandBus,
+            searchText: "",
+            replaceText: "",
+            new FindOptions(RequiredFormat: new StyleDiff(Bold: true)),
+            matchCase: false,
+            matchEntireCell: false,
+            replacementFormat: new StyleDiff(FillColor: new CellColor(255, 0, 0)));
+
+        result.Failure.Should().BeNull();
+        result.ReplacedCount.Should().Be(1);
+
+        // Text is untouched -- this was a format-only replace.
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("Alpha"));
+        sheet.GetCell(a2)!.Value.Should().Be(new TextValue("Beta"));
+
+        // The Find-format-matching cell picked up the Replace format...
+        var a1Style = wb.GetStyle(sheet.GetCell(a1)!.StyleId);
+        a1Style.FillColor.Should().Be(new CellColor(255, 0, 0));
+        a1Style.Bold.Should().BeTrue();
+
+        // ...and the non-matching cell was left alone entirely.
+        var a2Style = wb.GetStyle(sheet.GetCell(a2)!.StyleId);
+        a2Style.FillColor.Should().BeNull();
+
+        commandBus.Undo(wb.Id).Success.Should().BeTrue();
+        wb.GetStyle(sheet.GetCell(a1)!.StyleId).FillColor.Should().BeNull();
+    }
+
+    [Fact]
+    public void R110_TryReplaceAll_BlankSearchWithNoFormatCriteria_StaysNoOpAndDoesNotThrow()
+    {
+        // No-regression sibling: a genuinely blank search (no RequiredFormat on Find, no
+        // replacementFormat on Replace) must keep reporting zero replacements without throwing --
+        // the allowFormatOnly plumbing added for the format-only fix must never fire here.
+        var (wb, sheet, commandBus) = Setup();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(a1, new TextValue("Alpha"));
+
+        var act = () => FindReplaceService.TryReplaceAll(wb, commandBus, searchText: "", replaceText: "New");
+
+        act.Should().NotThrow();
+        var result = act();
+        result.ReplacedCount.Should().Be(0);
+        result.Failure.Should().BeNull();
+        sheet.GetCell(a1)!.Value.Should().Be(new TextValue("Alpha"));
+    }
 }
 
 file sealed class RejectingCommandBus(string message) : ICommandBus

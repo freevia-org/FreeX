@@ -19660,6 +19660,7 @@ public sealed partial class MainWindow : Window
             new SortOnChoice(SortDialogPlannerText.Default.SortOnCellValues),
             new SortOnChoice(SortDialogPlannerText.Default.SortOnCellColor),
             new SortOnChoice(SortDialogPlannerText.Default.SortOnFontColor),
+            new SortOnChoice(SortDialogPlannerText.Default.SortOnCellIcon),
         };
         var cellColorChoices = SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.CellColor);
         var fontColorChoices = SortDialogPlanner.BuildColorChoices(_session.Workbook, _session.ActiveSheet, range, SortOn.FontColor);
@@ -19699,6 +19700,7 @@ public sealed partial class MainWindow : Window
                 new ColumnDefinition(new GridLength(1, GridUnitType.Star)),
                 new ColumnDefinition(new GridLength(140)),
                 new ColumnDefinition(new GridLength(150)),
+                new ColumnDefinition(new GridLength(115)),
                 new ColumnDefinition(new GridLength(115)),
             },
         };
@@ -19787,6 +19789,11 @@ public sealed partial class MainWindow : Window
                 .Select(choice => new SortDialogComboItem<SortColorChoice>(string.IsNullOrWhiteSpace(choice.Label) ? "None" : choice.Label, choice))
                 .ToList();
 
+        IReadOnlyList<SortDialogComboItem<SortIconChoice>> CreateIconItems(SortDialogLevel level) =>
+            level.IconChoices
+                .Select(choice => new SortDialogComboItem<SortIconChoice>(string.IsNullOrWhiteSpace(choice.Label) ? "None" : choice.Label, choice))
+                .ToList();
+
         void SelectColumn(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortColumnChoice>> choices, SortDialogLevel level)
         {
             var selected = choices.Count > 0 ? choices[0] : null;
@@ -19847,6 +19854,21 @@ public sealed partial class MainWindow : Window
             comboBox.SelectedItem = selected;
         }
 
+        void SelectIcon(ComboBox comboBox, IReadOnlyList<SortDialogComboItem<SortIconChoice>> choices, SortDialogLevel level)
+        {
+            var selected = choices.Count > 0 ? choices[0] : null;
+            foreach (var choice in choices)
+            {
+                if (string.Equals(choice.Value.Label, level.TargetIcon, StringComparison.Ordinal))
+                {
+                    selected = choice;
+                    break;
+                }
+            }
+
+            comboBox.SelectedItem = selected;
+        }
+
         void ApplyColorChoices(SortDialogLevel level)
         {
             level.SetColorChoices(SortDialogPlanner.BuildColorChoicesForSortOn(
@@ -19855,8 +19877,27 @@ public sealed partial class MainWindow : Window
                 fontColorChoices));
         }
 
+        // Mirrors ApplyColorChoices, but the icon set a column carries is column-specific (unlike
+        // the whole-range color scan precomputed once above), so the choices are rescanned from
+        // SortDialogPlanner.BuildIconChoices against this level's own ColumnOffset every rebuild.
+        void ApplyIconChoices(SortDialogLevel level)
+        {
+            var iconChoices = IsIconSort(level)
+                ? SortDialogPlanner.BuildIconChoices(
+                    _session.Workbook,
+                    _session.ActiveSheet,
+                    range,
+                    level.ColumnOffset,
+                    headersCheck.IsChecked == true)
+                : [new SortIconChoice("")];
+            level.SetIconChoices(iconChoices);
+        }
+
         static bool IsColorSort(SortDialogLevel level) =>
             SortDialogPlanner.SortOnFromLabel(level.SortOn) is SortOn.CellColor or SortOn.FontColor;
+
+        static bool IsIconSort(SortDialogLevel level) =>
+            SortDialogPlanner.SortOnFromLabel(level.SortOn) == SortOn.CellIcon;
 
         static Border CreateSortCell(Control child, int row, int column, bool selected = false)
         {
@@ -19935,6 +19976,7 @@ public sealed partial class MainWindow : Window
             levelsGrid.Children.Add(CreateHeaderCell("Sort On", 1));
             levelsGrid.Children.Add(CreateHeaderCell("Order", 2));
             levelsGrid.Children.Add(CreateHeaderCell("Color", 3));
+            levelsGrid.Children.Add(CreateHeaderCell("Icon", 4));
 
             firstSortOnBox = null;
             firstColorBox = null;
@@ -19947,8 +19989,10 @@ public sealed partial class MainWindow : Window
                 var gridRow = levelIndex + 1;
                 var selected = levelIndex == selectedLevelIndex;
                 ApplyColorChoices(level);
+                ApplyIconChoices(level);
                 var directionChoices = CreateOrderItems(level);
                 var colorChoices = CreateColorItems(level);
+                var iconChoices = CreateIconItems(level);
                 var columnBox = new ComboBox
                 {
                     ItemsSource = columnChoices,
@@ -19959,11 +20003,6 @@ public sealed partial class MainWindow : Window
                 AutomationProperties.SetName(columnBox, "Sort by");
                 AutomationProperties.SetAutomationId(columnBox, $"SortLevel{levelIndex + 1}ColumnBox");
                 SelectColumn(columnBox, columnChoices, level);
-                columnBox.SelectionChanged += (_, _) =>
-                {
-                    if (columnBox.SelectedItem is SortDialogComboItem<SortColumnChoice> columnChoice)
-                        levels[levelIndex].ColumnOffset = columnChoice.Value.ColumnOffset;
-                };
 
                 var sortOnBox = new ComboBox
                 {
@@ -19999,6 +20038,18 @@ public sealed partial class MainWindow : Window
                 AutomationProperties.SetAutomationId(colorBox, $"SortLevel{levelIndex + 1}ColorBox");
                 SelectColor(colorBox, colorChoices, level);
 
+                var iconBox = new ComboBox
+                {
+                    ItemsSource = iconChoices,
+                    MinWidth = 105,
+                    IsEnabled = IsIconSort(level),
+                    IsVisible = selected,
+                };
+                ApplySortComboChrome(iconBox);
+                AutomationProperties.SetName(iconBox, "Icon");
+                AutomationProperties.SetAutomationId(iconBox, $"SortLevel{levelIndex + 1}IconBox");
+                SelectIcon(iconBox, iconChoices, level);
+
                 if (levelIndex == 0)
                 {
                     firstSortOnBox = sortOnBox;
@@ -20009,6 +20060,7 @@ public sealed partial class MainWindow : Window
                 {
                     var currentLevel = levels[levelIndex];
                     ApplyColorChoices(currentLevel);
+                    ApplyIconChoices(currentLevel);
 
                     var currentDirectionChoices = CreateOrderItems(currentLevel);
                     orderBox.ItemsSource = currentDirectionChoices;
@@ -20018,6 +20070,11 @@ public sealed partial class MainWindow : Window
                     colorBox.ItemsSource = currentColorChoices;
                     colorBox.IsEnabled = IsColorSort(currentLevel);
                     SelectColor(colorBox, currentColorChoices, currentLevel);
+
+                    var currentIconChoices = CreateIconItems(currentLevel);
+                    iconBox.ItemsSource = currentIconChoices;
+                    iconBox.IsEnabled = IsIconSort(currentLevel);
+                    SelectIcon(iconBox, currentIconChoices, currentLevel);
                 }
 
                 sortOnBox.SelectionChanged += (_, _) =>
@@ -20041,6 +20098,22 @@ public sealed partial class MainWindow : Window
                         levels[levelIndex].TargetColor = colorChoice.Value.Label;
                 };
 
+                iconBox.SelectionChanged += (_, _) =>
+                {
+                    if (iconBox.SelectedItem is SortDialogComboItem<SortIconChoice> iconChoice)
+                        levels[levelIndex].TargetIcon = iconChoice.Value.Label;
+                };
+
+                columnBox.SelectionChanged += (_, _) =>
+                {
+                    if (columnBox.SelectedItem is not SortDialogComboItem<SortColumnChoice> columnChoice)
+                        return;
+
+                    levels[levelIndex].ColumnOffset = columnChoice.Value.ColumnOffset;
+                    if (IsIconSort(levels[levelIndex]))
+                        RefreshSortOnDependentControls();
+                };
+
                 var columnCell = CreateSortCell(
                     selected ? columnBox : CreateCellText(columnChoices.FirstOrDefault(choice => choice.Value.ColumnOffset == level.ColumnOffset)?.Label ?? "", selected),
                     gridRow,
@@ -20051,7 +20124,9 @@ public sealed partial class MainWindow : Window
                 var orderCell = CreateSortCell(selected ? orderBox : CreateCellText(orderLabel, selected), gridRow, 2, selected);
                 var colorLabel = string.IsNullOrWhiteSpace(level.TargetColor) ? "" : level.TargetColor;
                 var colorCell = CreateSortCell(selected ? colorBox : CreateCellText(colorLabel, selected), gridRow, 3, selected);
-                foreach (var cell in new[] { columnCell, sortOnCell, orderCell, colorCell })
+                var iconLabel = string.IsNullOrWhiteSpace(level.TargetIcon) ? "" : level.TargetIcon;
+                var iconCell = CreateSortCell(selected ? iconBox : CreateCellText(iconLabel, selected), gridRow, 4, selected);
+                foreach (var cell in new[] { columnCell, sortOnCell, orderCell, colorCell, iconCell })
                 {
                     cell.PointerPressed += (_, _) =>
                     {

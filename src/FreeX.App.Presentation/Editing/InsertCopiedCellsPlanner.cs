@@ -18,6 +18,15 @@ public static class InsertCopiedCellsPlanner
     /// <c>false</c> (plain copy semantics, matching the pre-existing behavior) for callers that don't
     /// yet distinguish cut from copy.
     /// </param>
+    /// <param name="sourceAreas">
+    /// R110-insert-copied-cells-multiarea-1: every individually Ctrl+clicked area of a multi-area
+    /// source selection (mirrors <c>InternalClipboard.SourceAreas</c>/the r108 fix to the plain
+    /// Ctrl+V path). Forwarded into <see cref="PasteCommandFactory.CreateInternalPasteCommand"/> so
+    /// its CF/DV carry restricts itself to the ACTUAL copied areas instead of treating the whole
+    /// bounding box -- including the untouched gap between disjoint areas -- as copied. Defaults to
+    /// <c>null</c> (single contiguous area, matching the pre-existing behavior) for callers that
+    /// don't yet distinguish multi-area from single-area selections.
+    /// </param>
     public static IWorkbookCommand CreateCommand(
         Workbook workbook,
         SheetId sheetId,
@@ -25,7 +34,8 @@ public static class InsertCopiedCellsPlanner
         IReadOnlyList<(CellAddress Source, Cell Cell)> cells,
         GridRange destinationRange,
         KeyboardInsertDeleteDialogChoice choice,
-        bool isCut = false)
+        bool isCut = false,
+        IReadOnlyList<GridRange>? sourceAreas = null)
     {
         var insertRange = CreateInsertRange(sheetId, destinationRange.Start, sourceRange);
         IWorkbookCommand insertCommand = choice switch
@@ -76,7 +86,8 @@ public static class InsertCopiedCellsPlanner
             cells,
             destinationRange.Start,
             PasteCellsMode.All,
-            default);
+            default,
+            sourceAreas);
 
         // Unlike the ordinary Ctrl+V-after-Cut path (ClipboardPastePlanner.ShouldClearCutSourceAfterPaste),
         // this composite always clears the source when isCut is true, with no overlap guard: the clear

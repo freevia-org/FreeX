@@ -97,6 +97,48 @@ public static partial class XlsxChartPartReader
             }
         }
 
+        // R110-io-chart-series-embedded-line: mirrors XlsxChartPartReader.Bar.cs's
+        // TryReadBarChart fallback — when all val/cat formulas are named ranges (e.g. an
+        // OFFSET-based dynamic range like 'Sheet1'!rngCount, the classic "auto-expanding chart"
+        // pattern) or all cross-sheet cell refs, TryParseFormulaRange never populates `ranges` and
+        // this function used to unconditionally return false, silently dropping the whole
+        // Line/Radar/3D-Line/Stock chart from the workbook on load. Fall back to the embedded
+        // numCache/strCache values instead, exactly like Bar/Column already does.
+        var allLineLikeSeriesElements = plotCharts.SelectMany(c => c.Elements(ChartNs + "ser")).ToList();
+        var lineLikeEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allLineLikeSeriesElements, sheetId)
+                                   ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(allLineLikeSeriesElements, sheetId, sheetNameResolver);
+        if (lineLikeEmbeddedData is not null)
+        {
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
+            result.FirstRowIsHeader = hasTitleRange;
+            result.FirstColIsCategories = hasCategoryRange;
+            result.EmbeddedSeriesData = lineLikeEmbeddedData;
+            // R108-io-chart-series-embedded-fastpath discipline: SeriesInRows/
+            // ApplyVerbatimSeriesFormulasIfNeeded must run on this early-return path too, or the
+            // writer has nothing but a degenerate recomputed DataRange to re-derive series from on
+            // save (see the identical comment in XlsxChartPartReader.Bar.cs).
+            result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
+                .Where(index => index >= 0)
+                .Distinct()
+                .Order()
+                .ToList();
+            result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                allLineLikeSeriesElements,
+                sheetId,
+                sheetNameResolver);
+            ApplyVerbatimSeriesFormulasIfNeeded(allLineLikeSeriesElements, sheetId, sheetNameResolver, result);
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
+        }
+
         if (ranges.Count == 0)
         {
             chart = new ChartModel();
@@ -177,6 +219,38 @@ public static partial class XlsxChartPartReader
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
                 fallbackSeriesIndex++;
             }
+        }
+
+        // R110-io-chart-series-embedded-line: mirrors XlsxChartPartReader.Bar.cs's
+        // TryReadBarChart fallback — see the identical block/comment in TryReadLineLikeChart above.
+        var allLineSeriesElements = lineCharts.SelectMany(c => c.Elements(ChartNs + "ser")).ToList();
+        var lineEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allLineSeriesElements, sheetId)
+                               ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(allLineSeriesElements, sheetId, sheetNameResolver);
+        if (lineEmbeddedData is not null)
+        {
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
+            result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
+                .Distinct()
+                .Order()
+                .ToList();
+            result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
+            result.FirstRowIsHeader = hasTitleRange;
+            result.FirstColIsCategories = hasCategoryRange;
+            result.EmbeddedSeriesData = lineEmbeddedData;
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                allLineSeriesElements,
+                sheetId,
+                sheetNameResolver);
+            ApplyVerbatimSeriesFormulasIfNeeded(allLineSeriesElements, sheetId, sheetNameResolver, result);
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
         }
 
         if (ranges.Count == 0)
