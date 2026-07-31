@@ -4887,7 +4887,7 @@ public static class PptxPackageReader
             if (!uint.TryParse(shapeIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId))
                 continue;
 
-            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+            var shape = FindShapeRecursive(slide.Shapes, shapeId);
             if (shape?.Media is null)
                 continue;
 
@@ -4910,6 +4910,20 @@ public static class PptxPackageReader
                 shape.Media.PlaybackStartMode = MediaPlaybackStartMode.InClickSequence;
             }
         }
+    }
+
+    private static SlideShape? FindShapeRecursive(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+
+            if (shape.Children.Count > 0 && FindShapeRecursive(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 
     private static XElement? FindSequence(XElement tnLst, string nodeType)

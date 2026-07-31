@@ -2132,7 +2132,7 @@ public static class PptxPackageWriter
     private static XElement? BuildTimingEl(Slide slide)
     {
         var animations = slide.Animations;
-        var timedMedia = slide.Shapes
+        var timedMedia = AllShapes(slide.Shapes)
             .Where(shape => shape.Kind == SlideShapeKind.Media
                 && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
                     || shape.Media?.Loop == true))

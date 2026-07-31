@@ -144,6 +144,44 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void GroupedMedia_LoopPlayback_RoundTripsThroughPresentationTiming()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        var media = new SlideShape
+        {
+            Id = 8,
+            Name = "Grouped looping video",
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Loop = true,
+                Bytes = [0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70],
+                ContentType = "video/mp4",
+            },
+        };
+        var group = new SlideShape { Id = 80, Name = "Media group", Kind = SlideShapeKind.Group };
+        group.Children.Add(media);
+        slide.Shapes.Add(group);
+        pres.Slides.Add(slide);
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+
+        ms.Position = 0;
+        var reopened = PptxPackageReader.Read(ms);
+        var reopenedMedia = reopened.Slides[0].Shapes.Single().Children.Single();
+
+        reopenedMedia.Id.Should().Be(8u);
+        reopenedMedia.Media.Should().NotBeNull();
+        reopenedMedia.Media!.Loop.Should().BeTrue();
+        reopenedMedia.Media.PlaybackStartMode.Should().Be(MediaPlaybackStartMode.InClickSequence);
+    }
+
+    [Fact]
     public void Media_ReadsCaptionTrackMetadataFromSlideRelationships()
     {
         var pres = new Presentation();
