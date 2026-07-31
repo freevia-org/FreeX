@@ -476,6 +476,82 @@ public sealed class ViewTabDepthTests
     }
 
     [Fact]
+    public void View_mode_commands_report_one_live_checked_state_and_keep_legacy_aliases()
+    {
+        var active = DocumentViewMode.PrintLayout;
+        var callbacks = NoopCallbacks() with
+        {
+            SetPrintLayout = () => active = DocumentViewMode.PrintLayout,
+            SetWebLayout = () => active = DocumentViewMode.WebLayout,
+            SetDraftView = () => active = DocumentViewMode.Draft,
+            IsPrintLayoutActive = () => active == DocumentViewMode.PrintLayout,
+            IsWebLayoutActive = () => active == DocumentViewMode.WebLayout,
+            IsDraftViewActive = () => active == DocumentViewMode.Draft,
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        var print = Stateful(registry, "freew.print-layout");
+        var web = Stateful(registry, "freew.web-layout");
+        var draft = Stateful(registry, "freew.draft-view");
+        registry.TryGet(new RibbonCommandId("freew.printlayout"), out var printAlias).Should().BeTrue();
+        printAlias.Should().BeSameAs(print);
+
+        print.GetState().IsChecked.Should().BeTrue();
+        web.GetState().IsChecked.Should().BeFalse();
+        draft.GetState().IsChecked.Should().BeFalse();
+
+        web.Execute(RibbonCommandContext.Empty);
+        print.GetState().IsChecked.Should().BeFalse();
+        web.GetState().IsChecked.Should().BeTrue();
+        draft.GetState().IsChecked.Should().BeFalse();
+
+        active = DocumentViewMode.Draft;
+        print.GetState().IsChecked.Should().BeFalse();
+        web.GetState().IsChecked.Should().BeFalse();
+        draft.GetState().IsChecked.Should().BeTrue("state must follow host changes outside the ribbon");
+    }
+
+    [Fact]
+    public void Pane_commands_report_live_visibility_and_keep_legacy_aliases()
+    {
+        var navigationVisible = false;
+        var reviewingVisible = true;
+        var revealVisible = false;
+        var callbacks = NoopCallbacks() with
+        {
+            ToggleNavigationPane = () => navigationVisible = !navigationVisible,
+            ToggleReviewingPane = () => reviewingVisible = !reviewingVisible,
+            ToggleRevealFormatting = () => revealVisible = !revealVisible,
+            IsNavigationPaneVisible = () => navigationVisible,
+            IsReviewingPaneVisible = () => reviewingVisible,
+            IsRevealFormattingVisible = () => revealVisible,
+        };
+        var registry = FreeWRibbon.BuildRegistry(new DocumentView(), callbacks);
+
+        var navigation = Stateful(registry, "freew.nav-pane");
+        var reviewing = Stateful(registry, "freew.reviewing-pane");
+        var reveal = Stateful(registry, "freew.reveal-formatting");
+        registry.TryGet(new RibbonCommandId("freew.navigationpane"), out var navigationAlias).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.reviewingpane"), out var reviewingAlias).Should().BeTrue();
+        navigationAlias.Should().BeSameAs(navigation);
+        reviewingAlias.Should().BeSameAs(reviewing);
+
+        navigation.GetState().IsChecked.Should().BeFalse();
+        reviewing.GetState().IsChecked.Should().BeTrue();
+        reveal.GetState().IsChecked.Should().BeFalse();
+
+        navigation.Execute(RibbonCommandContext.Empty);
+        reviewing.Execute(RibbonCommandContext.Empty);
+        reveal.Execute(RibbonCommandContext.Empty);
+        navigation.GetState().IsChecked.Should().BeTrue();
+        reviewing.GetState().IsChecked.Should().BeFalse();
+        reveal.GetState().IsChecked.Should().BeTrue();
+
+        revealVisible = false;
+        reveal.GetState().IsChecked.Should().BeFalse("state must follow keyboard or shell changes");
+    }
+
+    [Fact]
     public void Window_group_exists_on_view_tab()
     {
         var definition = FreeWRibbon.BuildDefinition();
@@ -696,5 +772,11 @@ public sealed class ViewTabDepthTests
         scale.Should().Be(1.25);
         error.Should().BeNull();
         await Task.CompletedTask;
+    }
+
+    private static IRibbonStatefulCommand Stateful(RibbonCommandRegistry registry, string id)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+        return command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
     }
 }

@@ -183,6 +183,22 @@ public static class TextLayoutPlanner
     public const double DipPerPoint = 96.0 / 72.0;
     public const double DefaultColumnSpacingDip = 48.5;
     public const double DefaultTabStopDip = 96.0;
+
+    /// <summary>
+    /// Returns the glyph used to paint an RTF tab leader. The box-drawing glyph is
+    /// intentional: it is the closest renderer-neutral representation of RTF's
+    /// thick-line leader while keeping the host canvases responsible only for paint.
+    /// </summary>
+    public static char GetTabLeaderGlyph(TabStopLeader leader) =>
+        leader switch
+        {
+            TabStopLeader.Dots => '.',
+            TabStopLeader.Hyphens => '-',
+            TabStopLeader.Underscore => '_',
+            TabStopLeader.ThickLine => '\u2501',
+            TabStopLeader.Equal => '=',
+            _ => '\0',
+        };
     public const double ImportedAptosBodyOriginOffsetY = 6.0;
     public const double RuntimeAutoFitMinimumFontScale = 0.60;
     public const double RuntimeAutoFitMaximumLineSpacingReduction = 0.20;

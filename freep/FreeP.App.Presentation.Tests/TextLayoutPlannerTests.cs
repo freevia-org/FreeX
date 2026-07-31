@@ -796,6 +796,18 @@ public sealed class TextLayoutPlannerTests
             new TextTabSegmentPlacement(0, "Page 1", 80, TabStopLeader.Dots));
     }
 
+    [Theory]
+    [InlineData(TabStopLeader.None, '\0')]
+    [InlineData(TabStopLeader.Dots, '.')]
+    [InlineData(TabStopLeader.Hyphens, '-')]
+    [InlineData(TabStopLeader.Underscore, '_')]
+    [InlineData(TabStopLeader.ThickLine, '\u2501')]
+    [InlineData(TabStopLeader.Equal, '=')]
+    public void TabLeaderGlyph_MapsEveryExternalRtfLeader(TabStopLeader leader, char expected)
+    {
+        TextLayoutPlanner.GetTabLeaderGlyph(leader).Should().Be(expected);
+    }
+
     [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateTextLayoutMathToSharedPlanner()
     {
@@ -836,6 +848,8 @@ public sealed class TextLayoutPlannerTests
         avalonia.Should().Contain("TextLayoutPlanner.PlanColumns");
         avalonia.Should().Contain("TextLayoutPlanner.PlanNormalAutoFitOverflow");
         avalonia.Should().Contain("TextLayoutPlanner.ApplyAutoFitPlan");
+        wpf.Should().Contain("DrawTabLeaderWpf");
+        avalonia.Should().Contain("DrawTabLeaderAvalonia");
         avalonia.Should().Contain("TextLayoutPlanner.GetAutoFitCapacityHeight");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTabStops");
         avalonia.Should().Contain("TextLayoutPlanner.PlanTextOrientation");

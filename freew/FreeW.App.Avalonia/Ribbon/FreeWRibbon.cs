@@ -82,6 +82,18 @@ internal sealed record RibbonHostCallbacks(
     /// <paramref name="delta"/> to add/subtract from the current scale. One must be non-null.
     /// </summary>
     Action<double?, double> ApplyZoom,
+    /// <summary>Whether the normal Print Layout surface is active (excluding Outline/Page Edit overlays).</summary>
+    Func<bool>? IsPrintLayoutActive = null,
+    /// <summary>Whether the normal Web Layout surface is active.</summary>
+    Func<bool>? IsWebLayoutActive = null,
+    /// <summary>Whether the normal Draft surface is active.</summary>
+    Func<bool>? IsDraftViewActive = null,
+    /// <summary>Whether the Navigation pane is currently visible.</summary>
+    Func<bool>? IsNavigationPaneVisible = null,
+    /// <summary>Whether the Reviewing pane is currently visible.</summary>
+    Func<bool>? IsReviewingPaneVisible = null,
+    /// <summary>Whether the Reveal Formatting pane is currently visible.</summary>
+    Func<bool>? IsRevealFormattingVisible = null,
     Action? OpenSymbolPickerDialog = null,
     Action? CaptureScreenClip = null,
     /// <summary>Home &gt; Paragraph &gt; Tabs. Optional; registry no-ops when null.</summary>
@@ -371,17 +383,5 @@ internal sealed record RibbonHostCallbacks(
     /// <summary>View &gt; Read Mode page color choice.</summary>
     Action<string>? ApplyReadModePageColor = null,
     /// <summary>Insert &gt; Header/Footer text prompt. Returns null for Cancel, including the existing seed.</summary>
-    Func<bool, string, Task<string?>>? AskHeaderFooterText = null,
-    /// <summary>View &gt; Print Layout checked state.</summary>
-    Func<bool>? IsPrintLayoutActive = null,
-    /// <summary>View &gt; Web Layout checked state.</summary>
-    Func<bool>? IsWebLayoutActive = null,
-    /// <summary>View &gt; Draft checked state.</summary>
-    Func<bool>? IsDraftViewActive = null,
-    /// <summary>View &gt; Navigation Pane checked state.</summary>
-    Func<bool>? IsNavigationPaneVisible = null,
-    /// <summary>Home &gt; Reveal Formatting checked state.</summary>
-    Func<bool>? IsRevealFormattingVisible = null,
-    /// <summary>Review &gt; Reviewing Pane checked state.</summary>
-    Func<bool>? IsReviewingPaneVisible = null);
+    Func<bool, string, Task<string?>>? AskHeaderFooterText = null);
 

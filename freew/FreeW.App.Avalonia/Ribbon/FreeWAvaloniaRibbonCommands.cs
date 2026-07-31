@@ -482,13 +482,13 @@ internal static class FreeWAvaloniaRibbonCommands
 
         var printLayoutCommand = new ToggleActionCommand(
             callbacks.SetPrintLayout,
-            callbacks.IsPrintLayoutActive ?? (() => false));
+            callbacks.IsPrintLayoutActive ?? (() => editor.ViewMode == DocumentViewMode.PrintLayout));
         var webLayoutCommand = new ToggleActionCommand(
             callbacks.SetWebLayout,
-            callbacks.IsWebLayoutActive ?? (() => false));
+            callbacks.IsWebLayoutActive ?? (() => editor.ViewMode == DocumentViewMode.WebLayout));
         var draftViewCommand = new ToggleActionCommand(
             callbacks.SetDraftView,
-            callbacks.IsDraftViewActive ?? (() => false));
+            callbacks.IsDraftViewActive ?? (() => editor.ViewMode == DocumentViewMode.Draft));
         // Outline is a distinct host surface. A host that does not provide it must not silently
         // route the command to Draft; production MainWindow supplies the real toggle and state query.
         var outlineViewCommand = new ToggleActionCommand(
