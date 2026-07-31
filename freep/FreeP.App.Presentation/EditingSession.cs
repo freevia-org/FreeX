@@ -790,6 +790,59 @@ public sealed class EditingSession
         Bus.Execute(new ResizeShapeCommand(_currentSlideIndex, shapeId, newOffsetX, newOffsetY, newCx, newCy));
     }
 
+    /// <summary>
+    /// Applies a canvas transform plan to the current selection as one undoable operation.
+    /// Plans are filtered against the live selection so a stale pointer-up cannot transform a
+    /// shape that was removed from the selection while the pointer was captured.
+    /// </summary>
+    public bool ApplySelectedTransforms(IEnumerable<CanvasShapeTransform> transforms)
+    {
+        ArgumentNullException.ThrowIfNull(transforms);
+        if (CurrentSlide is null || _selectedShapeIds.Count == 0)
+            return false;
+
+        var selected = _selectedShapeIds.ToHashSet();
+        var commands = new List<IPresentationCommand>();
+        foreach (var transform in transforms)
+        {
+            if (!selected.Contains(transform.ShapeId))
+                continue;
+
+            var shape = FindShape(CurrentSlide.Shapes, transform.ShapeId);
+            if (shape is null || shape.Chart?.ChartSelectionProtected == true)
+                continue;
+
+            if (shape.OffsetXEmu != transform.XEmu ||
+                shape.OffsetYEmu != transform.YEmu ||
+                shape.ExtentCxEmu != transform.CxEmu ||
+                shape.ExtentCyEmu != transform.CyEmu)
+            {
+                commands.Add(new ResizeShapeCommand(
+                    _currentSlideIndex,
+                    transform.ShapeId,
+                    transform.XEmu,
+                    transform.YEmu,
+                    transform.CxEmu,
+                    transform.CyEmu));
+            }
+
+            var normalizedRotation = RotationOptionsPlanner.Normalize(transform.RotationDeg);
+            if (Math.Abs(shape.RotationDeg - normalizedRotation) > 0.0001)
+            {
+                commands.Add(new RotateShapeCommand(
+                    _currentSlideIndex,
+                    transform.ShapeId,
+                    normalizedRotation));
+            }
+        }
+
+        if (commands.Count == 0)
+            return false;
+
+        Bus.Execute(new BatchCommand("Transform Shapes", commands));
+        return true;
+    }
+
     /// <summary>Sets or removes one authored DrawingML preset-geometry adjustment.</summary>
     public void SetShapeGeometryAdjustment(uint shapeId, string name, double? value)
     {

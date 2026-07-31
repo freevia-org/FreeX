@@ -193,10 +193,19 @@ public sealed class SelectionAdorner : Adorner
             dc.DrawRectangle(marqueeFill, MarqueePen, mq);
         }
 
-        // Draw selection rects
-        foreach (var (id, rect) in _selectionRects)
+        // Multi-selection uses one group box for handles; individual boxes remain visible
+        // without handles so the selected members are still discoverable.
+        if (_selectionRects.Count == 1)
         {
-            DrawSelectionRect(dc, rect);
+            DrawSelectionRect(dc, _selectionRects[0].screenRect, drawHandles: true);
+        }
+        else
+        {
+            foreach (var (_, rect) in _selectionRects)
+                DrawSelectionRect(dc, rect, drawHandles: false);
+
+            if (SelectionBounds is { } groupBounds)
+                DrawSelectionRect(dc, groupBounds, drawHandles: true);
         }
 
         DrawGeometryHandles(dc);
@@ -234,10 +243,11 @@ public sealed class SelectionAdorner : Adorner
         }
     }
 
-    private static void DrawSelectionRect(DrawingContext dc, Rect rect)
+    private static void DrawSelectionRect(DrawingContext dc, Rect rect, bool drawHandles)
     {
         dc.DrawRectangle(null, SelectionPen, rect);
-        DrawHandles(dc, rect);
+        if (drawHandles)
+            DrawHandles(dc, rect);
     }
 
     private static void DrawPreviewRect(DrawingContext dc, Rect rect, double rotDeg)
@@ -356,4 +366,20 @@ public sealed class SelectionAdorner : Adorner
 
     /// <summary>Selection rects accessible to the gesture handler for redraw.</summary>
     public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects => _selectionRects;
+
+    /// <summary>Union box used for multi-selection handles and group gestures.</summary>
+    public Rect? SelectionBounds
+    {
+        get
+        {
+            if (_selectionRects.Count == 0)
+                return null;
+
+            double left = _selectionRects.Min(item => item.screenRect.Left);
+            double top = _selectionRects.Min(item => item.screenRect.Top);
+            double right = _selectionRects.Max(item => item.screenRect.Right);
+            double bottom = _selectionRects.Max(item => item.screenRect.Bottom);
+            return new Rect(left, top, right - left, bottom - top);
+        }
+    }
 }

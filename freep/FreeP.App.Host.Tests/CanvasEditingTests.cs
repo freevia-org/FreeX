@@ -184,6 +184,88 @@ public sealed class CanvasEditingTests
         editor.CanUndo.Should().BeFalse("a sub-threshold multi-selection move is not a user action");
     }
 
+    [StaFact]
+    public void GestureHandler_MultiSelectionResizeAndRotate_UseGroupHandlesAndOneUndoBatch()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var first = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100 * 9525L,
+            OffsetYEmu = 100 * 9525L,
+            ExtentCxEmu = 100 * 9525L,
+            ExtentCyEmu = 50 * 9525L,
+        };
+        var second = new SlideShape
+        {
+            Id = 2,
+            OffsetXEmu = 300 * 9525L,
+            OffsetYEmu = 100 * 9525L,
+            ExtentCxEmu = 50 * 9525L,
+            ExtentCyEmu = 50 * 9525L,
+        };
+        slide.Shapes.Add(first);
+        slide.Shapes.Add(second);
+
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        editor.Select(first.Id);
+        editor.Select(second.Id, addToSelection: true);
+
+        var adorner = new SelectionAdorner(new System.Windows.Controls.Canvas());
+        adorner.UpdateSelection([
+            (first.Id, new Rect(100, 100, 100, 50)),
+            (second.Id, new Rect(300, 100, 50, 50)),
+        ]);
+        adorner.SelectionBounds.Should().Be(new Rect(100, 100, 250, 50));
+        adorner.HitTestHandle(
+                adorner.SelectionBounds!.Value,
+                new Point(350, 150))
+            .Should().Be(CanvasGestureHandleKind.ResizeSE);
+
+        var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+            new CanvasGesturePoint(0, 0),
+            new CanvasGesturePoint(50, 25),
+            new SlideTransformCore(1, 0, 0, 1280, 720),
+            CanvasGestureHandleKind.ResizeSE,
+            CanvasGesturePlanner.CaptureTransformState(slide, editor.SelectedShapeIds),
+            slide,
+            SnapToGrid: false,
+            SnapToShapes: false,
+            BypassSnap: false));
+
+        editor.ApplySelectedTransforms(plan.Shapes).Should().BeTrue();
+        second.OffsetXEmu.Should().Be(340 * 9525L);
+        second.ExtentCxEmu.Should().Be(60 * 9525L);
+        editor.CanUndo.Should().BeTrue();
+
+        editor.Undo();
+        first.OffsetXEmu.Should().Be(100 * 9525L);
+        second.OffsetXEmu.Should().Be(300 * 9525L);
+        second.ExtentCxEmu.Should().Be(50 * 9525L);
+
+        var rotatePlan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+            new CanvasGesturePoint(225, 25),
+            new CanvasGesturePoint(325, 125),
+            new SlideTransformCore(1, 0, 0, 1280, 720),
+            CanvasGesturePlanner.CaptureTransformState(slide, editor.SelectedShapeIds),
+            SnapToFifteenDegrees: false));
+
+        editor.ApplySelectedTransforms(rotatePlan.Shapes).Should().BeTrue();
+        first.OffsetXEmu.Should().Be(175 * 9525L);
+        first.OffsetYEmu.Should().Be(25 * 9525L);
+        second.OffsetXEmu.Should().Be(200 * 9525L);
+        second.OffsetYEmu.Should().Be(200 * 9525L);
+        first.RotationDeg.Should().BeApproximately(90, 0.001);
+        second.RotationDeg.Should().BeApproximately(90, 0.001);
+        editor.Undo();
+        first.OffsetXEmu.Should().Be(100 * 9525L);
+        second.OffsetXEmu.Should().Be(300 * 9525L);
+    }
+
     [Fact]
     public void SlideTransform_Compute_CorrectScale_CenteredSlide()
     {

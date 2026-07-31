@@ -48,6 +48,7 @@ public sealed class CanvasGestureHandler
     private long                    _resizeOrigX, _resizeOrigY, _resizeOrigCx, _resizeOrigCy;
     private double                  _resizeOrigRotationDeg;
     private CanvasGestureHandleKind     _resizeHandle;
+    private IReadOnlyList<CanvasTransformShapeState>? _multiTransformStartShapes;
 
     // ── Rotate ────────────────────────────────────────────────────────────────────────────────
     private uint   _rotateShapeId;
@@ -189,7 +190,25 @@ public sealed class CanvasGestureHandler
         // Determine what was hit first for the existing selection (handles take priority)
         if (_editor.SelectedShapeIds.Count > 0)
         {
-            // Try handles of single selection (resize/rotate only supported for single)
+            // A multi-selection has one group box. Its handles operate on every selected shape.
+            if (_editor.SelectedShapeIds.Count > 1 && _adorner.SelectionBounds is { } groupRect)
+            {
+                var groupHandle = _adorner.HitTestHandle(groupRect, pt);
+                if (groupHandle == CanvasGestureHandleKind.Rotate)
+                {
+                    StartMultiRotate(slide, pt);
+                    e.Handled = true;
+                    return;
+                }
+                if (groupHandle is not CanvasGestureHandleKind.None and not CanvasGestureHandleKind.Body)
+                {
+                    StartMultiResize(slide, groupHandle, pt);
+                    e.Handled = true;
+                    return;
+                }
+            }
+
+            // Single-selection handles retain their existing shape-local behavior.
             if (_editor.SelectedShapeIds.Count == 1)
             {
                 var selId   = _editor.SelectedShapeIds[0];
@@ -369,6 +388,7 @@ public sealed class CanvasGestureHandler
 
         _dragStarted = false;
         _moveStartShapes = null;
+        _multiTransformStartShapes = null;
         _dragStartScreen = default;
         _resizeShapeId = 0;
         _resizeOrigX = _resizeOrigY = _resizeOrigCx = _resizeOrigCy = 0;
@@ -462,12 +482,44 @@ public sealed class CanvasGestureHandler
         _canvas.CaptureMouse();
     }
 
+    private void StartMultiResize(Slide slide, CanvasGestureHandleKind handle, Point screenPt)
+    {
+        _multiTransformStartShapes = CanvasGesturePlanner.CaptureTransformState(
+            slide,
+            _editor.SelectedShapeIds);
+        if (_multiTransformStartShapes.Count == 0)
+            return;
+
+        _gesture = GestureKind.Resize;
+        _dragStartScreen = screenPt;
+        _dragStarted = false;
+        _resizeHandle = handle;
+        _canvas.CaptureMouse();
+    }
+
     private void PreviewResize(Point screenPt, SlideTransform xf)
     {
         var drag = ReduceDrag(screenPt);
         if (!drag.DragStarted)
             return;
         _dragStarted = drag.DragStarted;
+
+        if (_multiTransformStartShapes is not null)
+        {
+            var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+                ToGesturePoint(_dragStartScreen),
+                ToGesturePoint(screenPt),
+                ToCoreTransform(xf),
+                _resizeHandle,
+                _multiTransformStartShapes,
+                _editor.CurrentSlide,
+                SnapToGrid,
+                SnapToShapes,
+                (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
+            _adorner.UpdatePreview(
+                plan.PreviewBounds is { } groupBounds ? ToWpfRect(groupBounds) : null);
+            return;
+        }
 
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
         var r = SlideCanvasGeometryPlanner.EmuBoundsToScreen(nx, ny, ncx, ncy, ToCoreTransform(xf));
@@ -479,6 +531,22 @@ public sealed class CanvasGestureHandler
         var drag = ReduceDrag(screenPt);
         if (!_dragStarted || !drag.ShouldCommit)
             return;
+
+        if (_multiTransformStartShapes is not null)
+        {
+            var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+                ToGesturePoint(_dragStartScreen),
+                ToGesturePoint(screenPt),
+                ToCoreTransform(xf),
+                _resizeHandle,
+                _multiTransformStartShapes,
+                _editor.CurrentSlide,
+                SnapToGrid,
+                SnapToShapes,
+                (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
+            _editor.ApplySelectedTransforms(plan.Shapes);
+            return;
+        }
 
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
         _editor.ResizeShape(_resizeShapeId, nx, ny, ncx, ncy);
@@ -536,12 +604,40 @@ public sealed class CanvasGestureHandler
         _canvas.CaptureMouse();
     }
 
+    private void StartMultiRotate(Slide slide, Point screenPt)
+    {
+        _multiTransformStartShapes = CanvasGesturePlanner.CaptureTransformState(
+            slide,
+            _editor.SelectedShapeIds);
+        if (_multiTransformStartShapes.Count == 0)
+            return;
+
+        _gesture = GestureKind.Rotate;
+        _dragStartScreen = screenPt;
+        _dragStarted = false;
+        _canvas.CaptureMouse();
+    }
+
     private void PreviewRotate(Point screenPt, SlideTransform xf)
     {
         var drag = ReduceDrag(screenPt);
         if (!drag.DragStarted)
             return;
         _dragStarted = drag.DragStarted;
+
+        if (_multiTransformStartShapes is not null)
+        {
+            var plan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+                ToGesturePoint(_dragStartScreen),
+                ToGesturePoint(screenPt),
+                ToCoreTransform(xf),
+                _multiTransformStartShapes,
+                (Keyboard.Modifiers & ModifierKeys.Shift) != 0));
+            _adorner.UpdatePreview(
+                plan.PreviewBounds is { } groupBounds ? ToWpfRect(groupBounds) : null,
+                plan.PreviewRotationDeg);
+            return;
+        }
 
         double angle = ComputeRotationAngle(screenPt, xf);
         // Show preview using selection rect with rotation hint
@@ -562,6 +658,18 @@ public sealed class CanvasGestureHandler
         var drag = ReduceDrag(screenPt);
         if (!_dragStarted || !drag.ShouldCommit)
             return;
+
+        if (_multiTransformStartShapes is not null)
+        {
+            var plan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+                ToGesturePoint(_dragStartScreen),
+                ToGesturePoint(screenPt),
+                ToCoreTransform(xf),
+                _multiTransformStartShapes,
+                (Keyboard.Modifiers & ModifierKeys.Shift) != 0));
+            _editor.ApplySelectedTransforms(plan.Shapes);
+            return;
+        }
 
         double angle = ComputeRotationAngle(screenPt, xf);
         _editor.RotateShape(_rotateShapeId, angle);
@@ -800,6 +908,7 @@ public sealed class CanvasGestureHandler
 
     internal bool HasPendingGestureStateForTests =>
         _moveStartShapes is not null ||
+        _multiTransformStartShapes is not null ||
         _resizeShapeId != 0 ||
         _rotateShapeId != 0 ||
         _geometryShapeId != 0 ||
@@ -896,6 +1005,22 @@ public sealed class CanvasGestureHandler
         }
 
         var xf = _canvas.CurrentTransform;
+
+        if (_editor.SelectedShapeIds.Count > 1 && _adorner.SelectionBounds is { } groupRect)
+        {
+            var groupHandle = _adorner.HitTestHandle(groupRect, screenPt);
+            _canvas.Cursor = groupHandle switch
+            {
+                CanvasGestureHandleKind.Rotate => Cursors.Cross,
+                CanvasGestureHandleKind.ResizeN or CanvasGestureHandleKind.ResizeS => Cursors.SizeNS,
+                CanvasGestureHandleKind.ResizeE or CanvasGestureHandleKind.ResizeW => Cursors.SizeWE,
+                CanvasGestureHandleKind.ResizeNE or CanvasGestureHandleKind.ResizeSW => Cursors.SizeNESW,
+                CanvasGestureHandleKind.ResizeNW or CanvasGestureHandleKind.ResizeSE => Cursors.SizeNWSE,
+                _ => Cursors.Arrow
+            };
+            if (groupHandle != CanvasGestureHandleKind.None)
+                return;
+        }
 
         if (_editor.SelectedShapeIds.Count == 1)
         {

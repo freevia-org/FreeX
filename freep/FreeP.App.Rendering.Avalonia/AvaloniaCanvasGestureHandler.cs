@@ -48,6 +48,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     private long                              _resizeOrigX, _resizeOrigY, _resizeOrigCx, _resizeOrigCy;
     private double                            _resizeOrigRotationDeg;
     private CanvasGestureHandleKind           _resizeHandle;
+    private IReadOnlyList<CanvasTransformShapeState>? _multiTransformStartShapes;
 
     // ── Rotate ─────────────────────────────────────────────────────────────────
     private uint   _rotateShapeId;
@@ -241,6 +242,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         _capturedPointer = null;
 
         _moveStartShapes = null;
+        _multiTransformStartShapes = null;
         _dragStartScreen = default;
         _resizeShapeId = 0;
         _resizeOrigX = _resizeOrigY = _resizeOrigCx = _resizeOrigCy = 0;
@@ -322,6 +324,24 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
             // double-click must continue through the normal selection path, matching WPF.
             if (!ShouldContinueDoubleClickSelection(shape))
                 return;
+        }
+
+        // A multi-selection has one group box. Its handles operate on every selected shape.
+        if (_editor.SelectedShapeIds.Count > 1 && _adorner.SelectionBounds is { } groupRect)
+        {
+            var groupHandle = _adorner.HitTestHandle(groupRect, pt);
+            if (groupHandle == CanvasGestureHandleKind.Rotate)
+            {
+                StartMultiRotate(slide, pt, e.Pointer);
+                e.Handled = true;
+                return;
+            }
+            if (groupHandle is not CanvasGestureHandleKind.None and not CanvasGestureHandleKind.Body)
+            {
+                StartMultiResize(slide, groupHandle, pt, e.Pointer);
+                e.Handled = true;
+                return;
+            }
         }
 
         // Handle single selection: check handles first.
@@ -525,11 +545,47 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         CapturePointer(pointer);
     }
 
+    private void StartMultiResize(
+        Slide slide,
+        CanvasGestureHandleKind handle,
+        Point screenPt,
+        IPointer pointer)
+    {
+        _multiTransformStartShapes = CanvasGesturePlanner.CaptureTransformState(
+            slide,
+            _editor.SelectedShapeIds);
+        if (_multiTransformStartShapes.Count == 0)
+            return;
+
+        _gesture = GestureKind.Resize;
+        _dragStartScreen = screenPt;
+        _dragStarted = false;
+        _resizeHandle = handle;
+        CapturePointer(pointer);
+    }
+
     private void PreviewResize(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
         var drag = ReduceDrag(screenPt);
         if (!drag.DragStarted) return;
         _dragStarted = drag.DragStarted;
+
+        if (_multiTransformStartShapes is not null)
+        {
+            var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+                ToGesturePoint(_dragStartScreen),
+                ToGesturePoint(screenPt),
+                xf,
+                _resizeHandle,
+                _multiTransformStartShapes,
+                _editor.CurrentSlide,
+                SnapToGrid,
+                SnapToShapes,
+                (modifiers & KeyModifiers.Alt) != 0));
+            _adorner.UpdatePreview(
+                plan.PreviewBounds is { } groupBounds ? ToAvaloniaRect(groupBounds) : null);
+            return;
+        }
 
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf, modifiers);
         var r = SlideCanvasGeometryPlanner.EmuBoundsToScreen(nx, ny, ncx, ncy, xf);
@@ -540,6 +596,23 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     {
         var drag = ReduceDrag(screenPt);
         if (!_dragStarted || !drag.ShouldCommit) return;
+
+        if (_multiTransformStartShapes is not null)
+        {
+            var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+                ToGesturePoint(_dragStartScreen),
+                ToGesturePoint(screenPt),
+                xf,
+                _resizeHandle,
+                _multiTransformStartShapes,
+                _editor.CurrentSlide,
+                SnapToGrid,
+                SnapToShapes,
+                (modifiers & KeyModifiers.Alt) != 0));
+            _editor.ApplySelectedTransforms(plan.Shapes);
+            return;
+        }
+
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf, modifiers);
         _editor.ResizeShape(_resizeShapeId, nx, ny, ncx, ncy);
     }
@@ -590,9 +663,44 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         CapturePointer(pointer);
     }
 
+    private void StartMultiRotate(
+        Slide slide,
+        Point screenPt,
+        IPointer pointer)
+    {
+        _multiTransformStartShapes = CanvasGesturePlanner.CaptureTransformState(
+            slide,
+            _editor.SelectedShapeIds);
+        if (_multiTransformStartShapes.Count == 0)
+            return;
+
+        _gesture = GestureKind.Rotate;
+        _dragStartScreen = screenPt;
+        _dragStarted = false;
+        CapturePointer(pointer);
+    }
+
     private void PreviewRotate(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
-        _dragStarted = true;
+        var drag = ReduceDrag(screenPt);
+        if (!drag.DragStarted)
+            return;
+        _dragStarted = drag.DragStarted;
+
+        if (_multiTransformStartShapes is not null)
+        {
+            var plan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+                ToGesturePoint(_dragStartScreen),
+                ToGesturePoint(screenPt),
+                xf,
+                _multiTransformStartShapes,
+                (modifiers & KeyModifiers.Shift) != 0));
+            _adorner.UpdatePreview(
+                plan.PreviewBounds is { } groupBounds ? ToAvaloniaRect(groupBounds) : null,
+                plan.PreviewRotationDeg);
+            return;
+        }
+
         double angle = ComputeRotationAngle(screenPt, xf, modifiers);
         if (_editor.CurrentSlide is not null && _editor.Presentation is not null)
         {
@@ -604,7 +712,21 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
     private void CommitRotate(Point screenPt, SlideTransformCore xf, KeyModifiers modifiers)
     {
-        if (!_dragStarted) return;
+        var drag = ReduceDrag(screenPt);
+        if (!_dragStarted || !drag.ShouldCommit) return;
+
+        if (_multiTransformStartShapes is not null)
+        {
+            var plan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+                ToGesturePoint(_dragStartScreen),
+                ToGesturePoint(screenPt),
+                xf,
+                _multiTransformStartShapes,
+                (modifiers & KeyModifiers.Shift) != 0));
+            _editor.ApplySelectedTransforms(plan.Shapes);
+            return;
+        }
+
         double angle = ComputeRotationAngle(screenPt, xf, modifiers);
         _editor.RotateShape(_rotateShapeId, angle);
     }
@@ -803,6 +925,22 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
         var xf = _canvas.CurrentTransform;
 
+        if (_editor.SelectedShapeIds.Count > 1 && _adorner.SelectionBounds is { } groupRect)
+        {
+            var groupHandle = _adorner.HitTestHandle(groupRect, screenPt);
+            _canvas.Cursor = groupHandle switch
+            {
+                CanvasGestureHandleKind.Rotate => new Cursor(StandardCursorType.Cross),
+                CanvasGestureHandleKind.ResizeN or CanvasGestureHandleKind.ResizeS => new Cursor(StandardCursorType.SizeNorthSouth),
+                CanvasGestureHandleKind.ResizeE or CanvasGestureHandleKind.ResizeW => new Cursor(StandardCursorType.SizeWestEast),
+                CanvasGestureHandleKind.ResizeNE or CanvasGestureHandleKind.ResizeSW => new Cursor(StandardCursorType.TopRightCorner),
+                CanvasGestureHandleKind.ResizeNW or CanvasGestureHandleKind.ResizeSE => new Cursor(StandardCursorType.TopLeftCorner),
+                _ => Cursor.Default
+            };
+            if (groupHandle != CanvasGestureHandleKind.None)
+                return;
+        }
+
         if (_editor.SelectedShapeIds.Count == 1)
         {
             var selId = _editor.SelectedShapeIds[0];
@@ -956,6 +1094,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
     internal bool HasPendingGestureStateForTests =>
         _moveStartShapes is not null ||
+        _multiTransformStartShapes is not null ||
         _resizeShapeId != 0 ||
         _rotateShapeId != 0 ||
         _geometryShapeId != 0 ||

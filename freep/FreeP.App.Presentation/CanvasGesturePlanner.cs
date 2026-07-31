@@ -63,6 +63,51 @@ public readonly record struct CanvasResizeBounds(
     long CxEmu,
     long CyEmu);
 
+public readonly record struct CanvasTransformShapeState(
+    uint ShapeId,
+    long XEmu,
+    long YEmu,
+    long CxEmu,
+    long CyEmu,
+    double RotationDeg);
+
+public readonly record struct CanvasShapeTransform(
+    uint ShapeId,
+    long XEmu,
+    long YEmu,
+    long CxEmu,
+    long CyEmu,
+    double RotationDeg);
+
+public readonly record struct CanvasMultiResizeRequest(
+    CanvasGesturePoint StartScreen,
+    CanvasGesturePoint CurrentScreen,
+    SlideTransformCore Transform,
+    CanvasGestureHandleKind Handle,
+    IReadOnlyList<CanvasTransformShapeState> Shapes,
+    Slide? CurrentSlide,
+    bool SnapToGrid,
+    bool SnapToShapes,
+    bool BypassSnap);
+
+public readonly record struct CanvasMultiRotateRequest(
+    CanvasGesturePoint StartScreen,
+    CanvasGesturePoint CurrentScreen,
+    SlideTransformCore Transform,
+    IReadOnlyList<CanvasTransformShapeState> Shapes,
+    bool SnapToFifteenDegrees);
+
+public readonly record struct CanvasMultiTransformPlan(
+    IReadOnlyList<CanvasShapeTransform> Shapes,
+    SlideScreenRect? PreviewBounds,
+    double PreviewRotationDeg)
+{
+    public static readonly CanvasMultiTransformPlan Empty = new(
+        Array.Empty<CanvasShapeTransform>(),
+        null,
+        0);
+}
+
 public readonly record struct CanvasRotationRequest(
     CanvasGesturePoint CurrentScreen,
     CanvasGesturePoint CenterSlide,
@@ -163,6 +208,32 @@ public static class CanvasGesturePlanner
         return states;
     }
 
+    public static IReadOnlyList<CanvasTransformShapeState> CaptureTransformState(
+        Slide slide,
+        IEnumerable<uint> selectedShapeIds)
+    {
+        ArgumentNullException.ThrowIfNull(slide);
+        ArgumentNullException.ThrowIfNull(selectedShapeIds);
+
+        var states = new List<CanvasTransformShapeState>();
+        foreach (var id in selectedShapeIds)
+        {
+            var shape = ShapeHitTester.FindShape(slide, id);
+            if (shape is null)
+                continue;
+
+            states.Add(new CanvasTransformShapeState(
+                id,
+                shape.OffsetXEmu,
+                shape.OffsetYEmu,
+                shape.ExtentCxEmu,
+                shape.ExtentCyEmu,
+                shape.RotationDeg));
+        }
+
+        return states;
+    }
+
     public static CanvasMovePlan PlanMove(CanvasMoveRequest request)
     {
         ArgumentNullException.ThrowIfNull(request.Transform);
@@ -251,6 +322,136 @@ public static class CanvasGesturePlanner
         return bounds;
     }
 
+    public static CanvasMultiTransformPlan PlanMultiResize(CanvasMultiResizeRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request.Transform);
+        ArgumentNullException.ThrowIfNull(request.Shapes);
+
+        if (request.Shapes.Count == 0)
+            return CanvasMultiTransformPlan.Empty;
+
+        var original = GetTransformBounds(request.Shapes);
+        double dxDip = request.Transform.ScaleScreenToDip(
+            request.CurrentScreen.X - request.StartScreen.X);
+        double dyDip = request.Transform.ScaleScreenToDip(
+            request.CurrentScreen.Y - request.StartScreen.Y);
+
+        bool snapEnabled = (request.SnapToGrid || request.SnapToShapes) && !request.BypassSnap;
+        if (snapEnabled && request.CurrentSlide is not null)
+        {
+            var candidates = request.SnapToShapes
+                ? SnapEngine.BuildShapeCandidates(
+                    request.CurrentSlide,
+                    request.Shapes.Select(shape => shape.ShapeId))
+                : null;
+            ApplyResizeSnap(
+                request.Handle,
+                original.X,
+                original.Y,
+                original.Width,
+                original.Height,
+                ref dxDip,
+                ref dyDip,
+                candidates,
+                request.Transform.SlideWidthDip,
+                request.Transform.SlideHeightDip,
+                request.SnapToGrid ? SnapEngine.DefaultGridPitchDip : 0);
+        }
+
+        var groupState = new CanvasResizeState(
+            0,
+            SlideTransformCore.DipToEmu(original.X),
+            SlideTransformCore.DipToEmu(original.Y),
+            SlideTransformCore.DipToEmu(original.Width),
+            SlideTransformCore.DipToEmu(original.Height),
+            0,
+            request.Handle);
+        var deltaXEmu = request.Transform.ScreenDeltaToEmu(dxDip * request.Transform.Scale);
+        var deltaYEmu = request.Transform.ScreenDeltaToEmu(dyDip * request.Transform.Scale);
+        var resized = ApplyResizeDelta(groupState, deltaXEmu, deltaYEmu);
+        double newX = SlideTransformCore.EmuToDip(resized.XEmu);
+        double newY = SlideTransformCore.EmuToDip(resized.YEmu);
+        double newWidth = SlideTransformCore.EmuToDip(resized.CxEmu);
+        double newHeight = SlideTransformCore.EmuToDip(resized.CyEmu);
+        double scaleX = original.Width == 0 ? 1 : newWidth / original.Width;
+        double scaleY = original.Height == 0 ? 1 : newHeight / original.Height;
+
+        var transforms = request.Shapes
+            .Select(shape => new CanvasShapeTransform(
+                shape.ShapeId,
+                SlideTransformCore.DipToEmu(newX +
+                    (SlideTransformCore.EmuToDip(shape.XEmu) - original.X) * scaleX),
+                SlideTransformCore.DipToEmu(newY +
+                    (SlideTransformCore.EmuToDip(shape.YEmu) - original.Y) * scaleY),
+                SlideTransformCore.DipToEmu(SlideTransformCore.EmuToDip(shape.CxEmu) * scaleX),
+                SlideTransformCore.DipToEmu(SlideTransformCore.EmuToDip(shape.CyEmu) * scaleY),
+                shape.RotationDeg))
+            .ToArray();
+
+        return new CanvasMultiTransformPlan(
+            transforms,
+            SlideCanvasGeometryPlanner.DipBoundsToScreen(
+                newX,
+                newY,
+                newWidth,
+                newHeight,
+                request.Transform),
+            0);
+    }
+
+    public static CanvasMultiTransformPlan PlanMultiRotate(CanvasMultiRotateRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request.Transform);
+        ArgumentNullException.ThrowIfNull(request.Shapes);
+
+        if (request.Shapes.Count == 0)
+            return CanvasMultiTransformPlan.Empty;
+
+        var group = GetTransformBounds(request.Shapes);
+        var centerSlide = new LayoutPoint(
+            group.X + group.Width / 2.0,
+            group.Y + group.Height / 2.0);
+        var centerScreen = request.Transform.SlideToScreen(centerSlide.X, centerSlide.Y);
+        double delta = DrawingObjectInteractionPlanner.CalculateRotationDelta(
+            new LayoutPoint(centerScreen.X, centerScreen.Y),
+            new LayoutPoint(request.StartScreen.X, request.StartScreen.Y),
+            new LayoutPoint(request.CurrentScreen.X, request.CurrentScreen.Y));
+        if (request.SnapToFifteenDegrees)
+            delta = Math.Round(delta / 15.0) * 15.0;
+
+        var transforms = request.Shapes
+            .Select(shape =>
+            {
+                double width = SlideTransformCore.EmuToDip(shape.CxEmu);
+                double height = SlideTransformCore.EmuToDip(shape.CyEmu);
+                double shapeCenterX = SlideTransformCore.EmuToDip(shape.XEmu) + width / 2.0;
+                double shapeCenterY = SlideTransformCore.EmuToDip(shape.YEmu) + height / 2.0;
+                var rotatedCenter = DrawingObjectInteractionPlanner.RotatePoint(
+                    new LayoutPoint(shapeCenterX, shapeCenterY),
+                    centerSlide,
+                    delta);
+
+                return new CanvasShapeTransform(
+                    shape.ShapeId,
+                    SlideTransformCore.DipToEmu(rotatedCenter.X - width / 2.0),
+                    SlideTransformCore.DipToEmu(rotatedCenter.Y - height / 2.0),
+                    shape.CxEmu,
+                    shape.CyEmu,
+                    shape.RotationDeg + delta);
+            })
+            .ToArray();
+
+        return new CanvasMultiTransformPlan(
+            transforms,
+            SlideCanvasGeometryPlanner.DipBoundsToScreen(
+                group.X,
+                group.Y,
+                group.Width,
+                group.Height,
+                request.Transform),
+            delta);
+    }
+
     public static double ComputeRotationAngle(CanvasRotationRequest request)
     {
         double cx = request.CenterSlide.X * request.Transform.Scale + request.Transform.OffsetX;
@@ -264,6 +465,28 @@ public static class CanvasGesturePlanner
             angle = Math.Round(angle / 15.0) * 15.0;
 
         return angle;
+    }
+
+    private static LayoutRect GetTransformBounds(IReadOnlyList<CanvasTransformShapeState> shapes)
+    {
+        double left = double.PositiveInfinity;
+        double top = double.PositiveInfinity;
+        double right = double.NegativeInfinity;
+        double bottom = double.NegativeInfinity;
+
+        foreach (var shape in shapes)
+        {
+            double x = SlideTransformCore.EmuToDip(shape.XEmu);
+            double y = SlideTransformCore.EmuToDip(shape.YEmu);
+            double rightEdge = x + SlideTransformCore.EmuToDip(shape.CxEmu);
+            double bottomEdge = y + SlideTransformCore.EmuToDip(shape.CyEmu);
+            left = Math.Min(left, x);
+            top = Math.Min(top, y);
+            right = Math.Max(right, rightEdge);
+            bottom = Math.Max(bottom, bottomEdge);
+        }
+
+        return new LayoutRect(left, top, right - left, bottom - top);
     }
 
     private static SnapResult ComputeMoveSnap(

@@ -222,6 +222,62 @@ public sealed class CanvasGesturePlannerTests
     }
 
     [Fact]
+    public void PlanMultiResize_SeHandleScalesEverySelectedShapeFromGroupBounds()
+    {
+        var states = new[]
+        {
+            new CanvasTransformShapeState(1, ToEmu(100), ToEmu(100), ToEmu(100), ToEmu(50), 0),
+            new CanvasTransformShapeState(2, ToEmu(300), ToEmu(100), ToEmu(50), ToEmu(50), 15),
+        };
+
+        var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+            StartScreen: new CanvasGesturePoint(0, 0),
+            CurrentScreen: new CanvasGesturePoint(50, 25),
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            Handle: CanvasGestureHandleKind.ResizeSE,
+            Shapes: states,
+            CurrentSlide: null,
+            SnapToGrid: false,
+            SnapToShapes: false,
+            BypassSnap: false));
+
+        plan.Shapes.Should().HaveCount(2);
+        plan.Shapes[0].XEmu.Should().Be(ToEmu(100));
+        plan.Shapes[0].YEmu.Should().Be(ToEmu(100));
+        plan.Shapes[0].CxEmu.Should().Be(ToEmu(120));
+        plan.Shapes[0].CyEmu.Should().Be(ToEmu(75));
+        plan.Shapes[1].XEmu.Should().Be(ToEmu(340));
+        plan.Shapes[1].CxEmu.Should().Be(ToEmu(60));
+        plan.Shapes[1].CyEmu.Should().Be(ToEmu(75));
+        plan.Shapes[1].RotationDeg.Should().Be(15);
+    }
+
+    [Fact]
+    public void PlanMultiRotate_UsesStartGripDeltaAndRotatesCentersAroundGroupCenter()
+    {
+        var states = new[]
+        {
+            new CanvasTransformShapeState(1, ToEmu(100), ToEmu(100), ToEmu(100), ToEmu(100), 10),
+            new CanvasTransformShapeState(2, ToEmu(300), ToEmu(100), ToEmu(100), ToEmu(100), 20),
+        };
+
+        var plan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+            StartScreen: new CanvasGesturePoint(250, 50),
+            CurrentScreen: new CanvasGesturePoint(300, 150),
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            Shapes: states,
+            SnapToFifteenDegrees: false));
+
+        plan.PreviewRotationDeg.Should().BeApproximately(90, 0.001);
+        plan.Shapes[0].XEmu.Should().Be(ToEmu(200));
+        plan.Shapes[0].YEmu.Should().Be(ToEmu(0));
+        plan.Shapes[0].RotationDeg.Should().BeApproximately(100, 0.001);
+        plan.Shapes[1].XEmu.Should().Be(ToEmu(200));
+        plan.Shapes[1].YEmu.Should().Be(ToEmu(200));
+        plan.Shapes[1].RotationDeg.Should().BeApproximately(110, 0.001);
+    }
+
+    [Fact]
     public void WpfAndAvaloniaHandlers_DelegateGesturePolicyToSharedPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "CanvasGestureHandler.cs");
@@ -232,6 +288,9 @@ public sealed class CanvasGesturePlannerTests
 
         wpf.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
         wpf.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
+        wpf.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
+        wpf.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
+        wpf.Should().Contain("ApplySelectedTransforms");
         wpf.Should().Contain("CanvasGesturePlanner.ReduceDrag");
         wpf.Should().Contain("BeginFormatPainter");
         wpf.Should().Contain("CancelFormatPainter");
@@ -245,6 +304,9 @@ public sealed class CanvasGesturePlannerTests
 
         avalonia.Should().Contain("CanvasGesturePlanner.ComputeResizeBounds");
         avalonia.Should().Contain("CanvasGesturePlanner.ComputeRotationAngle");
+        avalonia.Should().Contain("CanvasGesturePlanner.PlanMultiResize");
+        avalonia.Should().Contain("CanvasGesturePlanner.PlanMultiRotate");
+        avalonia.Should().Contain("ApplySelectedTransforms");
         avalonia.Should().Contain("CanvasGesturePlanner.ReduceDrag");
         avalonia.Should().Contain("BeginFormatPainter");
         avalonia.Should().Contain("CancelFormatPainter");
