@@ -10,6 +10,7 @@ using WpfParagraph = System.Windows.Documents.Paragraph;
 using WpfRun       = System.Windows.Documents.Run;
 using ModelParagraph = FreeP.Core.Model.Paragraph;
 using ModelRun       = FreeP.Core.Model.Run;
+using ModelTableCell = FreeP.Core.Model.TableCell;
 using WpfHyperlink  = System.Windows.Documents.Hyperlink;
 
 namespace FreeP.App.Rendering.Wpf;
@@ -335,6 +336,14 @@ internal static class TextBodyFlowDocumentConverter
 
     private static Inline ModelRunToWpfRun(ModelRun mr)
     {
+        if (mr.InlineTable is { } inlineTable)
+        {
+            return new InlineUIContainer(CreateInlineTableEditor(inlineTable))
+            {
+                BaselineAlignment = BaselineAlignment.Center,
+            };
+        }
+
         if (mr.InlineOleObject is { } ole)
         {
             var label = string.IsNullOrWhiteSpace(ole.ClassName)
@@ -462,6 +471,70 @@ internal static class TextBodyFlowDocumentConverter
         return hyperlink;
     }
 
+    private static Grid CreateInlineTableEditor(InlineTableInfo info)
+    {
+        var table = info.Table;
+        var grid = new Grid
+        {
+            Tag = info.Clone(),
+            Background = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
+        for (int column = 0; column < columnCount; column++)
+        {
+            double width = column < table.ColumnWidthsEmu.Count
+                ? Math.Max(24, table.ColumnWidthsEmu[column] / 9525.0)
+                : 72;
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
+        }
+        for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(height) });
+            int columnIndex = 0;
+            foreach (var cell in row.Cells)
+            {
+                var textBox = new TextBox
+                {
+                    Text = cell.TextBody is null
+                        ? string.Empty
+                        : InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody),
+                    Tag = new InlineTableCellBinding(rowIndex, cell, columnIndex),
+                    AcceptsReturn = true,
+                    BorderThickness = new Thickness(0.5),
+                    BorderBrush = Brushes.Gray,
+                    Padding = new Thickness(
+                        cell.InsetLeftPt.GetValueOrDefault() * PtToDip,
+                        cell.InsetTopPt.GetValueOrDefault() * PtToDip,
+                        cell.InsetRightPt.GetValueOrDefault() * PtToDip,
+                        cell.InsetBottomPt.GetValueOrDefault() * PtToDip),
+                    VerticalContentAlignment = cell.Anchor switch
+                    {
+                        TableCellAnchor.Middle => VerticalAlignment.Center,
+                        TableCellAnchor.Bottom => VerticalAlignment.Bottom,
+                        _ => VerticalAlignment.Top,
+                    },
+                };
+                if (cell.Fill is ShapeFill.Solid solid)
+                    textBox.Background = new SolidColorBrush(
+                        Color.FromArgb(solid.Color.Alpha, solid.Color.Resolved.R,
+                            solid.Color.Resolved.G, solid.Color.Resolved.B));
+                Grid.SetRow(textBox, rowIndex);
+                Grid.SetColumn(textBox, Math.Min(columnIndex, columnCount - 1));
+                Grid.SetColumnSpan(textBox, Math.Min(Math.Max(1, cell.GridSpan), columnCount - columnIndex));
+                Grid.SetRowSpan(textBox, Math.Min(Math.Max(1, cell.RowSpan), table.Rows.Count - rowIndex));
+                grid.Children.Add(textBox);
+                columnIndex += Math.Max(1, cell.GridSpan);
+            }
+        }
+        return grid;
+    }
+
+    private sealed record InlineTableCellBinding(int RowIndex, ModelTableCell SourceCell, int CellIndex);
+
     /// <summary>
     /// Recursively enumerates the leaf <see cref="Inline"/> elements of a paragraph,
     /// flattening nested <see cref="Span"/> containers that the RichTextBox editing engine
@@ -543,6 +616,39 @@ internal static class TextBodyFlowDocumentConverter
                 FileName = originalOle.FileName,
                 ClassName = originalOle.ClassName,
             };
+        }
+
+        if (inline is InlineUIContainer { Child: Grid grid }
+            && grid.Tag is InlineTableInfo originalTable)
+        {
+            var table = originalTable.Clone();
+            foreach (var textBox in grid.Children.OfType<TextBox>())
+            {
+                if (textBox.Tag is not InlineTableCellBinding binding)
+                    continue;
+                var row = table.Table.Rows.ElementAtOrDefault(binding.RowIndex);
+                var cell = row?.Cells.ElementAtOrDefault(binding.CellIndex);
+                if (cell is null)
+                    continue;
+
+                // Keep the cloned rich cell body, including nested inline tables, when
+                // the editable text was not changed. A plain TextBox is the host editor
+                // for this bounded path; only a real text edit should flatten its body.
+                var originalText = binding.SourceCell.TextBody is null
+                    ? string.Empty
+                    : InCanvasTextEditPlanner.ExtractPlainText(binding.SourceCell.TextBody);
+                if (string.Equals(originalText, textBox.Text ?? string.Empty, StringComparison.Ordinal))
+                    continue;
+
+                cell.TextBody = new TextBody
+                {
+                    Paragraphs =
+                    {
+                        new ModelParagraph { Runs = { new ModelRun { Text = textBox.Text ?? string.Empty } } },
+                    },
+                };
+            }
+            mr.InlineTable = table;
         }
 
         // Y1: read FontFamily LOCAL value only (not resolved/inherited).

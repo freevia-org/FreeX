@@ -18,7 +18,8 @@ public sealed record InCanvasRichTextVisualRun(
     ImagePart? InlineImage = null,
     long? InlineImageWidthEmu = null,
     long? InlineImageHeightEmu = null,
-    InlineOleObjectInfo? InlineOleObject = null);
+    InlineOleObjectInfo? InlineOleObject = null,
+    InlineTableInfo? InlineTable = null);
 
 public sealed record InCanvasRichTextVisualParagraph(
     int ParagraphIndex,
@@ -94,7 +95,8 @@ public static class InCanvasRichTextVisualPlanner
                     run.InlineImage,
                     run.InlineImageWidthEmu,
                     run.InlineImageHeightEmu,
-                    run.InlineOleObject));
+                    run.InlineOleObject,
+                    run.InlineTable));
                 runStart += run.Text.Length;
             }
 

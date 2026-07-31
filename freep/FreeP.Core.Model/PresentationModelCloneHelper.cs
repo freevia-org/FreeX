@@ -257,6 +257,7 @@ internal static class PresentationModelCloneHelper
         InlineImageWidthEmu = source.InlineImageWidthEmu,
         InlineImageHeightEmu = source.InlineImageHeightEmu,
         InlineOleObject = CloneInlineOleObject(source.InlineOleObject),
+        InlineTable = source.InlineTable?.Clone(),
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,

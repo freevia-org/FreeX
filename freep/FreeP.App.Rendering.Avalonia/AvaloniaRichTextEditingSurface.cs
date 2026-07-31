@@ -319,11 +319,13 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 width - originX - ContentPadding.Right);
             var inlineImages = CreateInlineImages(paragraph);
             var inlineOleObjects = CreateInlineOleObjects(paragraph);
+            var inlineTables = CreateInlineTables(paragraph);
             var layout = CreateLayout(
                 paragraph,
                 maxWidth,
                 inlineImages: inlineImages,
-                inlineOleObjects: inlineOleObjects);
+                inlineOleObjects: inlineOleObjects,
+                inlineTables: inlineTables);
             var origin = new Point(originX, y);
             var bulletOrigin = new Point(
                 ContentPadding.Left + paragraph.IndentDip - paragraph.HangingDip,
@@ -353,7 +355,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         double maxWidth,
         IBrush? foregroundOverride = null,
         IReadOnlyList<InlineImageLayout>? inlineImages = null,
-        IReadOnlyList<InlineOleLayout>? inlineOleObjects = null)
+        IReadOnlyList<InlineOleLayout>? inlineOleObjects = null,
+        IReadOnlyList<InlineTableLayout>? inlineTables = null)
     {
         var seed = paragraph.Runs.FirstOrDefault();
         var defaultTypeface = CreateTypeface(seed);
@@ -370,7 +373,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 CreateRunProperties(run, foregroundOverride)));
         }
 
-        if (inlineImages is { Count: > 0 } || inlineOleObjects is { Count: > 0 })
+        if (inlineImages is { Count: > 0 }
+            || inlineOleObjects is { Count: > 0 }
+            || inlineTables is { Count: > 0 })
         {
             var sourceRuns = paragraph.Runs
                 .Where(run => run.Length > 0)
@@ -379,7 +384,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     run.Length,
                     CreateRunProperties(run, foregroundOverride),
                     inlineImages?.FirstOrDefault(image => image.Start == run.Start),
-                    inlineOleObjects?.FirstOrDefault(ole => ole.Start == run.Start)))
+                    inlineOleObjects?.FirstOrDefault(ole => ole.Start == run.Start),
+                    inlineTables?.FirstOrDefault(table => table.Start == run.Start)))
                 .ToArray();
             var source = new InlineImageTextSource(
                 paragraph.Text,
@@ -488,6 +494,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
         IBrush foreground = foregroundOverride ?? (run?.InlineImage is not null
             || run?.InlineOleObject is not null
+            || run?.InlineTable is not null
             ? Brushes.Transparent
             : run?.Color is { } color
             ? new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B))
@@ -496,6 +503,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             ? InlineImageHeightDip(run)
             : run?.InlineOleObject is not null
                 ? InlineOleHeightDip(run)
+            : run?.InlineTable is not null
+                ? InlineTableHeightDip(run)
             : ToDip(run?.FontSizePt ?? _fallbackFontSizePt);
         return new GenericTextRunProperties(
             CreateTypeface(run),
@@ -559,6 +568,27 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             .ToArray();
     }
 
+    private static IReadOnlyList<InlineTableLayout> CreateInlineTables(
+        InCanvasRichTextVisualParagraph paragraph)
+    {
+        var result = new List<InlineTableLayout>();
+        foreach (var run in paragraph.Runs.Where(run => run.InlineTable is not null))
+        {
+            var table = run.InlineTable!.Table;
+            double width = table.ColumnWidthsEmu.Count == 0
+                ? 72
+                : table.ColumnWidthsEmu.Sum(widthEmu => Math.Max(24, widthEmu / 9525.0));
+            double height = table.Rows.Sum(row =>
+                row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24);
+            result.Add(new InlineTableLayout(
+                run.Start,
+                run.InlineTable,
+                Math.Max(24, width),
+                Math.Max(20, height)));
+        }
+        return result;
+    }
+
     private static double InlineImageWidthDip(InCanvasRichTextVisualRun run)
     {
         if (run.InlineImageWidthEmu is > 0)
@@ -575,6 +605,14 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
     private static double InlineOleHeightDip(InCanvasRichTextVisualRun run) =>
         Math.Max(18, run.FontSizePt is > 0 ? run.FontSizePt.Value * PtToDip + 4 : 20);
+
+    private static double InlineTableHeightDip(InCanvasRichTextVisualRun run)
+    {
+        if (run.InlineTable is not { Table.Rows.Count: > 0 } table)
+            return 24;
+        return Math.Max(20, table.Table.Rows.Sum(row =>
+            row.HeightEmu > 0 ? row.HeightEmu / 9525.0 : 24));
+    }
 
     private IReadOnlyList<Rect> BuildSelectionRects(bool includeHorizontalScroll = true)
     {
@@ -777,6 +815,14 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     run.Properties);
             }
 
+            if (run.InlineTable is { } table && offset == 0)
+            {
+                return new InlineTableTextRun(
+                    table,
+                    new Size(table.WidthDip, table.HeightDip),
+                    run.Properties);
+            }
+
             int length = Math.Min(run.Length - offset, _text.Length - textSourceIndex);
             return new TextCharacters(
                 _text.AsMemory(textSourceIndex, length),
@@ -845,12 +891,99 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         }
     }
 
+    private sealed class InlineTableTextRun : DrawableTextRun
+    {
+        private readonly InlineTableLayout _table;
+        private readonly Size _size;
+        private readonly TextRunProperties _properties;
+
+        internal InlineTableTextRun(
+            InlineTableLayout table,
+            Size size,
+            TextRunProperties properties)
+        {
+            _table = table;
+            _size = size;
+            _properties = properties;
+        }
+
+        public override int Length => 1;
+        public override TextRunProperties Properties => _properties;
+        public override Size Size => _size;
+        public override double Baseline => _size.Height;
+
+        public override void Draw(DrawingContext drawingContext, Point origin)
+        {
+            var table = _table.Info.Table;
+            int rowCount = Math.Max(1, table.Rows.Count);
+            int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
+            double[] widths = Enumerable.Range(0, columnCount)
+                .Select(index => index < table.ColumnWidthsEmu.Count
+                    ? Math.Max(24, table.ColumnWidthsEmu[index] / 9525.0)
+                    : 72)
+                .ToArray();
+            double[] heights = Enumerable.Range(0, rowCount)
+                .Select(index => table.Rows[index].HeightEmu > 0
+                    ? Math.Max(20, table.Rows[index].HeightEmu / 9525.0)
+                    : 24)
+                .ToArray();
+
+            double y = origin.Y;
+            for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
+            {
+                double x = origin.X;
+                var row = table.Rows.ElementAtOrDefault(rowIndex);
+                for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
+                {
+                    double width = widths[columnIndex];
+                    var cell = row?.Cells.ElementAtOrDefault(columnIndex);
+                    IBrush fill = cell?.Fill is ShapeFill.Solid solid
+                        ? (IBrush)new SolidColorBrush(Color.FromRgb(
+                            solid.Color.Resolved.R,
+                            solid.Color.Resolved.G,
+                            solid.Color.Resolved.B))
+                        : Brushes.Transparent;
+                    var rect = new Rect(x, y, width, heights[rowIndex]);
+                    drawingContext.DrawRectangle(fill, new Pen(Brushes.Gray, 0.5), rect);
+                    if (cell?.TextBody is { } body)
+                    {
+                        var text = InCanvasTextEditPlanner.ExtractPlainText(body);
+                        if (text.Length > 0)
+                        {
+                            var layout = new TextLayout(
+                                text,
+                                new Typeface(new FontFamily(InCanvasRichTextEditorDefaults.FallbackFontFamily)),
+                                Math.Max(9, InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt * PtToDip),
+                                Brushes.Black,
+                                TextAlignment.Left,
+                                TextWrapping.Wrap,
+                                TextTrimming.None,
+                                null,
+                                FlowDirection.LeftToRight,
+                                Math.Max(1, width - 4),
+                                Math.Max(1, heights[rowIndex] - 4),
+                                lineHeight: double.NaN,
+                                letterSpacing: 0,
+                                maxLines: 0,
+                                fontFeatures: null,
+                                textStyleOverrides: null);
+                            layout.Draw(drawingContext, new Point(x + 2, y + 2));
+                        }
+                    }
+                    x += width;
+                }
+                y += heights[rowIndex];
+            }
+        }
+    }
+
     private sealed record InlineTextSourceRun(
         int Start,
         int Length,
         TextRunProperties Properties,
         InlineImageLayout? InlineImage,
-        InlineOleLayout? InlineOleObject);
+        InlineOleLayout? InlineOleObject,
+        InlineTableLayout? InlineTable);
 
     private sealed record ParagraphLayout(
         InCanvasRichTextVisualParagraph Paragraph,
@@ -874,6 +1007,12 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
     private sealed record InlineOleLayout(
         int Start,
+        double WidthDip,
+        double HeightDip);
+
+    private sealed record InlineTableLayout(
+        int Start,
+        InlineTableInfo Info,
         double WidthDip,
         double HeightDip);
 }
