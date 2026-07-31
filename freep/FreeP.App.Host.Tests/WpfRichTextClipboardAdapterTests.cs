@@ -72,7 +72,20 @@ public sealed class WpfRichTextClipboardAdapterTests
         data.SetData(
             DataFormats.XamlPackage,
             new MemoryStream(CreateXamlPackage(
-                "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><List MarkerStyle=\"UpperRoman\"><ListItem><Paragraph>First</Paragraph></ListItem><ListItem><Paragraph>Second</Paragraph></ListItem></List></FlowDocument>")),
+                """
+                <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                  <FlowDocument.Resources>
+                    <ResourceDictionary>
+                      <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
+                    </ResourceDictionary>
+                  </FlowDocument.Resources>
+                  <List MarkerStyle="UpperRoman">
+                    <ListItem><Paragraph Foreground="{StaticResource Accent}">First</Paragraph></ListItem>
+                    <ListItem><Paragraph>Second</Paragraph></ListItem>
+                  </List>
+                </FlowDocument>
+                """)),
             autoConvert: false);
 
         WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
@@ -81,6 +94,7 @@ public sealed class WpfRichTextClipboardAdapterTests
         updated!.Paragraphs.Should().HaveCount(2);
         updated.Paragraphs[0].BulletKind.Should().Be(BulletKind.Auto);
         updated.Paragraphs[0].AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
+        updated.Paragraphs[0].Runs.Single().Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5597));
         updated.Paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
     }
 
