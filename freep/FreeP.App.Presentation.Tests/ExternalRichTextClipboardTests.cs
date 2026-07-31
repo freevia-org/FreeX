@@ -64,6 +64,33 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_ResolvesFontFamilyAndSizeResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          xmlns:sys="clr-namespace:System;assembly=mscorlib">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                  <sys:Double x:Key="BodySize">18</sys:Double>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph FontFamily="{DynamicResource BodyFont}"
+                         FontSize="{StaticResource BodySize}">Resource typography</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var run = payload!.Body.Paragraphs.Single().Runs.Single();
+        run.FontFamily.Should().Be("Aptos");
+        run.FontSizePt.Should().Be(13.5);
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_PreservesAllowedHyperlinks_AndBlocksUnsafeSchemes()
     {
         const string xaml = """

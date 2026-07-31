@@ -74,14 +74,19 @@ public sealed class WpfRichTextClipboardAdapterTests
             new MemoryStream(CreateXamlPackage(
                 """
                 <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                              xmlns:sys="clr-namespace:System;assembly=mscorlib">
                   <FlowDocument.Resources>
                     <ResourceDictionary>
                       <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
+                      <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                      <sys:Double x:Key="BodySize">18</sys:Double>
                     </ResourceDictionary>
                   </FlowDocument.Resources>
                   <List MarkerStyle="UpperRoman">
-                    <ListItem><Paragraph Foreground="{StaticResource Accent}">First</Paragraph></ListItem>
+                    <ListItem><Paragraph Foreground="{StaticResource Accent}"
+                                             FontFamily="{StaticResource BodyFont}"
+                                             FontSize="{DynamicResource BodySize}">First</Paragraph></ListItem>
                     <ListItem><Paragraph>Second</Paragraph></ListItem>
                   </List>
                 </FlowDocument>
@@ -95,6 +100,8 @@ public sealed class WpfRichTextClipboardAdapterTests
         updated.Paragraphs[0].BulletKind.Should().Be(BulletKind.Auto);
         updated.Paragraphs[0].AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
         updated.Paragraphs[0].Runs.Single().Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5597));
+        updated.Paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
+        updated.Paragraphs[0].Runs.Single().FontSizePt.Should().Be(13.5);
         updated.Paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
     }
 
