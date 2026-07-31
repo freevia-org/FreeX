@@ -70,12 +70,41 @@ public sealed class RibbonWpfSplitButtonTests
         });
     }
 
-    private static FrameworkElement BuildRibbon(IRibbonCommandRegistry registry) =>
+    [Fact]
+    public void DropdownMenu_PreservesDisabledParentsAndCheckedItems()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("menu", new RecordingCommand());
+            registry.Register("child", new RecordingCommand());
+            registry.Register("checked", new RecordingCommand());
+            var root = BuildRibbon(registry, new RibbonMenu(new[]
+            {
+                new RibbonMenuItem("Disabled", Children: new[]
+                {
+                    new RibbonMenuItem("Child", "child", "C")
+                }) { IsEnabled = false },
+                new RibbonMenuItem("Checked", "checked") { IsChecked = true }
+            }));
+            Layout(root, 420, 130);
+
+            var dropdown = FindButton(root, "paste.Dropdown");
+            var items = dropdown.ContextMenu!.Items.OfType<MenuItem>().ToArray();
+
+            items.Single(item => Equals(item.Header, "Disabled")).IsEnabled.Should().BeFalse();
+            var checkedItem = items.Single(item => Equals(item.Header, "Checked"));
+            checkedItem.IsCheckable.Should().BeTrue();
+            checkedItem.IsChecked.Should().BeTrue();
+        });
+    }
+
+    private static FrameworkElement BuildRibbon(IRibbonCommandRegistry registry, RibbonMenu? menu = null) =>
         RibbonWpfRenderer.BuildTabContent(
             new RibbonDefinitionBuilder()
                 .Tab("home", "Home", "H", tab => tab
                     .Group("clipboard", "Clipboard", "C", 1, group => group
-                        .SplitButton("paste", "Paste", new RibbonMenu(new[]
+                        .SplitButton("paste", "Paste", menu ?? new RibbonMenu(new[]
                         {
                             new RibbonMenuItem("Paste", "paste"),
                             new RibbonMenuItem("Paste Special", "pasteSpecial")

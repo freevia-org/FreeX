@@ -2019,7 +2019,13 @@ public static class AvaloniaRibbonRenderer
             Header = item.Header,
             InputGesture = null,
             Tag = item.CommandId?.Value,
+            IsEnabled = item.IsEnabled,
         };
+        if (item.IsChecked is { } isChecked)
+        {
+            menuItem.ToggleType = MenuItemToggleType.CheckBox;
+            menuItem.IsChecked = isChecked;
+        }
         RegisterMenuKeyTip(menuItem, item.KeyTip);
 
         if (!string.IsNullOrEmpty(item.InputGesture))
@@ -2033,7 +2039,8 @@ public static class AvaloniaRibbonRenderer
         else if (item.CommandId is { } commandId)
         {
             menuItem.Click += (_, _) => Execute(commandId, registry, afterExecute);
-            ApplyEnablement(menuItem, commandId, registry);
+            if (item.IsEnabled)
+                ApplyEnablement(menuItem, commandId, registry);
         }
 
         return menuItem;
