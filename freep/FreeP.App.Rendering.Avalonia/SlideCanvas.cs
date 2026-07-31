@@ -3343,6 +3343,12 @@ public sealed class SlideCanvas : Control
                     for (int y = 0; y < S; y++)
                         if ((x + y) % 2 == 0) SetPixel(x, y, fg);
                 break;
+            case "pct0":
+                FillAll(bg);
+                break;
+            case "pct100":
+                FillAll(fg);
+                break;
             case "pct25" or "pct30" or "pct5" or "pct10" or "pct20":
                 for (int x = 0; x < S; x++)
                     for (int y = 0; y < S; y++)

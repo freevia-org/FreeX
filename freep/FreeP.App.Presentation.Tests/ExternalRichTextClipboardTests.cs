@@ -572,6 +572,72 @@ Header\cell Value\cell\row}";
     }
 
     [Fact]
+    public void WordTableCellShading_PreservesPatternAndForegroundBackgroundColors()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue255;\red31\green78\blue121;\red242\green242\blue242;}
+\trowd\clcbpat1\clcfpat2\clbghoriz\cellx1440\clcbpat3\clcfpat2\clbgcross\cellx2880
+\clcbpat3\clshdng100\cellx4320
+Header\cell Body\cell Solid\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.TableCellStyles.Should().HaveCount(3);
+        payload.TableCellStyles![0].FillPattern.Should().Be("horzStripe");
+        payload.TableCellStyles[0].FillForegroundRgb.Should().Be(0x1F4E79);
+        payload.TableCellStyles[0].FillBackgroundRgb.Should().Be(0xFFFFFF);
+        payload.TableCellStyles[1].FillPattern.Should().Be("cross");
+        payload.TableCellStyles[2].FillPattern.Should().Be("pct100");
+
+        ClipboardTablePlanner.TryBuildStandaloneTable(
+            payload.Body,
+            payload.TableColumnWidthsEmu,
+            payload.TableCellStyles,
+            out var table).Should().BeTrue();
+
+        var firstFill = table.Rows[0].Cells[0].Fill.Should().BeOfType<ShapeFill.Pattern>().Subject;
+        firstFill.Preset.Should().Be("horzStripe");
+        firstFill.ForegroundColor.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        firstFill.BackgroundColor.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFFFF));
+    }
+
+    [Fact]
+    public void WordTableMergeControls_PreserveNativeGridAndRowSpans()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+\trowd\clmgf\cellx1440\clmrg\cellx2880\cellx4320
+Merged\cell\cell Tail\cell\row
+\trowd\clvmgf\cellx1440\cellx2880
+Top\cell Right\cell\row
+\trowd\clvmrg\cellx1440\cellx2880
+\cell Bottom\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.TableCellStyles.Should().HaveCount(7);
+        payload.TableCellStyles![0].HorizontalMergeStart.Should().BeTrue();
+        payload.TableCellStyles[1].HorizontalMergeContinuation.Should().BeTrue();
+        payload.TableCellStyles[3].VerticalMergeStart.Should().BeTrue();
+        payload.TableCellStyles[5].VerticalMergeContinuation.Should().BeTrue();
+
+        ClipboardTablePlanner.TryBuildStandaloneTable(
+            payload.Body,
+            payload.TableColumnWidthsEmu,
+            payload.TableCellStyles,
+            out var table).Should().BeTrue();
+
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        table.Rows[0].Cells[2].GridSpan.Should().Be(1);
+        table.Rows[1].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[2].Cells[0].VMerge.Should().BeTrue();
+    }
+
+    [Fact]
     public void NestedTableGroups_UseSameBoundedCellAndRowProjection()
     {
         const string rtf =
