@@ -27,6 +27,43 @@ public sealed class InsertDropdownPrimaryActionParityTests
         table.Rows.Select(row => row.Cells.Count).Should().Equal(2, 2);
     }
 
+    [Fact]
+    public void Cover_page_dropdown_primary_action_inserts_wpf_default_cover_page()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Properties.Title = "Primary action title";
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        registry.TryGet(new RibbonCommandId("freew.cover-page"), out var command)
+            .Should().BeTrue("the shared WPF command id must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
+
+        view.Document.Blocks.OfType<Paragraph>().First().PlainText.Should().Be("Primary action title");
+    }
+
+    [Fact]
+    public void Equation_dropdown_primary_action_inserts_wpf_default_equation()
+    {
+        var document = TextDocument.CreateEmpty();
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        registry.TryGet(new RibbonCommandId("freew.equation"), out var command)
+            .Should().BeTrue("the shared WPF command id must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var equations = view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Equation)
+            .Where(item => item is not null)
+            .ToArray();
+        equations.Should().ContainSingle();
+        equations[0]!.LinearText.Should().Contain("E = m");
+    }
+
     private static RibbonHostCallbacks NoopCallbacks() =>
         new(
             Open: () => { },
