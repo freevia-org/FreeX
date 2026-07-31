@@ -108,7 +108,18 @@ internal static class XlsxWorksheetDrawingObjectWriter
         IReadOnlyDictionary<string, string>? sourceDrawingPathsBySheet = null,
         HashSet<string>? usedDrawingPaths = null,
         int startPictureIndex = 1,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>>? sourceObjectHyperlinksBySheet = null)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, (string Target, string? TargetMode)>>? sourceObjectHyperlinksBySheet = null,
+        // drawing-zorder-share-part (residual-gap closure): sheet name -> the drawing part
+        // XlsxWorksheetChartWriter FRESHLY allocated for that sheet's charts earlier in this same save
+        // (populated only for sheets with no source drawing part of their own -- the case the
+        // chart-shadow/XlsxWorksheetDrawingPartMerger route cannot cover, because the merger only runs
+        // when the workbook has a source package with drawings). A worksheet can reference exactly ONE
+        // drawing part, so allocating a second one here and repointing the worksheet at it silently
+        // orphaned the chart writer's part: every chart on a sheet that also had a picture/shape/text
+        // box was lost on save. For those sheets we instead write INTO the chart writer's part and
+        // carry its chart anchors and relationships forward -- see WriteWorksheetDrawingObjects's
+        // preserveExistingContent handling.
+        IReadOnlyDictionary<string, string>? chartDrawingPathsBySheet = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -169,14 +180,29 @@ internal static class XlsxWorksheetDrawingObjectWriter
             // next drawing{N}.xml that is not reserved by another sheet's source drawing, not already
             // present in the archive (catches parts written by the chart writer in this same save), and
             // not already claimed by a previous sheet in this loop.
-            var drawingPath = sourceDrawingPaths.TryGetValue(name, out var ownDrawingPath) &&
-                              localUsedPaths.Add(ownDrawingPath)
-                ? ownDrawingPath
-                : AllocateFreshDrawingPath(archive, reservedDrawingPaths, localUsedPaths);
+            string drawingPath;
+            var preserveExistingContent = false;
+            if (sourceDrawingPaths.TryGetValue(name, out var ownDrawingPath) && localUsedPaths.Add(ownDrawingPath))
+            {
+                drawingPath = ownDrawingPath;
+            }
+            else if (chartDrawingPathsBySheet?.TryGetValue(name, out var chartDrawingPath) == true &&
+                     localUsedPaths.Add(chartDrawingPath))
+            {
+                // This sheet's charts were just written into a freshly allocated drawing part. Share it
+                // (a worksheet can only reference one) and keep what is already in it.
+                drawingPath = chartDrawingPath;
+                preserveExistingContent = true;
+            }
+            else
+            {
+                drawingPath = AllocateFreshDrawingPath(archive, reservedDrawingPaths, localUsedPaths);
+            }
+
             var objectHyperlinksByName = sourceObjectHyperlinksBySheet?.TryGetValue(name, out var sheetHyperlinks) == true
                 ? sheetHyperlinks
                 : EmptyObjectHyperlinksByName;
-            WriteWorksheetDrawingObjects(archive, worksheetPath, sheet, pictures, textBoxes, shapes, drawingPath, ref pictureIndex, objectHyperlinksByName);
+            WriteWorksheetDrawingObjects(archive, worksheetPath, sheet, pictures, textBoxes, shapes, drawingPath, ref pictureIndex, objectHyperlinksByName, preserveExistingContent);
         }
     }
 
@@ -231,7 +257,8 @@ internal static class XlsxWorksheetDrawingObjectWriter
         IReadOnlyList<DrawingShapeModel> shapes,
         string drawingPath,
         ref int pictureIndex,
-        IReadOnlyDictionary<string, (string Target, string? TargetMode)> oldObjectHyperlinksByName)
+        IReadOnlyDictionary<string, (string Target, string? TargetMode)> oldObjectHyperlinksByName,
+        bool preserveExistingContent = false)
     {
         var worksheetEntry = archive.GetEntry(worksheetPath);
         if (worksheetEntry is null)
@@ -257,11 +284,37 @@ internal static class XlsxWorksheetDrawingObjectWriter
         // round-trip) rather than position, since pictures/text boxes/shapes -- unlike charts, which
         // XlsxWorksheetChartWriter matches positionally -- can be freely reordered, added, or removed
         // independently of one another.
+        // drawing-zorder-share-part (residual-gap closure): when this sheet's charts were written into
+        // this very part by XlsxWorksheetChartWriter moments ago (preserveExistingContent), carry its
+        // anchors and relationships forward instead of dropping them -- the delete-and-rebuild below
+        // would otherwise discard every chart on a sheet that also has a picture/shape/text box. The
+        // chart writer's relationship ids ("rIdFreeXChart..." / "rIdFreeXChartHyperlink...") can never
+        // collide with the ids allocated below ("rIdFreeXPicture..."/"rIdFreeXLinkedPicture..."/
+        // "rIdFreeXPictureSvg..."/"rIdFreeXObjectHyperlink..."), so they are carried verbatim.
+        var preservedAnchors = new List<XElement>();
+        var preservedRelationships = new List<XElement>();
+        if (preserveExistingContent)
+        {
+            if (archive.GetEntry(drawingPath) is { } existingDrawingEntry &&
+                XlsxPackageXmlEditor.LoadXml(existingDrawingEntry).Root is { } existingRoot)
+            {
+                preservedAnchors.AddRange(existingRoot.Elements().Select(anchor => new XElement(anchor)));
+            }
+
+            if (archive.GetEntry(drawingRelsPath) is { } existingRelsEntry &&
+                XlsxPackageXmlEditor.LoadXml(existingRelsEntry).Root is { } existingRelsRoot)
+            {
+                preservedRelationships.AddRange(existingRelsRoot
+                    .Elements(packageRelNs + "Relationship")
+                    .Select(relationship => new XElement(relationship)));
+            }
+        }
+
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
 
-        var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
-        var anchors = new List<XElement>();
+        var drawingRelsXml = new XDocument(new XElement(packageRelNs + "Relationships", preservedRelationships));
+        var anchors = new List<XElement>(preservedAnchors);
         var nextPictureIndex = pictureIndex;
         var shapeIndex = 1;
         var hyperlinkRelIndex = 1;

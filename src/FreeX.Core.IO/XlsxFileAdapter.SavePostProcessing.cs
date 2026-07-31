@@ -268,6 +268,14 @@ public sealed partial class XlsxFileAdapter
             XlsxIndexedColorPaletteMapper.Save(packageStream, workbook);
         }
 
+        // drawing-zorder-share-part (residual-gap closure): drawing parts the chart writer allocates
+        // FRESH for a sheet (a sheet with no source drawing part of its own -- every sheet of a
+        // never-saved workbook, a brand-new or duplicated sheet, ...). A worksheet can reference only
+        // ONE drawing part, so the drawing-object writer must write this sheet's pictures/shapes/text
+        // boxes into that same part rather than allocating a second one and repointing the worksheet at
+        // it, which orphaned the charts. The sheets NOT listed here (those reusing their own source
+        // drawing part) stay on the existing chart-shadow + XlsxWorksheetDrawingPartMerger route.
+        var chartDrawingPathsBySheet = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         if (featurePlan.HasSupportedCharts)
         {
             packageStream.Position = 0;
@@ -279,7 +287,8 @@ public sealed partial class XlsxFileAdapter
                 XlsxChartXmlWriter.GetContentType,
                 XlsxChartXmlWriter.GetRelationshipType,
                 GetSourceDrawingPathsBySheet(workbook),
-                GetSourceChartHyperlinksBySheet(workbook));
+                GetSourceChartHyperlinksBySheet(workbook),
+                chartDrawingPathsBySheet);
         }
 
         if (featurePlan.HasSupportedDrawingObjects)
@@ -290,7 +299,8 @@ public sealed partial class XlsxFileAdapter
                 workbook,
                 GetSourceDrawingPathsBySheet(workbook),
                 startPictureIndex: GetSourceMaxPictureIndex(workbook) + 1,
-                sourceObjectHyperlinksBySheet: GetSourceDrawingObjectHyperlinksBySheet(workbook));
+                sourceObjectHyperlinksBySheet: GetSourceDrawingObjectHyperlinksBySheet(workbook),
+                chartDrawingPathsBySheet: chartDrawingPathsBySheet);
         }
 
         if (featurePlan.HasStructuredTables)
