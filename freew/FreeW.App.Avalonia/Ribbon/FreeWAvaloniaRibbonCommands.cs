@@ -707,11 +707,17 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.hf-go-to-footer", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
         r.Register("freew.hf-close", new ActionRibbonCommand(editor.CloseHeaderFooterEditing));
 
-        r.Register("freew.hf-different-first-page", new ActionRibbonCommand(editor.ToggleDifferentFirstPage));
-        r.Register("freew.hf-different-odd-even", new ActionRibbonCommand(editor.ToggleDifferentOddEvenPages));
+        r.Register("freew.hf-different-first-page", new PageSettingCommand(
+            editor,
+            page => page.DifferentFirstPage = !page.DifferentFirstPage,
+            page => page.DifferentFirstPage));
+        r.Register("freew.hf-different-odd-even", new PageSettingCommand(
+            editor,
+            page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages,
+            page => page.DifferentOddEvenPages));
 
-        r.Register("freew.hf-header-from-top", new ValueRibbonCommand(value => SetHeaderFooterDistance(value, editor.SetHeaderDistance)));
-        r.Register("freew.hf-footer-from-bottom", new ValueRibbonCommand(value => SetHeaderFooterDistance(value, editor.SetFooterDistance)));
+        r.Register("freew.hf-header-from-top", new HeaderFooterDistanceCommand(editor, footer: false));
+        r.Register("freew.hf-footer-from-bottom", new HeaderFooterDistanceCommand(editor, footer: true));
 
         r.Register("freew.hf-insert-page-number", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
         r.Register("freew.hf-insert-page-number-footer", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
@@ -750,10 +756,30 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.cc-combo", new ActionRibbonCommand(() => editor.InsertComboBoxControl()));
     }
 
-    private static void SetHeaderFooterDistance(string? value, Action<double> apply)
+    private sealed class HeaderFooterDistanceCommand(DocumentView editor, bool footer) : IRibbonStatefulCommand
     {
-        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var points))
-            apply(points);
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled
+                || !HeaderFooterDialogPlanner.TryParseDistance(context.SelectedValue, out var points))
+            {
+                return;
+            }
+
+            if (footer)
+                editor.SetFooterDistance(points);
+            else
+                editor.SetHeaderDistance(points);
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var page = editor.Document.Page;
+            var points = footer ? page.FooterDistancePt : page.HeaderDistancePt;
+            return new(
+                IsEnabled: !editor.IsEditingLocked,
+                Value: HeaderFooterDialogPlanner.FormatDistance(points));
+        }
     }
 
     private static void ExecutePageNumberFormat(
