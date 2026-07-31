@@ -204,6 +204,29 @@ public sealed class InCanvasRichTextVisualPlannerTests
         paragraph.SpaceAfterDip.Should().BeApproximately(8, 0.01);
     }
 
+    [Fact]
+    public void Create_ProjectsParagraphTabStopsIntoResolvedVisualPlan()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "Label\tValue" } },
+            TabStops =
+            {
+                new TabStop { PositionEmu = 914400, Alignment = TabStopAlignment.Right },
+                new TabStop { PositionEmu = 1828800, Alignment = TabStopAlignment.Decimal },
+            },
+        });
+
+        var paragraph = InCanvasRichTextVisualPlanner.Create(body).Paragraphs.Single();
+
+        paragraph.TabStops.Should().NotBeNull();
+        paragraph.TabStops!.Select(stop => (stop.PositionDip, stop.Alignment))
+            .Should().Equal(
+                (96d, TabStopAlignment.Right),
+                (192d, TabStopAlignment.Decimal));
+    }
+
     private static Paragraph Numbered(
         string text,
         AutoNumType type,

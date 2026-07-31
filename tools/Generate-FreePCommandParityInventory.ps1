@@ -439,7 +439,7 @@ internal static class FreePCommandInventory
             RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including modeled inline effects, inline picture/object placement, external OLE activation, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF and XamlPackage ingestion in Avalonia, including editable native table cell fill, border, inset, vertical-anchor styles, safe run-level hyperlinks, bounded list markers, and recursive nested inline tables from the supported XamlPackage path. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. Unsupported XamlPackage resources and FlowDocument controls, nested inline tables from unsupported RTF forms, unsupported RTF destinations and controls, richer RTF lists/fields, broader IME/RTL/FlowDocument behavior, in-place OLE hosting, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
         new(
             EvidenceId: "freep.clipboard.external-rtf-depth",
-            Area: "External RTF list, paragraph-layout, hyperlink, and field paste depth",
+            Area: "External RTF list, paragraph-layout, hyperlink, field, and tab-stop paste depth",
             Status: "shared-planner-and-host-evidence",
             HostCoverage: "WPF/Avalonia renderer-neutral rich-text model and paste adapters consume the same bounded external RTF planner; WPF remains authoritative and no platform-specific semantic fork was added",
             EvidenceDocs:
@@ -450,13 +450,16 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-external-rtf-list-level-templates-20260731.md",
                 "docs/parity/freep-external-rtf-file-hyperlink-20260729.md",
                 "docs/parity/freep-external-rtf-field-runs-20260730.md",
-                "docs/parity/freep-external-rtf-object-results-20260730.md"
+                "docs/parity/freep-external-rtf-object-results-20260730.md",
+                "docs/parity/freep-external-rtf-tab-stops-20260801.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation/ExternalRichTextClipboardPlanner.cs",
+                "freep/FreeP.App.Presentation/InCanvasRichTextVisualPlanner.cs",
                 "freep/FreeP.App.Presentation/ClipboardTablePlanner.cs",
                 "freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs",
+                "freep/FreeP.App.Presentation.Tests/InCanvasRichTextVisualPlannerTests.cs",
                 "freep/FreeP.App.Presentation.Tests/InCanvasRichClipboardTests.cs",
                 "freep/FreeP.App.Rendering.Avalonia.Tests/AvaloniaRichTextEditorTests.cs",
                 "freep/FreeP.App.Rendering.Wpf/WpfRichTextClipboardAdapter.cs",
