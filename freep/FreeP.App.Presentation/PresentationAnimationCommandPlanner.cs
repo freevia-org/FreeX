@@ -5,6 +5,7 @@ namespace FreeP.App.Compositor;
 public enum PresentationAnimationCommandIntentKind
 {
     AddEffect,
+    AddMotionPath,
     RemoveSelectedShapeAnimations,
     SetTrigger,
     SetDuration,
@@ -14,11 +15,21 @@ public enum PresentationAnimationCommandIntentKind
     TogglePane,
 }
 
+public enum PresentationMotionPathPreset
+{
+    Right,
+    Left,
+    Up,
+    Down,
+    ArcRight,
+}
+
 public sealed record PresentationAnimationCommandPlan(
     string CommandId,
     PresentationAnimationCommandIntentKind Intent,
     AnimationKind? Kind = null,
-    AnimationPreset? Preset = null);
+    AnimationPreset? Preset = null,
+    PresentationMotionPathPreset? MotionPathPreset = null);
 
 public static class PresentationAnimationCommandPlanner
 {
@@ -71,6 +82,11 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.exit.wedge", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Exit, AnimationPreset.Wedge),
             new PresentationAnimationCommandPlan("freep.anim.exit.wheel", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Exit, AnimationPreset.Wheel),
             new PresentationAnimationCommandPlan("freep.anim.exit.random-bars", PresentationAnimationCommandIntentKind.AddEffect, AnimationKind.Exit, AnimationPreset.RandomBars),
+            new PresentationAnimationCommandPlan("freep.anim.motion.right", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.Right),
+            new PresentationAnimationCommandPlan("freep.anim.motion.left", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.Left),
+            new PresentationAnimationCommandPlan("freep.anim.motion.up", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.Up),
+            new PresentationAnimationCommandPlan("freep.anim.motion.down", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.Down),
+            new PresentationAnimationCommandPlan("freep.anim.motion.arc-right", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.ArcRight),
             new PresentationAnimationCommandPlan("freep.anim.none", PresentationAnimationCommandIntentKind.RemoveSelectedShapeAnimations),
             new PresentationAnimationCommandPlan("freep.anim.trigger", PresentationAnimationCommandIntentKind.SetTrigger),
             new PresentationAnimationCommandPlan("freep.anim.duration", PresentationAnimationCommandIntentKind.SetDuration),
@@ -118,6 +134,16 @@ public static class PresentationAnimationCommandPlanner
                 }
 
                 editor.AddAnimation(0, BuildAnimation(kind, preset));
+                return true;
+
+            case PresentationAnimationCommandIntentKind.AddMotionPath:
+                if (plan.MotionPathPreset is not { } motionPathPreset
+                    || !TryGetSelectedShapeId(editor, out _))
+                {
+                    return false;
+                }
+
+                editor.AddAnimation(0, BuildMotionAnimation(motionPathPreset));
                 return true;
 
             case PresentationAnimationCommandIntentKind.RemoveSelectedShapeAnimations:
@@ -190,6 +216,42 @@ public static class PresentationAnimationCommandPlanner
             Trigger = AnimationTrigger.OnClick,
             DurationMs = DefaultDurationMs,
         };
+
+    public static ShapeAnimation BuildMotionAnimation(PresentationMotionPathPreset preset)
+    {
+        var motion = new MotionPath { Origin = "parent" };
+        motion.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+
+        switch (preset)
+        {
+            case PresentationMotionPathPreset.Right:
+                motion.Segments.Add(MotionPathSegment.LineTo(0.5, 0));
+                break;
+            case PresentationMotionPathPreset.Left:
+                motion.Segments.Add(MotionPathSegment.LineTo(-0.5, 0));
+                break;
+            case PresentationMotionPathPreset.Up:
+                motion.Segments.Add(MotionPathSegment.LineTo(0, -0.5));
+                break;
+            case PresentationMotionPathPreset.Down:
+                motion.Segments.Add(MotionPathSegment.LineTo(0, 0.5));
+                break;
+            case PresentationMotionPathPreset.ArcRight:
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.15, -0.25, 0.35, -0.25, 0.5, 0));
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(preset), preset, null);
+        }
+
+        return new ShapeAnimation
+        {
+            Kind = AnimationKind.Motion,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick,
+            DurationMs = DefaultDurationMs,
+            Motion = motion,
+        };
+    }
 
     public static bool TryParseTrigger(string? selectedValue, out AnimationTrigger trigger)
     {

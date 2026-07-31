@@ -214,6 +214,13 @@ internal static class FreePRibbonIcons
             ["freep.anim.exit.zoom-out"]   = RibbonCommandIconKind.Zoom,
             ["freep.anim.exit.blinds"]     = RibbonCommandIconKind.Grid,
 
+            // Motion-path authoring
+            ["freep.anim.motion.right"]     = RibbonCommandIconKind.ArrowRight,
+            ["freep.anim.motion.left"]      = RibbonCommandIconKind.ArrowLeft,
+            ["freep.anim.motion.up"]        = RibbonCommandIconKind.ArrowUp,
+            ["freep.anim.motion.down"]      = RibbonCommandIconKind.ArrowDown,
+            ["freep.anim.motion.arc-right"] = RibbonCommandIconKind.Effects,
+
             // Wave 4C: Animation none / timing / pane
             ["freep.anim.none"]         = RibbonCommandIconKind.Clear,
             ["freep.anim.trigger"]      = RibbonCommandIconKind.Next,

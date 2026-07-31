@@ -420,7 +420,42 @@ static void RenderDocumentComposite(
     // An export limit controls emitted PNGs, never the document's logical page count. In
     // particular, PAGE/NUMPAGES fields must keep reporting the full paginator result.
     int actualPageCount = Math.Max(1, paginator.PageCount);
-    int pageCount = Math.Min(actualPageCount, maxPages);
+    var endnoteIds = doc.Endnotes.Keys.OrderBy(id => id).ToList();
+    var endnoteBitmap = endnoteIds.Count == 0
+        ? null
+        : RenderNoteRegion(
+            doc,
+            Array.Empty<int>(),
+            endnoteIds,
+            pageWDip,
+            marginLeft,
+            marginRight,
+            isEndnotePage: false);
+    var requiresDedicatedEndnotePage = false;
+    double? finalPageEndnoteY = null;
+    if (endnoteBitmap is not null)
+    {
+        var finalBodyPage = paginator.GetPage(actualPageCount - 1);
+        var finalBodyBitmap = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
+        var finalBodyVisual = new DrawingVisual();
+        using (var dc = finalBodyVisual.RenderOpen())
+        {
+            dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pixW, pixH));
+            dc.DrawRectangle(
+                new VisualBrush(finalBodyPage.Visual) { Stretch = Stretch.None },
+                null,
+                new Rect(0, 0, pageWDip, pageHDip));
+        }
+        finalBodyBitmap.Render(finalBodyVisual);
+        var nextContentY = Math.Max(marginTop, FindLastPaintedRow(finalBodyBitmap) + 16);
+        requiresDedicatedEndnotePage = nextContentY + endnoteBitmap.Height > pixH - marginBottom;
+        if (!requiresDedicatedEndnotePage)
+            finalPageEndnoteY = nextContentY;
+    }
+
+    var actualPageCountWithEndnotes = actualPageCount + (requiresDedicatedEndnotePage ? 1 : 0);
+    int bodyPageCount = Math.Min(actualPageCount, maxPages);
+    int pageCount = Math.Min(actualPageCountWithEndnotes, maxPages);
     var footnoteIdsByPaginatorPage = doc.Footnotes.Count > 0
         ? PaginationEngine.ComputeFootnotePageOwnership(flow, paginator)
         : new Dictionary<int, IReadOnlyList<int>>();
@@ -569,14 +604,13 @@ static void RenderDocumentComposite(
     var differentOddEvenHeaderFooterPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(doc);
 
     // ═══ Per-page compositing ═════════════════════════════════════════════════════════════════════
-    // Word appends endnotes after the final body content when that page has room. They are not a
-    // separate, empty document page merely because the document contains endnotes.
-    var endnoteIds = doc.Endnotes.Keys.OrderBy(id => id).ToList();
+    // Word appends endnotes after the final body content when that page has room. A measured
+    // overflow becomes one physical page after the body instead of silently dropping the notes.
     var hasEndnotes = endnoteIds.Count > 0;
-    var evidencePageCount = actualPageCount;
+    var evidencePageCount = actualPageCountWithEndnotes;
     var sectionPageCounters = new Dictionary<int, int>();
 
-    for (int i = 0; i < pageCount; i++)
+    for (int i = 0; i < bodyPageCount; i++)
     {
         DocumentPage docPage = paginator.GetPage(i);
 
@@ -908,21 +942,17 @@ static void RenderDocumentComposite(
         // Word's default endnote layout continues after the body text on the final physical page
         // when the note region fits. Compose it after the body bitmap so placement follows the
         // actual paginator output rather than a guessed block boundary.
-        var hasEndnotesOnPage = hasEndnotes && i == pageCount - 1;
+        var hasEndnotesOnPage = hasEndnotes
+            && !requiresDedicatedEndnotePage
+            && i == actualPageCount - 1;
         if (hasEndnotesOnPage)
         {
-            var endnoteBmp = RenderNoteRegion(
-                doc,
-                Array.Empty<int>(),
-                endnoteIds,
-                thisPageWDip,
-                thisMarginLeft,
-                thisMarginRight,
-                isEndnotePage: false);
+            var endnoteBmp = endnoteBitmap;
             if (endnoteBmp is not null)
             {
                 var availableBottom = thisPixH - thisMarginBottom;
-                var nextContentY = Math.Max(thisMarginTop, FindLastPaintedRow(bmp) + 16);
+                var nextContentY = finalPageEndnoteY
+                    ?? Math.Max(thisMarginTop, FindLastPaintedRow(bmp) + 16);
                 if (nextContentY + endnoteBmp.Height <= availableBottom)
                 {
                     var endnoteVisual = new DrawingVisual();
@@ -932,7 +962,7 @@ static void RenderDocumentComposite(
                 }
                 else
                 {
-                    Console.WriteLine($"  [warn] {name}: endnotes overflow final body page; retaining body-only page until multi-page endnote pagination is available.");
+                    Console.WriteLine($"  [warn] {name}: final-page endnote preflight disagreed with the composite surface; emitting the dedicated endnote page.");
                     hasEndnotesOnPage = false;
                 }
             }
@@ -982,10 +1012,66 @@ static void RenderDocumentComposite(
             document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
-        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({evidenceBitmap.PixelWidth}x{evidenceBitmap.PixelHeight}, {pageCount}/{actualPageCount} pages emitted, composite)");
+        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({evidenceBitmap.PixelWidth}x{evidenceBitmap.PixelHeight}, {pageCount}/{actualPageCountWithEndnotes} pages emitted, composite)");
     }
 
-    // Endnotes are composed within the final body page above.
+    if (requiresDedicatedEndnotePage
+        && endnoteBitmap is not null
+        && actualPageCount < maxPages)
+    {
+        var endnotePageNumber = actualPageCount + 1;
+        var endnotePage = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
+        var endnotePageVisual = new DrawingVisual();
+        using (var dc = endnotePageVisual.RenderOpen())
+        {
+            var pageColor = string.IsNullOrEmpty(page.BackgroundColorHex)
+                ? Colors.White
+                : ParseHexColor(page.BackgroundColorHex, Colors.White);
+            dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, pixW, pixH));
+            dc.DrawImage(endnoteBitmap, new Rect(0, marginTop, pixW, endnoteBitmap.Height));
+        }
+        endnotePage.Render(endnotePageVisual);
+
+        var evidenceBitmap = NormalizeWordBaselineRasterSurface(endnotePage);
+        string outPath = BuildVisualEvidenceOutputPath(outDir, name, endnotePageNumber);
+        var byteLength = SavePng(evidenceBitmap, outPath);
+        var stats = ComputeWpfPixelStats(evidenceBitmap, "#FFFFFF");
+        var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, page);
+        var sectionRelativePageNumber = NextSectionRelativePageNumber(sectionPageCounters, sectionOrdinal);
+        var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
+            scenarioId: name,
+            hostId: "wpf-fidelity-render",
+            outputPath: outPath,
+            pixelWidth: evidenceBitmap.PixelWidth,
+            pixelHeight: evidenceBitmap.PixelHeight,
+            byteLength: byteLength,
+            pixelStats: stats,
+            page: page,
+            pageNumber: endnotePageNumber,
+            pageCount: evidencePageCount,
+            layoutKind: DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: pageWDip,
+            headerSlotName: null,
+            footerSlotName: null,
+            hasFootnotes: false,
+            hasEndnotes: true,
+            sectionOrdinal: sectionOrdinal,
+            sectionRelativePageNumber: sectionRelativePageNumber,
+            hostMetadata: BuildHostMetadata(
+                name,
+                renderPath: "composite",
+                captureSource: "wpf-composite-renderer",
+                pageIndex: actualPageCount.ToString(CultureInfo.InvariantCulture),
+                extra: new Dictionary<string, string>
+                {
+                    ["reviewMarkup"] = reviewMarkup ? "true" : "false",
+                    ["endnotePlacement"] = "dedicated-overflow-page"
+                }),
+            document: doc);
+        FreeWVisualEvidencePlanner.EnsureTrusted(row);
+        evidence.Add(row);
+        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({evidenceBitmap.PixelWidth}x{evidenceBitmap.PixelHeight}, {pageCount}/{actualPageCountWithEndnotes} pages emitted, composite endnotes)");
+    }
 }
 
 static void DrawTrackedRevisionChangeBars(

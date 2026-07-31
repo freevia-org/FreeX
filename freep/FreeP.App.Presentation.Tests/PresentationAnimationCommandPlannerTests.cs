@@ -90,6 +90,24 @@ public sealed class PresentationAnimationCommandPlannerTests
         plan.Preset.Should().BeNull();
     }
 
+    [Theory]
+    [InlineData("freep.anim.motion.right", PresentationMotionPathPreset.Right)]
+    [InlineData("freep.anim.motion.left", PresentationMotionPathPreset.Left)]
+    [InlineData("freep.anim.motion.up", PresentationMotionPathPreset.Up)]
+    [InlineData("freep.anim.motion.down", PresentationMotionPathPreset.Down)]
+    [InlineData("freep.anim.motion.arc-right", PresentationMotionPathPreset.ArcRight)]
+    public void TryPlan_MapsMotionCommandsToTypedPathPresets(
+        string commandId,
+        PresentationMotionPathPreset expectedPreset)
+    {
+        PresentationAnimationCommandPlanner.TryPlan(commandId, out var plan).Should().BeTrue();
+
+        plan.Intent.Should().Be(PresentationAnimationCommandIntentKind.AddMotionPath);
+        plan.Kind.Should().Be(AnimationKind.Motion);
+        plan.Preset.Should().BeNull();
+        plan.MotionPathPreset.Should().Be(expectedPreset);
+    }
+
     [Fact]
     public void TryPlan_RejectsUnknownCommandId()
     {
@@ -130,6 +148,37 @@ public sealed class PresentationAnimationCommandPlannerTests
         PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeFalse();
         editor.CurrentSlideAnimations.Should().BeEmpty();
         editor.Bus.CanUndo.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("freep.anim.motion.right", MotionPathSegmentKind.Line, 0.5, 0)]
+    [InlineData("freep.anim.motion.arc-right", MotionPathSegmentKind.Cubic, 0.5, 0)]
+    public void TryApply_MotionCommand_AddsUndoableMotionPath(
+        string commandId,
+        MotionPathSegmentKind expectedSegmentKind,
+        double expectedEndX,
+        double expectedEndY)
+    {
+        var editor = MakeSession(out _, out var shapeId);
+        PresentationAnimationCommandPlanner.TryPlan(commandId, out var plan).Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        var animation = editor.CurrentSlideAnimations.Should().ContainSingle().Subject;
+        animation.ShapeId.Should().Be(shapeId);
+        animation.Kind.Should().Be(AnimationKind.Motion);
+        animation.Motion.Should().NotBeNull();
+        animation.Motion!.Segments.Should().HaveCount(2);
+        animation.Motion.Segments[0].Kind.Should().Be(MotionPathSegmentKind.Move);
+        animation.Motion.Segments[1].Kind.Should().Be(expectedSegmentKind);
+        animation.Motion.Segments[1].X.Should().Be(expectedEndX);
+        animation.Motion.Segments[1].Y.Should().Be(expectedEndY);
+        editor.Bus.CanUndo.Should().BeTrue();
+
+        editor.Bus.Undo();
+        editor.CurrentSlideAnimations.Should().BeEmpty();
+        editor.Bus.Redo();
+        editor.CurrentSlideAnimations.Should().ContainSingle().Which.Kind.Should().Be(AnimationKind.Motion);
     }
 
     [Fact]

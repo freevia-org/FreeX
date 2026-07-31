@@ -2446,6 +2446,42 @@
   <data name="Ribbon_Command_AnimationNone_KeyTip" xml:space="preserve">
     <value>E</value>
   </data>
+  <data name="Ribbon_Group_AnimationMotionPath_Label" xml:space="preserve">
+    <value>Motion Paths</value>
+  </data>
+  <data name="Ribbon_Group_AnimationMotionPath_KeyTip" xml:space="preserve">
+    <value>M</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionRight_Label" xml:space="preserve">
+    <value>Right</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionRight_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionLeft_Label" xml:space="preserve">
+    <value>Left</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionLeft_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionUp_Label" xml:space="preserve">
+    <value>Up</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionUp_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionDown_Label" xml:space="preserve">
+    <value>Down</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionDown_KeyTip" xml:space="preserve">
+    <value>D</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcRight_Label" xml:space="preserve">
+    <value>Arc Right</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcRight_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
   <data name="Ribbon_Group_AnimationTiming_Label" xml:space="preserve">
     <value>Timing</value>
   </data>

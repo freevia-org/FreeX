@@ -1121,6 +1121,14 @@ public static class FreePRibbon
             if (profile.IncludeAnimationSeparators) group.Separator();
             group.Medium("freep.anim.none", FreePRibbonText.AnimationNoneCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.AnimationNoneCommand.KeyTip);
         });
+        tab.Group("animation-motion-paths", FreePRibbonText.AnimationMotionPathGroup.Label, FreePRibbonText.AnimationMotionPathGroup.KeyTip, 85, group =>
+        {
+            group.Medium("freep.anim.motion.right", FreePRibbonText.AnimationMotionRightCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.AnimationMotionRightCommand.KeyTip);
+            group.Medium("freep.anim.motion.left", FreePRibbonText.AnimationMotionLeftCommand.Label, RibbonCommandIconKind.ArrowLeft, FreePRibbonText.AnimationMotionLeftCommand.KeyTip);
+            group.Medium("freep.anim.motion.up", FreePRibbonText.AnimationMotionUpCommand.Label, RibbonCommandIconKind.ArrowUp, FreePRibbonText.AnimationMotionUpCommand.KeyTip);
+            group.Medium("freep.anim.motion.down", FreePRibbonText.AnimationMotionDownCommand.Label, RibbonCommandIconKind.ArrowDown, FreePRibbonText.AnimationMotionDownCommand.KeyTip);
+            group.Medium("freep.anim.motion.arc-right", FreePRibbonText.AnimationMotionArcRightCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionArcRightCommand.KeyTip);
+        });
         tab.Group("animation-timing", FreePRibbonText.AnimationTimingGroup.Label, FreePRibbonText.AnimationTimingGroup.KeyTip, 90, group =>
         {
             group.ComboBox("freep.anim.trigger", FreePRibbonText.AnimationTriggerCommand.Label, control => control with

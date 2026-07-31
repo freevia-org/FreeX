@@ -3304,6 +3304,32 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_motion_command_creates_motion_path_animation()
+    {
+        MotionPath? motion = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(shape.Id);
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.motion.right", out var command).Should().BeTrue();
+
+            command!.Execute(RibbonCommandContext.Empty);
+            motion = window.Editor.CurrentSlideAnimations.Single().Motion;
+        });
+
+        if (!ran) return;
+        motion.Should().NotBeNull();
+        motion!.Segments.Should().HaveCount(2);
+        motion.Segments[0].Kind.Should().Be(MotionPathSegmentKind.Move);
+        motion.Segments[1].Kind.Should().Be(MotionPathSegmentKind.Line);
+        motion.Segments[1].X.Should().Be(0.5);
+        motion.Segments[1].Y.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Animation_pane_renders_shared_timeline_rows_and_action_state()
     {
         AnimationPaneTimelinePlan? panePlan = null;
