@@ -79,8 +79,9 @@ internal sealed class PageBox : Border
 
     /// <summary>
     /// True when this page box is the synthetic endnotes page appended after all body pages.
-    /// It has no body blocks and no header/footer sub-editors.  Used by the FidelityRender tool to
-    /// identify the synthetic page and render it separately from the body FlowDocument paginator.
+    /// It has no body blocks but retains the final section's header/footer regions. Used by the
+    /// FidelityRender tool to identify the synthetic page and render it separately from the body
+    /// FlowDocument paginator.
     /// </summary>
     internal bool IsEndnoteSyntheticPage { get; private set; }
 
@@ -179,7 +180,8 @@ internal sealed class PageBox : Border
         int pageCount = 1,
         string? pageNumberText = null,
         IReadOnlyList<int>? footnoteIds = null,
-        IReadOnlyList<int>? endnoteIds = null)
+        IReadOnlyList<int>? endnoteIds = null,
+        bool isEndnoteSyntheticPage = false)
     {
         PageNumber = pageNumber;
         PageNumberText = pageNumberText
@@ -189,11 +191,8 @@ internal sealed class PageBox : Border
         FooterSlotName = footerSlotName;
         if (footnoteIds is { Count: > 0 }) FootnoteIds = footnoteIds;
         if (endnoteIds is { Count: > 0 })
-        {
             EndnoteIds = endnoteIds;
-            // The synthetic endnotes page has endnote IDs but no body blocks and no header/footer.
-            IsEndnoteSyntheticPage = pageBlocks.Count == 0 && headerSlotName is null && footerSlotName is null;
-        }
+        IsEndnoteSyntheticPage = isEndnoteSyntheticPage;
 
         var (pageWidth, _) = PageLayout.PageSizeDip(page);
         var (marginLeft, marginTop, marginRight, marginBottom) = PageLayout.MarginsDip(page);
@@ -279,7 +278,7 @@ internal sealed class PageBox : Border
             var noteRegion = BuildNoteRegion(
                 sourceModel, footnoteIds ?? Array.Empty<int>(),
                 endnoteIds ?? Array.Empty<int>(),
-                marginLeft, marginRight, isEndnoteBox);
+                marginLeft, marginRight, contentWidth, isEndnoteBox);
             Grid.SetRow(noteRegion, 2);
             stack.Children.Add(noteRegion);
         }
@@ -610,11 +609,11 @@ internal sealed class PageBox : Border
         IReadOnlyList<int> endnoteIds,
         double marginLeft,
         double marginRight,
+        double contentWidth,
         bool isEndnotePage)
     {
         var panel = new StackPanel { Orientation = Orientation.Vertical };
         double textSizePx = FootnoteTextSizePt * (96.0 / 72.0);
-        var (contentWidth, _) = PageLayout.ContentAreaDip(model.Page);
         var plan = footnoteIds.Count > 0
             ? DocumentNoteRegionPlanner.BuildFootnoteRegion(model, footnoteIds, pageNumber: 1, contentWidth)
             : DocumentNoteRegionPlanner.BuildEndnoteRegion(model, endnoteIds, pageNumber: 1, contentWidth, isEndnotePage);

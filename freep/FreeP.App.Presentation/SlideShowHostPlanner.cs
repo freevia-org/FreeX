@@ -532,10 +532,30 @@ public static class SlideShowHostPlanner
 
         foreach (var shapeId in triggerShapeIds)
         {
-            var shape = FindShape(slide.Shapes, shapeId);
+            var shape = FindShapeById(slide.Shapes, shapeId);
             if (shape is not null && HitTestShape(shape, slidePoint))
             {
                 return shapeId;
+            }
+        }
+
+        return null;
+    }
+
+    private static SlideShape? FindShapeById(
+        IReadOnlyList<SlideShape> shapes,
+        uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+
+            if (shape.Children.Count > 0)
+            {
+                var child = FindShapeById(shape.Children, shapeId);
+                if (child is not null)
+                    return child;
             }
         }
 

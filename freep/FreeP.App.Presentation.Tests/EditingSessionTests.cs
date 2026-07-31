@@ -200,6 +200,30 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void GroupedSmartArt_LayoutAndConvertRoutesRemainUndoable()
+    {
+        var (session, _) = MakeSmartArtSession();
+        var slide = session.CurrentSlide!;
+        var smartArt = slide.Shapes.Single();
+        slide.Shapes.Clear();
+        var group = new SlideShape { Id = 70, Name = "Group", Kind = SlideShapeKind.Group };
+        group.Children.Add(smartArt);
+        slide.Shapes.Add(group);
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicProcess).Should().BeTrue();
+        ShapeHitTester.FindShape(slide, 7)!.SmartArt!.Data!.LayoutUniqueId
+            .Should().EndWith("/layout/basicProcess");
+        session.Undo();
+        session.Redo();
+
+        session.ConvertSmartArtToShapes(7).Should().BeTrue();
+        group.Children.Should().NotContain(child => child.Id == 7);
+        group.Children.Should().NotBeEmpty();
+        session.Undo();
+        group.Children.Should().ContainSingle(child => child.Id == 7 && child.Kind == SlideShapeKind.SmartArt);
+    }
+
+    [Fact]
     public void ApplySmartArtPictureLayout_RefreshesPlaceholdersAndRemainsUndoableWithoutImages()
     {
         var (session, _) = MakeSmartArtSession();
@@ -886,6 +910,65 @@ public sealed class EditingSessionTests
         outer.Children.Should().ContainSingle(shape => shape.Id == inner.Id);
     }
 
+    [Fact]
+    public void NestedGroupedSelection_AlignAndZOrderUseContainingSiblingList()
+    {
+        var sess = Make();
+        var first = MakeShape(31);
+        first.OffsetYEmu = 100;
+        var second = MakeShape(32);
+        second.OffsetXEmu = 400;
+        second.OffsetYEmu = 300;
+        var inner = new SlideShape { Id = 33, Kind = SlideShapeKind.Group };
+        inner.Children.Add(first);
+        inner.Children.Add(second);
+        var outer = new SlideShape { Id = 34, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        sess.CurrentSlide!.Shapes.Add(outer);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.AlignTop();
+        first.OffsetYEmu.Should().Be(second.OffsetYEmu);
+        sess.Undo();
+        first.OffsetYEmu.Should().Be(100);
+        second.OffsetYEmu.Should().Be(300);
+
+        sess.Select(first.Id);
+        sess.BringToFront();
+        inner.Children[^1].Id.Should().Be(first.Id);
+        sess.Undo();
+        inner.Children[0].Id.Should().Be(first.Id);
+    }
+
+    [Fact]
+    public void GroupSelectedShapes_GroupsNestedChildrenAndUndoRestoresParentList()
+    {
+        var sess = Make();
+        var first = MakeShape(41);
+        var second = MakeShape(42);
+        second.OffsetXEmu = 400;
+        var parent = new SlideShape { Id = 43, Kind = SlideShapeKind.Group };
+        parent.Children.Add(first);
+        parent.Children.Add(second);
+        sess.CurrentSlide!.Shapes.Add(parent);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.GroupSelectedShapes();
+
+        sess.SelectedShapeIds.Should().ContainSingle();
+        parent.Children.Should().ContainSingle();
+        var nestedGroup = parent.Children[0];
+        nestedGroup.Kind.Should().Be(SlideShapeKind.Group);
+        nestedGroup.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
+
+        sess.Undo();
+        parent.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
+        sess.Redo();
+        parent.Children.Should().ContainSingle(shape => shape.Id == nestedGroup.Id);
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.ElbowConnector)]
     [InlineData(DrawingShapeKind.CurvedConnector)]
@@ -1024,6 +1107,33 @@ public sealed class EditingSessionTests
         group.Children.Select(shape => shape.Id).Should().Equal(second.Id, first.Id);
         sess.SendBackward();
         group.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
+
+    }
+
+    [Fact]
+    public void GroupedChildTextFormatting_UsesSharedUndoableRoutes()
+    {
+        var session = Make();
+        var group = new SlideShape { Id = 20, Name = "Group", Kind = SlideShapeKind.Group };
+        var child = MakeShape(21);
+        var run = new Run { Text = "grouped", Bold = false };
+        child.TextBody = new TextBody
+        {
+            Paragraphs = { new Paragraph { Runs = { run } } },
+        };
+        group.Children.Add(child);
+        session.CurrentSlide!.Shapes.Add(group);
+        session.Select(child.Id);
+
+        session.ToggleBoldOnSelection();
+        session.SetFontOnSelection("Arial");
+        session.SetFontSizeOnSelection(18);
+        session.SetTextAutoFitOnSelection(TextAutoFitKind.Shape).Should().Be(1);
+
+        run.Bold.Should().BeTrue();
+        run.FontFamily.Should().Be("Arial");
+        run.FontSizePt.Should().Be(18);
+        child.TextBody.AutoFitKind.Should().Be(TextAutoFitKind.Shape);
     }
 
     [Fact]
