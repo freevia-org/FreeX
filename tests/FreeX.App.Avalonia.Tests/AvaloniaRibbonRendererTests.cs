@@ -720,15 +720,21 @@ public sealed class AvaloniaRibbonRendererTests
             .Any(setter => setter.Property == property);
 
     [Fact]
-    public Task UnregisteredCommand_RendersDisabled() => RunOnUiThread(() =>
+    public Task UnregisteredCommand_DisablesPrimaryActionsButKeepsMenusReachable() => RunOnUiThread(() =>
     {
         var tab = BuildHomeTab();
-        // Empty registry => every command id is unregistered => controls disabled.
+        // Match WPF: command-only actions are disabled, while controls with real menu
+        // items remain reachable even when their primary command is unregistered.
         var content = AvaloniaRibbonRenderer.BuildTabContent(tab, new RibbonCommandRegistry());
 
         var buttons = content.GetLogicalDescendants().OfType<Button>().ToList();
         Assert.NotEmpty(buttons);
-        Assert.All(buttons, b => Assert.False(b.IsEnabled));
+        Assert.All(
+            buttons.Where(button => button.Flyout is null),
+            button => Assert.False(button.IsEnabled));
+        Assert.All(
+            buttons.Where(button => button.Flyout is MenuFlyout),
+            button => Assert.True(button.IsEnabled));
     });
 
     [Fact]
