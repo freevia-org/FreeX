@@ -350,9 +350,18 @@ public sealed partial class FormulaEvaluator
 
         var lookupIndex = (int)rawIndex;
         bool approximate;
-        if (rangeLookupValue is BlankValue)
+        if (node.Arguments.Count <= 3)
         {
+            // Genuinely omitted (no 4th argument node at all) -> Excel's friendly TRUE default.
             approximate = true;
+        }
+        else if (rangeLookupValue is BlankValue)
+        {
+            // Present but blank -- a trailing comma (VLOOKUP(A1,B:D,2,)) or a genuinely blank-cell
+            // reference -- coerces to the logical natural-zero FALSE (exact match), mirroring the
+            // slow path's VlookupScalar/HlookupScalar (BuiltInFunctions.Lookup.Legacy.cs). This is
+            // NOT the same as omitted, even though both evaluate to BlankValue.Instance.
+            approximate = false;
         }
         else
         {

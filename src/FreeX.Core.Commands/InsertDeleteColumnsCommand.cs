@@ -39,6 +39,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     private List<RowColumnShiftHelpers.ChartSeriesColumnMappingsWorkbookSnapshot>? _chartSeriesColumnMappingsSnapshot;
+    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingColumnsUp — every SeriesIndex-keyed
+    // per-series/per-point chart override (SeriesFormats, PointFillColors, trendline/error-bar
+    // series index, legend entries, etc.), tracked separately from the two snapshots above (which
+    // only cover DataRange and SeriesColumnMappings).
+    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
     // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionColumnsUp/
     // Down — tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
@@ -143,6 +148,10 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         _chartSeriesColumnMappingsSnapshot = RowColumnShiftHelpers.CaptureChartSeriesColumnMappings(ctx.Workbook);
+        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
+        // R102: must run BEFORE ShiftChartColumnsUp below — it needs each chart's PRE-insert
+        // DataRange to tell whether _beforeCol lands strictly inside the plotted data-column span.
+        RowColumnShiftHelpers.ShiftChartSeriesFormattingColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.ShiftChartColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.ShiftChartSeriesColumnMappingsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count));
@@ -364,6 +373,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartSeriesColumnMappings(ctx.Workbook, _chartSeriesColumnMappingsSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 
@@ -535,6 +545,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     private List<RowColumnShiftHelpers.ChartSeriesColumnMappingsWorkbookSnapshot>? _chartSeriesColumnMappingsSnapshot;
+    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingColumnsDown — every SeriesIndex-keyed
+    // per-series/per-point chart override (SeriesFormats, PointFillColors, trendline/error-bar
+    // series index, legend entries, etc.), tracked separately from the two snapshots above (which
+    // only cover DataRange and SeriesColumnMappings).
+    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
     // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionColumnsUp/
     // Down — tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
@@ -646,6 +661,10 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         _chartSeriesColumnMappingsSnapshot = RowColumnShiftHelpers.CaptureChartSeriesColumnMappings(ctx.Workbook);
+        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
+        // R102: must run BEFORE ShiftChartColumnsDown below — it needs each chart's PRE-delete
+        // DataRange to tell which plotted series positions the deleted band actually removed.
+        RowColumnShiftHelpers.ShiftChartSeriesFormattingColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
         RowColumnShiftHelpers.ShiftChartColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
         RowColumnShiftHelpers.ShiftChartSeriesColumnMappingsDown(ctx.Workbook, _sheetId, _startCol, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count));
@@ -855,6 +874,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartSeriesColumnMappings(ctx.Workbook, _chartSeriesColumnMappingsSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 

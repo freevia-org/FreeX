@@ -33,7 +33,8 @@ internal static class XlsxPackageXmlEditor
         XNamespace packageRelNs,
         string sourcePart,
         string targetPart,
-        string relationshipType)
+        string relationshipType,
+        IReadOnlyCollection<string>? additionalReservedIdsForMinting = null)
         => OpcRelationships.EnsureRelationshipForPackagePart(
             relsXml,
             packageRelNs,
@@ -41,5 +42,6 @@ internal static class XlsxPackageXmlEditor
             targetPart,
             relationshipType,
             XlsxPackagePath.ResolveRelationshipTarget,
-            XlsxPackagePath.GetRelationshipTarget);
+            XlsxPackagePath.GetRelationshipTarget,
+            additionalReservedIdsForMinting);
 }

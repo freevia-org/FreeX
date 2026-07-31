@@ -1,4 +1,4 @@
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -425,8 +425,33 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
         {
-            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name; a plain
+            // rename makes the direct targetSheets lookup fail even though the sheet's own worksheet
+            // part -- and all the unmodeled metadata this preserver carries forward (merge cells,
+            // page setup, sheet protection, retained hyperlinks, etc.) -- is completely unaffected.
+            // Fall back to a match on the sheet's own (rename-stable) worksheet part path, and resolve
+            // the sheet's CURRENT name too since every workbook.GetSheet/GetModeled* call below only
+            // knows sheets by their current (post-rename) name.
+            string targetWorksheetPath;
+            string currentSheetName;
+            if (targetSheets.TryGetValue(sheetName, out var directTargetPath))
+            {
+                targetWorksheetPath = directTargetPath;
+                currentSheetName = sheetName;
+            }
+            else if (TryResolveTargetWorksheetPathByPath(sourceSheets, targetSheets, sourceWorksheetPath, out targetWorksheetPath))
+            {
+                currentSheetName = targetSheets
+                    .First(pair => string.Equals(
+                        XlsxPackagePath.NormalizePackagePath(pair.Value),
+                        XlsxPackagePath.NormalizePackagePath(targetWorksheetPath),
+                        StringComparison.OrdinalIgnoreCase))
+                    .Key;
+            }
+            else
+            {
                 continue;
+            }
             if (worksheetsWithPreservableSourceMetadata is not null &&
                 !worksheetsWithPreservableSourceMetadata.Contains(sheetName))
             {
@@ -545,16 +570,16 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
             if (MergeWorksheetMergedCellMetadata(sourceMergeCells, targetRoot, workbookNs))
                 changed = true;
-            if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
+            if (MergeWorksheetSheetProtection(sourceSheetProtection, targetRoot, workbookNs, workbook.GetSheet(currentSheetName)))
                 changed = true;
-            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs, workbook.GetSheet(sheetName)))
+            if (MergeWorksheetSheetViews(sourceSheetViews, targetRoot, workbookNs, workbook.GetSheet(currentSheetName)))
                 changed = true;
             if (MergeWorksheetHyperlinkMetadata(
                     sourceHyperlinks,
                     targetRoot,
                     workbookNs,
                     relNs,
-                    workbook.GetSheet(sheetName),
+                    workbook.GetSheet(currentSheetName),
                     sourceArchive,
                     targetArchive,
                     sourceWorksheetPath,
@@ -569,7 +594,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        XlsxAllowEditRangeMapper.GetModeledReferences(workbook, sheetName)))
+                        XlsxAllowEditRangeMapper.GetModeledReferences(workbook, currentSheetName)))
                     {
                         changed = true;
                     }
@@ -613,7 +638,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        XlsxWorksheetCustomPropertyMapper.GetModeledNames(workbook, sheetName)))
+                        XlsxWorksheetCustomPropertyMapper.GetModeledNames(workbook, currentSheetName)))
                     {
                         changed = true;
                     }
@@ -626,7 +651,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                             sourceBlock,
                             targetRoot,
                             workbookNs,
-                            GetModeledWorksheetBreakIds(workbook, sheetName, rowBreaks: true),
+                            GetModeledWorksheetBreakIds(workbook, currentSheetName, rowBreaks: true),
                             CellAddress.MaxRow))
                     {
                         changed = true;
@@ -640,7 +665,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                             sourceBlock,
                             targetRoot,
                             workbookNs,
-                            GetModeledWorksheetBreakIds(workbook, sheetName, rowBreaks: false),
+                            GetModeledWorksheetBreakIds(workbook, currentSheetName, rowBreaks: false),
                             CellAddress.MaxCol))
                     {
                         changed = true;
@@ -653,7 +678,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        XlsxWorksheetDiagnosticsMapper.GetModeledIgnoredErrorCells(workbook, sheetName)))
+                        XlsxWorksheetDiagnosticsMapper.GetModeledIgnoredErrorCells(workbook, currentSheetName)))
                 {
                     changed = true;
                 }
@@ -664,7 +689,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        XlsxWorksheetDiagnosticsMapper.GetModeledCellWatchReferences(workbook, sheetName)))
+                        XlsxWorksheetDiagnosticsMapper.GetModeledCellWatchReferences(workbook, currentSheetName)))
                 {
                     changed = true;
                     continue;
@@ -675,7 +700,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                         sourceBlock,
                         targetRoot,
                         workbookNs,
-                        XlsxWorksheetScenarioMapper.GetModeledNamesForSheet(workbook, sheetName)))
+                        XlsxWorksheetScenarioMapper.GetModeledNamesForSheet(workbook, currentSheetName)))
                 {
                     changed = true;
                 }
@@ -683,7 +708,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     continue;
 
                 if (ShouldSkipClearedModeledWorksheetBlock(
-                        sourceBlock.Name, workbookNs, workbook, sheetName, sourceArchive, sourceWorksheetPath))
+                        sourceBlock.Name, workbookNs, workbook, currentSheetName, sourceArchive, sourceWorksheetPath))
                     continue;
 
                 if (targetRoot.Element(sourceBlock.Name) is not null)
@@ -717,6 +742,43 @@ internal static partial class XlsxWorksheetMetadataPreserver
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
+    }
+
+    // R102-io-rename-worksheet-exclusion-sweep-1: mirrors XlsxRenamedSourceSheetResolver, operating on
+    // the raw sourceSheets/targetSheets dictionaries this method already receives (which are exactly
+    // context.SourceSheets/TargetSheets on the live call path, but this method's legacy 3-arg overload
+    // builds them locally without a context at all).
+    private static bool TryResolveTargetWorksheetPathByPath(
+        IReadOnlyDictionary<string, string> sourceSheets,
+        IReadOnlyDictionary<string, string> targetSheets,
+        string sourceWorksheetPath,
+        out string targetWorksheetPath)
+    {
+        var normalizedSourcePath = XlsxPackagePath.NormalizePackagePath(sourceWorksheetPath);
+        foreach (var (candidateName, candidatePath) in targetSheets)
+        {
+            // R102-io-rename-worksheet-exclusion-sweep-1-falsepositive: reject a candidate whose name
+            // already existed at load time -- its path coincidence is a renumbering shift of that
+            // (still-existing, matched-by-name) sheet, not evidence of a rename. See
+            // XlsxRenamedSourceSheetResolver's header comment for the concrete delete+renumber repro
+            // (this is the exact bug FileAdapterSmokeTests.
+            // XlsxAdapter_LoadedWorkbookSave_DoesNotResurrectDeletedSheetUnsupportedWorksheetArtifacts
+            // guards against).
+            if (sourceSheets.ContainsKey(candidateName))
+                continue;
+
+            if (string.Equals(
+                    XlsxPackagePath.NormalizePackagePath(candidatePath),
+                    normalizedSourcePath,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                targetWorksheetPath = candidatePath;
+                return true;
+            }
+        }
+
+        targetWorksheetPath = "";
+        return false;
     }
 
     private static bool ShouldSkipClearedModeledWorksheetBlock(

@@ -148,6 +148,47 @@ public class SheetLayoutCommandTests
     }
 
     [Fact]
+    public void R102_SetRowHeightCommand_AcceptsPixelHeightUpToExcelMaximum()
+    {
+        // R102: Sheet.RowHeights stores pixels at 96 DPI, and Excel's real "0 to 409.5 points"
+        // row-height ceiling is 546 pixels (409.5 * 96/72) in that unit -- the same conversion
+        // RowColumnSizingPlanner.CreateRowHeightCommand applies to a dialog-entered point value
+        // before constructing this command, and the same cap AutoFitSizingService.MaximumRowHeight
+        // already enforces. A pixel height between the old (wrong) 409.5 ceiling and the true
+        // 546px ceiling -- e.g. a row that needs Excel's real ~320pt of wrapped content, which is
+        // 320 * 96/72 = ~427px -- must be accepted, not rejected.
+        var (_, sheet, ctx) = Setup();
+        var pixelHeight = 320.0 * (96.0 / 72.0);
+        pixelHeight.Should().BeInRange(409.5, AutoFitSizingService.MaximumRowHeight);
+
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, pixelHeight).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowHeights[1].Should().Be(pixelHeight);
+    }
+
+    [Fact]
+    public void R102_SetRowHeightCommand_AcceptsAutoFitEstimateAboveOldPointsCeiling()
+    {
+        // R102 (real entry point): AutoFitSizingService.EstimateRowHeight is the actual producer
+        // fed into SetRowHeightCommand by AutoFit Row Height (RowColumnSizingPlanner
+        // .CreateAutoFitRowHeightCommand). Heavily wrapped content can legitimately estimate a
+        // pixel height above the old (wrong) 409.5-points-as-pixels ceiling but at or below the
+        // true 546px maximum; the command must still apply it instead of no-op'ing.
+        var (_, sheet, ctx) = Setup();
+        var texts = new[] { string.Join('\n', Enumerable.Repeat("line", 50)) };
+        var estimatedHeight = AutoFitSizingService.EstimateRowHeight(texts, defaultHeight: 20);
+        estimatedHeight.Should().Be(AutoFitSizingService.MaximumRowHeight);
+        estimatedHeight.Should().BeGreaterThan(409.5);
+
+        var cmd = new SetRowHeightCommand(sheet.Id, 1, 1, estimatedHeight);
+        var outcome = cmd.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        sheet.RowHeights[1].Should().Be(estimatedHeight);
+    }
+
+    [Fact]
     public void SetRowHeightCommand_WithNullHeightClearsOverridesAndUndoRestores()
     {
         var (_, sheet, ctx) = Setup();
@@ -274,12 +315,17 @@ public class SheetLayoutCommandTests
     [Fact]
     public void SetRowHeightCommand_RejectsHeightAboveExcelMaximum()
     {
+        // R102: SetRowHeightCommand's height parameter is in the same pixel unit as
+        // Sheet.RowHeights (see AutoFitSizingService.MaximumRowHeight), so the ceiling this
+        // guard enforces is that pixel-space cap (546 = 409.5pt * 96/72), not the raw points
+        // number -- see SetRowHeightCommand_AcceptsPixelHeightUpToExcelMaximum for a legal
+        // pixel height just under that cap that must succeed.
         var (_, sheet, ctx) = Setup();
 
-        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, 409.6).Apply(ctx);
+        var outcome = new SetRowHeightCommand(sheet.Id, 1, 1, AutoFitSizingService.MaximumRowHeight + 0.1).Apply(ctx);
 
         outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Contain("0 to 409.5");
+        outcome.ErrorMessage.Should().Contain("546");
         sheet.RowHeights.Should().BeEmpty();
     }
 

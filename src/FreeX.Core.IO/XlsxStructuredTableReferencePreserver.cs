@@ -129,8 +129,14 @@ internal static class XlsxStructuredTableReferencePreserver
             if (!tableWorksheetPaths.Contains(sourceWorksheetPath))
                 continue;
 
-            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name -- resolve
+            // via the shared rename-tolerant fallback so a renamed sheet's structured table part
+            // relationships survive instead of being dropped like a deleted sheet's.
+            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
+                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
+            {
                 continue;
+            }
 
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
             var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);

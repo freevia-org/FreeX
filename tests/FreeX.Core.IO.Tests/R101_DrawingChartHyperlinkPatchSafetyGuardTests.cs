@@ -35,14 +35,20 @@ namespace FreeX.Core.IO.Tests;
 /// </summary>
 public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
 {
-    // Matches a `Hyperlink = <rhs>` assignment (object-initializer style `Hyperlink = expr,` or a plain
-    // statement `x.Hyperlink = expr;`), capturing the right-hand side. Word-bounded so it never matches
-    // `HyperlinkMetadata = ...` or `Hyperlinks[...] = ...` (unrelated cell-hyperlink fields). The
-    // negative lookahead excludes `Hyperlink => ...` (a switch/pattern arm, e.g.
+    // Matches a `Hyperlink = <rhs>` assignment (object-initializer style `Hyperlink = expr,`, a plain
+    // statement `x.Hyperlink = expr;`, or a LAST member of an object/`with`-initializer
+    // `Hyperlink = expr }` with no trailing comma), capturing the right-hand side. Word-bounded so it
+    // never matches `HyperlinkMetadata = ...` or `Hyperlinks[...] = ...` (unrelated cell-hyperlink
+    // fields). The negative lookahead excludes `Hyperlink => ...` (a switch/pattern arm, e.g.
     // `ConditionalFormulaScalarFunctionKind.Hyperlink => ...`) and `Hyperlink == ...` (an equality
     // comparison), neither of which is an assignment.
+    // The terminator class includes `}` (R102-multiline-hyperlink-guard-scan) so a last-member
+    // initializer entry with no trailing comma is still recognized as terminated, and the pattern is
+    // matched against the WHOLE FILE TEXT (not line-by-line) so a multi-line RHS -- e.g. a wrapped
+    // ternary `Hyperlink = flag\n    ? new DrawingObjectHyperlink(a, b, c)\n    : null;` -- is not
+    // silently skipped just because its terminator lands on a different line than `Hyperlink =`.
     private static readonly Regex HyperlinkAssignmentPattern = new(
-        @"\bHyperlink\s*=(?![=>])\s*([^,;]+)[,;]",
+        @"\bHyperlink\s*=(?![=>])\s*([^,;}]+)[,;}]",
         RegexOptions.Compiled);
 
     // FreeX.Core.Commands files known to declare/assign an UNRELATED "Hyperlink" identifier that has
@@ -71,6 +77,22 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
         var commandsDirectory = Path.Combine(FindRepositoryRoot(), "src", "FreeX.Core.Commands");
         Directory.Exists(commandsDirectory).Should().BeTrue($"expected {commandsDirectory} to exist");
 
+        var violations = ScanForViolations(commandsDirectory);
+
+        violations.Should().BeEmpty(
+            "no FreeX.Core.Commands command may set a new drawing/chart Hyperlink value until the " +
+            "patch-safety fingerprint covers it (see this test's class-level doc comment):\n" +
+            string.Join("\n", violations));
+    }
+
+    /// <summary>
+    /// The actual production scan: enumerates every *.cs file under <paramref name="commandsDirectory"/>
+    /// and reports every non-copy-forward <c>Hyperlink =</c> assignment. Extracted so the R102 regression
+    /// tests below can drive this EXACT code path (not a hand-rolled duplicate that could silently drift
+    /// out of sync with it) against synthetic fixture files.
+    /// </summary>
+    private static System.Collections.Generic.List<string> ScanForViolations(string commandsDirectory)
+    {
         var violations = new System.Collections.Generic.List<string>();
 
         foreach (var filePath in Directory.EnumerateFiles(commandsDirectory, "*.cs", SearchOption.AllDirectories))
@@ -82,34 +104,66 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
             if (UnrelatedHyperlinkIdentifierFiles.Contains(Path.GetFileName(filePath)))
                 continue;
 
-            var lines = File.ReadAllLines(filePath);
-            for (var lineNumber = 0; lineNumber < lines.Length; lineNumber++)
+            // Matched against the FULL FILE TEXT (not File.ReadAllLines + per-line matching) so a
+            // multi-line RHS is still caught even when its terminator (`,`/`;`/`}`) lands on a
+            // different line than the `Hyperlink =` token itself (R102-multiline-hyperlink-guard-scan).
+            // Comments are stripped first: once matching spans the whole file, a `//` comment (or a
+            // doc-comment example) that happens to mention "Hyperlink = ..." with no terminator on its
+            // own line would otherwise bleed into the NEXT real code line's terminator and get
+            // misreported as a violation (or, worse, swallow a real one). Line structure (and therefore
+            // line-number bookkeeping below) is preserved by blanking rather than deleting text.
+            var text = StripCommentsPreservingLineNumbers(File.ReadAllText(filePath));
+            foreach (Match match in HyperlinkAssignmentPattern.Matches(text))
             {
-                var line = lines[lineNumber];
-                foreach (Match match in HyperlinkAssignmentPattern.Matches(line))
-                {
-                    var rhs = match.Groups[1].Value.Trim();
-                    if (AllowedCopyForwardRhs.IsMatch(rhs))
-                        continue;
+                var rhs = match.Groups[1].Value.Trim();
+                if (AllowedCopyForwardRhs.IsMatch(rhs))
+                    continue;
 
-                    violations.Add(
-                        $"{Path.GetFileName(filePath)}:{lineNumber + 1}: `{line.Trim()}` -- assigns a " +
-                        "non-copy-forward value to a Hyperlink property. If this is a NEW " +
-                        "DrawingObjectHyperlink/ChartModel.Hyperlink mutation capability, " +
-                        "WriteDrawingChartFingerprint/WriteDrawingPictureFingerprint/" +
-                        "WriteDrawingTextBoxFingerprint/WriteDrawingShapeFingerprint in " +
-                        "XlsxFileAdapter.SourcePackageSnapshot.cs must be updated to compare the " +
-                        "Hyperlink field BEFORE this command ships, or a cell-patch save elsewhere in " +
-                        "the same file will silently discard the hyperlink change.");
-                }
+                var lineNumber = text.AsSpan(0, match.Index).Count('\n') + 1;
+                var snippet = match.Value.Trim().Replace('\n', ' ').Replace('\r', ' ');
+
+                violations.Add(
+                    $"{Path.GetFileName(filePath)}:{lineNumber}: `{snippet}` -- assigns a " +
+                    "non-copy-forward value to a Hyperlink property. If this is a NEW " +
+                    "DrawingObjectHyperlink/ChartModel.Hyperlink mutation capability, " +
+                    "WriteDrawingChartFingerprint/WriteDrawingPictureFingerprint/" +
+                    "WriteDrawingTextBoxFingerprint/WriteDrawingShapeFingerprint in " +
+                    "XlsxFileAdapter.SourcePackageSnapshot.cs must be updated to compare the " +
+                    "Hyperlink field BEFORE this command ships, or a cell-patch save elsewhere in " +
+                    "the same file will silently discard the hyperlink change.");
             }
         }
 
-        violations.Should().BeEmpty(
-            "no FreeX.Core.Commands command may set a new drawing/chart Hyperlink value until the " +
-            "patch-safety fingerprint covers it (see this test's class-level doc comment):\n" +
-            string.Join("\n", violations));
+        return violations;
     }
+
+    // Matches a `/* ... */` block comment (including `/** ... */` doc-comment blocks), across lines.
+    private static readonly Regex BlockCommentPattern = new(@"/\*.*?\*/", RegexOptions.Compiled | RegexOptions.Singleline);
+
+    // Matches a `//` (or `///`) line comment to end-of-line. The negative lookbehind for `:` avoids
+    // treating a `://` inside a string literal (e.g. a `"https://..."` URL) as a comment start -- good
+    // enough for this heuristic scan since none of today's files pair a URL literal with an unterminated
+    // `Hyperlink =` on the same line.
+    private static readonly Regex LineCommentPattern = new(@"(?<!:)//.*", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Blanks out comment text so it can never be mistaken for code, while preserving every original
+    /// newline (and therefore line count) so line-number reporting on the caller's match indices stays
+    /// accurate.
+    /// </summary>
+    private static string StripCommentsPreservingLineNumbers(string text)
+    {
+        text = BlockCommentPattern.Replace(text, m => new string('\n', m.Value.Count(c => c == '\n')));
+        text = LineCommentPattern.Replace(text, string.Empty);
+        return text;
+    }
+
+    /// <summary>
+    /// Internal seam used by <see cref="R102_DrawingChartHyperlinkPatchSafetyGuardMultilineScanTests"/>
+    /// to drive the real scan against synthetic fixture directories.
+    /// </summary>
+    internal static System.Collections.Generic.List<string> ScanForViolationsForTesting(string commandsDirectory)
+        => ScanForViolations(commandsDirectory);
 
     /// <summary>
     /// No-regression sibling: proves the scan itself actually inspects real files and isn't vacuously

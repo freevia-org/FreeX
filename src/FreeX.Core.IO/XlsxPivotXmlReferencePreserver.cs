@@ -299,8 +299,14 @@ internal static class XlsxPivotXmlReferencePreserver
             if (!pivotWorksheetPaths.Contains(sourceWorksheetPath))
                 continue;
 
-            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name -- resolve
+            // via the shared rename-tolerant fallback so a renamed pivot-table sheet doesn't lose its
+            // pivotTableDefinition (indistinguishable from the sheet having been deleted otherwise).
+            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
+                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
+            {
                 continue;
+            }
 
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
             var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);

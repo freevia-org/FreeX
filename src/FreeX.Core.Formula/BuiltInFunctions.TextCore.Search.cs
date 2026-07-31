@@ -12,12 +12,12 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        // Only a genuinely-omitted start_num (args.Count <= 2, or the
-        // OmittedOptionalOrdinalArgumentValue sentinel substituted for a truly-omitted trailing
-        // argument) defaults to 1. An explicit argument that merely evaluates to BlankValue (e.g. a
-        // reference to an empty cell) must NOT be treated as omitted -- Excel coerces it to numeric 0
-        // instead, which FindScalarWithArgs's startNum<1 domain check then correctly rejects.
-        var startArg = args.Count > 2 && args[2] is not OmittedOptionalOrdinalArgumentValue ? args[2] : new NumberValue(1);
+        // R102: only a genuinely-omitted start_num (args.Count <= 2 -- no 3rd argument node at all)
+        // defaults to 1. A present-but-empty argument (trailing comma) is no longer specially
+        // intercepted upstream -- it evaluates like any other blank-cell reference (BlankValue) and
+        // falls straight through here, coercing to numeric 0, which FindScalarWithArgs's startNum<1
+        // domain check then correctly rejects as #VALUE! (distinct from the omitted default).
+        var startArg = args.Count > 2 ? args[2] : new NumberValue(1);
         if (args[0] is RangeValue || args[1] is RangeValue || startArg is RangeValue)
             return MapTernaryTextArgs(args[0], args[1], startArg, FindScalarWithArgs);
         return FindScalarWithArgs(args[0], args[1], startArg);
@@ -69,9 +69,10 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        // See the identical comment in Find above -- only a genuinely-omitted start_num defaults to
-        // 1; an explicit blank-cell reference must coerce to 0 and hit the startNum<1 domain check.
-        var startArg = args.Count > 2 && args[2] is not OmittedOptionalOrdinalArgumentValue ? args[2] : new NumberValue(1);
+        // See the identical comment in Find above -- only a genuinely-omitted start_num (args.Count
+        // <= 2) defaults to 1; a present-but-blank argument coerces to 0 and hits the startNum<1
+        // domain check.
+        var startArg = args.Count > 2 ? args[2] : new NumberValue(1);
         if (args[0] is RangeValue || args[1] is RangeValue || startArg is RangeValue)
             return MapTernaryTextArgs(args[0], args[1], startArg, SearchScalarWithArgs);
         return SearchScalarWithArgs(args[0], args[1], startArg);
@@ -85,10 +86,10 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue withinError) return withinError;
         if (args.Count > 2 && args[2] is ErrorValue startError) return startError;
-        // See the identical comment in Find above -- only a genuinely-omitted start_num (the
-        // OmittedOptionalOrdinalArgumentValue sentinel) defaults to 1; an explicit blank-cell
-        // reference must coerce to 0 and hit the startByte<1 domain check below.
-        var startArg = args.Count > 2 && args[2] is not OmittedOptionalOrdinalArgumentValue ? args[2] : new NumberValue(1);
+        // See the identical comment in Find above -- only a genuinely-omitted start_num (args.Count
+        // <= 2) defaults to 1; a present-but-blank argument coerces to 0 and hits the startByte<1
+        // domain check below.
+        var startArg = args.Count > 2 ? args[2] : new NumberValue(1);
         return MapTernaryTextArgs(args[0], args[1], startArg, (findValue, withinValue, startValue) =>
             FindSearchBScalarWithArgs(findValue, withinValue, startValue, useWildcards));
     }

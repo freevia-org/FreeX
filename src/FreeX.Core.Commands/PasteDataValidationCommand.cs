@@ -1,3 +1,4 @@
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -78,14 +79,25 @@ public sealed class PasteDataValidationCommand : IWorkbookCommand
                     foreach (var intersection in IntersectWithSource(sourceRuleRange))
                     {
                         var mappedRange = MapRange(intersection, _sourceRange, tileAnchor, _transpose);
-                        var rowDelta = (int)mappedRange.Start.Row - (int)intersection.Start.Row;
-                        var colDelta = (int)mappedRange.Start.Col - (int)intersection.Start.Col;
+                        // Transpose swaps each relative reference's own (row,col) offset from the
+                        // rule's own AppliesTo anchor onto the pasted rule's new anchor -- it is NOT
+                        // the uniform per-cell translation PasteOffsetOp applies. Mirrors
+                        // PasteConditionalFormatsCommand.CloneRuleForDestination's pasteOp selection
+                        // (R56-commands-paste-special-5-1 / the CF sibling fix for this same anti-pattern),
+                        // using this piece's own intersection.Start (source anchor) and mappedRange.Start
+                        // (destination anchor) so a rule that only partially overlaps the copied range
+                        // still transposes relative to its own anchor rather than the whole copied
+                        // block's corner.
+                        RewriteOperation pasteOp = _transpose
+                            ? new PasteTransposeOp(intersection.Start.Row, intersection.Start.Col, mappedRange.Start.Row, mappedRange.Start.Col)
+                            : new PasteOffsetOp(
+                                (int)mappedRange.Start.Row - (int)intersection.Start.Row,
+                                (int)mappedRange.Start.Col - (int)intersection.Start.Col);
                         targetSheet.DataValidations.Add(DataValidationCopySupport.CloneValidation(
                             rule,
                             mappedRange,
                             targetSheet.Name,
-                            rowDelta,
-                            colDelta,
+                            pasteOp,
                             includeAdditionalRanges: false));
                     }
                 }

@@ -20,10 +20,16 @@ internal static class XlsxWorksheetVmlReferencePreserver
 
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
-            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name -- resolve
+            // both the target worksheet path AND the sheet's CURRENT name (workbook only knows
+            // sheets by their current name) via the shared rename-tolerant fallback.
+            if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
+                    context, sheetName, sourceWorksheetPath, out var currentSheetName, out var targetWorksheetPath))
+            {
                 continue;
+            }
 
-            var sheet = workbook.GetSheet(sheetName);
+            var sheet = workbook.GetSheet(currentSheetName);
             if (sheet is null)
                 continue;
 

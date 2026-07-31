@@ -267,4 +267,72 @@ public sealed class PagePaginationPlannerTests
 
         scale.Should().Be(100.0);
     }
+
+    [Fact]
+    public void R102_FitToPagesWide_PrintTitleColumnsCoverEntireRange_LeavesBothAxesAtNaturalCapacity()
+    {
+        // Print range A1:E100 (columns 1..5) with print title columns 1..5 -- the repeat range
+        // fully covers the print range's column extent, so there is no "body" column left to shrink
+        // (CountBodyItems == 0). Fit-to-1-page-wide has nothing left to apply on this axis, so both
+        // the column axis AND the free row axis must stay at their natural, unscaled capacity
+        // (18 cols / 48 rows for A4 portrait narrow margins -- see
+        // CalculatePageCapacity_DerivesRowsAndColumnsFromPrintableArea). Before the R102 fix, the
+        // column axis resolved to Math.Max(1, titleCount) = 5, which was then diffed against the
+        // natural 18-column capacity to derive a bogus uniform scale (18/5 = 3.6x) that shrank the
+        // unrelated free row axis from 48 down to 13 -- an arithmetic coincidence between titleCount
+        // and baseColumnsPerPage, not a real fit-to-page requirement.
+        var capacity = PagePaginationPlanner.CalculatePageCapacity(
+            Range(1, 1, 100, 5),
+            new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: 1, FitToPagesTall: null),
+            printTitleRows: null,
+            printTitleColumns: new WorksheetRepeatRange(1, 5),
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow);
+
+        capacity.ColumnsPerPage.Should().Be(18);
+        capacity.RowsPerPage.Should().Be(48);
+    }
+
+    [Fact]
+    public void R102_FitToPagesTall_PrintTitleRowsCoverEntireRange_LeavesBothAxesAtNaturalCapacity()
+    {
+        // Symmetric row-axis case: print range A1:J5 (rows 1..5) with print title rows 1..5 fully
+        // covering the row extent (CountBodyItems == 0 on the row axis). Fit-to-1-page-tall has
+        // nothing left to shrink on the row axis, so both the row axis and the free column axis must
+        // stay at natural capacity (48 rows / 18 cols).
+        var capacity = PagePaginationPlanner.CalculatePageCapacity(
+            Range(1, 1, 5, 100),
+            new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: null, FitToPagesTall: 1),
+            printTitleRows: new WorksheetRepeatRange(1, 5),
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow);
+
+        capacity.RowsPerPage.Should().Be(48);
+        capacity.ColumnsPerPage.Should().Be(18);
+    }
+
+    [Fact]
+    public void R102_FitToPagesWide_PartialPrintTitleColumnsStillDeriveUniformScaleForFreeAxis()
+    {
+        // No-regression sibling: when the print title range only PARTIALLY covers the print range
+        // (CountBodyItems > 0), the R102 fix must not disturb the pre-existing, intentional
+        // uniform-scale-to-free-axis behavior (R18-print-pagination-exact-1). Print range A1:J20,
+        // title columns 1..2 (partial) out of 10, fit-to-2-pages-wide: body columns = 10 - 2 = 8,
+        // bodyColumnsPerPage = ceil(8/2) = 4, columnsPerPage = 4 + 2 (titles) = 6. Uniform scale =
+        // 18/6 = 3.0x, applied to the free row axis: 48 * (100/300) = 16.
+        var capacity = PagePaginationPlanner.CalculatePageCapacity(
+            Range(1, 1, 20, 10),
+            new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: 2, FitToPagesTall: null),
+            printTitleRows: null,
+            printTitleColumns: new WorksheetRepeatRange(1, 2),
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow);
+
+        capacity.ColumnsPerPage.Should().Be(6);
+        capacity.RowsPerPage.Should().Be(16);
+    }
 }

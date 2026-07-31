@@ -91,8 +91,12 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=LEFT(\"abc\",)", sheet).Should().Be(new TextValue("a"));
-        _eval.Evaluate("=RIGHT(\"abc\",)", sheet).Should().Be(new TextValue("c"));
+        // R102: a genuinely-omitted num_chars (no 2nd argument at all) defaults to 1 -- this used
+        // to (incorrectly) use a trailing comma here, which is a PRESENT-but-blank argument, not
+        // the same thing; Excel coerces that to numeric 0 instead (see
+        // R102_TrailingCommaEmptyOrdinalArgumentTests for the corrected trailing-comma-empty case).
+        _eval.Evaluate("=LEFT(\"abc\")", sheet).Should().Be(new TextValue("a"));
+        _eval.Evaluate("=RIGHT(\"abc\")", sheet).Should().Be(new TextValue("c"));
     }
 
     [Fact]
@@ -431,7 +435,11 @@ public partial class FunctionLibraryTests
     public void Substitute_OmittedInstanceNum_ReplacesAll()
     {
         var sheet = MakeSheet();
-        _eval.Evaluate("=SUBSTITUTE(\"aababc\",\"ab\",\"X\",)", sheet).Should().Be(new TextValue("aXXc"));
+        // R102: a genuinely-omitted instance_num (no 4th argument at all) means "replace all" --
+        // this used to (incorrectly) use a trailing comma here, which is a PRESENT-but-blank
+        // argument; Excel coerces that to numeric 0 instead, which is < 1 and errors #VALUE! (see
+        // R102_TrailingCommaEmptyOrdinalArgumentTests for the corrected trailing-comma-empty case).
+        _eval.Evaluate("=SUBSTITUTE(\"aababc\",\"ab\",\"X\")", sheet).Should().Be(new TextValue("aXXc"));
     }
 
     [Fact]
@@ -576,8 +584,12 @@ public partial class FunctionLibraryTests
     {
         var sheet = MakeSheet();
 
-        _eval.Evaluate("=FIND(\"h\",\"hello\",)", sheet).Should().Be(new NumberValue(1));
-        _eval.Evaluate("=SEARCH(\"H\",\"hello\",)", sheet).Should().Be(new NumberValue(1));
+        // R102: a genuinely-omitted start_num (no 3rd argument at all) defaults to 1 -- this used
+        // to (incorrectly) use a trailing comma here, which is a PRESENT-but-blank argument; Excel
+        // coerces that to numeric 0 instead, which is < 1 and errors #VALUE! (see
+        // R102_TrailingCommaEmptyOrdinalArgumentTests for the corrected trailing-comma-empty case).
+        _eval.Evaluate("=FIND(\"h\",\"hello\")", sheet).Should().Be(new NumberValue(1));
+        _eval.Evaluate("=SEARCH(\"H\",\"hello\")", sheet).Should().Be(new NumberValue(1));
     }
 
     [Fact]

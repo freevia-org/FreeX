@@ -105,6 +105,13 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     private List<(FormControlModel Control, string? OldLinkedCell, string? OldListFillRange)>? _formControlNameSnapshot;
     // T7: CF/DV formula rewrites across ALL sheets for the rename
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaRenameSnapshot;
+    // R102: colorScale/dataBar/iconSet cfvo threshold values whose ThresholdType is
+    // CfThresholdType.Formula (e.g. a Color Scale Formula-type minimum of "=Sheet2!$B$1") --
+    // mirrors _cfFormulaRenameSnapshot but for the six threshold slots RewriteRuleFormulas
+    // tracks (see RowColumnShiftHelpers.Rules.cs Slot* constants), which the pre-existing hand-
+    // rolled cf.FormulaText-only pass never touched, unlike RenameStructuredTableCommand's R100
+    // rewrite of the same rules via the shared RewriteRuleFormulas/RestoreRuleFormulas helper.
+    private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _cfThresholdRenameSnapshot;
     private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaRenameSnapshot;
     // K16: chart verbatim series/data-label formulas (multi-area unions and "value from
     // cells" data labels) hold sheet-qualified text refs just like CF/DV formulas above and
@@ -257,52 +264,36 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             }
         }
 
+        // R102: use the shared RewriteRuleFormulas helper (the same primitive
+        // RenameStructuredTableCommand's R100 fix uses) instead of a hand-rolled loop, so a
+        // colorScale/dataBar/iconSet Formula-type threshold (MinThresholdValue/MidThresholdValue/
+        // MaxThresholdValue/DataBarMinThresholdValue/DataBarMaxThresholdValue/IconSetThresholds[i]
+        // .Value) referencing the renamed sheet (e.g. "=Sheet2!$B$1") gets rewritten too, not just
+        // cf.FormulaText and dv.Formula1/Formula2.
         _cfFormulaRenameSnapshot = [];
+        _cfThresholdRenameSnapshot = [];
         _dvFormulaRenameSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
         {
-            bool sheetCfChanged = false;
-            foreach (var cf in s.ConditionalFormats)
-            {
-                if (cf.FormulaText is { } ft)
-                {
-                    var rewritten = FormulaRewriter.Rewrite(ft, renameOp, s.Name);
-                    if (rewritten is not null && rewritten != ft)
-                    {
-                        _cfFormulaRenameSnapshot.Add((cf.Id, ft, s.Id));
-                        cf.FormulaText = rewritten;
-                        sheetCfChanged = true;
-                    }
-                }
-            }
+            var cfSnap = new Dictionary<Guid, string?>();
+            var cfThresholdSnap = new Dictionary<(Guid Id, int Slot), string?>();
+            var dvSnap = new Dictionary<(Guid Id, int Slot), string?>();
+            RowColumnShiftHelpers.RewriteRuleFormulas(s, renameOp, cfSnap, cfThresholdSnap, dvSnap);
+
+            foreach (var (ruleId, oldValue) in cfSnap)
+                _cfFormulaRenameSnapshot.Add((ruleId, oldValue, s.Id));
+            foreach (var (key, oldValue) in cfThresholdSnap)
+                _cfThresholdRenameSnapshot.Add((key.Id, key.Slot, oldValue, s.Id));
+            foreach (var (key, oldValue) in dvSnap)
+                _dvFormulaRenameSnapshot.Add((key.Id, key.Slot, oldValue, s.Id));
+
             // The CF viewport context cache is keyed on (sheet.Id, sheet.ContentVersion,
             // sheet.ConditionalFormats.Version) and caches a precompiled AST per CF object
-            // reference, so mutating cf.FormulaText in place above never invalidates it —
-            // bump Version explicitly so a stale cache hit doesn't keep evaluating the old
-            // sheet name after the rename.
-            if (sheetCfChanged)
+            // reference, so mutating cf.FormulaText/threshold values in place above never
+            // invalidates it — bump Version explicitly so a stale cache hit doesn't keep
+            // evaluating the old sheet name after the rename.
+            if (cfSnap.Count > 0 || cfThresholdSnap.Count > 0)
                 s.ConditionalFormats.NotifyRulesChanged();
-            foreach (var dv in s.DataValidations)
-            {
-                if (dv.Formula1 is { } f1)
-                {
-                    var rewritten = FormulaRewriter.Rewrite(f1, renameOp, s.Name);
-                    if (rewritten is not null && rewritten != f1)
-                    {
-                        _dvFormulaRenameSnapshot.Add((dv.Id, 1, f1, s.Id));
-                        dv.Formula1 = rewritten;
-                    }
-                }
-                if (dv.Formula2 is { } f2)
-                {
-                    var rewritten = FormulaRewriter.Rewrite(f2, renameOp, s.Name);
-                    if (rewritten is not null && rewritten != f2)
-                    {
-                        _dvFormulaRenameSnapshot.Add((dv.Id, 2, f2, s.Id));
-                        dv.Formula2 = rewritten;
-                    }
-                }
-            }
         }
 
         // K16: rewrite chart verbatim series/data-label formulas across ALL sheets so any
@@ -439,39 +430,44 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                     control.ListFillRange = oldListFillRange;
                 }
 
-            // T7 restore: CF/DV formula text
-            if (_cfFormulaRenameSnapshot is not null)
+            // T7/R102 restore: CF FormulaText + colorScale/dataBar/iconSet Formula-type
+            // thresholds, and DV Formula1/Formula2 — via the shared RestoreRuleFormulas helper
+            // (mirrors RenameStructuredTableCommand's R100 restore) so the threshold slots get
+            // undone symmetrically with the Apply-side RewriteRuleFormulas call above.
+            if (_cfFormulaRenameSnapshot is not null || _cfThresholdRenameSnapshot is not null || _dvFormulaRenameSnapshot is not null)
             {
-                var cfSheetsRestored = new HashSet<SheetId>();
-                foreach (var (ruleId, oldValue, sheetId) in _cfFormulaRenameSnapshot)
-                {
-                    var sh = ctx.Workbook.GetSheet(sheetId);
-                    if (sh is null) continue;
-                    foreach (var cf in sh.ConditionalFormats)
-                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; cfSheetsRestored.Add(sheetId); break; }
-                }
-                // Mirror the Do-path cache invalidation (see the comment above the forward
-                // rewrite loop): restoring cf.FormulaText in place does not by itself bump
-                // ConditionalFormats.Version, so the viewport CF cache would keep serving the
-                // stale post-rename precompiled AST after Undo unless we notify here too.
-                foreach (var sheetId in cfSheetsRestored)
-                    ctx.Workbook.GetSheet(sheetId)?.ConditionalFormats.NotifyRulesChanged();
-            }
+                var cfSnap = new Dictionary<Guid, string?>();
+                if (_cfFormulaRenameSnapshot is not null)
+                    foreach (var (ruleId, oldValue, _) in _cfFormulaRenameSnapshot)
+                        cfSnap[ruleId] = oldValue;
 
-            if (_dvFormulaRenameSnapshot is not null)
-            {
-                foreach (var (ruleId, slot, oldValue, sheetId) in _dvFormulaRenameSnapshot)
-                {
-                    var sh = ctx.Workbook.GetSheet(sheetId);
-                    if (sh is null) continue;
-                    foreach (var dv in sh.DataValidations)
-                    {
-                        if (dv.Id != ruleId) continue;
-                        if (slot == 1) dv.Formula1 = oldValue;
-                        else           dv.Formula2 = oldValue;
-                        break;
-                    }
-                }
+                var cfThresholdSnap = new Dictionary<(Guid Id, int Slot), string?>();
+                if (_cfThresholdRenameSnapshot is not null)
+                    foreach (var (ruleId, slot, oldValue, _) in _cfThresholdRenameSnapshot)
+                        cfThresholdSnap[(ruleId, slot)] = oldValue;
+
+                var dvSnap = new Dictionary<(Guid Id, int Slot), string?>();
+                if (_dvFormulaRenameSnapshot is not null)
+                    foreach (var (ruleId, slot, oldValue, _) in _dvFormulaRenameSnapshot)
+                        dvSnap[(ruleId, slot)] = oldValue;
+
+                var cfSheetsToNotify = new HashSet<SheetId>();
+                if (_cfFormulaRenameSnapshot is not null)
+                    foreach (var (_, _, sheetId) in _cfFormulaRenameSnapshot)
+                        cfSheetsToNotify.Add(sheetId);
+                if (_cfThresholdRenameSnapshot is not null)
+                    foreach (var (_, _, _, sheetId) in _cfThresholdRenameSnapshot)
+                        cfSheetsToNotify.Add(sheetId);
+
+                foreach (var sh in ctx.Workbook.Sheets)
+                    RowColumnShiftHelpers.RestoreRuleFormulas(sh, cfSnap, cfThresholdSnap, dvSnap);
+
+                // Mirror the Do-path cache invalidation (see the comment above the forward
+                // rewrite loop): restoring cf.FormulaText/threshold values in place does not by
+                // itself bump ConditionalFormats.Version, so the viewport CF cache would keep
+                // serving the stale post-rename precompiled AST after Undo unless we notify here.
+                foreach (var sheetId in cfSheetsToNotify)
+                    ctx.Workbook.GetSheet(sheetId)?.ConditionalFormats.NotifyRulesChanged();
             }
 
             // O25 restore: hyperlink bookmarks
@@ -518,6 +514,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     // X3: CF/DV formula rewrites across surviving sheets for the deleted-sheet #REF! pass
     private List<(Guid RuleId, string? OldValue, SheetId Sheet)>? _cfFormulaDeleteSnapshot;
+    // R102: mirrors RenameSheetCommand's _cfThresholdRenameSnapshot — colorScale/dataBar/iconSet
+    // Formula-type cfvo thresholds referencing the deleted sheet must become #REF! too, not just
+    // cf.FormulaText, or they keep dangling text naming a sheet that no longer exists.
+    private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _cfThresholdDeleteSnapshot;
     private List<(Guid RuleId, int Slot, string? OldValue, SheetId Sheet)>? _dvFormulaDeleteSnapshot;
     // R26: FormControlModel.LinkedCell/ListFillRange hold sheet-qualified string "formulas" just
     // like CF/DV above (mirrors RenameSheetCommand's P81 block, same fields, same FormulaRewriter
@@ -529,6 +529,18 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // Charts (on surviving sheets) whose DataRange pointed at the deleted sheet — remapped onto
     // their own host sheet so no dangling deleted-sheet reference remains.
     private List<(ChartModel Chart, GridRange OldValue)>? _chartDataRangeDeleteSnapshot;
+    // R102: PivotTableModel.SourceRange (on surviving sheets) that pointed at the deleted sheet —
+    // remapped onto the pivot's own host sheet, mirroring the chart DataRange block immediately
+    // above. Unlike PivotCacheModel.SourceSheetName (a nullable string cleared outright below),
+    // GridRange cannot express a sheetless/"cleared" reference, so this uses the same
+    // remap-onto-host-sheet fallback as _chartDataRangeDeleteSnapshot. Without this, a surviving
+    // PivotTableModel keeps a SourceRange naming a SheetId that no longer resolves via
+    // Workbook.GetSheet, which NativeJsonAdapter.Pivot.cs's ToPivotTableDto treats as "drop this
+    // pivot table from native-format save" (mirrors PivotTableRefreshService.Refresh /
+    // PivotSourceContext.ReadHeaders / SlicerTimelineSourceReader all resolving
+    // pivotTable.SourceRange.Start.Sheet the same way) — real Excel instead keeps the pivot table
+    // in place showing its last-cached values after the source sheet disappears.
+    private List<(PivotTableModel Pivot, GridRange OldValue)>? _pivotSourceRangeDeleteSnapshot;
     // String sheet-name refs on model objects that named the deleted sheet — cleared so no
     // dangling deleted-sheet reference remains (mirrors RenameSheetCommand's T6 block, but the
     // sheet has no new name to rewrite onto, so these are nulled instead of renamed).
@@ -619,54 +631,34 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
         _survivingScopedNamedFormulaRewriteSnapshot =
             RewriteScopedNamedFormulasForDeletedSheet(ctx.Workbook, deletedSheetName, deletedTableNames);
 
-        // X3: rewrite CF FormulaText and DV Formula1/Formula2 on all surviving sheets
-        // that reference the deleted sheet, producing #REF! — mirrors RenameSheetCommand T7.
+        // X3/R102: rewrite CF FormulaText, colorScale/dataBar/iconSet Formula-type thresholds,
+        // and DV Formula1/Formula2 on all surviving sheets that reference the deleted sheet,
+        // producing #REF! — mirrors RenameSheetCommand's T7/R102 pass via the same shared
+        // RewriteRuleFormulas helper (the primitive RenameStructuredTableCommand's R100 fix uses).
         var deleteOp = new DeleteSheetOp(deletedSheetName, deletedTableNames);
         _cfFormulaDeleteSnapshot = [];
+        _cfThresholdDeleteSnapshot = [];
         _dvFormulaDeleteSnapshot = [];
         foreach (var s in ctx.Workbook.Sheets)
         {
-            bool sheetCfChanged = false;
-            foreach (var cf in s.ConditionalFormats)
-            {
-                if (cf.FormulaText is { } ft)
-                {
-                    var rewritten = FormulaRewriter.Rewrite(ft, deleteOp, s.Name);
-                    if (rewritten is not null && rewritten != ft)
-                    {
-                        _cfFormulaDeleteSnapshot.Add((cf.Id, ft, s.Id));
-                        cf.FormulaText = rewritten;
-                        sheetCfChanged = true;
-                    }
-                }
-            }
-            // See RenameSheetCommand's T7 pass: mutating cf.FormulaText in place never
-            // invalidates the (sheet.Id, ContentVersion, ConditionalFormats.Version)-keyed CF
-            // viewport cache on its own, so bump Version explicitly for surviving sheets whose
-            // rules were rewritten to #REF!.
-            if (sheetCfChanged)
+            var cfSnap = new Dictionary<Guid, string?>();
+            var cfThresholdSnap = new Dictionary<(Guid Id, int Slot), string?>();
+            var dvSnap = new Dictionary<(Guid Id, int Slot), string?>();
+            RowColumnShiftHelpers.RewriteRuleFormulas(s, deleteOp, cfSnap, cfThresholdSnap, dvSnap);
+
+            foreach (var (ruleId, oldValue) in cfSnap)
+                _cfFormulaDeleteSnapshot.Add((ruleId, oldValue, s.Id));
+            foreach (var (key, oldValue) in cfThresholdSnap)
+                _cfThresholdDeleteSnapshot.Add((key.Id, key.Slot, oldValue, s.Id));
+            foreach (var (key, oldValue) in dvSnap)
+                _dvFormulaDeleteSnapshot.Add((key.Id, key.Slot, oldValue, s.Id));
+
+            // See RenameSheetCommand's T7/R102 pass: mutating cf.FormulaText/threshold values in
+            // place never invalidates the (sheet.Id, ContentVersion, ConditionalFormats.Version)-
+            // keyed CF viewport cache on its own, so bump Version explicitly for surviving sheets
+            // whose rules were rewritten to #REF!.
+            if (cfSnap.Count > 0 || cfThresholdSnap.Count > 0)
                 s.ConditionalFormats.NotifyRulesChanged();
-            foreach (var dv in s.DataValidations)
-            {
-                if (dv.Formula1 is { } f1)
-                {
-                    var rewritten = FormulaRewriter.Rewrite(f1, deleteOp, s.Name);
-                    if (rewritten is not null && rewritten != f1)
-                    {
-                        _dvFormulaDeleteSnapshot.Add((dv.Id, 1, f1, s.Id));
-                        dv.Formula1 = rewritten;
-                    }
-                }
-                if (dv.Formula2 is { } f2)
-                {
-                    var rewritten = FormulaRewriter.Rewrite(f2, deleteOp, s.Name);
-                    if (rewritten is not null && rewritten != f2)
-                    {
-                        _dvFormulaDeleteSnapshot.Add((dv.Id, 2, f2, s.Id));
-                        dv.Formula2 = rewritten;
-                    }
-                }
-            }
         }
 
         // R26: rewrite FormControlModel.LinkedCell/ListFillRange across all surviving sheets
@@ -730,6 +722,26 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
                     _chartDataRangeDeleteSnapshot.Add((chart, chart.DataRange));
                     var anchor = new CellAddress(s.Id, 1, 1);
                     chart.DataRange = new GridRange(anchor, anchor);
+                }
+            }
+        }
+
+        // R102: PivotTableModel.SourceRange (on surviving sheets, possibly hosting the pivot
+        // table itself elsewhere) whose Start.Sheet names the deleted sheet — remap onto the
+        // pivot's own host sheet, exactly mirroring the chart DataRange pass immediately above.
+        // See _pivotSourceRangeDeleteSnapshot's declaration for why GridRange (unlike the nullable
+        // PivotCacheModel.SourceSheetName string cleared below) needs a "remap" fallback instead of
+        // a clear.
+        _pivotSourceRangeDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var pivot in s.PivotTables)
+            {
+                if (pivot.SourceRange.Start.Sheet == _sheetId)
+                {
+                    _pivotSourceRangeDeleteSnapshot.Add((pivot, pivot.SourceRange));
+                    var anchor = new CellAddress(s.Id, 1, 1);
+                    pivot.SourceRange = new GridRange(anchor, anchor);
                 }
             }
         }
@@ -923,38 +935,43 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             RestoreScopedNamedFormulas(ctx.Workbook, _survivingScopedNamedFormulaRewriteSnapshot);
             RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimDeleteSnapshot);
 
-            // X3 restore: CF/DV formula text rewritten to #REF! must be restored
-            if (_cfFormulaDeleteSnapshot is not null)
+            // X3/R102 restore: CF FormulaText + colorScale/dataBar/iconSet Formula-type
+            // thresholds, and DV Formula1/Formula2 rewritten to #REF! must be restored — via the
+            // shared RestoreRuleFormulas helper (mirrors RenameSheetCommand's T7/R102 restore).
+            if (_cfFormulaDeleteSnapshot is not null || _cfThresholdDeleteSnapshot is not null || _dvFormulaDeleteSnapshot is not null)
             {
-                var cfSheetsRestored = new HashSet<SheetId>();
-                foreach (var (ruleId, oldValue, sheetId) in _cfFormulaDeleteSnapshot)
-                {
-                    var sh = ctx.Workbook.GetSheet(sheetId);
-                    if (sh is null) continue;
-                    foreach (var cf in sh.ConditionalFormats)
-                        if (cf.Id == ruleId) { cf.FormulaText = oldValue; cfSheetsRestored.Add(sheetId); break; }
-                }
-                // Mirror the Do-path cache invalidation above (X3 pass): restoring
-                // cf.FormulaText in place does not bump ConditionalFormats.Version on its
-                // own, so the viewport CF cache would keep serving the stale #REF!-rewritten
-                // precompiled AST after Undo unless we notify here too.
-                foreach (var sheetId in cfSheetsRestored)
+                var cfSnap = new Dictionary<Guid, string?>();
+                if (_cfFormulaDeleteSnapshot is not null)
+                    foreach (var (ruleId, oldValue, _) in _cfFormulaDeleteSnapshot)
+                        cfSnap[ruleId] = oldValue;
+
+                var cfThresholdSnap = new Dictionary<(Guid Id, int Slot), string?>();
+                if (_cfThresholdDeleteSnapshot is not null)
+                    foreach (var (ruleId, slot, oldValue, _) in _cfThresholdDeleteSnapshot)
+                        cfThresholdSnap[(ruleId, slot)] = oldValue;
+
+                var dvSnap = new Dictionary<(Guid Id, int Slot), string?>();
+                if (_dvFormulaDeleteSnapshot is not null)
+                    foreach (var (ruleId, slot, oldValue, _) in _dvFormulaDeleteSnapshot)
+                        dvSnap[(ruleId, slot)] = oldValue;
+
+                var cfSheetsToNotify = new HashSet<SheetId>();
+                if (_cfFormulaDeleteSnapshot is not null)
+                    foreach (var (_, _, sheetId) in _cfFormulaDeleteSnapshot)
+                        cfSheetsToNotify.Add(sheetId);
+                if (_cfThresholdDeleteSnapshot is not null)
+                    foreach (var (_, _, _, sheetId) in _cfThresholdDeleteSnapshot)
+                        cfSheetsToNotify.Add(sheetId);
+
+                foreach (var sh in ctx.Workbook.Sheets)
+                    RowColumnShiftHelpers.RestoreRuleFormulas(sh, cfSnap, cfThresholdSnap, dvSnap);
+
+                // Mirror the Do-path cache invalidation above (X3/R102 pass): restoring
+                // cf.FormulaText/threshold values in place does not bump ConditionalFormats.
+                // Version on its own, so the viewport CF cache would keep serving the stale
+                // #REF!-rewritten precompiled AST after Undo unless we notify here too.
+                foreach (var sheetId in cfSheetsToNotify)
                     ctx.Workbook.GetSheet(sheetId)?.ConditionalFormats.NotifyRulesChanged();
-            }
-            if (_dvFormulaDeleteSnapshot is not null)
-            {
-                foreach (var (ruleId, slot, oldValue, sheetId) in _dvFormulaDeleteSnapshot)
-                {
-                    var sh = ctx.Workbook.GetSheet(sheetId);
-                    if (sh is null) continue;
-                    foreach (var dv in sh.DataValidations)
-                    {
-                        if (dv.Id != ruleId) continue;
-                        if (slot == 1) dv.Formula1 = oldValue;
-                        else           dv.Formula2 = oldValue;
-                        break;
-                    }
-                }
             }
 
             if (_formControlDeleteSnapshot is not null)
@@ -967,6 +984,10 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_chartDataRangeDeleteSnapshot is not null)
                 foreach (var (chart, oldValue) in _chartDataRangeDeleteSnapshot)
                     chart.DataRange = oldValue;
+
+            if (_pivotSourceRangeDeleteSnapshot is not null)
+                foreach (var (pivot, oldValue) in _pivotSourceRangeDeleteSnapshot)
+                    pivot.SourceRange = oldValue;
 
             if (_pivotCacheNameDeleteSnapshot is not null)
                 foreach (var (cache, oldValue) in _pivotCacheNameDeleteSnapshot)

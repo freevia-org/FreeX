@@ -399,8 +399,14 @@ internal static partial class XlsxWorksheetMetadataPreserver
     {
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
-            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name -- resolve
+            // via the shared rename-tolerant fallback so a renamed sheet's custom-property
+            // relationships still get rebound instead of being dropped like a deleted sheet's.
+            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
+                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
+            {
                 continue;
+            }
             if (worksheetsWithPreservableSourceMetadata is not null &&
                 !worksheetsWithPreservableSourceMetadata.Contains(sheetName))
             {

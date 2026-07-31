@@ -11,10 +11,13 @@ public static partial class BuiltInFunctions
         if (args[0] is ErrorValue e) return e;
         if (args[1] is ErrorValue oldTextError) return oldTextError;
         if (args[2] is ErrorValue newTextError) return newTextError;
-        // A genuinely-omitted instance_num (args.Count <= 3, or the
-        // OmittedOptionalOrdinalArgumentValue sentinel substituted for a truly-omitted trailing
-        // argument) means "replace all" (instanceNum stays null below). An explicit argument that
-        // merely evaluates to BlankValue (e.g. a reference to an empty cell) must NOT be treated as
+        // R102: a genuinely-omitted instance_num (args.Count <= 3 -- no 4th argument node at all)
+        // means "replace all" -- represented here by substituting the OmittedOptionalOrdinalArgumentValue
+        // sentinel purely as this function's OWN internal "not given" marker (nothing upstream
+        // produces this sentinel anymore; a present-but-empty 4th argument, e.g. a trailing comma,
+        // now evaluates like any other blank-cell reference instead). instanceNum stays null below
+        // only for that genuinely-omitted case. A PRESENT argument that merely evaluates to
+        // BlankValue (a trailing comma OR a reference to an empty cell) must NOT be treated as
         // omitted -- Excel coerces it to numeric 0, which the instanceNum<1 domain check below then
         // correctly rejects as #VALUE!, exactly as an explicit literal 0 already does.
         var instanceArg = args.Count > 3 ? args[3] : OmittedOptionalOrdinalArgumentValue.Instance;
