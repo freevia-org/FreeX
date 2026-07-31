@@ -549,6 +549,46 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void ReaderWriter_Cycle2_AdmitsLiveGeometryAndPreservesNativeIdentity()
+    {
+        var corpusPath = FindRenderCompareCorpusFile("14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(corpusPath);
+        var slide = presentation.Slides.Single(candidate => candidate.Shapes.Any(shape =>
+            shape.Kind == SlideShapeKind.SmartArt
+            && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/cycle2", StringComparison.OrdinalIgnoreCase) == true));
+        var smartArt = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        smartArt.Data.LayoutUniqueId.Should().EndWith("/cycle2");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "cycle2 is now admitted only after the shared ellipse-ring geometry exists");
+        smartArt.Data.Nodes.Select(node => node.Text)
+            .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
+
+        var liveShapes = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Where(shape => shape.Text is not null)
+            .Select(shape => shape.Text!.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Idea", "Plan", "Execute", "Review", "Improve"]);
+        liveShapes.Count(shape => Math.Abs(shape.RotationDeg) > 0.1)
+            .Should().Be(5, "the five live cycle2 arrows carry tangent rotations");
+
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath);
+        var reopenedSmartArt = reopened.Slides.SelectMany(candidate => candidate.Shapes)
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt
+                && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/cycle2", StringComparison.OrdinalIgnoreCase) == true)
+            .SmartArt!;
+        reopenedSmartArt.Data.Should().NotBeNull();
+        reopenedSmartArt.Data!.LayoutUniqueId.Should().EndWith("/cycle2");
+        reopenedSmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        reopenedSmartArt.Data.Nodes.Select(node => node.Text)
+            .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
+    }
+
+    [Fact]
     public void Reader_SmartArt_PictureCaptionList_ImportsNodePictures()
     {
         var nodeTexts = new[] { "Alpha caption", "Beta caption" };

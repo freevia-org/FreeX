@@ -104,6 +104,7 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("opposingideas")
             .And.Contain("convergingradial")
             .And.Contain("interlockingrings")
+            .And.Contain("cycle2")
             .And.Contain("verticalprocess")
             .And.Contain("horizontalhierarchy")
             .And.Contain("hierarchy3");

@@ -523,6 +523,46 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Cycle2_UsesNativeEllipseRingAndTangentArrows()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Idea", "Plan", "Execute", "Review", "Improve");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/cycle2";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("cycle2 is admitted through its bounded native geometry");
+        shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().HaveCount(5, "cycle2 has one ellipse per editable node");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .Should().HaveCount(5, "cycle2 has one tangent arrow between each pair of nodes");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().OnlyContain(shape =>
+                shape.OffsetXEmu >= FrameX && shape.OffsetYEmu >= FrameY
+                && shape.OffsetXEmu + shape.ExtentCxEmu <= FrameX + FrameCx
+                && shape.OffsetYEmu + shape.ExtentCyEmu <= FrameY + FrameCy);
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .Select(shape => shape.RotationDeg)
+            .Should().OnlyContain(rotation => Math.Abs(rotation) > 0.1);
+    }
+
+    [Fact]
+    public void Cycle2_RejectsMoreThanNativeChildLimitForCachedFallback()
+    {
+        var data = MakeData(
+            SmartArtFamily.Cycle,
+            Enumerable.Range(1, 8).Select(index => $"Item {index}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/cycle2";
+        data.IsLiveLayoutSupported = true;
+
+        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().BeNull("cycle2's native definition caps the live geometry at seven nodes");
+    }
+
+    [Fact]
     public void ContinuousCycle_ReturnsLiveCircularBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "Plan", "Build", "Review", "Launch");

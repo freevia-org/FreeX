@@ -45,6 +45,7 @@ internal static class FreePCommandInventory
     {
         var wpf = Collect(FreePRibbon.Build(FreePRibbonCapabilities.Wpf), "WPF");
         var avalonia = Collect(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia), "Avalonia");
+        EnsureSmartArtSourceCoverage(wpf, avalonia);
         var commandIds = wpf.Keys.Concat(avalonia.Keys)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
@@ -75,7 +76,7 @@ internal static class FreePCommandInventory
         return new InventoryDocument(
             SchemaVersion: 1,
             GeneratedBy: "tools/Generate-FreePCommandParityInventory.ps1",
-            Source: "freep/FreeP.Ribbon.Definitions FreePRibbon.Build(FreePRibbonCapabilities.Wpf/Avalonia)",
+            Source: "freep/FreeP.Ribbon.Definitions FreePRibbon.Build(FreePRibbonCapabilities.Wpf/Avalonia) plus freep/FreeP.App.Presentation SmartArtLayoutPreset",
             Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell and backed profile commands are not reported as WPF or Avalonia implementation gaps. Platform-only rows are allowed only when the note names the intended shell/profile variance and the WPF shell route that carries the behavior. Workflow evidence rows track bounded FreeP WPF/Avalonia parity-depth slices that are not command gaps.",
             Summary: new InventorySummary(
                 TotalCommands: commands.Length,
@@ -94,6 +95,19 @@ internal static class FreePCommandInventory
                 WorkflowEvidenceRows: workflowEvidence.Count),
             WorkflowEvidence: workflowEvidence,
             Commands: commands);
+    }
+
+    private static void EnsureSmartArtSourceCoverage(
+        IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> wpf,
+        IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> avalonia)
+    {
+        // Derived from SmartArtLayoutPreset.Cycle2 through SlideObjectInsertionPlanner and
+        // FreePRibbon's Enum.GetValues gallery projection. Keep this guard here so the
+        // generated inventory cannot silently omit a newly authored SmartArt route.
+        const string cycle2CommandId = "freep.insert-smartart-cycle2";
+        if (!wpf.ContainsKey(cycle2CommandId) || !avalonia.ContainsKey(cycle2CommandId))
+            throw new InvalidOperationException(
+                $"The generated WPF/Avalonia command profiles must expose the source SmartArt layout {cycle2CommandId}.");
     }
 
     private static IReadOnlyList<WorkflowEvidenceEntry> BuildWorkflowEvidence() =>
