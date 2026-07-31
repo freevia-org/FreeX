@@ -68,13 +68,27 @@ public static class ExternalXamlClipboardPlanner
             var images = document
                 .Descendants()
                 .Where(element => element.Name.LocalName.Equals("Image", StringComparison.OrdinalIgnoreCase))
-                .Select(element => AttributeValue(element, "Source"))
-                .Where(static source => !string.IsNullOrWhiteSpace(source))
-                .Select(source => resolveImage?.Invoke(source!) ?? (null, null))
+                .Select(element => new
+                {
+                    Element = element,
+                    Source = AttributeValue(element, "Source"),
+                })
+                .Where(static image => !string.IsNullOrWhiteSpace(image.Source))
+                .Select(image =>
+                {
+                    var resolved = resolveImage?.Invoke(image.Source!) ?? (null, null);
+                    return (
+                        resolved.Bytes,
+                        resolved.ContentType,
+                        WidthEmu: ReadImageExtentEmu(image.Element, "Width"),
+                        HeightEmu: ReadImageExtentEmu(image.Element, "Height"));
+                })
                 .Where(static result => result.Bytes is { Length: > 0 })
                 .Select(static result => new InCanvasRichClipboardImage(
                     result.Bytes!,
-                    result.ContentType ?? "application/octet-stream"))
+                    result.ContentType ?? "application/octet-stream",
+                    result.WidthEmu,
+                    result.HeightEmu))
                 .ToArray();
             var blockElements = document
                 .Descendants()
@@ -505,6 +519,20 @@ public static class ExternalXamlClipboardPlanner
     private static bool TryParseDip(string? value, out double result) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
         && double.IsFinite(result);
+
+    private static long? ReadImageExtentEmu(XElement element, string attributeName)
+    {
+        if (!TryParseDip(AttributeValue(element, attributeName), out var dip)
+            || dip <= 0)
+        {
+            return null;
+        }
+
+        return Math.Clamp(
+            (long)Math.Round(dip * EmuPerDip),
+            9_525L,
+            63_500_000_000L);
+    }
 
     private static bool TryParseColor(string? value, out ThemeAwareColor? color)
     {
