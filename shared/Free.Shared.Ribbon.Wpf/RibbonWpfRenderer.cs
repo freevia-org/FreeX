@@ -89,6 +89,12 @@ public static class RibbonWpfRenderer
         var menu = new ContextMenu();
         foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group))
         {
+            if (control is RibbonSplitButton splitButton)
+            {
+                AddCollapsedSplitButtonItems(menu.Items, splitButton, registry);
+                continue;
+            }
+
             var menuItem = new MenuItem { Header = control.Label, Tag = control.Label };
             if (!string.IsNullOrEmpty(control.KeyTip))
                 RibbonTooltip.SetKeyTip(menuItem, control.KeyTip);
@@ -115,6 +121,43 @@ public static class RibbonWpfRenderer
         }
 
         return menu;
+    }
+
+    private static void AddCollapsedSplitButtonItems(
+        ItemCollection target,
+        RibbonSplitButton splitButton,
+        IRibbonCommandRegistry? registry)
+    {
+        var primary = new MenuItem
+        {
+            Header = splitButton.Label,
+            Tag = splitButton.CommandId.Value,
+            IsEnabled = registry?.TryGet(splitButton.CommandId, out _) == true
+        };
+        if (!string.IsNullOrEmpty(splitButton.KeyTip))
+            RibbonTooltip.SetKeyTip(primary, splitButton.KeyTip);
+        primary.Click += (sender, _) =>
+        {
+            if (registry?.TryGet(splitButton.CommandId, out var command) == true && command is not null)
+                command.Execute(SenderContext(sender));
+        };
+        target.Add(primary);
+
+        if (registry is null)
+            return;
+
+        foreach (var item in splitButton.Menu.Items)
+        {
+            if (item.Kind != RibbonMenuItemKind.Separator &&
+                item.CommandId is { } commandId &&
+                (commandId == splitButton.CommandId ||
+                 string.Equals(item.Header, splitButton.Label, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            AddMenuItem(target, item, registry);
+        }
     }
 
     private static FrameworkElement BuildGroup(
@@ -303,6 +346,9 @@ public static class RibbonWpfRenderer
         IRibbonStateStore? stateStore,
         RibbonWpfRendererOptions options)
     {
+        if (control is RibbonSplitButton splitButton)
+            return BuildSplitControl(splitButton, resourceHost, registry, stateStore, options);
+
         var stack = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
         stack.Children.Add(NewIcon(control, RibbonVisualMetrics.LargeIconSize, HorizontalAlignment.Center));
 
@@ -337,6 +383,9 @@ public static class RibbonWpfRenderer
         IRibbonStateStore? stateStore,
         RibbonWpfRendererOptions options)
     {
+        if (control is RibbonSplitButton splitButton)
+            return BuildSplitControl(splitButton, resourceHost, registry, stateStore, options);
+
         var content = new StackPanel { Orientation = Orientation.Horizontal };
         var icon = NewIcon(control, options.MediumIconSize, HorizontalAlignment.Center, VerticalAlignment.Center);
         icon.Margin = new Thickness(0, 0, 4, 0);
@@ -383,6 +432,9 @@ public static class RibbonWpfRenderer
         IRibbonStateStore? stateStore,
         RibbonWpfRendererOptions options)
     {
+        if (control is RibbonSplitButton splitButton)
+            return BuildSplitControl(splitButton, resourceHost, registry, stateStore, options);
+
         var hasMenu = HasMenu(control);
         FrameworkElement content;
         if (hasMenu && !options.UseExternalDropdownZones)
@@ -408,6 +460,198 @@ public static class RibbonWpfRenderer
         ((ContentControl)button).Content = content;
         WireMetadata(button, control, registry, stateStore, options);
         return button;
+    }
+
+    private static FrameworkElement BuildSplitControl(
+        RibbonSplitButton control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options) =>
+        control.PreferredLayout switch
+        {
+            RibbonCommandLayoutKind.Large => BuildLargeSplitControl(control, resourceHost, registry, stateStore, options),
+            RibbonCommandLayoutKind.Small => BuildIconSplitControl(control, resourceHost, registry, stateStore, options),
+            _ => BuildMediumSplitControl(control, resourceHost, registry, stateStore, options)
+        };
+
+    private static FrameworkElement BuildLargeSplitControl(
+        RibbonSplitButton control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
+    {
+        var primaryContent = new StackPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        primaryContent.Children.Add(NewIcon(control, RibbonVisualMetrics.LargeIconSize, HorizontalAlignment.Center));
+        var caption = new TextBlock
+        {
+            Text = control.Label,
+            FontSize = 12,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 2, 0, 0),
+            MaxWidth = 74
+        };
+        EnsureNaturalLabelWidth(caption);
+        RibbonMetadata.SetRole(caption, RibbonMetadataRole.CommandLabel);
+        primaryContent.Children.Add(caption);
+        RibbonMetadata.SetCommandContentLayout(primaryContent, RibbonCommandContentLayout.Large);
+
+        var primary = NewButton(control, resourceHost, "RibbonLargeButton");
+        primary.Width = 80;
+        primary.HorizontalContentAlignment = HorizontalAlignment.Center;
+        primary.VerticalContentAlignment = VerticalAlignment.Center;
+        ((ContentControl)primary).Content = primaryContent;
+        WireMetadata(primary, control, registry, stateStore, options, attachMenu: false, includeKeyTip: false);
+
+        var dropdown = BuildSplitDropdownButton(
+            control,
+            resourceHost,
+            registry,
+            stateStore,
+            options,
+            RibbonCommandContentLayout.Large,
+            width: 80,
+            height: 20);
+
+        var split = new Grid
+        {
+            Width = 80,
+            Height = 76,
+            RowDefinitions =
+            {
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                new RowDefinition { Height = new GridLength(20) }
+            }
+        };
+        Grid.SetRow(primary, 0);
+        Grid.SetRow(dropdown, 1);
+        split.Children.Add(primary);
+        split.Children.Add(dropdown);
+        return split;
+    }
+
+    private static FrameworkElement BuildMediumSplitControl(
+        RibbonSplitButton control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal };
+        var icon = NewIcon(control, options.MediumIconSize, HorizontalAlignment.Center, VerticalAlignment.Center);
+        icon.Margin = new Thickness(0, 0, 4, 0);
+        content.Children.Add(icon);
+        var label = new TextBlock
+        {
+            Text = control.Label,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        EnsureNaturalLabelWidth(label);
+        RibbonMetadata.SetRole(label, RibbonMetadataRole.CommandLabel);
+        content.Children.Add(label);
+        RibbonMetadata.SetCommandContentLayout(content, RibbonCommandContentLayout.Medium);
+
+        var primary = NewButton(control, resourceHost, "RibbonBtn");
+        primary.Height = RibbonVisualMetrics.SmallRowHeight;
+        primary.MinWidth = 84;
+        primary.HorizontalContentAlignment = HorizontalAlignment.Left;
+        ((ContentControl)primary).Content = content;
+        WireMetadata(primary, control, registry, stateStore, options, attachMenu: false, includeKeyTip: false);
+
+        var dropdown = BuildSplitDropdownButton(
+            control,
+            resourceHost,
+            registry,
+            stateStore,
+            options,
+            RibbonCommandContentLayout.Medium,
+            width: 20,
+            height: RibbonVisualMetrics.SmallRowHeight);
+
+        var split = new Grid { MinWidth = 104 };
+        split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
+        Grid.SetColumn(primary, 0);
+        Grid.SetColumn(dropdown, 1);
+        split.Children.Add(primary);
+        split.Children.Add(dropdown);
+        return split;
+    }
+
+    private static FrameworkElement BuildIconSplitControl(
+        RibbonSplitButton control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options)
+    {
+        var primary = NewButton(control, resourceHost, "RibbonIconButton");
+        primary.Width = 30;
+        primary.Height = RibbonVisualMetrics.SmallRowHeight;
+        primary.HorizontalContentAlignment = HorizontalAlignment.Center;
+        primary.VerticalContentAlignment = VerticalAlignment.Center;
+        var primaryContent = new Grid { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        primaryContent.Children.Add(NewIcon(control, options.SmallIconSize, HorizontalAlignment.Center, VerticalAlignment.Center));
+        RibbonMetadata.SetCommandContentLayout(primaryContent, RibbonCommandContentLayout.IconOnly);
+        ((ContentControl)primary).Content = primaryContent;
+        WireMetadata(primary, control, registry, stateStore, options, attachMenu: false, includeKeyTip: false);
+
+        var dropdown = BuildSplitDropdownButton(
+            control,
+            resourceHost,
+            registry,
+            stateStore,
+            options,
+            RibbonCommandContentLayout.IconOnly,
+            width: 14,
+            height: RibbonVisualMetrics.SmallRowHeight);
+
+        var split = new Grid { Width = 44, MinWidth = 44 };
+        split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        split.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(14) });
+        Grid.SetColumn(primary, 0);
+        Grid.SetColumn(dropdown, 1);
+        split.Children.Add(primary);
+        split.Children.Add(dropdown);
+        return split;
+    }
+
+    private static Button BuildSplitDropdownButton(
+        RibbonSplitButton control,
+        FrameworkElement resourceHost,
+        IRibbonCommandRegistry? registry,
+        IRibbonStateStore? stateStore,
+        RibbonWpfRendererOptions options,
+        RibbonCommandContentLayout layout,
+        double width,
+        double height)
+    {
+        var dropdown = (Button)NewButton(control, resourceHost, "RibbonBtn");
+        dropdown.Width = width;
+        dropdown.MinWidth = width;
+        dropdown.Height = height;
+        dropdown.Padding = new Thickness(0);
+        dropdown.HorizontalContentAlignment = HorizontalAlignment.Center;
+        dropdown.VerticalContentAlignment = VerticalAlignment.Center;
+        var chevron = Chevron();
+        RibbonMetadata.SetCommandContentLayout(chevron, layout);
+        dropdown.Content = chevron;
+        WireMetadata(
+            dropdown,
+            control,
+            registry,
+            stateStore,
+            options,
+            commandNameOverride: $"{control.CommandId.Value}.Dropdown");
+        return dropdown;
     }
 
     private static FrameworkElement BuildComboControl(RibbonComboBox combo, FrameworkElement resourceHost, IRibbonCommandRegistry? registry, IRibbonStateStore? stateStore)
@@ -465,13 +709,18 @@ public static class RibbonWpfRenderer
         return icon;
     }
 
-    private static TextBlock Chevron() => new()
+    private static TextBlock Chevron()
     {
-        Text = "▾",
-        FontSize = 9,
-        VerticalAlignment = VerticalAlignment.Center,
-        Margin = new Thickness(1, 0, 1, 0)
-    };
+        var chevron = new TextBlock
+        {
+            Text = "\u25BE",
+            FontSize = 9,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(1, 0, 1, 0)
+        };
+        RibbonMetadata.SetRole(chevron, RibbonMetadataRole.DropdownChevron);
+        return chevron;
+    }
 
     private static Control NewButton(RibbonControl control, FrameworkElement resourceHost, string styleKey)
     {
@@ -492,11 +741,15 @@ public static class RibbonWpfRenderer
         RibbonControl control,
         IRibbonCommandRegistry? registry,
         IRibbonStateStore? stateStore,
-        RibbonWpfRendererOptions options)
+        RibbonWpfRendererOptions options,
+        bool attachMenu = true,
+        bool includeKeyTip = true,
+        string? commandNameOverride = null)
     {
-        if (!string.IsNullOrEmpty(control.CommandId.Value))
-            RibbonMetadata.SetCommandName(element, control.CommandId.Value);
-        if (!string.IsNullOrEmpty(control.KeyTip))
+        var commandName = commandNameOverride ?? control.CommandId.Value;
+        if (!string.IsNullOrEmpty(commandName))
+            RibbonMetadata.SetCommandName(element, commandName);
+        if (includeKeyTip && !string.IsNullOrEmpty(control.KeyTip))
             RibbonTooltip.SetKeyTip(element, control.KeyTip);
         // The tooltip title doubles as the control's human-readable identity (keytip overlays, tests
         // that resolve a command by its visible title). Default it to the Label so every rendered
@@ -510,7 +763,7 @@ public static class RibbonWpfRenderer
         if (registry is null)
             return;
 
-        var menu = GetMenu(control);
+        var menu = attachMenu ? GetMenu(control) : null;
         var hasMenuItems = menu is not null && menu.Items.Count > 0;
         var commandIsLive = control is RibbonComboBox || hasMenuItems || registry.TryGet(control.CommandId, out _);
         element.IsEnabled = commandIsLive;
@@ -524,7 +777,7 @@ public static class RibbonWpfRenderer
         if (element is not ButtonBase buttonBase)
             return;
 
-        if (HasMenu(control) && options.UseExternalDropdownZones)
+        if (attachMenu && HasMenu(control) && options.UseExternalDropdownZones)
             RibbonMetadata.SetDropdownMenuButton(buttonBase, true);
 
         if (hasMenuItems)
@@ -611,43 +864,48 @@ public static class RibbonWpfRenderer
     {
         foreach (var item in items)
         {
-            if (item.Kind == Free.Shared.Ribbon.RibbonMenuItemKind.Separator)
-            {
-                target.Add(new Separator());
-                continue;
-            }
-
-            var menuItem = new MenuItem
-            {
-                Header = item.Header,
-                InputGestureText = item.InputGesture ?? string.Empty,
-                IsEnabled = item.IsEnabled,
-                IsCheckable = item.IsChecked.HasValue,
-                IsChecked = item.IsChecked ?? false,
-            };
-            // Keytip navigation only enters a menu whose items carry keytips, so propagate them.
-            if (!string.IsNullOrEmpty(item.KeyTip))
-                RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);
-
-            if (item.Children.Count > 0)
-            {
-                AddMenuItems(menuItem.Items, item.Children, registry);
-            }
-            else if (item.CommandId is { } commandId)
-            {
-                menuItem.IsEnabled = item.IsEnabled && registry.TryGet(commandId, out _);
-                // Some menu-item handlers read state off their sender. Carry the values the original
-                // authored menu set as Tag so those handlers resolve against the rendered menu item.
-                menuItem.Tag = item.Header;
-                menuItem.Click += (sender, _) =>
-                {
-                    if (registry.TryGet(commandId, out var command) && command is not null)
-                        command.Execute(SenderContext(sender));
-                };
-            }
-
-            target.Add(menuItem);
+            AddMenuItem(target, item, registry);
         }
+    }
+
+    private static void AddMenuItem(ItemCollection target, RibbonMenuItem item, IRibbonCommandRegistry registry)
+    {
+        if (item.Kind == Free.Shared.Ribbon.RibbonMenuItemKind.Separator)
+        {
+            target.Add(new Separator());
+            return;
+        }
+
+        var menuItem = new MenuItem
+        {
+            Header = item.Header,
+            InputGestureText = item.InputGesture ?? string.Empty,
+            IsEnabled = item.IsEnabled,
+            IsCheckable = item.IsChecked.HasValue,
+            IsChecked = item.IsChecked ?? false,
+        };
+        // Keytip navigation only enters a menu whose items carry keytips, so propagate them.
+        if (!string.IsNullOrEmpty(item.KeyTip))
+            RibbonTooltip.SetKeyTip(menuItem, item.KeyTip);
+
+        if (item.Children.Count > 0)
+        {
+            AddMenuItems(menuItem.Items, item.Children, registry);
+        }
+        else if (item.CommandId is { } commandId)
+        {
+            menuItem.IsEnabled = item.IsEnabled && registry.TryGet(commandId, out _);
+            // Some menu-item handlers read state off their sender. Carry the values the original
+            // authored menu set as Tag so those handlers resolve against the rendered menu item.
+            menuItem.Tag = item.Header;
+            menuItem.Click += (sender, _) =>
+            {
+                if (registry.TryGet(commandId, out var command) && command is not null)
+                    command.Execute(SenderContext(sender));
+            };
+        }
+
+        target.Add(menuItem);
     }
 
     private static FrameworkElement BuildInlineDivider() => new Rectangle
