@@ -106,6 +106,7 @@ public sealed class CanvasGestureHandler
         _canvas.MouseLeftButtonDown += OnMouseDown;
         _canvas.MouseLeftButtonUp   += OnMouseUp;
         _canvas.MouseMove           += OnMouseMove;
+        _canvas.LostMouseCapture   += OnLostMouseCapture;
         _canvas.KeyDown             += OnKeyDown;
         _canvas.Focusable           = true;
 
@@ -350,6 +351,23 @@ public sealed class CanvasGestureHandler
         _adorner.UpdateMarquee(null);
         _adorner.UpdateSnapGuides(null, SlideTransform.Identity); // Wave 12B: clear guides
         _canvas.ReleaseMouseCapture();
+    }
+
+    private void OnLostMouseCapture(object sender, MouseEventArgs e) =>
+        CancelActiveGesture();
+
+    private void CancelActiveGesture()
+    {
+        if (_gesture == GestureKind.None)
+            return;
+
+        _gesture = GestureKind.None;
+        _moveStartShapes = null;
+        _geometryHandleName = null;
+        _adorner.UpdatePreview(null);
+        _adorner.UpdateGeometryPreview(null, null);
+        _adorner.UpdateMarquee(null);
+        _adorner.UpdateSnapGuides(null, SlideTransform.Identity);
     }
 
     // ── Move gesture ──────────────────────────────────────────────────────────────────────────
@@ -732,6 +750,24 @@ public sealed class CanvasGestureHandler
                 e.Handled = true;
                 break;
         }
+    }
+
+    internal bool IsGestureActiveForTests => _gesture != GestureKind.None;
+
+    internal void SeedResizeStateForTests(
+        Point startScreen,
+        SlideShape shape,
+        CanvasGestureHandleKind handle)
+    {
+        _dragStartScreen = startScreen;
+        _resizeShapeId = shape.Id;
+        _resizeOrigX = shape.OffsetXEmu;
+        _resizeOrigY = shape.OffsetYEmu;
+        _resizeOrigCx = shape.ExtentCxEmu;
+        _resizeOrigCy = shape.ExtentCyEmu;
+        _resizeOrigRotationDeg = shape.RotationDeg;
+        _resizeHandle = handle;
+        _gesture = GestureKind.Resize;
     }
 
     private bool TryHandleCustomGeometryKey(Key key)

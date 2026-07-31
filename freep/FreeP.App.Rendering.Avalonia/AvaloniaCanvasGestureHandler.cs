@@ -197,18 +197,24 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
     private void OnPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
-        // Guard against re-entrancy: releasing capture (in cancel/commit path) can fire
-        // CaptureLost which would re-enter here. Check + clear _gesture atomically first.
-        if (_gesture == GestureKind.None) return;
-        _gesture     = GestureKind.None;
+        // Do NOT call e.Pointer.Capture(null) here: the framework has already released it.
+        CancelActiveGesture();
+    }
+
+    private void CancelActiveGesture()
+    {
+        // Reset state before any caller releases capture, preventing capture-loss re-entry.
+        if (_gesture == GestureKind.None)
+            return;
+
+        _gesture = GestureKind.None;
         _dragStarted = false;
+        _moveStartShapes = null;
+        _geometryHandleName = null;
         _adorner.UpdatePreview(null);
         _adorner.UpdateGeometryPreview(null, null);
         _adorner.UpdateMarquee(null);
         _adorner.UpdateSnapGuides(null, SlideTransformCore.Identity);
-        // Do NOT call e.Pointer.Capture(null) here — we are already in the capture-lost
-        // callback, so the capture was already released by the framework (or by our caller
-        // before we got here).
     }
 
     // ── Pointer down ───────────────────────────────────────────────────────────
@@ -896,6 +902,10 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     }
 
     // ── Helpers ────────────────────────────────────────────────────────────────
+
+    internal bool IsGestureActiveForTests => _gesture != GestureKind.None;
+
+    internal void SimulateCaptureLossForTests() => CancelActiveGesture();
 
     private static CanvasGesturePoint ToGesturePoint(Point point)
         => new(point.X, point.Y);

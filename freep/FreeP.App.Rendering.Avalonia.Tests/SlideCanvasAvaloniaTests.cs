@@ -3791,6 +3791,24 @@ public sealed class GestureHandlerAltSnapTests
     }
 
     [Fact]
+    public async Task GestureHandler_CaptureLoss_CancelsPendingResize()
+    {
+        await Run(() =>
+        {
+            var (handler, _, shape) = MakeHandler();
+            handler.SeedResizeState(
+                new Point(100, 100),
+                shape,
+                CanvasGestureHandleKind.ResizeSE);
+            handler.IsGestureActiveForTests.Should().BeTrue();
+
+            handler.SimulateCaptureLossForTests();
+
+            handler.IsGestureActiveForTests.Should().BeFalse();
+        });
+    }
+
+    [Fact]
     public async Task RebuiltEditor_DetachesStalePointerHandler_AndCapturesSelectedShape()
     {
         await Run(() =>

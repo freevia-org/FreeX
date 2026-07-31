@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
@@ -57,6 +58,41 @@ public sealed class CanvasEditingTests
         start.Should().BeGreaterThanOrEqualTo(0);
         end.Should().BeGreaterThan(start);
         source[start..end].Should().Contain("e.Handled = true;\n                return;");
+    }
+
+    [StaFact]
+    public void GestureHandler_CaptureLoss_CancelsPendingResize()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 914400L,
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        editor.Select(shape.Id);
+        var canvas = new SlideCanvas();
+        var handler = new CanvasGestureHandler(canvas, editor);
+
+        handler.SeedResizeStateForTests(
+            new Point(100, 100),
+            shape,
+            CanvasGestureHandleKind.ResizeSE);
+        handler.IsGestureActiveForTests.Should().BeTrue();
+
+        canvas.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0)
+        {
+            RoutedEvent = UIElement.LostMouseCaptureEvent,
+        });
+
+        handler.IsGestureActiveForTests.Should().BeFalse();
     }
     // ── SlideTransform ────────────────────────────────────────────────────────────
 
