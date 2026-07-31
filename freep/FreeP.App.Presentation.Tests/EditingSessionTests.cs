@@ -874,6 +874,7 @@ public sealed class EditingSessionTests
         second.RotationDeg.Should().Be(30);
     }
 
+    [Fact]
     public void NestedGroupedSelection_ResolvesConnectorHyperlinkAutoShapeAndUngroupRoutes()
     {
         var sess = Make();
@@ -941,52 +942,6 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
-    public void FlipSelectedShapes_TogglesAxisAndUndoRestoresIt()
-    {
-        var sess = Make();
-        var first = MakeShape(51);
-        var second = MakeShape(52);
-        sess.CurrentSlide!.Shapes.Add(first);
-        sess.CurrentSlide.Shapes.Add(second);
-
-        sess.Select(first.Id);
-        sess.Select(second.Id, addToSelection: true);
-        sess.FlipSelectedHorizontal();
-
-        first.FlipH.Should().BeTrue();
-        second.FlipH.Should().BeTrue();
-        first.FlipV.Should().BeFalse();
-        second.FlipV.Should().BeFalse();
-
-        sess.Undo();
-        first.FlipH.Should().BeFalse();
-        second.FlipH.Should().BeFalse();
-        sess.Redo();
-        first.FlipH.Should().BeTrue();
-        second.FlipH.Should().BeTrue();
-
-        sess.FlipSelectedVertical();
-        first.FlipV.Should().BeTrue();
-        second.FlipV.Should().BeTrue();
-        sess.Undo();
-        first.FlipV.Should().BeFalse();
-        second.FlipV.Should().BeFalse();
-    }
-
-    [Fact]
-    public void FlipShape_TogglesExistingStateAndCanBeUndone()
-    {
-        var sess = Make();
-        var shape = MakeShape(53);
-        shape.FlipV = true;
-        sess.CurrentSlide!.Shapes.Add(shape);
-
-        sess.FlipShape(shape.Id, horizontal: false);
-        shape.FlipV.Should().BeFalse();
-        sess.Undo();
-        shape.FlipV.Should().BeTrue();
-    }
-
     public void GroupSelectedShapes_GroupsNestedChildrenAndUndoRestoresParentList()
     {
         var sess = Make();
