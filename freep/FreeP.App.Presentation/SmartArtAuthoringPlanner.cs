@@ -227,6 +227,7 @@ public static class SmartArtAuthoringPlanner
     public const string HorizontalBulletListLayoutCommandId = "freep.smartart.layout.horizontal-bullet-list";
     public const string HorizontalBlockListLayoutCommandId = "freep.smartart.layout.horizontal-block-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
+    public const string Cycle2LayoutCommandId = "freep.smartart.layout.cycle-2";
     public const string ContinuousCycleLayoutCommandId = "freep.smartart.layout.continuous-cycle";
     public const string GearCycleLayoutCommandId = "freep.smartart.layout.gear-cycle";
     public const string TextCycleLayoutCommandId = "freep.smartart.layout.text-cycle";
