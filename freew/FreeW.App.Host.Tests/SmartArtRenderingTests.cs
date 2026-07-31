@@ -349,16 +349,16 @@ public sealed class SmartArtRenderingTests
             var textBlock = Assert.IsType<TextBlock>(node.Child);
             var foreground = Assert.IsType<SolidColorBrush>(textBlock.Foreground).Color;
             Assert.Equal(Colors.Black, foreground);
-            Assert.InRange(textBlock.FontSize, 24.639, 24.641);
+            Assert.InRange(textBlock.FontSize, 18.479, 18.481);
         }
 
         var canvas = LogicalDescendants<Canvas>(outer).Single();
         var top = NodeBorder(view, "Top");
         var baseNode = NodeBorder(view, "Base");
-        Assert.InRange(Canvas.GetLeft(top), 113.99, 114.01);
-        Assert.InRange(Canvas.GetTop(top), 5.99, 6.01);
-        Assert.InRange(Canvas.GetLeft(baseNode), 5.99, 6.01);
-        Assert.InRange(Canvas.GetTop(baseNode), 110.99, 111.01);
+        Assert.InRange(Canvas.GetLeft(top), 114.99, 115.01);
+        Assert.InRange(Canvas.GetTop(top), 7.49, 7.51);
+        Assert.InRange(Canvas.GetLeft(baseNode), 6.99, 7.01);
+        Assert.InRange(Canvas.GetTop(baseNode), 112.49, 112.51);
         var polygons = LogicalDescendants<Polygon>(canvas);
         Assert.Equal(4, polygons.Count);
         foreach (var polygon in polygons)

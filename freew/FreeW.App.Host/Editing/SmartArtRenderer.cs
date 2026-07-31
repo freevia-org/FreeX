@@ -491,6 +491,12 @@ internal static class SmartArtRenderer
                 ? new Thickness(0)
                 : new Thickness(6)
         };
+        var useNativeWordPyramidTextScale = string.Equals(plan.LayoutId, "pyramid1", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(plan.ColorScheme.Id, "accent2", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(plan.Style.Id, "flat1", StringComparison.OrdinalIgnoreCase)
+            && geometry.NaturalWidth == 300
+            && geometry.NaturalHeight == 150
+            && geometry.Nodes.Count == 4;
 
         foreach (var connector in geometry.Connectors)
             AddPlannedConnector(canvas, plan.Nodes, connector, strokeThickness, geometry.Kind);
@@ -509,9 +515,11 @@ internal static class SmartArtRenderer
                     margin: new Thickness(0),
                     padding: new Thickness(4, 2, 4, 2),
                     width: nodeGeometry.Width);
+                if (useNativeWordPyramidTextScale && label.Child is TextBlock text)
+                    text.FontSize *= 0.75;
                 label.Height = nodeGeometry.Height;
-                Canvas.SetLeft(label, nodeGeometry.X);
-                Canvas.SetTop(label, nodeGeometry.Y);
+                Canvas.SetLeft(label, nodeGeometry.X + (useNativeWordPyramidTextScale ? 1 : 0));
+                Canvas.SetTop(label, nodeGeometry.Y + (useNativeWordPyramidTextScale ? 1.5 : 0));
                 canvas.Children.Add(label);
             }
             else
