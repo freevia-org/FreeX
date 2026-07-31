@@ -191,6 +191,7 @@ public static class ExternalRichTextClipboardPlanner
             public bool ItalicSet;
             public bool Underline;
             public bool Strikethrough;
+            public int? BaselineOffset;
             public bool? RunRightToLeft;
             public int ColorIndex;
             public int UnicodeSkip = 1;
@@ -224,6 +225,7 @@ public static class ExternalRichTextClipboardPlanner
             bool Italic,
             bool Underline,
             bool Strikethrough,
+            int? BaselineOffset,
             bool? RunRightToLeft,
             SrgbColor? Color,
             bool BoldSet,
@@ -636,6 +638,17 @@ public static class ExternalRichTextClipboardPlanner
                 case "strike":
                 case "striked": _state.Strikethrough = value != 0; break;
                 case "strike0": _state.Strikethrough = false; break;
+                case "super": _state.BaselineOffset = RtfBaselineOffset(parameter ?? 6); break;
+                case "sub": _state.BaselineOffset = -RtfBaselineOffset(parameter ?? 6); break;
+                case "up":
+                    if (parameter is { } up)
+                        _state.BaselineOffset = RtfBaselineOffset(up);
+                    break;
+                case "dn":
+                    if (parameter is { } down)
+                        _state.BaselineOffset = -RtfBaselineOffset(down);
+                    break;
+                case "nosupersub": _state.BaselineOffset = null; break;
                 case "rtlch": _state.RunRightToLeft = true; break;
                 case "ltrch": _state.RunRightToLeft = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
@@ -1137,6 +1150,7 @@ public static class ExternalRichTextClipboardPlanner
                 state.Italic,
                 state.Underline,
                 state.Strikethrough,
+                state.BaselineOffset,
                 state.RunRightToLeft,
                 color,
                 state.BoldSet,
@@ -1152,6 +1166,17 @@ public static class ExternalRichTextClipboardPlanner
 
         private static double ToCellInsetPoints(int twips) =>
             Math.Clamp(twips / 20.0, 0.0, 72.0);
+
+        // RTF up/dn values are half-points; the shared run model stores the
+        // equivalent DrawingML-style thousandths of a percent of the font size.
+        private int RtfBaselineOffset(int halfPoints)
+        {
+            double fontSizePt = _state.FontSizePt ?? 12.0;
+            return (int)Math.Clamp(
+                Math.Round(halfPoints * 50_000.0 / fontSizePt),
+                1,
+                100_000);
+        }
 
         private void FlushActiveRun()
         {
@@ -1174,6 +1199,7 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
+                BaselineOffset = _activeStyle.BaselineOffset,
                 RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
@@ -1202,6 +1228,7 @@ public static class ExternalRichTextClipboardPlanner
             && left.Italic == right.Italic
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
+            && left.BaselineOffset == right.BaselineOffset
             && left.RunRightToLeft == right.RunRightToLeft
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
@@ -1219,6 +1246,7 @@ public static class ExternalRichTextClipboardPlanner
             _state.ItalicSet = true;
             _state.Underline = false;
             _state.Strikethrough = false;
+            _state.BaselineOffset = null;
             _state.RunRightToLeft = null;
             _state.ColorIndex = 0;
         }

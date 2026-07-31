@@ -145,6 +145,25 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfSuperscriptAndSubscript_PreserveBaselineControls()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}\f0\fs24 H\super i\sub j\nosupersub k\up12 u\dn6 d}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("H", "i", "j", "k", "u", "d");
+        runs[0].BaselineOffset.Should().BeNull();
+        runs[1].BaselineOffset.Should().Be(25_000);
+        runs[2].BaselineOffset.Should().Be(-25_000);
+        runs[3].BaselineOffset.Should().BeNull();
+        runs[4].BaselineOffset.Should().Be(50_000);
+        runs[5].BaselineOffset.Should().Be(-25_000);
+    }
+
+    [Fact]
     public void RtfPict_PreservesPngPayloadAlongsideText()
     {
         var png = Convert.FromBase64String(
