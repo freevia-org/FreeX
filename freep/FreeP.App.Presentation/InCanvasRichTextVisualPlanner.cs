@@ -107,9 +107,11 @@ public static class InCanvasRichTextVisualPlanner
                             paragraph.AutoNumType,
                             paragraph.AutoNumStartAt,
                             paragraph.AutoNumStartAtSpecified);
-                        bulletText = PresentationListMarkerPlanner.FormatAutoNumber(
+                        bulletText = markerState.FormatTemplate(
+                            paragraph.Level,
                             paragraph.AutoNumType,
-                            value);
+                            value,
+                            paragraph.AutoNumTextTemplate);
                         break;
                     }
                     default:

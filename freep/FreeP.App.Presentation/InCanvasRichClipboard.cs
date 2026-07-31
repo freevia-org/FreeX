@@ -412,6 +412,7 @@ public static class InCanvasRichClipboardPlanner
         AutoNumType = paragraph.AutoNumType,
         AutoNumStartAt = paragraph.AutoNumStartAt,
         AutoNumStartAtSpecified = paragraph.AutoNumStartAtSpecified,
+        AutoNumTextTemplate = paragraph.AutoNumTextTemplate,
         MarginLeftEmu = paragraph.MarginLeftEmu,
         IndentEmu = paragraph.IndentEmu,
         BulletColor = ToDto(paragraph.BulletColor),
@@ -556,6 +557,7 @@ public static class InCanvasRichClipboardPlanner
             AutoNumType = dto.AutoNumType,
             AutoNumStartAt = dto.AutoNumStartAt,
             AutoNumStartAtSpecified = dto.AutoNumStartAtSpecified,
+            AutoNumTextTemplate = dto.AutoNumTextTemplate,
             MarginLeftEmu = dto.MarginLeftEmu,
             IndentEmu = dto.IndentEmu,
             BulletColor = FromDto(dto.BulletColor),
@@ -853,6 +855,7 @@ public static class InCanvasRichClipboardPlanner
         public AutoNumType AutoNumType { get; set; }
         public int AutoNumStartAt { get; set; }
         public bool AutoNumStartAtSpecified { get; set; }
+        public string? AutoNumTextTemplate { get; set; }
         public long? MarginLeftEmu { get; set; }
         public long? IndentEmu { get; set; }
         public ClipboardColorDto? BulletColor { get; set; }

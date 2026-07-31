@@ -530,14 +530,19 @@ public static class PresentationNotesPagePreviewPlanner
 
     private static string BuildAutoNumberText(
         Paragraph paragraph,
-        PresentationListMarkerContinuationState markerState) =>
-        PresentationListMarkerPlanner.FormatAutoNumber(
+        PresentationListMarkerContinuationState markerState)
+    {
+        int value = markerState.Next(
+            paragraph.Level,
             paragraph.AutoNumType,
-            markerState.Next(
-                paragraph.Level,
-                paragraph.AutoNumType,
-                paragraph.AutoNumStartAt,
-                paragraph.AutoNumStartAtSpecified));
+            paragraph.AutoNumStartAt,
+            paragraph.AutoNumStartAtSpecified);
+        return markerState.FormatTemplate(
+            paragraph.Level,
+            paragraph.AutoNumType,
+            value,
+            paragraph.AutoNumTextTemplate);
+    }
 
     private static string BreakAndFormatCharMarker(
         Paragraph paragraph,
