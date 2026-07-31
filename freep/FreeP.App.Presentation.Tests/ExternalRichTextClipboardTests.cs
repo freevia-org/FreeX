@@ -390,6 +390,32 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void WordListOverride_FormattingLevel_PreservesBulletAndIndentGeometry()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid1
+{\listlevel\levelnfc0\levelstartat1\leveltext\'02\'00.;\levelnumbers\'01;}
+}}
+{\listoverridetable
+{\listoverride\listid1\listoverridecount1
+{\lfolevel\listoverrideformat1
+{\listlevel\levelnfc23\levelstartat1\li1440\fi-360\leveltext\'01\u8226?;\levelnumbers;}}
+\ls1}}
+\pard\ls1\ilvl0 Overridden}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var paragraph = payload!.Body.Paragraphs.Single();
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("\u2022");
+        paragraph.MarginLeftEmu.Should().Be(914400);
+        paragraph.IndentEmu.Should().Be(-228600);
+    }
+
+    [Fact]
     public void WordTableControls_FlattenRowsAndCellsLikeWpfProjection_AndPreserveCellFormatting()
     {
         const string rtf =
