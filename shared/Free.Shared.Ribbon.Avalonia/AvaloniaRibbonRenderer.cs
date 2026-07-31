@@ -2254,18 +2254,6 @@ public static class AvaloniaRibbonRenderer
                 case RibbonSeparator:
                     flyout.Items.Add(new Separator());
                     break;
-                case RibbonComboBox combo:
-                {
-                    var item = new MenuItem
-                    {
-                        Header = combo.Label,
-                        IsEnabled = false,
-                        Tag = combo.CommandId.Value,
-                    };
-                    RegisterMenuKeyTip(item, combo.KeyTip);
-                    flyout.Items.Add(item);
-                    break;
-                }
                 case RibbonSplitButton split:
                     AddCollapsedSplitButtonItems(flyout, split, registry, afterExecute);
                     break;

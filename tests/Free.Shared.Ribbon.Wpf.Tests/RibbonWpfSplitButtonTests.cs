@@ -167,6 +167,31 @@ public sealed class RibbonWpfSplitButtonTests
         });
     }
 
+    [Fact]
+    public void CollapsedGroup_ComboBoxProjectionMatchesAvaloniaEnablementAndExecutes()
+    {
+        var executions = new RecordingCommand();
+
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("font", executions);
+            var root = BuildComboRibbon(registry);
+            var group = Descendants(root).OfType<RibbonGroupHost>().Single();
+            Layout(root, 420, 130);
+            group.Collapsed = true;
+
+            var collapsedGrid = Assert.IsType<Grid>(group.Content);
+            var button = collapsedGrid.Children.OfType<Button>().Single();
+            var projection = button.ContextMenu!.Items.OfType<MenuItem>().Single();
+
+            projection.Header.Should().Be("Font");
+            projection.IsEnabled.Should().BeTrue();
+            projection.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, projection));
+            executions.Invocations.Should().Be(1);
+        });
+    }
+
     private static FrameworkElement BuildRibbon(
         IRibbonCommandRegistry registry,
         RibbonMenu? menu = null,
@@ -184,6 +209,17 @@ public sealed class RibbonWpfSplitButtonTests
                             PreferredLayout = layout,
                             KeyTip = "P"
                         })))
+                .Build()
+                .FindTab("home")!,
+            new Border(),
+            registry);
+
+    private static FrameworkElement BuildComboRibbon(IRibbonCommandRegistry registry) =>
+        RibbonWpfRenderer.BuildTabContent(
+            new RibbonDefinitionBuilder()
+                .Tab("home", "Home", "H", tab => tab
+                    .Group("font", "Font", "F", 1, group => group
+                        .ComboBox("font", "Font", combo => combo with { Items = new[] { "Arial" } })))
                 .Build()
                 .FindTab("home")!,
             new Border(),

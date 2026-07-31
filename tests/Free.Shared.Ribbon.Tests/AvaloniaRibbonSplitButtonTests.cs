@@ -157,6 +157,42 @@ public sealed class AvaloniaRibbonSplitButtonTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task CollapsedGroup_ComboBoxProjectionMatchesWpfEnablementAndExecutes()
+    {
+        await Session.Dispatch(() =>
+        {
+            var executions = 0;
+            var registry = new RibbonCommandRegistry();
+            registry.Register("font", new RecordingCommand(() => executions++));
+
+            var content = AvaloniaRibbonRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("font", "Font", "F", 1, group =>
+                        group.ComboBox("font", "Font", combo => combo with { Items = new[] { "Arial" } })))
+                    .Build()
+                    .FindTab("home")!,
+                registry);
+            var window = Show(content, 90);
+            try
+            {
+                var collapsed = content.GetLogicalDescendants().OfType<Button>()
+                    .Single(button => button.Classes.Contains("freex-ribbon-collapsed-group"));
+                var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
+                var projection = Assert.Single(flyout.Items.OfType<MenuItem>());
+
+                Assert.Equal("Font", projection.Header);
+                Assert.True(projection.IsEnabled);
+                projection.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, projection));
+                Assert.Equal(1, executions);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static RibbonTab BuildSplitTab(RibbonCommandLayoutKind layout) =>
         BuildSplitDefinition(layout)
             .FindTab("home")!;
