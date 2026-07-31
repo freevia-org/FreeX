@@ -51,6 +51,14 @@ internal static class XlsxStructuredTableWriter
 
         var tablePartIndex = 1;
 
+        // R107-commands-autofilter-table-color-sync-1: allocate any missing colour-filter dxfs into
+        // xl/styles.xml BEFORE writing any table part below, so the filterColumn writer can reference
+        // the freshly allocated dxfId (mirrors XlsxWorksheetSourceIndependentMetadataBatchWriter's
+        // identical ordering for worksheet-level AutoFilters -- see XlsxAutoFilterColorFilterDxfWriter).
+        IReadOnlyDictionary<(SheetId SheetId, int TableId, int ColumnId), int>? tableColorFilterDxfIds = null;
+        if (XlsxAutoFilterColorFilterDxfWriter.HasUnallocatedStructuredTableColorFilters(workbook))
+            tableColorFilterDxfIds = XlsxAutoFilterColorFilterDxfWriter.SaveForStructuredTables(archive, workbook, workbookNs);
+
         foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
         {
             var name = sheetElement.Attribute("name")?.Value;
@@ -100,7 +108,7 @@ internal static class XlsxStructuredTableWriter
                     claimedTablePaths.Add(tablePath);
                 }
 
-                XlsxPackageXmlEditor.ReplaceXml(archive, tablePath, ToXml(table, tablePath, sheet));
+                XlsxPackageXmlEditor.ReplaceXml(archive, tablePath, ToXml(table, tablePath, sheet, tableColorFilterDxfIds));
                 XlsxPackageXmlEditor.EnsureSpecificContentType(
                     archive,
                     $"/{tablePath}",
@@ -142,7 +150,11 @@ internal static class XlsxStructuredTableWriter
             extLst.AddBeforeSelf(tableParts);
     }
 
-    private static XDocument ToXml(StructuredTableModel table, string tablePath, Sheet sheet)
+    private static XDocument ToXml(
+        StructuredTableModel table,
+        string tablePath,
+        Sheet sheet,
+        IReadOnlyDictionary<(SheetId SheetId, int TableId, int ColumnId), int>? colorFilterDxfIds)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var columns = table.Columns.Count > 0
@@ -173,7 +185,7 @@ internal static class XlsxStructuredTableWriter
         XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(root, table.NativeAttributes);
 
         if (table.HasAutoFilter)
-            root.Add(ToAutoFilterXml(table, workbookNs));
+            root.Add(ToAutoFilterXml(table, workbookNs, sheet.Id, colorFilterDxfIds));
         if (TryCreateNativeSortState(table.NativeSortStateXml, workbookNs) is { } sortState)
             root.Add(sortState);
         root.Add(new XElement(
@@ -301,12 +313,22 @@ internal static class XlsxStructuredTableWriter
         (table.NativeStyleInfoAttributes?.Count > 0) ||
         (table.NativeStyleInfoChildXmls?.Count > 0);
 
-    private static XElement ToAutoFilterXml(StructuredTableModel table, XNamespace workbookNs)
+    private static XElement ToAutoFilterXml(
+        StructuredTableModel table,
+        XNamespace workbookNs,
+        SheetId sheetId,
+        IReadOnlyDictionary<(SheetId SheetId, int TableId, int ColumnId), int>? colorFilterDxfIds)
     {
         var element = AddAutoFilterNativeMetadata(new XElement(
             workbookNs + "autoFilter",
             new XAttribute("ref", GetAutoFilterRange(table).ToString()),
-            table.FilterColumns.Select(filterColumn => ToFilterColumnXml(filterColumn, workbookNs))),
+            table.FilterColumns.Select(filterColumn => ToFilterColumnXml(
+                filterColumn,
+                workbookNs,
+                colorFilterDxfIds is not null &&
+                colorFilterDxfIds.TryGetValue((sheetId, table.Id, filterColumn.ColumnId), out var allocatedDxfId)
+                    ? allocatedDxfId
+                    : null))),
             table,
             workbookNs);
         XlsxWorksheetAutoFilterNormalizer.NormalizeElement(element);
@@ -350,7 +372,10 @@ internal static class XlsxStructuredTableWriter
         return element;
     }
 
-    private static XElement ToFilterColumnXml(StructuredTableFilterColumnModel filterColumn, XNamespace workbookNs)
+    private static XElement ToFilterColumnXml(
+        StructuredTableFilterColumnModel filterColumn,
+        XNamespace workbookNs,
+        int? allocatedColorFilterDxfId)
     {
         var element = new XElement(
             workbookNs + "filterColumn",
@@ -381,10 +406,40 @@ internal static class XlsxStructuredTableWriter
             element.Add(customFilters);
         }
 
+        // R107-commands-autofilter-table-color-sync-1: mirrors XlsxWorksheetAutoFilterXmlMapper's own
+        // hasColorFilter branch -- a command-driven Filter-by-Cell/Font-Colour/No-Fill criterion on a
+        // table column. Excluded from "colorFilter" below in the NativeFilterXmls passthrough loop the
+        // same way "filters"/"customFilters" already are, so a table reloaded with one of these (which
+        // still flows through the passthrough today, since the reader never populates ColorFilter --
+        // see its doc comment) is never at risk of being emitted twice.
+        if (!hasCustomFilters && filterColumn.ColorFilter is { } colorFilter)
+            element.Add(ToColorFilterXml(colorFilter, workbookNs, allocatedColorFilterDxfId));
+
         foreach (var nativeFilterXml in filterColumn.NativeFilterXmls)
         {
-            TryAddNativeTableElement(element, nativeFilterXml, workbookNs, "filters", "customFilters");
+            TryAddNativeTableElement(element, nativeFilterXml, workbookNs, "filters", "customFilters", "colorFilter");
         }
+
+        return element;
+    }
+
+    /// <summary>Mirrors XlsxWorksheetAutoFilterXmlMapper.ToColorFilterXml exactly (same model type, same attribute-omission rules) so a table's &lt;colorFilter&gt; is byte-shape-identical to what the worksheet-level AutoFilter path would emit for the same criterion.</summary>
+    private static XElement ToColorFilterXml(WorksheetAutoFilterColorFilterModel colorFilter, XNamespace workbookNs, int? allocatedDxfId)
+    {
+        var element = new XElement(workbookNs + "colorFilter");
+        if (colorFilter.DifferentialFormatIdRaw is not null)
+            element.SetAttributeValue("dxfId", colorFilter.DifferentialFormatIdRaw);
+        else if (colorFilter.DifferentialFormatId is not null)
+            element.SetAttributeValue("dxfId", colorFilter.DifferentialFormatId.Value.ToString(CultureInfo.InvariantCulture));
+        else if (allocatedDxfId is not null)
+            element.SetAttributeValue("dxfId", allocatedDxfId.Value.ToString(CultureInfo.InvariantCulture));
+
+        if (colorFilter.CellColorRaw is not null)
+            element.SetAttributeValue("cellColor", colorFilter.CellColorRaw);
+        else if (!colorFilter.CellColor)
+            element.SetAttributeValue("cellColor", "0");
+
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, colorFilter.NativeAttributes);
 
         return element;
     }

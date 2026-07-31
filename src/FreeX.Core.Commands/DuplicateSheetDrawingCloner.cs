@@ -76,7 +76,7 @@ internal static class DuplicateSheetDrawingCloner
         }
 
         foreach (var sparkline in source.Sparklines)
-            copy.Sparklines.Add(CloneSparkline(sparkline, copyId));
+            copy.Sparklines.Add(CloneSparkline(sparkline, source.Id, copyId));
 
         foreach (var control in source.FormControls)
             copy.FormControls.Add(CloneFormControl(control, copyId));
@@ -387,10 +387,22 @@ internal static class DuplicateSheetDrawingCloner
             SelectedText = control.SelectedText
         };
 
-    private static SparklineModel CloneSparkline(SparklineModel sparkline, SheetId copyId) =>
+    /// <summary>
+    /// R107-cmd-duplicate-sheet-sparkline-cross-sheet-datarange: only remap DataRange/DateAxisRange
+    /// onto the copy when they actually point at the sheet being duplicated — a cross-sheet
+    /// DataRange (e.g. a Dashboard sparkline sourced from Data!A1:E1) must keep pointing at the
+    /// original source sheet, matching Excel's Duplicate Sheet behavior (only same-sheet references
+    /// travel with the copy). Mirrors CloneChart's identical DataRange guard above. Location is
+    /// always remapped unconditionally: a sparkline's Location is, by definition, always a cell on
+    /// the sheet being duplicated (that's what makes it "this sheet's sparkline"), never a
+    /// cross-sheet reference.
+    /// </summary>
+    private static SparklineModel CloneSparkline(SparklineModel sparkline, SheetId sourceSheetId, SheetId copyId) =>
         new()
         {
-            DataRange = RemapRange(sparkline.DataRange, copyId),
+            DataRange = sparkline.DataRange.Start.Sheet == sourceSheetId
+                ? RemapRange(sparkline.DataRange, copyId)
+                : sparkline.DataRange,
             Location = RemapAddress(sparkline.Location, copyId),
             Kind = sparkline.Kind,
             GroupId = sparkline.GroupId,
@@ -417,7 +429,9 @@ internal static class DuplicateSheetDrawingCloner
             ManualMin = sparkline.ManualMin,
             ManualMax = sparkline.ManualMax,
             DisplayEmptyCellsAs = sparkline.DisplayEmptyCellsAs,
-            DateAxisRange = RemapRange(sparkline.DateAxisRange, copyId)
+            DateAxisRange = sparkline.DateAxisRange is { } dateAxisRange && dateAxisRange.Start.Sheet == sourceSheetId
+                ? RemapRange(dateAxisRange, copyId)
+                : sparkline.DateAxisRange
         };
 
     /// <summary>

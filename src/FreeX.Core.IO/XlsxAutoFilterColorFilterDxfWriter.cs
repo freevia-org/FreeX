@@ -94,6 +94,82 @@ internal static class XlsxAutoFilterColorFilterDxfWriter
         return result;
     }
 
+    /// <summary>
+    /// R107-commands-autofilter-table-color-sync-1: same allocation as <see cref="Save"/>, but for
+    /// structured tables' own <see cref="StructuredTableFilterColumnModel.ColorFilter"/> (a table
+    /// carries its own &lt;autoFilter&gt; inside the table part rather than a worksheet-level one, so
+    /// it needs its own dxf allocation pass -- <see cref="XlsxStructuredTableWriter"/> calls this
+    /// itself, before writing any table part, so the caller need not coordinate ordering). Keyed by
+    /// (sheet, table, column) rather than just (sheet, column) since multiple tables on the same sheet
+    /// each number their own columns from 0, so the same ColumnId can legitimately collide across
+    /// tables.
+    /// </summary>
+    public static bool HasUnallocatedStructuredTableColorFilters(Workbook workbook)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var table in sheet.StructuredTables)
+            {
+                foreach (var column in table.FilterColumns)
+                {
+                    if (NeedsAllocation(column.ColorFilter))
+                        return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>See <see cref="HasUnallocatedStructuredTableColorFilters"/>. Mirrors <see cref="Save"/>'s allocation logic exactly, appending into the SAME workbook-level &lt;dxfs&gt; element.</summary>
+    public static IReadOnlyDictionary<(SheetId SheetId, int TableId, int ColumnId), int> SaveForStructuredTables(
+        ZipArchive archive,
+        Workbook workbook,
+        XNamespace workbookNs)
+    {
+        var pending = new List<(SheetId SheetId, int TableId, int ColumnId, CellStyle Style)>();
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var table in sheet.StructuredTables)
+            {
+                foreach (var column in table.FilterColumns)
+                {
+                    var colorFilter = column.ColorFilter;
+                    if (!NeedsAllocation(colorFilter))
+                        continue;
+
+                    var style = ToDxfStyle(colorFilter!);
+                    pending.Add((sheet.Id, table.Id, column.ColumnId, style));
+                }
+            }
+        }
+
+        if (pending.Count == 0)
+            return new Dictionary<(SheetId, int, int), int>();
+
+        var stylesEntry = archive.GetEntry("xl/styles.xml");
+        var stylesXml = stylesEntry is not null
+            ? XlsxPackageXmlEditor.LoadXml(stylesEntry)
+            : new XDocument(new XElement(workbookNs + "styleSheet"));
+        var root = stylesXml.Root;
+        if (root is null)
+            return new Dictionary<(SheetId, int, int), int>();
+
+        var dxfs = XlsxDifferentialStyleAllocator.GetOrCreateDxfsElement(root, workbookNs);
+        var nextNumFmtId = XlsxDifferentialStyleAllocator.ComputeNextCustomNumFmtId(root, dxfs, workbookNs);
+
+        var result = new Dictionary<(SheetId, int, int), int>();
+        foreach (var (sheetId, tableId, columnId, style) in pending)
+        {
+            var dxfXml = XlsxAdvancedConditionalFormatWriter.ToDifferentialStyleXml(style, workbookNs, nextNumFmtId);
+            var index = XlsxDifferentialStyleAllocator.AllocateOrReuse(dxfs, dxfXml, workbookNs);
+            result[(sheetId, tableId, columnId)] = index;
+        }
+
+        XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
+        return result;
+    }
+
     private static bool NeedsAllocation(WorksheetAutoFilterColorFilterModel? colorFilter) =>
         colorFilter is not null &&
         colorFilter.DifferentialFormatIdRaw is null &&

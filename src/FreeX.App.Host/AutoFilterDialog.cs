@@ -134,7 +134,7 @@ public sealed partial class AutoFilterDialog : Window
             _criteriaValueBox.Visibility = Visibility.Visible;
             _criteriaValueBox.ToolTip = UiText.Get("AutoFilter_ValueForTheSelectedTypedFilter");
             _criteriaConnectorBox.Visibility = Visibility.Visible;
-            _criteriaOperatorBox2.ItemsSource = criteriaOptions;
+            _criteriaOperatorBox2.ItemsSource = GetSecondRowCriteriaOptions(criteriaOptions);
             _criteriaOperatorBox2.Visibility = Visibility.Visible;
             _criteriaOperatorBox2.SelectedIndex = 0;
             _criteriaOperatorBox2.ToolTip = UiText.Format("AutoFilter_SecondFilterFamilyOperatorToolTip", GetFilterFamilyHeader(menuPlan.FilterKind));

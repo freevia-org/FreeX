@@ -233,14 +233,18 @@ public static class PagePaginationPlanner
         var printableHeight = Math.Max(1.0, (pageSize.Height - bodyTopInches - bodyBottomInches) * Dpi);
 
         // PR1: compute average row height from actual per-row sizes across the print range.
+        // R107: exclude hidden rows the same way CountBodyItems/CountRepeatItems already do below,
+        // so the "base" per-page count and the hidden-aware "target" per-page count are derived from
+        // the same (visible-only) population -- see AverageRowHeightPixels's doc comment.
         var effectiveRowHeight = AverageRowHeightPixels(
             printRange.Start.Row, printRange.End.Row,
-            rowHeights, defaultRowHeight);
+            rowHeights, defaultRowHeight, isRowHidden);
 
         // PR1: compute average column width in pixels from actual per-column character widths.
+        // R107: exclude hidden columns for the same reason as the row average above.
         var effectiveColWidth = AverageColumnWidthPixels(
             printRange.Start.Col, printRange.End.Col,
-            columnWidths, defaultColumnWidth);
+            columnWidths, defaultColumnWidth, isColumnHidden);
 
         var baseRowsPerPage = Math.Max(1u, (uint)Math.Floor(printableHeight / effectiveRowHeight));
         var baseColumnsPerPage = Math.Max(1u, (uint)Math.Floor(printableWidth / effectiveColWidth));
@@ -760,24 +764,37 @@ public static class PagePaginationPlanner
     /// Returns the average row height in pixels across the rows [startRow, endRow]. Each row's height
     /// is taken from <paramref name="rowHeights"/> when present; rows absent from the dictionary use
     /// <paramref name="defaultRowHeight"/>. Falls back to <see cref="NominalRowHeight"/> when
-    /// <paramref name="defaultRowHeight"/> is not positive.
+    /// <paramref name="defaultRowHeight"/> is not positive. When <paramref name="isHidden"/> is
+    /// supplied, hidden rows are excluded from both the sum and the divisor -- a hidden row takes no
+    /// print space, so folding its real (possibly very tall/short) recorded height into the average
+    /// would desync this "base" per-page count from the hidden-aware "target" per-page count that
+    /// <see cref="PageGeometryRules.CountBodyItems"/> resolves Fit-to-N-pages against
+    /// (R107-presentation-pagination-fit-to-pages-hidden-average-exclusion). Falls back to the
+    /// all-rows average when every row in range is hidden, to avoid a division by zero.
     /// </summary>
     public static double AverageRowHeightPixels(
         uint startRow,
         uint endRow,
         IReadOnlyDictionary<uint, double> rowHeights,
-        double defaultRowHeight)
+        double defaultRowHeight,
+        Func<uint, bool>? isHidden = null)
     {
         var fallback = defaultRowHeight > 0 ? defaultRowHeight : NominalRowHeight;
         if (endRow < startRow)
             return fallback;
 
         var total = 0.0;
-        var count = endRow - startRow + 1;
+        uint count = 0;
         for (var row = startRow; row <= endRow; row++)
-            total += rowHeights.TryGetValue(row, out var h) && h > 0 ? h : fallback;
+        {
+            if (isHidden?.Invoke(row) == true)
+                continue;
 
-        return total / count;
+            total += rowHeights.TryGetValue(row, out var h) && h > 0 ? h : fallback;
+            count++;
+        }
+
+        return count > 0 ? total / count : fallback;
     }
 
     /// <summary>
@@ -786,12 +803,17 @@ public static class PagePaginationPlanner
     /// from the dictionary use <paramref name="defaultColumnWidth"/>. The character-unit width is
     /// converted to pixels via <see cref="ColumnWidthPixelMapper.ColumnWidthToPixels"/>. Falls back to
     /// <see cref="MinimumPrintColumnWidth"/> when the computed pixel width would be zero or negative.
+    /// When <paramref name="isHidden"/> is supplied, hidden columns are excluded from both the sum and
+    /// the divisor, for the same reason as <see cref="AverageRowHeightPixels"/>
+    /// (R107-presentation-pagination-fit-to-pages-hidden-average-exclusion). Falls back to the
+    /// all-columns average when every column in range is hidden, to avoid a division by zero.
     /// </summary>
     public static double AverageColumnWidthPixels(
         uint startCol,
         uint endCol,
         IReadOnlyDictionary<uint, double> columnWidths,
-        double defaultColumnWidth)
+        double defaultColumnWidth,
+        Func<uint, bool>? isHidden = null)
     {
         var fallbackChars = defaultColumnWidth > 0 ? defaultColumnWidth : ColumnWidthPixelMapper.PixelsToColumnWidth(MinimumPrintColumnWidth);
         var fallbackPx = Math.Max(MinimumPrintColumnWidth, ColumnWidthPixelMapper.ColumnWidthToPixels(fallbackChars));
@@ -799,15 +821,19 @@ public static class PagePaginationPlanner
             return fallbackPx;
 
         var total = 0.0;
-        var count = endCol - startCol + 1;
+        uint count = 0;
         for (var col = startCol; col <= endCol; col++)
         {
+            if (isHidden?.Invoke(col) == true)
+                continue;
+
             var chars = columnWidths.TryGetValue(col, out var w) && w > 0 ? w : fallbackChars;
             var px = ColumnWidthPixelMapper.ColumnWidthToPixels(chars);
             total += Math.Max(MinimumPrintColumnWidth, px);
+            count++;
         }
 
-        return total / count;
+        return count > 0 ? total / count : fallbackPx;
     }
 
     /// <summary>Resolves a single row's real height in pixels, the same way <see cref="AverageRowHeightPixels"/> does per row.</summary>
