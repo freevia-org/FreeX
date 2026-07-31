@@ -1481,11 +1481,7 @@ internal static class FreePRibbonCommands
 
     // ── Inner helpers ─────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Stateful toggle that routes through the editor and updates the ribbon state store.
-    /// The checked state is a local indicator only; in a full implementation the editor would
-    /// expose selection-format query methods that 3C can feed back.
-    /// </summary>
+    /// <summary>Stateful toggle that routes through the editor and updates the ribbon state store.</summary>
     private sealed class EditorToggleCommand : IRibbonStatefulCommand
     {
         private readonly RibbonStateStore _stateStore;
@@ -1521,7 +1517,6 @@ internal static class FreePRibbonCommands
         private readonly EditingSession _editor;
         private readonly PresentationTransitionCommandPlan _plan;
         private readonly RibbonCommandId _id;
-        private bool _checked;
 
         public TransitionToggleCommand(
             RibbonStateStore stateStore,
@@ -1532,6 +1527,9 @@ internal static class FreePRibbonCommands
             _editor = editor;
             _plan = plan;
             _id = plan.CommandId;
+            SyncState();
+            _editor.Changed += SyncState;
+            _editor.CurrentSlideChanged += OnCurrentSlideChanged;
         }
 
         public void Execute(RibbonCommandContext context)
@@ -1541,11 +1539,17 @@ internal static class FreePRibbonCommands
                 return;
             }
 
-            _checked = !_checked;
-            _stateStore.SetChecked(_id, _checked);
+            SyncState();
         }
 
-        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: _checked);
+        public RibbonCommandState GetState() => new(
+            IsEnabled: true,
+            IsChecked: PresentationTransitionCommandPlanner.IsAdvanceOnClickChecked(
+                _editor.CurrentSlideTransition));
+
+        private void OnCurrentSlideChanged(object? sender, EventArgs e) => SyncState();
+
+        private void SyncState() => _stateStore.SetChecked(_id, GetState().IsChecked);
     }
 
     private sealed class AnimationPaneToggleCommand : IRibbonStatefulCommand

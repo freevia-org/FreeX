@@ -455,6 +455,39 @@ public sealed class AvaloniaRibbonHostCallbackTests
         Assert.IsType<EmptyRibbonCommand>(command);
     }
 
+    [Theory]
+    [InlineData("pageLayout.width", "2 pages")]
+    [InlineData("pageLayout.height", "3 pages")]
+    [InlineData("pageLayout.scale", "85%")]
+    public void PageLayoutScaleCombos_PassSelectedValueToValueAwareCallbacks(
+        string commandId,
+        string selectedValue)
+    {
+        var openedPageSetup = false;
+        string? applied = null;
+        var registry = AvaloniaRibbonComposition.BuildRegistry(
+            () => null,
+            _ => { },
+            new AvaloniaRibbonHostCallbacks
+            {
+                ExtraCommands = new Dictionary<string, Action>
+                {
+                    [commandId] = () => openedPageSetup = true,
+                },
+                SetPageLayoutScaleWidth = commandId == "pageLayout.width" ? value => applied = value : null,
+                SetPageLayoutScaleHeight = commandId == "pageLayout.height" ? value => applied = value : null,
+                SetPageLayoutScalePercent = commandId == "pageLayout.scale" ? value => applied = value : null,
+            });
+
+        Assert.True(registry.TryGet(Canonical(commandId), out var command));
+        Assert.IsType<ValueRibbonCommand>(command);
+
+        command!.Execute(RibbonCommandContext.ForSelectedValue(selectedValue));
+
+        Assert.Equal(selectedValue, applied);
+        Assert.False(openedPageSetup);
+    }
+
     [Fact]
     public void DrawCommands_DefaultToWindowsStaticDrawEnablement()
     {
