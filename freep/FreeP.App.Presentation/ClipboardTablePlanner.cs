@@ -85,8 +85,18 @@ public static class ClipboardTablePlanner
         TableCell cell,
         InCanvasRichClipboardTableCellStyle style)
     {
-        if (style.FillRgb is { } fillRgb)
+        if (style.FillPattern is { Length: > 0 } pattern)
+        {
+            var foreground = new ThemeAwareColor(SrgbColor.FromRgb(
+                style.FillForegroundRgb ?? style.FillRgb ?? 0));
+            var background = new ThemeAwareColor(SrgbColor.FromRgb(
+                style.FillBackgroundRgb ?? style.FillRgb ?? 0xFFFFFF));
+            cell.Fill = new ShapeFill.Pattern(pattern, foreground, background);
+        }
+        else if (style.FillRgb is { } fillRgb)
+        {
             cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fillRgb));
+        }
         cell.Anchor = style.Anchor;
         cell.InsetLeftPt = style.InsetLeftPt;
         cell.InsetRightPt = style.InsetRightPt;
