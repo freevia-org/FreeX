@@ -442,6 +442,33 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void WordListTable_PreservesMultiLevelLevelTextTemplateAndRichClipboardRoundTrip()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid9
+{\listlevel\levelnfc0\levelstartat1\leveltext\'02\'00.;\levelnumbers\'01;}
+{\listlevel\levelnfc0\levelstartat1\leveltext\'04\'00.\'01.;\levelnumbers\'01\'02;}
+}}
+{\listoverridetable{\listoverride\listid9\ls9}}
+\pard\ls9\ilvl0 Root\par
+\pard\ls9\ilvl1 Child}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs[0].AutoNumTextTemplate.Should().Be("%1.");
+        payload.Body.Paragraphs[1].AutoNumTextTemplate.Should().Be("%1.%2.");
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.Select(paragraph => paragraph.AutoNumTextTemplate)
+            .Should().Equal("%1.", "%1.%2.");
+    }
+
+    [Fact]
     public void WordListOverride_StartAtRestart_IsAppliedOnlyToItsFirstParagraph()
     {
         const string rtf =

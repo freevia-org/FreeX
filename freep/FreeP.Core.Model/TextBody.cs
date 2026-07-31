@@ -416,6 +416,14 @@ public sealed class Paragraph
     public bool AutoNumStartAtSpecified { get; set; }
 
     /// <summary>
+    /// Optional renderer-neutral level-text template retained from external rich text.
+    /// Substitutions use <c>%1</c> through <c>%9</c> for the corresponding list levels;
+    /// literal punctuation and text are preserved. When null, the standard
+    /// <see cref="AutoNumType"/> formatter is authoritative.
+    /// </summary>
+    public string? AutoNumTextTemplate { get; set; }
+
+    /// <summary>
     /// Left margin (indent from shape inset) in EMU from <c>a:pPr marL=</c>.
     /// Null means inherit from layout/master/style.
     /// Positive = bullet + text indented from the left edge.

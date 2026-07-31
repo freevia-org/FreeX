@@ -204,6 +204,7 @@ internal static class PresentationModelCloneHelper
             AutoNumType = source.AutoNumType,
             AutoNumStartAt = source.AutoNumStartAt,
             AutoNumStartAtSpecified = source.AutoNumStartAtSpecified,
+            AutoNumTextTemplate = source.AutoNumTextTemplate,
             MarginLeftEmu = source.MarginLeftEmu,
             IndentEmu = source.IndentEmu,
             BulletColor = source.BulletColor,

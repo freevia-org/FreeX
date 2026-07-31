@@ -158,6 +158,33 @@ public sealed class InCanvasRichTextVisualPlannerTests
     }
 
     [Fact]
+    public void Create_ExpandsMultiLevelExternalLevelTextTemplates()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            AutoNumStartAtSpecified = true,
+            AutoNumTextTemplate = "%1.",
+            Runs = { new Run { Text = "Root" } },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            Level = 1,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            AutoNumTextTemplate = "%1.%2.",
+            Runs = { new Run { Text = "Child" } },
+        });
+
+        var plan = InCanvasRichTextVisualPlanner.Create(body);
+
+        plan.Paragraphs.Select(paragraph => paragraph.BulletText)
+            .Should().Equal("1.", "1.1.");
+    }
+
+    [Fact]
     public void Create_HonorsWpfAuthorityParagraphSpacingWithoutIntroducingIndent()
     {
         var body = new TextBody();

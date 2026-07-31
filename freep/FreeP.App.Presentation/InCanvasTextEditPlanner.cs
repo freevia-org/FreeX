@@ -539,6 +539,7 @@ public sealed class InCanvasTextEditPlanner
         && a.AutoNumType == b.AutoNumType
         && a.AutoNumStartAt == b.AutoNumStartAt
         && a.AutoNumStartAtSpecified == b.AutoNumStartAtSpecified
+        && string.Equals(a.AutoNumTextTemplate, b.AutoNumTextTemplate, StringComparison.Ordinal)
         && a.MarginLeftEmu == b.MarginLeftEmu
         && a.IndentEmu == b.IndentEmu
         && TextBodyModelCloner.ColorsEqual(a.BulletColor, b.BulletColor)
@@ -1042,6 +1043,7 @@ internal static class TextBodyModelCloner
             AutoNumType = source.AutoNumType,
             AutoNumStartAt = source.AutoNumStartAt,
             AutoNumStartAtSpecified = source.AutoNumStartAtSpecified,
+            AutoNumTextTemplate = source.AutoNumTextTemplate,
             MarginLeftEmu = source.MarginLeftEmu,
             IndentEmu = source.IndentEmu,
             BulletColor = source.BulletColor,
