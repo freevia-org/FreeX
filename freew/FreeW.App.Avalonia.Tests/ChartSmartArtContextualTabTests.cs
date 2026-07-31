@@ -157,25 +157,57 @@ public sealed class ChartSmartArtContextualTabTests
     }
 
     [Fact]
-    public async Task Chart_size_dialog_command_routes_selected_chart_to_owner_modal_callback()
+    public async Task Chart_size_primary_and_dialog_alias_route_selected_chart_to_owner_modal_callback()
     {
         var ran = await OnUi(() =>
         {
             var (doc, blockIndex, runIndex) = DocWithFloatingChart();
+            var chart = ((Paragraph)doc.Blocks[blockIndex]).Runs[runIndex].Chart!;
             var view = new DocumentView();
             view.LoadDocument(doc);
             view.Measure(new Size(800, 2000));
             view.SelectFloating(blockIndex, runIndex);
-            var dialogOpened = false;
+            var dialogOpenCount = 0;
             var registry = FreeWAvaloniaRibbonCommands.Build(
                 view,
-                NoopCallbacks() with { OpenChartSizeDialog = () => dialogOpened = true });
+                NoopCallbacks() with { OpenChartSizeDialog = () => dialogOpenCount++ });
 
-            registry.TryGet(new RibbonCommandId("freew.chart-size-dialog"), out var command)
+            registry.TryGet(new RibbonCommandId("freew.chart-size"), out var primary)
                 .Should().BeTrue();
-            command!.Execute(RibbonCommandContext.Empty);
+            registry.TryGet(new RibbonCommandId("freew.chart-size-dialog"), out var dialogAlias)
+                .Should().BeTrue();
+            dialogAlias.Should().BeSameAs(primary);
 
-            dialogOpened.Should().BeTrue();
+            primary!.Execute(RibbonCommandContext.Empty);
+            dialogAlias!.Execute(RibbonCommandContext.Empty);
+
+            dialogOpenCount.Should().Be(2);
+            chart.WidthPt.Should().Be(360, "a cancelled dialog callback must not mutate the chart");
+            chart.HeightPt.Should().Be(216);
+        });
+
+        ran.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Chart_size_primary_is_disabled_without_a_selected_chart()
+    {
+        var ran = await OnUi(() =>
+        {
+            var view = new DocumentView();
+            view.LoadDocument(new TextDocument());
+            var dialogOpenCount = 0;
+            var registry = FreeWAvaloniaRibbonCommands.Build(
+                view,
+                NoopCallbacks() with { OpenChartSizeDialog = () => dialogOpenCount++ });
+
+            registry.TryGet(new RibbonCommandId("freew.chart-size"), out var command)
+                .Should().BeTrue();
+            command.Should().BeAssignableTo<IRibbonStatefulCommand>();
+            ((IRibbonStatefulCommand)command!).GetState().IsEnabled.Should().BeFalse();
+
+            command!.Execute(RibbonCommandContext.Empty);
+            dialogOpenCount.Should().Be(0);
         });
 
         ran.Should().BeTrue();
@@ -643,6 +675,7 @@ public sealed class ChartSmartArtContextualTabTests
     public async Task ChartSize_command_resizes_selected_chart_and_reverts_on_undo()
     {
         double? widthAfter = null, heightAfter = null, widthUndone = null, heightUndone = null;
+        var dialogOpenCount = 0;
         var ran = await OnUi(() =>
         {
             var (doc, bi, ri) = DocWithFloatingChart();
@@ -652,7 +685,9 @@ public sealed class ChartSmartArtContextualTabTests
             view.Measure(new Size(800, 2000));
             view.SelectFloating(bi, ri);
 
-            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            var registry = FreeWAvaloniaRibbonCommands.Build(
+                view,
+                NoopCallbacks() with { OpenChartSizeDialog = () => dialogOpenCount++ });
             registry.TryGet(new RibbonCommandId("freew.chart-size"), out var cmd);
             cmd!.Execute(RibbonCommandContext.ForSelectedValue("400 x 300"));
             widthAfter = chart.WidthPt;
@@ -667,6 +702,7 @@ public sealed class ChartSmartArtContextualTabTests
         heightAfter.Should().Be(300);
         widthUndone.Should().Be(360);
         heightUndone.Should().Be(216);
+        dialogOpenCount.Should().Be(0, "value-bearing combo execution must not open the dialog");
     }
 
     [Fact]

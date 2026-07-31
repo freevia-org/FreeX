@@ -114,6 +114,8 @@ public sealed class ResolvedTabStop
     public double PositionDip { get; init; }
     /// <summary>Tab alignment.</summary>
     public TabStopAlignment Alignment { get; init; }
+    /// <summary>Leader pattern authored by the source rich-text format.</summary>
+    public TabStopLeader Leader { get; init; }
 }
 
 /// <summary>

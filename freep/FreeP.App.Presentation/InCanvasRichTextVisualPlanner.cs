@@ -148,6 +148,7 @@ public static class InCanvasRichTextVisualPlanner
                 {
                     PositionDip = tabStop.PositionEmu / EmuPerDip,
                     Alignment = tabStop.Alignment,
+                    Leader = tabStop.Leader,
                 })
                 .ToArray();
 

@@ -7,6 +7,7 @@ using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -84,6 +85,52 @@ public sealed class HeaderFooterContextualTabTests
 
         foreach (var id in expected)
             registry.TryGet(new RibbonCommandId(id), out _).Should().BeTrue($"{id} should be backed in Avalonia");
+    }
+
+    [Fact]
+    public void Header_footer_options_and_distances_report_current_model_state()
+    {
+        var initial = new TextDocument();
+        initial.Page.DifferentFirstPage = true;
+        initial.Page.DifferentOddEvenPages = false;
+        initial.Page.HeaderDistancePt = 22.5;
+        initial.Page.FooterDistancePt = 31;
+        var view = new DocumentView();
+        view.LoadDocument(initial);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        State(registry, "freew.hf-different-first-page").IsChecked.Should().BeTrue();
+        State(registry, "freew.hf-different-odd-even").IsChecked.Should().BeFalse();
+        State(registry, "freew.hf-header-from-top").Value.Should()
+            .Be(HeaderFooterDialogPlanner.FormatDistance(22.5));
+        State(registry, "freew.hf-footer-from-bottom").Value.Should()
+            .Be(HeaderFooterDialogPlanner.FormatDistance(31));
+
+        Execute(registry, "freew.hf-different-first-page");
+        Execute(registry, "freew.hf-different-odd-even");
+        Execute(registry, "freew.hf-header-from-top", RibbonCommandContext.ForSelectedValue("27.25"));
+        Execute(registry, "freew.hf-footer-from-bottom", RibbonCommandContext.ForSelectedValue("44"));
+
+        State(registry, "freew.hf-different-first-page").IsChecked.Should().BeFalse();
+        State(registry, "freew.hf-different-odd-even").IsChecked.Should().BeTrue();
+        State(registry, "freew.hf-header-from-top").Value.Should()
+            .Be(HeaderFooterDialogPlanner.FormatDistance(27.25));
+        State(registry, "freew.hf-footer-from-bottom").Value.Should()
+            .Be(HeaderFooterDialogPlanner.FormatDistance(44));
+
+        var replacement = new TextDocument();
+        replacement.Page.DifferentFirstPage = true;
+        replacement.Page.DifferentOddEvenPages = true;
+        replacement.Page.HeaderDistancePt = 18;
+        replacement.Page.FooterDistancePt = 24;
+        view.LoadDocument(replacement);
+
+        State(registry, "freew.hf-different-first-page").IsChecked.Should().BeTrue();
+        State(registry, "freew.hf-different-odd-even").IsChecked.Should().BeTrue();
+        State(registry, "freew.hf-header-from-top").Value.Should()
+            .Be(HeaderFooterDialogPlanner.FormatDistance(18));
+        State(registry, "freew.hf-footer-from-bottom").Value.Should()
+            .Be(HeaderFooterDialogPlanner.FormatDistance(24));
     }
 
     [Fact]
@@ -208,5 +255,12 @@ public sealed class HeaderFooterContextualTabTests
     {
         registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
         command!.Execute(context);
+    }
+
+    private static RibbonCommandState State(RibbonCommandRegistry registry, string id)
+    {
+        registry.TryGet(new RibbonCommandId(id), out var command).Should().BeTrue();
+        command.Should().BeAssignableTo<IRibbonStatefulCommand>();
+        return ((IRibbonStatefulCommand)command!).GetState();
     }
 }

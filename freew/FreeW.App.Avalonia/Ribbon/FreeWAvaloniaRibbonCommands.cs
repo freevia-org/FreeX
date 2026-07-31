@@ -719,11 +719,17 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.hf-go-to-footer", new ActionRibbonCommand(() => editor.EditHeaderFooterSlot("footer")));
         r.Register("freew.hf-close", new ActionRibbonCommand(editor.CloseHeaderFooterEditing));
 
-        r.Register("freew.hf-different-first-page", new ActionRibbonCommand(editor.ToggleDifferentFirstPage));
-        r.Register("freew.hf-different-odd-even", new ActionRibbonCommand(editor.ToggleDifferentOddEvenPages));
+        r.Register("freew.hf-different-first-page", new PageSettingCommand(
+            editor,
+            page => page.DifferentFirstPage = !page.DifferentFirstPage,
+            page => page.DifferentFirstPage));
+        r.Register("freew.hf-different-odd-even", new PageSettingCommand(
+            editor,
+            page => page.DifferentOddEvenPages = !page.DifferentOddEvenPages,
+            page => page.DifferentOddEvenPages));
 
-        r.Register("freew.hf-header-from-top", new ValueRibbonCommand(value => SetHeaderFooterDistance(value, editor.SetHeaderDistance)));
-        r.Register("freew.hf-footer-from-bottom", new ValueRibbonCommand(value => SetHeaderFooterDistance(value, editor.SetFooterDistance)));
+        r.Register("freew.hf-header-from-top", new HeaderFooterDistanceCommand(editor, footer: false));
+        r.Register("freew.hf-footer-from-bottom", new HeaderFooterDistanceCommand(editor, footer: true));
 
         r.Register("freew.hf-insert-page-number", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: false)));
         r.Register("freew.hf-insert-page-number-footer", new ActionRibbonCommand(() => editor.InsertHeaderFooterPageNumber(footer: true)));
@@ -762,10 +768,30 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.cc-combo", new ActionRibbonCommand(() => editor.InsertComboBoxControl()));
     }
 
-    private static void SetHeaderFooterDistance(string? value, Action<double> apply)
+    private sealed class HeaderFooterDistanceCommand(DocumentView editor, bool footer) : IRibbonStatefulCommand
     {
-        if (double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var points))
-            apply(points);
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled
+                || !HeaderFooterDialogPlanner.TryParseDistance(context.SelectedValue, out var points))
+            {
+                return;
+            }
+
+            if (footer)
+                editor.SetFooterDistance(points);
+            else
+                editor.SetHeaderDistance(points);
+        }
+
+        public RibbonCommandState GetState()
+        {
+            var page = editor.Document.Page;
+            var points = footer ? page.FooterDistancePt : page.HeaderDistancePt;
+            return new(
+                IsEnabled: !editor.IsEditingLocked,
+                Value: HeaderFooterDialogPlanner.FormatDistance(points));
+        }
     }
 
     private static void ExecutePageNumberFormat(
@@ -2264,12 +2290,9 @@ internal static class FreeWAvaloniaRibbonCommands
                      && editor.SelectedFloatingChart() is not null)
                 callbacks.OpenChartEditDataDialog?.Invoke();
         }));
-        r.Register("freew.chart-size", new ValueRibbonCommand(value =>
-        {
-            if (TryParseChartSize(value, out var widthPt, out var heightPt))
-                editor.SetSelectedChartSize(widthPt, heightPt);
-        }));
-        r.Register("freew.chart-size-dialog", new SelectedFloatingDialogCommand(editor, "Chart", callbacks.OpenChartSizeDialog));
+        var chartSize = new ChartSizeCommand(editor, callbacks.OpenChartSizeDialog);
+        r.Register("freew.chart-size", chartSize);
+        r.Register("freew.chart-size-dialog", chartSize);
 
         // ── SmartArt Design ───────────────────────────────────────────────────
         // Layouts — the four Word families. Cycle maps to the model's Process kind (closest flat sequence).
@@ -2422,6 +2445,23 @@ internal static class FreeWAvaloniaRibbonCommands
             && double.TryParse(parts[1], CultureInfo.InvariantCulture, out heightPt)
             && widthPt > 0
             && heightPt > 0;
+    }
+
+    private sealed class ChartSizeCommand(DocumentView editor, Action? openDialog) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled)
+                return;
+
+            if (TryParseChartSize(context.SelectedValue, out var widthPt, out var heightPt))
+                editor.SetSelectedChartSize(widthPt, heightPt);
+            else if (string.IsNullOrWhiteSpace(context.SelectedValue))
+                openDialog?.Invoke();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingChart() is not null);
     }
 
     /// <summary>

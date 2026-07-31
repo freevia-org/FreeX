@@ -774,6 +774,29 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanTabStops_CarriesLeaderOnTheSegmentFollowingItsTab()
+    {
+        var paragraph = Paragraph("Contents\tPage 1");
+        var plan = TextLayoutPlanner.PlanTabStops(
+            paragraph,
+            startX: 0,
+            new[]
+            {
+                new ResolvedTabStop
+                {
+                    PositionDip = 100,
+                    Alignment = TabStopAlignment.Right,
+                    Leader = TabStopLeader.Dots,
+                },
+            },
+            MeasureTenDipPerCharacter);
+
+        plan.Segments.Should().Equal(
+            new TextTabSegmentPlacement(0, "Contents", 0),
+            new TextTabSegmentPlacement(0, "Page 1", 80, TabStopLeader.Dots));
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_DelegateTextLayoutMathToSharedPlanner()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");

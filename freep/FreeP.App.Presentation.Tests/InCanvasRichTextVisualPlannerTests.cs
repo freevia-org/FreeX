@@ -214,17 +214,22 @@ public sealed class InCanvasRichTextVisualPlannerTests
             TabStops =
             {
                 new TabStop { PositionEmu = 914400, Alignment = TabStopAlignment.Right },
-                new TabStop { PositionEmu = 1828800, Alignment = TabStopAlignment.Decimal },
+                new TabStop
+                {
+                    PositionEmu = 1828800,
+                    Alignment = TabStopAlignment.Decimal,
+                    Leader = TabStopLeader.Dots,
+                },
             },
         });
 
         var paragraph = InCanvasRichTextVisualPlanner.Create(body).Paragraphs.Single();
 
         paragraph.TabStops.Should().NotBeNull();
-        paragraph.TabStops!.Select(stop => (stop.PositionDip, stop.Alignment))
+        paragraph.TabStops!.Select(stop => (stop.PositionDip, stop.Alignment, stop.Leader))
             .Should().Equal(
-                (96d, TabStopAlignment.Right),
-                (192d, TabStopAlignment.Decimal));
+                (96d, TabStopAlignment.Right, TabStopLeader.None),
+                (192d, TabStopAlignment.Decimal, TabStopLeader.Dots));
     }
 
     private static Paragraph Numbered(

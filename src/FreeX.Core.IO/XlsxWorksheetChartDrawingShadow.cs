@@ -17,13 +17,16 @@ namespace FreeX.Core.IO;
 // chart anchors into the final drawing part, and deletes the shadow -- so the sheet ends up with a
 // single drawing part holding both the chart and the drawing-object anchors instead of losing one.
 //
-// Residual gap (needs changes outside this file set to close): a sheet with no prior source drawing
-// part -- including every sheet of a brand-new, never-saved workbook -- never reaches the "reused own
-// source drawing path" branch, so no shadow is written; the two writers there still allocate/point at
-// different drawing{N}.xml parts and the drawing-object writer's worksheet-drawing-reference rewrite
-// still silently orphans the chart writer's part. Closing that requires either writer to become aware
-// of the other's allocation within the same save pass, which lives in
-// XlsxWorksheetDrawingObjectWriter.cs / XlsxFileAdapter.SavePostProcessing.cs.
+// The other half of the same problem -- a sheet with NO prior source drawing part (every sheet of a
+// brand-new, never-saved workbook; a freshly added or duplicated sheet) -- cannot use this route at
+// all: no shadow is written there, and XlsxWorksheetDrawingPartMerger only runs when the workbook has
+// a source package with drawings. That case is closed the direct way instead, by making the two
+// writers aware of each other's allocation within the save pass: XlsxWorksheetChartWriter.Save reports
+// each freshly allocated drawing path (freshlyAllocatedDrawingPathsBySheet), and
+// XlsxWorksheetDrawingObjectWriter.Save writes that sheet's objects INTO that same part, carrying the
+// chart anchors and relationships already in it forward -- see its chartDrawingPathsBySheet parameter
+// and the wiring in XlsxFileAdapter.SavePostProcessing.cs. Before that, a sheet holding both a chart
+// and any picture/shape/text box lost every chart on save.
 internal static class XlsxWorksheetChartDrawingShadow
 {
     private const string ShadowMarker = ".freexChartShadow";
