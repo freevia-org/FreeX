@@ -104,6 +104,31 @@ public sealed class PictureDrawingContextualTabTests
         return (doc, 0, 1);
     }
 
+    private static (TextDocument Doc, int BlockIdx, int RunIdx) DocWithFloatingWordArt()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Body text.", RunFormatting.Default));
+        paragraph.Runs.Add(new Run(string.Empty, RunFormatting.Default)
+        {
+            WordArt = new WordArt
+            {
+                Text = "Heading",
+                AltText = "Original WordArt",
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Square,
+                    HorizontalOffsetPt = 24,
+                    VerticalOffsetPt = 18,
+                    ZOrderIndex = 1,
+                },
+            },
+        });
+        doc.Blocks.Add(paragraph);
+        return (doc, 0, 1);
+    }
+
     private static TextDocument DocWithFloatingImageAndShape()
     {
         var doc = TextDocument.CreateEmpty();
@@ -862,6 +887,113 @@ public sealed class PictureDrawingContextualTabTests
         shape.ExtendedFill!.Kind.Should().Be(ShapeFillKind.NoFill);
         shape.OutlineColorHex.Should().Be("#4472C4");
     }
+
+    [Fact]
+    public Task ShapeFormatPrimaryDialogs_seed_apply_and_undo_model_changes() =>
+        Session.Dispatch(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingShape();
+            var shape = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            var callbacks = NoopCallbacks() with
+            {
+                OpenShapePositionDialog = () =>
+                {
+                    var selected = view.SelectedFloatingShape();
+                    selected.Should().BeSameAs(shape);
+                    selected!.Placement!.HorizontalOffsetPt.Should().Be(36);
+                    view.SetFloatingPosition(18, 27, HorizontalAnchor.Page, VerticalAnchor.Margin);
+                },
+                OpenShapeSizeDialog = () =>
+                {
+                    view.GetSelectedFloatingSize().Should().Be((120.0, 80.0));
+                    view.SetFloatingSize(180, 90);
+                },
+                OpenShapeAltTextDialog = () =>
+                {
+                    view.SelectedFloatingShape().Should().BeSameAs(shape);
+                    view.SetSelectedFloatingAltText("Accessible shape");
+                },
+            };
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+            ExecuteCommand(registry, "freew.shape-position");
+            shape.Placement!.HorizontalOffsetPt.Should().Be(18);
+            shape.Placement.VerticalOffsetPt.Should().Be(27);
+            view.Undo();
+            shape.Placement.HorizontalOffsetPt.Should().Be(36);
+            shape.Placement.VerticalOffsetPt.Should().Be(36);
+
+            ExecuteCommand(registry, "freew.shape-size");
+            (shape.WidthPt, shape.HeightPt).Should().Be((180.0, 90.0));
+            view.Undo();
+            (shape.WidthPt, shape.HeightPt).Should().Be((120.0, 80.0));
+
+            ExecuteCommand(registry, "freew.shape-alt-text");
+            shape.AltText.Should().Be("Accessible shape");
+            view.Undo();
+            shape.AltText.Should().BeNull();
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task ShapeFormatPrimaryDialogs_cancel_without_mutating_seeded_shape() =>
+        Session.Dispatch(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingShape();
+            var shape = ((Paragraph)doc.Blocks[bi]).Runs[ri].Shape!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            var invoked = new List<string>();
+            var callbacks = NoopCallbacks() with
+            {
+                OpenShapePositionDialog = () => invoked.Add("position"),
+                OpenShapeSizeDialog = () => invoked.Add("size"),
+                OpenShapeAltTextDialog = () => invoked.Add("alt"),
+            };
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+            ExecuteCommand(registry, "freew.shape-position");
+            ExecuteCommand(registry, "freew.shape-size");
+            ExecuteCommand(registry, "freew.shape-alt-text");
+
+            invoked.Should().Equal("position", "size", "alt");
+            shape.Placement!.HorizontalOffsetPt.Should().Be(36);
+            shape.Placement.VerticalOffsetPt.Should().Be(36);
+            (shape.WidthPt, shape.HeightPt).Should().Be((120.0, 80.0));
+            shape.AltText.Should().BeNull();
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task ShapeAltTextPrimaryDialog_targets_selected_wordart_and_undoes() =>
+        Session.Dispatch(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingWordArt();
+            var wordArt = ((Paragraph)doc.Blocks[bi]).Runs[ri].WordArt!;
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            var callbacks = NoopCallbacks() with
+            {
+                OpenShapeAltTextDialog = () =>
+                {
+                    view.SelectedFloatingWordArt().Should().BeSameAs(wordArt);
+                    view.SetSelectedFloatingAltText("Accessible WordArt");
+                },
+            };
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, callbacks);
+
+            ExecuteCommand(registry, "freew.shape-alt-text");
+
+            wordArt.AltText.Should().Be("Accessible WordArt");
+            view.Undo();
+            wordArt.AltText.Should().Be("Original WordArt");
+        }, CancellationToken.None);
 
     [Fact]
     public async Task ObjectFormatDropdownOpeners_do_not_mutate_on_empty_context()

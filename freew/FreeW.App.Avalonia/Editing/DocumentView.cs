@@ -9712,6 +9712,16 @@ public sealed class DocumentView : Control
         return SelectedFloatingShapeLocation()?.Shape;
     }
 
+    /// <summary>The currently selected floating WordArt, or null for another selection kind.</summary>
+    public WordArt? SelectedFloatingWordArt()
+    {
+        if (_selectedFloating is not { Kind: "WordArt" } selected)
+            return null;
+        return TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            ? run.WordArt
+            : null;
+    }
+
     /// <summary>True while keyboard input is editing the first text run of a selected text box.</summary>
     public bool IsShapeTextEditing => _shapeCaret is not null;
 
