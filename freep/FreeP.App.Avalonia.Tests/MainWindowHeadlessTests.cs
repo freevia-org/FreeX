@@ -5620,6 +5620,8 @@ public sealed class MainWindowHeadlessTests
             renderedRows = window.SmartArtTextPaneRenderedRows;
             window.SmartArtTextPaneActionButtonCount.Should().Be(8);
             window.SmartArtTextPaneEnabledActionButtonCount.Should().Be(8);
+            window.SmartArtTextPaneCommandActionCount.Should().Be(5);
+            window.SmartArtTextPaneCommandActionsWrap.Should().BeTrue();
             window.SetSmartArtTextPaneRowText(0, "Discover");
             apply = window.ApplySmartArtTextPane();
             dirtyAfterApply = window.IsDirty;

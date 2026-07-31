@@ -285,6 +285,7 @@ public sealed partial class MainWindow : Window
     private readonly List<Button> _smartArtTextPaneActionButtons = new();
     private Button _smartArtTextPaneApplyButton = null!;
     private Button _smartArtTextPaneCloseButton = null!;
+    private WrapPanel _smartArtTextPaneCommandActions = null!;
     private bool _smartArtTextPaneRefreshing;
     private string? _selectedSmartArtTextPaneModelId;
     private Border _animationPaneHost = null!;
@@ -551,6 +552,10 @@ public sealed partial class MainWindow : Window
     internal int SmartArtTextPaneActionButtonCount => _smartArtTextPaneActionButtons.Count;
     internal int SmartArtTextPaneEnabledActionButtonCount =>
         _smartArtTextPaneActionButtons.Count(button => button.IsEnabled);
+    internal int SmartArtTextPaneCommandActionCount =>
+        _smartArtTextPaneCommandActions?.Children.OfType<Button>().Count() ?? 0;
+    internal bool SmartArtTextPaneCommandActionsWrap =>
+        _smartArtTextPaneCommandActions is not null;
     internal string SmartArtTextPaneMessage => _smartArtTextPaneMessage?.Text ?? string.Empty;
     internal IReadOnlyList<string> SmartArtTextPaneRenderedRows =>
         _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>()
@@ -1778,21 +1783,21 @@ public sealed partial class MainWindow : Window
             "Add an assistant below the selected hierarchy row.",
             SmartArtNodeEditKind.AddAssistant);
 
-        var buttons = new StackPanel
+        // Keep the fixed-width pane usable at the same 320px width as WPF: the
+        // command row must wrap instead of measuring wider than its host and
+        // leaving the left-side actions unreachable.
+        _smartArtTextPaneCommandActions = new WrapPanel
         {
             Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(12, 8, 12, 12),
-            Children =
-            {
-                _smartArtTextPaneAssistantButton,
-                _smartArtTextPanePictureButton,
-                _smartArtTextPaneClearPictureButton,
-                _smartArtTextPaneApplyButton,
-                _smartArtTextPaneCloseButton,
-            }
         };
-        DockPanel.SetDock(buttons, Dock.Bottom);
+        _smartArtTextPaneCommandActions.Children.Add(_smartArtTextPaneAssistantButton);
+        _smartArtTextPaneCommandActions.Children.Add(_smartArtTextPanePictureButton);
+        _smartArtTextPaneCommandActions.Children.Add(_smartArtTextPaneClearPictureButton);
+        _smartArtTextPaneCommandActions.Children.Add(_smartArtTextPaneApplyButton);
+        _smartArtTextPaneCommandActions.Children.Add(_smartArtTextPaneCloseButton);
+        DockPanel.SetDock(_smartArtTextPaneCommandActions, Dock.Bottom);
 
         DockPanel.SetDock(_smartArtTextPaneOutlineActions, Dock.Bottom);
 
@@ -1820,7 +1825,7 @@ public sealed partial class MainWindow : Window
                 {
                     header,
                     _smartArtTextPaneOutlineActions,
-                    buttons,
+                    _smartArtTextPaneCommandActions,
                     new ScrollViewer
                     {
                         VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
