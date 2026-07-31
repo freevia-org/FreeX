@@ -613,6 +613,33 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task XamlPackage_list_preserves_numbering_style()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage("""
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                      <List MarkerStyle="UpperLatin" StartIndex="4">
+                        <ListItem><Paragraph>Four</Paragraph></ListItem>
+                        <ListItem><Paragraph>Five</Paragraph></ListItem>
+                      </List>
+                    </FlowDocument>
+                    """)),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
+        body.Paragraphs.Should().HaveCount(2);
+        body.Paragraphs[0].BulletKind.Should().Be(BulletKind.Auto);
+        body.Paragraphs[0].AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
+        body.Paragraphs[0].AutoNumStartAt.Should().Be(4);
+        body.Paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task External_Rtf_table_preserves_solid_cell_style()
     {
         var clipboard = new FakeSystemClipboard

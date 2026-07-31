@@ -129,8 +129,85 @@ public static class ExternalXamlClipboardPlanner
         var paragraph = new Paragraph();
         var style = ReadStyle(element, default);
         ApplyParagraphProperties(element, paragraph);
+        ApplyListProperties(element, paragraph);
         ReadInlineNodes(element, paragraph, style, ref outputCharacters);
         body.Paragraphs.Add(paragraph);
+    }
+
+    private static void ApplyListProperties(XElement paragraphElement, Paragraph paragraph)
+    {
+        var listItem = paragraphElement.Ancestors()
+            .FirstOrDefault(element => element.Name.LocalName == "ListItem");
+        var list = listItem?.Ancestors()
+            .FirstOrDefault(element => element.Name.LocalName == "List");
+        if (listItem is null || list is null
+            || listItem.Descendants().FirstOrDefault(element => element.Name.LocalName == "Paragraph")
+                != paragraphElement)
+        {
+            return;
+        }
+
+        paragraph.Level = Math.Clamp(
+            paragraphElement.Ancestors().Count(element => element.Name.LocalName == "List") - 1,
+            0,
+            8);
+
+        switch (AttributeValue(list, "MarkerStyle")?.Trim().ToLowerInvariant())
+        {
+            case "decimal":
+                paragraph.BulletKind = BulletKind.Auto;
+                paragraph.AutoNumType = AutoNumType.ArabicPeriod;
+                break;
+            case "lowerlatin":
+            case "loweralpha":
+                paragraph.BulletKind = BulletKind.Auto;
+                paragraph.AutoNumType = AutoNumType.AlphaLcPeriod;
+                break;
+            case "upperlatin":
+            case "upperalpha":
+                paragraph.BulletKind = BulletKind.Auto;
+                paragraph.AutoNumType = AutoNumType.AlphaUcPeriod;
+                break;
+            case "lowerroman":
+                paragraph.BulletKind = BulletKind.Auto;
+                paragraph.AutoNumType = AutoNumType.RomanLcPeriod;
+                break;
+            case "upperroman":
+                paragraph.BulletKind = BulletKind.Auto;
+                paragraph.AutoNumType = AutoNumType.RomanUcPeriod;
+                break;
+            case "none":
+                paragraph.BulletKind = BulletKind.None;
+                paragraph.BulletSuppressed = true;
+                return;
+            case "circle":
+                paragraph.BulletKind = BulletKind.Char;
+                paragraph.BulletChar = "\u25E6";
+                break;
+            case "square":
+            case "box":
+                paragraph.BulletKind = BulletKind.Char;
+                paragraph.BulletChar = "\u25AA";
+                break;
+            case "disc":
+            case null:
+            case "":
+                paragraph.BulletKind = BulletKind.Char;
+                paragraph.BulletChar = "\u2022";
+                break;
+            default:
+                return;
+        }
+
+        var firstListItem = list.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "ListItem");
+        if (paragraph.BulletKind == BulletKind.Auto
+            && ReferenceEquals(firstListItem, listItem)
+            && TryReadInt(AttributeValue(list, "StartIndex"), out var startIndex))
+        {
+            paragraph.AutoNumStartAt = Math.Clamp(startIndex, 1, 999_999);
+            paragraph.AutoNumStartAtSpecified = true;
+        }
     }
 
     private static void ReadTable(
@@ -421,6 +498,9 @@ public static class ExternalXamlClipboardPlanner
 
     private static bool TryReadDouble(XElement element, string name, out double value) =>
         TryParseDip(AttributeValue(element, name), out value);
+
+    private static bool TryReadInt(string? value, out int result) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
 
     private static bool TryParseDip(string? value, out double result) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
