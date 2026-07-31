@@ -68,6 +68,20 @@ public static class AutoFilterRangeResolver
     public static GridRange? TryGetEffectiveAutoFilterRange(Sheet sheet) =>
         TryGetEffectiveAutoFilterRange(sheet, out var range) ? range : null;
 
+    /// <summary>
+    /// R104-app-presentation-autofilter-totalsrow-1: public choke point exposing
+    /// <see cref="StructuredTableEditEffects.GetFilterableLastRow"/> (internal to this assembly) to
+    /// UI-facing dropdown planners in FreeX.App.Presentation. When <paramref name="range"/> is exactly
+    /// a structured table's <c>Range</c> (the shape <see cref="TryGetEffectiveAutoFilterRange(Sheet, out GridRange)"/>
+    /// hands back for a table's header-cell filter dropdown) and that table's Totals Row is shown,
+    /// <c>range.End.Row</c> IS the Totals Row itself -- so the checklist/kind-detection/color-list
+    /// builders that enumerate the filterable data set must stop one row short of it, exactly like the
+    /// interactive filter-apply commands (FilterCommand, TopBottomFilterCommand, AverageFilterCommand,
+    /// FilterConditionCommand) already do via this same bound.
+    /// </summary>
+    public static uint GetFilterableLastRow(Sheet sheet, GridRange range) =>
+        StructuredTableEditEffects.GetFilterableLastRow(sheet, range);
+
     private static bool TryParseRange(string reference, SheetId sheetId, out GridRange range)
     {
         try

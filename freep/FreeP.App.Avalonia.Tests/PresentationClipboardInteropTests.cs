@@ -627,10 +627,12 @@ public sealed class PresentationClipboardInteropTests
                           <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
                           <FontFamily x:Key="BodyFont">Aptos</FontFamily>
                           <sys:Double x:Key="BodySize">18</sys:Double>
-                          <Style x:Key="ListText">
+                          <Style x:Key="ListBase">
                             <Setter Property="Foreground" Value="{StaticResource Accent}" />
                             <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
                             <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                          </Style>
+                          <Style x:Key="ListText" BasedOn="{StaticResource ListBase}">
                             <Setter Property="FontWeight" Value="Bold" />
                           </Style>
                         </ResourceDictionary>
@@ -656,6 +658,69 @@ public sealed class PresentationClipboardInteropTests
         body.Paragraphs[0].Runs.Single().FontSizePt.Should().Be(13.5);
         body.Paragraphs[0].Runs.Single().Bold.Should().BeTrue();
         body.Paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task XamlPackage_preserves_baseline_alignment()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage("""
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                      <Paragraph>
+                        <Run Text="base" />
+                        <Run BaselineAlignment="Superscript" Text="up" />
+                        <Run BaselineAlignment="Subscript" Text="down" />
+                      </Paragraph>
+                    </FlowDocument>
+                    """)),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single().Runs
+            .Select(run => run.BaselineOffset)
+            .Should().Equal(null, 10_000, -10_000);
+    }
+
+    [Fact]
+    public async Task XamlPackage_preserves_flow_direction()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" FlowDirection=\"RightToLeft\"><Paragraph><Run Text=\"אבג\"/><Run FlowDirection=\"LeftToRight\" Text=\"LTR\"/></Paragraph></FlowDocument>")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        var paragraph = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single();
+        paragraph.RightToLeft.Should().BeTrue();
+        paragraph.Runs.Select(run => run.RightToLeft).Should().Equal(true, false);
+    }
+
+    [Fact]
+    public async Task XamlPackage_preserves_text_alignment()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" TextAlignment=\"Center\"><Paragraph>centered</Paragraph><Paragraph TextAlignment=\"Right\">right</Paragraph></FlowDocument>")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Select(paragraph => paragraph.Align)
+            .Should().Equal(TextAlign.Center, TextAlign.Right);
     }
 
     [Fact]

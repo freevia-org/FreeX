@@ -81,10 +81,12 @@ public sealed class WpfRichTextClipboardAdapterTests
                           <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
                           <FontFamily x:Key="BodyFont">Aptos</FontFamily>
                           <sys:Double x:Key="BodySize">18</sys:Double>
-                          <Style x:Key="ListText">
+                          <Style x:Key="ListBase">
                             <Setter Property="Foreground" Value="{StaticResource Accent}" />
                             <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
                             <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                          </Style>
+                          <Style x:Key="ListText" BasedOn="{StaticResource ListBase}">
                             <Setter Property="FontWeight" Value="Bold" />
                           </Style>
                         </ResourceDictionary>
@@ -187,6 +189,70 @@ public sealed class WpfRichTextClipboardAdapterTests
         runs[1].BaselineOffset.Should().Be(25_000);
         runs[2].BaselineOffset.Should().Be(-25_000);
         runs[3].BaselineOffset.Should().BeNull();
+    }
+
+    [StaFact]
+    public void TryPasteDataObject_PreservesXamlBaselineAlignment()
+    {
+        const string xaml =
+            "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Run Text=\"base\"/><Run BaselineAlignment=\"Superscript\" Text=\"up\"/><Run BaselineAlignment=\"Subscript\" Text=\"down\"/></Paragraph></FlowDocument>";
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(
+            DataFormats.XamlPackage,
+            new MemoryStream(CreateXamlPackage(xaml)),
+            autoConvert: false);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        updated!.Paragraphs.Single().Runs.Select(run => run.BaselineOffset)
+            .Should().Equal(null, 10_000, -10_000);
+    }
+
+    [StaFact]
+    public void TryPasteDataObject_PreservesXamlFlowDirection()
+    {
+        const string xaml =
+            "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" FlowDirection=\"RightToLeft\"><Paragraph><Run Text=\"אבג\"/><Run FlowDirection=\"LeftToRight\" Text=\"LTR\"/></Paragraph></FlowDocument>";
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(
+            DataFormats.XamlPackage,
+            new MemoryStream(CreateXamlPackage(xaml)),
+            autoConvert: false);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        updated!.Paragraphs.Single().RightToLeft.Should().BeTrue();
+        updated.Paragraphs.Single().Runs.Select(run => run.RightToLeft)
+            .Should().Equal(true, false);
+    }
+
+    [StaFact]
+    public void TryPasteDataObject_PreservesXamlTextAlignment()
+    {
+        const string xaml =
+            "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" TextAlignment=\"Center\"><Paragraph>centered</Paragraph><Paragraph TextAlignment=\"Right\">right</Paragraph></FlowDocument>";
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(
+            DataFormats.XamlPackage,
+            new MemoryStream(CreateXamlPackage(xaml)),
+            autoConvert: false);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        updated!.Paragraphs.Select(paragraph => paragraph.Align)
+            .Should().Equal(TextAlign.Center, TextAlign.Right);
     }
 
     [StaFact]

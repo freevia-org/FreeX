@@ -19,6 +19,10 @@ public static class ExternalXamlClipboardPlanner
     public const int MaxXmlBytes = 8 * 1024 * 1024;
     public const int MaxOutputCharacters = 1_000_000;
     public const int MaxTableCellsPerRow = 4096;
+    // Keep XamlPackage script runs on the same compact offset used by the
+    // shared editor commands. The source format only exposes the semantic
+    // alignment, not a numeric DrawingML percentage.
+    private const int XamlScriptBaselineOffset = 10_000;
     private const long EmuPerDip = 9525;
 
     public static InCanvasRichClipboardPayload? TryParseXamlPackage(byte[]? bytes)
@@ -143,10 +147,12 @@ public static class ExternalXamlClipboardPlanner
         ref int outputCharacters)
     {
         var paragraph = new Paragraph();
-        var style = ReadStyle(element, default, resources);
-        ApplyParagraphProperties(element, paragraph);
+        var inherited = ReadInheritedStyle(element, resources);
+        var style = ReadStyle(element, inherited, resources);
+        ApplyParagraphProperties(element, paragraph, style);
+        paragraph.RightToLeft = style.RightToLeft;
         ApplyListProperties(element, paragraph);
-        ReadInlineNodes(element, paragraph, style, resources, ref outputCharacters);
+        ReadInlineNodes(element, paragraph, inherited, resources, ref outputCharacters);
         body.Paragraphs.Add(paragraph);
     }
 
@@ -272,10 +278,11 @@ public static class ExternalXamlClipboardPlanner
                         AddRun("\n", paragraph, default, ref outputCharacters);
 
                     var cellParagraph = cellParagraphs[paragraphIndex];
+                    var inherited = ReadInheritedStyle(cellParagraph, resources);
                     ReadInlineNodes(
                         cellParagraph,
                         paragraph,
-                        ReadStyle(cellParagraph, default, resources),
+                        inherited,
                         resources,
                         ref outputCharacters);
                 }
@@ -331,7 +338,12 @@ public static class ExternalXamlClipboardPlanner
         {
             if (node is XText text)
             {
-                AddText(text.Value, paragraph, style, ref outputCharacters);
+                AddText(
+                    text.Value,
+                    paragraph,
+                    style,
+                    ref outputCharacters,
+                    preserveWhitespace: ShouldPreserveWhitespace(element));
                 continue;
             }
 
@@ -365,7 +377,12 @@ public static class ExternalXamlClipboardPlanner
         if (element.Name.LocalName == "Run"
             && element.Attribute("Text") is { } textAttribute)
         {
-            AddText(textAttribute.Value, paragraph, style, ref outputCharacters);
+            AddText(
+                textAttribute.Value,
+                paragraph,
+                style,
+                ref outputCharacters,
+                preserveWhitespace: true);
         }
 
         if (element.Name.LocalName == "LineBreak")
@@ -377,19 +394,43 @@ public static class ExternalXamlClipboardPlanner
         foreach (var node in element.Nodes())
         {
             if (node is XText text)
-                AddText(text.Value, paragraph, style, ref outputCharacters);
+                AddText(
+                    text.Value,
+                    paragraph,
+                    style,
+                    ref outputCharacters,
+                    preserveWhitespace: ShouldPreserveWhitespace(element));
             else if (node is XElement child && child.Name.LocalName != "Paragraph")
                 ReadInlineElement(child, paragraph, style, resources, ref outputCharacters);
         }
+    }
+
+    private static bool ShouldPreserveWhitespace(XElement element)
+    {
+        if (element.AncestorsAndSelf().Any(ancestor =>
+                string.Equals(
+                    (string?)ancestor.Attribute(XNamespace.Xml + "space"),
+                    "preserve",
+                    StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        // Pretty-printed Paragraph/FlowDocument whitespace is structural indentation.
+        // Inline leaf content, however, can legitimately contain authored spaces.
+        return !element.Elements().Any()
+            && element.Name.LocalName is "Run" or "Span" or "Bold" or "Italic" or "Underline" or "Hyperlink";
     }
 
     private static void AddText(
         string text,
         Paragraph paragraph,
         XamlTextStyle style,
-        ref int outputCharacters)
+        ref int outputCharacters,
+        bool preserveWhitespace = false)
     {
-        if (string.IsNullOrEmpty(text) || string.IsNullOrWhiteSpace(text))
+        if (string.IsNullOrEmpty(text)
+            || (!preserveWhitespace && string.IsNullOrWhiteSpace(text)))
             return;
 
         AddRun(text, paragraph, style, ref outputCharacters);
@@ -416,6 +457,8 @@ public static class ExternalXamlClipboardPlanner
             ItalicSet = style.ItalicSet,
             Underline = style.Underline,
             Strikethrough = style.Strikethrough,
+            BaselineOffset = style.BaselineOffset,
+            RightToLeft = style.RightToLeft,
             Color = style.Color,
             Hyperlink = style.Hyperlink,
         });
@@ -431,8 +474,11 @@ public static class ExternalXamlClipboardPlanner
         if (TryReadResourceKey(styleReference, out var styleKey)
             && resources.Styles.TryGetValue(styleKey, out var resourceStyle))
         {
-            foreach (var setter in resourceStyle.Setters)
-                style = ApplyStyleSetter(style, setter.Key, setter.Value, resources);
+            style = ApplyStyleResource(
+                style,
+                styleKey,
+                resources,
+                new HashSet<string>(StringComparer.Ordinal));
         }
 
         var family = ResolveTextResource(
@@ -473,6 +519,15 @@ public static class ExternalXamlClipboardPlanner
                 Strikethrough = decorations.Contains("Strikethrough", StringComparison.OrdinalIgnoreCase),
             };
 
+        if (TryReadBaselineOffset(AttributeValue(element, "BaselineAlignment"), out var baselineOffset))
+            style = style with { BaselineOffset = baselineOffset };
+
+        if (TryReadFlowDirection(AttributeValue(element, "FlowDirection"), out var rightToLeft))
+            style = style with { RightToLeft = rightToLeft };
+
+        if (TryReadTextAlignment(AttributeValue(element, "TextAlignment"), out var alignment))
+            style = style with { ParagraphAlignment = alignment };
+
         var localName = element.Name.LocalName;
         if (localName.Equals("Bold", StringComparison.OrdinalIgnoreCase))
             style = style with { Bold = true, BoldSet = true };
@@ -500,6 +555,26 @@ public static class ExternalXamlClipboardPlanner
                 : null;
             style = style with { Hyperlink = hyperlink };
         }
+
+        return style;
+    }
+
+    private static XamlTextStyle ApplyStyleResource(
+        XamlTextStyle style,
+        string key,
+        XamlResourceCatalog resources,
+        HashSet<string> visited)
+    {
+        if (!visited.Add(key) || !resources.Styles.TryGetValue(key, out var resourceStyle))
+            return style;
+
+        if (TryReadResourceKey(resourceStyle.BasedOn, out var basedOnKey))
+        {
+            style = ApplyStyleResource(style, basedOnKey, resources, visited);
+        }
+
+        foreach (var setter in resourceStyle.Setters)
+            style = ApplyStyleSetter(style, setter.Key, setter.Value, resources);
 
         return style;
     }
@@ -546,6 +621,21 @@ public static class ExternalXamlClipboardPlanner
                     Underline = decorations.Contains("Underline", StringComparison.OrdinalIgnoreCase),
                     Strikethrough = decorations.Contains("Strikethrough", StringComparison.OrdinalIgnoreCase),
                 };
+
+            case "baselinealignment":
+                return TryReadBaselineOffset(value, out var baselineOffset)
+                    ? style with { BaselineOffset = baselineOffset }
+                    : style;
+
+            case "flowdirection":
+                return TryReadFlowDirection(value, out var rightToLeft)
+                    ? style with { RightToLeft = rightToLeft }
+                    : style;
+
+            case "textalignment":
+                return TryReadTextAlignment(value, out var alignment)
+                    ? style with { ParagraphAlignment = alignment }
+                    : style;
 
             case "foreground":
                 var foreground = ResolveColorResource(value, resources.Colors);
@@ -600,7 +690,9 @@ public static class ExternalXamlClipboardPlanner
                         setter => setter.Property!,
                         setter => setter.Value,
                         StringComparer.OrdinalIgnoreCase);
-                styles[key] = new XamlStyleResource(setters);
+                styles[key] = new XamlStyleResource(
+                    AttributeValue(resource, "BasedOn"),
+                    setters);
             }
         }
 
@@ -682,17 +774,12 @@ public static class ExternalXamlClipboardPlanner
             : value;
     }
 
-    private static void ApplyParagraphProperties(XElement element, Paragraph paragraph)
+    private static void ApplyParagraphProperties(
+        XElement element,
+        Paragraph paragraph,
+        XamlTextStyle style)
     {
-        var alignment = AttributeValue(element, "TextAlignment");
-        paragraph.Align = alignment?.ToLowerInvariant() switch
-        {
-            "center" => TextAlign.Center,
-            "right" => TextAlign.Right,
-            "justify" => TextAlign.Justify,
-            _ when string.Equals(alignment, "left", StringComparison.OrdinalIgnoreCase) => TextAlign.Left,
-            _ => null,
-        };
+        paragraph.Align = style.ParagraphAlignment;
 
         var margin = AttributeValue(element, "Margin")?.Split(',', StringSplitOptions.TrimEntries);
         if (margin is { Length: 4 })
@@ -719,6 +806,86 @@ public static class ExternalXamlClipboardPlanner
     private static bool TryParseDip(string? value, out double result) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
         && double.IsFinite(result);
+
+    private static bool TryReadBaselineOffset(string? value, out int? baselineOffset)
+    {
+        baselineOffset = null;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "superscript":
+                baselineOffset = XamlScriptBaselineOffset;
+                return true;
+            case "subscript":
+                baselineOffset = -XamlScriptBaselineOffset;
+                return true;
+            case "baseline":
+            case "normal":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryReadFlowDirection(string? value, out bool rightToLeft)
+    {
+        rightToLeft = false;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "righttoleft":
+            case "rtl":
+                rightToLeft = true;
+                return true;
+            case "lefttoright":
+            case "ltr":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryReadTextAlignment(string? value, out TextAlign alignment)
+    {
+        alignment = TextAlign.Left;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "left":
+                alignment = TextAlign.Left;
+                return true;
+            case "center":
+                alignment = TextAlign.Center;
+                return true;
+            case "right":
+                alignment = TextAlign.Right;
+                return true;
+            case "justify":
+                alignment = TextAlign.Justify;
+                return true;
+            case "distributed":
+                alignment = TextAlign.Distributed;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static XamlTextStyle ReadInheritedStyle(
+        XElement element,
+        XamlResourceCatalog resources)
+    {
+        var style = default(XamlTextStyle);
+        foreach (var ancestor in element.Ancestors().Reverse())
+            style = ReadStyle(ancestor, style, resources);
+        return style;
+    }
 
     private static long? ReadImageExtentEmu(XElement element, string attributeName)
     {
@@ -869,9 +1036,13 @@ public static class ExternalXamlClipboardPlanner
         bool BoldSet,
         bool ItalicSet,
         ThemeAwareColor? Color,
-        Hyperlink? Hyperlink);
+        Hyperlink? Hyperlink,
+        int? BaselineOffset = null,
+        bool? RightToLeft = null,
+        TextAlign? ParagraphAlignment = null);
 
     private sealed record XamlStyleResource(
+        string? BasedOn,
         IReadOnlyDictionary<string, string?> Setters);
 
     private sealed record XamlResourceCatalog(

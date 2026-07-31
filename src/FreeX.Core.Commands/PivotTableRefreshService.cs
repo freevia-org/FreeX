@@ -61,9 +61,21 @@ public static partial class PivotTableRefreshService
         var cache = CommandGuards.FindPivotCache(workbook, pivotTable);
         if (cache is { SourceType: PivotCacheSourceType.Table } && !string.IsNullOrWhiteSpace(cache.SourceTableName))
         {
-            var liveTable = FindStructuredTableByName(workbook, cache.SourceTableName);
+            // R104: once this cache has a stable SourceTableId, that id — not the current name
+            // string — is what identifies "the same table". A name-only lookup here would silently
+            // re-bind the pivot to a completely unrelated table that later happens to reuse a freed
+            // name (e.g. after the original table was "Converted to Range" and a different table was
+            // renamed onto the now-free name). Resolve by id when we have one; only fall back to the
+            // name-based lookup while no id has been established yet (a cache just loaded from a file,
+            // whose OOXML/JSON source carries only the name) — and lock in the id the first time that
+            // succeeds, exactly like SlicerModel.SourceTableId is established for table slicers.
+            var liveTable = cache.SourceTableId is { } sourceTableId
+                ? FindStructuredTableById(workbook, sourceTableId)
+                : FindStructuredTableByName(workbook, cache.SourceTableName);
             if (liveTable is not null)
             {
+                cache.SourceTableId ??= liveTable.Id;
+                cache.SourceTableName = liveTable.Name;
                 sourceSheet = workbook.GetSheet(liveTable.Range.Start.Sheet) ?? sourceSheet;
                 pivotTable.SourceRange = liveTable.Range;
                 cache.SourceReference = liveTable.Range.ToString();
@@ -348,6 +360,24 @@ public static partial class PivotTableRefreshService
             {
                 return table;
             }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// R104: resolves a table-backed pivot cache's live source by its stable
+    /// <see cref="StructuredTableModel.Id"/>, never by name. Deliberately has no name-based fallback:
+    /// once a cache has an id, a table elsewhere in the workbook that merely shares its old name is NOT
+    /// the same table, and must not be treated as one (see <see cref="PivotCacheModel.SourceTableId"/>).
+    /// </summary>
+    private static StructuredTableModel? FindStructuredTableById(Workbook workbook, int tableId)
+    {
+        foreach (var sheet in workbook.Sheets)
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (table.Id == tableId)
+                return table;
         }
 
         return null;

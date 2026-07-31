@@ -12,7 +12,7 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
     private StructuredTableModel? _previousTable;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
     private readonly Dictionary<string, string> _namedFormulaSnapshot = [];
-    private readonly List<PivotCacheModel> _renamedPivotCaches = [];
+    private readonly List<(PivotCacheModel Cache, int? PreviousSourceTableId)> _renamedPivotCaches = [];
     // R100: workbook-wide CF/DV/chart formula rewrites, so a manual table rename (Table
     // Design > Table Name, and the Name Manager) fixes every conditional-format rule,
     // data-validation rule, and chart series/error-bar formula in the ENTIRE workbook that
@@ -125,15 +125,29 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         // live table purely by cache.SourceTableName — if that stays pointed at the old name after a
         // rename, the lookup fails forever and the pivot silently stops tracking the table's extent.
         // Repoint every pivot cache that was sourced from this table so the name stays in sync.
+        //
+        // R104: once a cache has established a stable SourceTableId (see PivotTableRefreshService),
+        // that id — not the old name string — is the only reliable way to tell "this cache was sourced
+        // from THIS table". Matching by name alone here would wrongly repoint an unrelated, already-
+        // orphaned cache that merely happens to share this table's old name (e.g. left dangling by a
+        // prior "Convert to Range" on some other, unrelated table). Only fall back to a name match for
+        // a cache that has no id yet (nothing has refreshed it since it was loaded), and establish the
+        // id at the same time so this table's identity is pinned down going forward.
         _renamedPivotCaches.Clear();
         foreach (var cache in ctx.Workbook.PivotCaches)
         {
-            if (cache.SourceType == PivotCacheSourceType.Table &&
-                string.Equals(cache.SourceTableName, _previousTable.Name, StringComparison.OrdinalIgnoreCase))
-            {
-                cache.SourceTableName = normalizedName;
-                _renamedPivotCaches.Add(cache);
-            }
+            if (cache.SourceType != PivotCacheSourceType.Table)
+                continue;
+
+            var matchesById = cache.SourceTableId == _previousTable.Id;
+            var matchesByUnestablishedName = cache.SourceTableId is null &&
+                string.Equals(cache.SourceTableName, _previousTable.Name, StringComparison.OrdinalIgnoreCase);
+            if (!matchesById && !matchesByUnestablishedName)
+                continue;
+
+            _renamedPivotCaches.Add((cache, cache.SourceTableId));
+            cache.SourceTableName = normalizedName;
+            cache.SourceTableId = _previousTable.Id;
         }
 
         var affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
@@ -177,8 +191,11 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         _chartVerbatimSnapshot = null;
 
-        foreach (var cache in _renamedPivotCaches)
+        foreach (var (cache, previousSourceTableId) in _renamedPivotCaches)
+        {
             cache.SourceTableName = _previousTable.Name;
+            cache.SourceTableId = previousSourceTableId;
+        }
         _renamedPivotCaches.Clear();
 
         if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))

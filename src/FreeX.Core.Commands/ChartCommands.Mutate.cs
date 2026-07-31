@@ -221,6 +221,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     private List<ChartSeriesRawXmlEntry>? _previousAdditionalSeriesTrendlinesXml;
     private List<int>? _previousSeriesPlotOrder;
     private List<ChartLegendEntryModel>? _previousLegendEntries;
+    private List<ChartSeriesNameOverride>? _previousSeriesNameOverrides;
     private bool _clearedMappingsForSourceChange;
 
     public string Label => "Select Chart Data";
@@ -284,7 +285,12 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             // cells" range data labels, secondary-axis/combo-line/combo-scatter series-index
             // lists, the scalar trendline/error-bar series indexes, and per-series/per-point
             // formatting (fill/line/marker colors, data-label formats, and the verbatim
-            // extra-errBars/trendline XML passthroughs) -- all keyed by SeriesIndex too.
+            // extra-errBars/trendline XML passthroughs) -- all keyed by SeriesIndex too. The same
+            // applies to per-series custom "Series name" cell-reference overrides captured from a
+            // <c:tx> formula (R103-io-chart-series-tx-1): the writer's ResolveSeriesTitleXml always
+            // prefers a SeriesNameOverrides entry for the current SeriesIndex over the recomputed
+            // header title, so a stale entry would silently attach the wrong custom name to
+            // whichever series now sits at that index.
             _previousSeriesColumnMappings = chart.SeriesColumnMappings;
             _previousVerbatimSeriesFormulas = chart.VerbatimSeriesFormulas;
             _previousSeriesOrderOverrides = chart.SeriesOrderOverrides;
@@ -308,6 +314,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             _previousAdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml;
             _previousSeriesPlotOrder = chart.SeriesPlotOrder;
             _previousLegendEntries = chart.LegendEntries;
+            _previousSeriesNameOverrides = chart.SeriesNameOverrides;
             _clearedMappingsForSourceChange = true;
             chart.SeriesColumnMappings = [];
             chart.VerbatimSeriesFormulas = null;
@@ -332,6 +339,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.AdditionalSeriesTrendlinesXml = [];
             chart.SeriesPlotOrder = [];
             chart.LegendEntries = [];
+            chart.SeriesNameOverrides = [];
         }
 
         chart.DataRange = _dataRange;
@@ -378,6 +386,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
             chart.AdditionalSeriesTrendlinesXml = _previousAdditionalSeriesTrendlinesXml ?? [];
             chart.SeriesPlotOrder = _previousSeriesPlotOrder ?? [];
             chart.LegendEntries = _previousLegendEntries ?? [];
+            chart.SeriesNameOverrides = _previousSeriesNameOverrides ?? [];
         }
 
         _previousDataRange = null;
@@ -407,6 +416,7 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
         _previousAdditionalSeriesTrendlinesXml = null;
         _previousSeriesPlotOrder = null;
         _previousLegendEntries = null;
+        _previousSeriesNameOverrides = null;
         _clearedMappingsForSourceChange = false;
     }
 }

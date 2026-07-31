@@ -631,7 +631,18 @@ internal static class XlsxNamedRangeMapper
             if (IsExcelReservedDefinedName(name) || workbook.ValidateNamedRangeName(name) is not null)
                 continue;
 
-            yield return new DefinedNameEntry(name, null, FormatDefinedNameFormulaForXml(formulaText), false, null);
+            // A name can land here as a formula-backed "#REF!" left behind by deleting a sheet
+            // its range referred to (Workbook.RemoveNamedRangesForSheet) rather than being
+            // authored as a formula from the start. Excel keeps that name's Hidden flag and
+            // Comment across the conversion, so fall back to the same metadata lookup used for
+            // NamedRanges above instead of hard-coding hidden:false/comment:null.
+            var hasMetadata = workbook.TryGetNamedRangeMetadata(name, out var metadata);
+            yield return new DefinedNameEntry(
+                name,
+                null,
+                FormatDefinedNameFormulaForXml(formulaText),
+                hasMetadata && metadata.Hidden,
+                hasMetadata ? metadata.Comment : null);
         }
 
         foreach (var (key, formulaText) in workbook.ScopedNamedFormulas)
@@ -641,7 +652,15 @@ internal static class XlsxNamedRangeMapper
                 !TryGetLocalSheetId(workbook, key.Sheet, out var localSheetId))
                 continue;
 
-            yield return new DefinedNameEntry(key.Name, localSheetId, FormatDefinedNameFormulaForXml(formulaText), false, null);
+            // Same fallback as the workbook-global NamedFormulas branch above, for a
+            // sheet-scoped name converted to "#REF!" by a cross-sheet delete.
+            var hasMetadata = workbook.TryGetScopedNamedRangeMetadata(key.Name, key.Sheet, out var metadata);
+            yield return new DefinedNameEntry(
+                key.Name,
+                localSheetId,
+                FormatDefinedNameFormulaForXml(formulaText),
+                hasMetadata && metadata.Hidden,
+                hasMetadata ? metadata.Comment : null);
         }
 
         // R49-io-defined-name-scope-3-2: emit/keep-in-sync the built-in _xlnm._FilterDatabase

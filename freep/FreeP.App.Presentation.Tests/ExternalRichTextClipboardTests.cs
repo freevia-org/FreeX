@@ -41,6 +41,116 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesAuthoredInlineWhitespace_AndIgnoresIndentation()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph>
+                <Run Text="left" />
+                <Run Text=" " />
+                <Bold xml:space="preserve"> right </Bold>
+              </Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("left  right ");
+        payload.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("left", " ", " right ");
+        payload.Body.Paragraphs.Single().Runs[2].Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesBaselineAlignmentAndStyleInheritance()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="ScriptText">
+                    <Setter Property="BaselineAlignment" Value="Superscript" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph>
+                <Run Text="base" />
+                <Run BaselineAlignment="Superscript" Text="up" />
+                <Span BaselineAlignment="Subscript">down</Span>
+                <Run BaselineAlignment="Baseline" Text="normal" />
+              </Paragraph>
+              <Paragraph Style="{StaticResource ScriptText}">styled up</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs[0].Runs.Select(run => run.BaselineOffset)
+            .Should().Equal(null, 10_000, -10_000, null);
+        paragraphs[1].Runs.Single().BaselineOffset.Should().Be(10_000);
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesFlowDirectionInheritanceAndOverrides()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          FlowDirection="RightToLeft">
+              <Paragraph>
+                <Run Text="אבג" />
+                <Run FlowDirection="LeftToRight" Text="LTR" />
+              </Paragraph>
+              <Paragraph FlowDirection="LeftToRight">plain direction</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs.Select(paragraph => paragraph.RightToLeft)
+            .Should().Equal(true, false);
+        paragraphs[0].Runs.Select(run => run.RightToLeft)
+            .Should().Equal(true, false);
+        paragraphs[1].Runs.Single().RightToLeft.Should().BeFalse();
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesTextAlignmentInheritanceAndOverrides()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          TextAlignment="Center">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="JustifiedText">
+                    <Setter Property="TextAlignment" Value="Justify" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph>inherited center</Paragraph>
+              <Paragraph TextAlignment="Right">direct right</Paragraph>
+              <Paragraph Style="{StaticResource JustifiedText}">styled justify</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Select(paragraph => paragraph.Align)
+            .Should().Equal(TextAlign.Center, TextAlign.Right, TextAlign.Justify);
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_ResolvesSolidColorBrushResources()
     {
         const string xaml = """
@@ -125,6 +235,42 @@ public sealed class ExternalRichTextClipboardTests
         run.Bold.Should().BeTrue();
         run.Underline.Should().BeTrue();
         run.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_ResolvesBasedOnStyleChainsWithoutLooping()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="BaseText">
+                    <Setter Property="FontFamily" Value="Aptos" />
+                    <Setter Property="FontSize" Value="14" />
+                  </Style>
+                  <Style x:Key="HeadingText" BasedOn="{StaticResource BaseText}">
+                    <Setter Property="FontWeight" Value="Bold" />
+                  </Style>
+                  <Style x:Key="LoopA" BasedOn="{StaticResource LoopB}" />
+                  <Style x:Key="LoopB" BasedOn="{StaticResource LoopA}" />
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Style="{StaticResource HeadingText}">Heading</Paragraph>
+              <Paragraph Style="{StaticResource LoopA}">Loop remains safe</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
+        paragraphs[0].Runs.Single().FontSizePt.Should().Be(10.5);
+        paragraphs[0].Runs.Single().Bold.Should().BeTrue();
+        paragraphs[1].Runs.Single().Text.Should().Be("Loop remains safe");
     }
 
     [Fact]

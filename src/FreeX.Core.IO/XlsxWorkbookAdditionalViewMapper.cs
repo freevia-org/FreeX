@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
 using FreeX.Core.Model;
@@ -78,9 +79,41 @@ internal static class XlsxWorkbookAdditionalViewMapper
             view.Remove();
 
         foreach (var view in workbook.AdditionalViews.Views.Select(ToXml).OfType<XElement>())
+        {
+            ClampToCurrentSheetCount(view, workbook);
             bookViews.Add(view);
+        }
 
         return true;
+    }
+
+    // Excel writes one additional <workbookView> per open secondary window (View > New Window),
+    // each with its own activeTab/firstSheet index into the workbook's sheet-tab order. FreeX only
+    // models the PRIMARY view's activeTab/firstSheet on Workbook.ActiveSheetIndex/
+    // FirstVisibleSheetIndex (reconciled every save via
+    // XlsxWorkbookMetadataXmlHelper.ClampToVisibleSheetIndex); every other workbookView is preserved
+    // as an opaque blob and would otherwise be re-emitted with its load-time activeTab/firstSheet
+    // unchanged. Once the user inserts/deletes/reorders sheets, that stale index can go out of range
+    // for the new sheet count or land on a completely different sheet after a reorder. Clamp it the
+    // same way the primary view is clamped before writing the preserved element back out.
+    private static void ClampToCurrentSheetCount(XElement view, Workbook workbook)
+    {
+        ClampIndexAttribute(view, "activeTab", workbook);
+        ClampIndexAttribute(view, "firstSheet", workbook);
+    }
+
+    private static void ClampIndexAttribute(XElement view, string attributeName, Workbook workbook)
+    {
+        var attribute = view.Attribute(attributeName);
+        if (attribute is null)
+            return;
+
+        if (!int.TryParse(attribute.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+            return;
+
+        var clamped = XlsxWorkbookMetadataXmlHelper.ClampToVisibleSheetIndex(workbook, value)
+            ?? 0;
+        attribute.Value = clamped.ToString(CultureInfo.InvariantCulture);
     }
 
     private static WorkbookAdditionalViewModel ReadView(XElement element)

@@ -63,6 +63,8 @@ public sealed partial class NativeJsonAdapter
         {
             FontName = string.IsNullOrWhiteSpace(dto.FontName) ? CellStyle.Default.FontName : dto.FontName,
             FontSize = NativeJsonValueSanitizer.PositiveFiniteOrDefault(dto.FontSize, CellStyle.Default.FontSize),
+            Charset = dto.Charset,
+            FontFamily = dto.FontFamily,
             Bold = dto.Bold,
             Italic = dto.Italic,
             Underline = dto.Underline,
@@ -117,6 +119,8 @@ public sealed partial class NativeJsonAdapter
             FontName = style.FontName,
             FontSize = style.FontSize,
             FontScheme = style.FontScheme,
+            Charset = style.Charset,
+            FontFamily = style.FontFamily,
             Bold = style.Bold,
             Italic = style.Italic,
             Underline = style.Underline,
@@ -163,6 +167,8 @@ public sealed partial class NativeJsonAdapter
             FontName = safeStyle.FontName,
             FontSize = safeStyle.FontSize,
             FontScheme = safeStyle.FontScheme,
+            Charset = safeStyle.Charset,
+            FontFamily = safeStyle.FontFamily,
             Bold = safeStyle.Bold,
             Italic = safeStyle.Italic,
             Underline = safeStyle.Underline,
@@ -276,6 +282,8 @@ public sealed partial class NativeJsonAdapter
             return string.Equals(x.FontName, y.FontName, StringComparison.Ordinal)
                 && x.FontSize == y.FontSize
                 && x.FontScheme == y.FontScheme
+                && x.Charset == y.Charset
+                && x.FontFamily == y.FontFamily
                 && x.Bold == y.Bold
                 && x.Italic == y.Italic
                 && x.Underline == y.Underline
@@ -323,6 +331,8 @@ public sealed partial class NativeJsonAdapter
             hash.Add(obj.FontName, StringComparer.Ordinal);
             hash.Add(obj.FontSize);
             hash.Add(obj.FontScheme);
+            hash.Add(obj.Charset);
+            hash.Add(obj.FontFamily);
             hash.Add(obj.Bold);
             hash.Add(obj.Italic);
             hash.Add(obj.Underline);
