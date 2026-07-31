@@ -240,6 +240,8 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("xdotool_mousemove_sync", probe, StringComparison.Ordinal);
         Assert.Contains("probe_sheet_tabs", probe, StringComparison.Ordinal);
         Assert.Contains("sheet-tab-overflow-create-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("shortcut_create_count=9", probe, StringComparison.Ordinal);
+        Assert.Contains("send_key shift+F11", probe, StringComparison.Ordinal);
         Assert.Contains("sheet-tab-overflow-navigation-physical", probe, StringComparison.Ordinal);
         Assert.Contains("sheet-tab-overflow-activate-dialog-physical", probe, StringComparison.Ordinal);
         Assert.Contains("sheet-tab-drag-reorder-physical", probe, StringComparison.Ordinal);

@@ -2554,7 +2554,8 @@ probe_sheet_tabs() {
     local activate_id="" create_ready=false navigation_passed=false activate_passed=false
     local left_changed=false right_changed=false viewport_changed=false returned_to_origin=false
     local plus_x created_count
-    local plus_click_count=10
+    local plus_click_count=1
+    local shortcut_create_count=9
 
     tab_y="$(sheet_tab_y)"
     left_nav_x="$(sheet_tab_left_nav_x)"
@@ -2565,11 +2566,12 @@ probe_sheet_tabs() {
     sheet3_x="$(sheet_tab_center_x 2)"
 
     capture_sheet_tab_strip "sheet-tabs-before-overflow.png"
-    for created_count in $(seq 0 $((plus_click_count - 1))); do
-        plus_x="$(sheet_plus_center_x "$created_count")"
-        focus_app
-        xdotool_mousemove_sync "$plus_x" "$tab_y" click 1
-        sleep "$settle_seconds"
+    plus_x="$(sheet_plus_center_x 0)"
+    focus_app
+    xdotool_mousemove_sync "$plus_x" "$tab_y" click 1
+    sleep "$settle_seconds"
+    for created_count in $(seq 1 "$shortcut_create_count"); do
+        send_key shift+F11
     done
     capture_sheet_tab_strip "sheet-tabs-after-overflow.png"
 
@@ -2585,11 +2587,11 @@ probe_sheet_tabs() {
         create_ready=true
     fi
     write_artifact "sheet-tabs-create-postcondition.txt" \
-        "plus-clicks=$plus_click_count\nexpected-visible-sheets=11\nplus-center-derived-from-a1=true\nleft-nav-region-changed=$left_changed\nright-nav-region-changed=$right_changed\nleft-nav-x=$left_nav_x\nright-nav-x=$right_nav_x\n"
+        "plus-clicks=$plus_click_count\nshift-f11-insertions=$shortcut_create_count\nexpected-visible-sheets=11\nplus-center-derived-from-a1=true\nleft-nav-region-changed=$left_changed\nright-nav-region-changed=$right_changed\nleft-nav-x=$left_nav_x\nright-nav-x=$right_nav_x\n"
     if $create_ready; then
         record "sheet-tab-overflow-create-physical" "passed" \
-            "sheet-tabs-before-overflow.png; sheet-tabs-after-overflow.png; left/right navigation affordances became visible after $plus_click_count real + clicks" \
-            "The production + button was physically clicked once per coordinate and both sheet-tab overflow navigation regions changed from the pre-overflow strip." \
+            "sheet-tabs-before-overflow.png; sheet-tabs-after-overflow.png; left/right navigation affordances became visible after one real + click and $shortcut_create_count physical Shift+F11 insertions" \
+            "The production + button was physically clicked once, physical sheet-insert shortcuts completed the overflow setup, and both navigation regions changed from the pre-overflow strip." \
             "sheet-tabs-before-overflow.png;sheet-tabs-after-overflow.png;sheet-tabs-create-postcondition.txt;sheet-tabs-before-left-nav.png;sheet-tabs-after-left-nav.png;sheet-tabs-before-right-nav.png;sheet-tabs-after-right-nav.png"
     else
         record "sheet-tab-overflow-create-physical" "failed" \
