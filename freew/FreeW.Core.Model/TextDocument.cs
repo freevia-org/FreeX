@@ -3054,6 +3054,14 @@ public sealed class TextDocument
     public ParagraphFormatting DefaultParagraph { get; set; } = ParagraphFormatting.Default;
 
     /// <summary>
+    /// Whether paragraphs with no serialized line-spacing rule should use Word's application default
+    /// multiple (1.15) instead of the host text engine's natural single-line box. Set by the DOCX reader;
+    /// false for documents authored directly in the model so their existing layout remains unchanged.
+    /// Direct paragraph/style line rules still take precedence.
+    /// </summary>
+    public bool UseWordApplicationDefaultLineSpacing { get; set; }
+
+    /// <summary>
     /// The single modelled FreeW multilevel-list definition. Its per-level number formats map to the
     /// fixed FreeW multilevel numbering definition in word/numbering.xml.
     /// </summary>

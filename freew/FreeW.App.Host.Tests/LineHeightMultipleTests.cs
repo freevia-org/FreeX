@@ -60,4 +60,49 @@ public sealed class LineHeightMultipleTests
         var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
         Assert.True(double.IsNaN(wpf.LineHeight));
     }
+
+    [StaFact]
+    public void ImportedImplicitDefaultMultiple_AppliesWordApplicationLineHeight()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+        doc.UseWordApplicationDefaultLineSpacing = true;
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("body text")
+        {
+            Formatting = ParagraphFormatting.Default,
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        var ratio = new System.Windows.Media.FontFamily("Calibri").LineSpacing;
+        var expected = ParagraphFormatting.Default.LineSpacing * ratio * 1.10 * 11 * PxPerPoint;
+        Assert.Equal(expected, wpf.LineHeight, 1);
+    }
+
+    [StaFact]
+    public void ImportedExplicitSingle_DoesNotApplyWordApplicationCalibration()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+        doc.UseWordApplicationDefaultLineSpacing = true;
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("body text")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                LineSpacing = 1.0,
+                LineSpacingIsSet = true,
+            },
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        var ratio = new System.Windows.Media.FontFamily("Calibri").LineSpacing;
+        Assert.Equal(ratio * 11 * PxPerPoint, wpf.LineHeight, 1);
+    }
 }

@@ -37,7 +37,13 @@ public static class DocxReader
         var documentXml = LoadPart(archive, "word/document.xml")
             ?? throw new InvalidDataException("Not a Word document: word/document.xml is missing.");
 
-        var document = new TextDocument();
+        var document = new TextDocument
+        {
+            // Word applies its application paragraph default when the package cascade contains no
+            // w:spacing/@w:line token. Keep that import provenance separate from model-authored documents,
+            // whose implicit paragraph default intentionally follows the host's natural single-line box.
+            UseWordApplicationDefaultLineSpacing = true
+        };
         OpcDocumentProperties.ReadCoreProperties(
             archive,
             document.Properties,
