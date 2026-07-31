@@ -170,7 +170,10 @@ public static class AutoFilterDropdownMenuPlanner
         HashSet<uint> ownedHiddenRows)
     {
         var values = new HashSet<string>(StringComparer.Ordinal);
-        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
+        // R104-app-presentation-autofilter-totalsrow-1: exclude a shown structured-table Totals
+        // Row from this scan -- it is never a filterable data row (see GetFilterableLastRow).
+        var lastRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, plan.Range);
+        for (var row = plan.Range.Start.Row + 1; row <= lastRow; row++)
         {
             if (ownedHiddenRows.Contains(row))
                 continue;
@@ -210,7 +213,10 @@ public static class AutoFilterDropdownMenuPlanner
         var seenFontColors = new HashSet<CellColor>();
         var hasNoFill = false;
 
-        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
+        // R104-app-presentation-autofilter-totalsrow-1: exclude a shown structured-table Totals
+        // Row from the color scan -- it is never a filterable data row (see GetFilterableLastRow).
+        var lastColorRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, plan.Range);
+        for (var row = plan.Range.Start.Row + 1; row <= lastColorRow; row++)
         {
             // filter-by-color-cf: offer the color Excel would actually display for this cell —
             // including any conditional-formatting-driven fill/font color — not just the cell's
@@ -318,7 +324,12 @@ public static class AutoFilterDropdownMenuPlanner
         var allNumbers = true;
         var allDates = true;
 
-        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
+        // R104-app-presentation-autofilter-totalsrow-1: exclude a shown structured-table Totals
+        // Row from kind detection -- its SUBTOTAL aggregate (or custom formula result / text
+        // label) is never part of the filterable data set (see GetFilterableLastRow), so it must
+        // not sway whether Excel offers Number/Date/Text Filters for this column.
+        var lastKindRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, plan.Range);
+        for (var row = plan.Range.Start.Row + 1; row <= lastKindRow; row++)
         {
             var value = sheet.GetValue(row, filterColumn);
             if (value is BlankValue)

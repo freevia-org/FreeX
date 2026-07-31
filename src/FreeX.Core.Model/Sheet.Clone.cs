@@ -190,7 +190,39 @@ public sealed partial class Sheet
     private void CopyCellContentTo(Sheet copy, SheetId newId)
     {
         foreach (var (address, cell) in EnumerateCells())
-            copy.SetCell(RemapAddress(address, newId), cell.Clone());
+        {
+            var clonedCell = cell.Clone();
+
+            // R104: rebase an explicit same-sheet-qualified formula reference (e.g. "Sheet1!A1"
+            // typed/pasted on Sheet1 itself) onto the copy, mirroring the same rebase already
+            // applied to ConditionalFormat.FormulaText / DataValidation.Formula1-2 (below) and to
+            // hyperlink targets/bookmarks (above) -- otherwise RecalcEngine resolves the
+            // unrewritten qualifier by live sheet-name lookup and the duplicate's formula keeps
+            // pointing at the ORIGINAL sheet instead of following the copy, unlike every other
+            // same-sheet-qualified formula surface in this method.
+            if (clonedCell.FormulaText is { } formulaText)
+            {
+                var rewritten = RewriteSameSheetQualifiedFormula(formulaText, Name, copy.Name);
+                if (!string.Equals(rewritten, formulaText, StringComparison.Ordinal))
+                {
+                    var arrayMode = clonedCell.ArrayMode;
+                    var legacyArrayRows = clonedCell.LegacyArrayRows;
+                    var legacyArrayCols = clonedCell.LegacyArrayCols;
+                    // The FormulaText setter clears CachedAst (so the rewritten text re-parses
+                    // instead of reusing the stale AST built from the original text) but also
+                    // resets ArrayMode/LegacyArrayRows/LegacyArrayCols to "freshly authored"
+                    // defaults, which would silently discard a loaded legacy CSE array formula's
+                    // extent -- restore them so this rebase doesn't change anything else about
+                    // the cell.
+                    clonedCell.FormulaText = rewritten;
+                    clonedCell.ArrayMode = arrayMode;
+                    clonedCell.LegacyArrayRows = legacyArrayRows;
+                    clonedCell.LegacyArrayCols = legacyArrayCols;
+                }
+            }
+
+            copy.SetCell(RemapAddress(address, newId), clonedCell);
+        }
 
         foreach (var ((row, col), styleId) in GetStyleOnlyEntries())
             copy.SetStyleOnly(row, col, styleId);

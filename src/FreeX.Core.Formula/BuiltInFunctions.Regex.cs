@@ -8,6 +8,11 @@ public static partial class BuiltInFunctions
 {
     private static ScalarValue RegexTest(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        // Check the leftmost argument (text) for an error before resolving the pattern/mode
+        // arguments, matching Excel's left-to-right argument-error precedence that every other
+        // multi-argument function in this codebase follows (AGGREGATE, IF, EXACT, TEXTBEFORE, ...).
+        if (args[0] is ErrorValue e0) return e0;
+
         if (!TryCreateRegex(args[1], args.Count > 2 ? args[2] : BlankValue.Instance, out var regex, out var error))
             return error;
 
@@ -32,6 +37,9 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue RegexExtract(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        // See RegexTest: check the leftmost argument (text) first so the leftmost error wins.
+        if (args[0] is ErrorValue e0) return e0;
+
         if (!TryCreateRegex(args[1], args.Count > 3 ? args[3] : BlankValue.Instance, out var regex, out var error))
             return error;
         if (!TryGetOptionalMode(args, 2, defaultValue: 0, out int returnMode, out error))
@@ -103,6 +111,10 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue RegexReplace(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
+        // See RegexTest: check the leftmost argument (text) first so the leftmost error wins,
+        // rather than the previous 1,4,2,3,0 resolution order surfacing a later argument's error.
+        if (args[0] is ErrorValue e0) return e0;
+
         if (!TryCreateRegex(args[1], args.Count > 4 ? args[4] : BlankValue.Instance, out var regex, out var error))
             return error;
 

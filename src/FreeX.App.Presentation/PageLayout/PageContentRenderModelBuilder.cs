@@ -109,10 +109,27 @@ public static class PageContentRenderModelBuilder
         var printableW = pageW - marginLeft - marginRight;
         var printableH = pageH - marginTop - marginBottom;
 
+        // R104-presentation-vertical-center-body-height-1: the defensive residual-overflow shrink
+        // (ResolveScaleRatio below) and the vertical 'Center on page' offset (yOffset below) must both
+        // measure against the sheet's actual printable BODY height -- pageH minus whichever is larger
+        // of the top margin / header margin, and whichever is larger of the bottom margin / footer
+        // margin (PageGeometryRules.ResolveBodyEdge) -- not the plain margin box `printableH` above.
+        // contentTop already anchors the grid's top edge at this body-adjusted position (bodyTop, the
+        // R99 fix below); before this fix, yOffset was derived from the plain-margin printableH, so a
+        // Header (or Footer) margin larger than the Top (or Bottom) margin overshot the centered
+        // position by (headerMargin - topMargin)/2 pixels -- agreeing with neither Excel nor this app's
+        // own PDF export path (WorkbookPdfContentBuilder.cs's contentHeight is this exact body-adjusted
+        // height and drives its centerYOffset identically).
+        var headerMarginPx = sheet.HeaderMargin * Dpi;
+        var footerMarginPx = sheet.FooterMargin * Dpi;
+        var bodyTop = PageGeometryRules.ResolveBodyEdge(marginTop, headerMarginPx);
+        var bodyBottom = PageGeometryRules.ResolveBodyEdge(marginBottom, footerMarginPx);
+        var bodyHeight = Math.Max(0.0, pageH - bodyTop - bodyBottom);
+
         var columnWidthsPixels = BuildColumnWidthsPixels(sheet);
         var measurement = PrintLayoutPlanner.MeasurePrintableGrid(
             printableW,
-            printableH,
+            bodyHeight,
             pageRows,
             pageColumns,
             sheet.RowHeights,
@@ -134,13 +151,13 @@ public static class PageContentRenderModelBuilder
         var unscaledPrintedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var unscaledPrintedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
         var scaleRatio = ResolveScaleRatio(
-            pagePlan.EffectiveScalePercent, unscaledPrintedWidth, unscaledPrintedHeight, printableW, printableH);
+            pagePlan.EffectiveScalePercent, unscaledPrintedWidth, unscaledPrintedHeight, printableW, bodyHeight);
         measurement = ScaleMeasurement(measurement, scaleRatio);
 
         var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
         var xOffset = sheet.CenterHorizontallyOnPage ? Math.Max(0, (printableW - printedWidth) / 2) : 0;
-        var yOffset = sheet.CenterVerticallyOnPage ? Math.Max(0, (printableH - printedHeight) / 2) : 0;
+        var yOffset = sheet.CenterVerticallyOnPage ? Math.Max(0, (bodyHeight - printedHeight) / 2) : 0;
         var contentLeft = marginLeft + xOffset;
         // R99-presentation-header-band-preview-1: mirrors PagePaginationPlanner.
         // CalculatePageCapacityDetail's bodyTopInches = Math.Max(margins.Top, headerMarginInches) --
@@ -155,8 +172,7 @@ public static class PageContentRenderModelBuilder
         // already computed for this same page -- the header text visually collided with the first
         // printed row in print preview whenever Header margin &gt; Top margin, even though the actual
         // desktop print/PDF-export output (once separately fixed) did not.
-        var headerMarginPx = sheet.HeaderMargin * Dpi;
-        var contentTop = PageGeometryRules.ResolveBodyEdge(marginTop, headerMarginPx) + yOffset;
+        var contentTop = bodyTop + yOffset;
         var gridLeft = contentLeft + measurement.HeaderWidth;
         var gridTop = contentTop + measurement.HeaderHeight;
         var gridBounds = new LayoutRect(
@@ -231,7 +247,7 @@ public static class PageContentRenderModelBuilder
             marginRight,
             marginBottom,
             headerMarginPx,
-            sheet.FooterMargin * Dpi,
+            footerMarginPx,
             workbook.Name,
             workbookDirectory,
             sheet.Name,

@@ -618,7 +618,14 @@ public sealed class Workbook
                 // deletions that fully consume a name's range (see
                 // RowColumnShiftHelpers.NamedRanges.ConvertNamedRangeToRefError) instead of
                 // dropping the dictionary entry outright.
-                RemoveNamedRange(name);
+                //
+                // Deliberately do NOT call RemoveNamedRange here: it also removes the entry
+                // from NamedRangeMetadataByName, which would permanently discard the name's
+                // Hidden flag and Comment. Excel preserves every Name-Manager property except
+                // the range text when a referenced sheet is deleted, so only the NamedRanges
+                // entry is dropped — the metadata stays keyed by name and is picked up by
+                // XlsxNamedRangeMapper for the resulting NamedFormulas-backed "#REF!" entry.
+                NamedRanges.Remove(name);
                 NamedFormulas[name] = "#REF!";
             }
         }
@@ -640,7 +647,10 @@ public sealed class Workbook
                 }
                 else if (scopedRange.Start.Sheet == sheetId || scopedRange.End.Sheet == sheetId)
                 {
-                    RemoveScopedNamedRange(key.Name, key.Sheet);
+                    // As above: preserve the scoped name's Hidden/Comment metadata across the
+                    // #REF! conversion by removing only the range entry, not the metadata
+                    // entry keyed by (name, scope sheet). RemoveScopedNamedRange would drop both.
+                    _scopedNamedRanges.Remove(key);
                     DefineNamedFormula(key.Name, "#REF!", key.Sheet);
                 }
             }

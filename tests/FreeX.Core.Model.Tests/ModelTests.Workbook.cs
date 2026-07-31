@@ -79,7 +79,14 @@ public partial class WorkbookTests
 
         wb.NamedRanges.Should().ContainKey("KeepRange");
         wb.NamedRanges.Should().NotContainKey("RemoveRange");
-        wb.NamedRangeMetadataByName.Should().NotContainKey("RemoveRange");
+
+        // R104: real Excel keeps a defined name's Name-Manager metadata (Hidden/Comment) intact
+        // when the sheet its range refers to is deleted - only the range text is converted to
+        // "#REF!" (now living in NamedFormulas instead of NamedRanges). The metadata entry must
+        // therefore survive, not be dropped alongside the range.
+        wb.NamedFormulas.Should().ContainKey("RemoveRange");
+        wb.NamedFormulas["RemoveRange"].Should().Be("#REF!");
+        wb.NamedRangeMetadataByName.Should().ContainKey("RemoveRange");
     }
 
     [Fact]

@@ -7,6 +7,19 @@ public sealed class PivotCacheModel
     public string? SourceSheetName { get; set; }
     public string? SourceReference { get; set; }
     public string? SourceTableName { get; set; }
+    /// <summary>
+    /// R104: the stable <see cref="StructuredTableModel.Id"/> of the structured table this cache is
+    /// bound to, established the first time a table-backed refresh resolves <see
+    /// cref="SourceTableName"/> against a live table (mirrors <see cref="SlicerModel.SourceTableId"/>'s
+    /// stable-identity pattern for the analogous slicer-to-table binding). Null until that first
+    /// resolution (e.g. a cache freshly loaded from a file, where the OOXML/JSON source carries only the
+    /// name). Once set, a table-backed refresh must re-resolve by THIS id rather than by name alone —
+    /// otherwise "Convert to Range" on the original table followed by an unrelated table being renamed
+    /// to reuse the freed name would silently re-bind this cache (and its pivot) to that unrelated
+    /// table's data, since <see cref="SourceTableName"/> alone cannot distinguish "the same table,
+    /// renamed" from "a different table that now happens to share the name".
+    /// </summary>
+    public int? SourceTableId { get; set; }
     public int? ConnectionId { get; set; }
     public bool IsOlap { get; set; }
     public string PackagePart { get; init; } = "";

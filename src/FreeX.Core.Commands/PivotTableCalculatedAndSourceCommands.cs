@@ -174,11 +174,44 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         pivotTable.SourceRange = _sourceRange;
         if (cache is not null)
         {
-            cache.SourceSheetName = sourceSheet.Name;
-            cache.SourceReference = _sourceRange.ToString();
-            cache.Fields.Clear();
-            foreach (var header in ReadHeaders(sourceSheet, _sourceRange))
-                cache.Fields.Add(new PivotCacheFieldModel(header));
+            var headers = ReadHeaders(sourceSheet, _sourceRange);
+
+            // R104-sibling: an explicit "Change Data Source" must always win over whatever the cache
+            // was previously bound to -- including its table binding. Whether the NEW range happens to
+            // be a live structured table's exact extent decides the new binding: a resolved table
+            // reference always resolves to that table's exact range (see
+            // PivotDataSourcePlanner/TryResolveReferenceRange), so this exact match is how the command
+            // tells "redirected onto a table" apart from "redirected onto a plain range" -- and it fires
+            // identically whether the OLD binding was a table or a plain range, and whether the NEW
+            // table is the same table, a different table, or no table at all.
+            var matchedTable = FindLiveTableByExactRange(sourceSheet, _sourceRange);
+            var desiredType = matchedTable is not null ? PivotCacheSourceType.Table : PivotCacheSourceType.WorksheetRange;
+
+            if (desiredType == cache.SourceType)
+            {
+                // No SourceType crossing needed -- mutate the existing cache in place, same as the
+                // pre-fix command always did (so any external reference captured before Apply still
+                // observes the update), but the fix always reconciles the table binding to the NEW
+                // source too, instead of leaving a stale SourceTableName/SourceTableId behind.
+                cache.SourceSheetName = sourceSheet.Name;
+                cache.SourceReference = _sourceRange.ToString();
+                cache.SourceTableName = matchedTable?.Name;
+                cache.SourceTableId = matchedTable?.Id;
+                cache.Fields.Clear();
+                foreach (var header in headers)
+                    cache.Fields.Add(new PivotCacheFieldModel(header));
+            }
+            else
+            {
+                // PivotCacheModel.SourceType is init-only (mirrors the OOXML cacheSource's fixed
+                // shape), so crossing the table/range boundary can't be expressed by mutating the
+                // existing cache -- build a replacement carrying the same CacheId and swap it into the
+                // workbook's PivotCaches list.
+                var redirectedCache = BuildRedirectedCache(cache, sourceSheet, _sourceRange, matchedTable, desiredType, headers);
+                var cacheIndex = ctx.Workbook.PivotCaches.FindIndex(existing => existing.CacheId == cache.CacheId);
+                if (cacheIndex >= 0)
+                    ctx.Workbook.PivotCaches[cacheIndex] = redirectedCache;
+            }
         }
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
@@ -190,13 +223,75 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable) && _snapshot is not null)
         {
-            var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
             PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
-            _snapshot.Restore(pivotTable, cache);
+            _snapshot.Restore(pivotTable, ctx.Workbook);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         _snapshot = null;
         _targetSnapshot = null;
+    }
+
+    /// <summary>
+    /// A resolved table reference always yields that table's exact <see cref="StructuredTableModel.Range"/>
+    /// (the dialogs/planner never carry a separate "this was a table" flag through to this command), so an
+    /// exact range match against a live table on the source sheet is how a table-backed redirect is detected.
+    /// </summary>
+    private static StructuredTableModel? FindLiveTableByExactRange(Sheet sourceSheet, GridRange sourceRange)
+    {
+        foreach (var table in sourceSheet.StructuredTables)
+        {
+            if (table.Range.Equals(sourceRange))
+                return table;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Builds the cache that should replace <paramref name="original"/> when an explicit "Change Data
+    /// Source" crosses the table/range SourceType boundary (the only case that needs a whole new cache
+    /// object, since SourceType is init-only). The table binding (SourceTableName/SourceTableId) always
+    /// reflects the NEW source -- cleared entirely when <paramref name="matchedTable"/> is null
+    /// (redirected to a plain range) and re-established from scratch when it is not (newly table-backed).
+    /// Never carries the old table binding forward by accident.
+    /// </summary>
+    private static PivotCacheModel BuildRedirectedCache(
+        PivotCacheModel original,
+        Sheet sourceSheet,
+        GridRange sourceRange,
+        StructuredTableModel? matchedTable,
+        PivotCacheSourceType desiredType,
+        List<string> headers)
+    {
+        var redirected = new PivotCacheModel
+        {
+            CacheId = original.CacheId,
+            SourceType = desiredType,
+            SourceSheetName = sourceSheet.Name,
+            SourceReference = sourceRange.ToString(),
+            SourceTableName = matchedTable?.Name,
+            SourceTableId = matchedTable?.Id,
+            PackagePart = original.PackagePart,
+            ConnectionId = original.ConnectionId,
+            IsOlap = original.IsOlap,
+            RefreshOnLoad = original.RefreshOnLoad,
+            SaveData = original.SaveData,
+            EnableRefresh = original.EnableRefresh,
+            PreserveSourceSortFilter = original.PreserveSourceSortFilter,
+            MissingItemsLimit = original.MissingItemsLimit,
+            RecordCount = original.RecordCount,
+            CreatedVersion = original.CreatedVersion,
+            MinRefreshableVersion = original.MinRefreshableVersion,
+            RefreshedVersion = original.RefreshedVersion,
+            RefreshedBy = original.RefreshedBy,
+            RefreshedDateIso = original.RefreshedDateIso,
+            RawRecordsXml = original.RawRecordsXml,
+        };
+
+        foreach (var header in headers)
+            redirected.Fields.Add(new PivotCacheFieldModel(header));
+
+        return redirected;
     }
 
     private static List<string> ReadHeaders(Sheet sheet, GridRange sourceRange)
@@ -215,33 +310,66 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
 
     private sealed record PivotSourceSnapshot(
         GridRange SourceRange,
-        string? CacheSourceSheetName,
-        string? CacheSourceReference,
-        string? CacheSourceTableName,
-        IReadOnlyList<PivotCacheFieldModel> CacheFields,
-        GridRange? LastRenderedRange)
+        GridRange? LastRenderedRange,
+        PivotCacheModel? OriginalCache,
+        PivotCacheSourceType? OriginalCacheSourceType,
+        string? OriginalCacheSourceSheetName,
+        string? OriginalCacheSourceReference,
+        string? OriginalCacheSourceTableName,
+        int? OriginalCacheSourceTableId,
+        IReadOnlyList<PivotCacheFieldModel> OriginalCacheFields)
     {
         public static PivotSourceSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
             new(
                 pivotTable.SourceRange,
+                pivotTable.LastRenderedRange,
+                cache,
+                cache?.SourceType,
                 cache?.SourceSheetName,
                 cache?.SourceReference,
                 cache?.SourceTableName,
-                cache?.Fields.ToList() ?? [],
-                pivotTable.LastRenderedRange);
+                cache?.SourceTableId,
+                cache?.Fields.ToList() ?? []);
 
-        public void Restore(PivotTableModel pivotTable, PivotCacheModel? cache)
+        /// <summary>
+        /// Restores the exact prior cache state -- including SourceType (init-only, so it can only ever
+        /// be restored by putting the untouched original object back, never by field assignment) and
+        /// whether SourceTableId had been established yet (null) or was already pinned to a stable id (an
+        /// int), which are two different states a naive field-by-field restore could conflate.
+        ///
+        /// If Apply mutated the cache in place (no SourceType crossing), <see cref="OriginalCache"/> is
+        /// still the very same object currently sitting in <paramref name="workbook"/>'s PivotCaches --
+        /// its SourceType is unchanged, so restoring its mutable fields in place here matches the
+        /// pre-fix command's behavior (any external reference captured before Apply observes the revert
+        /// too). If Apply instead swapped in a replacement cache to cross the table/range boundary, the
+        /// CURRENT cache's SourceType differs from the captured one, and the only correct undo is putting
+        /// the exact original object back.
+        /// </summary>
+        public void Restore(PivotTableModel pivotTable, Workbook workbook)
         {
             pivotTable.SourceRange = SourceRange;
             pivotTable.LastRenderedRange = LastRenderedRange;
-            if (cache is null)
+            if (OriginalCache is null)
                 return;
 
-            cache.SourceSheetName = CacheSourceSheetName;
-            cache.SourceReference = CacheSourceReference;
-            cache.SourceTableName = CacheSourceTableName;
-            cache.Fields.Clear();
-            cache.Fields.AddRange(CacheFields);
+            var index = workbook.PivotCaches.FindIndex(existing => existing.CacheId == OriginalCache.CacheId);
+            if (index < 0)
+                return;
+
+            if (workbook.PivotCaches[index].SourceType == OriginalCacheSourceType)
+            {
+                var current = workbook.PivotCaches[index];
+                current.SourceSheetName = OriginalCacheSourceSheetName;
+                current.SourceReference = OriginalCacheSourceReference;
+                current.SourceTableName = OriginalCacheSourceTableName;
+                current.SourceTableId = OriginalCacheSourceTableId;
+                current.Fields.Clear();
+                current.Fields.AddRange(OriginalCacheFields);
+            }
+            else
+            {
+                workbook.PivotCaches[index] = OriginalCache;
+            }
         }
     }
 }
