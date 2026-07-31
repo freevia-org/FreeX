@@ -319,11 +319,21 @@ public static class AvaloniaRibbonRenderer
         };
 
         var first = true;
+        var usedGroupKeyTips = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var group in tab.Groups)
         {
             if (!first)
                 panel.Children.Add(BuildGroupDivider(resolvedPalette));
-            panel.Children.Add(new AvaloniaRibbonGroupHost(group, BuildGroup(group, registry, afterExecute, resolvedPalette), registry, afterExecute, resolvedPalette));
+            var collapsedKeyTip = RibbonCollapsedGroupPresentationPlanner.DeriveGroupKeyTip(
+                group.Header,
+                usedGroupKeyTips);
+            panel.Children.Add(new AvaloniaRibbonGroupHost(
+                group,
+                BuildGroup(group, registry, afterExecute, resolvedPalette),
+                registry,
+                afterExecute,
+                resolvedPalette,
+                collapsedKeyTip));
             first = false;
         }
 
@@ -1612,6 +1622,10 @@ public static class AvaloniaRibbonRenderer
         {
             Content = Chevron(new Thickness(0), palette),
             Tag = $"{control.CommandId.Value}.Dropdown",
+            Width = 80,
+            MinWidth = 80,
+            Height = 20,
+            MinHeight = 20,
             Padding = new Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
@@ -1620,7 +1634,7 @@ public static class AvaloniaRibbonRenderer
         SetKeyTip(dropdown, control.KeyTip);
 
         ApplyStateAndEnablement(primary, control.CommandId, registry, palette);
-        ApplyStateAndEnablement(dropdown, control.CommandId, registry, palette);
+        ApplyControlEnablement(dropdown, control, registry, palette);
 
         var split = new Grid
         {
@@ -2000,7 +2014,10 @@ public static class AvaloniaRibbonRenderer
             toggle.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
         }
 
-        ApplyStateAndEnablement(element, control.CommandId, registry, palette);
+        if (attachMenu)
+            ApplyControlEnablement(element, control, registry, palette);
+        else
+            ApplyStateAndEnablement(element, control.CommandId, registry, palette);
     }
 
     private static void ApplyEnablement(Control element, RibbonControl control, IRibbonCommandRegistry? registry, AvaloniaRibbonPalette? palette = null)
@@ -2024,6 +2041,32 @@ public static class AvaloniaRibbonRenderer
         if (cmd is IRibbonStatefulCommand stateful)
         {
             ApplyRibbonCommandState(element, stateful.GetState(), palette ?? ResolvePalette());
+            return;
+        }
+
+        element.IsEnabled = true;
+    }
+
+    private static void ApplyControlEnablement(
+        Control element,
+        RibbonControl control,
+        IRibbonCommandRegistry? registry,
+        AvaloniaRibbonPalette palette)
+    {
+        if (registry is null || string.IsNullOrEmpty(control.CommandId.Value))
+            return;
+
+        var menu = BuildMenu(control);
+        var commandIsLive = menu is { Items.Count: > 0 } || registry.TryGet(control.CommandId, out _);
+        if (!commandIsLive)
+        {
+            element.IsEnabled = false;
+            return;
+        }
+
+        if (registry.TryGet(control.CommandId, out var command) && command is IRibbonStatefulCommand stateful)
+        {
+            ApplyRibbonCommandState(element, stateful.GetState(), palette);
             return;
         }
 
@@ -2299,7 +2342,10 @@ public static class AvaloniaRibbonRenderer
             item.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
         }
 
-        ApplyEnablement(item, control.CommandId, registry);
+        if (BuildMenu(control) is { Items.Count: > 0 })
+            ApplyControlEnablement(item, control, registry, ResolvePalette());
+        else
+            ApplyEnablement(item, control.CommandId, registry);
         return item;
     }
 
@@ -2330,6 +2376,7 @@ public static class AvaloniaRibbonRenderer
         private readonly IRibbonCommandRegistry? _registry;
         private readonly Action? _afterExecute;
         private readonly AvaloniaRibbonPalette _palette;
+        private readonly string _collapsedKeyTip;
         private Control? _collapsedButton;
         private bool _collapsed;
 
@@ -2338,13 +2385,15 @@ public static class AvaloniaRibbonRenderer
             Control full,
             IRibbonCommandRegistry? registry,
             Action? afterExecute,
-            AvaloniaRibbonPalette palette)
+            AvaloniaRibbonPalette palette,
+            string collapsedKeyTip)
         {
             _group = group;
             _full = full;
             _registry = registry;
             _afterExecute = afterExecute;
             _palette = palette;
+            _collapsedKeyTip = collapsedKeyTip;
             Priority = group.Priority;
             VerticalAlignment = VerticalAlignment.Stretch;
             Content = full;
@@ -2407,6 +2456,7 @@ public static class AvaloniaRibbonRenderer
                 Flyout = BuildCollapsedGroupFlyout(_group, _registry, _afterExecute),
                 Tag = $"collapsed:{_group.Id}",
             };
+            SetKeyTip(button, _collapsedKeyTip);
             button.Classes.Add("freex-ribbon-collapsed-group");
             return button;
         }

@@ -44,9 +44,13 @@ public sealed class RibbonWpfSplitButtonTests
     }
 
     [Theory]
-    [InlineData(RibbonCommandLayoutKind.Medium, 20d)]
-    [InlineData(RibbonCommandLayoutKind.Small, 14d)]
-    public void SplitButton_UsesFixedDropdownZoneMetrics(RibbonCommandLayoutKind layout, double dropdownWidth)
+    [InlineData(RibbonCommandLayoutKind.Large, 80d, 20d)]
+    [InlineData(RibbonCommandLayoutKind.Medium, 20d, 22d)]
+    [InlineData(RibbonCommandLayoutKind.Small, 14d, 22d)]
+    public void SplitButton_UsesFixedDropdownZoneMetrics(
+        RibbonCommandLayoutKind layout,
+        double dropdownWidth,
+        double dropdownHeight)
     {
         StaTestRunner.Run(() =>
         {
@@ -58,7 +62,52 @@ public sealed class RibbonWpfSplitButtonTests
             var dropdown = FindButton(root, "paste.Dropdown");
 
             dropdown.Width.Should().Be(dropdownWidth);
+            dropdown.Height.Should().Be(dropdownHeight);
             dropdown.ContextMenu.Should().NotBeNull();
+        });
+    }
+
+    [Theory]
+    [InlineData(RibbonCommandLayoutKind.Large)]
+    [InlineData(RibbonCommandLayoutKind.Medium)]
+    [InlineData(RibbonCommandLayoutKind.Small)]
+    public void SplitButton_DropdownRemainsEnabledWhenPrimaryCommandIsUnavailable(RibbonCommandLayoutKind layout)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("pasteSpecial", new RecordingCommand());
+            var root = BuildRibbon(registry, layout: layout);
+            Layout(root, 420, 130);
+
+            var dropdown = FindButton(root, "paste.Dropdown");
+            var primary = FindButton(root, "paste");
+
+            dropdown.IsEnabled.Should().BeTrue();
+            primary.IsEnabled.Should().BeFalse();
+            dropdown.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, dropdown));
+            dropdown.ContextMenu!.IsOpen.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void CollapsedGroup_AssignsDerivedKeyTipToSplitOverflowButton()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("paste", new RecordingCommand());
+            var root = BuildRibbon(registry);
+            var group = Descendants(root).OfType<RibbonGroupHost>().Single();
+            Layout(root, 420, 130);
+            group.Collapsed = true;
+
+            var collapsedGrid = Assert.IsType<Grid>(group.Content);
+            var button = collapsedGrid.Children.OfType<Button>().Single();
+
+            RibbonTooltip.GetKeyTip(button).Should().Be("CL");
+            button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+            button.ContextMenu!.IsOpen.Should().BeTrue();
         });
     }
 
