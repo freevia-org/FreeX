@@ -123,6 +123,34 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesTextAlignmentInheritanceAndOverrides()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          TextAlignment="Center">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="JustifiedText">
+                    <Setter Property="TextAlignment" Value="Justify" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph>inherited center</Paragraph>
+              <Paragraph TextAlignment="Right">direct right</Paragraph>
+              <Paragraph Style="{StaticResource JustifiedText}">styled justify</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Select(paragraph => paragraph.Align)
+            .Should().Equal(TextAlign.Center, TextAlign.Right, TextAlign.Justify);
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_ResolvesSolidColorBrushResources()
     {
         const string xaml = """

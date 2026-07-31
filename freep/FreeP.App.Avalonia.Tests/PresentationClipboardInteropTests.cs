@@ -706,6 +706,24 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task XamlPackage_preserves_text_alignment()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" TextAlignment=\"Center\"><Paragraph>centered</Paragraph><Paragraph TextAlignment=\"Right\">right</Paragraph></FlowDocument>")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Select(paragraph => paragraph.Align)
+            .Should().Equal(TextAlign.Center, TextAlign.Right);
+    }
+
+    [Fact]
     public async Task External_Rtf_table_preserves_solid_cell_style()
     {
         var clipboard = new FakeSystemClipboard
