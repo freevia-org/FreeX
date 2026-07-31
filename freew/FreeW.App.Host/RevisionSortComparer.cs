@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -22,10 +22,7 @@ public enum RevisionSortOrder
 }
 
 /// <summary>
-/// Applies a <see cref="RevisionSortOrder"/> to a list of <see cref="RevisionEntry"/> values from
-/// <see cref="RevisionList.Enumerate"/>. Pure (no mutation of the document model); the result is a
-/// fresh list suitable for the Reviewing Pane's display. Sequence order is a no-op (reading order is
-/// already the enumeration order); all other orders use a stable sort.
+/// WPF compatibility facade over the renderer-neutral Reviewing Pane sort planner.
 /// </summary>
 public static class RevisionSortComparer
 {
@@ -40,22 +37,13 @@ public static class RevisionSortComparer
     {
         ArgumentNullException.ThrowIfNull(entries);
 
-        return order switch
+        return ReviewRevisionSortPlanner.Sort(entries, order switch
         {
-            RevisionSortOrder.Sequence => entries,
-            RevisionSortOrder.Author => entries
-                .OrderBy(e => e.Author ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(e => e.BlockIndex)
-                .ToList(),
-            RevisionSortOrder.Kind => entries
-                .OrderBy(e => (int)e.Kind)
-                .ThenBy(e => e.BlockIndex)
-                .ToList(),
-            RevisionSortOrder.Date => entries
-                .OrderBy(e => e.DateXml, StringComparer.Ordinal)   // null sorts first; callers will see blank
-                .ThenBy(e => e.BlockIndex)
-                .ToList(),
-            _ => entries,
-        };
+            RevisionSortOrder.Sequence => ReviewRevisionSortOrder.Sequence,
+            RevisionSortOrder.Author => ReviewRevisionSortOrder.Author,
+            RevisionSortOrder.Kind => ReviewRevisionSortOrder.Kind,
+            RevisionSortOrder.Date => ReviewRevisionSortOrder.Date,
+            _ => ReviewRevisionSortOrder.Sequence,
+        });
     }
 }

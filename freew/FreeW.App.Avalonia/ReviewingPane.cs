@@ -4,6 +4,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -31,9 +32,11 @@ public sealed class ReviewingPane : SidePaneBase
 
     private readonly ListBox _revisionList;
     private readonly TextBlock _countLabel;
+    private readonly ComboBox _sortCombo;
     private readonly Button _acceptAllButton;
     private readonly Button _rejectAllButton;
     private IReadOnlyList<RevisionEntry> _revisions = Array.Empty<RevisionEntry>();
+    private ReviewRevisionSortOrder _sortOrder = ReviewRevisionSortOrder.Sequence;
 
     // ── Construction ──────────────────────────────────────────────────────────
 
@@ -76,6 +79,37 @@ public sealed class ReviewingPane : SidePaneBase
             Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
         };
 
+        _sortCombo = new ComboBox
+        {
+            Width = 132,
+        };
+        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Sequence", Tag = ReviewRevisionSortOrder.Sequence });
+        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Author", Tag = ReviewRevisionSortOrder.Author });
+        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Type", Tag = ReviewRevisionSortOrder.Kind });
+        _sortCombo.Items.Add(new ComboBoxItem { Content = "By Date", Tag = ReviewRevisionSortOrder.Date });
+        _sortCombo.SelectedIndex = 0;
+        _sortCombo.SelectionChanged += (_, _) =>
+        {
+            if (_sortCombo.SelectedItem is ComboBoxItem { Tag: ReviewRevisionSortOrder order })
+            {
+                _sortOrder = order;
+                Refresh();
+            }
+        };
+
+        var sortRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(8, 0, 8, 4),
+        };
+        sortRow.Children.Add(new TextBlock
+        {
+            Text = "Sort:",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0),
+        });
+        sortRow.Children.Add(_sortCombo);
+
         // --- Revision list ------------------------------------------------------
         _revisionList = new ListBox
         {
@@ -96,8 +130,10 @@ public sealed class ReviewingPane : SidePaneBase
         //   [revisionList] fill
         DockPanel.SetDock(bulkRow, Dock.Top);
         DockPanel.SetDock(_countLabel, Dock.Top);
+        DockPanel.SetDock(sortRow, Dock.Top);
         InnerLayout.Children.Add(bulkRow);
         InnerLayout.Children.Add(_countLabel);
+        InnerLayout.Children.Add(sortRow);
         InnerLayout.Children.Add(_revisionList);
     }
 
@@ -109,7 +145,7 @@ public sealed class ReviewingPane : SidePaneBase
     /// </summary>
     public override void Refresh()
     {
-        var revisions = RevisionList.Enumerate(_editor.Document);
+        var revisions = ReviewRevisionSortPlanner.Sort(RevisionList.Enumerate(_editor.Document), _sortOrder);
         var previousIndex = _revisionList.SelectedIndex;
         _revisions = revisions;
         var hasRevisions = revisions.Count > 0;
@@ -194,6 +230,20 @@ public sealed class ReviewingPane : SidePaneBase
     internal int SelectedRevisionIndexForTest => _revisionList.SelectedIndex;
     internal RevisionEntry? SelectedRevision => (_revisionList.SelectedItem as RevisionItemView)?.Entry;
     internal RevisionEntry? SelectedRevisionForTest => SelectedRevision;
+    internal ReviewRevisionSortOrder SortOrderForTest => _sortOrder;
+
+    internal void SetSortOrderForTest(ReviewRevisionSortOrder order)
+    {
+        var index = order switch
+        {
+            ReviewRevisionSortOrder.Sequence => 0,
+            ReviewRevisionSortOrder.Author => 1,
+            ReviewRevisionSortOrder.Kind => 2,
+            ReviewRevisionSortOrder.Date => 3,
+            _ => 0,
+        };
+        _sortCombo.SelectedIndex = index;
+    }
 
     /// <summary>
     /// Enumerates the tracked-change entries for <paramref name="doc"/> via the model tier — the same

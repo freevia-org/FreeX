@@ -2,6 +2,7 @@ using Avalonia.Headless;
 using System.Threading;
 using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 
@@ -128,6 +129,35 @@ public sealed class ReviewChangeNavigationTests
     }
 
     [Fact]
+    public async Task ReviewingPane_sort_reorders_live_entries_and_keeps_selected_entry_actionable()
+    {
+        await Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(RevisionParagraph("Carol", "carol", RevisionKind.Inserted));
+            document.Blocks.Add(RevisionParagraph("Alice", "alice", RevisionKind.Deleted));
+            document.Blocks.Add(RevisionParagraph("Bob", "bob", RevisionKind.Inserted));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            var pane = new ReviewingPane(view);
+
+            pane.Refresh();
+            pane.SetSortOrderForTest(ReviewRevisionSortOrder.Author);
+
+            pane.SortOrderForTest.Should().Be(ReviewRevisionSortOrder.Author);
+            pane.SelectedRevisionForTest!.Author.Should().Be("Alice");
+            pane.SelectedRevisionForTest.Text.Should().Be("alice");
+
+            pane.AcceptEntry(pane.SelectedRevisionForTest);
+
+            RevisionList.Enumerate(document).Select(entry => entry.Text)
+                .Should().Equal("carol", "bob");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Production_MainWindow_step_opens_hidden_pane_and_navigates()
     {
         await Session.Dispatch(() =>
@@ -143,6 +173,17 @@ public sealed class ReviewChangeNavigationTests
                 "opening the hidden pane selects index 0 before Next advances once");
             window.Editor.CaretPositionForTest.Should().Be((1, 0));
         }, CancellationToken.None);
+    }
+
+    private static Paragraph RevisionParagraph(string author, string text, RevisionKind kind)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text)
+        {
+            Revision = kind,
+            RevisionAuthor = author,
+        });
+        return paragraph;
     }
 
     [Fact]
