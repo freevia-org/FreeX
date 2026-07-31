@@ -264,7 +264,10 @@ public sealed class InCanvasRichClipboardTests
                     InsetLeftPt: 6,
                     InsetRightPt: 12,
                     HorizontalMergeStart: true,
-                    VerticalMergeContinuation: true),
+                    VerticalMergeContinuation: true,
+                    FillPattern: "horzStripe",
+                    FillForegroundRgb: 0x1F4E79,
+                    FillBackgroundRgb: 0xFFFFFF),
                 new InCanvasRichClipboardTableCellStyle(),
             ]);
 
@@ -282,6 +285,9 @@ public sealed class InCanvasRichClipboardTests
         decoded.TableCellStyles[0].InsetRightPt.Should().Be(12);
         decoded.TableCellStyles[0].HorizontalMergeStart.Should().BeTrue();
         decoded.TableCellStyles[0].VerticalMergeContinuation.Should().BeTrue();
+        decoded.TableCellStyles[0].FillPattern.Should().Be("horzStripe");
+        decoded.TableCellStyles[0].FillForegroundRgb.Should().Be(0x1F4E79);
+        decoded.TableCellStyles[0].FillBackgroundRgb.Should().Be(0xFFFFFF);
     }
 
     [Fact]

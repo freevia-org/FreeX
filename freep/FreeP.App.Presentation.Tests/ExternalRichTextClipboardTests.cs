@@ -572,6 +572,38 @@ Header\cell Value\cell\row}";
     }
 
     [Fact]
+    public void WordTableCellShading_PreservesPatternAndForegroundBackgroundColors()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue255;\red31\green78\blue121;\red242\green242\blue242;}
+\trowd\clcbpat1\clcfpat2\clbghoriz\cellx1440\clcbpat3\clcfpat2\clbgcross\cellx2880
+\clcbpat3\clshdng100\cellx4320
+Header\cell Body\cell Solid\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.TableCellStyles.Should().HaveCount(3);
+        payload.TableCellStyles![0].FillPattern.Should().Be("horzStripe");
+        payload.TableCellStyles[0].FillForegroundRgb.Should().Be(0x1F4E79);
+        payload.TableCellStyles[0].FillBackgroundRgb.Should().Be(0xFFFFFF);
+        payload.TableCellStyles[1].FillPattern.Should().Be("cross");
+        payload.TableCellStyles[2].FillPattern.Should().Be("pct100");
+
+        ClipboardTablePlanner.TryBuildStandaloneTable(
+            payload.Body,
+            payload.TableColumnWidthsEmu,
+            payload.TableCellStyles,
+            out var table).Should().BeTrue();
+
+        var firstFill = table.Rows[0].Cells[0].Fill.Should().BeOfType<ShapeFill.Pattern>().Subject;
+        firstFill.Preset.Should().Be("horzStripe");
+        firstFill.ForegroundColor.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        firstFill.BackgroundColor.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFFFF));
+    }
+
+    [Fact]
     public void WordTableMergeControls_PreserveNativeGridAndRowSpans()
     {
         const string rtf =

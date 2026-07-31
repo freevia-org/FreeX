@@ -101,6 +101,9 @@ public static class ExternalRichTextClipboardPlanner
             private double _borderWidthPt = 0.75;
 
             public int? FillRgb { get; set; }
+            public string? FillPattern { get; set; }
+            public int? FillForegroundRgb { get; set; }
+            public int? FillBackgroundRgb { get; set; }
             public InCanvasRichClipboardTableBorder? Left { get; private set; }
             public InCanvasRichClipboardTableBorder? Right { get; private set; }
             public InCanvasRichClipboardTableBorder? Top { get; private set; }
@@ -154,12 +157,18 @@ public static class ExternalRichTextClipboardPlanner
                     HorizontalMergeStart,
                     HorizontalMergeContinuation,
                     VerticalMergeStart,
-                    VerticalMergeContinuation);
+                    VerticalMergeContinuation,
+                    FillPattern,
+                    FillForegroundRgb,
+                    FillBackgroundRgb ?? FillRgb);
             }
 
             public void Reset()
             {
                 FillRgb = null;
+                FillPattern = null;
+                FillForegroundRgb = null;
+                FillBackgroundRgb = null;
                 Left = null;
                 Right = null;
                 Top = null;
@@ -889,7 +898,26 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "clcbpat":
                     _pendingCellStyle.FillRgb = ResolveColorRgb(value);
+                    _pendingCellStyle.FillBackgroundRgb = _pendingCellStyle.FillRgb;
                     break;
+                case "clcfpat":
+                    _pendingCellStyle.FillForegroundRgb = ResolveColorRgb(value);
+                    break;
+                case "clshdng":
+                    _pendingCellStyle.FillPattern = PatternForPercentage(value);
+                    break;
+                case "clbghoriz": _pendingCellStyle.FillPattern = "horzStripe"; break;
+                case "clbgvert": _pendingCellStyle.FillPattern = "vertStripe"; break;
+                case "clbgfdiag": _pendingCellStyle.FillPattern = "upDiag"; break;
+                case "clbgbdiag": _pendingCellStyle.FillPattern = "diagStripe"; break;
+                case "clbgcross": _pendingCellStyle.FillPattern = "cross"; break;
+                case "clbgdcross": _pendingCellStyle.FillPattern = "diagCross"; break;
+                case "clbgdkhoriz": _pendingCellStyle.FillPattern = "ltHorz"; break;
+                case "clbgdkvert": _pendingCellStyle.FillPattern = "ltVert"; break;
+                case "clbgdkfdiag": _pendingCellStyle.FillPattern = "ltUpDiag"; break;
+                case "clbgdkbdiag": _pendingCellStyle.FillPattern = "ltDnDiag"; break;
+                case "clbgdkcross": _pendingCellStyle.FillPattern = "smGrid"; break;
+                case "clbgdkdcross": _pendingCellStyle.FillPattern = "diagCross"; break;
                 case "clbrdrl": _pendingCellStyle.BeginBorder(TableCellBorderSide.Left); break;
                 case "clbrdrr": _pendingCellStyle.BeginBorder(TableCellBorderSide.Right); break;
                 case "clbrdrt": _pendingCellStyle.BeginBorder(TableCellBorderSide.Top); break;
@@ -1346,6 +1374,14 @@ public static class ExternalRichTextClipboardPlanner
 
         private static double ToCellInsetPoints(int twips) =>
             Math.Clamp(twips / 20.0, 0.0, 72.0);
+
+        private static string PatternForPercentage(int percentage)
+        {
+            int[] supported = [0, 5, 10, 20, 25, 30, 40, 50, 60, 75, 90, 100];
+            int normalized = Math.Clamp(percentage, 0, 100);
+            int nearest = supported.OrderBy(value => Math.Abs(value - normalized)).First();
+            return $"pct{nearest}";
+        }
 
         // RTF up/dn values are half-points; the shared run model stores the
         // equivalent DrawingML-style thousandths of a percent of the font size.
