@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Threading;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
@@ -120,16 +121,29 @@ public sealed class R86_DatedifHolidaySerialVolatileNowTests
     [Fact]
     public void Now_RepeatedCallsWithinShortIdleWindow_ReturnIdenticalSerial()
     {
-        // Simulate two NOW() evaluations separated by measurable wall-clock time within the same
-        // "burst" (the shape of a large dependency chain being walked in one recalculation pass).
-        // Pre-fix, NOW() read DateTime.Now fresh every call, so a 50ms gap reliably produced a
-        // different serial value. Post-fix, both calls fall within the idle window and must
-        // return the exact same cached instant.
-        var first = (DateTimeValue)_eval.Evaluate("=NOW()", MakeSheet());
-        Thread.Sleep(50);
-        var second = (DateTimeValue)_eval.Evaluate("=NOW()", MakeSheet());
+        // The production idle window is 200 ms. A fixed Sleep(50) is not evidence that the
+        // observed interval stayed inside it: under a parallel suite the test thread can be
+        // descheduled for several hundred milliseconds. Retry until we observe a bounded
+        // interval, while retaining enough work between calls for an uncached NOW() to change.
+        const int maximumObservedIntervalMs = 150;
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            var first = (DateTimeValue)_eval.Evaluate("=NOW()", MakeSheet());
+            var elapsed = Stopwatch.StartNew();
+            Thread.SpinWait(50_000);
+            var second = (DateTimeValue)_eval.Evaluate("=NOW()", MakeSheet());
+            elapsed.Stop();
 
-        second.Value.Should().Be(first.Value);
+            if (elapsed.ElapsedMilliseconds > maximumObservedIntervalMs)
+            {
+                continue;
+            }
+
+            second.Value.Should().Be(first.Value);
+            return;
+        }
+
+        Assert.Fail("Could not observe two NOW() evaluations within the 200 ms idle window.");
     }
 
     [Fact]
