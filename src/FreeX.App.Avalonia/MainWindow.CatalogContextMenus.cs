@@ -284,7 +284,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private void ExecuteAvaloniaQuickAccessCommand(
+    private async void ExecuteAvaloniaQuickAccessCommand(
         QuickAccessToolbarCommandDefinition command,
         object sender,
         RoutedEventArgs args)
@@ -292,13 +292,115 @@ public sealed partial class MainWindow
         switch (command.Id)
         {
             case QuickAccessToolbarCommandIds.Save:
-                SaveButton_Click(sender, args);
+                await SaveCurrentWorkbookAsync();
                 return;
             case QuickAccessToolbarCommandIds.Undo:
                 UndoLastEdit();
                 return;
             case QuickAccessToolbarCommandIds.Redo:
                 RedoLastEdit();
+                return;
+            case QuickAccessToolbarCommandIds.New:
+                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.New);
+                return;
+            case QuickAccessToolbarCommandIds.Open:
+                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.Open);
+                return;
+            case QuickAccessToolbarCommandIds.SaveAs:
+                await ExecuteBackstageCommandWorkflowAsync(FreeXBackstageCommandId.SaveAs);
+                return;
+            case QuickAccessToolbarCommandIds.Print:
+                await ShowPrintDialogAsync();
+                return;
+            case QuickAccessToolbarCommandIds.ExportPdfXps:
+                await ShowBackstageExportDialogAsync();
+                return;
+            case QuickAccessToolbarCommandIds.Cut:
+                await CutSelectedRangeToClipboardAsync();
+                return;
+            case QuickAccessToolbarCommandIds.Copy:
+                await CopySelectedRangeToClipboardAsync();
+                return;
+            case QuickAccessToolbarCommandIds.Paste:
+                await PasteClipboardTextAsync();
+                return;
+            case QuickAccessToolbarCommandIds.FormatPainter:
+                FormatPainterButton_Click(sender, args);
+                return;
+            case QuickAccessToolbarCommandIds.Bold:
+                ToggleSelectedRangeBold();
+                return;
+            case QuickAccessToolbarCommandIds.Italic:
+                ToggleSelectedRangeItalic();
+                return;
+            case QuickAccessToolbarCommandIds.Underline:
+                ToggleSelectedRangeUnderline();
+                return;
+            case QuickAccessToolbarCommandIds.FillColor:
+                _fillColorButton.Flyout?.ShowAt(sender as Control ?? _fillColorButton);
+                return;
+            case QuickAccessToolbarCommandIds.FontColor:
+                _fontColorButton.Flyout?.ShowAt(sender as Control ?? _fontColorButton);
+                return;
+            case QuickAccessToolbarCommandIds.FormatCells:
+                await ShowFormatCellsDialogAsync();
+                return;
+            case QuickAccessToolbarCommandIds.InsertFunction:
+                InsertFunction();
+                return;
+            case QuickAccessToolbarCommandIds.AutoSum:
+                InsertAutoSumFormula("SUM");
+                return;
+            case QuickAccessToolbarCommandIds.CalculateNow:
+                CalculateNow();
+                return;
+            case QuickAccessToolbarCommandIds.CalculateSheet:
+                CalculateActiveSheet();
+                return;
+            case QuickAccessToolbarCommandIds.RefreshAll:
+                RefreshImportedData();
+                return;
+            case QuickAccessToolbarCommandIds.SortAscending:
+                SortSelectedRange(ascending: true);
+                return;
+            case QuickAccessToolbarCommandIds.SortDescending:
+                SortSelectedRange(ascending: false);
+                return;
+            case QuickAccessToolbarCommandIds.Filter:
+                ToggleAutoFilter();
+                return;
+            case QuickAccessToolbarCommandIds.DataValidation:
+                await ShowDataValidationDialogAsync();
+                return;
+            case QuickAccessToolbarCommandIds.NameManager:
+                NameManager();
+                return;
+            case QuickAccessToolbarCommandIds.Spelling:
+                await ShowSpellingDialogAsync();
+                return;
+            case QuickAccessToolbarCommandIds.CheckAccessibility:
+                await ShowAccessibilityCheckerDialogAsync();
+                return;
+            case QuickAccessToolbarCommandIds.ShareWorkbook:
+                await ShareWorkbookAsync();
+                return;
+            case QuickAccessToolbarCommandIds.Zoom100:
+                ZoomTo100Percent();
+                return;
+            case QuickAccessToolbarCommandIds.ZoomSelection:
+                ZoomToSelection();
+                return;
+            case QuickAccessToolbarCommandIds.FreezePanes:
+                FreezePanesAtActiveCell();
+                return;
+            case QuickAccessToolbarCommandIds.InsertSheet:
+                AddNewSheet();
+                return;
+            case QuickAccessToolbarCommandIds.FindSelect:
+                await ShowFindDialogAsync();
+                return;
+            case QuickAccessToolbarCommandIds.SelectionPane:
+                await OpenSelectionPaneDialogAsync();
                 return;
         }
 
@@ -321,8 +423,8 @@ public sealed partial class MainWindow
         var state = new QuickAccessCommandState(
             _session.CanUndo,
             _session.CanRedo,
-            HasActiveWorksheet: true,
-            HasSelection: true);
+            HasActiveWorksheet: _session.Workbook.GetSheet(_session.ActiveSheet.Id) is not null,
+            HasSelection: _session.SelectedRanges.Count > 0);
         foreach (var (commandId, button) in _avaloniaQuickAccessButtons)
             button.IsEnabled = QuickAccessCommandStateResolver.CanExecute(commandId, state);
     }
