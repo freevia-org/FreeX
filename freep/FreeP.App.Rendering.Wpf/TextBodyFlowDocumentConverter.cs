@@ -493,7 +493,17 @@ internal static class TextBodyFlowDocumentConverter
         {
             var row = table.Rows[rowIndex];
             double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(height) });
+            var rowDefinition = new RowDefinition();
+            if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
+            {
+                rowDefinition.Height = GridLength.Auto;
+                rowDefinition.MinHeight = height;
+            }
+            else
+            {
+                rowDefinition.Height = new GridLength(height);
+            }
+            grid.RowDefinitions.Add(rowDefinition);
             int columnIndex = 0;
             foreach (var cell in row.Cells)
             {

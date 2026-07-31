@@ -80,6 +80,8 @@ public sealed class InCanvasRichClipboardTests
         outer.Table.ColumnWidthsEmu.AddRange([457200, 457200]);
         outer.Table.Rows.Add(new TableRow
         {
+            HeightEmu = 304800,
+            HeightRule = TableRowHeightRule.Exact,
             Cells =
             {
                 new TableCell { TextBody = Body("Outer") },
@@ -127,6 +129,7 @@ public sealed class InCanvasRichClipboardTests
         decoded.Should().NotBeNull();
         var decodedOuter = decoded!.Body.Paragraphs.Single().Runs[1].InlineTable;
         decodedOuter.Should().NotBeNull();
+        decodedOuter!.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
         decodedOuter!.Table.Rows[0].Cells[1].TextBody!.Paragraphs[0].Runs
             .Single(run => run.InlineTable is not null)
             .InlineTable!.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text
