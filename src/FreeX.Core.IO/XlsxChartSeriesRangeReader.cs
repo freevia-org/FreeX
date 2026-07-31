@@ -21,10 +21,13 @@ internal static class XlsxChartSeriesRangeReader
     /// <summary>
     /// R82-io-chart-series-5: captures per-series round-trip metadata the writer cannot recompute
     /// positionally — an explicit &lt;c:order&gt; that diverges from &lt;c:idx&gt; (see
-    /// <see cref="ChartModel.SeriesOrderOverrides"/>), and a &lt;c:cat&gt; container built from
-    /// &lt;c:multiLvlStrRef&gt; (see <see cref="ChartModel.MultiLevelCategoryXml"/>). Safe to call
-    /// for every series regardless of chart family: a series with no &lt;c:cat&gt; (Scatter/Bubble)
-    /// simply captures nothing for the category half.
+    /// <see cref="ChartModel.SeriesOrderOverrides"/>), a &lt;c:cat&gt; container built from
+    /// &lt;c:multiLvlStrRef&gt; (see <see cref="ChartModel.MultiLevelCategoryXml"/>), and the series'
+    /// own &lt;c:tx&gt; formula text (see <see cref="ChartModel.SeriesNameOverrides"/> —
+    /// R103-io-chart-series-tx-1). Safe to call for every series regardless of chart family: a
+    /// series with no &lt;c:cat&gt; (Scatter/Bubble) simply captures nothing for the category half,
+    /// and a series with no &lt;c:tx&gt; (or a literal string tx with no &lt;c:f&gt;) captures
+    /// nothing for the name half.
     /// </summary>
     public static void CaptureSeriesRoundTripMetadata(XElement series, int seriesIndex, ChartModel chart)
     {
@@ -35,6 +38,16 @@ internal static class XlsxChartSeriesRangeReader
         var cat = ElementByLocalName(series, "cat");
         if (cat is not null && cat.Elements().Any(e => e.Name.LocalName == "multiLvlStrRef"))
             chart.MultiLevelCategoryXml.Add(new ChartSeriesRawXmlEntry(seriesIndex, cat.ToString(SaveOptions.DisableFormatting)));
+
+        // R103-io-chart-series-tx-1: capture the series' own <c:tx> formula verbatim whenever one is
+        // present, regardless of whether it happens to parse as an ordinary rectangular range. A
+        // plain reference to a non-header cell (e.g. 'Sheet1'!$F$1 for a series whose values come
+        // from column B) parses fine as a GridRange, so it never triggers the pre-existing
+        // unparsable-formula bypass (TryCollectVerbatimFormulas/CaptureFormulaIfUnparsable below) —
+        // without this capture the writer always recomputes the tx as the strip's own header cell
+        // and the user's custom reference is silently discarded on save.
+        if (ReadFirstFormula(series, "tx") is { Length: > 0 } txFormula)
+            chart.SeriesNameOverrides.Add(new ChartSeriesNameOverride(seriesIndex, txFormula));
     }
 
     public static bool UsesSecondaryValueAxis(XElement? plotArea, XElement plotChart)
@@ -325,7 +338,10 @@ internal static class XlsxChartSeriesRangeReader
                 ValFormula: CaptureFormulaIfUnparsable(series, isScatterOrBubble ? "yVal" : "val", sheetId),
                 CatFormula: CaptureFormulaIfUnparsable(series, isScatterOrBubble ? "xVal" : "cat", sheetId),
                 TxFormula: CaptureFormulaIfUnparsable(series, "tx", sheetId),
-                BubbleSizeFormula: CaptureFormulaIfUnparsable(series, "bubbleSize", sheetId)));
+                BubbleSizeFormula: CaptureFormulaIfUnparsable(series, "bubbleSize", sheetId),
+                ValCacheXml: CaptureCacheXmlIfUnparsable(series, isScatterOrBubble ? "yVal" : "val", sheetId),
+                CatCacheXml: CaptureCacheXmlIfUnparsable(series, isScatterOrBubble ? "xVal" : "cat", sheetId),
+                BubbleSizeCacheXml: CaptureCacheXmlIfUnparsable(series, "bubbleSize", sheetId)));
         }
 
         return result;
@@ -344,6 +360,36 @@ internal static class XlsxChartSeriesRangeReader
             return null;
 
         return TryParseFormulaRange(formula, sheetId, out _) ? null : formula;
+    }
+
+    /// <summary>
+    /// R103-io-chart-series-verbatim-cache: captures the container's own &lt;c:numCache&gt;/
+    /// &lt;c:strCache&gt; element verbatim (serialized text, root element name preserved), but ONLY
+    /// when that same container's own formula is unparsable — mirrors
+    /// <see cref="CaptureFormulaIfUnparsable"/>'s per-container scoping exactly, so a container
+    /// whose formula parses fine never gets a spurious cache capture here (its cache is instead
+    /// rebuilt from live worksheet data by the ordinary positional path in
+    /// <c>XlsxChartXmlWriter</c>). Real Excel always pairs a named-range/multi-area/external-link
+    /// series formula with a cache of its last-computed values so the chart still shows
+    /// last-known data under manual calculation or in a non-recalculating consumer; without
+    /// capturing this at load time, the writer had no cache to re-emit and always wrote none.
+    /// Returns null when the container is absent, its formula parses fine, or the source simply
+    /// had no cache element (e.g. a full-column named range with no computed value) — real Excel
+    /// omits the cache in that case too.
+    /// </summary>
+    private static string? CaptureCacheXmlIfUnparsable(XElement series, string containerName, SheetId sheetId)
+    {
+        var formula = ReadFirstFormula(series, containerName);
+        if (formula is null || TryParseFormulaRange(formula, sheetId, out _))
+            return null;
+
+        var container = ElementByLocalName(series, containerName);
+        if (container is null)
+            return null;
+
+        var cache = FindDescendantByLocalName(container, "numCache")
+            ?? FindDescendantByLocalName(container, "strCache");
+        return cache?.ToString(SaveOptions.DisableFormatting);
     }
 
     /// <summary>

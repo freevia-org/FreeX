@@ -31,9 +31,18 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(targetSheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;
 
+        // A rule can be anchored purely by an AdditionalRanges entry (AppliesTo elsewhere, or vice
+        // versa -- see ApplyConditionalFormatCommand, which populates AdditionalRanges for any
+        // ordinary multi-area/Ctrl+click CF application), so every range the rule covers
+        // (rule.AllRanges = AppliesTo + AdditionalRanges) must be checked against the copied source,
+        // not just the primary AppliesTo range. Each overlapping fragment becomes its own pasted
+        // rule with a fresh AppliesTo and no stale AdditionalRanges copied along, mirroring
+        // PasteDataValidationCommand's EnumerateRuleRanges/IntersectWithSource handling of the
+        // identical multi-area shape for Data Validation (R78-commands-paste-special-5-4).
         var pastedRules = sourceSheet.ConditionalFormats
-            .Where(rule => rule.AppliesTo.Overlaps(_sourceRange))
-            .Select(rule => CloneRuleForDestination(rule, targetSheet.Name))
+            .SelectMany(rule => rule.AllRanges
+                .Where(range => range.Overlaps(_sourceRange))
+                .Select(range => CloneRuleForDestination(rule, range, targetSheet.Name)))
             .ToList();
 
         // Give each pasted rule a fresh slot in the destination sheet's priority sequence instead of
@@ -67,15 +76,18 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         _previousRules = null;
     }
 
-    private ConditionalFormat CloneRuleForDestination(ConditionalFormat source, string hostSheetName)
+    private ConditionalFormat CloneRuleForDestination(ConditionalFormat source, GridRange ruleRange, string hostSheetName)
     {
         // Clip the rule to the copied source range before mapping. Rules are selected by Overlaps (not
         // Contains), so a rule that starts above/left of the source range would otherwise make
         // MapDestination compute a negative offset that underflows the uint cell coordinate into a
         // multi-billion-row garbage range (hang/OOM in AllCells()). Mirrors PasteDataValidationCommand.
-        var clipped = GridRange.TryIntersect(source.AppliesTo, _sourceRange, out var intersection)
+        // ruleRange is whichever of source.AllRanges (AppliesTo or one AdditionalRanges entry)
+        // overlapped _sourceRange -- clipping against that specific range (not always AppliesTo)
+        // is what lets a rule anchored purely via AdditionalRanges paste correctly.
+        var clipped = GridRange.TryIntersect(ruleRange, _sourceRange, out var intersection)
             ? intersection
-            : source.AppliesTo;
+            : ruleRange;
         var start = MapDestination(clipped.Start);
         var end = MapDestination(clipped.End);
 

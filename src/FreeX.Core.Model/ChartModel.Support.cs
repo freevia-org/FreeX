@@ -125,13 +125,29 @@ public sealed record ChartSeriesColumnMapping(int SeriesXmlIndex, uint ValueColu
 /// series additionally may need to preserve its <c>bubbleSize</c> formula, which has no
 /// standard-chart equivalent to repurpose, hence the dedicated <see cref="BubbleSizeFormula"/>.
 /// </para>
+/// <para>
+/// R103-io-chart-series-verbatim-cache: <see cref="ValCacheXml"/>/<see cref="CatCacheXml"/>/
+/// <see cref="BubbleSizeCacheXml"/> hold the source file's own &lt;c:numCache&gt;/&lt;c:strCache&gt;
+/// element (serialized verbatim, root-element name preserved) for the matching unparsable
+/// container, when the source actually had one. Real Excel always pairs a series formula —
+/// including a named-range/multi-area/external-link one — with a cache of its last-computed
+/// values, so a manual-calculation workbook or non-recalculating consumer still shows the chart's
+/// last-known data. Without this, <c>XlsxChartXmlWriter</c> had no cache data available to
+/// re-emit for a verbatim series (only the formula text was ever captured) and unconditionally
+/// wrote no cache at all, even when the source file had one. These are null when the source
+/// container had no cache to begin with (e.g. a full-column named range with no computed value),
+/// matching real Excel, which also omits the cache in that case.
+/// </para>
 /// </summary>
 public sealed record ChartSeriesVerbatimFormulas(
     int SeriesIndex,
     string? ValFormula,
     string? CatFormula,
     string? TxFormula,
-    string? BubbleSizeFormula = null);
+    string? BubbleSizeFormula = null,
+    string? ValCacheXml = null,
+    string? CatCacheXml = null,
+    string? BubbleSizeCacheXml = null);
 
 /// <summary>
 /// Embedded data values for a single chart series, extracted from the
@@ -343,6 +359,13 @@ public sealed record ChartPointFillFormat(
 /// See <see cref="ChartModel.SeriesOrderOverrides"/> for the round-trip rationale.
 /// </summary>
 public sealed record ChartSeriesOrderOverride(int SeriesIndex, int Order);
+
+/// <summary>
+/// R103-io-chart-series-tx-1: a series' &lt;c:tx&gt;&lt;c:strRef&gt;&lt;c:f&gt; formula captured
+/// verbatim from the source XML. See <see cref="ChartModel.SeriesNameOverrides"/> for the
+/// round-trip rationale.
+/// </summary>
+public sealed record ChartSeriesNameOverride(int SeriesIndex, string Formula);
 
 /// <summary>
 /// Per-data-point marker override for a Line/Scatter data point, read from a &lt;c:dPt&gt;'s

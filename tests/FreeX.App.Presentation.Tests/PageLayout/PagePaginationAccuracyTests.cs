@@ -228,8 +228,14 @@ public sealed class PagePaginationAccuracyTests
     [Fact]
     public void Paginate_FitToOneWideScaleAccountsForRealTotalColumnWidth()
     {
-        // When FitToPagesWide=1, the planner collapses all columns onto one page regardless of width.
-        // Verify that wide columns still produce ColumnPageCount=1 and an effective scale <= 100.
+        // When FitToPagesWide=1, the planner tries to collapse all columns onto one page -- but only
+        // within Excel's [10%, 400%] scale range (R103-print-pagination-scale-bound-1). Here 30
+        // columns @ 285px each (40-char width) against an A4/Narrow ~745.92px body and an 18-
+        // columns/page baseline would need an 18/30 = 6.67% shrink to literally hit 1 page, which is
+        // below Excel's 10% floor -- so real Excel (and this planner, post-fix) floors the scale at
+        // 10% and lets the sheet spread across 2 pages instead of crushing all 30 columns onto one
+        // unreadable page. This is the exact defect scenario the fix addresses, just with a wide-
+        // column axis instead of a wide-range axis.
         var range = Range(1, 1, 5, 30);
         var margins = WorksheetPageMargins.Narrow;
         var fitWide1 = new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: 1, FitToPagesTall: null);
@@ -249,9 +255,12 @@ public sealed class PagePaginationAccuracyTests
             headerMarginInches: 0.0,
             footerMarginInches: 0.0);
 
-        result.ColumnPageCount.Should().Be(1,
-            because: "FitToPagesWide=1 collapses all columns onto one page");
-        // Since the wide columns need multiple pages at 100%, the effective scale must be < 100.
+        result.ColumnPageCount.Should().Be(2,
+            because: "the literal fit-to-1-wide request would need an unbounded 6.67% shrink below " +
+            "Excel's 10% floor, so the scale is floored at 10% and the sheet correctly spills onto a " +
+            "2nd column page instead of crushing all 30 wide columns onto a single unreadable page");
+        // Even floored at 10%, the effective scale (derived from the ACTUAL resulting page count) is
+        // still <= 100 -- it is a shrink, just not as extreme as the literal (unbounded) request.
         result.EffectiveScalePercent.Should().BeLessThanOrEqualTo(100.0,
             because: "fit-to-1-wide must shrink content that exceeds a single page width");
     }

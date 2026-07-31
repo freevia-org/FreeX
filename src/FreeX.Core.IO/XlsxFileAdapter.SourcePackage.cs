@@ -40,7 +40,11 @@ public sealed partial class XlsxFileAdapter
         using var sourceStream = sourcePackage.OpenRead();
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
-        var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, generatedArchive);
+        var context = XlsxSourcePackagePreservationContext.TryCreate(
+            sourceArchive,
+            generatedArchive,
+            workbook,
+            sourcePackage.SourceSheetIdsByLocalId);
         var sourceParts = InspectSourcePackageParts(sourceArchive);
         var removedWorksheetPackageParts = GetExcludedWorksheetPackagePartPaths(
             sourceArchive,

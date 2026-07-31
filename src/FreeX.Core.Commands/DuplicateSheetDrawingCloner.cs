@@ -68,6 +68,124 @@ internal static class DuplicateSheetDrawingCloner
     }
 
     /// <summary>
+    /// R103: clones every workbook-level Slicer/Timeline anchored on <paramref name="source"/> (via
+    /// <see cref="SlicerModel.SourceSheetName"/> / <see cref="TimelineModel.SourceSheetName"/>) onto
+    /// <paramref name="copy"/>. Unlike every other floating-object kind (Charts, TextBoxes,
+    /// DrawingShapes, Pictures, Sparklines, FormControls), Slicers/Timelines are NOT part of
+    /// <c>Sheet</c>'s own drawing collections -- they live in workbook-level
+    /// <see cref="Workbook.Slicers"/>/<see cref="Workbook.Timelines"/>, keyed to a host sheet only
+    /// indirectly by name -- so <see cref="CopyDrawingCollections"/> (which only ever sees
+    /// <paramref name="source"/>/<paramref name="copy"/>, not the owning <see cref="Workbook"/>) can
+    /// never reach them. Without this, Duplicate Sheet / Move-or-Copy silently dropped any slicer or
+    /// timeline that was filtering a pivot table (or table) on the duplicated sheet, even though the
+    /// pivot table itself is faithfully cloned -- unlike real Excel, which copies the slicer/timeline
+    /// along with it.
+    /// <para>
+    /// <see cref="SlicerModel.Name"/>/<see cref="TimelineModel.Name"/> and
+    /// <c>CacheName</c> are given workbook-unique values (mirroring
+    /// <c>DuplicateSheetCommand.UniquifyClonedTables</c> for cloned structured tables) so the copy
+    /// doesn't collide with the source's slicer/timeline identity, and
+    /// <see cref="SlicerModel.PackagePart"/>/<see cref="TimelineModel.PackagePart"/> are left blank so
+    /// <c>XlsxSlicerTimelineWriter</c> allocates the clone its own package part on save instead of
+    /// aliasing the source's (mirroring <c>IsSourceLoaded = false</c> on <see cref="ClonePicture"/>/
+    /// <see cref="CloneTextBox"/>/<see cref="CloneDrawingShape"/> above).
+    /// </para>
+    /// <see cref="SlicerModel.DrawingAnchor"/>/<see cref="TimelineModel.DrawingAnchor"/> need no
+    /// remapping (unlike a chart/shape/picture's sheet-qualified anchor address): it is a bare
+    /// column/row-offset pair with no embedded <see cref="SheetId"/>, so it already describes a valid
+    /// position on the copy sheet's own drawing layer as-is.
+    /// </summary>
+    internal static (List<SlicerModel> Slicers, List<TimelineModel> Timelines) CopySlicersAndTimelines(
+        Workbook workbook, Sheet source, Sheet copy)
+    {
+        var clonedSlicers = new List<SlicerModel>();
+        var clonedTimelines = new List<TimelineModel>();
+
+        foreach (var slicer in workbook.Slicers
+                     .Where(s => string.Equals(s.SourceSheetName, source.Name, StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var clone = new SlicerModel
+            {
+                Name = GenerateUniqueName(workbook.Slicers.Select(s => s.Name), slicer.Name),
+                Caption = slicer.Caption,
+                CacheName = GenerateUniqueName(workbook.Slicers.Select(s => s.CacheName), slicer.CacheName),
+                SourcePivotTableName = slicer.SourcePivotTableName,
+                SourceFieldName = slicer.SourceFieldName,
+                StyleName = slicer.StyleName,
+                PackagePart = string.Empty,
+                DrawingAnchor = slicer.DrawingAnchor,
+                DrawingShapeName = slicer.DrawingShapeName,
+                ColumnCount = slicer.ColumnCount,
+                ShowCaption = slicer.ShowCaption,
+                SourceSheetName = copy.Name,
+                SourceTableId = slicer.SourceTableId,
+                SourceTableColumnId = slicer.SourceTableColumnId,
+                CacheItems = slicer.CacheItems,
+                AvailableItems = slicer.AvailableItems,
+                SelectionCaptured = slicer.SelectionCaptured
+            };
+            clone.SelectedItems.AddRange(slicer.SelectedItems);
+            workbook.Slicers.Add(clone);
+            clonedSlicers.Add(clone);
+        }
+
+        foreach (var timeline in workbook.Timelines
+                     .Where(t => string.Equals(t.SourceSheetName, source.Name, StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var clone = new TimelineModel
+            {
+                Name = GenerateUniqueName(workbook.Timelines.Select(t => t.Name), timeline.Name),
+                Caption = timeline.Caption,
+                CacheName = GenerateUniqueName(workbook.Timelines.Select(t => t.CacheName), timeline.CacheName),
+                SourcePivotTableName = timeline.SourcePivotTableName,
+                SourceFieldName = timeline.SourceFieldName,
+                StyleName = timeline.StyleName,
+                StartDate = timeline.StartDate,
+                EndDate = timeline.EndDate,
+                SelectedStartDate = timeline.SelectedStartDate,
+                SelectedEndDate = timeline.SelectedEndDate,
+                PackagePart = string.Empty,
+                DrawingAnchor = timeline.DrawingAnchor,
+                DrawingShapeName = timeline.DrawingShapeName,
+                SourceSheetName = copy.Name,
+                Level = timeline.Level,
+                SelectionLevel = timeline.SelectionLevel,
+                ScrollPosition = timeline.ScrollPosition
+            };
+            workbook.Timelines.Add(clone);
+            clonedTimelines.Add(clone);
+        }
+
+        return (clonedSlicers, clonedTimelines);
+    }
+
+    /// <summary>
+    /// Generates a workbook-unique name for a cloned Slicer/Timeline's Name or CacheName, trying
+    /// <paramref name="baseName"/> unchanged first (only relevant if a caller ever needs the exact
+    /// source name and it happens to already be free), then <c>baseName_2</c>, <c>baseName_3</c>, ...
+    /// against <paramref name="existingNames"/> -- mirrors
+    /// <c>DuplicateSheetCommand.GenerateUniqueTableName</c>'s numbered-suffix scheme for cloned
+    /// structured tables.
+    /// </summary>
+    private static string GenerateUniqueName(IEnumerable<string> existingNames, string baseName)
+    {
+        var existing = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
+        if (existing.Add(baseName))
+            return baseName;
+
+        for (var n = 2; n < 10_000; n++)
+        {
+            var candidate = $"{baseName}_{n}";
+            if (!existing.Contains(candidate))
+                return candidate;
+        }
+
+        return $"{baseName}_{Guid.NewGuid():N}";
+    }
+
+    /// <summary>
     /// R100: rewrites every Table[...] structured reference inside <paramref name="copy"/>'s own
     /// cloned charts (verbatim series value/category/name/bubble-size formulas, "value from cells"
     /// data-label formulas, and custom error-bar range formulas) that named one of the tables

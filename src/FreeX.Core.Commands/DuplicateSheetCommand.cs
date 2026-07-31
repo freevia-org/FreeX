@@ -10,6 +10,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
     private readonly string? _requestedName;
     private SheetId? _copySheetId;
     private int _insertIndex;
+    private List<SlicerModel>? _clonedSlicers;
+    private List<TimelineModel>? _clonedTimelines;
 
     public string Label => "Duplicate Sheet";
 
@@ -51,6 +53,14 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
 
         DuplicateSheetDrawingCloner.CopyDrawingCollections(source, copy, copyId);
 
+        // R103: Slicers/Timelines are workbook-level collections keyed to a host sheet only
+        // indirectly (SlicerModel.SourceSheetName / TimelineModel.SourceSheetName), so
+        // CopyDrawingCollections above -- which only ever sees the two Sheet objects, not the
+        // owning Workbook -- can never reach them. Without this, a slicer/timeline filtering a
+        // pivot table on the duplicated sheet silently vanished from the copy even though the
+        // pivot table itself is faithfully cloned, unlike real Excel's Duplicate Sheet/Move-or-Copy.
+        (_clonedSlicers, _clonedTimelines) = DuplicateSheetDrawingCloner.CopySlicersAndTimelines(ctx.Workbook, source, copy);
+
         // R17-table-listobject-3: Sheet.Clone copies StructuredTables verbatim (same Id, Name,
         // and DisplayName as the source's tables), which would otherwise leave two tables in the
         // workbook sharing an identity -> corrupt XLSX (Excel repairs by dropping a table) and
@@ -82,8 +92,27 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
 
     public void Revert(ICommandContext ctx)
     {
-        if (_copySheetId.HasValue)
-            ctx.Workbook.RemoveSheet(_copySheetId.Value);
+        if (!_copySheetId.HasValue)
+            return;
+
+        // R103: undo the workbook-level Slicer/Timeline clones CopySlicersAndTimelines added --
+        // Workbook.RemoveSheet only removes the Sheet itself and its named ranges, it has no idea
+        // Slicers/Timelines exist (they're keyed to a host sheet only indirectly, by name), so
+        // without this a Duplicate-Sheet-then-Undo would leave the cloned slicer/timeline behind,
+        // now dangling (SourceSheetName pointing at a sheet name that no longer exists).
+        if (_clonedSlicers is { Count: > 0 })
+        {
+            foreach (var slicer in _clonedSlicers)
+                ctx.Workbook.Slicers.Remove(slicer);
+        }
+
+        if (_clonedTimelines is { Count: > 0 })
+        {
+            foreach (var timeline in _clonedTimelines)
+                ctx.Workbook.Timelines.Remove(timeline);
+        }
+
+        ctx.Workbook.RemoveSheet(_copySheetId.Value);
     }
 
     /// <summary>

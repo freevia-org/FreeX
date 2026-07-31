@@ -69,21 +69,37 @@ public static class AutoFilterChecklistPlanner
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<AutoFilterChecklistItem>();
 
+        // R103-app-presentation-autofilter-1-1: a formula-computed date (DATE()/EDATE()/date
+        // arithmetic such as `=PrevDate+7`) round-trips through the formula engine as a plain
+        // NumberValue, not DateTimeValue -- CreateSortKey's text-based Rank-0 (numeric)/Rank-1
+        // (date) split would then bucket it ahead of any literally-typed date in the SAME column
+        // regardless of chronological order, since a raw invariant number string ("45292") parses
+        // as Rank 0 while a literal "yyyy-MM-dd" string parses as Rank 1. When the cell's resolved
+        // number format says the column is a date column, record each such value's actual date (as
+        // OADate ticks, matching the units the literal-date branch below already sorts by) here so
+        // the comparer puts it in the same date-ordered bucket as literally-typed dates.
+        var dateSortOverrides = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
         for (var row = range.Start.Row + 1; row <= range.End.Row; row++)
         {
             var value = sheet.GetValue(row, col);
             var normalized = ToFilterText(value);
             if (!seen.Add(normalized))
+            {
                 continue;
+            }
 
             var displayText = string.IsNullOrEmpty(normalized)
                 ? blankDisplayText
                 : FormatDisplayText(workbook, sheet, row, col, value, normalized);
 
             items.Add(new AutoFilterChecklistItem(displayText, normalized));
+
+            if (value is NumberValue number && workbook is not null && IsDateFormattedCell(workbook, sheet, row, col))
+                dateSortOverrides[normalized] = new DateTimeValue(number.Value).ToDateTime().Ticks;
         }
 
-        items.Sort(CompareChecklistItems);
+        items.Sort((left, right) => CompareChecklistItems(left, right, dateSortOverrides));
         return items;
     }
 
@@ -107,8 +123,28 @@ public static class AutoFilterChecklistPlanner
                 normalized));
         }
 
-        items.Sort(CompareChecklistItems);
+        items.Sort((left, right) => CompareChecklistItems(left, right, EmptyDateSortOverrides));
         return items;
+    }
+
+    private static readonly IReadOnlyDictionary<string, double> EmptyDateSortOverrides =
+        new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when the cell at (<paramref name="row"/>, <paramref name="col"/>) carries a date/time
+    /// number format -- Excel's own rule for "this is a date", independent of whether the value is
+    /// a literal entry or a formula result (Excel has no separate date value type distinct from a
+    /// formatted double). Mirrors the style resolution <see cref="FormatDisplayText"/> uses.
+    /// </summary>
+    private static bool IsDateFormattedCell(Workbook workbook, Sheet sheet, uint row, uint col)
+    {
+        var cell = sheet.GetCell(row, col);
+        var styleId = cell is not null && cell.StyleId != StyleId.Default
+            ? cell.StyleId
+            : sheet.GetStyleOnly(row, col) ?? StyleId.Default;
+
+        var numberFormat = workbook.GetStyle(styleId).NumberFormat;
+        return !string.IsNullOrEmpty(numberFormat) && NumberFormatter.IsDateTimeNumberFormat(numberFormat);
     }
 
     /// <summary>
@@ -141,10 +177,13 @@ public static class AutoFilterChecklistPlanner
         return NumberFormatter.Format(value, numberFormat, workbook.Uses1904DateSystem);
     }
 
-    private static int CompareChecklistItems(AutoFilterChecklistItem left, AutoFilterChecklistItem right)
+    private static int CompareChecklistItems(
+        AutoFilterChecklistItem left,
+        AutoFilterChecklistItem right,
+        IReadOnlyDictionary<string, double> dateSortOverrides)
     {
-        var leftKey = CreateSortKey(left.Value);
-        var rightKey = CreateSortKey(right.Value);
+        var leftKey = CreateSortKey(left.Value, dateSortOverrides);
+        var rightKey = CreateSortKey(right.Value, dateSortOverrides);
         var rankComparison = leftKey.Rank.CompareTo(rightKey.Rank);
         if (rankComparison != 0)
             return rankComparison;
@@ -156,10 +195,18 @@ public static class AutoFilterChecklistPlanner
         return string.Compare(left.DisplayText, right.DisplayText, StringComparison.CurrentCultureIgnoreCase);
     }
 
-    private static SortKey CreateSortKey(string value)
+    private static SortKey CreateSortKey(string value, IReadOnlyDictionary<string, double> dateSortOverrides)
     {
         if (string.IsNullOrEmpty(value))
             return new SortKey(5, 0);
+
+        // A formula-computed date's raw filter text is an invariant number string (its OADate
+        // serial), which would otherwise fall into the Rank-0 numeric branch below. When the
+        // caller determined (from the cell's own number format) that this value is really a date,
+        // route it into the same Rank-1 date bucket -- and same tick units -- as literally-typed
+        // dates so a mixed literal/computed date column sorts chronologically.
+        if (dateSortOverrides.TryGetValue(value, out var overrideTicks))
+            return new SortKey(1, overrideTicks);
 
         if (double.TryParse(value, NumberStyles.Float, CultureInfo.CurrentCulture, out var number) ||
             double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out number))

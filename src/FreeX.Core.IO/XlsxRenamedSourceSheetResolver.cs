@@ -33,6 +33,26 @@ namespace FreeX.Core.IO;
 // exist as a load-time name (i.e. it's a genuinely NEW name introduced by an in-session rename). C's name
 // already existed at load time, so C's path-coincidence with B is correctly rejected; a real rename's new
 // name (e.g. "PictureRenamed") never existed at load time, so it is correctly accepted.
+//
+// R103-io-rename-name-reuse-identity-gap: the two heuristics above (direct name match; path-with-guard
+// fallback) both stop being sound the moment a load-time NAME gets freed up and reused by a genuinely
+// DIFFERENT physical sheet in the same edit -- e.g. delete "Data" then rename "Sheet2" to "Data" (reusing
+// the just-freed string), or a plain two-sheet name SWAP. In either case context.TargetSheets now maps
+// sourceSheetName's exact string to a DIFFERENT physical worksheet part than the one that owned that name
+// at load time, so the unconditional direct-match branch below returned that other sheet's path as if
+// nothing had changed -- callers then merge sourceSheetName's own preserved raw content (VML comments,
+// pivot xml, form controls, ...) onto the wrong physical worksheet. Neither the direct branch nor the
+// path-fallback's "candidate name didn't already exist" guard catches this, because both operate on name
+// and path alone, and a *coincidental* worksheetN.xml renumbering (an unrelated sheet's deletion legally
+// shifting an untouched, unrenamed sheet's own part down a slot) is structurally indistinguishable from a
+// *reused* name/path without additional identity info. When the caller can supply it (every real save path
+// can: XlsxFileAdapter.SourcePackage.cs's sole context-construction site always has both the live Workbook
+// and its load-time Sheet.Id-by-position snapshot), context.VerifiedCurrentNameByLoadTimeName resolves
+// sourceSheetName to its CURRENT name via the sheet's own rename-stable Sheet.Id rather than trusting the
+// name string directly -- this also correctly and precisely resolves the SWAP case (each half's identity
+// tracks its own physical part through the swap), not just detects-and-rejects it. Only when identity data
+// is unavailable (a hypothetical future/legacy caller without a Workbook handy) does resolution fall back
+// to the original string-based heuristics, unchanged.
 internal static class XlsxRenamedSourceSheetResolver
 {
     /// <summary>
@@ -61,7 +81,27 @@ internal static class XlsxRenamedSourceSheetResolver
         out string currentSheetName,
         out string targetWorksheetPath)
     {
-        if (context.TargetSheets.TryGetValue(sourceSheetName, out var direct))
+        if (context.VerifiedCurrentNameByLoadTimeName is { } verifiedNames)
+        {
+            // Identity-verified path (see the R103 header comment above): only trust a name-based
+            // resolution when sourceSheetName's OWN load-time physical sheet (tracked by Sheet.Id) is
+            // confirmed to still exist, and resolve through ITS current name -- never sourceSheetName's
+            // raw string, which may since have been reused by a different physical sheet entirely.
+            if (verifiedNames.TryGetValue(sourceSheetName, out var verifiedCurrentName) &&
+                context.TargetSheets.TryGetValue(verifiedCurrentName, out var verifiedPath))
+            {
+                currentSheetName = verifiedCurrentName;
+                targetWorksheetPath = verifiedPath;
+                return true;
+            }
+
+            // Deliberately NOT falling back to a raw direct name lookup here: either sourceSheetName's
+            // own sheet is confirmed gone (genuinely deleted) or the identity map didn't cover it, and
+            // trusting a coincidental current name-string match at this point would risk exactly the
+            // misattribution this identity check exists to prevent. The path-based fallback below still
+            // runs and has its own independent guard against renumbering collisions.
+        }
+        else if (context.TargetSheets.TryGetValue(sourceSheetName, out var direct))
         {
             currentSheetName = sourceSheetName;
             targetWorksheetPath = direct;
