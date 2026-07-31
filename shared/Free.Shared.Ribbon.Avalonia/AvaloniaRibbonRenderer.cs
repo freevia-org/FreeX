@@ -1760,8 +1760,17 @@ public static class AvaloniaRibbonRenderer
         };
         box.KeyDown += (_, e) =>
         {
-            if (!ready || executionState.IsSynchronizing || e.Key != Key.Enter)
+            if (!ready || executionState.IsSynchronizing)
                 return;
+
+            if (e.Key != Key.Enter)
+            {
+                // The WPF duplicate window only spans the selection event immediately followed by
+                // Enter. Escape, arrow navigation, and text input begin a new interaction, so a
+                // later Enter must not be swallowed by an old selection commit.
+                ClearPendingComboSelection(executionState);
+                return;
+            }
 
             var value = ResolveComboValue(box);
             if (executionState.HasPendingSelectionCommit
@@ -1942,6 +1951,12 @@ public static class AvaloniaRibbonRenderer
         return string.IsNullOrWhiteSpace(value) ? box.Text : value;
     }
 
+    private static void ClearPendingComboSelection(ComboExecutionState executionState)
+    {
+        executionState.HasPendingSelectionCommit = false;
+        executionState.PendingSelectionValue = null;
+    }
+
     private static void SetComboValueWithoutExecuting(ComboBox combo, string value)
     {
         var executionState = ComboExecutionStates.GetOrCreateValue(combo);
@@ -1958,8 +1973,7 @@ public static class AvaloniaRibbonRenderer
         finally
         {
             executionState.IsSynchronizing = false;
-            executionState.HasPendingSelectionCommit = false;
-            executionState.PendingSelectionValue = null;
+            ClearPendingComboSelection(executionState);
         }
     }
 
