@@ -13118,9 +13118,10 @@ public sealed class DocumentView : RichTextBox
         var label = new TextBlock
         {
             Text = text.Text,
-            // Word's chart text uses the document/chart fallback rather than WPF's UI-default
-            // Segoe UI. This stays renderer-local because the shared scene owns geometry, not glyph rasterization.
-            FontFamily = new FontFamily("Calibri"),
+            // Word uses the Office display face for chart titles while labels keep the chart
+            // fallback. This stays renderer-local because the shared scene owns geometry, not glyph rasterization.
+            FontFamily = new FontFamily(
+                text.Kind == ChartSceneTextKind.Title ? "Aptos" : "Calibri"),
             FontSize = Math.Max(1, text.FontSize),
             Foreground = new SolidColorBrush(ParseSceneColor(text.ColorHex)),
             TextTrimming = TextTrimming.CharacterEllipsis

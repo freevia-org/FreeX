@@ -116,7 +116,7 @@ public sealed class ChartRenderingTests
     }
 
     [StaFact]
-    public void ChartSceneText_UsesCalibriInsteadOfTheWpfUiFallback()
+    public void ChartSceneText_UsesOfficeTitleFaceAndCalibriLabels()
     {
         var chart = new Chart { Kind = ChartKind.Column, Title = "Revenue by quarter" };
         chart.Categories.AddRange(new[] { "Q1", "Q2" });
@@ -126,7 +126,9 @@ public sealed class ChartRenderingTests
         var canvas = DocumentView.BuildChartSceneCanvas(scene);
 
         var title = Assert.Single(canvas.Children.OfType<TextBlock>(), text => text.Text == chart.Title);
-        Assert.Equal("Calibri", title.FontFamily.Source);
+        var category = Assert.Single(canvas.Children.OfType<TextBlock>(), text => text.Text == "Q1");
+        Assert.Equal("Aptos", title.FontFamily.Source);
+        Assert.Equal("Calibri", category.FontFamily.Source);
     }
 
     [StaFact]
