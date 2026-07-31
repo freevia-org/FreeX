@@ -208,6 +208,22 @@ public static class ExternalRichTextClipboardPlanner
             }
         }
 
+        private sealed class TableCaptureContext
+        {
+            public required int Level { get; init; }
+            public TableShape Table { get; } = new();
+            public TableRow? CurrentRow { get; set; }
+            public int CurrentCellIndex { get; set; }
+            public List<long> RightEdgesTwips { get; } = new();
+            public List<InCanvasRichClipboardTableCellStyle> CellStyles { get; } = new();
+            public StringBuilder ActiveText { get; } = new();
+            public CharacterStyle ActiveStyle { get; set; }
+            public bool HasActiveStyle { get; set; }
+            public Run? MarkerRun { get; set; }
+            public Run? EndMarkerRun { get; set; }
+            public bool RowCompleted { get; set; }
+        }
+
         private sealed class State
         {
             public Destination Destination;
@@ -285,6 +301,11 @@ public static class ExternalRichTextClipboardPlanner
         private IReadOnlyList<long>? _tableColumnWidthsEmu;
         private readonly List<InCanvasRichClipboardTableCellStyle> _tableCellStyles = new();
         private readonly CellStyleDraft _pendingCellStyle = new();
+        private readonly List<TableCaptureContext> _tableCaptures = new();
+        private readonly List<TableCaptureContext> _rootTableCaptures = new();
+        private bool _nestedTableSeen;
+        private bool _suppressCaptureForNextAppend;
+        private bool _suppressCaptureForNextParagraphBreak;
         private bool _sawRtfHeader;
         private bool _lastWasParagraphBreak;
         private Paragraph? _activeParagraph;
@@ -329,6 +350,7 @@ public static class ExternalRichTextClipboardPlanner
             }
 
             FlushActiveRun();
+            CloseAllTableCaptures();
 
             if (!_sawRtfHeader)
                 return null;
@@ -345,6 +367,14 @@ public static class ExternalRichTextClipboardPlanner
             EnsureParagraph();
             FinalizePictureCapture();
             FinalizeObjectCapture();
+            RewriteNestedTableMarkers();
+
+            if (_lastWasParagraphBreak
+                && _body.Paragraphs.Count > 1
+                && IsEmpty(_body.Paragraphs[^1]))
+            {
+                _body.Paragraphs.RemoveAt(_body.Paragraphs.Count - 1);
+            }
             var firstPicture = _picturePayloads.FirstOrDefault();
             return new InCanvasRichClipboardPayload(
                 _body,
@@ -649,6 +679,8 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "intbl":
                     _state.InTable = value != 0;
+                    if (!_state.InTable)
+                        CloseAllTableCaptures();
                     break;
                 case "itap":
                     _state.TableNesting = Math.Clamp(value, 0, 8);
@@ -895,6 +927,12 @@ public static class ExternalRichTextClipboardPlanner
                             && _tableCellRightEdgesTwips.Count < MaxTableCellsPerRow)
                         {
                             _tableCellRightEdgesTwips.Add(parameter.Value);
+                        }
+                        if (parameter is > 0
+                            && CurrentTableCapture() is { } capture
+                            && capture.RightEdgesTwips.Count < MaxTableCellsPerRow)
+                        {
+                            capture.RightEdgesTwips.Add(parameter.Value);
                         }
                     }
                     break;
@@ -1281,6 +1319,7 @@ public static class ExternalRichTextClipboardPlanner
             if (_outputCharacters > MaxOutputCharacters - text.Length)
                 throw new InvalidDataException("RTF output limit exceeded.");
 
+            CloseCompletedCapturesForText();
             var paragraph = _body.Paragraphs[^1];
             ApplyParagraphState(paragraph);
             var style = CurrentStyle();
@@ -1295,6 +1334,8 @@ public static class ExternalRichTextClipboardPlanner
             }
             _activeText.Append(text);
             _outputCharacters += text.Length;
+            if (!_suppressCaptureForNextAppend)
+                AppendCapturedText(text);
             _lastWasParagraphBreak = false;
         }
 
@@ -1302,6 +1343,10 @@ public static class ExternalRichTextClipboardPlanner
         {
             if (_state.SkipOutput || _state.Destination != Destination.Body)
                 return;
+            CloseCompletedCapturesForText();
+            if (!_suppressCaptureForNextParagraphBreak)
+                AppendCapturedParagraphBreak();
+            _suppressCaptureForNextParagraphBreak = false;
             FlushActiveRun();
             EnsureParagraph();
             ApplyParagraphState(_body.Paragraphs[^1]);
@@ -1315,6 +1360,7 @@ public static class ExternalRichTextClipboardPlanner
             if (_state.SkipOutput || _state.Destination != Destination.Body)
                 return;
 
+            BeginCapturedTableRow();
             FlushActiveRun();
             if (_tableRowActive)
                 CaptureTableColumnWidths();
@@ -1330,6 +1376,8 @@ public static class ExternalRichTextClipboardPlanner
             if (_state.SkipOutput || _state.Destination != Destination.Body)
                 return;
 
+            CaptureTableCellBoundary(CurrentTableLevel());
+
             if (!_tableRowActive)
             {
                 if (!_state.InTable)
@@ -1342,7 +1390,15 @@ public static class ExternalRichTextClipboardPlanner
 
             // WPF's FlowDocument text projection places a tab at every cell boundary;
             // AppendTableRowBoundary removes the final delimiter for the completed row.
-            AppendText("\t");
+            _suppressCaptureForNextAppend = true;
+            try
+            {
+                AppendText("\t");
+            }
+            finally
+            {
+                _suppressCaptureForNextAppend = false;
+            }
         }
 
         private void AppendTableRowBoundary()
@@ -1350,13 +1406,24 @@ public static class ExternalRichTextClipboardPlanner
             if (_state.SkipOutput || _state.Destination != Destination.Body || !_tableRowActive)
                 return;
 
+            CaptureTableRowBoundary(CurrentTableLevel());
             FlushActiveRun();
             RemoveTrailingTableDelimiter();
 
             // A \par inside the final cell already created the row's terminating
             // paragraph. Avoid introducing an extra blank line in that case.
             if (!_lastWasParagraphBreak)
-                AppendParagraphBreak();
+            {
+                _suppressCaptureForNextParagraphBreak = true;
+                try
+                {
+                    AppendParagraphBreak();
+                }
+                finally
+                {
+                    _suppressCaptureForNextParagraphBreak = false;
+                }
+            }
 
             CaptureTableColumnWidths();
             _tableRowActive = false;
@@ -1364,9 +1431,387 @@ public static class ExternalRichTextClipboardPlanner
             _tableCellRightEdgesTwips.Clear();
         }
 
+        private int CurrentTableLevel() => Math.Max(1, _state.TableNesting);
+
+        private TableCaptureContext? CurrentTableCapture() =>
+            _tableCaptures.Count == 0 ? null : _tableCaptures[^1];
+
+        private void BeginCapturedTableRow()
+        {
+            int level = CurrentTableLevel();
+            CloseCapturedLevelsAbove(level);
+            var capture = CurrentTableCapture();
+            if (capture is null || capture.Level != level)
+            {
+                FlushActiveRun();
+                capture = new TableCaptureContext { Level = level };
+                _tableCaptures.Add(capture);
+                if (level > 1)
+                {
+                    _nestedTableSeen = true;
+                }
+                else
+                {
+                    var marker = new Run { Text = "\uFFFC" };
+                    EnsureParagraph();
+                    _body.Paragraphs[^1].Runs.Add(marker);
+                    capture.MarkerRun = marker;
+                    _rootTableCaptures.Add(capture);
+                }
+            }
+
+            if (capture.CurrentRow is null)
+            {
+                capture.CurrentRow = new TableRow();
+                capture.CurrentCellIndex = 0;
+                capture.RightEdgesTwips.Clear();
+                capture.CellStyles.Clear();
+                capture.RowCompleted = false;
+            }
+        }
+
+        private void CaptureTableCellBoundary(int level)
+        {
+            CloseCapturedLevelsAbove(level);
+            var capture = CurrentTableCapture();
+            if (capture is null || capture.Level != level)
+                return;
+
+            EnsureCapturedCell(capture);
+            FlushCapturedRun(capture);
+            capture.CurrentCellIndex++;
+        }
+
+        private void CaptureTableRowBoundary(int level)
+        {
+            CloseCapturedLevelsAbove(level);
+            var capture = CurrentTableCapture();
+            if (capture is null || capture.Level != level || capture.CurrentRow is null)
+                return;
+
+            FlushCapturedRun(capture);
+            if (capture.CurrentRow.Cells.Count == 0)
+                EnsureCapturedCell(capture);
+            capture.Table.Rows.Add(capture.CurrentRow);
+            CaptureTableWidths(capture);
+            capture.CurrentRow = null;
+            capture.CurrentCellIndex = 0;
+            capture.RowCompleted = true;
+        }
+
+        private void AppendCapturedText(string text)
+        {
+            var capture = CurrentTableCapture();
+            if (capture is null)
+                return;
+
+            EnsureCapturedCell(capture);
+            var paragraph = capture.CurrentRow!.Cells[capture.CurrentCellIndex].TextBody!
+                .Paragraphs[^1];
+            ApplyParagraphState(paragraph);
+            var style = CurrentStyle();
+            if (!capture.HasActiveStyle || !SameStyle(capture.ActiveStyle, style))
+            {
+                FlushCapturedRun(capture);
+                capture.ActiveStyle = style;
+                capture.HasActiveStyle = true;
+            }
+            capture.ActiveText.Append(text);
+        }
+
+        private void AppendCapturedParagraphBreak()
+        {
+            var capture = CurrentTableCapture();
+            if (capture is null)
+                return;
+
+            EnsureCapturedCell(capture);
+            FlushCapturedRun(capture);
+            var body = capture.CurrentRow!.Cells[capture.CurrentCellIndex].TextBody!;
+            ApplyParagraphState(body.Paragraphs[^1]);
+            body.Paragraphs.Add(new Paragraph());
+        }
+
+        private void EnsureCapturedCell(TableCaptureContext capture)
+        {
+            capture.CurrentRow ??= new TableRow();
+            while (capture.CurrentRow.Cells.Count <= capture.CurrentCellIndex)
+            {
+                int index = capture.CurrentRow.Cells.Count;
+                var cell = new TableCell
+                {
+                    TextBody = new TextBody
+                    {
+                        Paragraphs = { new Paragraph() },
+                    },
+                };
+                if (index < capture.CellStyles.Count)
+                    ApplyCapturedCellStyle(cell, capture.CellStyles[index]);
+                capture.CurrentRow.Cells.Add(cell);
+            }
+        }
+
+        private void FlushCapturedRuns()
+        {
+            foreach (var capture in _tableCaptures)
+                FlushCapturedRun(capture);
+        }
+
+        private static void FlushCapturedRun(TableCaptureContext capture)
+        {
+            if (capture.CurrentRow is null
+                || capture.CurrentCellIndex < 0
+                || capture.CurrentCellIndex >= capture.CurrentRow.Cells.Count
+                || !capture.HasActiveStyle
+                || capture.ActiveText.Length == 0)
+            {
+                capture.ActiveText.Clear();
+                capture.HasActiveStyle = false;
+                return;
+            }
+
+            capture.CurrentRow.Cells[capture.CurrentCellIndex].TextBody!.Paragraphs[^1].Runs.Add(
+                RunFromCharacterStyle(capture.ActiveText.ToString(), capture.ActiveStyle));
+            capture.ActiveText.Clear();
+            capture.HasActiveStyle = false;
+        }
+
+        private static Run RunFromCharacterStyle(string text, CharacterStyle style) => new()
+        {
+            Text = text,
+            FontFamily = style.FontFamily,
+            FontSizePt = style.FontSizePt,
+            Bold = style.Bold,
+            BoldSet = style.BoldSet,
+            Italic = style.Italic,
+            ItalicSet = style.ItalicSet,
+            Underline = style.Underline,
+            Strikethrough = style.Strikethrough,
+            BaselineOffset = style.BaselineOffset,
+            Caps = style.Caps,
+            RightToLeft = style.RunRightToLeft,
+            Color = style.Color is { } color ? new ThemeAwareColor(color) : null,
+            Hyperlink = style.Hyperlink,
+        };
+
+        private void CloseCapturedLevelsAbove(int level)
+        {
+            while (_tableCaptures.Count > 0 && _tableCaptures[^1].Level > level)
+            {
+                var child = _tableCaptures[^1];
+                FinalizeCapturedContext(child);
+                _tableCaptures.RemoveAt(_tableCaptures.Count - 1);
+                if (_tableCaptures.Count > 0)
+                {
+                    var parent = _tableCaptures[^1];
+                    EnsureCapturedCell(parent);
+                    FlushCapturedRun(parent);
+                    parent.CurrentRow!.Cells[parent.CurrentCellIndex].TextBody!.Paragraphs[^1].Runs.Add(
+                        new Run
+                        {
+                            Text = "\uFFFC",
+                            InlineTable = new InlineTableInfo { Table = child.Table },
+                        });
+                }
+            }
+        }
+
+        private void CloseCompletedCapturesForText()
+        {
+            while (_tableCaptures.Count > 0
+                && _tableCaptures[^1].RowCompleted)
+            {
+                var capture = _tableCaptures[^1];
+                FinalizeCapturedContext(capture);
+                _tableCaptures.RemoveAt(_tableCaptures.Count - 1);
+                if (_tableCaptures.Count == 0)
+                    continue;
+
+                var parent = _tableCaptures[^1];
+                EnsureCapturedCell(parent);
+                FlushCapturedRun(parent);
+                parent.CurrentRow!.Cells[parent.CurrentCellIndex].TextBody!.Paragraphs[^1].Runs.Add(
+                    new Run
+                    {
+                        Text = "\uFFFC",
+                        InlineTable = new InlineTableInfo { Table = capture.Table },
+                    });
+            }
+        }
+
+        private void CloseAllTableCaptures()
+        {
+            while (_tableCaptures.Count > 0)
+            {
+                var capture = _tableCaptures[^1];
+                FinalizeCapturedContext(capture);
+                _tableCaptures.RemoveAt(_tableCaptures.Count - 1);
+                if (_tableCaptures.Count > 0)
+                {
+                    var parent = _tableCaptures[^1];
+                    EnsureCapturedCell(parent);
+                    FlushCapturedRun(parent);
+                    parent.CurrentRow!.Cells[parent.CurrentCellIndex].TextBody!.Paragraphs[^1].Runs.Add(
+                        new Run
+                        {
+                            Text = "\uFFFC",
+                            InlineTable = new InlineTableInfo { Table = capture.Table },
+                        });
+                }
+            }
+        }
+
+        private void FinalizeCapturedContext(TableCaptureContext capture)
+        {
+            FlushCapturedRun(capture);
+            if (capture.CurrentRow is not null)
+            {
+                if (capture.CurrentRow.Cells.Count == 0)
+                    EnsureCapturedCell(capture);
+                capture.Table.Rows.Add(capture.CurrentRow);
+                CaptureTableWidths(capture);
+                capture.CurrentRow = null;
+            }
+
+            if (capture.Level == 1 && capture.EndMarkerRun is null)
+            {
+                EnsureParagraph();
+                capture.EndMarkerRun = new Run { Text = "\uE000" };
+                _body.Paragraphs[^1].Runs.Add(capture.EndMarkerRun);
+                capture.MarkerRun!.InlineTable = new InlineTableInfo { Table = capture.Table };
+            }
+        }
+
+        private static void CaptureTableWidths(TableCaptureContext capture)
+        {
+            if (capture.Table.ColumnWidthsEmu.Count > 0 || capture.RightEdgesTwips.Count < 2)
+                return;
+
+            long previous = 0;
+            foreach (var edge in capture.RightEdgesTwips)
+            {
+                if (edge <= previous)
+                    return;
+                capture.Table.ColumnWidthsEmu.Add((edge - previous) * 635L);
+                previous = edge;
+            }
+        }
+
+        private static void ApplyCapturedCellStyle(
+            TableCell cell,
+            InCanvasRichClipboardTableCellStyle style)
+        {
+            if (style.FillPattern is { Length: > 0 } pattern)
+            {
+                cell.Fill = new ShapeFill.Pattern(
+                    pattern,
+                    new ThemeAwareColor(SrgbColor.FromRgb(style.FillForegroundRgb ?? style.FillRgb ?? 0)),
+                    new ThemeAwareColor(SrgbColor.FromRgb(style.FillBackgroundRgb ?? style.FillRgb ?? 0xFFFFFF)));
+            }
+            else if (style.FillRgb is { } fillRgb)
+            {
+                cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fillRgb));
+            }
+
+            cell.Anchor = style.Anchor;
+            cell.InsetLeftPt = style.InsetLeftPt;
+            cell.InsetRightPt = style.InsetRightPt;
+            cell.InsetTopPt = style.InsetTopPt;
+            cell.InsetBottomPt = style.InsetBottomPt;
+            cell.HMerge = style.HorizontalMergeContinuation;
+            cell.VMerge = style.VerticalMergeContinuation;
+            if (style.HorizontalMergeStart)
+                cell.GridSpan = 2;
+            if (style.VerticalMergeStart)
+                cell.RowSpan = 2;
+
+            cell.Borders = new TableCellBorders
+            {
+                Left = ToCapturedOutline(style.Left),
+                Right = ToCapturedOutline(style.Right),
+                Top = ToCapturedOutline(style.Top),
+                Bottom = ToCapturedOutline(style.Bottom),
+            };
+        }
+
+        private static ShapeOutline? ToCapturedOutline(InCanvasRichClipboardTableBorder? border) =>
+            border switch
+            {
+                null => null,
+                { IsNone: true } => ShapeOutline.None.Instance,
+                _ => new ShapeOutline.Visible(
+                    SrgbColor.FromRgb(border.ColorRgb),
+                    border.WidthPt <= 0 ? 0.75 : border.WidthPt),
+            };
+
+        private void RewriteNestedTableMarkers()
+        {
+            foreach (var root in _rootTableCaptures)
+            {
+                if (root.MarkerRun is null || root.EndMarkerRun is null)
+                    continue;
+
+                var start = FindRun(root.MarkerRun);
+                var end = FindRun(root.EndMarkerRun);
+                if (start is null || end is null)
+                    continue;
+
+                if (!_nestedTableSeen)
+                {
+                    start.Value.Paragraph.Runs.Remove(root.MarkerRun);
+                    end.Value.Paragraph.Runs.Remove(root.EndMarkerRun);
+                    continue;
+                }
+
+                RemoveRunsBetween(start.Value, end.Value);
+            }
+        }
+
+        private (Paragraph Paragraph, int Index)? FindRun(Run target)
+        {
+            foreach (var paragraph in _body.Paragraphs)
+            {
+                int index = paragraph.Runs.IndexOf(target);
+                if (index >= 0)
+                    return (paragraph, index);
+            }
+            return null;
+        }
+
+        private void RemoveRunsBetween(
+            (Paragraph Paragraph, int Index) start,
+            (Paragraph Paragraph, int Index) end)
+        {
+            int startParagraph = _body.Paragraphs.IndexOf(start.Paragraph);
+            int endParagraph = _body.Paragraphs.IndexOf(end.Paragraph);
+            if (startParagraph < 0 || endParagraph < startParagraph)
+                return;
+
+            if (startParagraph == endParagraph)
+            {
+                int count = end.Index - start.Index - 1;
+                if (count > 0)
+                    start.Paragraph.Runs.RemoveRange(start.Index + 1, count);
+                start.Paragraph.Runs.RemoveAt(start.Index + 1);
+                return;
+            }
+
+            if (start.Paragraph.Runs.Count > start.Index + 1)
+                start.Paragraph.Runs.RemoveRange(
+                    start.Index + 1,
+                    start.Paragraph.Runs.Count - start.Index - 1);
+            for (int paragraphIndex = endParagraph - 1; paragraphIndex > startParagraph; paragraphIndex--)
+                _body.Paragraphs.RemoveAt(paragraphIndex);
+            if (end.Paragraph.Runs.Count > end.Index)
+                end.Paragraph.Runs.RemoveAt(end.Index);
+        }
+
         private void CaptureTableCellStyle()
         {
-            _tableCellStyles.Add(_pendingCellStyle.Snapshot());
+            var style = _pendingCellStyle.Snapshot();
+            _tableCellStyles.Add(style);
+            if (CurrentTableCapture() is { } capture)
+                capture.CellStyles.Add(style);
             _pendingCellStyle.Reset();
         }
 
@@ -1463,6 +1908,7 @@ public static class ExternalRichTextClipboardPlanner
 
         private void FlushActiveRun()
         {
+            FlushCapturedRuns();
             if (_activeParagraph is null || !_hasActiveStyle || _activeText.Length == 0)
             {
                 _activeParagraph = null;

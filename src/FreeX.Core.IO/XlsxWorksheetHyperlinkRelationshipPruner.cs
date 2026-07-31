@@ -43,7 +43,7 @@ internal static class XlsxWorksheetHyperlinkRelationshipPruner
     private static readonly XNamespace PackageRelationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
     private static readonly XNamespace WorksheetRelationshipNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
-    public static void PruneOrphanedExternalRelationships(
+    public static void PruneOrphanedHyperlinkRelationships(
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
         XlsxSourcePackagePreservationContext? context)
@@ -101,7 +101,7 @@ internal static class XlsxWorksheetHyperlinkRelationshipPruner
             return;
 
         var orphans = root.Elements(PackageRelationshipNs + "Relationship")
-            .Where(element => IsOrphanedExternalHyperlinkRelationship(element, previouslyLiveHyperlinkIds, currentlyLiveHyperlinkIds))
+            .Where(element => IsOrphanedHyperlinkRelationship(element, previouslyLiveHyperlinkIds, currentlyLiveHyperlinkIds))
             .ToList();
         if (orphans.Count == 0)
             return;
@@ -115,7 +115,7 @@ internal static class XlsxWorksheetHyperlinkRelationshipPruner
             relsEntry.Delete();
     }
 
-    private static bool IsOrphanedExternalHyperlinkRelationship(
+    private static bool IsOrphanedHyperlinkRelationship(
         XElement relationship,
         IReadOnlySet<string> previouslyLiveHyperlinkIds,
         IReadOnlySet<string> currentlyLiveHyperlinkIds)
@@ -128,14 +128,14 @@ internal static class XlsxWorksheetHyperlinkRelationshipPruner
             return false;
         }
 
-        if (!string.Equals(
-                relationship.Attribute("TargetMode")?.Value.Trim(),
-                "External",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
+        // R107-io-internal-hyperlink-rel: no TargetMode filter. This used to prune only
+        // TargetMode="External" relationships, because the merger's package-part survival check
+        // silently dropped every TargetMode-less hyperlink relationship anyway (its "Sheet1!A1"-style
+        // document-location target never resolves to a real part), so no internal one could ever
+        // reach here to be orphaned. The merger now preserves both modes alike -- a hyperlink target
+        // is never a package part regardless of TargetMode -- so an internal ("Place in This
+        // Document") relationship whose cell hyperlink was removed must be pruned on exactly the same
+        // "was demonstrably live pre-edit, is referenced by nothing now" proof.
         var id = relationship.Attribute("Id")?.Value;
         if (string.IsNullOrWhiteSpace(id))
             return false;
