@@ -128,6 +128,42 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_ResolvesBasedOnStyleChainsWithoutLooping()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="BaseText">
+                    <Setter Property="FontFamily" Value="Aptos" />
+                    <Setter Property="FontSize" Value="14" />
+                  </Style>
+                  <Style x:Key="HeadingText" BasedOn="{StaticResource BaseText}">
+                    <Setter Property="FontWeight" Value="Bold" />
+                  </Style>
+                  <Style x:Key="LoopA" BasedOn="{StaticResource LoopB}" />
+                  <Style x:Key="LoopB" BasedOn="{StaticResource LoopA}" />
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Style="{StaticResource HeadingText}">Heading</Paragraph>
+              <Paragraph Style="{StaticResource LoopA}">Loop remains safe</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
+        paragraphs[0].Runs.Single().FontSizePt.Should().Be(10.5);
+        paragraphs[0].Runs.Single().Bold.Should().BeTrue();
+        paragraphs[1].Runs.Single().Text.Should().Be("Loop remains safe");
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_PreservesAllowedHyperlinks_AndBlocksUnsafeSchemes()
     {
         const string xaml = """

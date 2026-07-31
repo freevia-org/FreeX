@@ -431,8 +431,11 @@ public static class ExternalXamlClipboardPlanner
         if (TryReadResourceKey(styleReference, out var styleKey)
             && resources.Styles.TryGetValue(styleKey, out var resourceStyle))
         {
-            foreach (var setter in resourceStyle.Setters)
-                style = ApplyStyleSetter(style, setter.Key, setter.Value, resources);
+            style = ApplyStyleResource(
+                style,
+                styleKey,
+                resources,
+                new HashSet<string>(StringComparer.Ordinal));
         }
 
         var family = ResolveTextResource(
@@ -500,6 +503,26 @@ public static class ExternalXamlClipboardPlanner
                 : null;
             style = style with { Hyperlink = hyperlink };
         }
+
+        return style;
+    }
+
+    private static XamlTextStyle ApplyStyleResource(
+        XamlTextStyle style,
+        string key,
+        XamlResourceCatalog resources,
+        HashSet<string> visited)
+    {
+        if (!visited.Add(key) || !resources.Styles.TryGetValue(key, out var resourceStyle))
+            return style;
+
+        if (TryReadResourceKey(resourceStyle.BasedOn, out var basedOnKey))
+        {
+            style = ApplyStyleResource(style, basedOnKey, resources, visited);
+        }
+
+        foreach (var setter in resourceStyle.Setters)
+            style = ApplyStyleSetter(style, setter.Key, setter.Value, resources);
 
         return style;
     }
@@ -600,7 +623,9 @@ public static class ExternalXamlClipboardPlanner
                         setter => setter.Property!,
                         setter => setter.Value,
                         StringComparer.OrdinalIgnoreCase);
-                styles[key] = new XamlStyleResource(setters);
+                styles[key] = new XamlStyleResource(
+                    AttributeValue(resource, "BasedOn"),
+                    setters);
             }
         }
 
@@ -872,6 +897,7 @@ public static class ExternalXamlClipboardPlanner
         Hyperlink? Hyperlink);
 
     private sealed record XamlStyleResource(
+        string? BasedOn,
         IReadOnlyDictionary<string, string?> Setters);
 
     private sealed record XamlResourceCatalog(
