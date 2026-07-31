@@ -385,7 +385,7 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.table.inline-text.workflow-depth",
             Area: "Rich inline table-cell text editing, paragraph formatting, selection, and persistence",
             Status: "shared-planner-and-host-evidence",
-            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner and renderer-neutral rich clipboard routes with WPF RichTextBox and Avalonia native-input/custom-rich-surface adapters, including bounded external RTF and XamlPackage ingestion",
+            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner and renderer-neutral rich clipboard routes with WPF RichTextBox and Avalonia native-input/custom-rich-surface adapters, including bounded external RTF and XamlPackage ingestion with editable native table cell styles",
             EvidenceDocs:
             [
                 "docs/parity/freep-rich-clipboard-wave15-20260727.md",
@@ -416,8 +416,10 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Avalonia.Tests/PresentationClipboardInteropTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs",
                 "freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs"
+                ,"freep/FreeP.App.Presentation/ExternalXamlClipboardPlanner.cs"
+                ,"freep/FreeP.App.Host.Tests/OsClipboardServiceTests.cs"
             ],
-            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including all modeled inline effects, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF and XamlPackage ingestion in Avalonia. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. Unsupported XamlPackage resources and FlowDocument controls, inline picture/object runs in the rich editor, unsupported RTF destinations and controls, richer RTF lists/objects/fields, broader IME/RTL/FlowDocument behavior, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
+            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including all modeled inline effects, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF and XamlPackage ingestion in Avalonia, including editable native table cell fill, border, inset, and vertical-anchor styles. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. Unsupported XamlPackage resources and FlowDocument controls, nested inline tables, inline picture/object runs in the rich editor, unsupported RTF destinations and controls, richer RTF lists/objects/fields, broader IME/RTL/FlowDocument behavior, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
         new(
             EvidenceId: "freep.clipboard.external-rtf-depth",
             Area: "External RTF list, paragraph-layout, hyperlink, and field paste depth",
