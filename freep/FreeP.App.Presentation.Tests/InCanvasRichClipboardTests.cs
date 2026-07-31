@@ -62,6 +62,78 @@ public sealed class InCanvasRichClipboardTests
     }
 
     [Fact]
+    public void CaptureAndCodecRoundTrip_PreservesInlineTableAndNestedCellBodies()
+    {
+        var nested = new InlineTableInfo();
+        nested.Table.ColumnWidthsEmu.Add(457200);
+        nested.Table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell
+                {
+                    TextBody = Body("Nested"),
+                },
+            },
+        });
+        var outer = new InlineTableInfo();
+        outer.Table.ColumnWidthsEmu.AddRange([457200, 457200]);
+        outer.Table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell { TextBody = Body("Outer") },
+                new TableCell
+                {
+                    TextBody = new TextBody
+                    {
+                        Paragraphs =
+                        {
+                            new Paragraph
+                            {
+                                Runs =
+                                {
+                                    new Run { Text = "Cell " },
+                                    new Run { Text = "\uFFFC", InlineTable = nested },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        var source = new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run { Text = "Before " },
+                        new Run { Text = "\uFFFC", InlineTable = outer },
+                        new Run { Text = " After" },
+                    },
+                },
+            },
+        };
+
+        var payload = InCanvasRichClipboardPlanner.Capture(
+            source,
+            new InCanvasEditorTextSelection(0, source.Paragraphs[0].Runs.Sum(run => run.Text.Length)));
+        var decoded = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+
+        decoded.Should().NotBeNull();
+        var decodedOuter = decoded!.Body.Paragraphs.Single().Runs[1].InlineTable;
+        decodedOuter.Should().NotBeNull();
+        decodedOuter!.Table.Rows[0].Cells[1].TextBody!.Paragraphs[0].Runs
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text
+            .Should().Be("Nested");
+    }
+
+    [Fact]
     public void Effects_RoundTripEveryModeledInlineEffectAndFillVariant()
     {
         var themed = new ThemeAwareColor(

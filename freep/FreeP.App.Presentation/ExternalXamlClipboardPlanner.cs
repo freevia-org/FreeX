@@ -98,9 +98,11 @@ public static class ExternalXamlClipboardPlanner
             var blockElements = document
                 .Descendants()
                 .Where(element => element.Name.LocalName == "Table"
-                    ? !element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "Table")
+                    ? !element.Ancestors().Any(ancestor =>
+                        ancestor.Name.LocalName is "Table" or "Paragraph")
                     : element.Name.LocalName == "Paragraph"
-                        && !element.Ancestors().Any(ancestor => ancestor.Name.LocalName == "Table"))
+                        && !element.Ancestors().Any(ancestor =>
+                            ancestor.Name.LocalName is "Table" or "InlineUIContainer"))
                 .ToArray();
             if (blockElements.Length == 0 && images.Length == 0)
                 return null;
@@ -379,6 +381,26 @@ public static class ExternalXamlClipboardPlanner
         ref int outputCharacters)
     {
         var style = ReadStyle(element, inherited, resources);
+        if (element.Name.LocalName.Equals("Table", StringComparison.OrdinalIgnoreCase))
+        {
+            var table = ReadInlineTable(element, resources, resolveImage, ref outputCharacters);
+            if (table.Table.Rows.Count > 0)
+            {
+                paragraph.Runs.Add(new Run
+                {
+                    Text = "\uFFFC",
+                    InlineTable = table,
+                    FontFamily = style.FontFamily,
+                    FontSizePt = style.FontSizePt,
+                    Bold = style.Bold == true,
+                    Italic = style.Italic == true,
+                    Underline = style.Underline == true,
+                    Color = style.Color,
+                });
+                outputCharacters++;
+            }
+            return;
+        }
         if (element.Name.LocalName.Equals("Image", StringComparison.OrdinalIgnoreCase))
         {
             var source = AttributeValue(element, "Source");
@@ -438,6 +460,124 @@ public static class ExternalXamlClipboardPlanner
                 ReadInlineElement(child, paragraph, style, resources, resolveImage, ref outputCharacters);
         }
     }
+
+    private static InlineTableInfo ReadInlineTable(
+        XElement table,
+        XamlResourceCatalog resources,
+        Func<string, (byte[]? Bytes, string? ContentType)>? resolveImage,
+        ref int outputCharacters)
+    {
+        var result = new InlineTableInfo();
+        var rows = table
+            .Descendants()
+            .Where(element => element.Name.LocalName == "TableRow"
+                && element.Ancestors().FirstOrDefault(ancestor =>
+                    ancestor.Name.LocalName == "Table") == table)
+            .ToArray();
+
+        int maximumColumns = 0;
+        foreach (var rowElement in rows)
+        {
+            var row = new TableRow
+            {
+                HeightEmu = ReadImageExtentEmu(rowElement, "Height") ?? 0,
+            };
+            var cells = rowElement
+                .Descendants()
+                .Where(element => element.Name.LocalName == "TableCell"
+                    && element.Ancestors().FirstOrDefault(ancestor =>
+                        ancestor.Name.LocalName == "TableRow") == rowElement)
+                .ToArray();
+            if (cells.Length == 0)
+                continue;
+            if (cells.Length > MaxTableCellsPerRow)
+                throw new InvalidDataException("XamlPackage inline table row limit exceeded.");
+
+            foreach (var cellElement in cells)
+            {
+                var cellBody = new TextBody();
+                var cellParagraphs = cellElement
+                    .Descendants()
+                    .Where(element => element.Name.LocalName == "Paragraph"
+                        && element.Ancestors().FirstOrDefault(ancestor =>
+                            ancestor.Name.LocalName == "TableCell") == cellElement)
+                    .ToArray();
+                foreach (var paragraphElement in cellParagraphs)
+                {
+                    var paragraph = new Paragraph();
+                    var inherited = ReadInheritedStyle(paragraphElement, resources);
+                    var paragraphStyle = ReadStyle(paragraphElement, inherited, resources);
+                    ApplyParagraphProperties(paragraphElement, paragraph, paragraphStyle);
+                    paragraph.RightToLeft = paragraphStyle.RightToLeft;
+                    ReadInlineNodes(
+                        paragraphElement,
+                        paragraph,
+                        inherited,
+                        resources,
+                        resolveImage,
+                        ref outputCharacters);
+                    if (paragraph.Runs.Count == 0)
+                        paragraph.Runs.Add(new Run());
+                    cellBody.Paragraphs.Add(paragraph);
+                }
+                if (cellBody.Paragraphs.Count == 0)
+                    cellBody.Paragraphs.Add(new Paragraph { Runs = { new Run() } });
+
+                var cell = new TableCell
+                {
+                    TextBody = cellBody,
+                    GridSpan = Math.Max(1, ReadNullableInt(AttributeValue(cellElement, "ColumnSpan")) ?? 1),
+                    RowSpan = Math.Max(1, ReadNullableInt(AttributeValue(cellElement, "RowSpan")) ?? 1),
+                };
+                ApplyInlineTableCellStyle(cell, ReadTableCellStyle(cellElement));
+                row.Cells.Add(cell);
+            }
+
+            maximumColumns = Math.Max(maximumColumns, row.Cells.Sum(cell => cell.GridSpan));
+            result.Table.Rows.Add(row);
+        }
+
+        if (maximumColumns > 0)
+        {
+            for (int index = 0; index < maximumColumns; index++)
+                result.Table.ColumnWidthsEmu.Add(914400);
+        }
+
+        return result;
+    }
+
+    private static void ApplyInlineTableCellStyle(
+        TableCell cell,
+        InCanvasRichClipboardTableCellStyle style)
+    {
+        if (style.FillRgb is { } fill)
+            cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fill));
+        cell.Anchor = style.Anchor;
+        cell.InsetLeftPt = style.InsetLeftPt;
+        cell.InsetRightPt = style.InsetRightPt;
+        cell.InsetTopPt = style.InsetTopPt;
+        cell.InsetBottomPt = style.InsetBottomPt;
+        if (style.Left is not null || style.Right is not null
+            || style.Top is not null || style.Bottom is not null)
+        {
+            cell.Borders = new TableCellBorders
+            {
+                Left = ToInlineTableOutline(style.Left),
+                Right = ToInlineTableOutline(style.Right),
+                Top = ToInlineTableOutline(style.Top),
+                Bottom = ToInlineTableOutline(style.Bottom),
+            };
+        }
+    }
+
+    private static ShapeOutline? ToInlineTableOutline(InCanvasRichClipboardTableBorder? border) =>
+        border is null
+            ? null
+            : border.IsNone
+                ? ShapeOutline.None.Instance
+                : new ShapeOutline.Visible(
+                    SrgbColor.FromRgb(border.ColorRgb),
+                    border.WidthPt <= 0 ? 0.75 : border.WidthPt);
 
     private static bool ShouldPreserveWhitespace(XElement element)
     {
@@ -836,6 +976,9 @@ public static class ExternalXamlClipboardPlanner
 
     private static bool TryReadInt(string? value, out int result) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result);
+
+    private static int? ReadNullableInt(string? value) =>
+        TryReadInt(value, out var result) ? result : null;
 
     private static bool TryParseDip(string? value, out double result) =>
         double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out result)
