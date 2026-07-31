@@ -105,7 +105,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidencePlanner.BuildEvidenceRow(");
         source.Should().Contain("FreeWVisualEvidencePlanner.EnsureTrusted(row)");
         source.Should().Contain("int actualPageCount = Math.Max(1, paginator.PageCount);");
-        source.Should().Contain("int pageCount = Math.Min(actualPageCount, maxPages);");
+        source.Should().Contain("int bodyPageCount = Math.Min(actualPageCount, maxPages);");
+        source.Should().Contain("int pageCount = Math.Min(actualPageCountWithEndnotes, maxPages);");
         source.Should().Contain("box.PageNumberText, actualPageCount");
         source.Should().Contain("ComputeWpfPixelStats(");
         source.Should().Contain("FreeWVisualEvidencePlanner.ResolveSectionOrdinal");
@@ -215,6 +216,18 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("flow.PagePadding = new Thickness(");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");
+    }
+
+    [Fact]
+    public void FidelityRender_AppendsMeasuredEndnoteOverflowInsteadOfDroppingIt()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("var requiresDedicatedEndnotePage = false;");
+        source.Should().Contain("FindLastPaintedRow(finalBodyBitmap) + 16");
+        source.Should().Contain("var actualPageCountWithEndnotes = actualPageCount + (requiresDedicatedEndnotePage ? 1 : 0);");
+        source.Should().Contain("[\"endnotePlacement\"] = \"dedicated-overflow-page\"");
+        source.Should().NotContain("retaining body-only page until multi-page endnote pagination is available");
     }
 
     [Fact]
