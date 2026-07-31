@@ -67,7 +67,15 @@ internal static class XlsxWorksheetChartWriter
         // kept only so direct unit tests that hand-seed a package and call this method without going
         // through XlsxFileAdapter keep working; the real product entry point always supplies this
         // parameter.
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>>? sourceChartHyperlinksBySheet = null)
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChartHyperlinkPair>>? sourceChartHyperlinksBySheet = null,
+        // drawing-zorder-share-part (residual-gap closure): when supplied, receives sheet name ->
+        // drawing part path for every sheet whose chart drawing part this pass allocated FRESH (i.e.
+        // the sheet has no source drawing part of its own, so the shadow/merger route below cannot
+        // apply). XlsxWorksheetDrawingObjectWriter, which runs right after us, reuses that same part
+        // for the sheet's pictures/shapes/text boxes and preserves the chart anchors already in it
+        // instead of allocating a second drawing part and orphaning ours -- see the comment on
+        // XlsxWorksheetChartDrawingShadow.
+        IDictionary<string, string>? freshlyAllocatedDrawingPathsBySheet = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -136,6 +144,8 @@ internal static class XlsxWorksheetChartWriter
             var drawingPath = reusesOwnSourceDrawingPath
                 ? ownDrawingPath!
                 : AllocateFreshDrawingPath(archive, reservedDrawingPaths, usedDrawingPaths);
+            if (!reusesOwnSourceDrawingPath && freshlyAllocatedDrawingPathsBySheet is not null)
+                freshlyAllocatedDrawingPathsBySheet[name] = drawingPath;
             var sourceChartHyperlinks = sourceChartHyperlinksBySheet?.TryGetValue(name, out var sheetHyperlinks) == true
                 ? sheetHyperlinks
                 : null;
