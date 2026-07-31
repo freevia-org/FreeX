@@ -187,6 +187,48 @@ public sealed class R97_DrawingObjectHyperlinkCopyTests
         targetMode.Should().BeNull("the copy's internal target must stay TargetMode-less, matching the original");
     }
 
+    // R107-io-internal-hyperlink-rel: the sibling half of the case above -- the ORIGINAL (untouched,
+    // IsSourceLoaded) sheet's drawing. Its drawing part is preserved verbatim from the source package
+    // and still carries <a:hlinkClick r:id="rIdHlink1"/>, but the merger used to resolve that
+    // relationship's internal "Sheet1!A1" target as a relative PACKAGE PART path
+    // ("xl/drawings/Sheet1!A1"), find no such part, and drop the relationship -- and since it was the
+    // drawing's only relationship, the whole xl/drawings/_rels/drawingN.xml.rels part then vanished
+    // from the archive, leaving the preserved drawing pointing at a dangling r:id Excel would have to
+    // repair. The EXTERNAL-target sibling
+    // (DuplicateSheet_Shape_CopyKeepsHyperlink_AndOriginalKeepsItToo, above) never hit this because
+    // the merger short-circuits TargetMode="External" before the package-part check, which is exactly
+    // why the assertion below resolves the hyperlink THROUGH the rels part rather than just checking
+    // that the hlinkClick element survived.
+    [Fact]
+    public void DuplicateSheet_Shape_InternalPlaceInDocumentTarget_OriginalKeepsHyperlinkRelationshipPart()
+    {
+        using var package = BuildPackageWithDrawing(
+            ShapeAnchor("Rectangle 1", fromCol: 1, toCol: 4, hlinkRelId: "rIdHlink1"),
+            ("rIdHlink1", "Sheet1!A1", null));
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(package);
+        var sourceSheet = loaded.GetSheetAt(0);
+        sourceSheet.DrawingShapes.Should().ContainSingle().Subject.IsSourceLoaded
+            .Should().BeTrue("the original shape is never touched by duplicating its sheet");
+
+        new DuplicateSheetCommand(sourceSheet.Id).Apply(new TestCommandContext(loaded)).Success.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+
+        var (target, targetMode) = ResolveObjectHyperlinkRelationshipByName(saved, sourceSheet.Name, "Rectangle 1");
+        target.Should().Be("Sheet1!A1",
+            "the ORIGINAL sheet's drawing relationship part must survive the save so its preserved hlinkClick still resolves");
+        targetMode.Should().BeNull("the original's internal target must stay TargetMode-less");
+
+        saved.Position = 0;
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var originalDrawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(
+            FindDrawingPathForSheet(archive, sourceSheet.Name));
+        archive.GetEntry(originalDrawingRelsPath).Should().NotBeNull(
+            "the drawing relationship part must be present in the archive, not silently omitted");
+    }
+
     // ── No-regression sibling: an object with NO hyperlink must not gain one when duplicated. ──
 
     [Fact]
