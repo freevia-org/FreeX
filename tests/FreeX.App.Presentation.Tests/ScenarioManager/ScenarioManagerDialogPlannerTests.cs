@@ -162,6 +162,29 @@ public sealed class ScenarioManagerDialogPlannerTests
     }
 
     [Fact]
+    public void ValidateAcceptRequest_AcceptsMultiAreaCrossSheetChangingCells()
+    {
+        var workbook = CreateWorkbook(out var firstSheet);
+        var secondSheet = workbook.AddSheet("Sheet2");
+        SheetId? ResolveSheet(string name) => name switch
+        {
+            "Sheet1" => firstSheet.Id,
+            "Sheet2" => secondSheet.Id,
+            _ => null,
+        };
+
+        ScenarioManagerDialogPlanner.ValidateAcceptRequest(
+                ScenarioManagerDialogAction.Edit,
+                "Upside",
+                "A1:B2,Sheet2!C3:C4,Sheet1!E5",
+                "",
+                firstSheet.Id,
+                ResolveSheet)
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
     public void ProjectSelectionFields_UsesSelectedScenarioOrDefaultBlankState()
     {
         var selected = new ScenarioManagerDialogItem(

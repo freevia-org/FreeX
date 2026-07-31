@@ -3022,11 +3022,13 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_session.ExecuteScenarioManagerShowPlan(showPlan);");
         source.Should().Contain("ScenarioManagerPlanner.CreateDeletePlan(_session.Workbook, scenarioName);");
         source.Should().Contain("_session.ExecuteScenarioManagerDeletePlan(deletePlan);");
-        source.Should().Contain("ScenarioManagerPlanner.CreateSummaryReportPlan(_session.Workbook);");
+        source.Should().Contain("ScenarioManagerPlanner.CreateSummaryReportPlan(_session.Workbook, resultCells);");
         source.Should().Contain("_session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan);");
-        source.Should().Contain("CaptureScenarioManagerChangingCells(_session.SelectedRange);");
+        source.Should().Contain("CaptureScenarioManagerChangingCells(ranges);");
         source.Should().Contain("ScenarioManagerDialogPlanner.BuildItems(_session.Workbook)");
         source.Should().Contain("ScenarioManagerDialogPlanner.ProjectSelectionFields(");
+        source.Should().Contain("ScenarioManagerDialogPlanner.ValidateAcceptRequest(");
+        source.Should().Contain("ScenarioManagerDialogPlanner.ProjectAcceptResult(");
         source.Should().Contain("new ScenarioManagerSaveRequest(");
         source.Should().Contain("RefreshShell(status);");
         source.Should().Contain("ShowEditIssue(message);");
