@@ -620,6 +620,32 @@ public class RibbonTransitionsAnimationsTests
         Assert.Null(ex);
     }
 
+    [Fact]
+    public void Cmd_AdvanceOnClick_StateFollowsModelDefaultSlideSwitchAndUndo()
+    {
+        var (editor, presentation) = MakeSession();
+        editor.InsertSlide();
+        editor.SelectSlide(0);
+        var registry = MakeRegistry(editor);
+        Assert.True(registry.TryGet("freep.transition.advance-on-click", out var command));
+        var stateful = Assert.IsAssignableFrom<IRibbonStatefulCommand>(command);
+
+        Assert.True(stateful.GetState().IsChecked);
+        command!.Execute(RibbonCommandContext.Empty);
+        Assert.False(editor.CurrentSlideTransition!.AdvanceOnClick);
+        Assert.False(stateful.GetState().IsChecked);
+
+        editor.SelectSlide(1);
+        Assert.True(stateful.GetState().IsChecked);
+        editor.SelectSlide(0);
+        Assert.False(stateful.GetState().IsChecked);
+
+        editor.Undo();
+        Assert.True(stateful.GetState().IsChecked);
+        Assert.Null(editor.CurrentSlideTransition);
+        Assert.True(presentation.Slides[0].Transition is null);
+    }
+
     // ── All expected ids are registered ───────────────────────────────────────────
 
     [Theory]

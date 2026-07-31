@@ -416,6 +416,13 @@ public static class PresentationTransitionCommandPlanner
         return transition;
     }
 
+    /// <summary>
+    /// Returns the effective checked state for the Advance On Click ribbon toggle.
+    /// A missing transition uses PresentationML's default: a click advances the slide.
+    /// </summary>
+    public static bool IsAdvanceOnClickChecked(SlideTransition? currentTransition) =>
+        currentTransition?.AdvanceOnClick ?? true;
+
     public static SlideTransition BuildAdvanceAfterTransition(
         SlideTransition? currentTransition,
         int? advanceAfterMs)

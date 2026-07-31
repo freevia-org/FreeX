@@ -2953,12 +2953,16 @@ public sealed partial class MainWindow : Window
 
         foreach (var plan in PresentationTransitionCommandPlanner.BuiltInPlans)
         {
-            r.Register(plan.CommandId, new ContextRibbonCommand(ctx =>
-                PresentationTransitionCommandPlanner.TryApply(
-                    Editor,
-                    plan,
-                    ctx.SelectedValue,
-                    () => _ = PickTransitionSoundAsync())));
+            r.Register(
+                plan.CommandId,
+                plan.Intent == PresentationTransitionCommandIntentKind.ToggleAdvanceOnClick
+                    ? new TransitionAdvanceOnClickToggleCommand(Editor, plan)
+                    : new ContextRibbonCommand(ctx =>
+                        PresentationTransitionCommandPlanner.TryApply(
+                            Editor,
+                            plan,
+                            ctx.SelectedValue,
+                            () => _ = PickTransitionSoundAsync())));
         }
 
         foreach (var plan in PresentationDesignCommandPlanner.BuiltInPlans)
@@ -8946,6 +8950,7 @@ public sealed partial class MainWindow : Window
     private void OnEditorChanged()
     {
         _fileWorkflow.MarkDirty();
+        SyncRibbonCommandStates();
         RefreshSlidePane();
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
         RefreshNotesPane();
@@ -8964,6 +8969,7 @@ public sealed partial class MainWindow : Window
         _reviewWorkflowSession.SelectedCommentIndex = null;
         _selectedAnimationIndex = -1;
         _selectedMediaCaptionTrackIndex = null;
+        SyncRibbonCommandStates();
 
         // Sync slide-pane selection without re-triggering OnSlidePaneSelectionChanged.
         _slidePaneRefreshing = true;
@@ -8979,6 +8985,17 @@ public sealed partial class MainWindow : Window
         _selectionPane?.Refresh();
         RefreshPaneAccessibilityMetadata();
         UpdateStatus();
+    }
+
+    private void SyncRibbonCommandStates()
+    {
+        if (_ribbonControl is not null)
+        {
+            AvaloniaRibbonRenderer.SyncToggleStates(
+                _ribbonControl,
+                _ribbonCommandRegistry,
+                RibbonVisualPalette.FromTheme(App.ActiveTheme));
+        }
     }
 
     private void OnEditorSelectionChanged(object? sender, EventArgs e)
@@ -9776,6 +9793,22 @@ public sealed partial class MainWindow : Window
         public RibbonCommandState GetState() => new(
             IsEnabled: true,
             IsChecked: canvas.EditPointsEnabled);
+    }
+
+    private sealed class TransitionAdvanceOnClickToggleCommand(
+        EditingSession editor,
+        PresentationTransitionCommandPlan plan) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) =>
+            PresentationTransitionCommandPlanner.TryApply(
+                editor,
+                plan,
+                context.SelectedValue);
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: true,
+            IsChecked: PresentationTransitionCommandPlanner.IsAdvanceOnClickChecked(
+                editor.CurrentSlideTransition));
     }
 
     private sealed class ViewShowToggleCommand : IRibbonStatefulCommand

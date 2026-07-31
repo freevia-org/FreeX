@@ -3155,6 +3155,53 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_transition_advance_on_click_is_stateful_and_tracks_undoable_model_state()
+    {
+        var found = false;
+        var stateful = false;
+        var initiallyChecked = false;
+        var checkedAfterExecute = true;
+        var checkedAfterSlideSwitch = false;
+        var checkedAfterReturn = true;
+        var checkedAfterUndo = false;
+        var advanceAfterExecute = true;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.SelectSlide(0);
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet("freep.transition.advance-on-click", out var command);
+
+            stateful = command is IRibbonStatefulCommand;
+            var statefulCommand = command as IRibbonStatefulCommand;
+            initiallyChecked = statefulCommand?.GetState().IsChecked ?? true;
+
+            command!.Execute(RibbonCommandContext.Empty);
+            advanceAfterExecute = window.Editor.CurrentSlideTransition?.AdvanceOnClick == true;
+            checkedAfterExecute = statefulCommand?.GetState().IsChecked == true;
+
+            window.Editor.SelectSlide(1);
+            checkedAfterSlideSwitch = statefulCommand?.GetState().IsChecked == true;
+            window.Editor.SelectSlide(0);
+            checkedAfterReturn = statefulCommand?.GetState().IsChecked == true;
+            window.Editor.Undo();
+            checkedAfterUndo = statefulCommand?.GetState().IsChecked ?? true;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue("the transition toggle must be available in the Avalonia registry");
+        stateful.Should().BeTrue("WPF exposes Advance On Click as a stateful ribbon toggle");
+        initiallyChecked.Should().BeTrue("a slide without a transition uses the model default of advancing on click");
+        advanceAfterExecute.Should().BeFalse();
+        checkedAfterExecute.Should().BeFalse();
+        checkedAfterSlideSwitch.Should().BeTrue("the state must follow the newly selected slide");
+        checkedAfterReturn.Should().BeFalse();
+        checkedAfterUndo.Should().BeTrue("the checked state must follow the undoable model mutation");
+    }
+
+    [Fact]
     public async Task Ribbon_animation_commands_route_through_shared_planner()
     {
         var foundFade = false;
