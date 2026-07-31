@@ -540,6 +540,7 @@ public sealed class PresentationClipboardInteropTests
         objectShape.Kind.Should().Be(SlideShapeKind.Ole);
         objectShape.OleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
         objectShape.OleObject.EmbeddedExtension.Should().Be("docx");
+        objectShape.OleObject.ProgId.Should().Be("Word.Document.12");
         editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
             .Select(run => run.Text)
             .Should().ContainSingle()

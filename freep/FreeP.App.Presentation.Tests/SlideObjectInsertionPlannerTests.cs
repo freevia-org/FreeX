@@ -655,6 +655,19 @@ public sealed class SlideObjectInsertionPlannerTests
     }
 
     [Fact]
+    public void CreatePayload_PreservesExternalOleClassWhenSupplied()
+    {
+        var payload = OleInsertionPlanner.CreatePayload(
+            [1, 2, 3],
+            "Embedded.bin",
+            "Vendor.Custom.Widget.7");
+
+        payload.EmbeddedExtension.Should().Be("bin");
+        payload.ProgId.Should().Be("Vendor.Custom.Widget.7");
+        payload.OleObjXml.Should().Contain("progId=\"Vendor.Custom.Widget.7\"");
+    }
+
+    [Fact]
     public void InsertEmbeddedObject_IsUndoableAndPreservesPayload()
     {
         var editor = MakeSession();

@@ -1739,7 +1739,10 @@ public sealed class EditingSession
     /// Creates and inserts an embedded OLE package from raw file bytes. The package payload
     /// remains editable/activatable after save and the insertion is one undoable shape add.
     /// </summary>
-    public SlideShape InsertEmbeddedObject(byte[] embeddedBytes, string fileName)
+    public SlideShape InsertEmbeddedObject(
+        byte[] embeddedBytes,
+        string fileName,
+        string? sourceProgId = null)
     {
         var (x, y, cx, cy) = DefaultShapeBounds();
         var shape = new SlideShape
@@ -1753,7 +1756,10 @@ public sealed class EditingSession
             OffsetYEmu = y,
             ExtentCxEmu = cx,
             ExtentCyEmu = cy,
-            OleObject = OleInsertionPlanner.CreatePayload(embeddedBytes, fileName),
+            OleObject = OleInsertionPlanner.CreatePayload(
+                embeddedBytes,
+                fileName,
+                sourceProgId),
         };
         AddShape(shape);
         return shape;
