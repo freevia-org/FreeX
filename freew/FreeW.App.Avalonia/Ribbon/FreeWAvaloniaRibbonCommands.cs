@@ -2252,12 +2252,9 @@ internal static class FreeWAvaloniaRibbonCommands
                      && editor.SelectedFloatingChart() is not null)
                 callbacks.OpenChartEditDataDialog?.Invoke();
         }));
-        r.Register("freew.chart-size", new ValueRibbonCommand(value =>
-        {
-            if (TryParseChartSize(value, out var widthPt, out var heightPt))
-                editor.SetSelectedChartSize(widthPt, heightPt);
-        }));
-        r.Register("freew.chart-size-dialog", new SelectedFloatingDialogCommand(editor, "Chart", callbacks.OpenChartSizeDialog));
+        var chartSize = new ChartSizeCommand(editor, callbacks.OpenChartSizeDialog);
+        r.Register("freew.chart-size", chartSize);
+        r.Register("freew.chart-size-dialog", chartSize);
 
         // ── SmartArt Design ───────────────────────────────────────────────────
         // Layouts — the four Word families. Cycle maps to the model's Process kind (closest flat sequence).
@@ -2410,6 +2407,23 @@ internal static class FreeWAvaloniaRibbonCommands
             && double.TryParse(parts[1], CultureInfo.InvariantCulture, out heightPt)
             && widthPt > 0
             && heightPt > 0;
+    }
+
+    private sealed class ChartSizeCommand(DocumentView editor, Action? openDialog) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            if (!GetState().IsEnabled)
+                return;
+
+            if (TryParseChartSize(context.SelectedValue, out var widthPt, out var heightPt))
+                editor.SetSelectedChartSize(widthPt, heightPt);
+            else if (string.IsNullOrWhiteSpace(context.SelectedValue))
+                openDialog?.Invoke();
+        }
+
+        public RibbonCommandState GetState() =>
+            new(IsEnabled: editor.SelectedFloatingChart() is not null);
     }
 
     /// <summary>
