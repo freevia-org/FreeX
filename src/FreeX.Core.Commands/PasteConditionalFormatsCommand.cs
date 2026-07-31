@@ -9,16 +9,41 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
     private readonly GridRange _sourceRange;
     private readonly CellAddress _destination;
     private readonly bool _transpose;
+    private readonly bool _merge;
+    private readonly IReadOnlyList<GridRange>? _sourceAreas;
     private List<ConditionalFormat>? _previousRules;
 
     public string Label => "Paste Conditional Formats";
 
-    public PasteConditionalFormatsCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination, bool transpose)
+    // R108-commands-paste-conditional-formats-clear-1: `merge` defaults to false (supersede), which
+    // matches real Excel's ordinary paste-with-formatting behavior -- a normal Ctrl+V/Paste Special
+    // > All (and Format Painter, which shares this command from FormatPainterCommandFactory) REPLACES
+    // whatever conditional formatting already sat on the destination cells, exactly like
+    // PasteDataValidationCommand.ClearOverlappingValidationRanges already does for the sibling
+    // Data Validation paste (R52-commands-data-validation-apply-3-1/-3-2). Only the dedicated
+    // "Paste Special > All merging conditional formats" content kind (PasteSpecialContentKind.
+    // AllMergingConditionalFormats) passes merge:true, since that action's entire purpose -- per its
+    // own name and Microsoft's documentation -- is to ADD the copied rule alongside whatever the
+    // destination already has, never to clear it. Defaulting to false (rather than requiring every
+    // call site to opt in) means the fix reaches every existing call site --
+    // PasteCommandFactory.cs's plain/tiled/Paste-Special-options CF-carry branches AND
+    // FormatPainterCommandFactory.cs's two call sites -- for free; only the one call site that
+    // actually implements AllMergingConditionalFormats needs to pass merge:true explicitly.
+    // R108-commands-paste-conditional-formats-multiarea-1: `sourceAreas`, when supplied with more
+    // than one area, records every individually Ctrl+clicked area of a multi-area source selection
+    // (mirroring InternalClipboard.SourceAreas in MainWindow.ClipboardCommands.cs and the identical
+    // parameter PasteDataValidationCommand already has -- R78-commands-paste-special-5-4).
+    // `sourceRange` remains only the BOUNDING BOX of those areas, so without this, a conditional
+    // format rule that only overlaps the gap between disjoint areas (never part of the selection)
+    // would still be treated as "copied" and cloned onto the destination.
+    public PasteConditionalFormatsCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination, bool transpose, bool merge = false, IReadOnlyList<GridRange>? sourceAreas = null)
     {
         _sheetId = sheetId;
         _sourceRange = sourceRange;
         _destination = destination;
         _transpose = transpose;
+        _merge = merge;
+        _sourceAreas = sourceAreas is { Count: > 1 } ? sourceAreas : null;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -39,27 +64,49 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         // rule with a fresh AppliesTo and no stale AdditionalRanges copied along, mirroring
         // PasteDataValidationCommand's EnumerateRuleRanges/IntersectWithSource handling of the
         // identical multi-area shape for Data Validation (R78-commands-paste-special-5-4).
+        // R108-commands-paste-conditional-formats-multiarea-1: when _sourceAreas records a
+        // multi-area (Ctrl+click) source, intersect each of the rule's ranges against every
+        // ACTUAL copied area individually (IntersectWithSource) rather than against the whole
+        // _sourceRange bounding box, so a rule that only touches the gap between disjoint areas
+        // is correctly excluded. Mirrors PasteDataValidationCommand.IntersectWithSource.
         var pastedRules = sourceSheet.ConditionalFormats
             .SelectMany(rule => rule.AllRanges
-                .Where(range => range.Overlaps(_sourceRange))
+                .SelectMany(IntersectWithSource)
                 .Select(range => CloneRuleForDestination(rule, range, targetSheet.Name)))
             .ToList();
+
+        _previousRules = [.. targetSheet.ConditionalFormats];
+
+        // R108-commands-paste-conditional-formats-clear-1: a real Excel paste only supersedes
+        // conditional formatting on the destination cells themselves -- a pre-existing destination
+        // rule whose AppliesTo (or AdditionalRanges) merely overlaps the paste footprint must be
+        // shrunk to its surviving (non-overlapping) portion(s), not deleted wholesale, or cells
+        // outside the paste destination silently lose CF they were never part of pasting over.
+        // Mirrors PasteDataValidationCommand.ClearOverlappingValidationRanges. Skipped entirely for
+        // the dedicated "All merging conditional formats" action (_merge:true), whose whole point is
+        // to add alongside existing destination CF rather than replace them.
+        if (!_merge)
+        {
+            var footprint = GetDestinationFootprint();
+            ClearOverlappingConditionalFormatRanges(targetSheet, footprint);
+        }
 
         // Give each pasted rule a fresh slot in the destination sheet's priority sequence instead of
         // trusting the source rule's Priority verbatim (CloneRuleForDestination copies it as-is).
         // Excel's paste-with-formatting never leaves two active rules tied at the same priority number,
         // so renumber the pasted rules to start after whatever priority the destination sheet already
-        // holds. This only assigns priorities to the newly pasted rules -- it never rewrites the
-        // existing rules already on targetSheet, so it cannot affect
-        // ManageConditionalFormatsPlanner.ApplyRuleRange/MoveRule/Reprioritize (the Manage Rules dialog
-        // always replaces the whole rule list itself via ReplaceAllConditionalFormatsCommand).
+        // holds (computed AFTER the clear/shrink step above, so a rule that was dropped entirely by
+        // the clear doesn't keep reserving a priority slot it no longer occupies). This only assigns
+        // priorities to the newly pasted rules -- it never rewrites the existing rules already on
+        // targetSheet, so it cannot affect ManageConditionalFormatsPlanner.ApplyRuleRange/MoveRule/
+        // Reprioritize (the Manage Rules dialog always replaces the whole rule list itself via
+        // ReplaceAllConditionalFormatsCommand).
         var nextPriority = targetSheet.ConditionalFormats.Count > 0
             ? targetSheet.ConditionalFormats.Max(f => f.Priority) + 1
             : 1;
         foreach (var pasted in pastedRules)
             pasted.Priority = nextPriority++;
 
-        _previousRules = [.. targetSheet.ConditionalFormats];
         targetSheet.ConditionalFormats.AddRange(pastedRules);
 
         return new CommandOutcome(true, AffectedCells: pastedRules.SelectMany(rule => rule.AppliesTo.AllCells()).Distinct().ToList());
@@ -216,6 +263,25 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         return RewriteFormulaText(value, hostSheetName, pasteOp);
     }
 
+    // R108-commands-paste-conditional-formats-multiarea-1: mirrors
+    // PasteDataValidationCommand.IntersectWithSource -- with no (or a single) area recorded, this
+    // is unchanged from intersecting against the whole bounding box.
+    private IEnumerable<GridRange> IntersectWithSource(GridRange ruleRange)
+    {
+        if (_sourceAreas is not { } areas)
+        {
+            if (GridRange.TryIntersect(ruleRange, _sourceRange, out var intersection))
+                yield return intersection;
+            yield break;
+        }
+
+        foreach (var area in areas)
+        {
+            if (GridRange.TryIntersect(ruleRange, area, out var intersection))
+                yield return intersection;
+        }
+    }
+
     private CellAddress MapDestination(CellAddress source)
     {
         var rowOffset = source.Row - _sourceRange.Start.Row;
@@ -223,6 +289,93 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         return _transpose
             ? new CellAddress(_sheetId, _destination.Row + colOffset, _destination.Col + rowOffset)
             : new CellAddress(_sheetId, _destination.Row + rowOffset, _destination.Col + colOffset);
+    }
+
+    // Mirrors PasteDataValidationCommand.GetDestinationRange: the rectangle actually covered by this
+    // paste (source range remapped onto the destination anchor, swapping dimensions when transposed).
+    private GridRange GetDestinationFootprint()
+    {
+        var rowCount = _transpose ? _sourceRange.ColCount : _sourceRange.RowCount;
+        var colCount = _transpose ? _sourceRange.RowCount : _sourceRange.ColCount;
+        return new GridRange(
+            _destination,
+            new CellAddress(_destination.Sheet, _destination.Row + rowCount - 1, _destination.Col + colCount - 1));
+    }
+
+    // R108-commands-paste-conditional-formats-clear-1: mirrors ClearConditionalFormatsCommand.Apply's
+    // subtract-and-replace loop (ApplyConditionalFormatCommand.cs) -- checking AppliesTo AND
+    // AdditionalRanges for overlap and, for any rule that overlaps, replacing it with a single clone
+    // whose AppliesTo/AdditionalRanges cover only the surviving (non-overlapping) remainder, instead
+    // of deleting the whole rule just because part of it touches the paste footprint.
+    private static void ClearOverlappingConditionalFormatRanges(Sheet sheet, GridRange footprint)
+    {
+        var newRules = new List<ConditionalFormat>(sheet.ConditionalFormats.Count);
+        foreach (var rule in sheet.ConditionalFormats)
+        {
+            var allRanges = rule.AllRanges.ToArray();
+            if (!allRanges.Any(range => range.Overlaps(footprint)))
+            {
+                newRules.Add(rule);
+                continue;
+            }
+
+            var remaining = new List<GridRange>();
+            foreach (var range in allRanges)
+                remaining.AddRange(Subtract(range, footprint));
+
+            if (remaining.Count == 0)
+                continue; // whole rule range is inside the paste footprint -- drop the rule entirely
+
+            var shrunk = rule.Clone();
+            shrunk.AppliesTo = remaining[0];
+            shrunk.AdditionalRanges = remaining.Count > 1 ? remaining.Skip(1).ToList() : null;
+            newRules.Add(shrunk);
+        }
+
+        sheet.ConditionalFormats.Clear();
+        sheet.ConditionalFormats.AddRange(newRules);
+    }
+
+    /// <summary>
+    /// Returns the rectangle(s) that remain from <paramref name="source"/> after removing every
+    /// cell also covered by <paramref name="cut"/>. Disjoint ranges are returned unchanged; a
+    /// partial overlap yields up to four non-overlapping rectangles (above/below/left/right of the
+    /// intersection); full containment yields nothing. Mirrors
+    /// ClearConditionalFormatsCommand.SubtractRange / PasteDataValidationCommand.Subtract.
+    /// </summary>
+    private static IEnumerable<GridRange> Subtract(GridRange source, GridRange cut)
+    {
+        if (!source.Overlaps(cut))
+        {
+            yield return source;
+            yield break;
+        }
+
+        var top = Math.Max(source.Start.Row, cut.Start.Row);
+        var bottom = Math.Min(source.End.Row, cut.End.Row);
+        var left = Math.Max(source.Start.Col, cut.Start.Col);
+        var right = Math.Min(source.End.Col, cut.End.Col);
+        var sheet = source.Start.Sheet;
+
+        if (source.Start.Row < top)
+            yield return new GridRange(
+                new CellAddress(sheet, source.Start.Row, source.Start.Col),
+                new CellAddress(sheet, top - 1, source.End.Col));
+
+        if (bottom < source.End.Row)
+            yield return new GridRange(
+                new CellAddress(sheet, bottom + 1, source.Start.Col),
+                new CellAddress(sheet, source.End.Row, source.End.Col));
+
+        if (source.Start.Col < left)
+            yield return new GridRange(
+                new CellAddress(sheet, top, source.Start.Col),
+                new CellAddress(sheet, bottom, left - 1));
+
+        if (right < source.End.Col)
+            yield return new GridRange(
+                new CellAddress(sheet, top, right + 1),
+                new CellAddress(sheet, bottom, source.End.Col));
     }
 }
 

@@ -186,6 +186,15 @@ public sealed class Workbook
     /// Tracked here (never decremented, including on Undo of a table creation) instead of derived from
     /// live tables so an id, once handed out, is never handed out again for the lifetime of the
     /// in-memory workbook.
+    ///
+    /// R108: this property itself is never persisted (no field for it in NativeJsonAdapter's
+    /// WorkbookDto, and no equivalent slot in XLSX), so it always resets to 0 across a save/reload.
+    /// That is fine on its own -- <c>CreateStructuredTableCommand.NextTableId</c> (the sole allocator
+    /// of new table ids, in FreeX.Core.Commands) also floors its result against every live <see
+    /// cref="SlicerModel.SourceTableId"/> and <see cref="PivotCacheModel.SourceTableId"/>, both of
+    /// which DO round-trip through real XLSX/native-JSON, so a dangling reference pinned to a freed id
+    /// before save still blocks that id from being reissued after reload even though this counter
+    /// comes back at 0.
     /// </summary>
     public int NextStructuredTableIdWatermark { get; set; }
 

@@ -179,6 +179,25 @@ public static partial class XlsxChartPartReader
             result.FirstRowIsHeader = hasTitleRange;
             result.FirstColIsCategories = hasCategoryRange;
             result.EmbeddedSeriesData = comboEmbeddedData;
+            // R108-io-chart-series-embedded-fastpath: this branch returns early (before the
+            // SeriesInRows/ApplyVerbatimSeriesFormulasIfNeeded calls further down that every other
+            // return path in this function reaches) precisely BECAUSE every series' val/cat formula
+            // is a named range or a cross-sheet reference — i.e. exactly the shape that
+            // ApplyVerbatimSeriesFormulasIfNeeded exists to capture. Skipping these two calls here
+            // left chart.VerbatimSeriesFormulas null and chart.SeriesInRows false-by-default, so
+            // XlsxChartXmlWriter had nothing but a (frequently degenerate) recomputed chart.DataRange
+            // to re-derive series from on save — silently dropping the whole series set. Must run
+            // regardless of which return branch is taken.
+            result.SeriesColumnMappings = NormalizeSeriesColumnMappings(result.SeriesColumnMappings);
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                barCharts.Concat(lineCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
+                sheetId,
+                sheetNameResolver);
+            ApplyVerbatimSeriesFormulasIfNeeded(
+                barCharts.Concat(lineCharts).Concat(scatterCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
+                sheetId,
+                sheetNameResolver,
+                result);
             XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
             XlsxChartSanitizer.SanitizeLoadedChart(result);
             chart = result;
@@ -330,6 +349,23 @@ public static partial class XlsxChartPartReader
             result.FirstRowIsHeader = hasTitleRange;
             result.FirstColIsCategories = hasCategoryRange;
             result.EmbeddedSeriesData = embeddedData;
+            // R108-io-chart-series-embedded-fastpath: see the identical comment in
+            // TryReadBarLineComboChart above — this branch returns early precisely BECAUSE every
+            // series' val/cat formula is a named range or cross-sheet reference, exactly the shape
+            // ApplyVerbatimSeriesFormulasIfNeeded/DetectSeriesInRows exist to capture. Skipping them
+            // here left chart.VerbatimSeriesFormulas null and chart.SeriesInRows false, so
+            // XlsxChartXmlWriter had nothing to re-derive the series from on save but a frequently
+            // degenerate recomputed chart.DataRange — silently dropping the whole series set.
+            result.SeriesColumnMappings = NormalizeSeriesColumnMappings(result.SeriesColumnMappings);
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                barCharts.SelectMany(c => c.Elements(ChartNs + "ser")),
+                sheetId,
+                sheetNameResolver);
+            ApplyVerbatimSeriesFormulasIfNeeded(
+                barCharts.SelectMany(c => c.Elements(ChartNs + "ser")),
+                sheetId,
+                sheetNameResolver,
+                result);
             XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
             XlsxChartSanitizer.SanitizeLoadedChart(result);
             chart = result;

@@ -300,10 +300,21 @@ internal static class XlsxDataValidationNativeMetadataMapper
         }
         else
         {
+            // Mirrors XlsxDataValidationClosedXmlMapper.Save's own gate (see its doc comment):
+            // NormalizeNumericFormulaForSave exists only to canonicalize Date/Time/Decimal/
+            // WholeNumber bounds. It must never run for List (handled separately below) or for
+            // Custom/TextLength/Any, whose Formula1/Formula2 are arbitrary boolean expressions or
+            // opaque text -- not numeric bounds -- and would otherwise get silently reparsed and
+            // reformatted under CurrentCulture on comma-decimal locales (de-DE, fr-FR, ru-RU, ...).
+            var appliesNumericNormalization = validation.Type is DvType.WholeNumber or DvType.Decimal or DvType.Date or DvType.Time;
             formula1 = validation.Type == DvType.List
                 ? XlsxDataValidationClosedXmlMapper.NormalizeListFormulaForSave(validation.Formula1 ?? "")
-                : XlsxDataValidationClosedXmlMapper.NormalizeNumericFormulaForSave(validation.Type, validation.Formula1);
-            formula2 = XlsxDataValidationClosedXmlMapper.NormalizeNumericFormulaForSave(validation.Type, validation.Formula2);
+                : appliesNumericNormalization
+                    ? XlsxDataValidationClosedXmlMapper.NormalizeNumericFormulaForSave(validation.Type, validation.Formula1)
+                    : validation.Formula1;
+            formula2 = appliesNumericNormalization
+                ? XlsxDataValidationClosedXmlMapper.NormalizeNumericFormulaForSave(validation.Type, validation.Formula2)
+                : validation.Formula2;
         }
 
         if (!string.IsNullOrEmpty(formula1))

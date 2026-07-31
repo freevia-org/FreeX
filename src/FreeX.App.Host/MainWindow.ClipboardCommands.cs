@@ -666,6 +666,14 @@ public partial class MainWindow
                     foreach (var sheetId in targetSheetIds)
                     {
                         var sheetDestinationRange = GroupedSheetRangePlanner.RemapRangeToSheet(destinationRange, sheetId);
+                        // R108-clipboard-paste-multiarea-1: forward clip.SourceAreas (mirrors the
+                        // Paste-Special-Validation/Format-Painter call sites in this file, e.g.
+                        // R78-commands-paste-special-5-1/-3/-4 below) so the r107 plain-Ctrl+V
+                        // conditional-format/data-validation carry (PasteCommandFactory's
+                        // sourceAreas-aware CF/DV branches) restricts itself to the ACTUAL copied
+                        // areas of a multi-area (Ctrl+click) source selection instead of treating
+                        // its whole bounding box -- including the untouched gap between disjoint
+                        // areas -- as copied.
                         var sheetPasteCommand = PasteCommandFactory.CreateInternalPasteCommand(
                             _workbook,
                             sheetId,
@@ -673,7 +681,8 @@ public partial class MainWindow
                             clip.Cells,
                             sheetDestinationRange,
                             ClipboardPastePlanner.ToCorePasteMode(mode),
-                            options);
+                            options,
+                            clip.SourceAreas);
                         if (keepColumnWidths)
                         {
                             sheetPasteCommand = new CompositeWorkbookCommand(

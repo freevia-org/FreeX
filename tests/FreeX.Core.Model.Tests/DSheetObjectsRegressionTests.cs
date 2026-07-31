@@ -343,6 +343,98 @@ public sealed class DSheetObjectsRegressionTests
         slicer.SourceSheetName.Should().Be("Data");
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // R108 — RemoveSheet must remove the SlicerModel/TimelineModel instance itself from
+    // ctx.Workbook.Slicers/Timelines when the sheet hosting its drawing anchor is deleted, not
+    // merely null SourceSheetName. Nulling alone left the instance behind, homeless but alive,
+    // and every downstream consumer that falls back to "wherever the connected pivot table
+    // lives" (SlicerTimelinePanePlanner) or "sheet1" (XlsxSlicerTimelineWriter) would silently
+    // reattach it to an unrelated surviving sheet on the next render/save -- exactly the
+    // "dashboard" pattern (pivot on 'Data', slicer placed on 'Dashboard') this codebase already
+    // explicitly supports elsewhere.
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Fact]
+    public void R108_RemoveSheet_RemovesSlicerAnchoredOnDeletedSheet_EvenWhenPivotSurvivesElsewhere()
+    {
+        var wb = new Workbook("test");
+        wb.AddSheet("Data");
+        var dashboard = wb.AddSheet("Dashboard");
+        var ctx = new TestCommandContext(wb);
+        // The dashboard pattern: the slicer is anchored on 'Dashboard' (its drawing lives there)
+        // but filters a pivot table that lives on the surviving 'Data' sheet. Deleting
+        // 'Dashboard' must delete the slicer itself, not leave it homeless and pointing only at
+        // the still-alive pivot's name.
+        var slicer = new SlicerModel { SourceSheetName = "Dashboard", SourcePivotTableName = "PivotOnData" };
+        wb.Slicers.Add(slicer);
+
+        var command = new RemoveSheetCommand(dashboard.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        wb.Slicers.Should().NotContain(slicer,
+            "the slicer's drawing anchor lived on the deleted sheet, so real Excel deletes the " +
+            "slicer along with it instead of letting it reattach to the surviving pivot's sheet");
+    }
+
+    [Fact]
+    public void R108_RemoveSheet_RemovesTimelineAnchoredOnDeletedSheet()
+    {
+        var wb = new Workbook("test");
+        wb.AddSheet("Data");
+        var dashboard = wb.AddSheet("Dashboard");
+        var ctx = new TestCommandContext(wb);
+        var timeline = new TimelineModel { SourceSheetName = "Dashboard", SourcePivotTableName = "PivotOnData" };
+        wb.Timelines.Add(timeline);
+
+        var command = new RemoveSheetCommand(dashboard.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        wb.Timelines.Should().NotContain(timeline);
+    }
+
+    [Fact]
+    public void R108_RemoveSheetRevert_ReinsertsSlicerAtOriginalIndexInWorkbookSlicers()
+    {
+        var wb = new Workbook("test");
+        wb.AddSheet("Data");
+        var dashboard = wb.AddSheet("Dashboard");
+        var ctx = new TestCommandContext(wb);
+        var survivorBefore = new SlicerModel { SourceSheetName = "Data" };
+        var deleted = new SlicerModel { SourceSheetName = "Dashboard" };
+        var survivorAfter = new SlicerModel { SourceSheetName = "Data" };
+        wb.Slicers.Add(survivorBefore);
+        wb.Slicers.Add(deleted);
+        wb.Slicers.Add(survivorAfter);
+
+        var command = new RemoveSheetCommand(dashboard.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+        wb.Slicers.Should().NotContain(deleted);
+
+        command.Revert(ctx);
+
+        wb.Slicers.Should().ContainInOrder(survivorBefore, deleted, survivorAfter);
+        deleted.SourceSheetName.Should().Be("Dashboard");
+    }
+
+    [Fact]
+    public void R108_RemoveSheet_DoesNotRemoveSlicerAnchoredOnSurvivingSheet()
+    {
+        // Sibling/no-regression: a slicer anchored on a DIFFERENT surviving sheet must be left
+        // completely untouched by deleting an unrelated sheet.
+        var wb = new Workbook("test");
+        var oldSheet = wb.AddSheet("Old");
+        wb.AddSheet("Data");
+        var ctx = new TestCommandContext(wb);
+        var slicer = new SlicerModel { SourceSheetName = "Data" };
+        wb.Slicers.Add(slicer);
+
+        var command = new RemoveSheetCommand(oldSheet.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        wb.Slicers.Should().ContainSingle().Which.Should().BeSameAs(slicer);
+        slicer.SourceSheetName.Should().Be("Data");
+    }
+
     [Fact]
     public void RemoveSheet_ClearsPictureLinkedSourceSheetName()
     {
