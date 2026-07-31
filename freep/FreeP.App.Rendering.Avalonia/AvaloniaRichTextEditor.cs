@@ -419,6 +419,12 @@ internal sealed class AvaloniaRichTextEditor : Grid
         ResetVerticalNavigation();
         InputBox.Focus();
         int logicalPosition = _richTextView.HitTestLogicalPosition(e.GetPosition(_richTextView));
+        if (e.ClickCount >= 2 && TryActivateInlineOleAt(logicalPosition))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.ClickCount >= 3)
         {
             SelectParagraph(logicalPosition);
@@ -448,6 +454,19 @@ internal sealed class AvaloniaRichTextEditor : Grid
         e.Pointer.Capture(InputBox);
         e.Handled = true;
         UpdateSurfaceSelection();
+    }
+
+    private bool TryActivateInlineOleAt(int logicalPosition)
+    {
+        SynchronizeText();
+        if (!_buffer.TryGetInlineOleObjectAt(logicalPosition, out var inlineObject)
+            && (logicalPosition <= 0
+                || !_buffer.TryGetInlineOleObjectAt(logicalPosition - 1, out inlineObject)))
+        {
+            return false;
+        }
+
+        return OleActivationService.TryActivate(inlineObject);
     }
 
     private void OnInputPointerMoved(object? sender, PointerEventArgs e)
