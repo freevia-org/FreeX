@@ -183,6 +183,19 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartPlan_ImportedQuickLayoutColumn_PreservesSerializedMonoBluePalette()
+    {
+        var column = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0]);
+        column.StyleId = 7;
+        column.QuickLayoutId = 9;
+        column.ColorSchemeId = "mono-blue";
+        column.NativeVisualSettings = new ChartNativeVisualSettings(false, false, false, false);
+
+        ChartSmartArtVisualPlanner.BuildChartPlan(column).PaletteHex
+            .Should().StartWith("#214A82", "#2E5FAA", "#4472C4", "#6C8FD1");
+    }
+
+    [Fact]
     public void ChartPlan_ImportedNativeScatterStyle_UsesWordBlueGrayPointPalette()
     {
         var scatter = Chart.Create(ChartKind.Scatter, ["155", "160", "165", "170"], [52.0, 58.0, 62.0, 66.0]);

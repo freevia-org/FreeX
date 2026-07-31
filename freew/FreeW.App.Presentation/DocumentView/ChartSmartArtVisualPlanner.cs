@@ -434,6 +434,12 @@ public static class ChartSmartArtVisualPlanner
         if (chart.NativeVisualSettings is null)
             return scheme.Colors.Select(NormalizeHex).ToList();
 
+        if (chart.Kind == ChartKind.Column
+            && chart.StyleId == 7
+            && chart.QuickLayoutId == 9
+            && string.Equals(chart.ColorSchemeId, "mono-blue", StringComparison.OrdinalIgnoreCase))
+            return scheme.Colors.Select(NormalizeHex).ToList();
+
         // Office's native style ids are not FreeW gallery ids. These two combinations are the
         // default Office-theme palettes serialized by the imported chart parts, measured from Word.
         if (chart.Kind == ChartKind.Column
