@@ -3622,14 +3622,13 @@ public sealed class DocumentView : Control
                 imageOpsByPage[pageIndex]);
         }
 
-        // Floating images use the same snapshot/page-space geometry and behind/in-front draw
-        // buckets as the live Avalonia renderer. Keep them as separate passes so a behind-text
-        // image lands below body glyphs while an in-front image remains above them. PDF pages clip
-        // any authored edge that falls outside the media box, matching the compositor's page clip.
-        var floatingBehindImageOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
-        var floatingInFrontImageOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+        // Floating images and shapes share the same snapshot/page-space geometry and merged
+        // behind/in-front draw buckets as the live Avalonia renderer. Keep all object kinds in one
+        // pass so a shape and image with interleaved z-order still paint in the same order.
+        var floatingBehindOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+        var floatingInFrontOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
 
-        void AddFloatingImageOps(
+        void AddFloatingDrawingOps(
             bool behindText,
             List<List<Free.Shared.Pdf.PdfDrawOp>> target)
         {
@@ -3637,46 +3636,59 @@ public sealed class DocumentView : Control
                          _floatingSnapshots,
                          behindText))
             {
-                if (snapshot.Kind != DocumentFloatingObjectKind.Image
-                    || snapshot.BlockIndex < 0
+                if (snapshot.BlockIndex < 0
                     || snapshot.BlockIndex >= _doc.Blocks.Count
                     || _doc.Blocks[snapshot.BlockIndex] is not Paragraph paragraph
                     || snapshot.RunIndex < 0
                     || snapshot.RunIndex >= paragraph.Runs.Count
-                    || paragraph.Runs[snapshot.RunIndex].Image is not { IsFloating: true } image)
+                    || snapshot.Kind is not (DocumentFloatingObjectKind.Image or DocumentFloatingObjectKind.Shape))
                     continue;
 
                 var pageIndex = PageIndexFromPageSpaceY(snapshot.Rect.TopDip + 0.01);
                 if (pageIndex < 0)
                     continue;
 
-                var rendered = _floatingImages
-                    .Where(item => item.BlockIndex == snapshot.BlockIndex
-                        && item.RunIndex == snapshot.RunIndex)
-                    .Select(item => item.Image)
-                    .FirstOrDefault()
-                    ?? DecodeRenderedImage(image);
                 var sourceRect = new Rect(
                     snapshot.Rect.XDip,
                     snapshot.Rect.YDip,
                     snapshot.Rect.WidthDip,
                     snapshot.Rect.HeightDip);
                 var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
-                if (BuildPdfImage(sourceRect, image, rendered, pageTopDip, pageHeightPt) is not { } imageOp)
+                IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> objectOps = snapshot.Kind switch
+                {
+                    DocumentFloatingObjectKind.Image when paragraph.Runs[snapshot.RunIndex].Image is { IsFloating: true } image =>
+                        BuildPdfImage(
+                            sourceRect,
+                            image,
+                            _floatingImages
+                                .Where(item => item.BlockIndex == snapshot.BlockIndex
+                                    && item.RunIndex == snapshot.RunIndex)
+                                .Select(item => item.Image)
+                                .FirstOrDefault()
+                                ?? DecodeRenderedImage(image),
+                            pageTopDip,
+                            pageHeightPt) is { } imageOp
+                            ? [imageOp]
+                            : [],
+                    DocumentFloatingObjectKind.Shape when paragraph.Runs[snapshot.RunIndex].Shape is { IsFloating: true } shape =>
+                        BuildPdfShapeOps(shape, snapshot, sourceRect, pageTopDip, pageHeightPt),
+                    _ => [],
+                };
+                if (objectOps.Count == 0)
                     continue;
 
                 while (target.Count <= pageIndex)
                     target.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
-                target[pageIndex].Add(imageOp);
+                target[pageIndex].AddRange(objectOps);
             }
         }
 
-        AddFloatingImageOps(behindText: true, target: floatingBehindImageOpsByPage);
-        AddFloatingImageOps(behindText: false, target: floatingInFrontImageOpsByPage);
+        AddFloatingDrawingOps(behindText: true, target: floatingBehindOpsByPage);
+        AddFloatingDrawingOps(behindText: false, target: floatingInFrontOpsByPage);
 
-        for (var pageIndex = 0; pageIndex < floatingBehindImageOpsByPage.Count; pageIndex++)
+        for (var pageIndex = 0; pageIndex < floatingBehindOpsByPage.Count; pageIndex++)
         {
-            if (floatingBehindImageOpsByPage[pageIndex].Count == 0)
+            if (floatingBehindOpsByPage[pageIndex].Count == 0)
                 continue;
 
             EnsurePage(pageIndex);
@@ -3685,7 +3697,7 @@ public sealed class DocumentView : Control
                 : 0;
             pagesOps[pageIndex].InsertRange(
                 Math.Min(insertionIndex, pagesOps[pageIndex].Count),
-                floatingBehindImageOpsByPage[pageIndex]);
+                floatingBehindOpsByPage[pageIndex]);
         }
 
         // The live Avalonia layout has already resolved page ownership, field text, wrapping, and
@@ -3710,15 +3722,15 @@ public sealed class DocumentView : Control
                 Math.Max(0, xPt), yPt, fontSizePt, face, ParseColor(fmt.ColorHex), text));
         }
 
-        // In-front floating images are appended after body text, matching Render's second floating
-        // pass. Keep them ahead of header/footer and note regions, as in the live compositor.
-        for (var pageIndex = 0; pageIndex < floatingInFrontImageOpsByPage.Count; pageIndex++)
+        // In-front floating drawings are appended after body text, matching Render's second
+        // floating pass. Keep them ahead of header/footer and note regions, as in the compositor.
+        for (var pageIndex = 0; pageIndex < floatingInFrontOpsByPage.Count; pageIndex++)
         {
-            if (floatingInFrontImageOpsByPage[pageIndex].Count == 0)
+            if (floatingInFrontOpsByPage[pageIndex].Count == 0)
                 continue;
 
             EnsurePage(pageIndex);
-            pagesOps[pageIndex].AddRange(floatingInFrontImageOpsByPage[pageIndex]);
+            pagesOps[pageIndex].AddRange(floatingInFrontOpsByPage[pageIndex]);
         }
 
         foreach (var item in _headerFooterItems)
@@ -3815,6 +3827,328 @@ public sealed class DocumentView : Control
                 image.CropTop,
                 image.CropRight,
                 image.CropBottom));
+    }
+
+    private IReadOnlyList<PdfDrawOp> BuildPdfShapeOps(
+        Shape shape,
+        DocumentFloatingObjectSnapshot snapshot,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        var plan = DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot);
+        var xPt = (sourceRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+        var yPt = pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint);
+        var widthPt = sourceRect.Width / PxPerPoint;
+        var heightPt = sourceRect.Height / PxPerPoint;
+        var ops = new List<PdfDrawOp>();
+
+        AddPdfShapeGeometryOps(ops, plan, xPt, yPt, widthPt, heightPt);
+        AddPdfShapeTextOps(ops, plan, snapshot, sourceRect, pageTopDip, pageHeightPt);
+        if (ops.Count == 0)
+            return [];
+
+        if (Math.Abs(plan.RotationAngle) > 0.001)
+        {
+            return [new PdfRotationGroup(
+                xPt + widthPt / 2,
+                yPt + heightPt / 2,
+                plan.RotationAngle,
+                ops)];
+        }
+
+        return ops;
+    }
+
+    private static void AddPdfShapeGeometryOps(
+        List<PdfDrawOp> ops,
+        DrawingObjectVisualPlan plan,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        var fillColor = ResolvePdfShapeFillFallback(plan.Fill);
+        PdfColor? outlineColor = plan.Outline.IsVisible ? ParseColor(plan.Outline.ColorHex) : null;
+        var strokeWidth = Math.Max(0.1, plan.Outline.WidthDip / PxPerPoint);
+        var gradient = BuildPdfShapeGradient(plan.Fill, x, y, width, height);
+
+        switch (plan.GeometryKind)
+        {
+            case DrawingObjectGeometryKind.Ellipse:
+                if (gradient is not null)
+                {
+                    ops.Add(new PdfFillEllipseLinearGradient(
+                        x, y, width, height, gradient, fillColor ?? new PdfColor(255, 255, 255)));
+                }
+                else if (fillColor is { } ellipseFill)
+                {
+                    ops.Add(new PdfFillEllipse(x, y, width, height, ellipseFill));
+                }
+
+                if (outlineColor is { } ellipseOutline)
+                    ops.Add(new PdfStrokeEllipse(x, y, width, height, ellipseOutline, strokeWidth));
+                break;
+
+            case DrawingObjectGeometryKind.RoundedRectangle:
+            case DrawingObjectGeometryKind.Custom:
+                var contours = plan.GeometryKind == DrawingObjectGeometryKind.Custom
+                    ? BuildPdfCustomGeometry(plan.CustomGeometry, x, y, width, height)
+                    : [BuildPdfRoundedRectangleContour(x, y, width, height)];
+                if (contours.Count == 0)
+                    break;
+
+                if (gradient is not null)
+                {
+                    ops.Add(new PdfPathLinearGradient(
+                        contours,
+                        gradient,
+                        fillColor,
+                        null,
+                        outlineColor,
+                        strokeWidth));
+                }
+                else if (fillColor is not null || outlineColor is not null)
+                {
+                    ops.Add(new PdfPath(contours, fillColor, outlineColor, strokeWidth));
+                }
+                break;
+
+            case DrawingObjectGeometryKind.Rectangle:
+            case DrawingObjectGeometryKind.TextBox:
+            default:
+                if (gradient is not null)
+                {
+                    ops.Add(new PdfFillRectLinearGradient(
+                        x, y, width, height, gradient, fillColor ?? new PdfColor(255, 255, 255)));
+                }
+                else if (fillColor is { } rectangleFill)
+                {
+                    ops.Add(new PdfFillRect(x, y, width, height, rectangleFill));
+                }
+
+                if (outlineColor is { } rectangleOutline)
+                    ops.Add(new PdfStrokeRect(x, y, width, height, rectangleOutline, strokeWidth));
+                break;
+        }
+    }
+
+    private void AddPdfShapeTextOps(
+        List<PdfDrawOp> ops,
+        DrawingObjectVisualPlan plan,
+        DocumentFloatingObjectSnapshot snapshot,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        if (plan.Text is null)
+            return;
+
+        var cachedLayout = _floatingShapes
+            .FirstOrDefault(item => item.BlockIndex == snapshot.BlockIndex
+                && item.RunIndex == snapshot.RunIndex)
+            ?.TextLayout;
+        var layout = cachedLayout ?? DrawingObjectTextLayoutPlanner.LayoutPlan(
+            plan.Text,
+            sourceRect.Width,
+            sourceRect.Height,
+            (value, formatting) => Build(value, formatting).WidthIncludingTrailingWhitespace,
+            formatting => Build("Ag", formatting).Height);
+        if (layout is null)
+            return;
+
+        var originX = sourceRect.X + (sourceRect.Width - layout.Width) / 2;
+        var originY = sourceRect.Y + (sourceRect.Height - layout.Height) / 2;
+        var currentLine = -1;
+        RunFormatting? currentFormatting = null;
+        var currentText = new StringBuilder();
+        var currentX = 0.0;
+        var currentY = 0.0;
+        var currentHeight = 0.0;
+        var textStartIndex = ops.Count;
+
+        void Flush()
+        {
+            if (currentText.Length == 0 || currentFormatting is null)
+                return;
+
+            var fontSizePt = currentFormatting.FontSizePt ?? DefaultFontSizePt;
+            var baselineDip = currentY + currentHeight * 0.82;
+            var baselinePt = pageHeightPt - ((baselineDip - pageTopDip) / PxPerPoint);
+            var face = currentFormatting.Bold
+                ? currentFormatting.Italic ? PdfFontFace.BoldItalic : PdfFontFace.Bold
+                : currentFormatting.Italic ? PdfFontFace.Italic : PdfFontFace.Regular;
+            ops.Add(new PdfText(
+                (currentX - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt,
+                baselinePt,
+                fontSizePt,
+                face,
+                ParseColor(currentFormatting.ColorHex),
+                currentText.ToString()));
+            currentText.Clear();
+            currentFormatting = null;
+        }
+
+        foreach (var glyph in layout.Glyphs.OrderBy(glyph => glyph.LineIndex).ThenBy(glyph => glyph.X))
+        {
+            var startsNewRun = currentFormatting is null
+                || currentLine != glyph.LineIndex
+                || currentFormatting != glyph.Formatting;
+            if (startsNewRun)
+            {
+                Flush();
+                currentLine = glyph.LineIndex;
+                currentFormatting = glyph.Formatting;
+                currentX = originX + glyph.X;
+                currentY = originY + glyph.Y;
+                currentHeight = glyph.Height;
+            }
+
+            currentText.Append(glyph.Character);
+        }
+
+        Flush();
+
+        if (plan.Text.Direction is ShapeTextDirection.Rotate90 or ShapeTextDirection.Rotate270)
+        {
+            var textOps = ops.Skip(textStartIndex).ToList();
+            if (textOps.Count > 0)
+            {
+                ops.RemoveRange(ops.Count - textOps.Count, textOps.Count);
+                ops.Add(new PdfRotationGroup(
+                    (sourceRect.X - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt + sourceRect.Width / PxPerPoint / 2,
+                    pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint) + sourceRect.Height / PxPerPoint / 2,
+                    plan.Text.Direction == ShapeTextDirection.Rotate90 ? 90 : -90,
+                    textOps));
+            }
+        }
+    }
+
+    private static PdfColor? ResolvePdfShapeFillFallback(DrawingObjectFillPlan fill) =>
+        fill.Kind switch
+        {
+            DrawingObjectFillKind.Solid => ParseColor(fill.ColorHex),
+            DrawingObjectFillKind.Pattern => ParseColor(fill.PatternBackgroundColorHex ?? fill.PatternForegroundColorHex),
+            DrawingObjectFillKind.Gradient => ParseColor(fill.GradientStops.FirstOrDefault()?.ColorHex),
+            _ => null,
+        };
+
+    private static PdfLinearGradient? BuildPdfShapeGradient(
+        DrawingObjectFillPlan fill,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (fill.Kind != DrawingObjectFillKind.Gradient || fill.GradientStops.Count == 0)
+            return null;
+
+        var angle = fill.GradientAngle / 60000.0 * Math.PI / 180.0;
+        var cos = Math.Cos(angle);
+        var sin = Math.Sin(angle);
+        var start = new PdfPathPoint(
+            x + width * (0.5 - cos * 0.5),
+            y + height * (0.5 + sin * 0.5));
+        var end = new PdfPathPoint(
+            x + width * (0.5 + cos * 0.5),
+            y + height * (0.5 - sin * 0.5));
+        var stops = fill.GradientStops
+            .Select(stop => new PdfGradientStop(
+                Math.Clamp(stop.Position / 100000.0, 0, 1),
+                ParseColor(stop.ColorHex)))
+            .ToArray();
+        return new PdfLinearGradient(start.X, start.Y, end.X, end.Y, stops);
+    }
+
+    private static PdfPathContour BuildPdfRoundedRectangleContour(
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        var radius = Math.Min(6.0 / PxPerPoint, Math.Min(width, height) / 4);
+        var right = x + width;
+        var top = y + height;
+        const double kappa = 0.5522847498;
+        var start = new PdfPathPoint(x + radius, top);
+        var segments = new List<PdfPathSegment>
+        {
+            PdfPathSegment.LineTo(new PdfPathPoint(right - radius, top)),
+            PdfPathSegment.BezierTo(
+                new PdfPathPoint(right - radius + radius * kappa, top),
+                new PdfPathPoint(right, top - radius + radius * kappa),
+                new PdfPathPoint(right, top - radius)),
+            PdfPathSegment.LineTo(new PdfPathPoint(right, y + radius)),
+            PdfPathSegment.BezierTo(
+                new PdfPathPoint(right, y + radius - radius * kappa),
+                new PdfPathPoint(right - radius + radius * kappa, y),
+                new PdfPathPoint(right - radius, y)),
+            PdfPathSegment.LineTo(new PdfPathPoint(x + radius, y)),
+            PdfPathSegment.BezierTo(
+                new PdfPathPoint(x + radius - radius * kappa, y),
+                new PdfPathPoint(x, y + radius - radius * kappa),
+                new PdfPathPoint(x, y + radius)),
+            PdfPathSegment.LineTo(new PdfPathPoint(x, top - radius)),
+            PdfPathSegment.BezierTo(
+                new PdfPathPoint(x, top - radius + radius * kappa),
+                new PdfPathPoint(x + radius - radius * kappa, top),
+                start),
+        };
+        return new PdfPathContour(start, segments, Closed: true);
+    }
+
+    private static IReadOnlyList<PdfPathContour> BuildPdfCustomGeometry(
+        CustomGeometry? geometry,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (geometry is null || geometry.Segments.Count == 0 || geometry.Width == 0 || geometry.Height == 0)
+            return [];
+
+        PdfPathPoint Map(CustomPoint point) => new(
+            x + point.X / (double)geometry.Width * width,
+            y + height - point.Y / (double)geometry.Height * height);
+
+        var contours = new List<PdfPathContour>();
+        PdfPathPoint? start = null;
+        var segments = new List<PdfPathSegment>();
+        var closed = false;
+
+        void Flush()
+        {
+            if (start is { } first)
+                contours.Add(new PdfPathContour(first, segments.ToArray(), closed));
+            start = null;
+            segments.Clear();
+            closed = false;
+        }
+
+        foreach (var segment in geometry.Segments)
+        {
+            switch (segment.Kind)
+            {
+                case CustomSegmentKind.MoveTo when segment.Point is { } point:
+                    Flush();
+                    start = Map(point);
+                    break;
+                case CustomSegmentKind.LineTo when segment.Point is { } point:
+                    segments.Add(PdfPathSegment.LineTo(Map(point)));
+                    break;
+                case CustomSegmentKind.CubicBezierTo when segment.Point is { } point
+                    && segment.ControlPoint1 is { } control1
+                    && segment.ControlPoint2 is { } control2:
+                    segments.Add(PdfPathSegment.BezierTo(Map(control1), Map(control2), Map(point)));
+                    break;
+                case CustomSegmentKind.Close:
+                    closed = true;
+                    break;
+            }
+        }
+
+        Flush();
+        return contours;
     }
 
     private static bool RequiresRasterImageBake(InlineImage image) =>

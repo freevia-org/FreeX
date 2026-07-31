@@ -935,6 +935,48 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildFloatingObjectDrawOrder_InterleavesShapeAndImageByZOrder()
+    {
+        var snapshots = new[]
+        {
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Image,
+                0,
+                0,
+                new DocumentFloatRect(0, 0, 80, 40),
+                BehindText: true,
+                ZOrderIndex: 8,
+                ImageWrapping.Behind),
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Shape,
+                0,
+                1,
+                new DocumentFloatRect(8, 8, 80, 40),
+                BehindText: true,
+                ZOrderIndex: 3,
+                ImageWrapping.Behind),
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.Shape,
+                0,
+                2,
+                new DocumentFloatRect(16, 16, 80, 40),
+                BehindText: false,
+                ZOrderIndex: 1,
+                ImageWrapping.InFront),
+        };
+
+        DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: true)
+            .Select(snapshot => (snapshot.Kind, snapshot.ZOrderIndex))
+            .Should().Equal(
+                (DocumentFloatingObjectKind.Shape, 3),
+                (DocumentFloatingObjectKind.Image, 8));
+
+        DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: false)
+            .Select(snapshot => (snapshot.Kind, snapshot.ZOrderIndex))
+            .Should().Equal((DocumentFloatingObjectKind.Shape, 1));
+    }
+
+    [Fact]
     public void HitTestFloatingObject_PrefersFrontBandThenHighestZOrder()
     {
         var rect = new DocumentFloatRect(10, 20, 100, 80);

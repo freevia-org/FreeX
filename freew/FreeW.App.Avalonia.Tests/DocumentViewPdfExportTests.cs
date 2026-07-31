@@ -1,3 +1,4 @@
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Avalonia;
@@ -274,6 +275,87 @@ public sealed class DocumentViewPdfExportTests
             behindOp.RotationDegrees.Should().BeApproximately(12, 0.001);
             frontOp.X.Should().BeApproximately(96, 0.001);
             frontOp.Y.Should().BeApproximately(88, 0.001);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesFloatingShapesAsVectorGeometryTextAndMergedLayering() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 240;
+            document.Page.HeightPt = 180;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Body text between drawing layers"));
+            var behind = new Shape(ShapeKind.Ellipse, 48, 36, "#FF0000")
+            {
+                OutlineColorHex = "#000000",
+                OutlineWidthPt = 1.5,
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.Behind,
+                    HorizontalAnchor = HorizontalAnchor.Page,
+                    HorizontalOffsetPt = 24,
+                    VerticalAnchor = VerticalAnchor.Page,
+                    VerticalOffsetPt = 30,
+                    ZOrderIndex = 1,
+                },
+            };
+            var front = Shape.TextBoxWith("Vector shape text", 72, 36, "#00AA00");
+            front.OutlineColorHex = "#0000FF";
+            front.OutlineWidthPt = 2;
+            front.Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 96,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 42,
+                ZOrderIndex = 3,
+            };
+            paragraph.Runs.Add(Run.FromShape(behind));
+            paragraph.Runs.Add(Run.FromShape(front));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(800, 1200));
+
+            var ops = view.BuildPdfContent().Pages.Single().Ops.ToList();
+            var bodyIndex = ops.FindIndex(op => op is PdfText text
+                && text.Text.Contains("Body text", StringComparison.Ordinal));
+            var shapeTextIndex = ops.FindIndex(op => op is PdfText text
+                && text.Text.Contains("Vector", StringComparison.Ordinal));
+
+            var ellipse = ops.OfType<PdfFillEllipse>().Single(op => op.Color == new PdfColor(255, 0, 0));
+            var ellipseOutline = ops.OfType<PdfStrokeEllipse>().Single(op => op.Color == PdfColor.Black);
+            var rectangle = ops.OfType<PdfFillRect>().Single(op => op.Color == new PdfColor(0, 170, 0));
+            var rectangleOutline = ops.OfType<PdfStrokeRect>().Single(op => op.Color == new PdfColor(0, 0, 255));
+
+            ellipse.X.Should().BeApproximately(24, 0.001);
+            ellipse.Y.Should().BeApproximately(114, 0.001);
+            ellipse.Width.Should().BeApproximately(48, 0.001);
+            ellipse.Height.Should().BeApproximately(36, 0.001);
+            ellipseOutline.LineWidth.Should().BeApproximately(1.5, 0.001);
+            rectangle.X.Should().BeApproximately(96, 0.001);
+            rectangle.Y.Should().BeApproximately(102, 0.001);
+            rectangle.Width.Should().BeApproximately(72, 0.001);
+            rectangle.Height.Should().BeApproximately(36, 0.001);
+            rectangleOutline.LineWidth.Should().BeApproximately(2, 0.001);
+            ops.IndexOf(ellipse).Should().BeLessThan(bodyIndex, "behind shapes must precede body glyphs");
+            ops.IndexOf(rectangle).Should().BeGreaterThan(bodyIndex, "in-front shapes must follow body glyphs");
+            shapeTextIndex.Should().BeGreaterThan(
+                ops.IndexOf(rectangle),
+                "shape text should be emitted after the front shape; ops={0}",
+                string.Join(",", ops.Select(op => op is PdfText text ? $"text:{text.Text}" : op.GetType().Name)));
+
+            var pdfBytes = SkiaPdfWriter.WriteToBytes(view.BuildPdfContent());
+            pdfBytes.Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
         }, CancellationToken.None);
 
     [Fact]
