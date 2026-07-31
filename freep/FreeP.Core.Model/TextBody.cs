@@ -272,6 +272,12 @@ public sealed class Run
     /// </summary>
     public InlineOleObjectInfo? InlineOleObject { get; set; }
 
+    /// <summary>
+    /// Inline table carried by an object-replacement run. The run's text is U+FFFC, matching
+    /// inline pictures and embedded objects so selection and caret offsets remain stable.
+    /// </summary>
+    public InlineTableInfo? InlineTable { get; set; }
+
     /// <summary>Font family name, or null to inherit from paragraph/layout/master.</summary>
     public string? FontFamily { get; set; }
 

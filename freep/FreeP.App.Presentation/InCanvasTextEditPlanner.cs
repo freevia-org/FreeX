@@ -514,6 +514,7 @@ public sealed class InCanvasTextEditPlanner
                     || ra.InlineImageWidthEmu != rb.InlineImageWidthEmu
                     || ra.InlineImageHeightEmu != rb.InlineImageHeightEmu
                     || !InlineOleObjectsEqual(ra.InlineOleObject, rb.InlineOleObject)
+                    || !TextBodyModelCloner.InlineTablesEqual(ra.InlineTable, rb.InlineTable)
                     || ra.Bold != rb.Bold
                     || ra.Italic != rb.Italic
                     || ra.Underline != rb.Underline
@@ -764,6 +765,9 @@ internal static class TextBodyRunMutationPlanner
         InlineOleObject = source.InlineOleObject is { } ole && text == source.Text
             ? CloneInlineOleObject(ole)
             : null,
+        InlineTable = source.InlineTable is { } table && text == source.Text
+            ? table.Clone()
+            : null,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,
@@ -792,6 +796,7 @@ internal static class TextBodyRunMutationPlanner
         && a.InlineImageWidthEmu == b.InlineImageWidthEmu
         && a.InlineImageHeightEmu == b.InlineImageHeightEmu
         && InlineOleObjectsEqual(a.InlineOleObject, b.InlineOleObject)
+        && TextBodyModelCloner.InlineTablesEqual(a.InlineTable, b.InlineTable)
         && a.FontFamily == b.FontFamily
         && a.FontSizePt == b.FontSizePt
         && a.BaselineOffset == b.BaselineOffset
@@ -1041,6 +1046,67 @@ public sealed class SetShapeTextBodyCommand : IPresentationCommand
 
 internal static class TextBodyModelCloner
 {
+    internal static bool InlineTablesEqual(InlineTableInfo? a, InlineTableInfo? b)
+    {
+        if (a is null || b is null)
+            return a is null && b is null;
+
+        var left = a.Table;
+        var right = b.Table;
+        if (!left.ColumnWidthsEmu.SequenceEqual(right.ColumnWidthsEmu)
+            || left.Rows.Count != right.Rows.Count)
+            return false;
+
+        for (int rowIndex = 0; rowIndex < left.Rows.Count; rowIndex++)
+        {
+            var leftRow = left.Rows[rowIndex];
+            var rightRow = right.Rows[rowIndex];
+            if (leftRow.HeightEmu != rightRow.HeightEmu
+                || leftRow.Cells.Count != rightRow.Cells.Count)
+                return false;
+
+            for (int cellIndex = 0; cellIndex < leftRow.Cells.Count; cellIndex++)
+            {
+                var leftCell = leftRow.Cells[cellIndex];
+                var rightCell = rightRow.Cells[cellIndex];
+                if (leftCell.GridSpan != rightCell.GridSpan
+                    || leftCell.RowSpan != rightCell.RowSpan
+                    || leftCell.HMerge != rightCell.HMerge
+                    || leftCell.VMerge != rightCell.VMerge
+                    || !TextBodiesEqualForInlineTable(leftCell.TextBody, rightCell.TextBody))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool TextBodiesEqualForInlineTable(TextBody? a, TextBody? b)
+    {
+        if (a is null || b is null)
+            return a is null && b is null;
+        if (a.Paragraphs.Count != b.Paragraphs.Count)
+            return false;
+
+        for (int paragraphIndex = 0; paragraphIndex < a.Paragraphs.Count; paragraphIndex++)
+        {
+            var left = a.Paragraphs[paragraphIndex];
+            var right = b.Paragraphs[paragraphIndex];
+            if (left.Align != right.Align || left.Runs.Count != right.Runs.Count)
+                return false;
+            for (int runIndex = 0; runIndex < left.Runs.Count; runIndex++)
+            {
+                var leftRun = left.Runs[runIndex];
+                var rightRun = right.Runs[runIndex];
+                if (leftRun.Text != rightRun.Text
+                    || !InlineTablesEqual(leftRun.InlineTable, rightRun.InlineTable))
+                    return false;
+            }
+        }
+
+        return true;
+    }
+
     internal static TextBody? CloneTextBody(TextBody? source)
     {
         if (source is null)
@@ -1154,6 +1220,7 @@ internal static class TextBodyModelCloner
         InlineImageWidthEmu = source.InlineImageWidthEmu,
         InlineImageHeightEmu = source.InlineImageHeightEmu,
         InlineOleObject = CloneInlineOleObject(source.InlineOleObject),
+        InlineTable = source.InlineTable?.Clone(),
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,

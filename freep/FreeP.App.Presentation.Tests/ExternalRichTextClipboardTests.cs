@@ -429,6 +429,51 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesNestedInlineTableAsObjectReplacementRun()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph><Run Text="Before"/><InlineUIContainer><Border>
+                <Table><TableRowGroup><TableRow>
+                  <TableCell Background="#FFF2CC"><Paragraph>Outer</Paragraph></TableCell>
+                  <TableCell><Paragraph>Inner <InlineUIContainer><Border>
+                    <Table><TableRowGroup><TableRow>
+                      <TableCell><Paragraph>Nested</Paragraph></TableCell>
+                    </TableRow></TableRowGroup></Table>
+                  </Border></InlineUIContainer></Paragraph></TableCell>
+                </TableRow></TableRowGroup></Table>
+              </Border></InlineUIContainer><Run Text="After"/></Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("Before", "\uFFFC", "After");
+        var outer = runs[1].InlineTable;
+        outer.Should().NotBeNull();
+        outer!.Table.Rows.Should().HaveCount(1);
+        outer.Table.Rows[0].Cells.Should().HaveCount(2);
+        outer.Table.Rows[0].Cells[0].Fill.Should().BeOfType<ShapeFill.Solid>();
+        outer.Table.Rows[0].Cells[1].TextBody!.Paragraphs[0].Runs
+            .Select(run => run.Text).Should().Contain("\uFFFC");
+        outer.Table.Rows[0].Cells[1].TextBody!.Paragraphs[0].Runs
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text
+            .Should().Be("Nested");
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.Single().Runs[1].InlineTable!.Table.Rows[0].Cells[1]
+            .TextBody!.Paragraphs[0].Runs.Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text
+            .Should().Be("Nested");
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_RejectsOversizedTableRows()
     {
         var cells = string.Concat(Enumerable.Repeat(

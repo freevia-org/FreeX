@@ -11,6 +11,8 @@ using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 using ModelParagraph = FreeP.Core.Model.Paragraph;
 using ModelRun       = FreeP.Core.Model.Run;
+using ModelTableCell = FreeP.Core.Model.TableCell;
+using ModelTableRow  = FreeP.Core.Model.TableRow;
 using ModelHyperlink = FreeP.Core.Model.Hyperlink;
 using WpfParagraph  = System.Windows.Documents.Paragraph;
 using WpfRun        = System.Windows.Documents.Run;
@@ -135,6 +137,85 @@ public sealed class RichTextEditorTests
         restored.Paragraphs[0].Runs.Select(run => (run.Text, run.Bold, run.Italic))
             .Should().Equal(("Bold", true, false), (" italic", false, true));
         restored.Paragraphs[1].Runs.Single().Underline.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void WpfInlineTableEditor_PreservesNestedCellTableWhenTextIsUnchanged()
+    {
+        var inner = new TableShape();
+        inner.ColumnWidthsEmu.Add(457200);
+        inner.Rows.Add(new ModelTableRow
+        {
+            HeightEmu = 228600,
+            Cells =
+            {
+                new ModelTableCell
+                {
+                    TextBody = new TextBody
+                    {
+                        Paragraphs =
+                        {
+                            new ModelParagraph { Runs = { new ModelRun { Text = "Nested" } } },
+                        },
+                    },
+                },
+            },
+        });
+
+        var outer = new TableShape();
+        outer.ColumnWidthsEmu.Add(457200);
+        outer.Rows.Add(new ModelTableRow
+        {
+            HeightEmu = 228600,
+            Cells =
+            {
+                new ModelTableCell
+                {
+                    TextBody = new TextBody
+                    {
+                        Paragraphs =
+                        {
+                            new ModelParagraph
+                            {
+                                Runs =
+                                {
+                                    new ModelRun
+                                    {
+                                        Text = "\uFFFC",
+                                        InlineTable = new InlineTableInfo { Table = inner },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        });
+
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new ModelParagraph
+                {
+                    Runs =
+                    {
+                        new ModelRun { Text = "Before " },
+                        new ModelRun { Text = "\uFFFC", InlineTable = new InlineTableInfo { Table = outer } },
+                        new ModelRun { Text = " After" },
+                    },
+                },
+            },
+        };
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(document, body);
+        var restoredTable = restored.Paragraphs[0].Runs[1].InlineTable;
+
+        restoredTable.Should().NotBeNull();
+        restoredTable!.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0]
+            .InlineTable!.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text
+            .Should().Be("Nested");
     }
 
     [StaFact]

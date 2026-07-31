@@ -199,6 +199,7 @@ public static class InCanvasRichClipboardPlanner
             {
                 if (run.InlineImage is null
                     && run.InlineOleObject is null
+                    && run.InlineTable is null
                     && !run.Text.Contains('\uFFFC', StringComparison.Ordinal))
                 {
                     cleanedRuns.Add(run);
@@ -214,6 +215,7 @@ public static class InCanvasRichClipboardPlanner
                 run.InlineImageWidthEmu = null;
                 run.InlineImageHeightEmu = null;
                 run.InlineOleObject = null;
+                run.InlineTable = null;
                 cleanedRuns.Add(run);
             }
 
@@ -450,6 +452,133 @@ public static class InCanvasRichClipboardPlanner
         Paragraphs = body.Paragraphs.Select(ToDto).ToList(),
     };
 
+    private static ClipboardInlineTableDto? ToDto(InlineTableInfo? info)
+    {
+        if (info is null)
+            return null;
+
+        return new ClipboardInlineTableDto
+        {
+            ColumnWidthsEmu = info.Table.ColumnWidthsEmu.ToList(),
+            Rows = info.Table.Rows.Select(row => new ClipboardInlineTableRowDto
+            {
+                HeightEmu = row.HeightEmu,
+                Cells = row.Cells.Select(cell => new ClipboardInlineTableCellDto
+                {
+                    Body = cell.TextBody is null ? null : ToDto(cell.TextBody),
+                    GridSpan = cell.GridSpan,
+                    RowSpan = cell.RowSpan,
+                    HMerge = cell.HMerge,
+                    VMerge = cell.VMerge,
+                    Style = ToDto(cell),
+                }).ToList(),
+            }).ToList(),
+        };
+    }
+
+    private static ClipboardInlineTableStyleDto? ToDto(TableCell cell)
+    {
+        var style = new ClipboardInlineTableStyleDto
+        {
+            FillRgb = cell.Fill is ShapeFill.Solid solid
+                ? Rgb(solid.Color.Resolved)
+                : null,
+            Anchor = cell.Anchor,
+            InsetLeftPt = cell.InsetLeftPt,
+            InsetRightPt = cell.InsetRightPt,
+            InsetTopPt = cell.InsetTopPt,
+            InsetBottomPt = cell.InsetBottomPt,
+        };
+        if (cell.Borders is { } borders)
+        {
+            style.Left = ToInlineTableDto(borders.Left);
+            style.Right = ToInlineTableDto(borders.Right);
+            style.Top = ToInlineTableDto(borders.Top);
+            style.Bottom = ToInlineTableDto(borders.Bottom);
+        }
+        return style;
+    }
+
+    private static ClipboardInlineTableBorderDto? ToInlineTableDto(ShapeOutline? outline) => outline switch
+    {
+        ShapeOutline.None => new ClipboardInlineTableBorderDto { IsNone = true },
+        ShapeOutline.Visible visible => new ClipboardInlineTableBorderDto
+        {
+            ColorRgb = Rgb(visible.Color.Resolved),
+            WidthPt = visible.WidthPt,
+        },
+        _ => null,
+    };
+
+    private static InlineTableInfo? FromDto(ClipboardInlineTableDto? dto)
+    {
+        if (dto is null)
+            return null;
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.AddRange(dto.ColumnWidthsEmu ?? []);
+        foreach (var rowDto in dto.Rows ?? [])
+        {
+            var row = new TableRow { HeightEmu = rowDto.HeightEmu };
+            foreach (var cellDto in rowDto.Cells ?? [])
+            {
+                var cell = new TableCell
+                {
+                    TextBody = cellDto.Body is null ? null : FromDto(cellDto.Body),
+                    GridSpan = Math.Max(1, cellDto.GridSpan),
+                    RowSpan = Math.Max(1, cellDto.RowSpan),
+                    HMerge = cellDto.HMerge,
+                    VMerge = cellDto.VMerge,
+                };
+                ApplyInlineTableStyle(cell, cellDto.Style);
+                row.Cells.Add(cell);
+            }
+            table.Rows.Add(row);
+        }
+
+        return new InlineTableInfo { Table = table };
+    }
+
+    private static void ApplyInlineTableStyle(
+        TableCell cell,
+        ClipboardInlineTableStyleDto? style)
+    {
+        if (style is null)
+            return;
+        if (style.FillRgb is { } fill)
+            cell.Fill = new ShapeFill.Solid(ToColor(fill));
+        cell.Anchor = style.Anchor;
+        cell.InsetLeftPt = style.InsetLeftPt;
+        cell.InsetRightPt = style.InsetRightPt;
+        cell.InsetTopPt = style.InsetTopPt;
+        cell.InsetBottomPt = style.InsetBottomPt;
+        if (style.Left is not null || style.Right is not null
+            || style.Top is not null || style.Bottom is not null)
+        {
+            cell.Borders = new TableCellBorders
+            {
+                Left = FromDto(style.Left),
+                Right = FromDto(style.Right),
+                Top = FromDto(style.Top),
+                Bottom = FromDto(style.Bottom),
+            };
+        }
+    }
+
+    private static ShapeOutline? FromDto(ClipboardInlineTableBorderDto? border) => border switch
+    {
+        null => null,
+        { IsNone: true } => ShapeOutline.None.Instance,
+        _ => new ShapeOutline.Visible(ToColor(border.ColorRgb), border.WidthPt <= 0 ? 0.75 : border.WidthPt),
+    };
+
+    private static int Rgb(SrgbColor color) => (color.R << 16) | (color.G << 8) | color.B;
+
+    private static SrgbColor ToColor(int rgb) => new(
+        (byte)((rgb >> 16) & 0xFF),
+        (byte)((rgb >> 8) & 0xFF),
+        (byte)(rgb & 0xFF));
+
     private static ClipboardParagraphDto ToDto(Paragraph paragraph) => new()
     {
         Align = paragraph.Align,
@@ -502,6 +631,7 @@ public static class InCanvasRichClipboardPlanner
             Bytes = run.InlineOleObject.EmbeddedBytes.ToArray(),
             ClassName = run.InlineOleObject.ClassName,
         },
+        InlineTable = ToDto(run.InlineTable),
         FontFamily = run.FontFamily,
         FontSizePt = run.FontSizePt,
         BaselineOffset = run.BaselineOffset,
@@ -669,6 +799,7 @@ public static class InCanvasRichClipboardPlanner
                     ClassName = obj.ClassName,
                 }
                 : null,
+            InlineTable = FromDto(dto.InlineTable),
             FontFamily = dto.FontFamily,
             FontSizePt = dto.FontSizePt,
             BaselineOffset = dto.BaselineOffset,
@@ -977,6 +1108,7 @@ public static class InCanvasRichClipboardPlanner
         public string? Text { get; set; }
         public ClipboardImageDto? InlineImage { get; set; }
         public ClipboardObjectDto? InlineOleObject { get; set; }
+        public ClipboardInlineTableDto? InlineTable { get; set; }
         public string? FontFamily { get; set; }
         public double? FontSizePt { get; set; }
         public int? BaselineOffset { get; set; }
@@ -998,6 +1130,49 @@ public static class InCanvasRichClipboardPlanner
         public ClipboardHyperlinkDto? Hyperlink { get; set; }
         public ClipboardFieldDto? Field { get; set; }
         public ClipboardMathDto? Math { get; set; }
+    }
+
+    private sealed class ClipboardInlineTableDto
+    {
+        public List<long>? ColumnWidthsEmu { get; set; }
+        public List<ClipboardInlineTableRowDto>? Rows { get; set; }
+    }
+
+    private sealed class ClipboardInlineTableRowDto
+    {
+        public long HeightEmu { get; set; }
+        public List<ClipboardInlineTableCellDto>? Cells { get; set; }
+    }
+
+    private sealed class ClipboardInlineTableCellDto
+    {
+        public ClipboardBodyDto? Body { get; set; }
+        public int GridSpan { get; set; } = 1;
+        public int RowSpan { get; set; } = 1;
+        public bool HMerge { get; set; }
+        public bool VMerge { get; set; }
+        public ClipboardInlineTableStyleDto? Style { get; set; }
+    }
+
+    private sealed class ClipboardInlineTableStyleDto
+    {
+        public int? FillRgb { get; set; }
+        public ClipboardInlineTableBorderDto? Left { get; set; }
+        public ClipboardInlineTableBorderDto? Right { get; set; }
+        public ClipboardInlineTableBorderDto? Top { get; set; }
+        public ClipboardInlineTableBorderDto? Bottom { get; set; }
+        public TableCellAnchor? Anchor { get; set; }
+        public double? InsetLeftPt { get; set; }
+        public double? InsetRightPt { get; set; }
+        public double? InsetTopPt { get; set; }
+        public double? InsetBottomPt { get; set; }
+    }
+
+    private sealed class ClipboardInlineTableBorderDto
+    {
+        public int ColorRgb { get; set; }
+        public double WidthPt { get; set; }
+        public bool IsNone { get; set; }
     }
 
     private sealed class ClipboardHyperlinkDto
