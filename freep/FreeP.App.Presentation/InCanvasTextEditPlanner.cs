@@ -842,7 +842,7 @@ internal static class TextBodyRunMutationPlanner
                 ClassName = source.ClassName,
             };
 
-    private static void MergeAdjacentRunsWithSameFormat(TextBody body)
+    internal static void MergeAdjacentRunsWithSameFormat(TextBody body)
     {
         foreach (var paragraph in body.Paragraphs)
         {
