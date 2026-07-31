@@ -517,8 +517,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // The three Window/Zoom-dialog callbacks are optional on RibbonHostCallbacks (default null so
         // test call sites stay terse); fall back to a safe no-op when the shell didn't supply one.
         r.Register("freew.zoom-dialog",       new ActionRibbonCommand(callbacks.OpenZoomDialog ?? (() => { })));
-        var gridlinesCommand = new ActionRibbonCommand(() => editor.ShowGridlines = !editor.ShowGridlines);
-        var rulerCommand = new ActionRibbonCommand(() => editor.ShowRuler = !editor.ShowRuler);
+        var gridlinesCommand = new ToggleActionCommand(
+            () => editor.ShowGridlines = !editor.ShowGridlines,
+            () => editor.ShowGridlines);
+        var rulerCommand = new ToggleActionCommand(
+            () => editor.ShowRuler = !editor.ShowRuler,
+            () => editor.ShowRuler);
         r.Register("freew.gridlines",         gridlinesCommand);
         r.Register("freew.view-gridlines",    gridlinesCommand);
         r.Register("freew.ruler",             rulerCommand);

@@ -426,12 +426,16 @@ public sealed class ViewTabDepthTests
 
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.gridlines"), out var cmd).Should().BeTrue();
+        var state = cmd.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        state.GetState().IsChecked.Should().BeFalse("gridlines start unchecked");
 
         cmd!.Execute(RibbonCommandContext.Empty);
         view.ShowGridlines.Should().BeTrue("executing freew.gridlines must turn gridlines on");
+        state.GetState().IsChecked.Should().BeTrue("the WPF-equivalent command must report checked after enabling");
 
         cmd!.Execute(RibbonCommandContext.Empty);
         view.ShowGridlines.Should().BeFalse("executing it again must turn gridlines off");
+        state.GetState().IsChecked.Should().BeFalse("the WPF-equivalent command must clear checked after disabling");
     }
 
     [Fact]
@@ -443,12 +447,16 @@ public sealed class ViewTabDepthTests
 
         var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
         registry.TryGet(new RibbonCommandId("freew.ruler"), out var cmd).Should().BeTrue();
+        var state = cmd.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        state.GetState().IsChecked.Should().BeFalse("the ruler starts unchecked");
 
         cmd!.Execute(RibbonCommandContext.Empty);
         view.ShowRuler.Should().BeTrue("executing freew.ruler must turn the ruler on");
+        state.GetState().IsChecked.Should().BeTrue("the WPF-equivalent command must report checked after enabling");
 
         cmd!.Execute(RibbonCommandContext.Empty);
         view.ShowRuler.Should().BeFalse("executing it again must turn the ruler off");
+        state.GetState().IsChecked.Should().BeFalse("the WPF-equivalent command must clear checked after disabling");
     }
 
     [Fact]
