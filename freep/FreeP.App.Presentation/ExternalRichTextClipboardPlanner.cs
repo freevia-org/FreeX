@@ -110,6 +110,10 @@ public static class ExternalRichTextClipboardPlanner
             public double? InsetRightPt { get; set; }
             public double? InsetTopPt { get; set; }
             public double? InsetBottomPt { get; set; }
+            public bool HorizontalMergeStart { get; set; }
+            public bool HorizontalMergeContinuation { get; set; }
+            public bool VerticalMergeStart { get; set; }
+            public bool VerticalMergeContinuation { get; set; }
 
             public void BeginBorder(TableCellBorderSide side)
             {
@@ -146,7 +150,11 @@ public static class ExternalRichTextClipboardPlanner
                     InsetLeftPt,
                     InsetRightPt,
                     InsetTopPt,
-                    InsetBottomPt);
+                    InsetBottomPt,
+                    HorizontalMergeStart,
+                    HorizontalMergeContinuation,
+                    VerticalMergeStart,
+                    VerticalMergeContinuation);
             }
 
             public void Reset()
@@ -163,6 +171,10 @@ public static class ExternalRichTextClipboardPlanner
                 InsetRightPt = null;
                 InsetTopPt = null;
                 InsetBottomPt = null;
+                HorizontalMergeStart = false;
+                HorizontalMergeContinuation = false;
+                VerticalMergeStart = false;
+                VerticalMergeContinuation = false;
             }
 
             private void CommitBorder()
@@ -898,6 +910,10 @@ public static class ExternalRichTextClipboardPlanner
                 case "clpadr": _pendingCellStyle.InsetRightPt = ToCellInsetPoints(value); break;
                 case "clpadt": _pendingCellStyle.InsetTopPt = ToCellInsetPoints(value); break;
                 case "clpadb": _pendingCellStyle.InsetBottomPt = ToCellInsetPoints(value); break;
+                case "clmgf": _pendingCellStyle.HorizontalMergeStart = true; break;
+                case "clmrg": _pendingCellStyle.HorizontalMergeContinuation = true; break;
+                case "clvmgf": _pendingCellStyle.VerticalMergeStart = true; break;
+                case "clvmrg": _pendingCellStyle.VerticalMergeContinuation = true; break;
                 case "trleft":
                 case "trgaph":
                 case "trrh":

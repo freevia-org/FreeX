@@ -18,7 +18,11 @@ public sealed record InCanvasRichClipboardTableCellStyle(
     double? InsetLeftPt = null,
     double? InsetRightPt = null,
     double? InsetTopPt = null,
-    double? InsetBottomPt = null);
+    double? InsetBottomPt = null,
+    bool HorizontalMergeStart = false,
+    bool HorizontalMergeContinuation = false,
+    bool VerticalMergeStart = false,
+    bool VerticalMergeContinuation = false);
 
 /// <summary>
 /// One image payload carried by an external rich clipboard fragment. Width and height are
