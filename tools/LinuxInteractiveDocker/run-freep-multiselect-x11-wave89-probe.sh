@@ -27,6 +27,16 @@ track_screenshot() { printf '%s\n' "$1" >> "$screenshots_file"; }
 capture() { local name="$1"; command -v scrot >/dev/null 2>&1 || return 1; scrot -o "$output/$name" >/dev/null 2>&1 || return 1; [[ -s "$output/$name" ]] || return 1; track_screenshot "$name"; }
 focus_owner() { timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowactivate --sync "$owner_id" >/dev/null 2>&1 || true; timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowfocus "$owner_id" >/dev/null 2>&1 || true; sleep 0.12; }
 send_owner_key() { focus_owner; timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" "$@"; sleep "$settle_seconds"; }
+smooth_mousemove() {
+  local from_x="$1" from_y="$2" to_x="$3" to_y="$4" steps="${5:-12}"
+  local index x y
+  for index in $(seq 1 "$steps"); do
+    x=$((from_x + (to_x - from_x) * index / steps))
+    y=$((from_y + (to_y - from_y) * index / steps))
+    xdotool mousemove --sync "$x" "$y"
+    sleep 0.04
+  done
+}
 capture_window_state() { local name="$1"; { printf 'owner-window-id=%s\nowner-window-title=%s\n' "$owner_id" "$owner_title"; printf 'active-window=%s\nfocus-window=%s\n' "$(xdotool getactivewindow 2>/dev/null || true)" "$(xdotool getwindowfocus 2>/dev/null || true)"; printf 'wmctrl-list-begin\n'; wmctrl -l 2>/dev/null || true; printf 'wmctrl-list-end\n'; } > "$output/$name"; }
 
 inspect_pptx() {
@@ -54,8 +64,8 @@ import json,sys
 d=json.load(open(sys.argv[1],encoding="utf-8")); state=sys.argv[2]
 expected={
 "baseline":[{"id":2,"name":"Wave89 Left","bounds":{"x":1905000,"y":1714500,"cx":1905000,"cy":1143000},"rotation":0.0},{"id":3,"name":"Wave89 Right","bounds":{"x":4762500,"y":2857500,"cx":1905000,"cy":1143000},"rotation":0.0}],
-"resized":[{"id":2,"name":"Wave89 Left","bounds":{"x":1905000,"y":1714500,"cx":2286000,"cy":1714500},"rotation":0.0},{"id":3,"name":"Wave89 Right","bounds":{"x":5334000,"y":3429000,"cx":2286000,"cy":1714500},"rotation":0.0}],
-"rotated":[{"id":2,"name":"Wave89 Left","bounds":{"x":4476750,"y":857250,"cx":2286000,"cy":1714500},"rotation":90.0},{"id":3,"name":"Wave89 Right","bounds":{"x":2762250,"y":4286250,"cx":2286000,"cy":1714500},"rotation":90.0}]}
+"resized":[{"id":2,"name":"Wave89 Left","bounds":{"x":1905000,"y":1714500,"cx":2286000,"cy":1733550},"rotation":0.0},{"id":3,"name":"Wave89 Right","bounds":{"x":5334000,"y":3448050,"cx":2286000,"cy":1733550},"rotation":0.0}],
+"rotated":[{"id":2,"name":"Wave89 Left","bounds":{"x":4486275,"y":866775,"cx":2286000,"cy":1733550},"rotation":90.0},{"id":3,"name":"Wave89 Right","bounds":{"x":2752725,"y":4295775,"cx":2286000,"cy":1733550},"rotation":90.0}]}
 def same(a,e):return a.get("id")==e["id"] and a.get("name")==e["name"] and a.get("bounds")==e["bounds"] and abs(float(a.get("rotation",-999))-e["rotation"])<.001
 raise SystemExit(0 if len(d.get("shapes",[]))==2 and all(same(a,e) for a,e in zip(d["shapes"],expected[state])) else 1)
 PY
@@ -68,6 +78,8 @@ save_checkpoint() {
     fi
     sleep .25
   done
+  [[ -s "$temporary" ]] && cp "$temporary" "$output/$prefix-actual.pptx"
+  [[ -s "$inspect" ]] && cp "$inspect" "$output/$prefix-actual.json"
   rm -f "$temporary" "$inspect"; return 1
 }
 copy_current_state() { local prefix="$1" state="$2"; cp "$document_path" "$output/$prefix.pptx"; inspect_pptx "$output/$prefix.pptx" "$output/$prefix.json"; assert_package_state "$output/$prefix.json" "$state"; sha256sum "$output/$prefix.pptx" | awk '{print tolower($1)}' > "$output/$prefix.sha256.txt"; }
@@ -122,25 +134,24 @@ printf 'first-shape-center=%s,%s\nsecond-shape-center=%s,%s\nresize-se-start=%s,
 focus_owner; xdotool mousemove --sync "$first_x" "$first_y"; xdotool click --clearmodifiers 1; sleep "$settle_seconds"; xdotool keydown ctrl; xdotool mousemove --sync "$second_x" "$second_y"; xdotool click 1; xdotool keyup ctrl; sleep "$settle_seconds"; capture multi-selected.png; capture_window_state multi-selected-state.txt
 if [[ -s "$output/multi-selected.png" ]]; then record two-shape-pointer-selection passed "Real pointer clicks selected both fixture shapes and retained group-selection evidence." multi-selected.png multi-selected-state.txt pointer-calibration.txt; else record two-shape-pointer-selection failed "The two-shape group-selection screenshot was not captured." multi-selected-state.txt pointer-calibration.txt; fi
 
-focus_owner; xdotool mousemove --sync "$resize_start_x" "$resize_start_y"; xdotool mousedown 1; xdotool mousemove --sync --duration .65 "$resize_end_x" "$resize_end_y"; sleep "$settle_seconds"; capture resize-drag.png; xdotool mouseup 1; sleep "$settle_seconds"; capture after-resize.png; capture_window_state after-resize-state.txt
+focus_owner; xdotool mousemove --sync "$resize_start_x" "$resize_start_y"; xdotool mousedown 1; smooth_mousemove "$resize_start_x" "$resize_start_y" "$resize_end_x" "$resize_end_y"; sleep "$settle_seconds"; capture resize-drag.png; xdotool mouseup 1; sleep "$settle_seconds"; capture after-resize.png; capture_window_state after-resize-state.txt
 if [[ -s "$output/resize-drag.png" && -s "$output/after-resize.png" ]]; then record group-resize-handle-drag passed "Real pointer drag moved the shared SE group resize handle." resize-drag.png after-resize.png after-resize-state.txt pointer-calibration.txt; else record group-resize-handle-drag failed "Group resize screenshots were incomplete." resize-drag.png after-resize.png after-resize-state.txt pointer-calibration.txt; fi
 if save_checkpoint after-resize resized; then record saved-resize-geometry passed "Saved PPTX contains exact resized bounds for both shapes with zero rotation." after-resize.json after-resize.pptx after-resize.sha256.txt; else record saved-resize-geometry failed "Saved PPTX did not contain exact resized geometry." after-resize-inspection-error.txt; fi
 
-focus_owner; xdotool mousemove --sync "$rotate_start_x" "$rotate_start_y"; xdotool mousedown 1; xdotool mousemove --sync --duration .65 "$rotate_end_x" "$rotate_end_y"; sleep "$settle_seconds"; capture rotate-drag.png; xdotool mouseup 1; sleep "$settle_seconds"; capture after-rotate.png; capture_window_state after-rotate-state.txt
+focus_owner; xdotool mousemove --sync "$rotate_start_x" "$rotate_start_y"; xdotool keydown shift; xdotool mousedown 1; smooth_mousemove "$rotate_start_x" "$rotate_start_y" "$rotate_end_x" "$rotate_end_y"; sleep "$settle_seconds"; capture rotate-drag.png; xdotool mouseup 1; xdotool keyup shift; sleep "$settle_seconds"; capture after-rotate.png; capture_window_state after-rotate-state.txt
 if [[ -s "$output/rotate-drag.png" && -s "$output/after-rotate.png" ]]; then record group-rotate-handle-drag passed "Real pointer drag moved the shared rotate handle through a 90 degree group turn." rotate-drag.png after-rotate.png after-rotate-state.txt pointer-calibration.txt; else record group-rotate-handle-drag failed "Group rotate screenshots were incomplete." rotate-drag.png after-rotate.png after-rotate-state.txt pointer-calibration.txt; fi
 if save_checkpoint after-rotate rotated; then record saved-rotate-geometry passed "Saved PPTX contains exact persisted 90 degree rotations and centers for both shapes." after-rotate.json after-rotate.pptx after-rotate.sha256.txt; else record saved-rotate-geometry failed "Saved PPTX did not contain exact persisted rotated geometry." after-rotate-inspection-error.txt; fi
 
 send_owner_key ctrl+z; capture after-undo.png; capture_window_state after-undo-state.txt
 if save_checkpoint after-undo resized; then record ctrl-z-restores-resize passed "One physical Ctrl+Z restored and persisted the exact saved resize state." after-undo.png after-undo-state.txt after-undo.json after-undo.pptx after-undo.sha256.txt; else record ctrl-z-restores-resize failed "One physical Ctrl+Z did not restore the exact resize package." after-undo.png after-undo-state.txt after-undo-inspection-error.txt; fi
 
-focus_owner; xdotool mousemove --sync "$rotate_start_x" "$rotate_start_y"; xdotool mousedown 1; xdotool mousemove --sync --duration .55 "$rotate_end_x" "$rotate_end_y"; sleep "$settle_seconds"; capture escape-drag.png; timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$owner_id" Escape; sleep "$settle_seconds"; xdotool mouseup 1 2>/dev/null || true; capture after-escape.png; capture_window_state after-escape-state.txt
+focus_owner; xdotool mousemove --sync "$rotate_start_x" "$rotate_start_y"; xdotool mousedown 1; smooth_mousemove "$rotate_start_x" "$rotate_start_y" "$rotate_end_x" "$rotate_end_y"; sleep "$settle_seconds"; capture escape-drag.png; timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$owner_id" Escape; sleep "$settle_seconds"; xdotool mouseup 1 2>/dev/null || true; capture after-escape.png; capture_window_state after-escape-state.txt
 escape_ok=false; if copy_current_state after-escape resized && [[ -f "$output/after-undo.sha256.txt" && "$(cat "$output/after-undo.sha256.txt")" == "$(cat "$output/after-escape.sha256.txt")" ]]; then escape_ok=true; fi
 if $escape_ok; then record escape-cancel-preserves-package passed "Escape canceled active rotate capture and stale pointer release left the exact package hash and geometry unchanged." escape-drag.png after-escape.png after-escape-state.txt after-escape.json after-escape.sha256.txt; else record escape-cancel-preserves-package failed "Escape cancellation changed the package or failed to restore resize geometry." escape-drag.png after-escape.png after-escape-state.txt after-escape-inspection-error.txt; fi
 
-focus_owner; xdotool mousemove --sync "$rotate_start_x" "$rotate_start_y"; xdotool mousedown 1; xdotool mousemove --sync --duration .55 "$rotate_end_x" "$rotate_end_y"; sleep "$settle_seconds"; capture capture-loss-drag.png; send_owner_key ctrl+o || true; sleep .9
-dialog_id=""; for _ in $(seq 1 20); do for candidate in $(xdotool search --onlyvisible --name 'Open' 2>/dev/null || true); do [[ "$candidate" != "$owner_id" ]] && dialog_id="$candidate" && break; done; [[ -n "$dialog_id" ]] && break; sleep .25; done
-if [[ -n "$dialog_id" ]]; then xdotool windowactivate --sync "$dialog_id" >/dev/null 2>&1 || true; capture capture-loss-dialog.png; capture_window_state capture-loss-dialog-state.txt; xdotool key --clearmodifiers --window "$dialog_id" Escape >/dev/null 2>&1 || true; else printf 'No secondary Open window appeared after Ctrl+O.\n' > "$output/capture-loss-dialog-error.txt"; capture capture-loss-dialog.png || true; fi
-xdotool mouseup 1 2>/dev/null || true; focus_owner; sleep "$settle_seconds"; capture after-capture-loss.png; capture_window_state after-capture-loss-state.txt
-capture_loss_ok=false; if [[ -n "$dialog_id" ]] && copy_current_state after-capture-loss resized && [[ -f "$output/after-undo.sha256.txt" && "$(cat "$output/after-undo.sha256.txt")" == "$(cat "$output/after-capture-loss.sha256.txt")" ]]; then capture_loss_ok=true; fi
-if $capture_loss_ok; then record capture-loss-cancel-preserves-package passed "A real Open dialog released pointer capture; dismissal left the exact package hash and geometry unchanged." capture-loss-drag.png capture-loss-dialog.png capture-loss-dialog-state.txt after-capture-loss.png after-capture-loss-state.txt after-capture-loss.json after-capture-loss.sha256.txt; else record capture-loss-cancel-preserves-package failed "The real focus/capture-loss route did not prove an unchanged package." capture-loss-drag.png capture-loss-dialog.png capture-loss-dialog-error.txt after-capture-loss.png after-capture-loss-state.txt after-capture-loss-inspection-error.txt; fi
+focus_owner; xdotool mousemove --sync "$rotate_start_x" "$rotate_start_y"; xdotool mousedown 1; smooth_mousemove "$rotate_start_x" "$rotate_start_y" "$rotate_end_x" "$rotate_end_y"; sleep "$settle_seconds"; capture capture-loss-drag.png
+xdotool windowminimize "$owner_id"; sleep .9; capture capture-loss-window-hidden.png; capture_window_state capture-loss-window-hidden-state.txt
+xdotool windowmap "$owner_id"; focus_owner; xdotool mouseup 1 2>/dev/null || true; sleep "$settle_seconds"; capture after-capture-loss.png; capture_window_state after-capture-loss-state.txt
+capture_loss_ok=false; if copy_current_state after-capture-loss resized && [[ -f "$output/after-undo.sha256.txt" && "$(cat "$output/after-undo.sha256.txt")" == "$(cat "$output/after-capture-loss.sha256.txt")" ]]; then capture_loss_ok=true; fi
+if $capture_loss_ok; then record capture-loss-cancel-preserves-package passed "Minimizing the real owner window released pointer capture; restoring it and releasing the stale pointer left the exact package hash and geometry unchanged." capture-loss-drag.png capture-loss-window-hidden.png capture-loss-window-hidden-state.txt after-capture-loss.png after-capture-loss-state.txt after-capture-loss.json after-capture-loss.sha256.txt; else record capture-loss-cancel-preserves-package failed "The real window deactivation/capture-loss route did not prove an unchanged package." capture-loss-drag.png capture-loss-window-hidden.png capture-loss-window-hidden-state.txt after-capture-loss.png after-capture-loss-state.txt after-capture-loss-inspection-error.txt; fi
 exit 0

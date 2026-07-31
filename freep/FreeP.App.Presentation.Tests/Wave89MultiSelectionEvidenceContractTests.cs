@@ -33,6 +33,13 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
 
         probe.Should().Contain("xdotool keydown ctrl");
         probe.Should().Contain("xdotool mousedown 1");
+        probe.Should().Contain("xdotool keydown shift");
+        probe.Should().Contain("xdotool keyup shift");
+        probe.Should().Contain("smooth_mousemove");
+        probe.Should().NotContain("--duration");
+        probe.Should().Contain("xdotool windowminimize");
+        probe.Should().Contain("xdotool windowmap");
+        probe.Should().NotContain("send_owner_key ctrl+o");
         probe.Should().Contain("assert_package_state");
         probe.Should().Contain("ctrl-z-restores-resize");
         probe.Should().Contain("escape-cancel-preserves-package");
@@ -50,6 +57,9 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
         var runner = ReadWorkspaceFile("tools", "Run-FreePMultiSelectionX11Validation.ps1");
 
         runner.Should().Contain("Invoke-External powershell.exe $startArgs");
+        runner.Should().Contain("Wait-EvidenceFile");
+        runner.Should().Contain("Start-Sleep -Milliseconds 100");
+        runner.Should().NotContain("Invoke-External docker @(\"cp\"");
         runner.Should().Contain("if ($PublishDir) { $startArgs += @(\"-PublishDir\", $PublishDir) }");
         runner.Should().Contain("if ($SkipPublish) { $startArgs += \"-SkipPublish\" }");
         runner.Should().Contain("if ($SkipImageBuild) { $startArgs += \"-SkipImageBuild\" }");

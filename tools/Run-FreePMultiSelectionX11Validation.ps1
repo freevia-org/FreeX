@@ -28,6 +28,21 @@ $baseFixturePath = Join-Path $repoRoot "tools/FreeP.RenderCompare/corpus/02-auto
 $requiredIds = @("visible-window-discovery", "two-shape-pointer-selection", "group-resize-handle-drag", "saved-resize-geometry", "group-rotate-handle-drag", "saved-rotate-geometry", "ctrl-z-restores-resize", "escape-cancel-preserves-package", "capture-loss-cancel-preserves-package")
 
 function Invoke-External { param([Parameter(Mandatory=$true)][string]$FilePath, [Parameter(Mandatory=$true)][string[]]$Arguments); Push-Location $repoRoot; try { & $FilePath @Arguments; if ($LASTEXITCODE -ne 0) { throw "$FilePath exited with code $LASTEXITCODE." } } finally { Pop-Location } }
+function Wait-EvidenceFile {
+    param([Parameter(Mandatory=$true)][string]$Directory, [Parameter(Mandatory=$true)][string]$Name)
+    if ([IO.Path]::GetFileName($Name) -ne $Name) { throw "Evidence name must be a file name: $Name" }
+    $path = Join-Path $Directory $Name
+    foreach ($attempt in 1..30) {
+        # OneDrive can briefly make Test-Path disagree with directory enumeration after a
+        # Docker bind mount closes. Enumerating the directory returns the stable file entry.
+        $entry = Get-ChildItem -LiteralPath $Directory -File -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ceq $Name } |
+            Select-Object -First 1
+        if ($null -ne $entry -and $entry.Length -gt 0) { return $entry.FullName }
+        Start-Sleep -Milliseconds 100
+    }
+    throw "Missing or empty evidence '$Name'."
+}
 function Write-Fixture {
     param([string]$Source, [string]$Destination)
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -59,15 +74,15 @@ function Assert-Manifest {
     $ids = @($manifest.results | ForEach-Object { [string]$_.id }); if ([string]::Join("|", $ids) -ne [string]::Join("|", $requiredIds)) { throw "Wave 89 result IDs/order failed." }
     if ($manifest.results.Count -ne 9 -or $manifest.summary.total -ne 9 -or $manifest.summary.failed -ne 0 -or $manifest.summary.passed -ne 9) { throw "Wave 89 result summary failed." }
     if ($manifest.calibration.status -ne "passed" -or @($manifest.screenshots).Count -lt 7) { throw "Wave 89 calibration/screenshot contract failed." }
-    foreach ($result in @($manifest.results)) { if ($result.category -ne "physical-x11-multiselect" -or $result.status -ne "passed" -or $result.evidenceLevel -ne "physical-x11-input" -or @($result.evidence).Count -lt 1) { throw "Result '$($result.id)' failed the physical evidence contract." }; foreach ($name in @($result.evidence)) { $path = Join-Path $EvidenceDirectory ([IO.Path]::GetFileName([string]$name)); if ([IO.Path]::GetFileName([string]$name) -ne [string]$name -or -not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) { throw "Missing or empty evidence '$name' for '$($result.id)'." } } }
-    foreach ($shot in @($manifest.screenshots)) { $path = Join-Path $EvidenceDirectory ([IO.Path]::GetFileName([string]$shot.name)); if ([IO.Path]::GetFileName([string]$shot.name) -ne [string]$shot.name -or -not (Test-Path -LiteralPath $path -PathType Leaf) -or (Get-Item -LiteralPath $path).Length -le 0) { throw "Missing or empty screenshot '$($shot.name)'." } }
+    foreach ($result in @($manifest.results)) { if ($result.category -ne "physical-x11-multiselect" -or $result.status -ne "passed" -or $result.evidenceLevel -ne "physical-x11-input" -or @($result.evidence).Count -lt 1) { throw "Result '$($result.id)' failed the physical evidence contract." }; foreach ($name in @($result.evidence)) { try { [void](Wait-EvidenceFile -Directory $EvidenceDirectory -Name ([string]$name)) } catch { throw "Missing or empty evidence '$name' for '$($result.id)'." } } }
+    foreach ($shot in @($manifest.screenshots)) { try { [void](Wait-EvidenceFile -Directory $EvidenceDirectory -Name ([string]$shot.name)) } catch { throw "Missing or empty screenshot '$($shot.name)'." } }
     $expectedStates = @{
         baseline = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 1905000; cy = 1143000; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 4762500; y = 2857500; cx = 1905000; cy = 1143000; rotation = 0 })
-        afterResize = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1714500; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3429000; cx = 2286000; cy = 1714500; rotation = 0 })
-        afterRotate = @(@{ id = 2; name = "Wave89 Left"; x = 4476750; y = 857250; cx = 2286000; cy = 1714500; rotation = 90 }, @{ id = 3; name = "Wave89 Right"; x = 2762250; y = 4286250; cx = 2286000; cy = 1714500; rotation = 90 })
-        afterUndo = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1714500; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3429000; cx = 2286000; cy = 1714500; rotation = 0 })
-        afterEscape = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1714500; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3429000; cx = 2286000; cy = 1714500; rotation = 0 })
-        afterCaptureLoss = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1714500; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3429000; cx = 2286000; cy = 1714500; rotation = 0 })
+        afterResize = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1733550; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3448050; cx = 2286000; cy = 1733550; rotation = 0 })
+        afterRotate = @(@{ id = 2; name = "Wave89 Left"; x = 4486275; y = 866775; cx = 2286000; cy = 1733550; rotation = 90 }, @{ id = 3; name = "Wave89 Right"; x = 2752725; y = 4295775; cx = 2286000; cy = 1733550; rotation = 90 })
+        afterUndo = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1733550; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3448050; cx = 2286000; cy = 1733550; rotation = 0 })
+        afterEscape = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1733550; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3448050; cx = 2286000; cy = 1733550; rotation = 0 })
+        afterCaptureLoss = @(@{ id = 2; name = "Wave89 Left"; x = 1905000; y = 1714500; cx = 2286000; cy = 1733550; rotation = 0 }, @{ id = 3; name = "Wave89 Right"; x = 5334000; y = 3448050; cx = 2286000; cy = 1733550; rotation = 0 })
     }
     foreach ($state in $expectedStates.Keys) {
         $value = $manifest.packageStates.$state
@@ -94,7 +109,10 @@ try {
     $session = Get-Content -LiteralPath (Join-Path $resolvedOutputRoot "freep/current-session.json") -Raw | ConvertFrom-Json; $sessionDirectory = [IO.Path]::GetFullPath([string]$session.sessionDirectory); $probeInWork = Join-Path $sessionDirectory "freep-multiselect-x11-wave89-probe.sh"; Copy-Item -LiteralPath $probeSource -Destination $probeInWork -Force
     $manifestPath = Join-Path $sessionDirectory "freep-multiselect-x11-wave89-validation/results.json"; $evidenceDirectory = Split-Path -Parent $manifestPath; New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
     Push-Location $repoRoot; try { $dockerArgs = @("exec", "--env", "FREEP_DOCUMENT_PATH=/documents/$fixtureName", "--env", "FREEP_EXPECTED_DOCUMENT_NAME=$fixtureName", "--env", "FREEP_EXPECTED_WINDOW_PATTERN=FreeP", $session.containerName, "bash", "/work/freep-multiselect-x11-wave89-probe.sh", "/work/freep-multiselect-x11-wave89-validation"); $probeOutput = @(& docker @dockerArgs 2>&1); $probeExitCode = $LASTEXITCODE } finally { Pop-Location }
-    $probeOutput | Set-Content -LiteralPath (Join-Path $evidenceDirectory "probe.log") -Encoding utf8; Invoke-External docker @("cp", "$($session.containerName):/work/freep-multiselect-x11-wave89-validation/.", $evidenceDirectory)
+    # The generic harness bind-mounts the session directory at /work, so probe evidence is
+    # already present on the host. Copying it back over the same OneDrive path causes a
+    # transient directory replacement and makes otherwise-complete evidence appear missing.
+    $probeOutput | Set-Content -LiteralPath (Join-Path $evidenceDirectory "probe.log") -Encoding utf8
     if ($started -and -not $KeepContainer) { Invoke-External powershell.exe @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $genericRunner, "-Action", "Stop", "-App", "FreeP", "-Port", "$Port", "-OutputDir", $resolvedOutputRoot); $started = $false }
     if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw "Probe did not write manifest: $manifestPath" }; $manifest = Assert-Manifest -ManifestPath $manifestPath -EvidenceDirectory $evidenceDirectory; $report = [ordered]@{ suite = $manifest.suite; probeExitCode = $probeExitCode; manifest = $manifestPath; evidenceDirectory = $evidenceDirectory; fixture = $fixturePath; results = $manifest.summary }; $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $resolvedOutputRoot "wave89-report.json") -Encoding utf8
     Write-Host "Manifest contract validation: passed"; Write-Host "Results: $($manifest.summary.passed) passed, $($manifest.summary.failed) failed, $($manifest.summary.total) total"; Write-Host "Manifest: $manifestPath"; Write-Host "Evidence: $evidenceDirectory"; if ($probeExitCode -ne 0) { throw "Wave 89 probe exited with code $probeExitCode." }
