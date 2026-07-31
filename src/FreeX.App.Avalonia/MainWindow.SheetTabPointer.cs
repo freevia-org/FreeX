@@ -77,7 +77,10 @@ public sealed partial class MainWindow
 
     private bool TryBeginFormulaSheetSpanTabPointer(SheetId sheetId, KeyModifiers modifiers)
     {
-        if (!IsFormulaRangeEntryActiveForPointMode() ||
+        // WPF keeps an existing formula Edit session alive while sheet tabs seed the next
+        // cross-sheet point reference. Point mode may be entered afterward with F2, so the
+        // shared span planner must see both lifecycle states.
+        if (GetFormulaReferenceHighlightEditor() is null ||
             _session.Workbook.GetSheet(sheetId) is not { } clickedSheet)
         {
             return false;
