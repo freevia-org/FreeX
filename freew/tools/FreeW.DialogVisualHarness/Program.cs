@@ -89,24 +89,40 @@ static int RunCompare(string[] args)
     var avalonia = Read<CaptureManifest>(avaloniaPath);
     Directory.CreateDirectory(output);
     var rows = CompareCaptures(inventory, wpf, avalonia, output);
+    var inventoryScenarioCount = inventory.Scenarios.Count;
+    var wpfCaptureCount = wpf.Captures.Count(c => c.Status == "captured");
+    var avaloniaCaptureCount = avalonia.Captures.Count(IsValidatedAvaloniaCapture);
+    var generatedFromSha256 = Sha256(string.Join("\n", File.ReadAllText(inventoryPath), File.ReadAllText(wpfPath), File.ReadAllText(avaloniaPath)));
+    var targetDpi = 96;
+    IReadOnlyDictionary<string, int> counts;
     if (baselinePath is not null)
     {
         var baseline = Read<ComparisonReport>(Path.GetFullPath(baselinePath));
-        var baselineRows = baseline.Rows.ToDictionary(row => row.ScenarioId, StringComparer.OrdinalIgnoreCase);
-        var refreshPrefix = refreshRoute is null ? null : refreshRoute.TrimEnd('.') + ".";
-        rows = rows.Select(row => refreshPrefix is not null && row.ScenarioId.StartsWith(refreshPrefix, StringComparison.OrdinalIgnoreCase)
-            ? row
-            : baselineRows.TryGetValue(row.ScenarioId, out var preserved) ? preserved : row).ToList();
+        var merged = ComparisonReportMerger.Merge(baseline, rows, refreshRoute!);
+        rows = merged.Rows.ToList();
+        inventoryScenarioCount = merged.InventoryScenarioCount;
+        wpfCaptureCount = merged.WpfCaptureCount;
+        avaloniaCaptureCount = merged.AvaloniaCaptureCount;
+        generatedFromSha256 = merged.GeneratedFromSha256;
+        targetDpi = merged.TargetDpi;
+        counts = merged.Counts;
+    }
+    else
+    {
+        inventoryScenarioCount = inventory.Scenarios.Count;
+        wpfCaptureCount = wpf.Captures.Count(c => c.Status == "captured");
+        avaloniaCaptureCount = avalonia.Captures.Count(IsValidatedAvaloniaCapture);
+        counts = rows.GroupBy(r => r.Classification).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
     }
     var report = new ComparisonReport(
         Schema: "freew.dialog-visual-comparison.v1",
-        GeneratedFromSha256: Sha256(string.Join("\n", File.ReadAllText(inventoryPath), File.ReadAllText(wpfPath), File.ReadAllText(avaloniaPath))),
-        TargetDpi: 96,
-        InventoryScenarioCount: inventory.Scenarios.Count,
-        WpfCaptureCount: wpf.Captures.Count(c => c.Status == "captured"),
-        AvaloniaCaptureCount: avalonia.Captures.Count(IsValidatedAvaloniaCapture),
+        GeneratedFromSha256: generatedFromSha256,
+        TargetDpi: targetDpi,
+        InventoryScenarioCount: inventoryScenarioCount,
+        WpfCaptureCount: wpfCaptureCount,
+        AvaloniaCaptureCount: avaloniaCaptureCount,
         Rows: rows,
-        Counts: rows.GroupBy(r => r.Classification).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal));
+        Counts: counts);
     var json = JsonSerializer.Serialize(report, JsonOptions());
     var markdown = BuildComparisonMarkdown(report);
     var html = BuildComparisonHtml(report);
