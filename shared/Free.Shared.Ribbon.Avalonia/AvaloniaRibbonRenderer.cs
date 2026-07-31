@@ -86,6 +86,15 @@ public static class AvaloniaRibbonRenderer
         internal bool IsSynchronizing;
     }
 
+    private sealed class ComboExecutionState
+    {
+        internal bool IsSynchronizing;
+        internal bool HasPendingSelectionCommit;
+        internal string? PendingSelectionValue;
+    }
+
+    private static readonly ConditionalWeakTable<ComboBox, ComboExecutionState> ComboExecutionStates = new();
+
     internal static AvaloniaRibbonPalette ResolvePalette(RibbonVisualPalette? palette = null) =>
         new(palette ?? RibbonVisualPalette.FromTheme(BrandThemes.FreeX));
 
@@ -274,6 +283,16 @@ public static class AvaloniaRibbonRenderer
                 && cmd is IRibbonStatefulCommand stateful)
             {
                 ApplyRibbonCommandState(toggle, stateful.GetState(), resolvedPalette);
+            }
+        }
+
+        foreach (var combo in ribbon.GetVisualDescendants().OfType<ComboBox>())
+        {
+            if (combo.Tag is string id && !string.IsNullOrEmpty(id)
+                && registry.TryGet(new RibbonCommandId(id), out var cmd)
+                && cmd is IRibbonStatefulCommand stateful)
+            {
+                ApplyRibbonCommandState(combo, stateful.GetState(), resolvedPalette);
             }
         }
     }
@@ -1680,6 +1699,7 @@ public static class AvaloniaRibbonRenderer
             Height = RibbonVisualMetrics.SmallRowHeight,
             MinHeight = RibbonVisualMetrics.SmallRowHeight,
             MaxHeight = RibbonVisualMetrics.SmallRowHeight,
+            IsEditable = true,
             FontSize = 12,
             FontFamily = RibbonFontFamily,
             Padding = new Thickness(6, 0, 18, 0),
@@ -1693,6 +1713,7 @@ public static class AvaloniaRibbonRenderer
         };
         foreach (var item in combo.Items)
             box.Items.Add(item);
+        var executionState = ComboExecutionStates.GetOrCreateValue(box);
         RibbonCommandState? state = null;
         if (registry is not null
             && registry.TryGet(combo.CommandId, out var command)
@@ -1700,21 +1721,65 @@ public static class AvaloniaRibbonRenderer
         {
             state = stateful.GetState();
         }
-        var stateIndex = state?.Value is { Length: > 0 } value
-            ? combo.Items.ToList().FindIndex(item => string.Equals(item, value, StringComparison.Ordinal))
-            : -1;
-        if (stateIndex >= 0)
-            box.SelectedIndex = stateIndex;
-        else if (combo.Items.Count > 0)
-            box.SelectedIndex = 0;
+
+        // Seed from the command state before applying the normal first-item fallback. This matters
+        // for editable values such as a user-entered font or scale that are not in the catalog.
+        executionState.IsSynchronizing = true;
+        try
+        {
+            var stateIndex = state?.Value is { Length: > 0 } value
+                ? combo.Items.ToList().FindIndex(item => string.Equals(item, value, StringComparison.Ordinal))
+                : -1;
+            if (stateIndex >= 0)
+                box.SelectedIndex = stateIndex;
+            else if (state?.Value is { } stateValue)
+            {
+                box.SelectedIndex = -1;
+                box.Text = stateValue;
+            }
+            else if (combo.Items.Count > 0)
+                box.SelectedIndex = 0;
+        }
+        finally
+        {
+            executionState.IsSynchronizing = false;
+        }
 
         // A user pick executes the control's command, passing the chosen value so the host applies it
         // (e.g. font size). The initial programmatic SelectedIndex is suppressed by a ready flag.
         var ready = false;
         box.SelectionChanged += (_, _) =>
         {
-            if (ready)
-                ExecuteWithValue(combo.CommandId, registry, box.SelectedItem as string, afterExecute);
+            if (!ready || executionState.IsSynchronizing)
+                return;
+
+            var value = ResolveComboValue(box);
+            ExecuteWithValue(combo.CommandId, registry, value, afterExecute);
+            executionState.HasPendingSelectionCommit = true;
+            executionState.PendingSelectionValue = value;
+        };
+        box.KeyDown += (_, e) =>
+        {
+            if (!ready || executionState.IsSynchronizing || e.Key != Key.Enter)
+                return;
+
+            var value = ResolveComboValue(box);
+            if (executionState.HasPendingSelectionCommit
+                && string.Equals(executionState.PendingSelectionValue, value, StringComparison.Ordinal))
+            {
+                // Avalonia can deliver Enter after the selection event. WPF has already committed
+                // that selection, so do not execute the same value a second time.
+                executionState.HasPendingSelectionCommit = false;
+                executionState.PendingSelectionValue = null;
+            }
+            else
+            {
+                executionState.HasPendingSelectionCommit = false;
+                executionState.PendingSelectionValue = null;
+                ExecuteWithValue(combo.CommandId, registry, value, afterExecute);
+            }
+
+            e.Handled = true;
         };
         ready = true;
 
@@ -1866,8 +1931,35 @@ public static class AvaloniaRibbonRenderer
                 ApplyToggleCheckedChrome(toggle, palette);
                 break;
             case ComboBox combo when state.Value is { } value:
-                combo.Text = value;
+                SetComboValueWithoutExecuting(combo, value);
                 break;
+        }
+    }
+
+    private static string? ResolveComboValue(ComboBox box)
+    {
+        var value = box.SelectedItem?.ToString();
+        return string.IsNullOrWhiteSpace(value) ? box.Text : value;
+    }
+
+    private static void SetComboValueWithoutExecuting(ComboBox combo, string value)
+    {
+        var executionState = ComboExecutionStates.GetOrCreateValue(combo);
+        executionState.IsSynchronizing = true;
+        try
+        {
+            var matchingIndex = combo.Items.ToList().FindIndex(item =>
+                string.Equals(item?.ToString(), value, StringComparison.Ordinal));
+            if (combo.SelectedIndex != matchingIndex)
+                combo.SelectedIndex = matchingIndex;
+            if (!string.Equals(combo.Text, value, StringComparison.Ordinal))
+                combo.Text = value;
+        }
+        finally
+        {
+            executionState.IsSynchronizing = false;
+            executionState.HasPendingSelectionCommit = false;
+            executionState.PendingSelectionValue = null;
         }
     }
 
