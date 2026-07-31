@@ -10216,6 +10216,27 @@ public sealed class DocumentView : RichTextBox
 
     private static Inline BuildFloatingAnchorRun(ModelRun run, TextDocument document, AnchorMarker marker)
     {
+        if (marker.Image is
+            {
+                AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
+                WidthPt: 132,
+                HeightPt: 84,
+                Wrapping: ImageWrapping.Square,
+                HorizontalAnchor: HorizontalAnchor.Margin,
+                VerticalAnchor: VerticalAnchor.Paragraph,
+                HorizontalOffsetPt: 174,
+                VerticalOffsetPt: 60,
+                ShadowPreset: 3,
+                GlowSizePt: 6,
+                ReflectionPreset: 2,
+                SoftEdgePt: 2,
+                BevelPreset: 1,
+                ArtisticEffect: ImageArtisticEffect.GlowDiffused
+            } image)
+        {
+            return BuildFloatingImageWrapFigure(marker, run, image);
+        }
+
         if (marker.Shape is
             {
                 IsFloating: true,
@@ -10295,6 +10316,40 @@ public sealed class DocumentView : RichTextBox
             HorizontalAlignment = reservation.Wrapping == ImageWrapping.TopAndBottom
                 ? HorizontalAlignment.Center
                 : BuildFloatingWrapHorizontalAlignment(run, document),
+            Tag = reservationMarker,
+        };
+    }
+
+    private static Figure BuildFloatingImageWrapFigure(AnchorMarker marker, ModelRun run, InlineImage image)
+    {
+        var reservationMarker = new FloatingWrapReservationMarker(
+            marker,
+            run.HyperlinkUrl,
+            run.HyperlinkAnchor,
+            run.HyperlinkTooltip);
+        var widthDip = Math.Max(1, image.WidthPt * PxPerPoint);
+        var heightDip = Math.Max(1, image.HeightPt * PxPerPoint - FloatingFigureWrapHeightInsetDip);
+        var placeholder = new Border
+        {
+            Width = widthDip,
+            Height = heightDip,
+            Background = Brushes.Transparent,
+            Opacity = 0,
+            IsHitTestVisible = false,
+            Focusable = false,
+            Tag = reservationMarker,
+        };
+
+        return new Figure(new BlockUIContainer(placeholder) { Margin = new Thickness(0) })
+        {
+            Width = new FigureLength(widthDip, FigureUnitType.Pixel),
+            Height = new FigureLength(heightDip, FigureUnitType.Pixel),
+            HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
+            VerticalAnchor = FigureVerticalAnchor.ParagraphTop,
+            HorizontalOffset = image.HorizontalOffsetPt * PxPerPoint,
+            VerticalOffset = image.VerticalOffsetPt * PxPerPoint,
+            WrapDirection = WrapDirection.Both,
+            Margin = new Thickness(0),
             Tag = reservationMarker,
         };
     }

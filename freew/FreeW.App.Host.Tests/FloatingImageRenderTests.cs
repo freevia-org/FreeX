@@ -252,6 +252,24 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void ObjectFormatSquareImage_UsesItsPositionedFigureForWordWrap()
+    {
+        var view = new DocumentView();
+        view.LoadModel(FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument());
+
+        var figure = view.Document.Blocks.OfType<WpfParagraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<Figure>())
+            .Should().ContainSingle().Which;
+        figure.Width.Value.Should().BeApproximately(176, 0.01);
+        figure.Height.Value.Should().BeApproximately(108, 0.01);
+        figure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.ContentLeft);
+        figure.VerticalAnchor.Should().Be(FigureVerticalAnchor.ParagraphTop);
+        figure.HorizontalOffset.Should().BeApproximately(232, 0.01);
+        figure.VerticalOffset.Should().BeApproximately(80, 0.01);
+        figure.WrapDirection.Should().Be(WrapDirection.Both);
+    }
+
+    [StaFact]
     public void FloatingImage_WrapModesProduceReservationAndSurviveCommitInOrder()
     {
         foreach (var wrapping in new[] { ImageWrapping.Square, ImageWrapping.Tight, ImageWrapping.TopAndBottom })
