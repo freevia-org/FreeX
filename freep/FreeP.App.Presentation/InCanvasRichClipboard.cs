@@ -612,6 +612,7 @@ public static class InCanvasRichClipboardPlanner
         {
             PositionEmu = stop.PositionEmu,
             Alignment = stop.Alignment,
+            Leader = stop.Leader,
         }).ToList(),
         BulletImage = paragraph.BulletImage is null ? null : new ClipboardImageDto
         {
@@ -769,7 +770,12 @@ public static class InCanvasRichClipboardPlanner
             SpaceAfterPt = dto.SpaceAfterPt,
         };
         foreach (var stop in dto.TabStops ?? [])
-            paragraph.TabStops.Add(new TabStop { PositionEmu = stop.PositionEmu, Alignment = stop.Alignment });
+            paragraph.TabStops.Add(new TabStop
+            {
+                PositionEmu = stop.PositionEmu,
+                Alignment = stop.Alignment,
+                Leader = stop.Leader,
+            });
         if (dto.BulletImage is { } image)
             paragraph.BulletImage = new ImagePart
             {
@@ -1092,6 +1098,7 @@ public static class InCanvasRichClipboardPlanner
     {
         public long PositionEmu { get; set; }
         public TabStopAlignment Alignment { get; set; }
+        public TabStopLeader Leader { get; set; }
     }
 
     private sealed class ClipboardImageDto

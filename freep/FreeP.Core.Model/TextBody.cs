@@ -11,6 +11,17 @@ public enum TabStopAlignment
     Decimal = 3
 }
 
+/// <summary>Leader glyph pattern used to fill the gap before text at an RTF tab stop.</summary>
+public enum TabStopLeader
+{
+    None = 0,
+    Dots = 1,
+    Hyphens = 2,
+    Underscore = 3,
+    ThickLine = 4,
+    Equal = 5
+}
+
 /// <summary>
 /// A single tab stop in a paragraph's tab stop list.
 /// Position is in EMU from the text body's left inset (matches a:tab pos= semantics).
@@ -22,6 +33,9 @@ public sealed class TabStop
 
     /// <summary>Alignment of text at this stop.</summary>
     public TabStopAlignment Alignment { get; set; } = TabStopAlignment.Left;
+
+    /// <summary>Optional leader pattern authored by an external rich-text source.</summary>
+    public TabStopLeader Leader { get; set; } = TabStopLeader.None;
 }
 
 // ── Text autofit ────────────────────────────────────────────────────────────────

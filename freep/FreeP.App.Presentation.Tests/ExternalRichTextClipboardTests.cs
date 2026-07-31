@@ -568,6 +568,37 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfTabStopLeaders_PreserveEachLeaderThroughRichClipboardRoundTrip()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\pard\tldot\tx1440\tlhyph\tx2880\tlul\tx4320\tlth\tx5760\tleq\tx7200 Contents}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Single().TabStops
+            .Select(stop => (stop.PositionEmu, stop.Leader))
+            .Should().Equal(
+                (914_400L, TabStopLeader.Dots),
+                (1_828_800L, TabStopLeader.Hyphens),
+                (2_743_200L, TabStopLeader.Underscore),
+                (3_657_600L, TabStopLeader.ThickLine),
+                (4_572_000L, TabStopLeader.Equal));
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+
+        reopened!.Body.Paragraphs.Single().TabStops
+            .Select(stop => stop.Leader)
+            .Should().Equal(
+                TabStopLeader.Dots,
+                TabStopLeader.Hyphens,
+                TabStopLeader.Underscore,
+                TabStopLeader.ThickLine,
+                TabStopLeader.Equal);
+    }
+
+    [Fact]
     public void RtfNestedTable_PreservesRecursiveInlineTableAndSurroundingText()
     {
         const string rtf =

@@ -584,7 +584,8 @@ public sealed class InCanvasTextEditPlanner
         for (int index = 0; index < a.Count; index++)
         {
             if (a[index].PositionEmu != b[index].PositionEmu
-                || a[index].Alignment != b[index].Alignment)
+                || a[index].Alignment != b[index].Alignment
+                || a[index].Leader != b[index].Leader)
                 return false;
         }
 
@@ -1187,6 +1188,7 @@ internal static class TextBodyModelCloner
             {
                 PositionEmu = tabStop.PositionEmu,
                 Alignment = tabStop.Alignment,
+                Leader = tabStop.Leader,
             });
 
         foreach (var run in source.Runs)
