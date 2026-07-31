@@ -109,9 +109,10 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         double horizontalOffset,
         double verticalOffset,
         HorizontalAnchor horizontalAnchor,
-        VerticalAnchor verticalAnchor)
+        VerticalAnchor verticalAnchor,
+        string title)
     {
-        Title = "Picture Position";
+        Title = title;
         Width = 360;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -151,8 +152,9 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         double horizontalOffset,
         double verticalOffset,
         HorizontalAnchor horizontalAnchor,
-        VerticalAnchor verticalAnchor) =>
-        new ImagePositionDialog(horizontalOffset, verticalOffset, horizontalAnchor, verticalAnchor)
+        VerticalAnchor verticalAnchor,
+        string title = "Picture Position") =>
+        new ImagePositionDialog(horizontalOffset, verticalOffset, horizontalAnchor, verticalAnchor, title)
             .ShowDialog<ImagePositionDialogResult?>(owner);
 
     private void Accept()

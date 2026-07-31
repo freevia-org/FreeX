@@ -261,13 +261,26 @@ public static class ExternalRichTextClipboardPlanner
             public int? FirstLineIndentTwips;
             public int? SpaceBeforeTwips;
             public int? SpaceAfterTwips;
+            public List<TabStop> TabStops { get; set; } = new();
+            public TabStopAlignment PendingTabStopAlignment { get; set; }
             public FieldContext? Field;
             public Hyperlink? Hyperlink;
             public bool InTable;
             public int TableNesting;
             public int ListLevelTextPrefixBytesRemaining;
 
-            public State Clone() => (State)MemberwiseClone();
+            public State Clone()
+            {
+                var clone = (State)MemberwiseClone();
+                clone.TabStops = TabStops
+                    .Select(stop => new TabStop
+                    {
+                        PositionEmu = stop.PositionEmu,
+                        Alignment = stop.Alignment,
+                    })
+                    .ToList();
+                return clone;
+            }
         }
 
         private readonly record struct CharacterStyle(
@@ -874,6 +887,43 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "sb": _state.SpaceBeforeTwips = parameter is { } before ? Math.Clamp(before, -100_000, 100_000) : 0; break;
                 case "sa": _state.SpaceAfterTwips = parameter is { } after ? Math.Clamp(after, -100_000, 100_000) : 0; break;
+                case "tql":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopAlignment = TabStopAlignment.Left;
+                    break;
+                case "tqc":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopAlignment = TabStopAlignment.Center;
+                    break;
+                case "tqr":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopAlignment = TabStopAlignment.Right;
+                    break;
+                case "tqdec":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopAlignment = TabStopAlignment.Decimal;
+                    break;
+                case "tx":
+                    if (_state.Destination == Destination.Body
+                        && parameter is > 0 and <= 100_000_000)
+                    {
+                        long positionEmu = parameter.Value * 635L;
+                        var stop = new TabStop
+                        {
+                            PositionEmu = positionEmu,
+                            Alignment = _state.PendingTabStopAlignment,
+                        };
+                        int existing = _state.TabStops.FindIndex(
+                            candidate => candidate.PositionEmu == positionEmu);
+                        if (existing >= 0)
+                            _state.TabStops[existing] = stop;
+                        else
+                            _state.TabStops.Add(stop);
+                        _state.TabStops.Sort(
+                            (left, right) => left.PositionEmu.CompareTo(right.PositionEmu));
+                        _state.PendingTabStopAlignment = TabStopAlignment.Left;
+                    }
+                    break;
                 case "pn":
                     _legacyList = new LegacyListDefinition();
                     break;
@@ -920,7 +970,6 @@ public static class ExternalRichTextClipboardPlanner
                 case "ri":
                 case "sl":
                 case "slmult":
-                case "tx":
                 case "pnf":
                 case "pnfs":
                 case "cellx":
@@ -2033,6 +2082,8 @@ public static class ExternalRichTextClipboardPlanner
             _state.FirstLineIndentTwips = null;
             _state.SpaceBeforeTwips = null;
             _state.SpaceAfterTwips = null;
+            _state.TabStops.Clear();
+            _state.PendingTabStopAlignment = TabStopAlignment.Left;
             _state.InTable = false;
             _state.TableNesting = 0;
         }
@@ -2049,6 +2100,15 @@ public static class ExternalRichTextClipboardPlanner
             paragraph.IndentEmu = ToEmu(_state.FirstLineIndentTwips);
             paragraph.SpaceBeforePt = ToPoints(_state.SpaceBeforeTwips);
             paragraph.SpaceAfterPt = ToPoints(_state.SpaceAfterTwips);
+            paragraph.TabStops.Clear();
+            foreach (var tabStop in _state.TabStops)
+            {
+                paragraph.TabStops.Add(new TabStop
+                {
+                    PositionEmu = tabStop.PositionEmu,
+                    Alignment = tabStop.Alignment,
+                });
+            }
 
             if (_legacyList is { } legacyList)
             {

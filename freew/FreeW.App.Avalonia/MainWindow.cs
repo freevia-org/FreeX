@@ -913,6 +913,44 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenShapePositionDialogAsync()
+    {
+        if (_editor.SelectedFloatingShape() is not { Placement: { } placement })
+            return;
+        var result = await ImagePositionDialog.ShowAsync(
+            this,
+            placement.HorizontalOffsetPt,
+            placement.VerticalOffsetPt,
+            placement.HorizontalAnchor,
+            placement.VerticalAnchor,
+            "Shape Position");
+        if (result is not null)
+            _editor.SetFloatingPosition(result.HorizontalOffset, result.VerticalOffset, result.HorizontalAnchor, result.VerticalAnchor);
+        _editor.Focus();
+    }
+
+    private async Task OpenShapeSizeDialogAsync()
+    {
+        if (_editor.SelectedFloatingShape() is not { } shape)
+            return;
+        var result = await ImageSizeDialog.ShowAsync(this, shape.WidthPt, shape.HeightPt, "Shape Size");
+        if (result is not null)
+            _editor.SetFloatingSize(result.Width, result.Height);
+        _editor.Focus();
+    }
+
+    private async Task OpenShapeAltTextDialogAsync()
+    {
+        var seed = _editor.SelectedFloatingShape()?.AltText
+                   ?? _editor.SelectedFloatingWordArt()?.AltText;
+        if (_editor.SelectedFloatingInfo?.Kind is not ("Shape" or "WordArt"))
+            return;
+        var result = await ImageAltTextDialog.ShowAsync(this, seed ?? string.Empty);
+        if (result is not null)
+            _editor.SetSelectedFloatingAltText(result);
+        _editor.Focus();
+    }
+
     private async Task OpenChartEditDataDialogAsync()
     {
         if (_editor.SelectedFloatingChart() is not { } chart)
@@ -1697,6 +1735,9 @@ public sealed partial class MainWindow : Window
             OpenImageBorderDialog: () => _ = OpenImageBorderDialogAsync(),
             OpenImageAdjustDialog: () => _ = OpenImageAdjustDialogAsync(),
             OpenImagePositionDialog: () => _ = OpenImagePositionDialogAsync(),
+            OpenShapePositionDialog: () => _ = OpenShapePositionDialogAsync(),
+            OpenShapeSizeDialog: () => _ = OpenShapeSizeDialogAsync(),
+            OpenShapeAltTextDialog: () => _ = OpenShapeAltTextDialogAsync(),
             OpenInsertChartDialog: () => _ = OpenInsertChartDialogAsync(),
             OpenChartEditDataDialog: () => _ = OpenChartEditDataDialogAsync(),
             OpenChartTitleDialog: () => _ = OpenChartTitleDialogAsync(),

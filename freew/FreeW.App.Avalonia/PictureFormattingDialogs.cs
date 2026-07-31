@@ -63,9 +63,9 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
     private readonly double _aspect;
     private bool _updating;
 
-    private ImageSizeDialog(double widthPt, double heightPt)
+    private ImageSizeDialog(double widthPt, double heightPt, string title)
     {
-        Title = "Image Size";
+        Title = title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -107,8 +107,12 @@ internal sealed class ImageSizeDialog : FreeWDialogWindow
         CloseOnEscape(this, () => Close(null));
     }
 
-    public static Task<ImageSizeDialogResult?> ShowAsync(Window owner, double widthPt, double heightPt) =>
-        new ImageSizeDialog(widthPt, heightPt).ShowDialog<ImageSizeDialogResult?>(owner);
+    public static Task<ImageSizeDialogResult?> ShowAsync(
+        Window owner,
+        double widthPt,
+        double heightPt,
+        string title = "Image Size") =>
+        new ImageSizeDialog(widthPt, heightPt, title).ShowDialog<ImageSizeDialogResult?>(owner);
 
     private void UpdateLockedHeight()
     {

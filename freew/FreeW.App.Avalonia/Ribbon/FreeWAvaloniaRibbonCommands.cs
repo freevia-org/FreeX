@@ -1459,7 +1459,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.image-align-to-margin", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
         r.Register("freew.image-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
         r.Register("freew.image-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
-        RegisterFloatingPositionCommands(r, editor, "shape", "Shape");
+        RegisterFloatingPositionCommands(r, editor, "shape", "Shape", callbacks.OpenShapePositionDialog);
         r.Register("freew.shape-edit-shape", new ActionRibbonCommand(() => editor.Focus()));
         r.Register("freew.shape-convert-freeform", new ActionRibbonCommand(editor.ConvertSelectedShapeToFreeform));
         r.Register("freew.shape-edit-points", new ActionRibbonCommand(editor.BeginShapeEditPoints));
@@ -1478,7 +1478,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.shape-align-to-margin", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.AlignToMargin));
         r.Register("freew.shape-distribute-h", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeHorizontal));
         r.Register("freew.shape-distribute-v", new FloatingObjectArrangeCommand(editor, FloatingObjectArrangeKind.DistributeVertical));
-        r.Register("freew.shape-size", new FloatingObjectSizeCommand(editor, "Shape"));
+        r.Register("freew.shape-size", new FloatingObjectSizeCommand(editor, "Shape", callbacks.OpenShapeSizeDialog));
         foreach (var preset in FreeWRibbonDefinitionData.FloatingSizePresets)
         {
             var captured = preset;
@@ -1487,7 +1487,7 @@ internal static class FreeWAvaloniaRibbonCommands
                 new FloatingObjectSizePresetCommand(editor, "Shape", captured));
         }
 
-        r.Register("freew.shape-alt-text", new FloatingObjectAltTextCommand(editor));
+        r.Register("freew.shape-alt-text", new FloatingObjectAltTextCommand(editor, callbacks.OpenShapeAltTextDialog));
         foreach (var preset in FreeWRibbonDefinitionData.ShapeAltTextPresets)
         {
             var captured = preset;
@@ -1885,15 +1885,18 @@ internal static class FreeWAvaloniaRibbonCommands
 
     private sealed class FloatingObjectSizeCommand(
         DocumentView editor,
-        string requiredKind) : IRibbonStatefulCommand
+        string requiredKind,
+        Action? openDialog) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!IsEnabled()
-                || !TryParseSize(context.SelectedValue, out var widthPt, out var heightPt))
+            if (!IsEnabled())
                 return;
 
-            editor.SetFloatingSize(widthPt, heightPt);
+            if (TryParseSize(context.SelectedValue, out var widthPt, out var heightPt))
+                editor.SetFloatingSize(widthPt, heightPt);
+            else if (string.IsNullOrWhiteSpace(context.SelectedValue))
+                openDialog?.Invoke();
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
@@ -1934,14 +1937,19 @@ internal static class FreeWAvaloniaRibbonCommands
             && editor.GetSelectedFloatingSize() is not null;
     }
 
-    private sealed class FloatingObjectAltTextCommand(DocumentView editor) : IRibbonStatefulCommand
+    private sealed class FloatingObjectAltTextCommand(
+        DocumentView editor,
+        Action? openDialog) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
-            if (!CanEditAltText() || context.SelectedValue is null)
+            if (!CanEditAltText())
                 return;
 
-            editor.SetSelectedFloatingAltText(context.SelectedValue);
+            if (context.SelectedValue is null)
+                openDialog?.Invoke();
+            else
+                editor.SetSelectedFloatingAltText(context.SelectedValue);
         }
 
         public RibbonCommandState GetState() =>

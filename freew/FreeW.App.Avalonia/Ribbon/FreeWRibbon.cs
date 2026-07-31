@@ -298,6 +298,12 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenImageAdjustDialog = null,
     /// <summary>Picture Format &gt; Position &gt; More Layout Options. Optional owner-modal route.</summary>
     Action? OpenImagePositionDialog = null,
+    /// <summary>Drawing Format &gt; Position. Optional owner-modal shape route.</summary>
+    Action? OpenShapePositionDialog = null,
+    /// <summary>Drawing Format &gt; Size. Optional owner-modal shape route.</summary>
+    Action? OpenShapeSizeDialog = null,
+    /// <summary>Drawing Format &gt; Alt Text. Optional owner-modal shape/WordArt route.</summary>
+    Action? OpenShapeAltTextDialog = null,
     /// <summary>Insert &gt; Chart. Optional owner-modal chart-data route.</summary>
     Action? OpenInsertChartDialog = null,
     /// <summary>Chart Design &gt; Edit Data. Optional owner-modal seeded chart-data route.</summary>
