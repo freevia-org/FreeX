@@ -121,6 +121,7 @@ public static partial class XlsxChartPartReader
         ApplyVerbatimSeriesFormulasIfNeeded(
             plotCharts.SelectMany(c => c.Elements(ChartNs + "ser")),
             sheetId,
+            sheetNameResolver,
             result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
@@ -199,6 +200,7 @@ public static partial class XlsxChartPartReader
         ApplyVerbatimSeriesFormulasIfNeeded(
             lineCharts.SelectMany(c => c.Elements(ChartNs + "ser")),
             sheetId,
+            sheetNameResolver,
             result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);

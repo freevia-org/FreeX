@@ -238,22 +238,14 @@ public static class PageBreakPreviewLayoutPlanner
 
         foreach (var range in areas)
         {
-            if (!TryCalculateVisibleRangeBounds(
-                    viewport,
-                    range,
-                    rowHeaderWidth,
-                    columnHeaderHeight,
-                    actualWidth,
-                    actualHeight,
-                    out var printBounds,
-                    out _))
-            {
-                continue;
-            }
-
-            anyAreaVisible = true;
-            outsideMasks = SubtractRegion(outsideMasks, printBounds);
-
+            // Pagination (and thus this area's contribution to the running page-number offset) must be
+            // computed unconditionally, even when the area is currently scrolled out of the GridView's
+            // viewport. This planner is re-invoked on every redraw from the live, scroll-position-dependent
+            // Viewport, so gating the offset on visibility would make an area's pages "disappear" from the
+            // running count the moment the user scrolls it off-screen - even though those pages still exist
+            // and are still numbered continuously in the real print/PDF output (mirrors
+            // WorkbookExportPrintPlanner's continuous numbering across print areas). Only the emitted tiles
+            // (pages/masks/break lines) are conditioned on visibility.
             var pagination = PagePaginationPlanner.Paginate(
                 range,
                 scaleToFit,
@@ -273,28 +265,43 @@ public static class PageBreakPreviewLayoutPlanner
                 isRowHidden,
                 isColumnHidden);
 
-            pages.AddRange(BuildVisiblePages(
-                viewport,
-                range,
-                pagination.RowSegments,
-                pagination.ColumnSegments,
-                pageOrder,
-                rowHeaderWidth,
-                columnHeaderHeight,
-                actualWidth,
-                actualHeight,
-                pageNumberOffset));
-            pageNumberOffset += pagination.RowSegments.Count * pagination.ColumnSegments.Count;
+            if (TryCalculateVisibleRangeBounds(
+                    viewport,
+                    range,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    actualWidth,
+                    actualHeight,
+                    out var printBounds,
+                    out _))
+            {
+                anyAreaVisible = true;
+                outsideMasks = SubtractRegion(outsideMasks, printBounds);
 
-            automaticBreaks.AddRange(BuildAutomaticBreakLines(
-                viewport,
-                pagination.RowSegments,
-                pagination.ColumnSegments,
-                rowPageBreaks,
-                columnPageBreaks,
-                printBounds,
-                rowHeaderWidth,
-                columnHeaderHeight));
+                pages.AddRange(BuildVisiblePages(
+                    viewport,
+                    range,
+                    pagination.RowSegments,
+                    pagination.ColumnSegments,
+                    pageOrder,
+                    rowHeaderWidth,
+                    columnHeaderHeight,
+                    actualWidth,
+                    actualHeight,
+                    pageNumberOffset));
+
+                automaticBreaks.AddRange(BuildAutomaticBreakLines(
+                    viewport,
+                    pagination.RowSegments,
+                    pagination.ColumnSegments,
+                    rowPageBreaks,
+                    columnPageBreaks,
+                    printBounds,
+                    rowHeaderWidth,
+                    columnHeaderHeight));
+            }
+
+            pageNumberOffset += pagination.RowSegments.Count * pagination.ColumnSegments.Count;
         }
 
         if (!anyAreaVisible)

@@ -739,6 +739,79 @@ internal static class WorksheetAutoFilterColumnSync
         string.Equals(autoFilter.Reference, range.ToString(), StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// R106-commands-autofilter-table-sync-1: mirrors an interactively-applied Top 10/Above-Average/
+/// custom-criterion AutoFilter criterion into a structured table's own
+/// <see cref="StructuredTableModel.FilterColumns"/> -- the same job
+/// <see cref="FilterCommand.ApplyToStructuredTableIfMatched"/> already does for a plain value-list
+/// filter (finding H18) -- whenever <c>range</c> is exactly a structured table's
+/// <see cref="StructuredTableModel.Range"/> (the shape
+/// <c>AutoFilterRangeResolver.TryGetEffectiveAutoFilterRange</c> hands back for a table's own
+/// header-cell filter dropdown). Without this, Top10/Above-Average/Custom-criterion filters applied
+/// from a Table's dropdown hid/showed rows correctly in the live session but were silently dropped
+/// from the table's saved &lt;autoFilter&gt; XML on save/reload -- only the sibling
+/// <see cref="WorksheetAutoFilterColumnSync"/> path was covered for these commands, which is (by
+/// design) a no-op for a table range, since tables carry their own &lt;autoFilter&gt; inside the
+/// table part rather than a worksheet-level one.
+/// </summary>
+internal static class StructuredTableFilterColumnSync
+{
+    /// <summary>
+    /// Replaces (or removes, when <paramref name="newColumn"/> is <c>null</c>) the
+    /// <see cref="StructuredTableFilterColumnModel"/> entry for <paramref name="columnId"/> on the
+    /// structured table whose <see cref="StructuredTableModel.Range"/> exactly matches
+    /// <paramref name="range"/>. Returns a snapshot of the previous
+    /// <see cref="StructuredTableModel.FilterColumns"/> list for undo (via <see cref="Restore"/>), or
+    /// <c>null</c> when no structured table matches <paramref name="range"/> (e.g. the range is a
+    /// plain worksheet AutoFilter range instead).
+    /// </summary>
+    public static StructuredTableFilterColumnSnapshot? Apply(
+        Sheet sheet,
+        GridRange range,
+        int columnId,
+        StructuredTableFilterColumnModel? newColumn)
+    {
+        for (var i = 0; i < sheet.StructuredTables.Count; i++)
+        {
+            var table = sheet.StructuredTables[i];
+            if (!table.Range.Equals(range))
+                continue;
+
+            var previous = new List<StructuredTableFilterColumnModel>(table.FilterColumns);
+
+            var filterColumns = table.FilterColumns
+                .Where(fc => fc.ColumnId != columnId)
+                .ToList();
+            if (newColumn is not null)
+                filterColumns.Add(newColumn);
+            filterColumns.Sort(static (a, b) => a.ColumnId.CompareTo(b.ColumnId));
+
+            sheet.StructuredTables[i] = StructuredTableDesignCommandHelpers.CopyTable(table, filterColumns: filterColumns);
+            return new StructuredTableFilterColumnSnapshot(table.Id, previous);
+        }
+
+        return null;
+    }
+
+    /// <summary>Undoes an <see cref="Apply"/> call, restoring the exact previous list contents.</summary>
+    public static void Restore(Sheet sheet, StructuredTableFilterColumnSnapshot? snapshot)
+    {
+        if (snapshot is not { } value)
+            return;
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, value.TableId, out var tableIndex))
+            return;
+
+        var table = sheet.StructuredTables[tableIndex];
+        sheet.StructuredTables[tableIndex] = StructuredTableDesignCommandHelpers.CopyTable(
+            table, filterColumns: value.PreviousFilterColumns);
+    }
+}
+
+/// <summary>Snapshot captured by <see cref="StructuredTableFilterColumnSync.Apply"/> for undo.</summary>
+internal readonly record struct StructuredTableFilterColumnSnapshot(
+    int TableId,
+    List<StructuredTableFilterColumnModel> PreviousFilterColumns);
+
 internal readonly struct FilterAllowedValueMatcher
 {
     private readonly string? _singleValue;

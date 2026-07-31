@@ -124,6 +124,14 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         // combination (Excel's "Existing File > Bookmark..." picker), so the sub-address is recovered
         // directly from the source XML instead.
         Dictionary<string, Dictionary<string, string>>? externalHyperlinkLocationsByWorksheetPath = null;
+        // R106-io-hyperlink-range-shift: whole-column ("C:C"), whole-row ("3:3"), and oversized
+        // bounded-range hyperlink refs are stripped from the ClosedXML-input copy before ClosedXML
+        // loads it (XlsxWorksheetHyperlinkNormalizer.StripRangeHyperlinkRefs), so ClosedXML's own
+        // xlSheet.Hyperlinks collection below never contains them at all. Read them directly from
+        // this PRISTINE, unmodified package archive instead so Sheet.RangeHyperlinks can track their
+        // live GridRange and shift it on row/column insert/delete, mirroring
+        // ReadWorksheetExternalHyperlinkLocations just above.
+        Dictionary<string, Dictionary<string, GridRange>>? rangeHyperlinksByWorksheetPath = null;
         var packageMetadataDiagnostics = MeasureLoadPhase(() =>
         {
             try
@@ -138,6 +146,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 chartsheets = XlsxChartsheetReader.Read(packageArchive);
                 firstPageNumberEnabledByWorksheetPath = ReadWorksheetFirstPageNumberEnabledFlags(packageArchive);
                 externalHyperlinkLocationsByWorksheetPath = ReadWorksheetExternalHyperlinkLocations(packageArchive);
+                rangeHyperlinksByWorksheetPath = ReadWorksheetRangeHyperlinks(packageArchive);
 
                 workbookTheme = packageParts.HasTheme
                     ? XlsxWorkbookThemeReader.Load(packageArchive)
@@ -672,6 +681,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                 {
                     warnings.Add($"[hyperlinks] Sheet '{xlSheet.Name}': {ex.Message}");
                 }
+            }
+
+            // R106-io-hyperlink-range-shift: populate Sheet.RangeHyperlinks with the whole-column/
+            // row and oversized-bounded-range refs xlSheet.Hyperlinks above could never see (they
+            // were stripped before ClosedXML loaded its copy). Keyed by worksheet part path, read
+            // from the pristine source archive up front (rangeHyperlinksByWorksheetPath).
+            if (xmlLayout?.WorksheetPath is { Length: > 0 } rangeHyperlinkWorksheetPath &&
+                rangeHyperlinksByWorksheetPath is not null &&
+                rangeHyperlinksByWorksheetPath.TryGetValue(rangeHyperlinkWorksheetPath, out var rangesByRef))
+            {
+                foreach (var (originalRef, range) in rangesByRef)
+                    sheet.RangeHyperlinks[originalRef] = range;
             }
 
             if (xmlLayout is { } layout)
@@ -1876,6 +1897,137 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         }
 
         return result;
+    }
+
+    // R106-io-hyperlink-range-shift: reads, per worksheet part path, every hyperlink "ref" that is
+    // a whole-column ("C:C"), whole-row ("3:3"), or oversized bounded range (over
+    // MaxExpandableHyperlinkRangeCellCount cells below) -- the exact same refs
+    // XlsxWorksheetHyperlinkNormalizer.StripRangeHyperlinkRefs removes from the ClosedXML-input copy
+    // before load, so ClosedXML's own xlSheet.Hyperlinks collection (read in the main load loop
+    // above) never contains them at all. Keyed by the ORIGINAL ref string -- the identity
+    // Sheet.RangeHyperlinks uses to track a live, shift-adjusted GridRange for each one, and the
+    // same identity XlsxWorksheetMetadataPreserver.MergeWorksheetHyperlinkMetadata re-correlates
+    // against at save time. Best-effort: any worksheet entry that fails to parse is simply omitted.
+    private static Dictionary<string, Dictionary<string, GridRange>> ReadWorksheetRangeHyperlinks(
+        ZipArchive archive)
+    {
+        var result = new Dictionary<string, Dictionary<string, GridRange>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry))
+        {
+            XDocument xml;
+            try
+            {
+                xml = XlsxPackageXmlEditor.LoadXml(entry);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            if (xml.Root is not { } root)
+                continue;
+
+            var ns = root.Name.Namespace;
+            var hyperlinksElement = root.Element(ns + "hyperlinks");
+            if (hyperlinksElement is null)
+                continue;
+
+            Dictionary<string, GridRange>? byRef = null;
+            foreach (var hyperlinkElement in hyperlinksElement.Elements(ns + "hyperlink"))
+            {
+                var reference = hyperlinkElement.Attribute("ref")?.Value;
+                if (string.IsNullOrWhiteSpace(reference))
+                    continue;
+
+                if (TryParseRangeHyperlinkGridRange(reference, out var range))
+                    (byRef ??= new Dictionary<string, GridRange>(StringComparer.Ordinal))[reference] = range;
+            }
+
+            if (byRef is not null)
+                result[XlsxPackagePath.NormalizeEntryPath(entry)] = byRef;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="XlsxWorksheetHyperlinkNormalizer"/>'s strip criteria exactly (whole-
+    /// column/row, or a bounded range above <see cref="MaxExpandableHyperlinkRangeCellCount"/>).
+    /// Returns the equivalent <see cref="GridRange"/> -- a whole-column ref spans the full row
+    /// extent, a whole-row ref the full column extent -- so RowColumnShiftHelpers.ShiftRange*Up/Down
+    /// (which already special-case a whole-column/row GridRange as a no-op on the perpendicular
+    /// axis) apply unchanged. A plain bounded ref within the cap returns <see langword="false"/>: it
+    /// is representable via the ordinary CellAddress-keyed Sheet.Hyperlinks/HyperlinkMetadata path
+    /// and must not also enter Sheet.RangeHyperlinks.
+    /// </summary>
+    private static bool TryParseRangeHyperlinkGridRange(string reference, out GridRange range)
+    {
+        range = default;
+        var trimmed = reference.Trim();
+        if (trimmed.Length == 0 || trimmed.Contains(' ', StringComparison.Ordinal))
+            return false;
+
+        var parts = trimmed.Split(':');
+        if (parts.Length != 2)
+            return false;
+
+        var sheet = SheetId.New();
+        if (TryParseWholeColumnOrRowRangeRef(parts[0], parts[1], sheet, out range))
+            return true;
+
+        if (!CellAddress.TryParse(parts[0], sheet, out var start) ||
+            !CellAddress.TryParse(parts[1], sheet, out var end))
+        {
+            return false;
+        }
+
+        var bounded = new GridRange(start, end);
+        if (bounded.CellCount <= MaxExpandableHyperlinkRangeCellCount)
+            return false;
+
+        range = bounded;
+        return true;
+    }
+
+    private static bool TryParseWholeColumnOrRowRangeRef(string left, string right, SheetId sheet, out GridRange range)
+    {
+        range = default;
+        if (left.Length == 0 || right.Length == 0)
+            return false;
+
+        if (left.All(char.IsAsciiLetter) && right.All(char.IsAsciiLetter))
+        {
+            // Whole-column: "C:C" / "B:D" -- both sides are bare column letters. Anchor each to
+            // row 1 purely to reuse CellAddress.TryParse's column-letter parsing.
+            if (!CellAddress.TryParse(left + "1", sheet, out var startCol) ||
+                !CellAddress.TryParse(right + "1", sheet, out var endCol))
+            {
+                return false;
+            }
+
+            range = new GridRange(
+                new CellAddress(sheet, 1, startCol.Col),
+                new CellAddress(sheet, CellAddress.MaxRow, endCol.Col));
+            return true;
+        }
+
+        if (left.All(char.IsAsciiDigit) && right.All(char.IsAsciiDigit))
+        {
+            // Whole-row: "3:3" / "2:5" -- both sides are bare row numbers.
+            if (!uint.TryParse(left, NumberStyles.Integer, CultureInfo.InvariantCulture, out var startRow) ||
+                !uint.TryParse(right, NumberStyles.Integer, CultureInfo.InvariantCulture, out var endRow) ||
+                startRow == 0 || endRow == 0)
+            {
+                return false;
+            }
+
+            range = new GridRange(
+                new CellAddress(sheet, startRow, 1),
+                new CellAddress(sheet, endRow, CellAddress.MaxCol));
+            return true;
+        }
+
+        return false;
     }
 
     // R98-io-hyperlink-oversized-ref: mirrors XlsxWorksheetHyperlinkNormalizer's

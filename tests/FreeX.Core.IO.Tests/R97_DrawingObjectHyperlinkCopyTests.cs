@@ -148,8 +148,21 @@ public sealed class R97_DrawingObjectHyperlinkCopyTests
     // ── Internal ("Place in This Document") target -- no TargetMode attribute (OPC default Internal),
     // and no ScreenTip. Must round-trip through the copy identically to the external case. ──
 
+    // R106-drawing-object-hyperlink-duplicate-rebase (was
+    // "DuplicateSheet_Shape_InternalPlaceInDocumentTarget_CopyKeepsHyperlink"): this test originally
+    // asserted the copy's internal ("Place in This Document") hyperlink stayed pointed at the SOURCE
+    // sheet unchanged. That is no longer correct: DuplicateSheetDrawingCloner now rebases a same-sheet
+    // internal hyperlink onto the duplicate, via the same reasoning Sheet.Clone already applies to the
+    // equivalent CELL hyperlink (and to conditional-format/data-validation/r104 same-sheet formula
+    // references) on a duplicated sheet -- all of those follow the copy, not the original, and real
+    // Excel's Move-or-Copy "Create a copy" is understood (per this codebase's established convention;
+    // not independently re-verified against real Excel here) to keep every self-reference on a
+    // duplicated sheet pointing at itself. A shape's own hyperlink to a cell on its own sheet is exactly
+    // such a self-reference, so it must follow the same rule. Renamed and re-asserted to match; the
+    // no-hyperlink, external-hyperlink, and cross-sheet-hyperlink sibling cases immediately below/in
+    // R106_DuplicateSheetDrawingObjectHyperlinkRebaseTests still correctly assert NO rewrite happens.
     [Fact]
-    public void DuplicateSheet_Shape_InternalPlaceInDocumentTarget_CopyKeepsHyperlink()
+    public void DuplicateSheet_Shape_InternalPlaceInDocumentTarget_CopyRebasesHyperlinkOntoDuplicate()
     {
         using var package = BuildPackageWithDrawing(
             ShapeAnchor("Rectangle 1", fromCol: 1, toCol: 4, hlinkRelId: "rIdHlink1"),
@@ -169,7 +182,8 @@ public sealed class R97_DrawingObjectHyperlinkCopyTests
         adapter.Save(loaded, saved);
 
         var (target, targetMode) = ResolveObjectHyperlinkRelationshipByName(saved, copySheet.Name, "Rectangle 1");
-        target.Should().Be("Sheet1!A1");
+        target.Should().Be($"'{copySheet.Name}'!A1",
+            "the copy's same-sheet internal hyperlink must follow the duplicate, matching the equivalent cell hyperlink");
         targetMode.Should().BeNull("the copy's internal target must stay TargetMode-less, matching the original");
     }
 

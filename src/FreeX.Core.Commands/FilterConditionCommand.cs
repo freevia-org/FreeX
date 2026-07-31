@@ -241,6 +241,12 @@ public sealed class FilterConditionCommand : IWorkbookCommand
     // being silently dropped on save, matching the sibling FilterCommand/TopBottomFilterCommand/
     // AverageFilterCommand which already keep this in sync for their own criterion kinds.
     private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
+    // R106-commands-autofilter-table-sync-1: WorksheetAutoFilterColumnSync above is a no-op whenever
+    // _range is a structured table's own Range -- keep the TABLE's own FilterColumns model in sync
+    // too (mirrors FilterCommand.ApplyToStructuredTableIfMatched for the value-list case, finding
+    // H18), otherwise a Custom Filter applied from a Table's header dropdown hides/shows rows live
+    // but is silently dropped from the table's <autoFilter> XML on save/reload.
+    private StructuredTableFilterColumnSnapshot? _tableFilterSnapshot;
 
     public string Label => "Apply Filter";
 
@@ -290,6 +296,24 @@ public sealed class FilterConditionCommand : IWorkbookCommand
                     DateGroups: [],
                     NativeFiltersAttributes: null,
                     NativeFilterXmls: []));
+
+            // R106-commands-autofilter-table-sync-1: mirror the same custom criterion into the
+            // owning structured table's FilterColumns model (a no-op when _range isn't a table's own
+            // Range) -- unlike Top10/DynamicFilter, StructuredTableFilterColumnModel already has
+            // first-class CustomFilters/CustomFiltersAnd fields (it round-trips a table's own
+            // <customFilters> today), so no raw-XML passthrough is needed here.
+            _tableFilterSnapshot = StructuredTableFilterColumnSync.Apply(
+                sheet,
+                _range,
+                (int)_filterColOffset,
+                new StructuredTableFilterColumnModel(
+                    (int)_filterColOffset,
+                    Values: [],
+                    IncludeBlank: false,
+                    CustomFilters: [.. built.Filters.Select(f => new StructuredTableCustomFilterModel(f.Operator, f.Value, f.NativeAttributes))],
+                    CustomFiltersAnd: built.And,
+                    NativeCustomFiltersAttributes: null,
+                    NativeFilterXmls: []));
         }
 
         // R100-commands-filter-totalsrow-1: see FilterCommand.RecomputeHiddenRows -- exclude a
@@ -308,6 +332,7 @@ public sealed class FilterConditionCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
         WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+        StructuredTableFilterColumnSync.Restore(sheet, _tableFilterSnapshot);
 
         if (!_undoSnapshot.HasSnapshot)
             return;

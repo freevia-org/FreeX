@@ -171,13 +171,29 @@ public sealed partial class XlsxFileAdapter
                 if (worksheetEntry is null)
                     continue;
 
-                var layout = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, stylesXml, differentialStyles, workbookTheme, indexedColors);
-                result[name] = layout;
-                if (loadStructuredTableMetadata)
+                // R106-io-sheet-xml-layout-isolation-1: isolate each sheet's layout read so a
+                // failure parsing ONE sheet's metadata (background image / header-footer pictures /
+                // drawing parts / sparklines / form controls / structured tables / advanced CF /
+                // data-validation native metadata / x14 DV / ignored errors / etc.) only skips that
+                // one sheet's entry, instead of aborting the whole dictionary build and silently
+                // leaving every sheet AFTER it in document order with no entry at all -- which
+                // downstream disables both XlsxDataValidationNativeMetadataMapper.Apply (multi-area
+                // rule dedup) and XlsxX14DataValidationReader.Apply (cross-sheet/long List source
+                // merge) for every one of those later sheets.
+                try
                 {
-                    worksheetPathsBySheetName![name] = worksheetPath;
-                    if (layout.TableRelationshipIds.Count > 0)
-                        tableRelationshipIdsBySheetName![name] = layout.TableRelationshipIds;
+                    var layout = ReadHiddenSheetLayout(archive, worksheetPath, worksheetEntry, stylesXml, differentialStyles, workbookTheme, indexedColors);
+                    result[name] = layout;
+                    if (loadStructuredTableMetadata)
+                    {
+                        worksheetPathsBySheetName![name] = worksheetPath;
+                        if (layout.TableRelationshipIds.Count > 0)
+                            tableRelationshipIdsBySheetName![name] = layout.TableRelationshipIds;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    warnings?.Add($"[worksheet-xml-metadata] Sheet '{name}': {ex.Message}");
                 }
             }
 

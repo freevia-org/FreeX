@@ -13,6 +13,23 @@ public sealed class AverageFilterCommand : IWorkbookCommand
     // R33-commands-autofilter-slicer-1: keep the worksheet AutoFilter's <dynamicFilter> filterColumn
     // model in sync with the interactively-applied Above/Below Average criterion, so it round-trips
     // through XlsxWorksheetAutoFilterXmlMapper instead of being silently dropped on save.
+    //
+    // R106-commands-autofilter-table-sync-1: WorksheetAutoFilterColumnSync above is a no-op whenever
+    // _range is a structured table's own Range -- unlike the sibling TopBottomFilterCommand (<top10>)
+    // and FilterConditionCommand (<customFilters>), this command intentionally does NOT mirror its
+    // criterion into the table's own FilterColumns model yet. A raw <dynamicFilter> passthrough into
+    // a table's <autoFilter> (the same NativeFilterXmls approach TopBottomFilterCommand uses for
+    // <top10>) was attempted and reverted: it crashes
+    // ClosedXML.Excel.XLWorkbook.LoadAutoFilterColumns with a NullReferenceException the moment
+    // FreeX's own real Load path (XlsxFileAdapter -> OpenClosedXmlWorkbookWithSanitizationFallback)
+    // re-opens the saved file -- verified via a failing round-trip test. FreeX already has to work
+    // around the identical ClosedXML limitation for WORKSHEET-level <dynamicFilter> elements
+    // (XlsxClosedXmlLoadPackageSanitizer.HasWorksheetDynamicFilters/RemoveWorksheetDynamicFilters
+    // strips them from xl/worksheets/*.xml before handing the package to ClosedXML), but that
+    // scan+strip does not yet extend to xl/tables/*.xml parts. Until that Core.IO gap is closed,
+    // writing a table-level <dynamicFilter> would trade a silent-drop bug for a load crash, which is
+    // strictly worse -- so this command is left writing ONLY the (harmless, already-covered)
+    // worksheet-level AutoFilter model for now. See the R106 fix round's siblingLeads.
     private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
 
     public string Label => _above ? "Above Average Filter" : "Below Average Filter";

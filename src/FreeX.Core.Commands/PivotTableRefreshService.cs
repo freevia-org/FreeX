@@ -289,12 +289,27 @@ public static partial class PivotTableRefreshService
 
     private static void SetPivotCell(Sheet sheet, CellAddress address, ScalarValue value)
     {
+        // R106: a destination cell that is a non-anchor (hidden/covered) member of a pre-existing
+        // merged region must stay empty -- only a merge's top-left anchor cell ever carries a
+        // value, exactly like PasteCellsCommand's identical guard. ClearRefreshRanges only ever
+        // un-merges inside the pivot's PREVIOUSLY known footprint (LastRenderedRange/TargetRange);
+        // it cannot know the new render's actual extent up front, so a pivot that grows (more row
+        // groups, more columns, a move, etc.) could otherwise silently plant a hidden value into
+        // someone else's merged cell that was never part of the old footprint. Every pivot body/
+        // header write funnels through this pair of methods, so guarding here protects all of them
+        // without every writer having to remember its own check.
+        if (sheet.GetMergeRegion(address) is { } mergeRegion && !mergeRegion.Start.Equals(address))
+            return;
+
         sheet.SetCell(address, value);
         CurrentRenderFootprint.Value?.Include(address);
     }
 
     private static void SetPivotCell(Sheet sheet, CellAddress address, Cell cell)
     {
+        if (sheet.GetMergeRegion(address) is { } mergeRegion && !mergeRegion.Start.Equals(address))
+            return;
+
         sheet.SetCell(address, cell);
         CurrentRenderFootprint.Value?.Include(address);
     }

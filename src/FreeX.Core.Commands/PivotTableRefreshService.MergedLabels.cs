@@ -192,6 +192,16 @@ public static partial class PivotTableRefreshService
         var region = new GridRange(
             new CellAddress(sheet.Id, startRow, startCol),
             new CellAddress(sheet.Id, endRow, endCol));
+
+        // R106: unlike MergeCellsCommand (which absorbs-or-rejects overlaps before ever calling
+        // AddMergedRegion), this had no overlap check at all -- two merged regions could end up
+        // covering the same cell if a pre-existing merge (left over from an old, larger render
+        // footprint, or a manual merge) happened to sit under this pivot-owned label area. The
+        // pivot's own row-label merge always wins here: un-merge anything already overlapping it
+        // first, exactly like ClearTargetRange already does for the pivot's cleared ranges.
+        if (sheet.MergedRegions.Any(existing => existing.Overlaps(region)))
+            sheet.ReplaceMergedRegions(sheet.MergedRegions.Where(existing => !existing.Overlaps(region)));
+
         sheet.AddMergedRegion(region);
 
         var labelCell = sheet.GetCell(startRow, startCol);

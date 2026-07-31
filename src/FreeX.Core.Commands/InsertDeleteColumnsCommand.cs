@@ -28,6 +28,9 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
+    // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
+    // bounded hyperlink refs shift independently of the CellAddress-keyed dictionaries above.
+    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
@@ -128,6 +131,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.HyperlinkMetadata, _beforeCol, _count);
         _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
             ctx.Workbook, sheet, new InsertColsOp(sheet.Name, _beforeCol, _count), sheet.Name);
+        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
+        RowColumnShiftHelpers.ShiftRangeHyperlinksColumnsUp(sheet, _beforeCol, _count);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.RichTextRuns, _beforeCol, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides must shift in lockstep with its
@@ -363,6 +368,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
+        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
@@ -534,6 +540,9 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
+    // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
+    // bounded hyperlink refs shift/delete independently of the CellAddress-keyed dictionaries above.
+    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
@@ -641,6 +650,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.HyperlinkMetadata, _startCol, _count);
         _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
             ctx.Workbook, sheet, new DeleteColsOp(sheet.Name, _startCol, _count), sheet.Name);
+        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
+        RowColumnShiftHelpers.ShiftRangeHyperlinksColumnsDown(sheet, _startCol, _count);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.RichTextRuns, _startCol, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides must shift/delete in lockstep with its
@@ -873,6 +884,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
+        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.

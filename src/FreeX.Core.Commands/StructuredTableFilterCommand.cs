@@ -64,6 +64,18 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         var filters = new List<TableFilterState>(table.FilterColumns.Count);
         foreach (var filterColumn in table.FilterColumns)
         {
+            // R106-commands-autofilter-table-sync-1: TopBottomFilterCommand/FilterConditionCommand
+            // now also write a FilterColumns entry for their own criterion kinds (Top10/DynamicFilter
+            // as raw NativeFilterXmls passthrough, custom comparisons as CustomFilters) -- neither is
+            // representable as a plain value-list AllowedValues match, and both are already enforced
+            // live via sheet.ColumnFilterOwnedRows (which RemoveExistingFilterRows above already
+            // consults to avoid un-hiding their rows). Reconstructing them here as an
+            // AllowedValues-from-Values filter would wrongly treat "no Values recorded" as "hide
+            // every row in this column", corrupting rows this table's OWN value-list filters have no
+            // opinion on. Skip them; only genuine value-list entries participate in this rebuild.
+            if (filterColumn.CustomFilters.Count > 0 || filterColumn.NativeFilterXmls.Count > 0)
+                continue;
+
             var tableColumnIndex = filterColumn.ColumnId;
             if (tableColumnIndex < 0 || tableColumnIndex >= table.Columns.Count)
                 return null;
