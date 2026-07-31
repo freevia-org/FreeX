@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using Free.Shared.Ribbon;
 
@@ -137,7 +138,7 @@ public sealed class RibbonGroupHost : ContentControl
         if (_collapsedMenuFactory is not null)
         {
             var contextMenu = _collapsedMenuFactory();
-            ConfigureCollapsedGroupMenu(contextMenu, button);
+            ConfigureCollapsedGroupMenu(contextMenu, button, _resourceHost);
             button.ContextMenu = contextMenu;
             button.Click += (_, _) => contextMenu.IsOpen = true;
             return Wrap(button);
@@ -163,15 +164,67 @@ public sealed class RibbonGroupHost : ContentControl
         return container;
     }
 
-    private static void ConfigureCollapsedGroupMenu(ContextMenu contextMenu, Button anchor)
+    private static void ConfigureCollapsedGroupMenu(
+        ContextMenu contextMenu,
+        Button anchor,
+        FrameworkElement resourceHost)
     {
         var contract = RibbonPopupInteractionContract.CollapsedGroup;
+        var chrome = RibbonVisualMetrics.PopupChrome;
         contextMenu.PlacementTarget = anchor;
-        contextMenu.Placement = contract.Placement switch
+        contextMenu.Placement = contract.RepositionAtScreenEdge
+            ? PlacementMode.Custom
+            : contract.Placement switch
         {
             RibbonPopupPlacement.BelowAnchor => PlacementMode.Bottom,
+            RibbonPopupPlacement.AboveAnchor => PlacementMode.Top,
             _ => PlacementMode.Bottom,
         };
+        contextMenu.MinWidth = chrome.MinWidth;
+        contextMenu.MaxWidth = chrome.MaxWidth;
+        contextMenu.Padding = ToThickness(chrome.PopupPadding);
+        contextMenu.Background = FindBrush(resourceHost, "ThemeRibbonSurfaceBrush", "FreeXRibbonSurfaceBrush", Brushes.White);
+        contextMenu.BorderBrush = FindBrush(resourceHost, "ThemeRibbonBorderBrush", "FreeXBorderBrush", Brushes.Gray);
+        contextMenu.BorderThickness = new Thickness(chrome.BorderThickness);
+        contextMenu.Foreground = FindBrush(resourceHost, "ThemeNeutralTextBrush", "FreeXTextBrush", Brushes.Black);
+        contextMenu.Effect = new DropShadowEffect
+        {
+            Color = Colors.Black,
+            Direction = 270,
+            ShadowDepth = chrome.ShadowDepth,
+            BlurRadius = chrome.ShadowBlurRadius,
+            Opacity = chrome.ShadowOpacity,
+        };
+        contextMenu.SnapsToDevicePixels = true;
+        foreach (var item in contextMenu.Items.OfType<MenuItem>())
+        {
+            item.MinHeight = chrome.ItemMinHeight;
+            item.Padding = ToThickness(chrome.ItemPadding);
+            item.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        }
+
+        if (contract.RepositionAtScreenEdge)
+        {
+            contextMenu.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
+            {
+                var screenAnchor = anchor.PointToScreen(new Point(0, 0));
+                var result = RibbonPopupPlacementPlanner.Plan(
+                    new RibbonPopupRect(screenAnchor.X, screenAnchor.Y, targetSize.Width, targetSize.Height),
+                    new RibbonPopupRect(0, 0, popupSize.Width, popupSize.Height),
+                    new RibbonPopupRect(
+                        SystemParameters.WorkArea.Left,
+                        SystemParameters.WorkArea.Top,
+                        SystemParameters.WorkArea.Width,
+                        SystemParameters.WorkArea.Height),
+                    contract);
+                return
+                [
+                    new CustomPopupPlacement(
+                        new Point(result.X - screenAnchor.X, result.Y - screenAnchor.Y),
+                        PopupPrimaryAxis.None),
+                ];
+            };
+        }
         contextMenu.StaysOpen = false;
         contextMenu.Opened += (_, _) =>
         {
@@ -235,6 +288,20 @@ public sealed class RibbonGroupHost : ContentControl
                     args.Handled = true;
             }),
             handledEventsToo: true);
+    }
+
+    private static Thickness ToThickness(RibbonPopupInsets insets) =>
+        new(insets.Left, insets.Top, insets.Right, insets.Bottom);
+
+    private static Brush FindBrush(
+        FrameworkElement resourceHost,
+        string primaryKey,
+        string fallbackKey,
+        Brush fallback)
+    {
+        return resourceHost.TryFindResource(primaryKey) as Brush ??
+            resourceHost.TryFindResource(fallbackKey) as Brush ??
+            fallback;
     }
 
     private static FrameworkElement Wrap(FrameworkElement element)

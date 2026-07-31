@@ -3,6 +3,7 @@ namespace Free.Shared.Ribbon;
 public enum RibbonPopupPlacement
 {
     BelowAnchor,
+    AboveAnchor,
 }
 
 /// <summary>
@@ -14,14 +15,71 @@ public sealed record RibbonPopupInteractionContract(
     bool FocusFirstEnabledItemOnOpen,
     bool TraverseEnabledItems,
     bool DismissOnEscape,
-    bool RestoreFocusToAnchorOnClose)
+    bool RestoreFocusToAnchorOnClose,
+    bool RepositionAtScreenEdge,
+    double AnchorGap)
 {
     public static RibbonPopupInteractionContract CollapsedGroup { get; } = new(
         RibbonPopupPlacement.BelowAnchor,
         FocusFirstEnabledItemOnOpen: true,
         TraverseEnabledItems: true,
         DismissOnEscape: true,
-        RestoreFocusToAnchorOnClose: true);
+        RestoreFocusToAnchorOnClose: true,
+        RepositionAtScreenEdge: true,
+        AnchorGap: RibbonVisualMetrics.PopupChrome.AnchorGap);
+}
+
+public readonly record struct RibbonPopupRect(double X, double Y, double Width, double Height);
+
+public readonly record struct RibbonPopupPlacementResult(
+    RibbonPopupPlacement Placement,
+    double X,
+    double Y);
+
+/// <summary>
+/// Computes a stable left-aligned popup position and flips above the anchor when the preferred
+/// below-anchor position cannot fit. Native hosts can use the same result directly or opt into their
+/// toolkit's equivalent edge constraint adjustment when the screen work area is not exposed.
+/// </summary>
+public static class RibbonPopupPlacementPlanner
+{
+    public static RibbonPopupPlacementResult Plan(
+        RibbonPopupRect anchor,
+        RibbonPopupRect popup,
+        RibbonPopupRect workArea,
+        RibbonPopupInteractionContract? contract = null)
+    {
+        contract ??= RibbonPopupInteractionContract.CollapsedGroup;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(popup.Width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(popup.Height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workArea.Width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workArea.Height);
+
+        var x = Clamp(anchor.X, workArea.X, workArea.X + workArea.Width - popup.Width);
+        var belowY = anchor.Y + anchor.Height + contract.AnchorGap;
+        var aboveY = anchor.Y - popup.Height - contract.AnchorGap;
+        var placement = contract.Placement;
+        var y = placement == RibbonPopupPlacement.AboveAnchor ? aboveY : belowY;
+
+        if (contract.RepositionAtScreenEdge && placement == RibbonPopupPlacement.BelowAnchor &&
+            y + popup.Height > workArea.Y + workArea.Height && aboveY >= workArea.Y)
+        {
+            placement = RibbonPopupPlacement.AboveAnchor;
+            y = aboveY;
+        }
+        else if (contract.RepositionAtScreenEdge && placement == RibbonPopupPlacement.AboveAnchor &&
+                 y < workArea.Y && belowY + popup.Height <= workArea.Y + workArea.Height)
+        {
+            placement = RibbonPopupPlacement.BelowAnchor;
+            y = belowY;
+        }
+
+        y = Clamp(y, workArea.Y, workArea.Y + workArea.Height - popup.Height);
+        return new RibbonPopupPlacementResult(placement, x, y);
+    }
+
+    private static double Clamp(double value, double minimum, double maximum) =>
+        Math.Min(Math.Max(value, minimum), Math.Max(minimum, maximum));
 }
 
 public readonly record struct RibbonPopupFocusItem(bool IsFocusable, bool IsEnabled)

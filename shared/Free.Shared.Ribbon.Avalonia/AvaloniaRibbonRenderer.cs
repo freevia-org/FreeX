@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
+using Avalonia.Controls.Primitives.PopupPositioning;
 using Free.Shared.Ribbon;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
@@ -35,6 +36,7 @@ public static class AvaloniaRibbonRenderer
     private const string FileRibbonTabId = "FileTab";
     private const string KeyTipBadgeTag = "RibbonKeyTipBadge";
     private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
+    private const string PopupChromeClass = "freex-ribbon-popup-chrome";
     private const double TabHeaderHeight = 28;
     // Selected-tab accent underline thickness — matches the WPF TabItem template's
     // BorderThickness="0,0,0,3" (MainWindowResources.xaml). Kept as a single shared token so the Linux
@@ -67,6 +69,7 @@ public static class AvaloniaRibbonRenderer
     private static readonly ConditionalWeakTable<CheckBox, CheckBoxExecutionState> CheckBoxExecutionStates = new();
     private static readonly ConditionalWeakTable<Control, KeyTipFlyoutState> KeyTipFlyoutStates = new();
     private static readonly ConditionalWeakTable<MenuItem, MenuKeyTipState> MenuKeyTipStates = new();
+    private static readonly ConditionalWeakTable<Application, object> PopupChromeStyleApplications = new();
 
     private sealed class KeyTipFlyoutState
     {
@@ -1317,6 +1320,25 @@ public static class AvaloniaRibbonRenderer
         tabControl.Styles.Add(disabledToggleTemplateBorder);
         tabControl.Styles.Add(disabledChecks);
         tabControl.Styles.Add(disabledCombos);
+
+        var popupBorder = new Style(x => x.OfType<MenuFlyoutPresenter>().Class(PopupChromeClass).Template().OfType<Border>())
+        {
+            Setters =
+            {
+                new Setter(Border.BackgroundProperty, palette.SurfaceBrush),
+                new Setter(Border.BorderBrushProperty, palette.DividerBrush),
+                new Setter(Border.BorderThicknessProperty, new Thickness(RibbonVisualMetrics.PopupChrome.BorderThickness)),
+                new Setter(Border.CornerRadiusProperty, new CornerRadius(RibbonVisualMetrics.PopupChrome.CornerRadius)),
+                new Setter(Border.BoxShadowProperty, new BoxShadows(new BoxShadow
+                {
+                    OffsetX = 0,
+                    OffsetY = RibbonVisualMetrics.PopupChrome.ShadowDepth,
+                    Blur = RibbonVisualMetrics.PopupChrome.ShadowBlurRadius,
+                    Color = Color.FromArgb((byte)(RibbonVisualMetrics.PopupChrome.ShadowOpacity * 255), 0, 0, 0),
+                })),
+            },
+        };
+        tabControl.Styles.Add(popupBorder);
     }
 
     private static Control BuildGroup(RibbonGroup group, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
@@ -2244,7 +2266,8 @@ public static class AvaloniaRibbonRenderer
     private static MenuFlyout BuildCollapsedGroupFlyout(
         RibbonGroup group,
         IRibbonCommandRegistry? registry,
-        Action? afterExecute)
+        Action? afterExecute,
+        AvaloniaRibbonPalette palette)
     {
         var flyout = new MenuFlyout();
         foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group))
@@ -2443,8 +2466,8 @@ public static class AvaloniaRibbonRenderer
                 Content = stack,
                 Tag = $"collapsed:{_group.Id}",
             };
-            var flyout = BuildCollapsedGroupFlyout(_group, _registry, _afterExecute);
-            ConfigureCollapsedGroupFlyout(flyout, button);
+            var flyout = BuildCollapsedGroupFlyout(_group, _registry, _afterExecute, _palette);
+            ConfigureCollapsedGroupFlyout(flyout, button, _palette);
             button.Flyout = flyout;
             SetKeyTip(button, _collapsedKeyTip);
             button.Classes.Add("freex-ribbon-collapsed-group");
@@ -2452,14 +2475,42 @@ public static class AvaloniaRibbonRenderer
         }
     }
 
-    private static void ConfigureCollapsedGroupFlyout(MenuFlyout flyout, Button anchor)
+    private static void ConfigureCollapsedGroupFlyout(
+        MenuFlyout flyout,
+        Button anchor,
+        AvaloniaRibbonPalette palette)
     {
         var contract = RibbonPopupInteractionContract.CollapsedGroup;
+        var chrome = RibbonVisualMetrics.PopupChrome;
         flyout.Placement = contract.Placement switch
         {
             RibbonPopupPlacement.BelowAnchor => PlacementMode.Bottom,
+            RibbonPopupPlacement.AboveAnchor => PlacementMode.Top,
             _ => PlacementMode.Bottom,
         };
+        flyout.HorizontalOffset = 0;
+        flyout.VerticalOffset = 0;
+        if (contract.RepositionAtScreenEdge)
+        {
+            flyout.PlacementConstraintAdjustment =
+                PopupPositionerConstraintAdjustment.SlideX |
+                PopupPositionerConstraintAdjustment.FlipY;
+        }
+        flyout.FlyoutPresenterClasses.Add(PopupChromeClass);
+        if (Application.Current is { } application)
+        {
+            PopupChromeStyleApplications.GetValue(application, _ =>
+            {
+                application.Styles.Add(CreatePopupPresenterStyle(chrome, palette));
+                application.Styles.Add(CreatePopupPresenterBorderStyle(chrome, palette));
+                return new object();
+            });
+        }
+        foreach (var item in flyout.Items.OfType<MenuItem>())
+        {
+            item.MinHeight = chrome.ItemMinHeight;
+            item.Padding = ToThickness(chrome.ItemPadding);
+        }
         flyout.Opened += (_, _) =>
         {
             if (!contract.FocusFirstEnabledItemOnOpen)
@@ -2488,6 +2539,45 @@ public static class AvaloniaRibbonRenderer
                 handledEventsToo: true);
         }
     }
+
+    private static Style CreatePopupPresenterStyle(
+        RibbonPopupChromeMetrics chrome,
+        AvaloniaRibbonPalette palette) => new(x => x.OfType<MenuFlyoutPresenter>().Class(PopupChromeClass))
+    {
+        Setters =
+        {
+            new Setter(TemplatedControl.BackgroundProperty, palette.SurfaceBrush),
+            new Setter(TemplatedControl.BorderBrushProperty, palette.DividerBrush),
+            new Setter(TemplatedControl.MinWidthProperty, chrome.MinWidth),
+            new Setter(TemplatedControl.MaxWidthProperty, chrome.MaxWidth),
+            new Setter(TemplatedControl.PaddingProperty, ToThickness(chrome.PopupPadding)),
+            new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(chrome.BorderThickness)),
+        },
+    };
+
+    private static Style CreatePopupPresenterBorderStyle(
+        RibbonPopupChromeMetrics chrome,
+        AvaloniaRibbonPalette palette) => new(x => x.OfType<MenuFlyoutPresenter>().Class(PopupChromeClass).Template().OfType<Border>())
+    {
+        Setters =
+        {
+            new Setter(Border.BackgroundProperty, palette.SurfaceBrush),
+            new Setter(Border.BorderBrushProperty, palette.DividerBrush),
+            new Setter(Border.BorderThicknessProperty, new Thickness(chrome.BorderThickness)),
+            new Setter(Border.CornerRadiusProperty, new CornerRadius(chrome.CornerRadius)),
+            new Setter(Border.BoxShadowProperty, new BoxShadows(new BoxShadow
+            {
+                OffsetX = 0,
+                OffsetY = chrome.ShadowDepth,
+                Blur = chrome.ShadowBlurRadius,
+                Color = Color.FromArgb((byte)(chrome.ShadowOpacity * 255), 0, 0, 0),
+            })),
+        },
+    };
+
+    private static Thickness ToThickness(RibbonPopupInsets insets) =>
+        new(insets.Left, insets.Top, insets.Right, insets.Bottom);
+
 
     private static void HandleCollapsedGroupFlyoutKey(
         MenuFlyout flyout,

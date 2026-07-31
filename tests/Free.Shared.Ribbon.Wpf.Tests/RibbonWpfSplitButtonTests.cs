@@ -143,8 +143,18 @@ public sealed class RibbonWpfSplitButtonTests
                 var items = menu.Items.OfType<MenuItem>().ToArray();
 
                 menu.PlacementTarget.Should().BeSameAs(button);
-                menu.Placement.Should().Be(PlacementMode.Bottom);
+                menu.Placement.Should().Be(PlacementMode.Custom);
+                menu.CustomPopupPlacementCallback.Should().NotBeNull();
                 menu.StaysOpen.Should().BeFalse();
+                menu.MinWidth.Should().Be(RibbonVisualMetrics.PopupChrome.MinWidth);
+                menu.MaxWidth.Should().Be(RibbonVisualMetrics.PopupChrome.MaxWidth);
+                menu.Padding.Should().Be(new Thickness(4));
+                menu.BorderThickness.Should().Be(new Thickness(1));
+                menu.Background.Should().NotBeNull();
+                menu.BorderBrush.Should().NotBeNull();
+                menu.Effect.Should().BeOfType<System.Windows.Media.Effects.DropShadowEffect>();
+                items[0].MinHeight.Should().Be(RibbonVisualMetrics.PopupChrome.ItemMinHeight);
+                items[0].Padding.Should().Be(new Thickness(10, 5, 10, 5));
                 items[0].IsEnabled.Should().BeFalse();
 
                 window.Activate();

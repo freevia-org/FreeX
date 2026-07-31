@@ -112,6 +112,35 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
         RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(items, 2, -1).Should().Be(3);
     }
 
+    [Fact]
+    public void PopupChrome_UsesOneSharedRendererNeutralMetricSet()
+    {
+        var chrome = RibbonVisualMetrics.PopupChrome;
+
+        chrome.MinWidth.Should().Be(220);
+        chrome.MaxWidth.Should().Be(360);
+        chrome.ItemMinHeight.Should().Be(28);
+        chrome.PopupPadding.Should().Be(new RibbonPopupInsets(4, 4, 4, 4));
+        chrome.ItemPadding.Should().Be(new RibbonPopupInsets(10, 5, 10, 5));
+        chrome.BorderThickness.Should().Be(1);
+        chrome.ShadowDepth.Should().Be(2);
+        chrome.ShadowBlurRadius.Should().Be(8);
+        chrome.ShadowOpacity.Should().Be(0.22);
+    }
+
+    [Fact]
+    public void PopupPlacementPlanner_FlipsAboveAndClampsHorizontallyAtScreenEdges()
+    {
+        var result = RibbonPopupPlacementPlanner.Plan(
+            new RibbonPopupRect(790, 570, 24, 24),
+            new RibbonPopupRect(0, 0, 220, 120),
+            new RibbonPopupRect(0, 0, 800, 600));
+
+        result.Placement.Should().Be(RibbonPopupPlacement.AboveAnchor);
+        result.X.Should().Be(580);
+        result.Y.Should().Be(449);
+    }
+
     private static RibbonGroup CreateGroup(string header, params RibbonControl[] controls) =>
         new(
             header.Replace(" ", "", StringComparison.Ordinal).ToLowerInvariant(),

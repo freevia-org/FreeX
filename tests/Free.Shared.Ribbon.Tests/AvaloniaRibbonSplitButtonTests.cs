@@ -1,10 +1,13 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Primitives.PopupPositioning;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Free.Shared.Ribbon.Avalonia;
 
 namespace Free.Shared.Ribbon.Tests;
@@ -221,7 +224,19 @@ public sealed class AvaloniaRibbonSplitButtonTests
                 var items = flyout.Items.OfType<MenuItem>().ToArray();
 
                 Assert.Equal(PlacementMode.Bottom, flyout.Placement);
+                Assert.Equal(
+                    PopupPositionerConstraintAdjustment.SlideX | PopupPositionerConstraintAdjustment.FlipY,
+                    flyout.PlacementConstraintAdjustment);
+                Assert.NotNull(Application.Current);
+                Assert.Contains(
+                    Application.Current!.Styles.OfType<Style>(),
+                    style => style.Setters.OfType<Setter>().Any(setter =>
+                        setter.Property == TemplatedControl.MinWidthProperty &&
+                        Equals(setter.Value, RibbonVisualMetrics.PopupChrome.MinWidth)));
+                Assert.Contains("freex-ribbon-popup-chrome", flyout.FlyoutPresenterClasses);
                 Assert.False(items[0].IsEnabled);
+                Assert.Equal(RibbonVisualMetrics.PopupChrome.ItemMinHeight, items[0].MinHeight);
+                Assert.Equal(new Thickness(10, 5, 10, 5), items[0].Padding);
 
                 flyout.ShowAt(collapsed);
                 Assert.True(flyout.IsOpen);
