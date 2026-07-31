@@ -41,6 +41,29 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesAuthoredInlineWhitespace_AndIgnoresIndentation()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph>
+                <Run Text="left" />
+                <Run Text=" " />
+                <Bold xml:space="preserve"> right </Bold>
+              </Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("left  right ");
+        payload.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("left", " ", " right ");
+        payload.Body.Paragraphs.Single().Runs[2].Bold.Should().BeTrue();
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_ResolvesSolidColorBrushResources()
     {
         const string xaml = """
