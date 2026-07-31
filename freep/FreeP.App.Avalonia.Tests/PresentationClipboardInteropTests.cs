@@ -620,14 +620,19 @@ public sealed class PresentationClipboardInteropTests
             Content = new PresentationClipboardContent(
                 XamlPackageBytes: CreateXamlPackage("""
                     <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                                  xmlns:sys="clr-namespace:System;assembly=mscorlib">
                       <FlowDocument.Resources>
                         <ResourceDictionary>
                           <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
+                          <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                          <sys:Double x:Key="BodySize">18</sys:Double>
                         </ResourceDictionary>
                       </FlowDocument.Resources>
                       <List MarkerStyle="UpperLatin" StartIndex="4">
-                        <ListItem><Paragraph Foreground="{StaticResource Accent}">Four</Paragraph></ListItem>
+                        <ListItem><Paragraph Foreground="{StaticResource Accent}"
+                                                 FontFamily="{StaticResource BodyFont}"
+                                                 FontSize="{DynamicResource BodySize}">Four</Paragraph></ListItem>
                         <ListItem><Paragraph>Five</Paragraph></ListItem>
                       </List>
                     </FlowDocument>
@@ -643,6 +648,8 @@ public sealed class PresentationClipboardInteropTests
         body.Paragraphs[0].AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
         body.Paragraphs[0].AutoNumStartAt.Should().Be(4);
         body.Paragraphs[0].Runs.Single().Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5597));
+        body.Paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
+        body.Paragraphs[0].Runs.Single().FontSizePt.Should().Be(13.5);
         body.Paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
     }
 
