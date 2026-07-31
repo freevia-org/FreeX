@@ -385,7 +385,7 @@ internal static class PaginationEngine
         return assignment;
     }
 
-    private static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
+    internal static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
     {
         var modelBlocks = editor.Model.Blocks;
         var scratchBlocks = flow.Blocks.ToArray();

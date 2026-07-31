@@ -394,7 +394,8 @@ public sealed class PagedEditNoteRegionTests
         doc.Page.MarginTopPt = 54;
         doc.Page.MarginBottomPt = 60;
         doc.Blocks.Add(new Paragraph("Final landscape section"));
-        doc.Endnotes[1] = new Endnote(1, "Endnote body");
+        doc.Endnotes[1] = new Endnote(1,
+            string.Join(' ', Enumerable.Repeat("overflowing endnote content", 1000)));
 
         var (panel, _) = BuildPanel(doc);
 
@@ -403,6 +404,35 @@ public sealed class PagedEditNoteRegionTests
         AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
         panel.Rebuild();
         AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+    }
+
+    [StaFact]
+    public void FittingEndnotes_InMultiSectionDocument_AttachToFinalBodyPageAcrossRebuilds()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Portrait section")
+        {
+            SectionBreak = new Section(new PageSettings
+            {
+                WidthPt = 612,
+                HeightPt = 792,
+                Landscape = false
+            }, SectionBreakKind.NextPage)
+        });
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+        doc.Page.Landscape = true;
+        doc.Blocks.Add(new Paragraph("Final landscape section"));
+        doc.Endnotes[1] = new Endnote(1, "Fitting endnote body");
+
+        var (panel, _) = BuildPanel(doc);
+
+        AssertFittingFinalSectionOwnership(panel, doc.Page);
+        panel.Repaginate();
+        AssertFittingFinalSectionOwnership(panel, doc.Page);
+        panel.Rebuild();
+        AssertFittingFinalSectionOwnership(panel, doc.Page);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -483,5 +513,16 @@ public sealed class PagedEditNoteRegionTests
         box.PageGeometry.MarginRightPt.Should().Be(expected.MarginRightPt);
         box.PageGeometry.MarginTopPt.Should().Be(expected.MarginTopPt);
         box.PageGeometry.MarginBottomPt.Should().Be(expected.MarginBottomPt);
+    }
+
+    private static void AssertFittingFinalSectionOwnership(PaginatedEditorPanel panel, PageSettings expected)
+    {
+        panel.PageBoxes.Count.Should().BeGreaterThanOrEqualTo(2);
+        panel.PageBoxes.Should().NotContain(box => box.IsEndnoteSyntheticPage);
+        var finalBox = panel.PageBoxes.Last();
+        finalBox.EndnoteIds.Should().Equal(1);
+        finalBox.PageGeometry.WidthPt.Should().Be(expected.WidthPt);
+        finalBox.PageGeometry.HeightPt.Should().Be(expected.HeightPt);
+        finalBox.PageGeometry.Landscape.Should().Be(expected.Landscape);
     }
 }

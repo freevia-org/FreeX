@@ -808,17 +808,12 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         if (editor.Model.Endnotes.Count == 0)
             return false;
 
-        // SectionAwareDocumentPaginator is built from this panel, so probing it here would recurse.
-        // Keep the established dedicated-page fallback until section-specific endnote measurement
-        // is available; ordinary single-geometry documents use the same measured path as printing.
-        if (editor.Model.Sections.Count > 1)
-            return true;
-
         try
         {
             var page = editor.Model.Page;
             var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
             var flow = PrintLayout.BuildPaginatedDocument(editor);
+            PaginationEngine.ApplySectionBreakFlags(editor, flow);
             var inner = ((IDocumentPaginatorSource)flow).DocumentPaginator;
             inner.PageSize = new Size(pageWidth, pageHeight);
             var paginator = new HeaderFooterPaginator(inner, editor.Model, page);
