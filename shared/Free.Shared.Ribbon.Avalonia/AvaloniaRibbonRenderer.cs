@@ -2247,7 +2247,7 @@ public static class AvaloniaRibbonRenderer
         Action? afterExecute)
     {
         var flyout = new MenuFlyout();
-        foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group, includeSeparators: true))
+        foreach (var control in RibbonCollapsedGroupPresentationPlanner.GetOverflowControls(group))
         {
             switch (control)
             {

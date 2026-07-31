@@ -192,6 +192,38 @@ public sealed class RibbonWpfSplitButtonTests
         });
     }
 
+    [Fact]
+    public void CollapsedGroup_OmitsSeparatorsAndRowBreaksFromOverflowMenu()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("one", new RecordingCommand());
+            registry.Register("two", new RecordingCommand());
+            var root = RibbonWpfRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab
+                        .Group("group", "Group", "G", 1, group => group
+                            .Button("one", "One")
+                            .Separator()
+                            .RowBreak()
+                            .Button("two", "Two")))
+                    .Build()
+                    .FindTab("home")!,
+                new Border(),
+                registry);
+            var group = Descendants(root).OfType<RibbonGroupHost>().Single();
+            Layout(root, 420, 130);
+            group.Collapsed = true;
+
+            var collapsedButton = Assert.IsType<Button>(Assert.IsType<Grid>(group.Content).Children[0]);
+            var items = collapsedButton.ContextMenu!.Items.OfType<MenuItem>().ToArray();
+
+            items.Select(item => item.Header).Should().Equal("One", "Two");
+            collapsedButton.ContextMenu.Items.OfType<Separator>().Should().BeEmpty();
+        });
+    }
+
     private static FrameworkElement BuildRibbon(
         IRibbonCommandRegistry registry,
         RibbonMenu? menu = null,

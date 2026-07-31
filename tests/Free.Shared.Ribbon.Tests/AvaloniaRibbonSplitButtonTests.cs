@@ -193,6 +193,43 @@ public sealed class AvaloniaRibbonSplitButtonTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task CollapsedGroup_OmitsSeparatorsAndRowBreaksFromOverflowMenu()
+    {
+        await Session.Dispatch(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("one", new RecordingCommand(() => { }));
+            registry.Register("two", new RecordingCommand(() => { }));
+            var content = AvaloniaRibbonRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab
+                        .Group("group", "Group", "G", 1, group => group
+                            .Button("one", "One")
+                            .Separator()
+                            .RowBreak()
+                            .Button("two", "Two")))
+                    .Build()
+                    .FindTab("home")!,
+                registry);
+            var window = Show(content, 90);
+            try
+            {
+                var collapsed = content.GetLogicalDescendants().OfType<Button>()
+                    .Single(button => button.Classes.Contains("freex-ribbon-collapsed-group"));
+                var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
+                var items = flyout.Items.OfType<MenuItem>().ToArray();
+
+                Assert.Equal(new[] { "One", "Two" }, items.Select(item => item.Header));
+                Assert.DoesNotContain(flyout.Items, item => item is Separator);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static RibbonTab BuildSplitTab(RibbonCommandLayoutKind layout) =>
         BuildSplitDefinition(layout)
             .FindTab("home")!;
