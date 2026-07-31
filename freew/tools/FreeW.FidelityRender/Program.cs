@@ -185,6 +185,9 @@ static void RenderDocumentComposite(
     // Calibrated against the cached Word page: the WPF note bitmap's measured height differs
     // from the Avalonia overlay, so it needs its own printable-frame reserve.
     const double FootnoteTrailingReserveDip = 15.0;
+    // WPF rounds the two-column paginator's top frame differently from Word. Keep this below
+    // the 1.6-DIP page-assignment threshold so all four backstage pages retain the same flow.
+    const double BackstageBodyTopReserveDip = 1.5;
 
     // ── page geometry from model ──────────────────────────────────────────────────────────────────
     if (wpfRenderTargetFailure is not null)
@@ -311,9 +314,13 @@ static void RenderDocumentComposite(
     var tableHeaderReserveDip = reserveTableHeaderFrame
         ? PageLayout.PointsToDip(page.HeaderDistancePt)
         : 0;
+    var backstageTopReserveDip =
+        name is "backstage-pdf-export-fidelity" or "backstage-print-preview-fidelity"
+            ? BackstageBodyTopReserveDip
+            : 0;
     flow.PagePadding = new Thickness(
         marginLeft,
-        marginTop + tableHeaderReserveDip,
+        marginTop + tableHeaderReserveDip + backstageTopReserveDip,
         marginRight,
         marginBottom + bodyFootnoteReserveDip);
 
