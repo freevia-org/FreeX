@@ -266,6 +266,55 @@ public sealed class CanvasEditingTests
         second.OffsetXEmu.Should().Be(300 * 9525L);
     }
 
+    [StaFact]
+    public void SelectionAdorner_RendersPerMemberMultiTransformPreviewGeometry()
+    {
+        var plan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+            StartScreen: new CanvasGesturePoint(0, 0),
+            CurrentScreen: new CanvasGesturePoint(50, 25),
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            Handle: CanvasGestureHandleKind.ResizeSE,
+            Shapes:
+            [
+                new CanvasTransformShapeState(1, 100 * 9525L, 100 * 9525L, 100 * 9525L, 50 * 9525L, 0),
+                new CanvasTransformShapeState(2, 300 * 9525L, 100 * 9525L, 50 * 9525L, 50 * 9525L, 15),
+            ],
+            CurrentSlide: null,
+            SnapToGrid: false,
+            SnapToShapes: false,
+            BypassSnap: false));
+
+        var adorner = new SelectionAdorner(new System.Windows.Controls.Canvas());
+        adorner.UpdateSelection([
+            (1u, new Rect(100, 100, 100, 50)),
+            (2u, new Rect(300, 100, 50, 50)),
+        ]);
+        adorner.UpdateTransformPreview(plan);
+
+        adorner.SelectionRects.Should().HaveCount(2);
+        adorner.TransformPreview.Should().HaveCount(2);
+        adorner.TransformPreview[0].ScreenBounds.Should().Be(new SlideScreenRect(100, 100, 120, 75));
+        adorner.TransformPreview[1].ScreenBounds.Should().Be(new SlideScreenRect(340, 100, 60, 75));
+        adorner.TransformPreview[1].RotationDeg.Should().Be(15);
+        adorner.HasTransientInteractionVisualsForTests.Should().BeTrue();
+
+        var rotatePlan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+            StartScreen: new CanvasGesturePoint(225, 25),
+            CurrentScreen: new CanvasGesturePoint(325, 125),
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            Shapes:
+            [
+                new CanvasTransformShapeState(1, 100 * 9525L, 100 * 9525L, 100 * 9525L, 50 * 9525L, 0),
+                new CanvasTransformShapeState(2, 300 * 9525L, 100 * 9525L, 50 * 9525L, 50 * 9525L, 15),
+            ],
+            SnapToFifteenDegrees: false));
+        adorner.UpdateTransformPreview(rotatePlan);
+        adorner.TransformPreview.Should().HaveCount(2);
+        adorner.TransformPreview[0].RotationDeg.Should().BeApproximately(90, 0.001);
+        adorner.TransformPreview[1].RotationDeg.Should().BeApproximately(105, 0.001);
+        adorner.SelectionRects.Should().HaveCount(2);
+    }
+
     [Fact]
     public void SlideTransform_Compute_CorrectScale_CenteredSlide()
     {

@@ -89,6 +89,59 @@ public static class SlideCanvasGeometryPlanner
             SlideTransformCore.EmuToDip(extentCyEmu),
             transform);
 
+    /// <summary>
+    /// Returns the axis-aligned screen envelope of a rotated, unexpanded slide-DIP frame.
+    /// This is used by selection chrome; the compositor still owns the member's oriented
+    /// paint transform.
+    /// </summary>
+    public static SlideScreenRect OrientedBoundsToScreen(
+        double left,
+        double top,
+        double width,
+        double height,
+        double rotationDeg,
+        SlideTransformCore transform)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+
+        double centerX = left + width / 2.0;
+        double centerY = top + height / 2.0;
+        double radians = rotationDeg * Math.PI / 180.0;
+        double cos = Math.Cos(radians);
+        double sin = Math.Sin(radians);
+        var corners = new[]
+        {
+            RotateCorner(left, top, centerX, centerY, cos, sin),
+            RotateCorner(left + width, top, centerX, centerY, cos, sin),
+            RotateCorner(left + width, top + height, centerX, centerY, cos, sin),
+            RotateCorner(left, top + height, centerX, centerY, cos, sin),
+        };
+
+        double minX = corners.Min(point => point.X);
+        double minY = corners.Min(point => point.Y);
+        double maxX = corners.Max(point => point.X);
+        double maxY = corners.Max(point => point.Y);
+        return DipBoundsToScreen(minX, minY, maxX - minX, maxY - minY, transform);
+    }
+
+    public static SlideScreenRect ShapeVisualBoundsToScreen(
+        SlideShape shape,
+        Presentation presentation,
+        SlideTransformCore transform)
+    {
+        ArgumentNullException.ThrowIfNull(shape);
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var bounds = ShapeHitTester.GetShapeBoundsDip(shape, presentation);
+        return OrientedBoundsToScreen(
+            bounds.Left,
+            bounds.Top,
+            bounds.Width,
+            bounds.Height,
+            shape.RotationDeg,
+            transform);
+    }
+
     public static SlideScreenRect? ShapeBoundsToScreen(
         Slide slide,
         Presentation presentation,
@@ -243,5 +296,18 @@ public static class SlideCanvasGeometryPlanner
             ? transform.SlideToScreen(0, guide.Position)
             : transform.SlideToScreen(guide.Position, 0);
         return guide.IsHorizontal ? point.Y : point.X;
+    }
+
+    private static (double X, double Y) RotateCorner(
+        double x,
+        double y,
+        double centerX,
+        double centerY,
+        double cos,
+        double sin)
+    {
+        double dx = x - centerX;
+        double dy = y - centerY;
+        return (centerX + dx * cos - dy * sin, centerY + dx * sin + dy * cos);
     }
 }

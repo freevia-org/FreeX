@@ -257,6 +257,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         _geometryDragStartScreen = default;
         _marqueeStartSlide = default;
         _adorner.UpdatePreview(null);
+        _adorner.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
         _adorner.UpdateGeometryPreview(null, null);
         _adorner.UpdateMarquee(null);
         _adorner.UpdateSnapGuides(null, SlideTransformCore.Identity);
@@ -582,8 +583,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
                 SnapToGrid,
                 SnapToShapes,
                 (modifiers & KeyModifiers.Alt) != 0));
-            _adorner.UpdatePreview(
-                plan.PreviewBounds is { } groupBounds ? ToAvaloniaRect(groupBounds) : null);
+            _adorner.UpdateTransformPreview(plan);
             return;
         }
 
@@ -695,9 +695,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
                 xf,
                 _multiTransformStartShapes,
                 (modifiers & KeyModifiers.Shift) != 0));
-            _adorner.UpdatePreview(
-                plan.PreviewBounds is { } groupBounds ? ToAvaloniaRect(groupBounds) : null,
-                plan.PreviewRotationDeg);
+            _adorner.UpdateTransformPreview(plan);
             return;
         }
 
@@ -1132,11 +1130,13 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransformCore xf)
     {
         if (_editor.Presentation is null) return null;
-        var rect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
-            slide,
-            _editor.Presentation,
-            shapeId,
-            xf);
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
+        var rect = shape is null
+            ? (SlideScreenRect?)null
+            : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
+                shape,
+                _editor.Presentation,
+                xf);
         return rect is { } screenRect ? ToAvaloniaRect(screenRect) : null;
     }
 

@@ -79,6 +79,16 @@ public readonly record struct CanvasShapeTransform(
     long CyEmu,
     double RotationDeg);
 
+/// <summary>
+/// Screen-space geometry for one member of a live multi-selection transform preview.
+/// The bounds remain the member's unrotated frame; hosts apply <see cref="RotationDeg"/>
+/// around its center when drawing the preview outline.
+/// </summary>
+public readonly record struct CanvasShapeTransformPreview(
+    uint ShapeId,
+    SlideScreenRect ScreenBounds,
+    double RotationDeg);
+
 public readonly record struct CanvasMultiResizeRequest(
     CanvasGesturePoint StartScreen,
     CanvasGesturePoint CurrentScreen,
@@ -99,11 +109,13 @@ public readonly record struct CanvasMultiRotateRequest(
 
 public readonly record struct CanvasMultiTransformPlan(
     IReadOnlyList<CanvasShapeTransform> Shapes,
+    IReadOnlyList<CanvasShapeTransformPreview> PreviewShapes,
     SlideScreenRect? PreviewBounds,
     double PreviewRotationDeg)
 {
     public static readonly CanvasMultiTransformPlan Empty = new(
         Array.Empty<CanvasShapeTransform>(),
+        Array.Empty<CanvasShapeTransformPreview>(),
         null,
         0);
 }
@@ -388,8 +400,9 @@ public static class CanvasGesturePlanner
                 shape.RotationDeg))
             .ToArray();
 
-        return new CanvasMultiTransformPlan(
+        return CreateMultiTransformPlan(
             transforms,
+            request.Transform,
             SlideCanvasGeometryPlanner.DipBoundsToScreen(
                 newX,
                 newY,
@@ -441,8 +454,9 @@ public static class CanvasGesturePlanner
             })
             .ToArray();
 
-        return new CanvasMultiTransformPlan(
+        return CreateMultiTransformPlan(
             transforms,
+            request.Transform,
             SlideCanvasGeometryPlanner.DipBoundsToScreen(
                 group.X,
                 group.Y,
@@ -450,6 +464,31 @@ public static class CanvasGesturePlanner
                 group.Height,
                 request.Transform),
             delta);
+    }
+
+    private static CanvasMultiTransformPlan CreateMultiTransformPlan(
+        IReadOnlyList<CanvasShapeTransform> transforms,
+        SlideTransformCore transform,
+        SlideScreenRect? previewBounds,
+        double previewRotationDeg)
+    {
+        var previews = transforms
+            .Select(shape => new CanvasShapeTransformPreview(
+                shape.ShapeId,
+                SlideCanvasGeometryPlanner.EmuBoundsToScreen(
+                    shape.XEmu,
+                    shape.YEmu,
+                    shape.CxEmu,
+                    shape.CyEmu,
+                    transform),
+                shape.RotationDeg))
+            .ToArray();
+
+        return new CanvasMultiTransformPlan(
+            transforms,
+            previews,
+            previewBounds,
+            previewRotationDeg);
     }
 
     public static double ComputeRotationAngle(CanvasRotationRequest request)

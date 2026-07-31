@@ -250,6 +250,10 @@ public sealed class CanvasGesturePlannerTests
         plan.Shapes[1].CxEmu.Should().Be(ToEmu(60));
         plan.Shapes[1].CyEmu.Should().Be(ToEmu(75));
         plan.Shapes[1].RotationDeg.Should().Be(15);
+        plan.PreviewShapes.Should().HaveCount(2);
+        plan.PreviewShapes[0].ScreenBounds.Should().Be(new SlideScreenRect(100, 100, 120, 75));
+        plan.PreviewShapes[1].ScreenBounds.Should().Be(new SlideScreenRect(340, 100, 60, 75));
+        plan.PreviewShapes[1].RotationDeg.Should().Be(15);
     }
 
     [Fact]
@@ -275,6 +279,30 @@ public sealed class CanvasGesturePlannerTests
         plan.Shapes[1].XEmu.Should().Be(ToEmu(200));
         plan.Shapes[1].YEmu.Should().Be(ToEmu(200));
         plan.Shapes[1].RotationDeg.Should().BeApproximately(110, 0.001);
+        plan.PreviewShapes.Should().HaveCount(2);
+        plan.PreviewShapes.Single(preview => preview.ShapeId == 1).ScreenBounds
+            .Should().Be(new SlideScreenRect(200, 0, 100, 100));
+        plan.PreviewShapes.Single(preview => preview.ShapeId == 2).ScreenBounds
+            .Should().Be(new SlideScreenRect(200, 200, 100, 100));
+        plan.PreviewShapes.Single(preview => preview.ShapeId == 1).RotationDeg
+            .Should().BeApproximately(100, 0.001);
+    }
+
+    [Fact]
+    public void OrientedBoundsToScreen_EnvelopesRotatedMemberForSelectionChrome()
+    {
+        var bounds = SlideCanvasGeometryPlanner.OrientedBoundsToScreen(
+            left: 100,
+            top: 100,
+            width: 100,
+            height: 50,
+            rotationDeg: 90,
+            transform: new SlideTransformCore(1, 0, 0, 1280, 720));
+
+        bounds.Left.Should().BeApproximately(125, 0.001);
+        bounds.Top.Should().BeApproximately(75, 0.001);
+        bounds.Width.Should().BeApproximately(50, 0.001);
+        bounds.Height.Should().BeApproximately(100, 0.001);
     }
 
     [Fact]

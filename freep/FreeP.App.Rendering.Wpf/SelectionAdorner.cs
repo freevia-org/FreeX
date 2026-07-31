@@ -94,6 +94,10 @@ public sealed class SelectionAdorner : Adorner
     /// <summary>Live-preview rotation angle in degrees (only meaningful during rotate gesture).</summary>
     private double _previewRotationDeg;
 
+    /// <summary>Per-member geometry from the shared multi-transform preview plan.</summary>
+    private IReadOnlyList<CanvasShapeTransformPreview> _transformPreview =
+        Array.Empty<CanvasShapeTransformPreview>();
+
     /// <summary>Active marquee rect in screen coords (null = no marquee).</summary>
     private Rect? _marqueeRect;
 
@@ -120,6 +124,7 @@ public sealed class SelectionAdorner : Adorner
         _selectionRects.Clear();
         _selectionRects.AddRange(rects);
         _previewRect = null;
+        _transformPreview = Array.Empty<CanvasShapeTransformPreview>();
         InvalidateVisual();
     }
 
@@ -146,6 +151,16 @@ public sealed class SelectionAdorner : Adorner
     {
         _previewRect = screenRect;
         _previewRotationDeg = rotationDeg;
+        _transformPreview = Array.Empty<CanvasShapeTransformPreview>();
+        InvalidateVisual();
+    }
+
+    /// <summary>Shows each member's live geometry from one shared transform plan.</summary>
+    public void UpdateTransformPreview(CanvasMultiTransformPlan plan)
+    {
+        _transformPreview = plan.PreviewShapes;
+        _previewRect = plan.PreviewBounds is { } bounds ? ToWpfRect(bounds) : null;
+        _previewRotationDeg = plan.PreviewRotationDeg;
         InvalidateVisual();
     }
 
@@ -170,6 +185,7 @@ public sealed class SelectionAdorner : Adorner
 
     internal bool HasTransientInteractionVisualsForTests =>
         _previewRect.HasValue ||
+        _transformPreview.Count > 0 ||
         _marqueeRect.HasValue ||
         _snapGuides is { Count: > 0 } ||
         _geometryPreview.HasValue;
@@ -209,6 +225,9 @@ public sealed class SelectionAdorner : Adorner
         }
 
         DrawGeometryHandles(dc);
+
+        foreach (var preview in _transformPreview)
+            DrawPreviewRect(dc, ToWpfRect(preview.ScreenBounds), preview.RotationDeg);
 
         // Draw preview
         if (_previewRect.HasValue)
@@ -264,6 +283,9 @@ public sealed class SelectionAdorner : Adorner
         if (rotDeg != 0)
             dc.Pop();
     }
+
+    private static Rect ToWpfRect(SlideScreenRect rect) =>
+        new(rect.Left, rect.Top, rect.Width, rect.Height);
 
     private static void DrawHandles(DrawingContext dc, Rect rect)
     {
@@ -366,6 +388,9 @@ public sealed class SelectionAdorner : Adorner
 
     /// <summary>Selection rects accessible to the gesture handler for redraw.</summary>
     public IReadOnlyList<(uint id, Rect screenRect)> SelectionRects => _selectionRects;
+
+    /// <summary>Per-member live preview rectangles exposed for focused host tests.</summary>
+    internal IReadOnlyList<CanvasShapeTransformPreview> TransformPreview => _transformPreview;
 
     /// <summary>Union box used for multi-selection handles and group gestures.</summary>
     public Rect? SelectionBounds

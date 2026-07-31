@@ -3969,6 +3969,59 @@ public sealed class GestureHandlerAltSnapTests
     }
 
     [Fact]
+    public void SelectionAdornerLayer_RendersPerMemberMultiTransformPreviewGeometry()
+    {
+        var plan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+            StartScreen: new CanvasGesturePoint(250, 50),
+            CurrentScreen: new CanvasGesturePoint(300, 150),
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            Shapes:
+            [
+                new CanvasTransformShapeState(1, 100 * 9525L, 100 * 9525L, 100 * 9525L, 100 * 9525L, 10),
+                new CanvasTransformShapeState(2, 300 * 9525L, 100 * 9525L, 100 * 9525L, 100 * 9525L, 20),
+            ],
+            SnapToFifteenDegrees: false));
+
+        var adorner = new SelectionAdornerLayer();
+        adorner.UpdateSelection([
+            (1u, new Rect(100, 100, 100, 50)),
+            (2u, new Rect(300, 100, 50, 50)),
+        ]);
+        adorner.UpdateTransformPreview(plan);
+
+        adorner.SelectionRects.Should().HaveCount(2);
+        adorner.TransformPreview.Should().HaveCount(2);
+        adorner.TransformPreview.Single(preview => preview.ShapeId == 1).ScreenBounds
+            .Should().Be(new SlideScreenRect(200, 0, 100, 100));
+        adorner.TransformPreview.Single(preview => preview.ShapeId == 1).RotationDeg
+            .Should().BeApproximately(100, 0.001);
+        adorner.TransformPreview.Single(preview => preview.ShapeId == 2).ScreenBounds
+            .Should().Be(new SlideScreenRect(200, 200, 100, 100));
+        adorner.TransformPreview.Single(preview => preview.ShapeId == 2).RotationDeg
+            .Should().BeApproximately(110, 0.001);
+        adorner.HasTransientInteractionVisualsForTests.Should().BeTrue();
+
+        var resizePlan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+            StartScreen: new CanvasGesturePoint(0, 0),
+            CurrentScreen: new CanvasGesturePoint(50, 25),
+            Transform: new SlideTransformCore(1, 0, 0, 1280, 720),
+            Handle: CanvasGestureHandleKind.ResizeSE,
+            Shapes:
+            [
+                new CanvasTransformShapeState(1, 100 * 9525L, 100 * 9525L, 100 * 9525L, 50 * 9525L, 0),
+                new CanvasTransformShapeState(2, 300 * 9525L, 100 * 9525L, 50 * 9525L, 50 * 9525L, 15),
+            ],
+            CurrentSlide: null,
+            SnapToGrid: false,
+            SnapToShapes: false,
+            BypassSnap: false));
+        adorner.UpdateTransformPreview(resizePlan);
+        adorner.TransformPreview[0].ScreenBounds.Should().Be(new SlideScreenRect(100, 100, 120, 75));
+        adorner.TransformPreview[1].RotationDeg.Should().Be(15);
+        adorner.SelectionRects.Should().HaveCount(2);
+    }
+
+    [Fact]
     public async Task RebuiltEditor_DetachesStalePointerHandler_AndCapturesSelectedShape()
     {
         await Run(() =>

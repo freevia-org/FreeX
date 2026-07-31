@@ -403,6 +403,7 @@ public sealed class CanvasGestureHandler
         _geometryDragStartScreen = default;
         _marqueeStartSlide = default;
         _adorner.UpdatePreview(null);
+        _adorner.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
         _adorner.UpdateGeometryPreview(null, null);
         _adorner.UpdateMarquee(null);
         _adorner.UpdateSnapGuides(null, SlideTransform.Identity);
@@ -516,8 +517,7 @@ public sealed class CanvasGestureHandler
                 SnapToGrid,
                 SnapToShapes,
                 (Keyboard.Modifiers & ModifierKeys.Alt) != 0));
-            _adorner.UpdatePreview(
-                plan.PreviewBounds is { } groupBounds ? ToWpfRect(groupBounds) : null);
+            _adorner.UpdateTransformPreview(plan);
             return;
         }
 
@@ -633,9 +633,7 @@ public sealed class CanvasGestureHandler
                 ToCoreTransform(xf),
                 _multiTransformStartShapes,
                 (Keyboard.Modifiers & ModifierKeys.Shift) != 0));
-            _adorner.UpdatePreview(
-                plan.PreviewBounds is { } groupBounds ? ToWpfRect(groupBounds) : null,
-                plan.PreviewRotationDeg);
+            _adorner.UpdateTransformPreview(plan);
             return;
         }
 
@@ -1144,11 +1142,13 @@ public sealed class CanvasGestureHandler
     private Rect? GetSelectionScreenRect(uint shapeId, Slide slide, SlideTransform xf)
     {
         if (_editor.Presentation is null) return null;
-        var rect = SlideCanvasGeometryPlanner.ShapeBoundsToScreen(
-            slide,
-            _editor.Presentation,
-            shapeId,
-            ToCoreTransform(xf));
+        var shape = ShapeHitTester.FindShape(slide, shapeId);
+        var rect = shape is null
+            ? (SlideScreenRect?)null
+            : SlideCanvasGeometryPlanner.ShapeVisualBoundsToScreen(
+                shape,
+                _editor.Presentation,
+                ToCoreTransform(xf));
         return rect is { } screenRect ? ToWpfRect(screenRect) : null;
     }
 
