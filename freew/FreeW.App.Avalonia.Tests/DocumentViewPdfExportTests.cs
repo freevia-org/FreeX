@@ -359,6 +359,51 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_PreservesFloatingShapeFlipsAndDashStyle() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 240;
+            document.Page.HeightPt = 180;
+
+            var shape = Shape.TextBoxWith("Flipped dashed shape", 72, 36, "#00AA00");
+            shape.OutlineColorHex = "#0000FF";
+            shape.OutlineWidthPt = 2;
+            shape.OutlineDash = "dashDot";
+            shape.RotationAngle = 17;
+            shape.FlipH = true;
+            shape.FlipV = true;
+            shape.Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 48,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 42,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromShape(shape));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(800, 1200));
+
+            var group = view.BuildPdfContent().Pages
+                .SelectMany(page => page.Ops)
+                .OfType<PdfRotationGroup>()
+                .Single();
+            group.FlipH.Should().BeTrue();
+            group.FlipV.Should().BeTrue();
+            group.RotationDegrees.Should().BeApproximately(17, 0.001);
+
+            var outline = group.Ops.OfType<PdfStrokeRect>().Single();
+            outline.Dash.Should().NotBeNull();
+            outline.Dash!.Segments.Should().Equal(4, 2, 1, 2);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_RendersFloatingImagesAtTheirPageSpacePixels() =>
         Session.Dispatch(() =>
         {

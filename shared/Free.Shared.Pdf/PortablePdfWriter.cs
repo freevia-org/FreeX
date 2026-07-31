@@ -96,10 +96,10 @@ public static class PortablePdfWriter
                 AppendFilledRectangleLinearGradient(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Gradient, patternResources, fill.FallbackColor);
                 break;
             case PdfStrokeRect stroke:
-                AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
+                AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth, stroke.Dash);
                 break;
             case PdfStrokeRectLinearGradient stroke:
-                AppendStrokedRectangleLinearGradient(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Gradient, patternResources, stroke.FallbackColor, stroke.LineWidth);
+                AppendStrokedRectangleLinearGradient(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Gradient, patternResources, stroke.FallbackColor, stroke.LineWidth, stroke.Dash);
                 break;
             case PdfFillEllipse fillEllipse:
                 AppendFilledEllipse(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Color);
@@ -115,7 +115,8 @@ public static class PortablePdfWriter
                     strokeEllipse.Width,
                     strokeEllipse.Height,
                     strokeEllipse.Color,
-                    strokeEllipse.LineWidth);
+                    strokeEllipse.LineWidth,
+                    strokeEllipse.Dash);
                 break;
             case PdfStrokeEllipseLinearGradient strokeEllipse:
                 AppendStrokedEllipseLinearGradient(
@@ -127,7 +128,8 @@ public static class PortablePdfWriter
                     strokeEllipse.Gradient,
                     patternResources,
                     strokeEllipse.FallbackColor,
-                    strokeEllipse.LineWidth);
+                    strokeEllipse.LineWidth,
+                    strokeEllipse.Dash);
                 break;
             case PdfText text:
                 AppendText(content, text.X, text.Y, text.FontSize, FontResource(text.Face), text.Color, text.Text);
@@ -850,7 +852,13 @@ public static class PortablePdfWriter
             return;
 
         content.AppendLine("q");
-        AppendRotationTransform(content, group.CenterX, group.CenterY, group.RotationDegrees);
+        AppendRotationTransform(
+            content,
+            group.CenterX,
+            group.CenterY,
+            group.RotationDegrees,
+            group.FlipH,
+            group.FlipV);
 
         foreach (var op in group.Ops)
             AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
@@ -888,15 +896,23 @@ public static class PortablePdfWriter
         StringBuilder content,
         double centerX,
         double centerY,
-        double rotationDegrees)
+        double rotationDegrees,
+        bool flipH = false,
+        bool flipV = false)
     {
         var rotation = -rotationDegrees * Math.PI / 180d;
         var cos = Math.Cos(rotation);
         var sin = Math.Sin(rotation);
-        var e = centerX - (cos * centerX) + (sin * centerY);
-        var f = centerY - (sin * centerX) - (cos * centerY);
+        var scaleX = flipH ? -1 : 1;
+        var scaleY = flipV ? -1 : 1;
+        var a = cos * scaleX;
+        var b = sin * scaleX;
+        var c = -sin * scaleY;
+        var d = cos * scaleY;
+        var e = centerX - (a * centerX) - (c * centerY);
+        var f = centerY - (b * centerX) - (d * centerY);
         content.AppendLine(
-            $"{FormatNumber(cos)} {FormatNumber(sin)} {FormatNumber(-sin)} {FormatNumber(cos)} {FormatNumber(e)} {FormatNumber(f)} cm");
+            $"{FormatNumber(a)} {FormatNumber(b)} {FormatNumber(c)} {FormatNumber(d)} {FormatNumber(e)} {FormatNumber(f)} cm");
     }
 
     private static void AppendFilledRectangle(
@@ -942,11 +958,13 @@ public static class PortablePdfWriter
         double width,
         double height,
         PdfColor color,
-        double lineWidth)
+        double lineWidth,
+        PdfDashPattern? dash)
     {
         content.AppendLine("q");
         AppendRgb(content, color, "RG");
         content.AppendLine($"{FormatNumber(lineWidth)} w");
+        AppendDashPattern(content, dash);
         content.AppendLine($"{FormatNumber(x)} {FormatNumber(y)} {FormatNumber(width)} {FormatNumber(height)} re S");
         content.AppendLine("Q");
     }
@@ -960,17 +978,19 @@ public static class PortablePdfWriter
         PdfLinearGradient gradient,
         IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources,
         PdfColor fallbackColor,
-        double lineWidth)
+        double lineWidth,
+        PdfDashPattern? dash)
     {
         if (!patternResources.TryGetValue(gradient, out var pattern))
         {
-            AppendStrokedRectangle(content, x, y, width, height, fallbackColor, lineWidth);
+            AppendStrokedRectangle(content, x, y, width, height, fallbackColor, lineWidth, dash);
             return;
         }
 
         content.AppendLine("q");
         AppendStrokePattern(content, pattern.ResourceName);
         content.AppendLine($"{FormatNumber(lineWidth)} w");
+        AppendDashPattern(content, dash);
         content.AppendLine($"{FormatNumber(x)} {FormatNumber(y)} {FormatNumber(width)} {FormatNumber(height)} re S");
         content.AppendLine("Q");
     }
@@ -1025,7 +1045,8 @@ public static class PortablePdfWriter
         double width,
         double height,
         PdfColor color,
-        double lineWidth)
+        double lineWidth,
+        PdfDashPattern? dash)
     {
         if (width <= 0 || height <= 0)
             return;
@@ -1033,6 +1054,7 @@ public static class PortablePdfWriter
         content.AppendLine("q");
         AppendRgb(content, color, "RG");
         content.AppendLine($"{FormatNumber(lineWidth)} w");
+        AppendDashPattern(content, dash);
         AppendEllipsePath(content, x, y, width, height);
         content.AppendLine("S");
         content.AppendLine("Q");
@@ -1047,19 +1069,21 @@ public static class PortablePdfWriter
         PdfLinearGradient gradient,
         IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources,
         PdfColor fallbackColor,
-        double lineWidth)
+        double lineWidth,
+        PdfDashPattern? dash)
     {
         if (width <= 0 || height <= 0)
             return;
         if (!patternResources.TryGetValue(gradient, out var pattern))
         {
-            AppendStrokedEllipse(content, x, y, width, height, fallbackColor, lineWidth);
+            AppendStrokedEllipse(content, x, y, width, height, fallbackColor, lineWidth, dash);
             return;
         }
 
         content.AppendLine("q");
         AppendStrokePattern(content, pattern.ResourceName);
         content.AppendLine($"{FormatNumber(lineWidth)} w");
+        AppendDashPattern(content, dash);
         AppendEllipsePath(content, x, y, width, height);
         content.AppendLine("S");
         content.AppendLine("Q");
@@ -1234,6 +1258,7 @@ public static class PortablePdfWriter
         {
             AppendRgb(content, stroke, "RG");
             content.AppendLine($"{FormatNumber(Math.Max(0.1, path.StrokeWidth))} w");
+            AppendDashPattern(content, path.StrokeDash);
         }
 
         foreach (var contour in path.Contours)
@@ -1290,11 +1315,13 @@ public static class PortablePdfWriter
         {
             AppendStrokePattern(content, strokePattern!.ResourceName);
             content.AppendLine($"{FormatNumber(Math.Max(0.1, path.StrokeWidth))} w");
+            AppendDashPattern(content, path.StrokeDash);
         }
         else if (path.StrokeFallbackColor is { } strokeFallback)
         {
             AppendRgb(content, strokeFallback, "RG");
             content.AppendLine($"{FormatNumber(Math.Max(0.1, path.StrokeWidth))} w");
+            AppendDashPattern(content, path.StrokeDash);
         }
 
         AppendPathContours(content, path.Contours);
@@ -1329,6 +1356,22 @@ public static class PortablePdfWriter
             if (contour.Closed)
                 content.AppendLine("h");
         }
+    }
+
+    private static void AppendDashPattern(StringBuilder content, PdfDashPattern? dash)
+    {
+        if (dash is null || dash.Segments.Count == 0)
+            return;
+
+        var segments = dash.Segments
+            .Where(segment => double.IsFinite(segment) && segment > 0)
+            .Select(FormatNumber)
+            .ToArray();
+        if (segments.Length == 0)
+            return;
+
+        var phase = double.IsFinite(dash.Phase) ? dash.Phase : 0;
+        content.AppendLine($"[{string.Join(" ", segments)}] {FormatNumber(phase)} d");
     }
 
     private static void AppendText(

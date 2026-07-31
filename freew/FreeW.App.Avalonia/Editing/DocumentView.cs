@@ -3848,13 +3848,15 @@ public sealed class DocumentView : Control
         if (ops.Count == 0)
             return [];
 
-        if (Math.Abs(plan.RotationAngle) > 0.001)
+        if (Math.Abs(plan.RotationAngle) > 0.001 || plan.FlipH || plan.FlipV)
         {
             return [new PdfRotationGroup(
                 xPt + widthPt / 2,
                 yPt + heightPt / 2,
                 plan.RotationAngle,
-                ops)];
+                ops,
+                plan.FlipH,
+                plan.FlipV)];
         }
 
         return ops;
@@ -3871,6 +3873,7 @@ public sealed class DocumentView : Control
         var fillColor = ResolvePdfShapeFillFallback(plan.Fill);
         PdfColor? outlineColor = plan.Outline.IsVisible ? ParseColor(plan.Outline.ColorHex) : null;
         var strokeWidth = Math.Max(0.1, plan.Outline.WidthDip / PxPerPoint);
+        var dash = BuildPdfShapeDash(plan.Outline.DashStyle);
         var gradient = BuildPdfShapeGradient(plan.Fill, x, y, width, height);
 
         switch (plan.GeometryKind)
@@ -3887,7 +3890,7 @@ public sealed class DocumentView : Control
                 }
 
                 if (outlineColor is { } ellipseOutline)
-                    ops.Add(new PdfStrokeEllipse(x, y, width, height, ellipseOutline, strokeWidth));
+                    ops.Add(new PdfStrokeEllipse(x, y, width, height, ellipseOutline, strokeWidth, dash));
                 break;
 
             case DrawingObjectGeometryKind.RoundedRectangle:
@@ -3906,11 +3909,12 @@ public sealed class DocumentView : Control
                         fillColor,
                         null,
                         outlineColor,
-                        strokeWidth));
+                        strokeWidth,
+                        dash));
                 }
                 else if (fillColor is not null || outlineColor is not null)
                 {
-                    ops.Add(new PdfPath(contours, fillColor, outlineColor, strokeWidth));
+                    ops.Add(new PdfPath(contours, fillColor, outlineColor, strokeWidth, dash));
                 }
                 break;
 
@@ -3928,7 +3932,7 @@ public sealed class DocumentView : Control
                 }
 
                 if (outlineColor is { } rectangleOutline)
-                    ops.Add(new PdfStrokeRect(x, y, width, height, rectangleOutline, strokeWidth));
+                    ops.Add(new PdfStrokeRect(x, y, width, height, rectangleOutline, strokeWidth, dash));
                 break;
         }
     }
@@ -4030,6 +4034,15 @@ public sealed class DocumentView : Control
             DrawingObjectFillKind.Solid => ParseColor(fill.ColorHex),
             DrawingObjectFillKind.Pattern => ParseColor(fill.PatternBackgroundColorHex ?? fill.PatternForegroundColorHex),
             DrawingObjectFillKind.Gradient => ParseColor(fill.GradientStops.FirstOrDefault()?.ColorHex),
+            _ => null,
+        };
+
+    private static PdfDashPattern? BuildPdfShapeDash(string? dashStyle) =>
+        dashStyle?.Trim().ToLowerInvariant() switch
+        {
+            "dash" => new PdfDashPattern([4, 3]),
+            "sysdot" => new PdfDashPattern([1, 2]),
+            "dashdot" => new PdfDashPattern([4, 2, 1, 2]),
             _ => null,
         };
 

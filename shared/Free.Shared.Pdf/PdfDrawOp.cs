@@ -59,7 +59,8 @@ public sealed record PdfStrokeRect(
     double Width,
     double Height,
     PdfColor Color,
-    double LineWidth) : PdfDrawOp;
+    double LineWidth,
+    PdfDashPattern? Dash = null) : PdfDrawOp;
 
 /// <summary>
 /// Strokes the outline of an axis-aligned rectangle with a linear gradient.
@@ -71,7 +72,8 @@ public sealed record PdfStrokeRectLinearGradient(
     double Height,
     PdfLinearGradient Gradient,
     PdfColor FallbackColor,
-    double LineWidth) : PdfDrawOp;
+    double LineWidth,
+    PdfDashPattern? Dash = null) : PdfDrawOp;
 
 /// <summary>Fills an axis-aligned ellipse inside the supplied rectangular bounds.</summary>
 public sealed record PdfFillEllipse(double X, double Y, double Width, double Height, PdfColor Color) : PdfDrawOp;
@@ -92,7 +94,8 @@ public sealed record PdfStrokeEllipse(
     double Width,
     double Height,
     PdfColor Color,
-    double LineWidth) : PdfDrawOp;
+    double LineWidth,
+    PdfDashPattern? Dash = null) : PdfDrawOp;
 
 /// <summary>Strokes an axis-aligned ellipse inside the supplied rectangular bounds with a linear gradient.</summary>
 public sealed record PdfStrokeEllipseLinearGradient(
@@ -102,7 +105,8 @@ public sealed record PdfStrokeEllipseLinearGradient(
     double Height,
     PdfLinearGradient Gradient,
     PdfColor FallbackColor,
-    double LineWidth) : PdfDrawOp;
+    double LineWidth,
+    PdfDashPattern? Dash = null) : PdfDrawOp;
 
 /// <summary>
 /// Draws a single run of text. <paramref name="X"/>/<paramref name="Y"/> is the text origin
@@ -162,6 +166,12 @@ public enum PdfPathSegmentKind
 
 public readonly record struct PdfPathPoint(double X, double Y);
 
+/// <summary>
+/// PDF stroke dash array and phase. Segments are measured in user-space points and alternate
+/// painted and skipped portions, matching DrawingML preset dash semantics after host mapping.
+/// </summary>
+public sealed record PdfDashPattern(IReadOnlyList<double> Segments, double Phase = 0);
+
 public sealed record PdfPathSegment(
     PdfPathSegmentKind Kind,
     PdfPathPoint End,
@@ -188,7 +198,8 @@ public sealed record PdfPath(
     IReadOnlyList<PdfPathContour> Contours,
     PdfColor? FillColor,
     PdfColor? StrokeColor,
-    double StrokeWidth) : PdfDrawOp;
+    double StrokeWidth,
+    PdfDashPattern? StrokeDash = null) : PdfDrawOp;
 
 /// <summary>
 /// Draws arbitrary path contours with optional linear-gradient fill and/or stroke. Solid fallback
@@ -200,7 +211,8 @@ public sealed record PdfPathLinearGradient(
     PdfColor? FillFallbackColor,
     PdfLinearGradient? StrokeGradient,
     PdfColor? StrokeFallbackColor,
-    double StrokeWidth) : PdfDrawOp;
+    double StrokeWidth,
+    PdfDashPattern? StrokeDash = null) : PdfDrawOp;
 
 /// <summary>
 /// Applies a rotation transform around a fixed PDF user-space center to a child draw-op list.
@@ -211,7 +223,9 @@ public sealed record PdfRotationGroup(
     double CenterX,
     double CenterY,
     double RotationDegrees,
-    IReadOnlyList<PdfDrawOp> Ops) : PdfDrawOp;
+    IReadOnlyList<PdfDrawOp> Ops,
+    bool FlipH = false,
+    bool FlipV = false) : PdfDrawOp;
 
 /// <summary>
 /// Applies a uniform opacity to a child draw-op list. Writers render the children as a graphics

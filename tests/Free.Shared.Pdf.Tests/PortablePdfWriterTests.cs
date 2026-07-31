@@ -97,6 +97,32 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsDashPatternAndCenteredFlipTransform()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfRotationGroup(
+                50,
+                40,
+                0,
+                [new PdfStrokeRect(
+                    20,
+                    30,
+                    40,
+                    20,
+                    PdfColor.Black,
+                    1,
+                    new PdfDashPattern([4, 3]))],
+                FlipH: true),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument([page])));
+
+        pdf.Should().Contain("-1 0 0 1 100 0 cm");
+        pdf.Should().Contain("[4 3] 0 d");
+    }
+
+    [Fact]
     public void Write_PdfLineRoundTripsCorrectCoordinates()
     {
         var page = new PdfContentPage(612, 792, new PdfDrawOp[]

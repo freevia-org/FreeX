@@ -195,7 +195,10 @@ public static class SkiaPdfWriter
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, stroke.Y, stroke.Height);
                 strokePaint.Color = ToSkColor(stroke.Color);
                 strokePaint.StrokeWidth = (float)stroke.LineWidth;
+                using var strokeDash = CreateDashEffect(stroke.Dash);
+                strokePaint.PathEffect = strokeDash;
                 canvas.DrawRect(new SKRect((float)stroke.X, top, (float)(stroke.X + stroke.Width), top + (float)stroke.Height), strokePaint);
+                strokePaint.PathEffect = null;
                 break;
             }
 
@@ -204,7 +207,10 @@ public static class SkiaPdfWriter
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, stroke.Y, stroke.Height);
                 ApplyLinearGradient(strokePaint, stroke.Gradient, pageHeight, stroke.FallbackColor);
                 strokePaint.StrokeWidth = (float)stroke.LineWidth;
+                using var gradientStrokeDash = CreateDashEffect(stroke.Dash);
+                strokePaint.PathEffect = gradientStrokeDash;
                 canvas.DrawRect(new SKRect((float)stroke.X, top, (float)(stroke.X + stroke.Width), top + (float)stroke.Height), strokePaint);
+                strokePaint.PathEffect = null;
                 strokePaint.Shader = null;
                 break;
             }
@@ -239,11 +245,14 @@ public static class SkiaPdfWriter
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, strokeEllipse.Y, strokeEllipse.Height);
                 strokePaint.Color = ToSkColor(strokeEllipse.Color);
                 strokePaint.StrokeWidth = (float)strokeEllipse.LineWidth;
+                using var ellipseStrokeDash = CreateDashEffect(strokeEllipse.Dash);
+                strokePaint.PathEffect = ellipseStrokeDash;
                 canvas.DrawOval(new SKRect(
                     (float)strokeEllipse.X,
                     top,
                     (float)(strokeEllipse.X + strokeEllipse.Width),
                     top + (float)strokeEllipse.Height), strokePaint);
+                strokePaint.PathEffect = null;
                 break;
             }
 
@@ -252,11 +261,14 @@ public static class SkiaPdfWriter
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, strokeEllipse.Y, strokeEllipse.Height);
                 ApplyLinearGradient(strokePaint, strokeEllipse.Gradient, pageHeight, strokeEllipse.FallbackColor);
                 strokePaint.StrokeWidth = (float)strokeEllipse.LineWidth;
+                using var gradientEllipseStrokeDash = CreateDashEffect(strokeEllipse.Dash);
+                strokePaint.PathEffect = gradientEllipseStrokeDash;
                 canvas.DrawOval(new SKRect(
                     (float)strokeEllipse.X,
                     top,
                     (float)(strokeEllipse.X + strokeEllipse.Width),
                     top + (float)strokeEllipse.Height), strokePaint);
+                strokePaint.PathEffect = null;
                 strokePaint.Shader = null;
                 break;
             }
@@ -323,7 +335,10 @@ public static class SkiaPdfWriter
                 {
                     strokePaint.Color = ToSkColor(stroke);
                     strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
+                    using var pathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
+                    strokePaint.PathEffect = pathStrokeDash;
                     canvas.DrawPath(skPath, strokePaint);
+                    strokePaint.PathEffect = null;
                 }
 
                 break;
@@ -349,7 +364,10 @@ public static class SkiaPdfWriter
                     else
                         strokePaint.Color = ToSkColor(strokeFallback);
                     strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
+                    using var gradientPathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
+                    strokePaint.PathEffect = gradientPathStrokeDash;
                     canvas.DrawPath(skPath, strokePaint);
+                    strokePaint.PathEffect = null;
                     strokePaint.Shader = null;
                 }
 
@@ -365,6 +383,7 @@ public static class SkiaPdfWriter
                 var centerY = (float)PdfRenderGeometry.ToCanvasY(pageHeight, group.CenterY);
                 canvas.Save();
                 canvas.Translate(centerX, centerY);
+                canvas.Scale(group.FlipH ? -1 : 1, group.FlipV ? -1 : 1);
                 canvas.RotateDegrees((float)group.RotationDegrees);
                 canvas.Translate(-centerX, -centerY);
                 foreach (var child in group.Ops)
@@ -528,6 +547,20 @@ public static class SkiaPdfWriter
             colors,
             positions,
             SKShaderTileMode.Clamp);
+    }
+
+    private static SKPathEffect? CreateDashEffect(PdfDashPattern? dash)
+    {
+        if (dash is null)
+            return null;
+
+        var segments = dash.Segments
+            .Where(segment => double.IsFinite(segment) && segment > 0)
+            .Select(segment => (float)segment)
+            .ToArray();
+        return segments.Length == 0
+            ? null
+            : SKPathEffect.CreateDash(segments, (float)(double.IsFinite(dash.Phase) ? dash.Phase : 0));
     }
 
     private static SKPaint CreateImagePaint(double opacity) =>
