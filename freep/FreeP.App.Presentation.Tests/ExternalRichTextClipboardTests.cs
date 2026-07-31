@@ -164,6 +164,24 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfCapsControls_PreserveRunCapitalizationSemantics()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}\f0\fs24 a\caps b\caps0 c\scaps d\scaps0 e}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("a", "b", "c", "d", "e");
+        runs[0].Caps.Should().Be(RunTextCaps.None);
+        runs[1].Caps.Should().Be(RunTextCaps.All);
+        runs[2].Caps.Should().Be(RunTextCaps.None);
+        runs[3].Caps.Should().Be(RunTextCaps.Small);
+        runs[4].Caps.Should().Be(RunTextCaps.None);
+    }
+
+    [Fact]
     public void RtfPict_PreservesPngPayloadAlongsideText()
     {
         var png = Convert.FromBase64String(

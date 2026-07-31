@@ -192,6 +192,7 @@ public static class ExternalRichTextClipboardPlanner
             public bool Underline;
             public bool Strikethrough;
             public int? BaselineOffset;
+            public RunTextCaps Caps;
             public bool? RunRightToLeft;
             public int ColorIndex;
             public int UnicodeSkip = 1;
@@ -226,6 +227,7 @@ public static class ExternalRichTextClipboardPlanner
             bool Underline,
             bool Strikethrough,
             int? BaselineOffset,
+            RunTextCaps Caps,
             bool? RunRightToLeft,
             SrgbColor? Color,
             bool BoldSet,
@@ -649,6 +651,8 @@ public static class ExternalRichTextClipboardPlanner
                         _state.BaselineOffset = -RtfBaselineOffset(down);
                     break;
                 case "nosupersub": _state.BaselineOffset = null; break;
+                case "caps": _state.Caps = value != 0 ? RunTextCaps.All : RunTextCaps.None; break;
+                case "scaps": _state.Caps = value != 0 ? RunTextCaps.Small : RunTextCaps.None; break;
                 case "rtlch": _state.RunRightToLeft = true; break;
                 case "ltrch": _state.RunRightToLeft = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
@@ -1151,6 +1155,7 @@ public static class ExternalRichTextClipboardPlanner
                 state.Underline,
                 state.Strikethrough,
                 state.BaselineOffset,
+                state.Caps,
                 state.RunRightToLeft,
                 color,
                 state.BoldSet,
@@ -1200,6 +1205,7 @@ public static class ExternalRichTextClipboardPlanner
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
                 BaselineOffset = _activeStyle.BaselineOffset,
+                Caps = _activeStyle.Caps,
                 RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
@@ -1229,6 +1235,7 @@ public static class ExternalRichTextClipboardPlanner
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
             && left.BaselineOffset == right.BaselineOffset
+            && left.Caps == right.Caps
             && left.RunRightToLeft == right.RunRightToLeft
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
@@ -1247,6 +1254,7 @@ public static class ExternalRichTextClipboardPlanner
             _state.Underline = false;
             _state.Strikethrough = false;
             _state.BaselineOffset = null;
+            _state.Caps = RunTextCaps.None;
             _state.RunRightToLeft = null;
             _state.ColorIndex = 0;
         }
