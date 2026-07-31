@@ -224,6 +224,55 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task ClipboardPaste_CustomPayloadPrecedesXamlPackageRtfAndPlainText()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("target").Body,
+                backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+                using var transfer = new DataTransfer();
+                var item = new DataTransferItem();
+                var customPayload = InCanvasRichClipboardPayload.FromPlainText("custom");
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.RichTextPlatformFormat
+                        : AvaloniaRichTextEditor.RichTextFormat,
+                    InCanvasRichClipboardPlanner.Serialize(customPayload));
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalXamlPackageWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalXamlPackageLinuxFormat,
+                    CreateXamlPackage(
+                        "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Bold>ignored package</Bold></Paragraph></FlowDocument>"));
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalRtfLinuxFormat,
+                    Encoding.ASCII.GetBytes(@"{\rtf1\ansi ignored rtf}"));
+                item.SetText("plain fallback");
+                transfer.Add(item);
+
+                (await editor.PasteDataTransferAsync(transfer)).Should().BeTrue();
+                editor.Text.Should().Be("custom");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ClipboardPaste_ExternalRtfAppliesSharedParagraphAndHyperlinkMetadata()
     {
         await Session.Dispatch(async () =>

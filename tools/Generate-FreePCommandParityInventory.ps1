@@ -385,12 +385,13 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.table.inline-text.workflow-depth",
             Area: "Rich inline table-cell text editing, paragraph formatting, selection, and persistence",
             Status: "shared-planner-and-host-evidence",
-            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner and renderer-neutral rich clipboard routes with WPF RichTextBox and Avalonia native-input/custom-rich-surface adapters, including bounded external RTF ingestion",
+            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner and renderer-neutral rich clipboard routes with WPF RichTextBox and Avalonia native-input/custom-rich-surface adapters, including bounded external RTF and XamlPackage ingestion",
             EvidenceDocs:
             [
                 "docs/parity/freep-rich-clipboard-wave15-20260727.md",
                 "docs/parity/freep-rich-effects-clipboard-wave16-20260727.md",
                 "docs/parity/freep-external-rtf-paste-wave17-20260727.md",
+                "docs/parity/freep-wave74-xamlpackage-clipboard-parity-20260731.md",
                 "docs/parity/freep-rich-table-cell-editing-shared-visual-2026-07-27.md",
                 "docs/parity/freep-table-cell-rich-editor-fidelity-2026-07-03.md",
                 "docs/parity/freep-list-gallery-image-bullet-ui-2026-07-05.md",
@@ -416,7 +417,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs",
                 "freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs"
             ],
-            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including all modeled inline effects, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF paste in Avalonia. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. XamlPackage import, unsupported RTF destinations and controls, richer RTF lists/objects/fields, broader IME/RTL/FlowDocument behavior, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
+            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including all modeled inline effects, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF and XamlPackage ingestion in Avalonia. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. Unsupported XamlPackage resources and FlowDocument controls, inline picture/object runs in the rich editor, unsupported RTF destinations and controls, richer RTF lists/objects/fields, broader IME/RTL/FlowDocument behavior, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
         new(
             EvidenceId: "freep.clipboard.external-rtf-depth",
             Area: "External RTF list, paragraph-layout, hyperlink, and field paste depth",
@@ -439,7 +440,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Rendering.Wpf/WpfRichTextClipboardAdapter.cs",
                 "freep/FreeP.App.Host.Tests/WpfRichTextClipboardAdapterTests.cs"
             ],
-            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, guarded http/https/mailto/file HYPERLINK field results with remote file hosts blocked, safe non-hyperlink field tokens with cached result text, visible embedded-object result text while ignoring binary OLE payloads, common trowd/cellx/cell/row plus nestcell/nestrow table boundaries as WPF-compatible tab-delimited cells and paragraph-delimited rows, and validated PNG/JPEG \\pict payloads as slide-level picture shapes while retaining custom-v2 > RTF > plain-text precedence. Because TextBody has no inline table node, cell widths, borders, fills, vertical alignment, merges, nested-table structure, and table geometry are flattened rather than persisted. XamlPackage import, editable OLE embedding, unsupported RTF destinations and controls, complex Word field calculation, RTL/IME nuances, complete Word list-template numbering, inline picture/object runs, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
+            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, guarded http/https/mailto/file HYPERLINK field results with remote file hosts blocked, safe non-hyperlink field tokens with cached result text, visible embedded-object result text while ignoring binary OLE payloads, common trowd/cellx/cell/row plus nestcell/nestrow table boundaries as WPF-compatible tab-delimited cells and paragraph-delimited rows, and validated PNG/JPEG \\pict payloads as slide-level picture shapes while retaining custom-v2 > RTF > plain-text precedence. Because TextBody has no inline table node, cell widths, borders, fills, vertical alignment, merges, nested-table structure, and table geometry are flattened rather than persisted. Editable OLE embedding, unsupported XamlPackage resources and controls, unsupported RTF destinations and controls, complex Word field calculation, RTL/IME nuances, complete Word list-template numbering, inline picture/object runs in the rich editor, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
         new(
             EvidenceId: "freep.header-footer.placeholder-creation",
             Area: "Header/Footer date, footer, and slide-number placeholder creation",

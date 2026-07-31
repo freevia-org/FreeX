@@ -35,6 +35,32 @@ public sealed class WpfRichTextClipboardAdapterTests
     }
 
     [StaFact]
+    public void TryPasteDataObject_CustomPayloadPrecedesXamlPackageAndRtf()
+    {
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var custom = InCanvasRichClipboardPayload.FromPlainText("custom");
+        var data = new DataObject();
+        data.SetData(
+            PresentationClipboardFormats.RichText,
+            new MemoryStream(InCanvasRichClipboardPlanner.Serialize(custom)),
+            autoConvert: false);
+        data.SetData(
+            DataFormats.XamlPackage,
+            new MemoryStream(CreateXamlPackage(
+                "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Bold>ignored package</Bold></Paragraph></FlowDocument>")),
+            autoConvert: false);
+        data.SetData(DataFormats.Rtf, Encoding.ASCII.GetBytes(@"{\rtf1\ansi ignored rtf}"));
+        data.SetText("plain fallback");
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        InCanvasTextEditPlanner.ExtractPlainText(updated!).Should().Be("custom");
+    }
+
+    [StaFact]
     public void ExternalRtfTable_UsesNativeWpfTableBlockAndTabRowTextProjection()
     {
         const string rtf = @"{\rtf1\ansi\trowd\cellx1440\cellx2880 A\cell B\cell\row\trowd\cellx1440\cellx2880 C\cell D\cell\row}";

@@ -270,6 +270,35 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task Avalonia_data_transfer_round_trips_wpf_xamlpackage_platform_format()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var xamlPackage = Encoding.UTF8.GetBytes("wpf-xamlpackage");
+            var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+                new PresentationClipboardContent(XamlPackageBytes: xamlPackage),
+                out var bitmap);
+            try
+            {
+                bitmap.Should().BeNull();
+                transfer.Formats.Should().Contain(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaPresentationSystemClipboard.ExternalXamlPackageWindowsFormat
+                        : AvaloniaPresentationSystemClipboard.ExternalXamlPackageLinuxFormat);
+
+                var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+
+                content.XamlPackageBytes.Should().Equal(xamlPackage);
+                content.HasXamlPackage.Should().BeTrue();
+            }
+            finally
+            {
+                ((IDisposable)transfer).Dispose();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Avalonia_data_transfer_falls_back_when_public_platform_format_cannot_be_read()
     {
         using var transfer = new ThrowingPlatformAliasTransfer();
