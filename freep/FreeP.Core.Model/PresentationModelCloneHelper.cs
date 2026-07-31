@@ -7,7 +7,7 @@ internal static class PresentationModelCloneHelper
         if (slideIndex < 0 || slideIndex >= presentation.Slides.Count)
             return null;
 
-        var shape = presentation.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
+        var shape = ShapeHelper.Find(presentation, slideIndex, shapeId);
         return shape?.Table;
     }
 

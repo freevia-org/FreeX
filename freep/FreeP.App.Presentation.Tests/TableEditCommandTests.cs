@@ -250,6 +250,22 @@ public sealed class TableEditCommandTests
     }
 
     [Fact]
+    public void SetTableHeaderRowCommand_GroupedChild_ApplyAndUndoTogglesFirstRowFlag()
+    {
+        var (p, bus, shape) = MakeTable();
+        var group = new SlideShape { Id = 70, Kind = SlideShapeKind.Group };
+        p.Slides[0].Shapes.Remove(shape);
+        group.Children.Add(shape);
+        p.Slides[0].Shapes.Add(group);
+
+        bus.Execute(new SetTableHeaderRowCommand(0, shape.Id, true));
+
+        shape.Table!.Flags.FirstRow.Should().BeTrue();
+        bus.Undo();
+        shape.Table.Flags.FirstRow.Should().BeFalse();
+    }
+
+    [Fact]
     public void SetTableCellText_Revert_RestoresPreviousText()
     {
         var (p, bus, shape) = MakeTableWithText();
