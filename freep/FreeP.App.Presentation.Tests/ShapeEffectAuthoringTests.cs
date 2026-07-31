@@ -61,6 +61,27 @@ public sealed class ShapeEffectAuthoringTests
     }
 
     [Fact]
+    public void SetShapeShadowCommand_GroupedChild_UpdatesAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var child = new SlideShape { Id = 71, Kind = SlideShapeKind.AutoShape };
+        var group = new SlideShape { Id = 72, Kind = SlideShapeKind.Group };
+        group.Children.Add(child);
+        presentation.Slides[0].Shapes.Add(group);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetShapeShadowCommand(
+            0,
+            child.Id,
+            ShapeEffectAuthoringPlanner.Resolve(ShapeShadowPreset.Subtle)));
+
+        child.Effects.Should().NotBeNull();
+        child.Effects!.HasOuterShadow.Should().BeTrue();
+        bus.Undo();
+        child.Effects.Should().BeNull();
+    }
+
+    [Fact]
     public void SetShapeShadowCommand_NoneRemovesOnlyOuterShadow()
     {
         var presentation = Presentation.CreateEmpty();

@@ -154,7 +154,7 @@ public sealed class SetShapeShadowCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return null;
 
-        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+        return ShapeHelper.Find(presentation, _slideIndex, _shapeId);
     }
 
     private static bool HasAnyEffects(ShapeEffects effects) =>
@@ -245,7 +245,7 @@ public sealed class SetShapeGlowCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return null;
 
-        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+        return ShapeHelper.Find(presentation, _slideIndex, _shapeId);
     }
 
     private static bool HasAnyEffects(ShapeEffects effects) =>
@@ -330,7 +330,7 @@ public sealed class SetShapeSoftEdgeCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return null;
 
-        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+        return ShapeHelper.Find(presentation, _slideIndex, _shapeId);
     }
 
     private static bool HasAnyEffects(ShapeEffects effects) =>
@@ -439,7 +439,7 @@ public sealed class SetShapeBevelCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return null;
 
-        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+        return ShapeHelper.Find(presentation, _slideIndex, _shapeId);
     }
 
     private static bool HasAnyEffects(ShapeEffects effects) =>
@@ -557,7 +557,7 @@ public sealed class SetShape3dCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return null;
 
-        return presentation.Slides[_slideIndex].Shapes.FirstOrDefault(shape => shape.Id == _shapeId);
+        return ShapeHelper.Find(presentation, _slideIndex, _shapeId);
     }
 
     private static bool HasAnyEffects(ShapeEffects effects) =>

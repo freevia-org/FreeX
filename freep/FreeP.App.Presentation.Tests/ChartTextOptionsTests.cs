@@ -87,6 +87,30 @@ public sealed class ChartTextOptionsTests
     }
 
     [Fact]
+    public void SetChartTextOptions_GroupedChart_UpdatesAndUndoRestores()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape();
+        var chartShape = new SlideShape { Id = 11, Kind = SlideShapeKind.Chart, Chart = chart };
+        var group = new SlideShape { Id = 12, Kind = SlideShapeKind.Group };
+        group.Children.Add(chartShape);
+        slide.Shapes.Add(group);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetChartTextOptionsCommand(
+            0,
+            chartShape.Id,
+            new ChartTextOptions("Calibri", 14, true, false, null)));
+
+        chart.TextStyle.Should().NotBeNull();
+        chart.TextStyle!.FontFamily.Should().Be("Calibri");
+        bus.Undo();
+        chart.TextStyle.Should().BeNull();
+    }
+
+    [Fact]
     public void SetChartTextOptions_BlankValuesClearAuthoredStyle()
     {
         var presentation = new Presentation();

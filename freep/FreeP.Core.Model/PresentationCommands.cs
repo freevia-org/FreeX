@@ -661,7 +661,7 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
     }
 }
 
-file static class ShapeHelper
+internal static class ShapeHelper
 {
     internal static SlideShape? Find(Presentation p, int slideIndex, uint shapeId)
     {
