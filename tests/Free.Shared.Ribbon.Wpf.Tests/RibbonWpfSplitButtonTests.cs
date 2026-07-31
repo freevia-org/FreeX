@@ -8,6 +8,7 @@ using Free.Shared.Ribbon.Wpf;
 
 namespace Free.Shared.Ribbon.Wpf.Tests;
 
+[Trait("Category", "RibbonUiLane")]
 public sealed class RibbonWpfSplitButtonTests
 {
     [Fact]

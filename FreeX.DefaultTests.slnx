@@ -14,7 +14,6 @@
     <Project Path="tests/FreeX.ParityCompare.Tests/FreeX.ParityCompare.Tests.csproj" />
     <Project Path="tests/Free.Shared.Pdf.Tests/Free.Shared.Pdf.Tests.csproj" />
     <Project Path="tests/Free.Shared.Ribbon.Tests/Free.Shared.Ribbon.Tests.csproj" />
-    <Project Path="tests/Free.Shared.Ribbon.Wpf.Tests/Free.Shared.Ribbon.Wpf.Tests.csproj" />
     <Project Path="tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj" />
     <Project Path="freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
