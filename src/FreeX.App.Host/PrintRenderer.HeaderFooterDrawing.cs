@@ -43,7 +43,7 @@ public static partial class PrintRenderer
         // band entirely inside that same grid span, printing the footer on top of the last row(s).
         // Clamping footerY to never start above the grid's own bottom edge keeps the footer band
         // below the grid, matching Excel and the already-fixed PDF export tier.
-        var gridBottomEdge = pageH - Math.Max(marginBottom, footerMargin);
+        var gridBottomEdge = pageH - PageGeometryRules.ResolveBodyEdge(marginBottom, footerMargin);
         var footerY = Math.Max(Math.Max(4, pageH - footerMargin - footerHeight), gridBottomEdge);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;

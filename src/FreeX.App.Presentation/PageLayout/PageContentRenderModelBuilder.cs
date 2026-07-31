@@ -156,7 +156,7 @@ public static class PageContentRenderModelBuilder
         // printed row in print preview whenever Header margin &gt; Top margin, even though the actual
         // desktop print/PDF-export output (once separately fixed) did not.
         var headerMarginPx = sheet.HeaderMargin * Dpi;
-        var contentTop = Math.Max(marginTop, headerMarginPx) + yOffset;
+        var contentTop = PageGeometryRules.ResolveBodyEdge(marginTop, headerMarginPx) + yOffset;
         var gridLeft = contentLeft + measurement.HeaderWidth;
         var gridTop = contentTop + measurement.HeaderHeight;
         var gridBounds = new LayoutRect(
@@ -281,7 +281,7 @@ public static class PageContentRenderModelBuilder
         var scaledHeight = printedHeight * scaleRatio;
         var widthFitScale = scaledWidth > printableWidth && scaledWidth > 0 ? printableWidth / scaledWidth : 1.0;
         var heightFitScale = scaledHeight > printableHeight && scaledHeight > 0 ? printableHeight / scaledHeight : 1.0;
-        scaleRatio *= Math.Min(widthFitScale, heightFitScale);
+        scaleRatio *= PageGeometryRules.ResolveUniformScale(widthFitScale, heightFitScale);
 
         return double.IsFinite(scaleRatio) && scaleRatio > 0 ? scaleRatio : 1.0;
     }
@@ -794,7 +794,7 @@ public static class PageContentRenderModelBuilder
         // bodyBottomInches), so once FooterMargin exceeds BottomMargin the unclamped footer band would
         // land inside the grid's own span, printing on top of the last row(s) in both shells' shared
         // print-preview canvas. Clamp so the footer band never starts above the grid's bottom edge.
-        var gridBottomEdge = pageH - Math.Max(marginBottom, footerMargin);
+        var gridBottomEdge = pageH - PageGeometryRules.ResolveBodyEdge(marginBottom, footerMargin);
         var footerY = Math.Max(Math.Max(4, pageH - footerMargin - lineHeight), gridBottomEdge);
         var leftInset = sheet.HeaderFooterAlignWithMargins ? marginLeft : 0.3 * Dpi;
         var rightInset = sheet.HeaderFooterAlignWithMargins ? marginRight : 0.3 * Dpi;

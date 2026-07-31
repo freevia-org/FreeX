@@ -225,8 +225,8 @@ public static class PagePaginationPlanner
         // header/footer margins as an ADDITIONAL reservation on top of the top/bottom margins (the old
         // PR5 formula) silently lost real body height even with the universal defaults (0.3in
         // header/footer margin under a 0.75in top/bottom margin), where Excel reserves nothing extra.
-        var bodyTopInches = Math.Max(margins.Top, headerMarginInches);
-        var bodyBottomInches = Math.Max(margins.Bottom, footerMarginInches);
+        var bodyTopInches = PageGeometryRules.ResolveBodyEdge(margins.Top, headerMarginInches);
+        var bodyBottomInches = PageGeometryRules.ResolveBodyEdge(margins.Bottom, footerMarginInches);
         var printableWidth = Math.Max(1.0, (pageSize.Width - margins.Left - margins.Right) * Dpi);
         var printableHeight = Math.Max(1.0, (pageSize.Height - bodyTopInches - bodyBottomInches) * Dpi);
 
@@ -309,7 +309,7 @@ public static class PagePaginationPlanner
 
             var widthScale = ComputeScaleFraction(baseColumnsPerPage, columnsPerPageIfWideOnly);
             var heightScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPageIfTallOnly);
-            var uniformScale = Math.Min(widthScale, heightScale);
+            var uniformScale = PageGeometryRules.ResolveUniformScale(widthScale, heightScale);
 
             columnsPerPage = ApplyUniformScaleToFreeAxis(baseColumnsPerPage, uniformScale);
             rowsPerPage = ApplyUniformScaleToFreeAxis(baseRowsPerPage, uniformScale);
@@ -348,17 +348,20 @@ public static class PagePaginationPlanner
     /// The "s" shrink fraction implied by going from <paramref name="baseItemsPerPage"/> (the natural,
     /// unscaled per-page item count) to <paramref name="resolvedItemsPerPage"/>: <c>s = base / resolved</c>,
     /// i.e. <c>resolved = base / s</c> -- the same relationship <see cref="ApplyScaleToFitCapacity"/>'s
-    /// explicit-percent branch uses (<c>s = percent / 100</c>).
+    /// explicit-percent branch uses (<c>s = percent / 100</c>). Public so other page-setup-driven
+    /// capacity resolvers (e.g. the PDF export tier's page-setup resolver) share this single
+    /// implementation instead of re-deriving an identical copy.
     /// </summary>
-    private static double ComputeScaleFraction(uint baseItemsPerPage, uint resolvedItemsPerPage) =>
+    public static double ComputeScaleFraction(uint baseItemsPerPage, uint resolvedItemsPerPage) =>
         resolvedItemsPerPage == 0 ? 1.0 : baseItemsPerPage / (double)resolvedItemsPerPage;
 
     /// <summary>
     /// Applies the uniform shrink fraction derived from the constrained axis to the free axis's
     /// baseline capacity, clamped to the same [<see cref="MinScalePercent"/>, <see cref="MaxScalePercent"/>]
-    /// range as an explicit scale percent.
+    /// range as an explicit scale percent. Public for the same sharing reason as
+    /// <see cref="ComputeScaleFraction"/>.
     /// </summary>
-    private static uint ApplyUniformScaleToFreeAxis(uint baseItemsPerPage, double scaleFraction)
+    public static uint ApplyUniformScaleToFreeAxis(uint baseItemsPerPage, double scaleFraction)
     {
         if (scaleFraction <= 0 || !double.IsFinite(scaleFraction))
             return baseItemsPerPage;
