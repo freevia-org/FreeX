@@ -38,7 +38,7 @@ public static class SlideShowMediaInteractionPlanner
     {
         ArgumentNullException.ThrowIfNull(slide);
 
-        return slide.Shapes
+        return EnumerateShapes(slide.Shapes)
             .Where(shape => shape.Kind == SlideShapeKind.Media && shape.Media is not null)
             .Select(shape => BuildShapePlan(shape, slideDipW, slideDipH, canvasW, canvasH))
             .ToArray();
@@ -109,5 +109,15 @@ public static class SlideShowMediaInteractionPlanner
             hasEmbeddedSource || hasLinkedSource,
             hasEmbeddedSource ? "embedded" : hasLinkedSource ? "http-link" : "missing",
             PlaybackBackendCapabilityNote);
+    }
+
+    private static IEnumerable<SlideShape> EnumerateShapes(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            foreach (var child in EnumerateShapes(shape.Children))
+                yield return child;
+        }
     }
 }

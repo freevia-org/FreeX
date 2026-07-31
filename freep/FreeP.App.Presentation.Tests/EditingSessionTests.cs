@@ -747,6 +747,19 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void InsertDefaultTextBox_AllocatesIdAfterGroupedDescendants()
+    {
+        var sess = Make();
+        var group = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        group.Children.Add(MakeShape(80));
+        sess.CurrentSlide!.Shapes.Add(group);
+
+        var inserted = sess.InsertDefaultTextBox();
+
+        inserted.Id.Should().Be(81);
+    }
+
+    [Fact]
     public void InsertMedia_AddsEmbeddedVideoAndIsUndoable()
     {
         var sess = Make();

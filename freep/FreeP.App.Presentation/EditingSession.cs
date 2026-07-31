@@ -1412,7 +1412,17 @@ public sealed class EditingSession
     {
         var slide = CurrentSlide;
         if (slide is null) return 1u;
-        return slide.Shapes.Count == 0 ? 1u : slide.Shapes.Max(s => s.Id) + 1u;
+        return EnumerateAllShapes(slide.Shapes).Select(shape => shape.Id).DefaultIfEmpty().Max() + 1u;
+    }
+
+    private static IEnumerable<SlideShape> EnumerateAllShapes(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            foreach (var child in EnumerateAllShapes(shape.Children))
+                yield return child;
+        }
     }
 
     private int NextSmartArtPartIndex()
