@@ -116,6 +116,20 @@ public sealed partial class MainWindowMouseSelectionSourceTests
     }
 
     [Fact]
+    public void HeaderDragRangeUsesPointerDownIndexAsExplicitAnchor()
+    {
+        var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");
+        var extend = selectionSource[
+            selectionSource.IndexOf("private void ExtendHeaderSelection", StringComparison.Ordinal)..
+            selectionSource.IndexOf("private bool IsHeaderSelectionExtensionUnchanged", StringComparison.Ordinal)];
+
+        extend.Should().Contain("var firstCol = Math.Min(anchorIndex, targetIndex);");
+        extend.Should().Contain("var firstRow = Math.Min(anchorIndex, targetIndex);");
+        extend.Should().Contain("var anchor = new CellAddress(_currentSheetId, 1, anchorIndex);");
+        extend.Should().Contain("var anchor = new CellAddress(_currentSheetId, anchorIndex, 1);");
+    }
+
+    [Fact]
     public void HeaderMouseSelectionClearsDragStateOnCancelAndMouseUp()
     {
         var selectionSource = DialogSourceTestSupport.ReadHostSources("MainWindow.Selection.cs");

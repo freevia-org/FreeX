@@ -7742,12 +7742,12 @@ public sealed partial class MainWindow : Window
         if (kind == HeaderResizeKind.Column)
         {
             var targetCol = TryResolveColumnHeaderPointerIndex(args, out var col) ? col : index;
-            SelectEntireColumn(targetCol, extend: true);
+            SelectEntireColumnFromHeaderDrag(targetCol, _headerSelectionDragAnchorIndex);
         }
         else
         {
             var targetRow = TryResolveRowHeaderPointerIndex(args, out var row) ? row : index;
-            SelectEntireRow(targetRow, extend: true);
+            SelectEntireRowFromHeaderDrag(targetRow, _headerSelectionDragAnchorIndex);
         }
         args.Handled = true;
     }

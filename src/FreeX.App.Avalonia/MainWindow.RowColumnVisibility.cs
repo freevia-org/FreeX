@@ -115,13 +115,24 @@ public sealed partial class MainWindow
     private void SelectEntireRow(uint row, bool extend = false)
     {
         var anchorRow = extend ? _session.ActiveCell.Row : row;
+        SelectEntireRowRange(anchorRow, row);
+    }
+
+    private void SelectEntireRowFromHeaderDrag(uint targetRow, uint anchorRow) =>
+        SelectEntireRowRange(anchorRow, targetRow);
+
+    private void SelectEntireRowRange(uint anchorRow, uint targetRow)
+    {
         var sheet = _session.ActiveSheet.Id;
         var range = SelectionRangeService.GetWholeRows(
-            new GridRange(new CellAddress(sheet, anchorRow, 1), new CellAddress(sheet, row, 1)));
+            new GridRange(new CellAddress(sheet, anchorRow, 1), new CellAddress(sheet, targetRow, 1)));
 
         // Match the WPF SelectRow route: a row-header click is a formula reference
         // while point mode is active, not a request to commit the edit first.
-        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+        if (TryApplyFormulaRangeSelection(
+                range,
+                new CellAddress(sheet, anchorRow, 1),
+                new CellAddress(sheet, targetRow, CellAddress.MaxCol)))
             return;
 
         if (!TryCommitPendingFormulaEdit())
@@ -167,12 +178,23 @@ public sealed partial class MainWindow
     private void SelectEntireColumn(uint col, bool extend = false)
     {
         var anchorCol = extend ? _session.ActiveCell.Col : col;
+        SelectEntireColumnRange(anchorCol, col);
+    }
+
+    private void SelectEntireColumnFromHeaderDrag(uint targetCol, uint anchorCol) =>
+        SelectEntireColumnRange(anchorCol, targetCol);
+
+    private void SelectEntireColumnRange(uint anchorCol, uint targetCol)
+    {
         var sheet = _session.ActiveSheet.Id;
         var range = SelectionRangeService.GetWholeColumns(
-            new GridRange(new CellAddress(sheet, 1, anchorCol), new CellAddress(sheet, 1, col)));
+            new GridRange(new CellAddress(sheet, 1, anchorCol), new CellAddress(sheet, 1, targetCol)));
 
         // Keep column-header point selection on the shared formula-entry path, as WPF does.
-        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+        if (TryApplyFormulaRangeSelection(
+                range,
+                new CellAddress(sheet, 1, anchorCol),
+                new CellAddress(sheet, CellAddress.MaxRow, targetCol)))
             return;
 
         if (!TryCommitPendingFormulaEdit())

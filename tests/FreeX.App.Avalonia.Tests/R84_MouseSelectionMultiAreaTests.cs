@@ -159,6 +159,45 @@ public sealed class R84_MouseSelectionMultiAreaTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task HeaderDragAfterShiftClick_UsesPointerDownHeaderAsAnchor()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sheet = window.Session.Workbook.AddSheet("HeaderDragAnchorFixture");
+                window.Session.SelectSheet(sheet.Id);
+
+                // Shift-click D after selecting B creates B:D, but the drag that follows starts
+                // at D. WPF retains D as the pointer-down anchor rather than reusing the range's
+                // active-cell anchor (B).
+                InvokeSelectEntireColumn(window, 2, extend: false);
+                InvokeSelectEntireColumn(window, 4, extend: true);
+                InvokeSelectEntireColumnFromHeaderDrag(window, 6, 4);
+
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    new CellAddress(sheet.Id, 1, 4),
+                    new CellAddress(sheet.Id, CellAddress.MaxRow, 6)));
+
+                InvokeSelectEntireRow(window, 2, extend: false);
+                InvokeSelectEntireRow(window, 4, extend: true);
+                InvokeSelectEntireRowFromHeaderDrag(window, 6, 4);
+
+                window.Session.SelectedRange.Should().Be(new GridRange(
+                    new CellAddress(sheet.Id, 4, 1),
+                    new CellAddress(sheet.Id, 6, CellAddress.MaxCol)));
+            }
+            finally
+            {
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
     private static void InvokeSelectEntireColumn(MainWindow window, uint col, bool extend) =>
         typeof(MainWindow)
             .GetMethod("SelectEntireColumn", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -168,4 +207,19 @@ public sealed class R84_MouseSelectionMultiAreaTests
         typeof(MainWindow)
             .GetMethod("AddAdditionalColumnSelection", BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(window, [col]);
+
+    private static void InvokeSelectEntireColumnFromHeaderDrag(MainWindow window, uint targetCol, uint anchorCol) =>
+        typeof(MainWindow)
+            .GetMethod("SelectEntireColumnFromHeaderDrag", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [targetCol, anchorCol]);
+
+    private static void InvokeSelectEntireRow(MainWindow window, uint row, bool extend) =>
+        typeof(MainWindow)
+            .GetMethod("SelectEntireRow", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [row, extend]);
+
+    private static void InvokeSelectEntireRowFromHeaderDrag(MainWindow window, uint targetRow, uint anchorRow) =>
+        typeof(MainWindow)
+            .GetMethod("SelectEntireRowFromHeaderDrag", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, [targetRow, anchorRow]);
 }

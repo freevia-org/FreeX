@@ -298,8 +298,8 @@ public sealed class AvaloniaGridInputSourceTests
         // split header resolves correctly too, not just viewport.ColMetrics/RowMetrics (main pane).
         source.Should().Contain("foreach (var metric in CombineSplitColumnMetrics(_session.Viewport))");
         source.Should().Contain("foreach (var metric in CombineSplitRowMetrics(_session.Viewport))");
-        source.Should().Contain("SelectEntireColumn(targetCol, extend: true);");
-        source.Should().Contain("SelectEntireRow(targetRow, extend: true);");
+        source.Should().Contain("SelectEntireColumnFromHeaderDrag(targetCol, _headerSelectionDragAnchorIndex);");
+        source.Should().Contain("SelectEntireRowFromHeaderDrag(targetRow, _headerSelectionDragAnchorIndex);");
     }
 
     [Fact]
