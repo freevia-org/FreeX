@@ -410,7 +410,7 @@ public static class PresentationNotesPagePreviewPlanner
         SlideShape? shape,
         int slideNumber)
     {
-        var text = shape is null ? string.Empty : ExtractHeaderFooterText(shape);
+        var text = shape is null ? string.Empty : ExtractHeaderFooterText(shape, slideNumber);
         if (!string.IsNullOrWhiteSpace(text))
             return text.Trim();
 
@@ -419,7 +419,7 @@ public static class PresentationNotesPagePreviewPlanner
             : string.Empty;
     }
 
-    private static string ExtractHeaderFooterText(SlideShape shape)
+    private static string ExtractHeaderFooterText(SlideShape shape, int slideNumber)
     {
         if (shape.TextBody is null)
             return string.Empty;
@@ -427,9 +427,24 @@ public static class PresentationNotesPagePreviewPlanner
         return string.Join(
             Environment.NewLine,
             shape.TextBody.Paragraphs.Select(paragraph => string.Concat(paragraph.Runs.Select(run =>
-                run.Field is { } field && !string.IsNullOrEmpty(field.CachedText)
-                    ? field.CachedText
+                run.Field is { } field
+                    ? ResolveHeaderFooterFieldText(field, slideNumber)
                     : run.Text))));
+    }
+
+    private static string ResolveHeaderFooterFieldText(FieldRun field, int slideNumber)
+    {
+        var fieldType = field.FieldType.ToLowerInvariant();
+        if (fieldType.Contains("slidenum") || fieldType == "\\slidenum" || fieldType == "ppslidenum")
+            return slideNumber.ToString(CultureInfo.InvariantCulture);
+
+        if (!string.IsNullOrEmpty(field.CachedText))
+            return field.CachedText;
+
+        return fieldType.StartsWith("datetime", StringComparison.Ordinal) ||
+            fieldType is "date" or "time"
+            ? DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture)
+            : string.Empty;
     }
 
     private static SlideShape? FindPlaceholderShape(Slide slide, PlaceholderType placeholderType) =>
