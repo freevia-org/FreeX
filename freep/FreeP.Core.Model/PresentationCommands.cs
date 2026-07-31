@@ -669,6 +669,9 @@ internal static class ShapeHelper
         return Find(p.Slides[slideIndex].Shapes, shapeId);
     }
 
+    internal static SlideShape? Find(Slide slide, uint shapeId) =>
+        Find(slide.Shapes, shapeId);
+
     private static SlideShape? Find(IEnumerable<SlideShape> shapes, uint shapeId)
     {
         foreach (var shape in shapes)
