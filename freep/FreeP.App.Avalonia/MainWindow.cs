@@ -921,6 +921,7 @@ public sealed partial class MainWindow : Window
             LoadPresentationAsSaved(_presentation, path: null);
         }
 
+        SeedPhysicalSmartArtTextPaneIfRequested();
         SeedPhysicalHyperlinkFixtureIfRequested();
 
         Content = windowFrame.Root;
@@ -965,6 +966,28 @@ public sealed partial class MainWindow : Window
             Trigger = AnimationTrigger.OnClick,
             DurationMs = 500,
         });
+        RefreshCanvas();
+    }
+
+    private void SeedPhysicalSmartArtTextPaneIfRequested()
+    {
+        if (!string.Equals(
+                Environment.GetEnvironmentVariable("FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED"),
+                "1",
+                StringComparison.Ordinal) ||
+            Editor.CurrentSlide is null)
+        {
+            return;
+        }
+
+        var smartArt = Editor.CurrentSlide.Shapes.FirstOrDefault(shape => shape.SmartArt is not null);
+        if (smartArt is null)
+        {
+            return;
+        }
+
+        Editor.Select(smartArt.Id);
+        ShowSmartArtTextPane();
         RefreshCanvas();
     }
 

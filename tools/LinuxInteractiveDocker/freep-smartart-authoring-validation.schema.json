@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freex.local/schemas/freep-linux-smartart-authoring-physical-v1.json",
+  "title": "FreeP Linux physical SmartArt authoring evidence",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "baseline", "appSurface", "coverage", "semanticReadback", "contractValidation", "summary", "results"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freep-linux-smartart-authoring-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeP" },
+    "baseline": { "const": false },
+    "appSurface": { "const": "smartart-text-pane-outline" },
+    "coverage": {
+      "type": "object",
+      "required": ["scope", "exhaustive"],
+      "properties": { "exhaustive": { "const": false } }
+    },
+    "semanticReadback": {
+      "type": "object",
+      "required": ["tool", "selection", "transcripts", "packageParts"],
+      "properties": {
+        "tool": { "const": "xclip" },
+        "selection": { "const": "clipboard" },
+        "transcripts": { "const": ["smartart-outline-reopen"] },
+        "packageParts": { "const": ["ppt/diagrams/data1.xml", "ppt/diagrams/drawing1.xml"] }
+      }
+    },
+    "contractValidation": {
+      "type": "object",
+      "required": ["status", "validator", "contractReference"],
+      "properties": {
+        "status": { "const": "passed" },
+        "validator": { "const": "tools/Run-FreePSmartArtAuthoringValidation.ps1" },
+        "contractReference": { "const": "tools/LinuxInteractiveDocker/freep-smartart-authoring-validation.schema.json" }
+      }
+    },
+    "summary": { "type": "object", "properties": { "total": { "const": 4 } } },
+    "results": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["id", "category", "status", "evidenceLevel", "evidence", "note"],
+        "properties": {
+          "category": { "const": "physical-x11-smartart-authoring" },
+          "status": { "const": "passed" },
+          "evidenceLevel": { "const": "physical-x11-input" },
+          "evidence": { "type": "array", "minItems": 1 },
+          "note": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
