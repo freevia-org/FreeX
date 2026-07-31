@@ -2975,12 +2975,20 @@ public sealed partial class MainWindow : Window
 
         foreach (var plan in PresentationAnimationCommandPlanner.BuiltInPlans)
         {
-            r.Register(plan.CommandId, new ContextRibbonCommand(ctx =>
-                PresentationAnimationCommandPlanner.TryApply(
-                    Editor,
-                    plan,
-                    ctx.SelectedValue,
-                    OnAnimationPaneRequested)));
+            r.Register(
+                plan.CommandId,
+                plan.Intent == PresentationAnimationCommandIntentKind.TogglePane
+                    ? new AnimationPaneToggleCommand(
+                        Editor,
+                        plan,
+                        () => IsAnimationPaneVisible,
+                        OnAnimationPaneRequested)
+                    : new ContextRibbonCommand(ctx =>
+                        PresentationAnimationCommandPlanner.TryApply(
+                            Editor,
+                            plan,
+                            ctx.SelectedValue,
+                            OnAnimationPaneRequested)));
         }
 
         // Slide show
@@ -5721,6 +5729,7 @@ public sealed partial class MainWindow : Window
         var plan = RefreshAnimationPaneTimelinePlan(selectedAnimationIndex);
         RenderAnimationPane(plan);
         _animationPaneHost.IsVisible = true;
+        SyncRibbonCommandStates();
         RefreshPaneAccessibilityMetadata();
         return plan;
     }
@@ -5729,6 +5738,7 @@ public sealed partial class MainWindow : Window
     {
         if (_animationPaneHost is not null)
             _animationPaneHost.IsVisible = false;
+        SyncRibbonCommandStates();
         RefreshPaneAccessibilityMetadata();
     }
 
@@ -9811,6 +9821,37 @@ public sealed partial class MainWindow : Window
             IsEnabled: true,
             IsChecked: PresentationTransitionCommandPlanner.IsAdvanceOnClickChecked(
                 editor.CurrentSlideTransition));
+    }
+
+    private sealed class AnimationPaneToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly EditingSession _editor;
+        private readonly PresentationAnimationCommandPlan _plan;
+        private readonly Func<bool> _isPaneVisible;
+        private readonly Action<PresentationAnimationCommandPlan> _togglePane;
+
+        public AnimationPaneToggleCommand(
+            EditingSession editor,
+            PresentationAnimationCommandPlan plan,
+            Func<bool> isPaneVisible,
+            Action<PresentationAnimationCommandPlan> togglePane)
+        {
+            _editor = editor;
+            _plan = plan;
+            _isPaneVisible = isPaneVisible;
+            _togglePane = togglePane;
+        }
+
+        public void Execute(RibbonCommandContext context) =>
+            PresentationAnimationCommandPlanner.TryApply(
+                _editor,
+                _plan,
+                context.SelectedValue,
+                _togglePane);
+
+        public RibbonCommandState GetState() => new(
+            IsEnabled: true,
+            IsChecked: _isPaneVisible());
     }
 
     private sealed class ViewShowToggleCommand : IRibbonStatefulCommand
