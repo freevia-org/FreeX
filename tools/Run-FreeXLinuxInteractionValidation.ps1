@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
+    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -1171,6 +1171,10 @@ try {
         @(
             "autofilter-recalculation-apply-change-clear-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "backstage-print") {
+        @(
+            "backstage-print-ctrl-shift-f12-cancel"
+        )
     } elseif ($PhysicalProbeSelector -eq "formula-3d-grip") {
         @(
             "formula-bar-point-mode-3d-sheet-range-grip"
@@ -1245,6 +1249,8 @@ try {
     })
     $artifactRequiredPhysicalProbeIds = if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
         @("name-box-dropdown-parity-native-crop")
+    } elseif ($PhysicalProbeSelector -eq "backstage-print") {
+        @("backstage-print-ctrl-shift-f12-cancel")
     } elseif ($PhysicalProbeSelector -eq "name-box-dropdown") {
         @(
             "name-box-dropdown-keyboard-physical",

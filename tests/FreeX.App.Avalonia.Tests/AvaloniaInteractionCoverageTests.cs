@@ -243,6 +243,8 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("Sheet2Anchor", probe, StringComparison.Ordinal);
         Assert.Contains("Sheet3Anchor", probe, StringComparison.Ordinal);
         Assert.Contains("harmless readiness sentinel", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_selector\" == \"backstage-print", probe, StringComparison.Ordinal);
+        Assert.Contains("screen_changed \"$output/$before_screenshot\"", probe, StringComparison.Ordinal);
         Assert.True(
             probe.IndexOf("probe_backstage_print_shortcut", StringComparison.Ordinal) <
             probe.IndexOf("probe_cancelable_window \"native-save-as-f12-cancel\"", StringComparison.Ordinal));

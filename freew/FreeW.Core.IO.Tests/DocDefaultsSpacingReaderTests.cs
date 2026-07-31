@@ -85,6 +85,28 @@ public class DocDefaultsSpacingReaderTests
     }
 
     [Fact]
+    public void ImportedDocument_MarksMissingLineRuleForWordApplicationDefault()
+    {
+        var doc = Read("<w:p><w:r><w:t>body</w:t></w:r></w:p>");
+        var formatting = FirstFormatting(doc);
+
+        doc.UseWordApplicationDefaultLineSpacing.Should().BeTrue();
+        formatting.LineSpacing.Should().Be(1.15);
+        formatting.LineSpacingIsSet.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExplicitSingleLineRule_RemainsAuthoritativeOverWordApplicationDefault()
+    {
+        var doc = Read("<w:p><w:pPr><w:spacing w:line=\"240\" w:lineRule=\"auto\"/></w:pPr><w:r><w:t>body</w:t></w:r></w:p>");
+        var formatting = FirstFormatting(doc);
+
+        doc.UseWordApplicationDefaultLineSpacing.Should().BeTrue();
+        formatting.LineSpacing.Should().Be(1.0);
+        formatting.LineSpacingIsSet.Should().BeTrue();
+    }
+
+    [Fact]
     public void Autospacing_OverridesLiteralValue()
     {
         // w:afterAutospacing means Word ignores the literal after value and uses automatic (~one line)

@@ -3138,7 +3138,7 @@ probe_backstage_print_shortcut() {
     open_count="$(visible_window_count)"
     capture "$after_screenshot"
 
-    if [[ "$open_count" == "$before_count" ]] && screen_changed "$before_screenshot" "$after_screenshot" 300; then
+    if [[ "$open_count" == "$before_count" ]] && screen_changed "$output/$before_screenshot" "$output/$after_screenshot" 300; then
         opened=true
     fi
 
@@ -3147,7 +3147,7 @@ probe_backstage_print_shortcut() {
     cancel_count="$(visible_window_count)"
     capture "$cancel_screenshot"
     if $opened && [[ "$cancel_count" == "$before_count" ]] &&
-       screen_changed "$after_screenshot" "$cancel_screenshot" 300; then
+       screen_changed "$output/$after_screenshot" "$output/$cancel_screenshot" 300; then
         closed=true
     fi
 
@@ -3171,6 +3171,15 @@ if ! command -v xclip >/dev/null 2>&1; then
     record "x11-clipboard-precondition" "failed" "x11-input-results.json" "$calibration_reason"
     write_manifest
     exit 2
+fi
+
+if [[ "$probe_selector" == "backstage-print" ]]; then
+    probe_backstage_print_shortcut
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
 fi
 
 if [[ "$probe_selector" == "sheet-tabs" ]]; then

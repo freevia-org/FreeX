@@ -77,6 +77,10 @@ public sealed class DocumentView : RichTextBox
 {
     private const double PxPerPoint = 96.0 / 72.0;
 
+    // Word's implicit 1.15-line application default uses a taller Calibri line box than WPF's
+    // FontFamily.LineSpacing metric. Calibrated against a three-page Word COM continuation fixture.
+    private const double ImportedWordApplicationLineHeightScale = 1.10;
+
     // Matches the shared planner's default page-space gap around wrapped objects.
     private const double FloatingWrapGapDip = 9.0;
 
@@ -9466,11 +9470,15 @@ public sealed class DocumentView : RichTextBox
             if (!paraFmt.LineSpacingIsSet)
                 paraFmt = paraFmt with { LineSpacing = 1.0, LineRule = LineSpacingRule.Multiple, LineHeightPt = 0 };
         }
-        // A missing w:spacing/@w:line uses Word's natural single-line layout. ParagraphFormatting
-        // carries 1.15 as a convenient model default, but that value is not an explicit OOXML line
-        // rule and must not force WPF's LineHeight on a document that omitted it.
+        // Imported WordprocessingML uses Word's application default multiple when the package cascade
+        // omits w:spacing/@w:line. Model-authored FreeW documents keep the host's natural single-line box.
+        // Explicit paragraph/style rules and non-default model values remain authoritative.
+        var usesWordApplicationDefaultLineSpacing = !paraFmt.LineSpacingIsSet &&
+            Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) <= 0.0001 &&
+            document.UseWordApplicationDefaultLineSpacing;
         var hasExplicitMultipleLineSpacing = paraFmt.LineSpacingIsSet ||
-            Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
+            Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001 ||
+            usesWordApplicationDefaultLineSpacing;
         var wpf = new WpfParagraph
         {
             // Right-to-left paragraph direction (w:bidi). WPF lays the inline content out RTL and, because
@@ -9506,7 +9514,9 @@ public sealed class DocumentView : RichTextBox
             // approximated as exact, the closest FlowDocument behaviour).
             LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple && hasExplicitMultipleLineSpacing
                 ? (paraFmt.LineSpacing > 0
-                    ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
+                    ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) *
+                      (usesWordApplicationDefaultLineSpacing ? ImportedWordApplicationLineHeightScale : 1.0) *
+                      (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
                     : double.NaN)
                 : (paraFmt.LineHeightPt > 0 ? paraFmt.LineHeightPt * PxPerPoint : double.NaN),
             LineStackingStrategy = paraFmt.LineRule == LineSpacingRule.Exact

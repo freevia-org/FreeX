@@ -990,7 +990,7 @@ public sealed class PresentationExportPlannerTests
         slide.Shapes.Add(MakeHeaderFooterPlaceholder(
             PlaceholderType.DateTime,
             string.Empty,
-            "datetime1",
+            "datetime3",
             cachedText: string.Empty));
         slide.Shapes.Add(MakeHeaderFooterPlaceholder(
             PlaceholderType.SlideNumber,
@@ -1003,10 +1003,21 @@ public sealed class PresentationExportPlannerTests
 
         plan.HeaderFooterPlaceholders
             .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.DateTime)
-            .Text.Should().Be(DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture));
+            .Text.Should().Be(HeaderFooterDateTimeFormatter.Format("datetime3", DateTime.Now));
         plan.HeaderFooterPlaceholders
             .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.SlideNumber)
             .Text.Should().Be("1");
+    }
+
+    [Theory]
+    [InlineData("datetime1", "7/6/2026")]
+    [InlineData("datetime2", "Monday, July 6, 2026")]
+    [InlineData("datetime3", "6 July 2026")]
+    [InlineData("datetime4", "July 6, 2026")]
+    public void NotesPagePreviewPlan_UsesAutomaticDateFieldFormat(string fieldType, string expected)
+    {
+        HeaderFooterDateTimeFormatter.Format(fieldType, new DateTime(2026, 7, 6))
+            .Should().Be(expected);
     }
 
     [Fact]
