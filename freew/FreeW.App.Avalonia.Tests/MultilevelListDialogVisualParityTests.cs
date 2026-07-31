@@ -1,8 +1,11 @@
+using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
@@ -23,6 +26,8 @@ public sealed class MultilevelListDialogVisualParityTests
             var combos = controls.OfType<ComboBox>().ToArray();
             var textBoxes = controls.OfType<TextBox>().ToArray();
             var buttons = controls.OfType<Button>().ToArray();
+            var actionRow = controls.OfType<StackPanel>()
+                .Single(panel => panel.Children.OfType<Button>().Count() == 2);
 
             dialog.Width.Should().Be(380);
             combos.Should().HaveCount(4);
@@ -30,6 +35,8 @@ public sealed class MultilevelListDialogVisualParityTests
             combos.Skip(1).Should().OnlyContain(combo => combo.MinWidth == 130);
             textBoxes.Should().HaveCount(2);
             textBoxes.Should().OnlyContain(textBox => textBox.MinWidth == 60);
+            combos.Should().OnlyContain(combo => combo.Margin == new Thickness(0, 0, 0, 4));
+            textBoxes.Should().OnlyContain(textBox => textBox.Margin == new Thickness(0, 0, 0, 4));
             combos.Should().OnlyContain(combo => combo.HorizontalAlignment == HorizontalAlignment.Stretch);
             textBoxes.Should().OnlyContain(textBox => textBox.HorizontalAlignment == HorizontalAlignment.Stretch);
             combos.Should().OnlyContain(combo => combo.Height == 20);
@@ -37,6 +44,38 @@ public sealed class MultilevelListDialogVisualParityTests
             buttons.Select(button => button.Content?.ToString()).Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
             buttons.Single(button => button.IsDefault).Content.Should().Be(ShellStrings.Current.Ok);
             buttons.Single(button => button.IsCancel).Content.Should().Be(ShellStrings.Current.Cancel);
+            buttons.Select(button => AutomationProperties.GetName(button))
+                .Should().Equal(
+                    ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok),
+                    ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Cancel));
+            actionRow.Spacing.Should().Be(8);
+            actionRow.Margin.Should().Be(new Thickness(0, 12, 0, 0));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Invalid_start_uses_wpf_validation_target_without_opening_a_nested_dialog()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new MultilevelListDialog(MultiLevelListFormat.DecimalNumberFormats);
+            dialog.Show();
+            try
+            {
+                dialog.UpdateLayout();
+                var start = dialog.GetLogicalDescendants().OfType<TextBox>().First();
+                start.Text = "0";
+
+                dialog.ValidateForTest();
+
+                start.IsFocused.Should().BeTrue();
+                start.SelectionStart.Should().Be(0);
+                start.SelectionEnd.Should().Be(start.Text?.Length ?? 0);
+            }
+            finally
+            {
+                dialog.Close();
+            }
         }, CancellationToken.None);
     }
 

@@ -33,6 +33,7 @@
   <ItemGroup>
     <ProjectReference Include="..\FreeW.App.Localization\FreeW.App.Localization.csproj" />
     <ProjectReference Include="..\FreeW.App.Host\FreeW.App.Host.csproj" />
+    <ProjectReference Include="..\tools\FreeW.DialogVisualHarness\FreeW.DialogVisualHarness.csproj" Aliases="Harness" />
   </ItemGroup>
 
 </Project>

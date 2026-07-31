@@ -1134,9 +1134,12 @@ public sealed partial class MainWindow
             if (_chartDragSession is not { } session || !ReferenceEquals(session.Container, container))
                 return;
 
-            args.Pointer.Capture(null);
             var committed = session.Moved;
             _chartDragSession = null;
+            // Clear the session before releasing capture: Avalonia may raise PointerCaptureLost
+            // synchronously, and that event must take the cancellation path only for an active drag.
+            args.Pointer.Capture(null);
+            container.Cursor = Cursor.Default;
             if (committed)
                 CommitChartDrag(session, container);
             args.Handled = true;
@@ -1145,7 +1148,14 @@ public sealed partial class MainWindow
         container.PointerCaptureLost += (_, _) =>
         {
             if (_chartDragSession is { } session && ReferenceEquals(session.Container, container))
+            {
                 _chartDragSession = null;
+                container.Cursor = Cursor.Default;
+                // Capture can be revoked without PointerReleased (window deactivation, an overlay
+                // rebuild, or platform cancellation). Discard the live preview just as the shared
+                // drawing-object path does from OnLostMouseCapture.
+                RefreshShell(string.Empty);
+            }
         };
     }
 

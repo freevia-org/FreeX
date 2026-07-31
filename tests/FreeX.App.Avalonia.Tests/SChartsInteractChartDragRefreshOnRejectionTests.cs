@@ -48,6 +48,49 @@ public sealed class SChartsInteractChartDragRefreshOnRejectionTests
         refreshCallCount.Should().Be(2, "both the success path and the rejection path must call RefreshShell");
     }
 
+    [Fact]
+    public void ChartPointerCaptureLoss_RefreshesShellToDiscardLivePreview()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DrawingObjectInteraction.cs"));
+
+        var wireStart = source.IndexOf("private void WireChartDragMoveRelease(", System.StringComparison.Ordinal);
+        var start = source.IndexOf("container.PointerCaptureLost += (_, _) =>", wireStart, System.StringComparison.Ordinal);
+        start.Should().BeGreaterThan(-1, "chart drag cancellation should still be wired through PointerCaptureLost");
+        var end = source.IndexOf("};", start, System.StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        var body = source[start..(end + 2)];
+
+        body.Should().Contain("_chartDragSession = null");
+        body.Should().Contain("container.Cursor = Cursor.Default");
+        body.Should().Contain("RefreshShell(string.Empty)",
+            "capture cancellation must rebuild the overlay from committed chart bounds");
+    }
+
+    [Fact]
+    public void ChartPointerRelease_ClearsSessionBeforeReleasingCapture()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.DrawingObjectInteraction.cs"));
+
+        var wireStart = source.IndexOf("private void WireChartDragMoveRelease(", System.StringComparison.Ordinal);
+        var start = source.IndexOf("container.PointerReleased += (_, args) =>", wireStart, System.StringComparison.Ordinal);
+        start.Should().BeGreaterThan(-1, "chart drag release should still be wired through PointerReleased");
+        var end = source.IndexOf("};", start, System.StringComparison.Ordinal);
+        end.Should().BeGreaterThan(start);
+        var body = source[start..(end + 2)];
+
+        var clearIndex = body.IndexOf("_chartDragSession = null", System.StringComparison.Ordinal);
+        var captureIndex = body.IndexOf("args.Pointer.Capture(null)", System.StringComparison.Ordinal);
+        var commitIndex = body.IndexOf("CommitChartDrag(session, container)", System.StringComparison.Ordinal);
+
+        clearIndex.Should().BeGreaterThan(-1);
+        captureIndex.Should().BeGreaterThan(-1);
+        commitIndex.Should().BeGreaterThan(-1);
+        clearIndex.Should().BeLessThan(captureIndex,
+            "PointerCaptureLost can be synchronous and must not treat normal release as cancellation");
+        captureIndex.Should().BeLessThan(commitIndex,
+            "the final bounds must be committed only after capture release has completed");
+    }
+
     private static int CountOccurrences(string haystack, string needle)
     {
         var count = 0;

@@ -1703,7 +1703,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "basicMatrix and matrix1 now use the bounded shared matrix-family live-layout path for up to four parsed nodes as renderer-neutral quadrant rectangles. Unsupported matrix siblings and matrix diagrams with more than four parsed nodes remain on cached drawing fallback. PowerPoint-authoritative visual baselines and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "basicMatrix and matrix1 use the bounded shared matrix-family live-layout path for parsed nodes in deterministic two-column row-major rectangles, retaining the four-node quadrant geometry; larger inputs continue into additional rows. Unsupported matrix siblings, PowerPoint-authoritative visual baselines, and broader SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.titled-matrix",

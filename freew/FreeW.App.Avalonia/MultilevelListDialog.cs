@@ -4,7 +4,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -24,7 +23,6 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
     private readonly ComboBox _level0Format;
     private readonly ComboBox _level1Format;
     private readonly ComboBox _level2Format;
-    private readonly TextBlock _status = new();
 
     internal MultilevelListDialog(IReadOnlyList<ListNumberFormat> currentFormats)
     {
@@ -46,7 +44,6 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         _level0Format = Combo(labels, state.Level0FormatIndex, 130);
         _level1Format = Combo(labels, state.Level1FormatIndex, 130);
         _level2Format = Combo(labels, state.Level2FormatIndex, 130);
-        AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome, new Thickness(0, 6, 0, 0));
 
         var panel = new StackPanel { Margin = new Thickness(14) };
         panel.Children.Add(new TextBlock
@@ -64,10 +61,12 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         AddField(panel, "Level 1 number style:", _level0Format);
         AddField(panel, "Level 2 number style:", _level1Format);
         AddField(panel, "Level 3 number style:", _level2Format);
-        panel.Children.Add(_status);
-        var ok = Button(ShellStrings.Current.Ok, true, false, Accept);
-        var cancel = Button(ShellStrings.Current.Cancel, false, true, () => Close(null));
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)));
+        panel.Children.Add(AvaloniaCompactDialogChrome.CreateOkCancelRow(
+            Accept,
+            () => Close(null),
+            buttonWidth: 72,
+            margin: new Thickness(0, 12, 0, 0),
+            style: Chrome));
         Content = panel;
         Opened += (_, _) => _levels.Focus();
         KeyDown += (_, args) =>
@@ -81,21 +80,43 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
     public static Task<MultilevelListDefinition?> ShowAsync(Window owner, IReadOnlyList<ListNumberFormat> formats) =>
         new MultilevelListDialog(formats).ShowDialog<MultilevelListDefinition?>(owner);
 
-    private void Accept()
+    private async void Accept()
     {
-        if (MultilevelListDialogPlanner.TryBuildResult(
-                new MultilevelListDialogInput(
-                    _levels.SelectedIndex, _level0Start.Text, _level1Start.Text,
-                    _level0Format.SelectedIndex, _level1Format.SelectedIndex, _level2Format.SelectedIndex),
-                CultureInfo.CurrentCulture, out var result, out var validation))
+        if (TryBuildResult(out var result, out var validation))
         {
             Close(result);
             return;
         }
-        _status.Text = validation?.Message ?? MultilevelListDialogPlanner.PositiveStartAtMessage;
+        await AvaloniaUserMessageDialog.ShowWarningAsync(
+            this,
+            validation?.Message ?? MultilevelListDialogPlanner.PositiveStartAtMessage);
+        FocusValidationTarget(validation);
+    }
+
+    // The visual harness and headless tests need the WPF validation state without opening a
+    // nested modal warning window that would block their dispatcher.
+    internal void ValidateForTest()
+    {
+        if (TryBuildResult(out _, out var validation))
+            return;
+        FocusValidationTarget(validation);
+    }
+
+    private bool TryBuildResult(
+        out MultilevelListDefinition? result,
+        out MultilevelListDialogValidation? validation) =>
+        MultilevelListDialogPlanner.TryBuildResult(
+            new MultilevelListDialogInput(
+                _levels.SelectedIndex, _level0Start.Text, _level1Start.Text,
+                _level0Format.SelectedIndex, _level1Format.SelectedIndex, _level2Format.SelectedIndex),
+            CultureInfo.CurrentCulture,
+            out result,
+            out validation);
+
+    private void FocusValidationTarget(MultilevelListDialogValidation? validation)
+    {
         var target = validation?.Field == MultilevelListDialogField.Level1StartAt ? _level1Start : _level0Start;
-        target.Focus();
-        target.SelectAll();
+        AvaloniaCompactDialogChrome.FocusAndSelect(target);
     }
 
     private static void AddField(StackPanel panel, string label, Control control)
@@ -110,7 +131,8 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         });
         control.HorizontalAlignment = HorizontalAlignment.Stretch;
         // Avalonia's text line metrics are taller than WPF's default TextBlock line box;
-        // use the equivalent visual rhythm so the action row remains inside the WPF client height.
+        // this compact host margin preserves the WPF row rhythm and keeps the fixed
+        // authority-sized action row inside the client bounds.
         control.Margin = new Thickness(0, 0, 0, 4);
         panel.Children.Add(control);
     }
@@ -132,13 +154,5 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         var box = new TextBox { Text = text, MinWidth = minWidth };
         AvaloniaCompactDialogChrome.ApplyTextBox(box, Chrome);
         return box;
-    }
-
-    private static Button Button(string text, bool isDefault, bool isCancel, Action click)
-    {
-        var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
-        AvaloniaCompactDialogChrome.ApplyButton(button, Chrome, 72, isDefault);
-        button.Click += (_, _) => click();
-        return button;
     }
 }

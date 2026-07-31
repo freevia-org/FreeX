@@ -16,7 +16,7 @@ namespace FreeP.App.Compositor;
 ///   <see cref="SmartArtFamily.List"/>      — vertical stack of boxes
 ///   <see cref="SmartArtFamily.Cycle"/>     — N boxes on a circle with arrow connectors
 ///   <see cref="SmartArtFamily.Hierarchy"/> — tree (root top, children below, connector lines)
-///   <see cref="SmartArtFamily.Matrix"/>    — up to four boxes in a quadrant grid
+///   <see cref="SmartArtFamily.Matrix"/>    — two-column grid of boxes with additional rows
 ///
 /// Returns null for <see cref="SmartArtFamily.Unknown"/> → compositor falls back to cached drawing.
 ///
@@ -639,11 +639,11 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count < 2 || string.IsNullOrWhiteSpace(nodes[0].Text))
+        if (nodes.Count == 0 || string.IsNullOrWhiteSpace(nodes[0].Text))
             return null;
 
         var bodyNodes = nodes.Skip(1).ToList();
-        int columns = bodyNodes.Count == 1 ? 1 : 2;
+        int columns = bodyNodes.Count <= 1 ? 1 : 2;
         int rows = (bodyNodes.Count + columns - 1) / columns;
 
         long outerPadX = (long)(fcx * OuterPaddingFrac);
@@ -659,7 +659,9 @@ public static class SmartArtLayoutEngine
 
         long bodyW = fcx - 2 * outerPadX;
         long boxW = Math.Max((bodyW - (columns - 1) * gapX) / columns, 1L);
-        long boxH = Math.Max((bodyH - (rows - 1) * gapY) / rows, 1L);
+        long boxH = rows > 0
+            ? Math.Max((bodyH - (rows - 1) * gapY) / rows, 1L)
+            : 1L;
 
         var shapes = new List<SlideShape>(bodyNodes.Count + 1)
         {
