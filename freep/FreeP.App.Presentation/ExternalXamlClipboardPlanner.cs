@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Xml.Linq;
+using Free.Shared.AppServices;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -319,6 +320,7 @@ public static class ExternalXamlClipboardPlanner
             Underline = style.Underline,
             Strikethrough = style.Strikethrough,
             Color = style.Color,
+            Hyperlink = style.Hyperlink,
         });
     }
 
@@ -369,6 +371,22 @@ public static class ExternalXamlClipboardPlanner
         var foreground = AttributeValue(element, "Foreground");
         if (TryParseColor(foreground, out var color))
             style = style with { Color = color };
+
+        if (localName.Equals("Hyperlink", StringComparison.OrdinalIgnoreCase)
+            || !string.IsNullOrWhiteSpace(AttributeValue(element, "NavigateUri")))
+        {
+            var target = AttributeValue(element, "NavigateUri");
+            var tooltip = AttributeValue(element, "ToolTip")
+                ?? AttributeValue(element, "Tooltip");
+            var hyperlink = ExternalUriLauncher.TryCreateAllowedUri(target ?? string.Empty, out var uri)
+                ? new Hyperlink
+                {
+                    Url = uri.AbsoluteUri,
+                    Tooltip = string.IsNullOrWhiteSpace(tooltip) ? null : tooltip,
+                }
+                : null;
+            style = style with { Hyperlink = hyperlink };
+        }
 
         return style;
     }
@@ -542,5 +560,6 @@ public static class ExternalXamlClipboardPlanner
         bool Strikethrough,
         bool BoldSet,
         bool ItalicSet,
-        ThemeAwareColor? Color);
+        ThemeAwareColor? Color,
+        Hyperlink? Hyperlink);
 }

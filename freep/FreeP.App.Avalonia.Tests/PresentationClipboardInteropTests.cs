@@ -578,7 +578,7 @@ public sealed class PresentationClipboardInteropTests
                       <Table><TableRowGroup><TableRow>
                         <TableCell Background="#FFF2F2F2" Padding="4,2,6,8"
                                    BorderBrush="#FF1F4E79" BorderThickness="1,2,3,4"
-                                   VerticalContentAlignment="Center"><Paragraph><Italic>Q1</Italic></Paragraph></TableCell>
+                                   VerticalContentAlignment="Center"><Paragraph><Hyperlink NavigateUri="https://example.test/q1"><Italic>Q1</Italic></Hyperlink></Paragraph></TableCell>
                         <TableCell><Paragraph>42</Paragraph></TableCell>
                       </TableRow></TableRowGroup></Table>
                     </FlowDocument>
@@ -596,6 +596,8 @@ public sealed class PresentationClipboardInteropTests
         shape.Table!.Rows.Should().ContainSingle();
         shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
             .Single().Text.Should().Be("Q1");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Hyperlink!.Url.Should().Be("https://example.test/q1");
         shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
             .Single().Italic.Should().BeTrue();
         var firstCell = shape.Table.Rows[0].Cells[0];
