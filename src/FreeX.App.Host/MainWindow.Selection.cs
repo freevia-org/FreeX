@@ -202,10 +202,18 @@ public partial class MainWindow
             return false;
 
         if (_formulaEditCell is not { } formulaCell ||
-            !FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
+            !FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
                 editor.Text,
                 _formulaReferenceStart,
                 _formulaReferenceLength,
+                editor.CaretIndex,
+                editor.SelectionLength,
+                out var referenceStart,
+                out var referenceLength) ||
+            !FormulaRangeEntryPlanner.TryAppendDisjointRangeSelection(
+                editor.Text,
+                referenceStart,
+                referenceLength,
                 range,
                 formulaCell,
                 _options.UseR1C1ReferenceStyle,

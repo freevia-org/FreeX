@@ -236,21 +236,37 @@ public partial class MainWindow
         var referenceInsertionIndex = editor.SelectionLength > 0
             ? editor.SelectionStart
             : editor.CaretIndex;
+        var previousReferenceStart = _formulaReferenceStart;
+        var previousReferenceLength = _formulaReferenceLength;
+        if (previousReferenceStart is null && previousReferenceLength is null)
+        {
+            FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
+                editor.Text,
+                previousReferenceStart,
+                previousReferenceLength,
+                referenceInsertionIndex,
+                editor.SelectionLength,
+                out var recoveredStart,
+                out var recoveredLength);
+            previousReferenceStart = recoveredLength > 0 ? recoveredStart : null;
+            previousReferenceLength = recoveredLength > 0 ? recoveredLength : null;
+        }
+
         var applied = getPivotDataPlan is not null
             ? FormulaRangeEntryPlanner.TryApplySelectionText(
                 editor.Text,
                 referenceInsertionIndex,
                 editor.SelectionLength,
-                _formulaReferenceStart,
-                _formulaReferenceLength,
+                previousReferenceStart,
+                previousReferenceLength,
                 getPivotDataPlan.FunctionCall,
                 out var edit)
             : FormulaRangeEntryPlanner.TryApplyRangeSelection(
                 editor.Text,
                 referenceInsertionIndex,
                 editor.SelectionLength,
-                _formulaReferenceStart,
-                _formulaReferenceLength,
+                previousReferenceStart,
+                previousReferenceLength,
                 range,
                 formulaCell.Value,
                 _options.UseR1C1ReferenceStyle,

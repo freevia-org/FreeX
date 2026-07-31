@@ -10107,26 +10107,16 @@ public sealed partial class MainWindow : Window
         out int referenceStart,
         out int referenceLength)
     {
-        referenceStart = 0;
-        referenceLength = 0;
-        if (_formulaReferenceStart is { } trackedStart &&
-            _formulaReferenceLength is { } trackedLength &&
-            trackedStart >= 0 && trackedLength >= 0 &&
-            trackedStart + trackedLength <= (editor.Text?.Length ?? 0))
-        {
-            referenceStart = trackedStart;
-            referenceLength = trackedLength;
-            return true;
-        }
-
         var text = editor.Text ?? "";
         var (caretIndex, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
-        return selectionLength == 0 &&
-            FormulaRangeEntryPlanner.TryGetTrailingReferenceSpan(
-                text,
-                caretIndex,
-                out referenceStart,
-                out referenceLength);
+        return FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
+            text,
+            _formulaReferenceStart,
+            _formulaReferenceLength,
+            caretIndex,
+            selectionLength,
+            out referenceStart,
+            out referenceLength);
     }
 
     private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
@@ -10154,14 +10144,17 @@ public sealed partial class MainWindow : Window
         var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
         var previousReferenceStart = _formulaReferenceStart;
         var previousReferenceLength = _formulaReferenceLength;
-        if (previousReferenceStart is null && previousReferenceLength is null && selectionLength == 0)
+        if (previousReferenceStart is null && previousReferenceLength is null)
         {
             // A physical Avalonia caret edit can clear the tracked span while the TextBox is
             // moving a reverse selection. Recover the authored trailing area before replacing it,
             // including its quoted sheet qualifier, instead of inserting a third reference.
-            FormulaRangeEntryPlanner.TryGetTrailingReferenceSpan(
+            FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
                 text,
+                previousReferenceStart,
+                previousReferenceLength,
                 selectionStart,
+                selectionLength,
                 out var recoveredStart,
                 out var recoveredLength);
             previousReferenceStart = recoveredLength > 0 ? recoveredStart : null;

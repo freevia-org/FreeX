@@ -293,6 +293,32 @@ public static class FormulaRangeEntryPlanner
         return referenceLength > 0;
     }
 
+    public static bool TryGetReferenceSpanForPointEntry(
+        string text,
+        int? trackedReferenceStart,
+        int? trackedReferenceLength,
+        int caretIndex,
+        int selectionLength,
+        out int referenceStart,
+        out int referenceLength)
+    {
+        referenceStart = 0;
+        referenceLength = 0;
+
+        if (trackedReferenceStart is { } trackedStart &&
+            trackedReferenceLength is { } trackedLength &&
+            trackedStart >= 0 && trackedLength >= 0 &&
+            trackedStart + trackedLength <= text.Length)
+        {
+            referenceStart = trackedStart;
+            referenceLength = trackedLength;
+            return true;
+        }
+
+        return selectionLength == 0 &&
+            TryGetTrailingReferenceSpan(text, caretIndex, out referenceStart, out referenceLength);
+    }
+
     private static string FormatRangeReference(
         GridRange selectedRange,
         CellAddress formulaCell,

@@ -36,4 +36,38 @@ public sealed class R93_ExistingFormulaCrossSheetPointingTests
             harness.FormulaBarText.Should().Be("=SUM('Middle Sheet:Final Sheet'!B2");
         });
     }
+
+    [Fact]
+    public void ExistingExternalFormula_PointReplacementCommitsAndEscapeRestoresOriginal()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowFormulaBarSyncTests.MainWindowHarness.Create();
+            var sheet = harness.FirstSheet;
+            var formulaAddress = new CellAddress(sheet.Id, 8, 7);
+            const string externalFormula = "SUM('[Data File.xlsx]Sheet1'!A1)";
+
+            sheet.SetCell(formulaAddress, Cell.FromFormula(externalFormula));
+            harness.SelectActiveCell(8, 7);
+            harness.EditActiveCellInFormulaBar();
+            harness.FormulaBarText.Should().Be("=SUM('[Data File.xlsx]Sheet1'!A1)");
+
+            var closeParen = harness.FormulaBarText.IndexOf(')');
+            harness.SetFormulaBarCaretIndex(closeParen);
+            harness.PressFormulaBarKey(Key.F2).Should().BeTrue();
+            harness.ApplyFormulaRangeSelection(sheet.Id, 2, 2, extend: false).Should().BeTrue();
+            harness.FormulaBarText.Should().Be("=SUM(B2)");
+            harness.PressFormulaBarKey(Key.Enter).Should().BeTrue();
+            sheet.GetCell(formulaAddress)!.FormulaText.Should().Be("SUM(B2)");
+
+            sheet.SetCell(formulaAddress, Cell.FromFormula(externalFormula));
+            harness.SelectActiveCell(8, 7);
+            harness.EditActiveCellInFormulaBar();
+            harness.SetFormulaBarCaretIndex(harness.FormulaBarText.IndexOf(')'));
+            harness.PressFormulaBarKey(Key.F2).Should().BeTrue();
+            harness.ApplyFormulaRangeSelection(sheet.Id, 2, 2, extend: false).Should().BeTrue();
+            harness.PressFormulaBarKey(Key.Escape).Should().BeTrue();
+            sheet.GetCell(formulaAddress)!.FormulaText.Should().Be(externalFormula);
+        });
+    }
 }
