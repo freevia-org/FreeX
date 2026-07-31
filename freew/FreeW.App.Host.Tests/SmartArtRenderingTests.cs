@@ -226,6 +226,11 @@ public sealed class SmartArtRenderingTests
         Assert.Equal(0, outer.BorderThickness.Left);
         Assert.Null(outer.BorderBrush);
 
+        var viewbox = LogicalDescendants<Viewbox>(outer).Single();
+        var translation = Assert.IsType<TranslateTransform>(viewbox.RenderTransform);
+        Assert.Equal(0, translation.X);
+        Assert.Equal(3, translation.Y);
+
         foreach (var text in new[] { "Plan", "Build", "Verify" })
         {
             var node = NodeBorder(view, text);
