@@ -12,6 +12,44 @@ namespace FreeP.App.Host.Tests;
 public sealed class WpfRichTextClipboardAdapterTests
 {
     [StaFact]
+    public void InlineOleRun_RoundTripsThroughWpfFlowDocument()
+    {
+        var source = new TextBody();
+        source.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run { Text = "Before" },
+                new Run
+                {
+                    Text = "\uFFFC",
+                    InlineOleObject = new InlineOleObjectInfo
+                    {
+                        EmbeddedBytes = [0x01, 0x02, 0x03],
+                        FileName = "Embedded.docx",
+                        ClassName = "Word.Document.12",
+                    },
+                },
+                new Run { Text = "After" },
+            },
+        });
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(source);
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(document, source);
+
+        restored.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Before", "\uFFFC", "After");
+        var inlineOle = restored.Paragraphs.Single().Runs[1].InlineOleObject;
+        inlineOle.Should().NotBeNull();
+        inlineOle!.EmbeddedBytes
+            .Should().Equal(0x01, 0x02, 0x03);
+        inlineOle.FileName
+            .Should().Be("Embedded.docx");
+        inlineOle.ClassName
+            .Should().Be("Word.Document.12");
+    }
+
+    [StaFact]
     public void TryPasteDataObject_PreservesInlineXamlImageInsideTextRunSequence()
     {
         var png = Convert.FromBase64String(

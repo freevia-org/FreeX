@@ -651,10 +651,9 @@ public sealed class OsClipboardServiceTests
         objectShape.Kind.Should().Be(SlideShapeKind.Ole);
         objectShape.OleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
         objectShape.OleObject.EmbeddedExtension.Should().Be("docx");
-        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
-            .Select(run => run.Text)
-            .Should().ContainSingle()
-            .Which.Should().Be("Before Embedded result After");
+        InCanvasTextEditPlanner.ExtractPlainText(
+                editor.CurrentSlide.Shapes[1].TextBody)
+            .Should().Be("Before Embedded result After");
     }
 
     [StaFact]

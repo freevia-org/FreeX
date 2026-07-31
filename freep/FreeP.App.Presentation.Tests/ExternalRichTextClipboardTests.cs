@@ -604,11 +604,16 @@ public sealed class ExternalRichTextClipboardTests
         var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
 
         payload.Should().NotBeNull();
-        payload!.PlainText.Should().Be("Before Embedded result After");
+        payload!.PlainText.Should().Be("Before \uFFFCEmbedded result After");
         payload.GetObjectPayloads().Should().ContainSingle();
         payload.GetObjectPayloads()[0].Bytes.Should().Equal(0x01, 0x02, 0x03);
         payload.GetObjectPayloads()[0].FileName.Should().Be("Embedded.docx");
         payload.GetObjectPayloads()[0].ClassName.Should().Be("Word.Document.12");
+        var inline = payload.Body.Paragraphs.Single().Runs
+            .Single(run => run.InlineOleObject is not null);
+        inline.Text.Should().Be("\uFFFC");
+        inline.InlineOleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+        inline.InlineOleObject.FileName.Should().Be("Embedded.docx");
 
         var restored = InCanvasRichClipboardPlanner.Deserialize(
             InCanvasRichClipboardPlanner.Serialize(payload));
@@ -617,6 +622,16 @@ public sealed class ExternalRichTextClipboardTests
         restored.GetObjectPayloads()[0].Bytes.Should().Equal(0x01, 0x02, 0x03);
         restored.GetObjectPayloads()[0].FileName.Should().Be("Embedded.docx");
         restored.GetObjectPayloads()[0].ClassName.Should().Be("Word.Document.12");
+        restored.Body.Paragraphs.Single().Runs
+            .Single(run => run.InlineOleObject is not null)
+            .InlineOleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+
+        var slideBody = InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body);
+        InCanvasTextEditPlanner.ExtractPlainText(slideBody)
+            .Should().Be("Before Embedded result After");
+        slideBody.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .All(run => run.InlineOleObject is null)
+            .Should().BeTrue();
     }
 
     [Fact]

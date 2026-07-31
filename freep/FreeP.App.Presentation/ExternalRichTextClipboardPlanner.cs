@@ -1187,10 +1187,41 @@ public static class ExternalRichTextClipboardPlanner
 
             if (_objectBytes.Count > 0)
             {
-                _objectPayloads.Add(new InCanvasRichClipboardObject(
-                    _objectBytes.ToArray(),
-                    ResolveObjectFileName(),
-                    ResolveObjectClassName()));
+                byte[] bytes = _objectBytes.ToArray();
+                string fileName = ResolveObjectFileName();
+                string? className = ResolveObjectClassName();
+                _objectPayloads.Add(new InCanvasRichClipboardObject(bytes, fileName, className));
+
+                // Keep object order and caret semantics inside the rich editor. The detached
+                // payload list remains for slide-level fallback insertion, while this marker
+                // lets a rich-text paste retain the object at its authored inline position.
+                FlushActiveRun();
+                EnsureParagraph();
+                ApplyParagraphState(_body.Paragraphs[^1]);
+                var style = CurrentStyle();
+                _body.Paragraphs[^1].Runs.Add(new Run
+                {
+                    Text = "\uFFFC",
+                    InlineOleObject = new InlineOleObjectInfo
+                    {
+                        EmbeddedBytes = bytes,
+                        FileName = fileName,
+                        ClassName = className,
+                    },
+                    FontFamily = style.FontFamily,
+                    FontSizePt = style.FontSizePt,
+                    Bold = style.Bold,
+                    BoldSet = style.BoldSet,
+                    Italic = style.Italic,
+                    ItalicSet = style.ItalicSet,
+                    Underline = style.Underline,
+                    Strikethrough = style.Strikethrough,
+                    BaselineOffset = style.BaselineOffset,
+                    Caps = style.Caps,
+                    RightToLeft = style.RunRightToLeft,
+                    Color = style.Color is { } color ? new ThemeAwareColor(color) : null,
+                    Hyperlink = style.Hyperlink,
+                });
             }
 
             _objectBytes.Clear();

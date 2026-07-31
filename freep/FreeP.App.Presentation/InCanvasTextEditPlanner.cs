@@ -513,6 +513,7 @@ public sealed class InCanvasTextEditPlanner
                     || !ImagePartsEqual(ra.InlineImage, rb.InlineImage)
                     || ra.InlineImageWidthEmu != rb.InlineImageWidthEmu
                     || ra.InlineImageHeightEmu != rb.InlineImageHeightEmu
+                    || !InlineOleObjectsEqual(ra.InlineOleObject, rb.InlineOleObject)
                     || ra.Bold != rb.Bold
                     || ra.Italic != rb.Italic
                     || ra.Underline != rb.Underline
@@ -562,6 +563,16 @@ public sealed class InCanvasTextEditPlanner
             return a is null && b is null;
 
         return a.ContentType == b.ContentType && a.Bytes.AsSpan().SequenceEqual(b.Bytes);
+    }
+
+    private static bool InlineOleObjectsEqual(InlineOleObjectInfo? a, InlineOleObjectInfo? b)
+    {
+        if (a is null || b is null)
+            return a is null && b is null;
+
+        return a.FileName == b.FileName
+            && a.ClassName == b.ClassName
+            && a.EmbeddedBytes.AsSpan().SequenceEqual(b.EmbeddedBytes);
     }
 
     private static bool TabStopsEqual(IReadOnlyList<TabStop> a, IReadOnlyList<TabStop> b)
@@ -750,6 +761,9 @@ internal static class TextBodyRunMutationPlanner
         InlineImageHeightEmu = source.InlineImage is not null && text == source.Text
             ? source.InlineImageHeightEmu
             : null,
+        InlineOleObject = source.InlineOleObject is { } ole && text == source.Text
+            ? CloneInlineOleObject(ole)
+            : null,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,
@@ -777,6 +791,7 @@ internal static class TextBodyRunMutationPlanner
         ImagePartsEqual(a.InlineImage, b.InlineImage)
         && a.InlineImageWidthEmu == b.InlineImageWidthEmu
         && a.InlineImageHeightEmu == b.InlineImageHeightEmu
+        && InlineOleObjectsEqual(a.InlineOleObject, b.InlineOleObject)
         && a.FontFamily == b.FontFamily
         && a.FontSizePt == b.FontSizePt
         && a.BaselineOffset == b.BaselineOffset
@@ -806,6 +821,26 @@ internal static class TextBodyRunMutationPlanner
 
         return a.ContentType == b.ContentType && a.Bytes.AsSpan().SequenceEqual(b.Bytes);
     }
+
+    private static bool InlineOleObjectsEqual(InlineOleObjectInfo? a, InlineOleObjectInfo? b)
+    {
+        if (a is null || b is null)
+            return a is null && b is null;
+
+        return a.FileName == b.FileName
+            && a.ClassName == b.ClassName
+            && a.EmbeddedBytes.AsSpan().SequenceEqual(b.EmbeddedBytes);
+    }
+
+    private static InlineOleObjectInfo? CloneInlineOleObject(InlineOleObjectInfo? source) =>
+        source is null
+            ? null
+            : new InlineOleObjectInfo
+            {
+                EmbeddedBytes = source.EmbeddedBytes.ToArray(),
+                FileName = source.FileName,
+                ClassName = source.ClassName,
+            };
 
     private static void MergeAdjacentRunsWithSameFormat(TextBody body)
     {
@@ -1102,12 +1137,23 @@ internal static class TextBodyModelCloner
                 ContentType = source.ContentType
             };
 
+    private static InlineOleObjectInfo? CloneInlineOleObject(InlineOleObjectInfo? source) =>
+        source is null
+            ? null
+            : new InlineOleObjectInfo
+            {
+                EmbeddedBytes = source.EmbeddedBytes.ToArray(),
+                FileName = source.FileName,
+                ClassName = source.ClassName,
+            };
+
     internal static Run CloneRun(Run source) => new()
     {
         Text = source.Text,
         InlineImage = CloneImagePart(source.InlineImage),
         InlineImageWidthEmu = source.InlineImageWidthEmu,
         InlineImageHeightEmu = source.InlineImageHeightEmu,
+        InlineOleObject = CloneInlineOleObject(source.InlineOleObject),
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,

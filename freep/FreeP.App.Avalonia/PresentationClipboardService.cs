@@ -418,14 +418,19 @@ internal sealed class AvaloniaPresentationClipboardService(
                     request.Editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
                     request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
+                var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
+                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
+                    : payload.Body;
                 var table = payload.ContainsTable
                     ? request.Editor.InsertTableFromClipboard(
-                        payload.Body,
+                        slideBody,
                         payload.TableColumnWidthsEmu,
                         payload.TableCellStyles)
                     : null;
-                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
-                    request.Editor.InsertTextBox(payload.Body);
+                if (table is null
+                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
+                    request.Editor.InsertTextBox(slideBody);
                 return source;
             }
 
@@ -448,14 +453,19 @@ internal sealed class AvaloniaPresentationClipboardService(
                     request.Editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
                     request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
+                var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
+                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
+                    : payload.Body;
                 var table = payload.ContainsTable
                     ? request.Editor.InsertTableFromClipboard(
-                        payload.Body,
+                        slideBody,
                         payload.TableColumnWidthsEmu,
                         payload.TableCellStyles)
                     : null;
-                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
-                    request.Editor.InsertTextBox(payload.Body);
+                if (table is null
+                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
+                    request.Editor.InsertTextBox(slideBody);
                 return source;
             }
 
