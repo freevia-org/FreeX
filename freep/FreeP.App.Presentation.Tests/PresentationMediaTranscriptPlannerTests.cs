@@ -167,6 +167,48 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void BuildTranscriptPlan_ParsesDfxpInheritedOffsetsAndFrameClock()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 44,
+            Name = "DFXP video",
+            Kind = SlideShapeKind.Media,
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                CaptionTracks =
+                {
+                    new MediaCaptionTrackInfo
+                    {
+                        Source = "ppt/media/captions.dfxp",
+                        ContentType = "application/ttaf+xml",
+                        Bytes = Encoding.UTF8.GetBytes("""
+                            <?xml version="1.0" encoding="utf-8"?>
+                            <tt xmlns="http://www.w3.org/ns/ttml" xmlns:ttp="http://www.w3.org/ns/ttml#parameter"
+                                ttp:frameRate="25">
+                              <body begin="00:00:00.500"><div begin="00:00:01:00">
+                                <p begin="00:00:00:10" dur="00:00:00:15">Frame based <span>DFXP</span> cue.</p>
+                              </div></body>
+                            </tt>
+                            """)
+                    }
+                }
+            }
+        });
+
+        var track = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(presentation)
+            .Tracks.Should().ContainSingle().Subject;
+
+        track.Status.Should().Be(PresentationMediaTranscriptTrackStatus.Available);
+        track.Cues.Should().ContainSingle();
+        track.Cues[0].Text.Should().Be("Frame based DFXP cue.");
+        track.Cues[0].StartTime.Should().Be(TimeSpan.FromMilliseconds(1900));
+        track.Cues[0].EndTime.Should().Be(TimeSpan.FromMilliseconds(2500));
+    }
+
+    [Fact]
     public void BuildTranscriptPlan_ClassifiesExternalNoBytesAndUnsupportedTracks()
     {
         var presentation = Presentation.CreateEmpty();

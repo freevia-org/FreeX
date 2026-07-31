@@ -1197,7 +1197,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             row.GetProperty("evidenceId").GetString() == "freep.media-caption.native-sidecar-depth");
         mediaCaptionDepth.GetProperty("remainingWork").GetString()
             .Should()
-            .Contain("shared planner parses paragraph cues");
+            .Contain("shared planner now resolves TTML/DFXP inherited body/div offsets");
 
         var chartBaseline = workflowEvidence.Single(row =>
             row.GetProperty("evidenceId").GetString() == "freep.chart.powerpoint-baseline-readiness");
