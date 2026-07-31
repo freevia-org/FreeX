@@ -185,9 +185,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         var pageToSection = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
         var pageNumberDisplay = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSection, model, assignment);
         var differentOddEvenPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
-        // Endnotes page is appended after body pages when the document has endnotes.
         var hasEndnotes = model.Endnotes.Count > 0;
-        var totalBoxCount = hasEndnotes ? pageCount + 1 : pageCount;
+        var endnoteIds = model.Endnotes.Keys.OrderBy(k => k).ToList();
+        var requiresDedicatedEndnotePage = hasEndnotes && RequiresDedicatedEndnotePage(sourceEditor);
+        var totalBoxCount = requiresDedicatedEndnotePage ? pageCount + 1 : pageCount;
         var boxes = new List<PageBox>(totalBoxCount);
         for (var i = 0; i < pageCount; i++)
         {
@@ -205,7 +206,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCount,
                 pageNumberText: pageNumberDisplay[i].Text,
-                footnoteIds: pageFootnoteIds[i]);
+                footnoteIds: pageFootnoteIds[i],
+                endnoteIds: hasEndnotes && !requiresDedicatedEndnotePage && i == pageCount - 1
+                    ? endnoteIds
+                    : null);
             // W21: record which section this page belongs to so CommitHeaderFooterSlots can write
             // edits back to the correct section's HeadersFooters rather than always the document-level.
             box.OwnerSectionHf = pageSection.HeadersFooters;
@@ -216,9 +220,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // All endnote entries are collected into one page at the end of the document, mirroring
         // Word's behaviour. The synthetic page has no body blocks and no header/footer.
         // Use the final section's page settings for the endnotes page.
-        if (hasEndnotes)
+        if (requiresDedicatedEndnotePage)
         {
-            var endnoteIds = model.Endnotes.Keys.OrderBy(k => k).ToList();
             var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
                 sourceModel: model,
                 endnoteIds: endnoteIds);
@@ -604,7 +607,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         _pageBoxes.Clear();
 
         var hasEndnotesRep = model.Endnotes.Count > 0;
-        var totalBoxCountRep = hasEndnotesRep ? pageCount + 1 : pageCount;
+        var endnoteIdsRep = model.Endnotes.Keys.OrderBy(k => k).ToList();
+        var requiresDedicatedEndnotePageRep = hasEndnotesRep && RequiresDedicatedEndnotePage(_sourceEditor);
+        var totalBoxCountRep = requiresDedicatedEndnotePageRep ? pageCount + 1 : pageCount;
         var pageToSectionRep = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
         var pageNumberDisplayRep = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionRep, model, assignment);
         var differentOddEvenPagesRep = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
@@ -623,7 +628,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCountRep,
                 pageNumberText: pageNumberDisplayRep[i].Text,
-                footnoteIds: pageFootnoteIdsRep[i]);
+                footnoteIds: pageFootnoteIdsRep[i],
+                endnoteIds: hasEndnotesRep && !requiresDedicatedEndnotePageRep && i == pageCount - 1
+                    ? endnoteIdsRep
+                    : null);
             box.OwnerSectionHf = pageSection.HeadersFooters; // W21: section-aware commit
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
@@ -632,9 +640,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             HookDragDrop(box);
         }
 
-        if (hasEndnotesRep)
+        if (requiresDedicatedEndnotePageRep)
         {
-            var endnoteIdsRep = model.Endnotes.Keys.OrderBy(k => k).ToList();
             var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
                 sourceModel: model,
                 endnoteIds: endnoteIdsRep);
@@ -739,7 +746,9 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         }
 
         var hasEndnotesReb = model.Endnotes.Count > 0;
-        var totalBoxCountReb = hasEndnotesReb ? pageCount + 1 : pageCount;
+        var endnoteIdsReb = model.Endnotes.Keys.OrderBy(k => k).ToList();
+        var requiresDedicatedEndnotePageReb = hasEndnotesReb && RequiresDedicatedEndnotePage(_sourceEditor);
+        var totalBoxCountReb = requiresDedicatedEndnotePageReb ? pageCount + 1 : pageCount;
         var pageToSectionReb = HeaderFooterPagePlanner.MapPagesToSections(model, assignment, pageCount);
         var pageNumberDisplayReb = PageNumberFormatDialogPlanner.BuildDisplayPlans(pageToSectionReb, model, assignment);
         var differentOddEvenPagesReb = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(model);
@@ -758,7 +767,10 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
                 footerSlot: slots.Footer, footerSlotName: slots.FooterSlotName,
                 pageCount: totalBoxCountReb,
                 pageNumberText: pageNumberDisplayReb[i].Text,
-                footnoteIds: pageFootnoteIdsReb[i]);
+                footnoteIds: pageFootnoteIdsReb[i],
+                endnoteIds: hasEndnotesReb && !requiresDedicatedEndnotePageReb && i == pageCount - 1
+                    ? endnoteIdsReb
+                    : null);
             box.OwnerSectionHf = pageSection.HeadersFooters; // W21: section-aware commit
             _pageBoxes.Add(box);
             _stack.Children.Add(box);
@@ -767,9 +779,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             HookDragDrop(box);
         }
 
-        if (hasEndnotesReb)
+        if (requiresDedicatedEndnotePageReb)
         {
-            var endnoteIdsReb = model.Endnotes.Keys.OrderBy(k => k).ToList();
             var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
                 sourceModel: model,
                 endnoteIds: endnoteIdsReb);
@@ -790,6 +801,34 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         if (_pageBoxes.Count > 0)
             _pageBoxes[0].Body.Focus();
+    }
+
+    private static bool RequiresDedicatedEndnotePage(DocumentView editor)
+    {
+        if (editor.Model.Endnotes.Count == 0)
+            return false;
+
+        // SectionAwareDocumentPaginator is built from this panel, so probing it here would recurse.
+        // Keep the established dedicated-page fallback until section-specific endnote measurement
+        // is available; ordinary single-geometry documents use the same measured path as printing.
+        if (editor.Model.Sections.Count > 1)
+            return true;
+
+        try
+        {
+            var page = editor.Model.Page;
+            var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
+            var flow = PrintLayout.BuildPaginatedDocument(editor);
+            var inner = ((IDocumentPaginatorSource)flow).DocumentPaginator;
+            inner.PageSize = new Size(pageWidth, pageHeight);
+            var paginator = new HeaderFooterPaginator(inner, editor.Model, page);
+            paginator.ComputePageCount();
+            return paginator.RequiresDedicatedEndnotePage;
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     // ── Phase 4: header/footer slot commit ───────────────────────────────────────────────────────

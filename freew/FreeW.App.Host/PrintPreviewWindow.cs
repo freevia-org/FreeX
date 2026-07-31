@@ -417,7 +417,7 @@ internal sealed class HeaderFooterPaginator(
         return visual;
     }
 
-    private bool RequiresDedicatedEndnotePage
+    internal bool RequiresDedicatedEndnotePage
     {
         get
         {
