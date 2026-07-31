@@ -91,6 +91,43 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_AppliesTextSettersFromReferencedStyleResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          xmlns:sys="clr-namespace:System;assembly=mscorlib">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <SolidColorBrush x:Key="BodyBrush" Color="#FF1F4E79" />
+                  <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                  <sys:Double x:Key="BodySize">16</sys:Double>
+                  <Style x:Key="BodyText">
+                    <Setter Property="Foreground" Value="{StaticResource BodyBrush}" />
+                    <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
+                    <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                    <Setter Property="FontWeight" Value="Bold" />
+                    <Setter Property="TextDecorations" Value="Underline" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Style="{StaticResource BodyText}">Styled paragraph</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var run = payload!.Body.Paragraphs.Single().Runs.Single();
+        run.FontFamily.Should().Be("Aptos");
+        run.FontSizePt.Should().Be(12);
+        run.Bold.Should().BeTrue();
+        run.Underline.Should().BeTrue();
+        run.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_PreservesAllowedHyperlinks_AndBlocksUnsafeSchemes()
     {
         const string xaml = """

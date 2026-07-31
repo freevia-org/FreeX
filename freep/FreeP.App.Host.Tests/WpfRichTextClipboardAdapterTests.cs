@@ -76,18 +76,22 @@ public sealed class WpfRichTextClipboardAdapterTests
                 <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                               xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                  <FlowDocument.Resources>
-                    <ResourceDictionary>
-                      <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
-                      <FontFamily x:Key="BodyFont">Aptos</FontFamily>
-                      <sys:Double x:Key="BodySize">18</sys:Double>
-                    </ResourceDictionary>
-                  </FlowDocument.Resources>
-                  <List MarkerStyle="UpperRoman">
-                    <ListItem><Paragraph Foreground="{StaticResource Accent}"
-                                             FontFamily="{StaticResource BodyFont}"
-                                             FontSize="{DynamicResource BodySize}">First</Paragraph></ListItem>
-                    <ListItem><Paragraph>Second</Paragraph></ListItem>
+                      <FlowDocument.Resources>
+                        <ResourceDictionary>
+                          <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
+                          <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                          <sys:Double x:Key="BodySize">18</sys:Double>
+                          <Style x:Key="ListText">
+                            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                            <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
+                            <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                            <Setter Property="FontWeight" Value="Bold" />
+                          </Style>
+                        </ResourceDictionary>
+                      </FlowDocument.Resources>
+                      <List MarkerStyle="UpperRoman">
+                        <ListItem><Paragraph Style="{StaticResource ListText}">First</Paragraph></ListItem>
+                        <ListItem><Paragraph>Second</Paragraph></ListItem>
                   </List>
                 </FlowDocument>
                 """)),
@@ -102,6 +106,7 @@ public sealed class WpfRichTextClipboardAdapterTests
         updated.Paragraphs[0].Runs.Single().Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5597));
         updated.Paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
         updated.Paragraphs[0].Runs.Single().FontSizePt.Should().Be(13.5);
+        updated.Paragraphs[0].Runs.Single().Bold.Should().BeTrue();
         updated.Paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
     }
 
