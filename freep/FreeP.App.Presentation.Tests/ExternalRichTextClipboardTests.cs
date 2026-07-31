@@ -41,6 +41,34 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesAllowedHyperlinks_AndBlocksUnsafeSchemes()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph>
+                <Hyperlink NavigateUri="https://example.test/docs" ToolTip="Open docs">Docs</Hyperlink>
+                <Hyperlink NavigateUri="javascript:alert(1)">Unsafe</Hyperlink>
+                <Run NavigateUri="mailto:help@example.test" Text="Mail" />
+              </Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs[0].Text.Should().Be("Docs");
+        runs[0].Hyperlink.Should().NotBeNull();
+        runs[0].Hyperlink!.Url.Should().Be("https://example.test/docs");
+        runs[0].Hyperlink!.Tooltip.Should().Be("Open docs");
+        runs[1].Text.Should().Be("Unsafe");
+        runs[1].Hyperlink.Should().BeNull();
+        runs[2].Text.Should().Be("Mail");
+        runs[2].Hyperlink!.Url.Should().Be("mailto:help@example.test");
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_FlattensTablesLikeWpfProjection_AndPreservesCellFormatting()
     {
         const string xaml = """
