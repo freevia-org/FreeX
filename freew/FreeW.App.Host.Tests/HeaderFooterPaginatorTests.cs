@@ -1,8 +1,10 @@
 using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Documents;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -178,27 +180,61 @@ public sealed class HeaderFooterPaginatorTests
     }
 
     [StaFact]
-    public void MultiPageEndnotes_DrawOnTheFinalPage()
+    public void MultiPageEndnotes_AppendAPhysicalPageWhenTheFinalBodyPageIsFull()
+    {
+        var model = DocxReader.Read(RepositoryFile(
+            "freew-fidelity-corpus", "files", "review", "endnotes.docx"));
+        var view = new DocumentView();
+        view.LoadModel(model);
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.Equal(3, paginator.PageCount);
+
+        var lastPage = paginator.GetPage(paginator.PageCount - 1);
+        var container = Assert.IsType<System.Windows.Media.ContainerVisual>(lastPage.Visual);
+        Assert.True(container.Children.Count >= 2,
+            "the dedicated physical page should contain its page surface plus the endnote overlay");
+    }
+
+    [StaFact]
+    public void FittingEndnotes_RemainOnTheFinalBodyPage()
     {
         var model = TextDocument.CreateEmpty();
         model.Endnotes[1] = new Endnote(1, "endnote body");
 
         var flow = new FlowDocument();
-        for (var i = 0; i < 120; i++)
-            flow.Blocks.Add(new System.Windows.Documents.Paragraph(
-                new System.Windows.Documents.Run($"body paragraph {i}")));
+        flow.Blocks.Add(new System.Windows.Documents.Paragraph(
+            new System.Windows.Documents.Run("short body")));
 
         var inner = ((IDocumentPaginatorSource)flow).DocumentPaginator;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(model.Page);
         inner.PageSize = new Size(pageWidth, pageHeight);
+        inner.ComputePageCount();
+        var bodyPageCount = inner.PageCount;
 
         var paginator = new HeaderFooterPaginator(inner, model, model.Page, lineHeightDip: 16);
         paginator.ComputePageCount();
-        Assert.True(paginator.PageCount >= 2);
 
-        var lastPage = paginator.GetPage(paginator.PageCount - 1);
-        var container = Assert.IsType<System.Windows.Media.ContainerVisual>(lastPage.Visual);
+        Assert.Equal(bodyPageCount, paginator.PageCount);
+        var page = paginator.GetPage(paginator.PageCount - 1);
+        var container = Assert.IsType<System.Windows.Media.ContainerVisual>(page.Visual);
         Assert.True(container.Children.Count >= 2,
-            "the final page should contain the base page plus the endnote overlay");
+            "a fitting endnote should remain overlaid after the final body content");
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(directory))
+        {
+            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
     }
 }

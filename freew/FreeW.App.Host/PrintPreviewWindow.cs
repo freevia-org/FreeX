@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
@@ -258,13 +259,26 @@ internal sealed class HeaderFooterPaginator(
     double lineHeightDip = 0,
     IReadOnlyList<IReadOnlyList<int>>? footnoteIdsByPage = null) : DocumentPaginator
 {
+    private bool? _requiresDedicatedEndnotePage;
+
     public override bool IsPageCountValid => inner.IsPageCountValid;
-    public override int PageCount => inner.PageCount;
-    public override Size PageSize { get => inner.PageSize; set => inner.PageSize = value; }
+    public override int PageCount => inner.PageCount + (RequiresDedicatedEndnotePage ? 1 : 0);
+    public override Size PageSize
+    {
+        get => inner.PageSize;
+        set
+        {
+            inner.PageSize = value;
+            _requiresDedicatedEndnotePage = null;
+        }
+    }
     public override IDocumentPaginatorSource Source => inner.Source;
 
     public override DocumentPage GetPage(int pageNumber)
     {
+        if (RequiresDedicatedEndnotePage && pageNumber == inner.PageCount)
+            return BuildDedicatedEndnotePage(pageNumber);
+
         var basePage = inner.GetPage(pageNumber);
         var hasWatermark = !string.IsNullOrEmpty(page.Watermark);
         var hasBorder = page.PageBorder is not null;
@@ -283,7 +297,9 @@ internal sealed class HeaderFooterPaginator(
             && (model.Footnotes.Count > 0 || model.Endnotes.Count > 0);
         // Endnotes are collected at the document end. They belong on the final printed page even
         // when the document has multiple body pages and no footnote marker assignment on that page.
-        var hasEndnotesAtFoot = model.Endnotes.Count > 0 && pageNumber == inner.PageCount - 1;
+        var hasEndnotesAtFoot = model.Endnotes.Count > 0
+            && !RequiresDedicatedEndnotePage
+            && pageNumber == inner.PageCount - 1;
         var hasNotesAtFoot = hasMappedNotesAtFoot || hasFallbackNotesAtFoot || hasEndnotesAtFoot;
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
             && !hasWatermark && !hasBorder && !hasLineNumbers && !hasColumnRule && !hasNotesAtFoot)
@@ -331,7 +347,7 @@ internal sealed class HeaderFooterPaginator(
                 contentWidth,
                 pageFootnoteIds,
                 includeAllNotes: hasFallbackNotesAtFoot,
-                includeEndnotes: pageNumber == inner.PageCount - 1));
+                includeEndnotes: !RequiresDedicatedEndnotePage && pageNumber == inner.PageCount - 1));
 
         return new DocumentPage(visual, size, basePage.BleedBox, basePage.ContentBox);
     }
@@ -348,7 +364,9 @@ internal sealed class HeaderFooterPaginator(
         double contentWidth,
         IReadOnlyList<int>? pageFootnoteIds,
         bool includeAllNotes,
-        bool includeEndnotes)
+        bool includeEndnotes,
+        double? separatorYOverride = null,
+        double? maxYOverride = null)
     {
         var visual = new DrawingVisual();
         if (contentWidth <= 0)
@@ -371,11 +389,11 @@ internal sealed class HeaderFooterPaginator(
         var contentBottom = size.Height - PageLayout.PointsToDip(page.MarginBottomPt);
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 0.5);
         using var dc = visual.RenderOpen();
-        var sepY = contentBottom + PageLayout.PointsToDip(3);
+        var sepY = separatorYOverride ?? contentBottom + PageLayout.PointsToDip(3);
         dc.DrawLine(pen, new Point(marginLeft, sepY), new Point(marginLeft + contentWidth * 0.3, sepY));
 
         var y = sepY + PageLayout.PointsToDip(2);
-        var maxY = size.Height - PageLayout.PointsToDip(4); // stay on the sheet
+        var maxY = maxYOverride ?? size.Height - PageLayout.PointsToDip(4); // stay on the sheet
         foreach (var (id, text) in notes)
         {
             if (y >= maxY)
@@ -397,6 +415,119 @@ internal sealed class HeaderFooterPaginator(
             y += formatted.Height + PageLayout.PointsToDip(1);
         }
         return visual;
+    }
+
+    private bool RequiresDedicatedEndnotePage
+    {
+        get
+        {
+            if (_requiresDedicatedEndnotePage is { } cached)
+                return cached;
+
+            inner.ComputePageCount();
+            if (model.Endnotes.Count == 0 || inner.PageCount == 0)
+            {
+                _requiresDedicatedEndnotePage = false;
+                return false;
+            }
+
+            var finalPage = inner.GetPage(inner.PageCount - 1);
+            var size = finalPage.Size;
+            var width = Math.Max(1, (int)Math.Ceiling(size.Width));
+            var height = Math.Max(1, (int)Math.Ceiling(size.Height));
+            var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            var visual = new DrawingVisual();
+            using (var dc = visual.RenderOpen())
+            {
+                dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+                dc.DrawRectangle(
+                    new VisualBrush(finalPage.Visual) { Stretch = Stretch.None },
+                    null,
+                    new Rect(0, 0, size.Width, size.Height));
+            }
+            bitmap.Render(visual);
+
+            var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
+            var marginRight = PageLayout.PointsToDip(page.MarginRightPt);
+            var contentWidth = Math.Max(0, size.Width - marginLeft - marginRight);
+            var notePlan = DocumentNoteRegionPlanner.BuildEndnoteRegion(
+                model,
+                model.Endnotes.Keys.OrderBy(id => id).ToList(),
+                pageNumber: inner.PageCount,
+                contentWidth,
+                isSyntheticPage: false);
+            var contentBottom = size.Height - PageLayout.PointsToDip(page.MarginBottomPt);
+            var nextContentY = Math.Max(
+                PageLayout.PointsToDip(page.MarginTopPt),
+                FindLastPaintedRow(bitmap) + 16);
+            _requiresDedicatedEndnotePage = nextContentY + notePlan.EstimatedHeightDip > contentBottom;
+            return _requiresDedicatedEndnotePage.Value;
+        }
+    }
+
+    private DocumentPage BuildDedicatedEndnotePage(int pageNumber)
+    {
+        var size = inner.PageSize;
+        var visual = new ContainerVisual();
+        var background = new DrawingVisual();
+        using (var dc = background.RenderOpen())
+            dc.DrawRectangle(Brushes.White, null, new Rect(new Point(), size));
+        visual.Children.Add(background);
+
+        if (!string.IsNullOrEmpty(page.Watermark))
+            visual.Children.Add(BuildWatermark(page.Watermark!, size));
+        if (page.PageBorder is { } border)
+            visual.Children.Add(BuildPageBorder(border, size));
+
+        var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
+        var contentWidth = Math.Max(0, size.Width - marginLeft - PageLayout.PointsToDip(page.MarginRightPt));
+        if (model.Header is { IsEmpty: false } header)
+        {
+            var top = PageLayout.PointsToDip(Math.Max(0, page.MarginTopPt - 36));
+            visual.Children.Add(BuildOverlay(ResolveText(header, pageNumber), marginLeft, top, contentWidth));
+        }
+        if (model.Footer is { IsEmpty: false } footer)
+        {
+            var bottom = size.Height - PageLayout.PointsToDip(Math.Max(18, page.MarginBottomPt - 18));
+            visual.Children.Add(BuildOverlay(ResolveText(footer, pageNumber), marginLeft, bottom, contentWidth));
+        }
+
+        visual.Children.Add(BuildNotesAtFoot(
+            size,
+            marginLeft,
+            contentWidth,
+            pageFootnoteIds: null,
+            includeAllNotes: false,
+            includeEndnotes: true,
+            separatorYOverride: PageLayout.PointsToDip(page.MarginTopPt) + 7,
+            maxYOverride: size.Height - PageLayout.PointsToDip(page.MarginBottomPt)));
+
+        var contentBox = new Rect(
+            marginLeft,
+            PageLayout.PointsToDip(page.MarginTopPt),
+            contentWidth,
+            Math.Max(0, size.Height
+                - PageLayout.PointsToDip(page.MarginTopPt)
+                - PageLayout.PointsToDip(page.MarginBottomPt)));
+        return new DocumentPage(visual, size, new Rect(new Point(), size), contentBox);
+    }
+
+    private static int FindLastPaintedRow(RenderTargetBitmap bitmap)
+    {
+        var stride = bitmap.PixelWidth * 4;
+        var pixels = new byte[stride * bitmap.PixelHeight];
+        bitmap.CopyPixels(pixels, stride, 0);
+        for (var y = bitmap.PixelHeight - 1; y >= 0; y--)
+        {
+            var row = y * stride;
+            for (var x = 0; x < bitmap.PixelWidth; x++)
+            {
+                var offset = row + x * 4;
+                if (pixels[offset] < 245 || pixels[offset + 1] < 245 || pixels[offset + 2] < 245)
+                    return y;
+            }
+        }
+        return 0;
     }
 
     private static IReadOnlyList<IReadOnlyList<int>> BuildFootnoteIdsByPage(
