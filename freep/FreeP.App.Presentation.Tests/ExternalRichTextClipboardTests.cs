@@ -401,6 +401,24 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void WordListTable_UsesLevelTextPunctuationForExistingAutoNumberVariants()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid8
+{\listlevel\levelnfc3\levelstartat1\leveltext\'02\'00);\levelnumbers;}
+}}
+{\listoverridetable{\listoverride\listid8\ls8}}
+\pard\ls8\ilvl0 Alpha list}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Single().AutoNumType.Should().Be(AutoNumType.AlphaUcParenR);
+    }
+
+    [Fact]
     public void WordListOverride_StartAtRestart_IsAppliedOnlyToItsFirstParagraph()
     {
         const string rtf =

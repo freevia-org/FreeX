@@ -67,6 +67,7 @@ public static class ExternalRichTextClipboardPlanner
             public int? LeftIndentTwips { get; set; }
             public int? FirstLineIndentTwips { get; set; }
             public string? BulletChar { get; set; }
+            public string LevelTextTemplate { get; set; } = string.Empty;
         }
 
         private sealed class ListOverrideDefinition
@@ -1432,7 +1433,9 @@ public static class ExternalRichTextClipboardPlanner
             }
 
             paragraph.BulletKind = BulletKind.Auto;
-            paragraph.AutoNumType = MapAutoNumType(numberFormat);
+            paragraph.AutoNumType = MapAutoNumType(
+                numberFormat,
+                formattingOverride?.LevelTextTemplate ?? level.LevelTextTemplate);
             paragraph.AutoNumStartAt = listOverride.StartAtByLevel.TryGetValue(_state.ListLevel, out var overrideStartAt)
                 ? overrideStartAt
                 : formattingOverride is { StartAtSpecified: true }
@@ -1448,15 +1451,22 @@ public static class ExternalRichTextClipboardPlanner
             var level = _state.Destination == Destination.ListOverrideTable
                 ? _currentListOverrideLevelDefinition
                 : _currentListLevel;
-            if (level is null
-                || level.NumberFormat != 23
-                || level.BulletChar is not null
-                || string.IsNullOrEmpty(text))
+            if (level is null || string.IsNullOrEmpty(text))
                 return;
 
             char candidate = text[0];
-            if (!char.IsControl(candidate) && candidate != ';')
-                level.BulletChar = candidate.ToString();
+            if (char.IsControl(candidate) || candidate == ';')
+                return;
+
+            if (level.NumberFormat == 23)
+            {
+                if (level.BulletChar is null)
+                    level.BulletChar = candidate.ToString();
+                return;
+            }
+
+            if (level.LevelTextTemplate.Length < 16)
+                level.LevelTextTemplate += candidate;
         }
 
         private void AppendFieldInstruction(string text)
@@ -1529,14 +1539,28 @@ public static class ExternalRichTextClipboardPlanner
 
         private static double? ToPoints(int? twips) => twips / 20.0;
 
-        private static AutoNumType MapAutoNumType(int numberFormat) => numberFormat switch
+        private static AutoNumType MapAutoNumType(int numberFormat, string? levelTextTemplate)
         {
-            1 => AutoNumType.RomanUcPeriod,
-            2 => AutoNumType.RomanLcPeriod,
-            3 => AutoNumType.AlphaUcPeriod,
-            4 => AutoNumType.AlphaLcPeriod,
-            _ => AutoNumType.ArabicPeriod,
-        };
+            bool opensWithParen = levelTextTemplate?.Contains('(') == true;
+            bool closesWithParen = levelTextTemplate?.EndsWith(')') == true;
+            bool hasBothParens = opensWithParen && closesWithParen;
+
+            return numberFormat switch
+            {
+                0 => hasBothParens
+                    ? AutoNumType.ArabicParenBoth
+                    : closesWithParen ? AutoNumType.ArabicParenR : AutoNumType.ArabicPeriod,
+                1 => closesWithParen ? AutoNumType.RomanUcParenR : AutoNumType.RomanUcPeriod,
+                2 => closesWithParen ? AutoNumType.RomanLcParenR : AutoNumType.RomanLcPeriod,
+                3 => hasBothParens
+                    ? AutoNumType.AlphaUcParenBoth
+                    : closesWithParen ? AutoNumType.AlphaUcParenR : AutoNumType.AlphaUcPeriod,
+                4 => hasBothParens
+                    ? AutoNumType.AlphaLcParenBoth
+                    : closesWithParen ? AutoNumType.AlphaLcParenR : AutoNumType.AlphaLcPeriod,
+                _ => AutoNumType.ArabicPeriod,
+            };
+        }
 
         private void ResetColorTable()
         {
