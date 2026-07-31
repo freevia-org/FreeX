@@ -13093,8 +13093,13 @@ public sealed class DocumentView : RichTextBox
             AddSceneMarker(canvas, marker);
         foreach (var slice in scene.Slices)
             AddSceneSlice(canvas, slice);
+        var usesWordQuickLayoutColumnAxisTitles =
+            scene.Kind == ChartKind.Column
+            && scene.StyleId == 7
+            && scene.QuickLayoutId == 9
+            && string.Equals(scene.ColorSchemeId, "mono-blue", StringComparison.OrdinalIgnoreCase);
         foreach (var text in scene.Texts)
-            AddSceneText(canvas, text);
+            AddSceneText(canvas, text, usesWordQuickLayoutColumnAxisTitles);
 
         for (var index = 0; index < scene.Legend.Count; index++)
         {
@@ -13113,7 +13118,10 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
-    private static void AddSceneText(Canvas canvas, ChartSceneText text)
+    private static void AddSceneText(
+        Canvas canvas,
+        ChartSceneText text,
+        bool usesWordQuickLayoutColumnAxisTitles = false)
     {
         var label = new TextBlock
         {
@@ -13122,7 +13130,11 @@ public sealed class DocumentView : RichTextBox
             // fallback. This stays renderer-local because the shared scene owns geometry, not glyph rasterization.
             FontFamily = new FontFamily(
                 text.Kind == ChartSceneTextKind.Title ? "Aptos" : "Calibri"),
-            FontSize = Math.Max(1, text.FontSize),
+            FontSize = Math.Max(
+                1,
+                text.Kind == ChartSceneTextKind.AxisTitle && usesWordQuickLayoutColumnAxisTitles
+                    ? text.FontSize * 1.2
+                    : text.FontSize),
             Foreground = new SolidColorBrush(ParseSceneColor(text.ColorHex)),
             TextTrimming = TextTrimming.CharacterEllipsis
         };

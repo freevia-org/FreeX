@@ -132,6 +132,32 @@ public sealed class ChartRenderingTests
     }
 
     [StaFact]
+    public void ChartSceneText_ImportedQuickLayoutColumnScalesOnlyAxisTitles()
+    {
+        var chart = new Chart
+        {
+            Kind = ChartKind.Column,
+            Title = "Revenue by quarter",
+            CategoryAxisTitle = "Quarter",
+            ValueAxisTitle = "USD",
+            StyleId = 7,
+            QuickLayoutId = 9,
+            ColorSchemeId = "mono-blue"
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        chart.Series.Add(new ChartSeries("Revenue", new double[] { 1, 2 }));
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 400, 224);
+        var canvas = DocumentView.BuildChartSceneCanvas(scene);
+        var labels = canvas.Children.OfType<TextBlock>().ToList();
+
+        Assert.Equal(24, Assert.Single(labels, text => text.Text == "Quarter").FontSize);
+        Assert.Equal(24, Assert.Single(labels, text => text.Text == "USD").FontSize);
+        Assert.Equal(24, Assert.Single(labels, text => text.Text == chart.Title).FontSize);
+        Assert.All(labels.Where(text => text.Text == "Q1"), text => Assert.Equal(9, text.FontSize));
+    }
+
+    [StaFact]
     public void Style1_NoPlotAreaFill_CanvasBackgroundIsTransparent()
     {
         // Style 1 (default) has PlotAreaFill=false → Canvas background should be Transparent.

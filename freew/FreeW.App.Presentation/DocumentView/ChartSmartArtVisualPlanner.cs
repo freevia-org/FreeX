@@ -180,6 +180,9 @@ public sealed record ChartSceneLegendEntry(
 public sealed record ChartScene(
     ChartKind Kind,
     ChartVisualGeometryKind GeometryKind,
+    int StyleId,
+    string ColorSchemeId,
+    int QuickLayoutId,
     ChartSceneRect FrameBounds,
     ChartSceneRect PlotBounds,
     string? PlotFillHex,
@@ -774,7 +777,8 @@ public static class ChartSmartArtVisualPlanner
             }
         }
 
-        return new ChartScene(chart.Kind, plan.GeometryKind, frame, plot,
+        return new ChartScene(chart.Kind, plan.GeometryKind, plan.StyleId, plan.ColorSchemeId, plan.QuickLayoutId,
+            frame, plot,
             plan.PlotAreaFill && !isPie ? "#D9E2F3" : null,
             paletteHex, chart.Categories.ToList(), plan.Series.Count,
             gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
