@@ -229,6 +229,21 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
     }
 
     [Fact]
+    public async Task CtrlP_EntersBackstagePrintPaneBeforeChoosingPreviewOrPrint()
+    {
+        await Run(async (window, _) =>
+        {
+            window.Show();
+
+            await PressHandled(window, Key.P, KeyModifiers.Control);
+
+            window.IsBackstageOverlayVisibleForTest.Should().BeTrue();
+            window.ActiveBackstagePaneForTest.Should().Be(FreeXBackstagePaneId.Print);
+            window.BackstagePaneButtonForTest(FreeXBackstagePaneId.Print)!.IsEffectivelyEnabled.Should().BeTrue();
+        });
+    }
+
+    [Fact]
     public async Task BackstageCommandKeytipHonorsDisabledRenderedCommand()
     {
         await Run(async (window, _) =>

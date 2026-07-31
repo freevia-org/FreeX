@@ -29,7 +29,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route)");
         source.Should().Contain("case WorkbookShortcutRoute.Find:");
         source.Should().Contain("case WorkbookShortcutRoute.PrintWorkbook:");
-        source.Should().Contain("await ShowPrintPreviewDialogAsync();");
+        source.Should().Contain("ShowBackstagePrintPane();");
         source.Should().Contain("case WorkbookShortcutRoute.ToggleBold:");
         source.Should().Contain("case WorkbookShortcutRoute.ActivatePreviousSheet:");
         source.Should().Contain("case WorkbookShortcutRoute.SelectNextSheetGroup:");
