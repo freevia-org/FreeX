@@ -1,5 +1,7 @@
 using FreeX.Core.Model;
 using System.Buffers;
+using System.Globalization;
+using System.Xml.Linq;
 
 namespace FreeX.Core.Commands;
 
@@ -16,6 +18,13 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
     // sync with the interactively-applied Top 10/Bottom 10 (items or percent) criterion, so it
     // round-trips through XlsxWorksheetAutoFilterXmlMapper instead of being silently dropped on save.
     private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
+    // R106-commands-autofilter-table-sync-1: WorksheetAutoFilterColumnSync above is a no-op whenever
+    // _range is a structured table's own Range (tables carry their own <autoFilter> rather than a
+    // worksheet-level one) -- keep the TABLE's own FilterColumns model in sync too (mirrors
+    // FilterCommand.ApplyToStructuredTableIfMatched for the value-list case, finding H18), otherwise
+    // a Top 10/Bottom N filter applied from a Table's header dropdown hides/shows rows live but is
+    // silently dropped from the table's <autoFilter> XML on save/reload.
+    private StructuredTableFilterColumnSnapshot? _tableFilterSnapshot;
 
     public string Label => (_top, _percent) switch
     {
@@ -63,6 +72,7 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         if (_count == 0)
         {
             _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(sheet, _range, (int)_filterColOffset, null);
+            _tableFilterSnapshot = StructuredTableFilterColumnSync.Apply(sheet, _range, (int)_filterColOffset, null);
 
             if (!sheet.ColumnFilterOwnedRows.TryGetValue(filterCol, out var ownedRows) || ownedRows.Count == 0)
                 return new CommandOutcome(true);
@@ -131,6 +141,22 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
                 NativeFiltersAttributes: null,
                 NativeFilterXmls: []));
 
+        // R106-commands-autofilter-table-sync-1: mirror the same Top10 criterion into the owning
+        // structured table's FilterColumns model (a no-op when _range isn't a table's own Range).
+        // StructuredTableFilterColumnModel has no first-class Top10 field, so the criterion is
+        // carried as the exact raw <top10> XML XlsxStructuredTableWriter/XlsxStructuredTableMetadataReader
+        // already pass through verbatim for any filterColumn child they don't model directly (the same
+        // mechanism that already round-trips a Top10 filter Excel itself wrote into a table).
+        _tableFilterSnapshot = StructuredTableFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new StructuredTableFilterColumnModel(
+                (int)_filterColOffset,
+                Values: [],
+                IncludeBlank: false,
+                NativeFilterXmls: [BuildTop10Xml(_top, _percent, _count, filterValue)]));
+
         try
         {
             if (allNumericVisible)
@@ -151,11 +177,35 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
     {
         var sheet = ctx.GetSheet(_sheetId);
         WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+        StructuredTableFilterColumnSync.Restore(sheet, _tableFilterSnapshot);
 
         if (!_undoSnapshot.HasSnapshot)
             return;
 
         _undoSnapshot.Restore(sheet);
+    }
+
+    /// <summary>
+    /// Serializes the Top10 criterion into the raw spreadsheetml &lt;top10&gt; XML
+    /// XlsxStructuredTableWriter's NativeFilterXmls passthrough expects verbatim -- mirrors
+    /// XlsxWorksheetAutoFilterXmlMapper.ToTop10Xml's own attribute-omission rules (top/percent
+    /// attributes are only written when they differ from their OOXML default) so the table's
+    /// &lt;top10&gt; is byte-shape-identical to what the worksheet-level AutoFilter path would emit
+    /// for the same criterion.
+    /// </summary>
+    private static string BuildTop10Xml(bool top, bool percent, uint value, double? filterValue)
+    {
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var element = new XElement(ns + "top10");
+        if (!top)
+            element.SetAttributeValue("top", "0");
+        if (percent)
+            element.SetAttributeValue("percent", "1");
+        element.SetAttributeValue("val", value.ToString(CultureInfo.InvariantCulture));
+        if (filterValue is not null)
+            element.SetAttributeValue("filterVal", filterValue.Value.ToString(CultureInfo.InvariantCulture));
+
+        return element.ToString(SaveOptions.DisableFormatting);
     }
 
     private int GetPercentKeepCount(Sheet sheet, uint filterCol, uint firstDataRow, uint lastDataRow)

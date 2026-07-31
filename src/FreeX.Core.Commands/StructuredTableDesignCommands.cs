@@ -617,6 +617,7 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
     private HashSet<uint>? _previousValueFilterHiddenRows;
     private Dictionary<uint, IReadOnlyList<string>>? _previousActiveValueFilterColumns;
     private readonly Dictionary<CellAddress, string> _formulaSnapshot = [];
+    private readonly List<PivotCacheModel> _orphanedPivotCaches = [];
 
     public string Label => "Convert to Range";
 
@@ -634,6 +635,7 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         _previousValueFilterHiddenRows = null;
         _previousActiveValueFilterColumns = null;
         _formulaSnapshot.Clear();
+        _orphanedPivotCaches.Clear();
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -652,6 +654,34 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
         ConvertToRangeStructuredReferenceLowering.LowerAllFormulas(ctx.Workbook, sheet, _removedTable, _formulaSnapshot);
 
         sheet.StructuredTables.RemoveAt(tableIndex);
+
+        // R106: a table-backed pivot cache that has never been refreshed since its file was loaded
+        // (the normal starting state for every real workbook — WorkbookOpenService never calls
+        // PivotTableRefreshService.Refresh at open time) still identifies its source purely by
+        // cache.SourceTableName, with SourceTableId left null (see PivotTableRefreshService.cs's
+        // id-or-name fallback and PivotCacheModel.SourceTableId's doc comment). Left alone, that
+        // dangling name is exactly what a later RenameStructuredTableCommand on some OTHER table onto
+        // this now-freed name would collide with -- RenameStructuredTableCommand's own repoint loop
+        // only matches by the renamed table's OLD name, so it correctly does not catch this case, and
+        // the next ordinary refresh's null-id fallback would then resolve the dangling name against
+        // that unrelated table and silently rebind the pivot to its data (the exact bug R104 fixed for
+        // the post-first-refresh state). Pin every such cache's SourceTableId to the table being
+        // removed's own (now-orphaned) id here, at the moment the name is freed -- an id that no
+        // longer resolves to any live table -- so the id-based lookup in PivotTableRefreshService.Refresh
+        // leaves the pivot's last-known extent untouched instead of ever falling back to a name match
+        // against a decoy that later reuses the freed name. A cache that has already established a
+        // different SourceTableId (R104's post-refresh state) is untouched here, matching existing,
+        // deliberate behavior that Convert-to-Range never touches pivot caches otherwise.
+        foreach (var cache in ctx.Workbook.PivotCaches)
+        {
+            if (cache.SourceType != PivotCacheSourceType.Table || cache.SourceTableId is not null)
+                continue;
+            if (!string.Equals(cache.SourceTableName, _removedTable.Name, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            _orphanedPivotCaches.Add(cache);
+            cache.SourceTableId = _removedTable.Id;
+        }
 
         // Excel's real Convert-to-Range clears the table's filter state so every row reappears —
         // the table's per-column dropdown UI (and its filter bookkeeping) is gone once the table
@@ -681,6 +711,10 @@ public sealed class ConvertStructuredTableToRangeCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
+
+        foreach (var cache in _orphanedPivotCaches)
+            cache.SourceTableId = null;
+        _orphanedPivotCaches.Clear();
 
         var insertIndex = _removedIndex >= 0 && _removedIndex <= sheet.StructuredTables.Count
             ? _removedIndex

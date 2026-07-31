@@ -71,6 +71,34 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
         @"^\w+(\.\w+)*\.Hyperlink$",
         RegexOptions.Compiled);
 
+    // REVIEWED-AND-SAFE (R106-drawing-object-hyperlink-duplicate-rebase audit): this guard fired
+    // exactly as designed when DuplicateSheetDrawingCloner.CopyDrawingCollections started assigning
+    // `cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name)` --
+    // a computed (non-copy-forward) value, breaking the "no command can SET a hyperlink" premise this
+    // test's class doc describes. AUDITED: still NOT a patch-safety hole, for a reason independent of
+    // the fingerprint gap this guard polices. DuplicateSheetCommand adds a brand-new sheet that has no
+    // corresponding worksheet part in the ORIGINAL source package snapshot; XlsxFileAdapter's cell-patch
+    // eligibility check (PackageAllowsCellPatchSave in XlsxFileAdapter.SourcePackageSnapshot.cs) walks
+    // every live sheet and requires a source-package worksheet path for each one via
+    // worksheetPathMap.SheetPathsByName -- the new sheet has none, so that walk fails with
+    // "package_guard_sheet_path_missing" and blocks cell-patch save for the WHOLE workbook, forcing the
+    // full ClosedXML rebuild (which recomputes the drawing/chart XML from the current model, including
+    // the now-rebased Hyperlink) every single time a just-duplicated sheet is still present at save time.
+    // The cheap cell-patch path (the one this guard's fingerprint actually gates) is therefore
+    // categorically unreachable for this assignment -- the same conclusion R97_DrawingObjectHyperlinkCopyTests'
+    // class doc already draws for the sibling verbatim-copy-forward Hyperlink assignments this cloner
+    // makes. So the fingerprint methods do NOT need to start comparing Hyperlink for this case; only this
+    // allowlist needed updating, so the guard keeps working for the NEXT command that sets a
+    // drawing/chart Hyperlink outside of DuplicateSheetDrawingCloner's sheet-duplication path (where the
+    // same argument would not apply).
+    // Note: HyperlinkAssignmentPattern's RHS capture group ([^,;}]+) stops at the FIRST comma, so for a
+    // multi-argument call like `RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name)`
+    // the captured `rhs` is only the truncated `RewriteSameSheetHyperlinkTarget(cloned.Hyperlink` prefix
+    // (no closing paren, no trailing arguments) -- matched here accordingly.
+    private static readonly Regex AllowedRewriteSameSheetHyperlinkTargetRhs = new(
+        @"^RewriteSameSheetHyperlinkTarget\(\w+(\.\w+)*\.Hyperlink$",
+        RegexOptions.Compiled);
+
     [Fact]
     public void NoCommandAssignsANewDrawingOrChartHyperlinkValue_WithoutUpdatingThePatchSafetyFingerprint()
     {
@@ -116,7 +144,7 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
             foreach (Match match in HyperlinkAssignmentPattern.Matches(text))
             {
                 var rhs = match.Groups[1].Value.Trim();
-                if (AllowedCopyForwardRhs.IsMatch(rhs))
+                if (AllowedCopyForwardRhs.IsMatch(rhs) || AllowedRewriteSameSheetHyperlinkTargetRhs.IsMatch(rhs))
                     continue;
 
                 var lineNumber = text.AsSpan(0, match.Index).Count('\n') + 1;

@@ -35,9 +35,27 @@ public sealed class GridResizeSizePlannerTests
         GridResizeSizePlanner.ClampColumnSize(GridResizeSizePlanner.MaximumColumnSizePixels + 100)
             .Should()
             .Be(GridResizeSizePlanner.MaximumColumnSizePixels);
+    }
+
+    [Fact]
+    public void R106_MaximumColumnSizePixels_IsIndependentlyPinnedToPixelValue()
+    {
+        // R106: GridResizeSizePlanner.MaximumColumnSizePixels is declared as a plain const alias of
+        // ColumnWidthPixelMapper.MaximumColumnWidthPixels (`public const double MaximumColumnSizePixels =
+        // ColumnWidthPixelMapper.MaximumColumnWidthPixels;`), so an assertion of the form
+        // `MaximumColumnSizePixels.Should().Be(ColumnWidthPixelMapper.MaximumColumnWidthPixels)` compares
+        // that compile-time constant to itself and can never fail for any value it holds -- exactly the
+        // row-sibling blind spot that let GridResizeSizePlanner.MaximumRowSizePixels silently hold a
+        // points-space value instead of the required pixel value for many rounds before R105 caught it
+        // (see ClampRowSize_CapsAtMaximumHeight below). Pin the column ceiling to independently-derived
+        // values instead: the raw literal, and ColumnWidthToPixels applied to Excel's 255-character
+        // maximum column width (255 * 7 + 5 = 1790), so a future points/pixels unit mismatch on the
+        // column axis would be caught here.
         GridResizeSizePlanner.MaximumColumnSizePixels
             .Should()
-            .Be(ColumnWidthPixelMapper.MaximumColumnWidthPixels);
+            .Be(1790.0)
+            .And.Be(ColumnWidthPixelMapper.ColumnWidthToPixels(ColumnWidthPixelMapper.MaximumColumnWidth))
+            .And.Be(ColumnWidthPixelMapper.MaximumColumnWidthPixels);
     }
 
     [Fact]

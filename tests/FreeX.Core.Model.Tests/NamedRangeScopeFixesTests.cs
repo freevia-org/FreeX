@@ -1,3 +1,4 @@
+using System.Linq;
 using FluentAssertions;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
@@ -237,13 +238,39 @@ public sealed class NamedRangeScopeFixesTests
 
         var copy = wb.Sheets[1];
         wb.ScopedNamedRanges.Should().ContainKey(("LocalRate", copy.Id));
-        // Range/comment content is carried over verbatim (not remapped to the copy's sheet).
-        wb.ScopedNamedRanges[("LocalRate", copy.Id)].Should().Be(range);
+        // R106: a same-sheet scoped name's range is rebased onto the COPY's own sheet (matching
+        // Excel's Move-or-Copy, which rebases a local name's RefersTo when it targets its own
+        // host sheet) -- comment/metadata still carries over verbatim.
+        var expectedRange = new GridRange(new CellAddress(copy.Id, 2, 2), new CellAddress(copy.Id, 2, 2));
+        wb.ScopedNamedRanges[("LocalRate", copy.Id)].Should().Be(expectedRange);
         wb.TryGetScopedNamedRangeMetadata("LocalRate", copy.Id, out var metadata).Should().BeTrue();
         metadata.Comment.Should().Be("note");
 
         // The source sheet's own scoped name must be unaffected.
         wb.ScopedNamedRanges.Should().ContainKey(("LocalRate", sheet1.Id));
+        wb.ScopedNamedRanges[("LocalRate", sheet1.Id)].Should().Be(range);
+    }
+
+    [Fact]
+    public void DuplicateSheetCommand_CrossSheetScopedNamedRange_KeepsPointingAtOriginalSheet()
+    {
+        // R106 sibling coverage: a sheet-scoped name that deliberately targets ANOTHER sheet's
+        // cells (not its own host sheet) must NOT be rebased onto the copy -- only a same-sheet
+        // reference travels with the duplicate, mirroring Sheet.Clone.ClonePivotTable's SourceRange
+        // handling for a pivot table whose data lives on a different sheet than the pivot itself.
+        var (wb, ctx) = CreateContext();
+        var sheet1 = wb.Sheets[0];
+        var dataSheet = wb.AddSheet("Data");
+        var range = new GridRange(new CellAddress(dataSheet.Id, 0, 0), new CellAddress(dataSheet.Id, 0, 0));
+        wb.DefineNamedRange("ExternalRate", range, new NamedRangeMetadata("Sheet1", ""), sheet1.Id);
+
+        var command = new DuplicateSheetCommand(sheet1.Id);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        var copy = wb.Sheets.Single(s => s.Id != sheet1.Id && s.Id != dataSheet.Id);
+        wb.ScopedNamedRanges.Should().ContainKey(("ExternalRate", copy.Id));
+        // Unchanged: still points at the Data sheet, not remapped onto the copy.
+        wb.ScopedNamedRanges[("ExternalRate", copy.Id)].Should().Be(range);
     }
 
     [Fact]

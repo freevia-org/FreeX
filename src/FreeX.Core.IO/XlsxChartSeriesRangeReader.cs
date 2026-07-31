@@ -268,17 +268,49 @@ internal static class XlsxChartSeriesRangeReader
     /// <summary>
     /// Returns true when at least one formula in the series XML (val/cat/tx containers, or
     /// xVal/yVal/bubbleSize for a Scatter/Bubble series) cannot be parsed as a single rectangular
-    /// range. Multi-area formulas such as "Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5" trigger this path.
+    /// range, OR resolves cleanly but to a sheet other than the chart's own host
+    /// <paramref name="sheetId"/> (R106-io-chart-series-cross-sheet — see
+    /// <see cref="FormulaNeedsVerbatimCapture"/>). Multi-area formulas such as
+    /// "Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5" also trigger this path.
     /// </summary>
-    public static bool HasUnparsableFormula(XElement series, SheetId sheetId)
+    public static bool HasUnparsableFormula(
+        XElement series,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver = null)
     {
         foreach (var formula in ReadSeriesRangeFormulas(series, GetSeriesRangeContainerNames(series)))
         {
-            if (!TryParseFormulaRange(formula, sheetId, out _))
+            if (FormulaNeedsVerbatimCapture(formula, sheetId, sheetNameResolver))
                 return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// R106-io-chart-series-cross-sheet: true when <paramref name="formula"/> either (a) cannot be
+    /// parsed as a single rectangular range at all (named range, multi-area, external-workbook
+    /// link — the pre-existing case), or (b) parses fine but resolves to a DIFFERENT sheet than the
+    /// chart's own host <paramref name="sheetId"/> (e.g. a "Target" series sourced from a shared
+    /// parameters sheet while an "Actual" series is local — Excel's ordinary "Select Data > Add
+    /// Series > any sheet" scenario). Case (b) matters because
+    /// <see cref="XlsxChartXmlWriter"/>'s positional strip recompute
+    /// (<c>FormatStripRange</c>/<c>GetChartSeriesStripSequence</c>) can only ever address the
+    /// chart's own host sheet — a cross-sheet series formula must be captured verbatim (formula +
+    /// cache) exactly like a genuinely-unparsable one, or it has no way to round-trip on save.
+    /// When <paramref name="sheetNameResolver"/> is null the 2-sheet-agnostic overload of
+    /// <see cref="TryParseFormulaRange"/> always resolves to <paramref name="sheetId"/> itself, so
+    /// this always returns the pre-existing (unparsable-only) answer in that case.
+    /// </summary>
+    private static bool FormulaNeedsVerbatimCapture(
+        string formula,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver)
+    {
+        if (!TryParseFormulaRange(formula, sheetId, sheetNameResolver, out var range))
+            return true;
+
+        return range.Start.Sheet != sheetId;
     }
 
     /// <summary>
@@ -315,14 +347,15 @@ internal static class XlsxChartSeriesRangeReader
     /// </summary>
     public static List<ChartSeriesVerbatimFormulas>? TryCollectVerbatimFormulas(
         IEnumerable<XElement> allSeriesElements,
-        SheetId sheetId)
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver = null)
     {
         var seriesList = allSeriesElements.ToList();
         List<ChartSeriesVerbatimFormulas>? result = null;
         for (var i = 0; i < seriesList.Count; i++)
         {
             var series = seriesList[i];
-            if (!HasUnparsableFormula(series, sheetId))
+            if (!HasUnparsableFormula(series, sheetId, sheetNameResolver))
                 continue;
 
             var seriesIndex = ReadSeriesIndex(series, i);
@@ -335,13 +368,13 @@ internal static class XlsxChartSeriesRangeReader
             // to repurpose.
             (result ??= []).Add(new ChartSeriesVerbatimFormulas(
                 SeriesIndex: seriesIndex,
-                ValFormula: CaptureFormulaIfUnparsable(series, isScatterOrBubble ? "yVal" : "val", sheetId),
-                CatFormula: CaptureFormulaIfUnparsable(series, isScatterOrBubble ? "xVal" : "cat", sheetId),
-                TxFormula: CaptureFormulaIfUnparsable(series, "tx", sheetId),
-                BubbleSizeFormula: CaptureFormulaIfUnparsable(series, "bubbleSize", sheetId),
-                ValCacheXml: CaptureCacheXmlIfUnparsable(series, isScatterOrBubble ? "yVal" : "val", sheetId),
-                CatCacheXml: CaptureCacheXmlIfUnparsable(series, isScatterOrBubble ? "xVal" : "cat", sheetId),
-                BubbleSizeCacheXml: CaptureCacheXmlIfUnparsable(series, "bubbleSize", sheetId)));
+                ValFormula: CaptureFormulaIfUnparsable(series, isScatterOrBubble ? "yVal" : "val", sheetId, sheetNameResolver),
+                CatFormula: CaptureFormulaIfUnparsable(series, isScatterOrBubble ? "xVal" : "cat", sheetId, sheetNameResolver),
+                TxFormula: CaptureFormulaIfUnparsable(series, "tx", sheetId, sheetNameResolver),
+                BubbleSizeFormula: CaptureFormulaIfUnparsable(series, "bubbleSize", sheetId, sheetNameResolver),
+                ValCacheXml: CaptureCacheXmlIfUnparsable(series, isScatterOrBubble ? "yVal" : "val", sheetId, sheetNameResolver),
+                CatCacheXml: CaptureCacheXmlIfUnparsable(series, isScatterOrBubble ? "xVal" : "cat", sheetId, sheetNameResolver),
+                BubbleSizeCacheXml: CaptureCacheXmlIfUnparsable(series, "bubbleSize", sheetId, sheetNameResolver)));
         }
 
         return result;
@@ -353,13 +386,17 @@ internal static class XlsxChartSeriesRangeReader
     /// its formula parses fine — even if a sibling container in the same series needed the
     /// verbatim bypass. See R99-io-chart-series-verbatim-container-scope above.
     /// </summary>
-    private static string? CaptureFormulaIfUnparsable(XElement series, string containerName, SheetId sheetId)
+    private static string? CaptureFormulaIfUnparsable(
+        XElement series,
+        string containerName,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver = null)
     {
         var formula = ReadFirstFormula(series, containerName);
         if (formula is null)
             return null;
 
-        return TryParseFormulaRange(formula, sheetId, out _) ? null : formula;
+        return FormulaNeedsVerbatimCapture(formula, sheetId, sheetNameResolver) ? formula : null;
     }
 
     /// <summary>
@@ -377,10 +414,14 @@ internal static class XlsxChartSeriesRangeReader
     /// had no cache element (e.g. a full-column named range with no computed value) — real Excel
     /// omits the cache in that case too.
     /// </summary>
-    private static string? CaptureCacheXmlIfUnparsable(XElement series, string containerName, SheetId sheetId)
+    private static string? CaptureCacheXmlIfUnparsable(
+        XElement series,
+        string containerName,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver = null)
     {
         var formula = ReadFirstFormula(series, containerName);
-        if (formula is null || TryParseFormulaRange(formula, sheetId, out _))
+        if (formula is null || !FormulaNeedsVerbatimCapture(formula, sheetId, sheetNameResolver))
             return null;
 
         var container = ElementByLocalName(series, containerName);

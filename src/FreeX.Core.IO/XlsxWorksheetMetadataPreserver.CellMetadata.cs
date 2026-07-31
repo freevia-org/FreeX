@@ -64,8 +64,32 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 if (!IsStrippedRangeHyperlinkRef(reference))
                     continue;
 
+                // R106-io-hyperlink-range-shift: the "ref" copied verbatim from this pristine
+                // pre-edit source snapshot is only correct if NO row/column insert or delete has
+                // touched the sheet since load -- Sheet.RangeHyperlinks tracks the SAME range's
+                // current, shift-adjusted GridRange (kept up to date by every insert/delete the
+                // session performs, see RowColumnShiftHelpers.ShiftRangeHyperlinks*). Use that live
+                // range to compute the ref actually written, instead of the stale original string.
+                // A lookup miss when a sheet IS available means a row/column delete fully consumed
+                // this range (mirroring how a DataValidation/ConditionalFormat rule whose entire
+                // AppliesTo area was deleted is dropped rather than resurrected at a stale address)
+                // -- skip re-emission entirely rather than resurrect it at the wrong place. Only
+                // when no sheet is available at all (defensive; the established pattern in this
+                // method already tolerates a null sheet) does this fall back to the old verbatim
+                // behavior, so no existing caller shape regresses.
+                string? liveReference = reference;
+                if (sheet is not null)
+                {
+                    if (!sheet.RangeHyperlinks.TryGetValue(reference, out var liveRange))
+                        continue;
+
+                    liveReference = FormatRangeHyperlinkRef(liveRange);
+                }
+
                 targetHyperlinks ??= CreateAndInsertWorksheetHyperlinksElement(targetRoot, workbookNs);
                 var reemitted = new XElement(sourceHyperlink);
+                if (!string.Equals(liveReference, reference, StringComparison.Ordinal))
+                    reemitted.SetAttributeValue("ref", liveReference);
                 RebindWorksheetElementRelationshipId(
                     reemitted,
                     sourceArchive,
@@ -75,7 +99,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
                     relNs,
                     packageRelNs);
                 targetHyperlinks.Add(reemitted);
-                targetByReference[reference] = reemitted;
+                targetByReference[liveReference!] = reemitted;
                 changed = true;
                 continue;
             }
@@ -161,6 +185,34 @@ internal static partial class XlsxWorksheetMetadataPreserver
     // as an independent, narrowly-scoped copy here rather than exposing the normalizer's private helpers,
     // so this file's ownership boundary stays self-contained.
     private const long MaxBoundedHyperlinkRangeCellCount = 100_000;
+
+    // R106-io-hyperlink-range-shift: formats Sheet.RangeHyperlinks' live (shift-adjusted) GridRange
+    // back into the "ref" string form Excel expects -- "C:C"/"B:D" for a whole-column range (Start.Row
+    // == 1 and End.Row == MaxRow), "3:3"/"2:5" for a whole-row range (Start.Col == 1 and End.Col ==
+    // MaxCol), or plain "A1"/"A1:B2" A1 notation for a bounded (oversized) range. Mirrors
+    // XlsxWorksheetHyperlinkNormalizer.NormalizeReference's inverse direction (parse -> format instead
+    // of format -> parse).
+    private static string FormatRangeHyperlinkRef(GridRange range)
+    {
+        var isWholeColumn = range.Start.Row == 1 && range.End.Row == CellAddress.MaxRow;
+        var isWholeRow = range.Start.Col == 1 && range.End.Col == CellAddress.MaxCol;
+
+        // A range that is BOTH (the entire sheet) is vanishingly unlikely for a real hyperlink but
+        // is unambiguous either way; prefer the whole-column form.
+        if (isWholeColumn)
+        {
+            var startCol = CellAddress.NumberToColumnName(range.Start.Col);
+            var endCol = CellAddress.NumberToColumnName(range.End.Col);
+            return $"{startCol}:{endCol}";
+        }
+
+        if (isWholeRow)
+            return $"{range.Start.Row}:{range.End.Row}";
+
+        return range.Start == range.End
+            ? range.Start.ToA1()
+            : $"{range.Start.ToA1()}:{range.End.ToA1()}";
+    }
 
     private static bool IsStrippedRangeHyperlinkRef(string reference)
     {

@@ -63,6 +63,16 @@ public sealed class R21_StructuredTableFilter_PreservesColumnOwnedRows
         sheet.FilterHiddenRows.Should().BeEquivalentTo([5u, 6u]);
         sheet.ColumnFilterOwnedRows[scoreCol].Should().BeEquivalentTo([5u, 6u]);
 
+        // R106-commands-autofilter-table-sync-1: TopBottomFilterCommand.Apply now mirrors its
+        // criterion into the table's own FilterColumns model too (this test's Score-column Top-3
+        // filter is applied against the table's own Range, so it matches), the same copy-on-write
+        // way FilterCommand.ApplyToStructuredTableIfMatched already replaces
+        // sheet.StructuredTables[i] with a new StructuredTableModel instance rather than mutating
+        // the original in place (StructuredTableModel's properties are init-only) -- re-fetch the
+        // live instance rather than mutating the now-stale local `table` reference captured before
+        // that Apply call.
+        table = sheet.StructuredTables.Single(t => t.Id == table.Id);
+
         // Now a table slicer/dropdown changes the Region column's value-list filter to "North" and
         // re-applies the table's structured filters (mirrors PivotTableSlicerCommands.ApplyTableSlicer).
         table.FilterColumns.Add(new StructuredTableFilterColumnModel(0, ["North"]));

@@ -357,6 +357,11 @@ internal static class TextBodyFlowDocumentConverter
                     Foreground = Brushes.Black,
                 },
             };
+            border.MouseLeftButtonDown += (_, args) =>
+            {
+                if (args.ClickCount >= 2 && OleActivationService.TryActivate(ole))
+                    args.Handled = true;
+            };
             return new InlineUIContainer(border)
             {
                 BaselineAlignment = BaselineAlignment.Center,

@@ -230,8 +230,33 @@ internal static partial class XlsxChartXmlWriter
     {
         if (HasAuthoritativeSeriesColumnMappings(chart, layout))
         {
+            var mappedSeriesIndexes = new HashSet<int>();
             foreach (var mapping in chart.SeriesColumnMappings.OrderBy(m => m.SeriesXmlIndex))
+            {
+                mappedSeriesIndexes.Add(mapping.SeriesXmlIndex);
                 yield return (mapping.ValueColumn, mapping.SeriesXmlIndex);
+            }
+
+            // R106-io-chart-series-cross-sheet: a series whose <c:val> formula points at a
+            // DIFFERENT sheet than the chart's own host sheet never gets a column mapping —
+            // TryReadSeriesValueColumn only maps same-sheet single-column ranges — but it DOES get
+            // a captured verbatim formula/cache (see XlsxChartSeriesRangeReader's cross-sheet
+            // handling of HasUnparsableFormula/TryCollectVerbatimFormulas). It must still be
+            // emitted here: BuildChartSeries already prefers `verbatim?.ValFormula` over the
+            // recomputed strip range for any series returned from this sequence, so the strip
+            // value below is never actually used for these entries — only the series index
+            // matters, to look up the verbatim formula/cache by. Without this fallback, the
+            // "authoritative mappings" fast path above silently drops the cross-sheet series from
+            // the saved file entirely (it is present in neither loop).
+            foreach (var verbatimSeriesIndex in (chart.VerbatimSeriesFormulas ?? [])
+                .Where(formulas => formulas.ValFormula is not null && !mappedSeriesIndexes.Contains(formulas.SeriesIndex))
+                .Select(formulas => formulas.SeriesIndex)
+                .Distinct()
+                .OrderBy(index => index))
+            {
+                yield return (layout.FirstValueStrip, verbatimSeriesIndex);
+            }
+
             yield break;
         }
 

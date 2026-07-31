@@ -276,6 +276,116 @@ public sealed class PageBreakPreviewLayoutPlannerTests
     }
 
     [Fact]
+    public void R106_Calculate_MultiArea_OffscreenEarlierAreaStillContributesToPageNumberOffset()
+    {
+        // R106: area 1 (rows 1-70, col 1) paginates into multiple pages but is scrolled entirely out of
+        // the viewport's visible columns (only column 2 is in view). Area 2 (rows 1-5, col 2) is fully
+        // visible and must continue numbering from where area 1's (invisible) pages left off - Excel's
+        // Page Break Preview numbers every page of a multi-area job continuously regardless of what is
+        // currently scrolled into view. Before the fix, the `continue` at the visibility check skipped the
+        // pageNumberOffset increment entirely, so area 2's page would incorrectly restart at 1.
+        var sheetId = SheetId.New();
+        var area1 = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 70, 1));
+        var area2 = new GridRange(new CellAddress(sheetId, 1, 2), new CellAddress(sheetId, 5, 2));
+
+        // Viewport only exposes column 2 (area 1's column 1 is scrolled out of view) and rows 1-10 (covers
+        // area 2's rows 1-5 fully; area 1's rows 1-70 are irrelevant since its column is already excluded).
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 10).Select(row => new RowMetric((uint)row, 20, (row - 1) * 20.0)).ToList(),
+            [new ColMetric(2, 40, 0)],
+            null,
+            []);
+
+        // Sanity check: area 1 alone (as the single-area overload would see it, with a viewport that DOES
+        // include its column) paginates into more than one page, so it has a nonzero page count to lose.
+        var area1OnlyViewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 70).Select(row => new RowMetric((uint)row, 20, (row - 1) * 20.0)).ToList(),
+            [new ColMetric(1, 40, 0)],
+            null,
+            []);
+        var area1OnlyLayout = PageBreakPreviewLayoutPlanner.Calculate(
+            area1OnlyViewport,
+            area1,
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 100,
+            actualHeight: 1500);
+        var area1PageCount = area1OnlyLayout.Pages.Count;
+        area1PageCount.Should().BeGreaterThan(1, "area 1 must contribute more than one page for this test to be meaningful");
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            printAreas: [area1, area2],
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 100,
+            actualHeight: 250);
+
+        var page = layout.Pages.Should().ContainSingle("only area 2 is visible; area 1 is scrolled off-screen").Which;
+        page.PageNumber.Should().Be(area1PageCount + 1,
+            "area 2's page number must continue after area 1's page count, even though area 1 contributed no visible tiles");
+    }
+
+    [Fact]
+    public void R106_Calculate_MultiArea_BothAreasVisible_NoRegressionInContinuousNumbering()
+    {
+        // No-regression sibling: when both areas ARE visible (the existing
+        // Calculate_MultiArea_DoesNotMaskSecondPrintArea path), numbering must remain continuous and
+        // start at 1 - the fix must not change behavior for the already-covered fully-visible case.
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            Enumerable.Range(1, 5).Select(row => new RowMetric((uint)row, 20, (row - 1) * 20.0)).ToList(),
+            Enumerable.Range(1, 7).Select(col => new ColMetric((uint)col, 40, (col - 1) * 40.0)).ToList(),
+            null,
+            []);
+        var area1 = new GridRange(new CellAddress(sheetId, 1, 1), new CellAddress(sheetId, 5, 3));
+        var area2 = new GridRange(new CellAddress(sheetId, 1, 5), new CellAddress(sheetId, 5, 7));
+
+        var layout = PageBreakPreviewLayoutPlanner.Calculate(
+            viewport,
+            printAreas: [area1, area2],
+            rowPageBreaks: null,
+            columnPageBreaks: null,
+            WorksheetPageOrder.DownThenOver,
+            WorksheetScaleToFit.Default,
+            printTitleRows: null,
+            printTitleColumns: null,
+            WorksheetPaperSize.A4,
+            WorksheetPageOrientation.Portrait,
+            WorksheetPageMargins.Narrow,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            actualWidth: 310,
+            actualHeight: 118);
+
+        layout.Pages.Should().HaveCountGreaterThan(1);
+        layout.Pages.Select(page => page.PageNumber).Should().BeInAscendingOrder();
+        layout.Pages.Select(page => page.PageNumber).Should().OnlyHaveUniqueItems();
+        layout.Pages.First().PageNumber.Should().Be(1);
+    }
+
+    [Fact]
     public void CalculateWatermarkFontSize_ClampsToLegibleRange()
     {
         PageBreakPreviewLayoutPlanner.CalculateWatermarkFontSize(new LayoutRect(0, 0, 50, 50))

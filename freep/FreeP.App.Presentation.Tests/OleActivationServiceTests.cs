@@ -34,6 +34,21 @@ public sealed class OleActivationServiceTests
         }).Should().Be("xlsx");
     }
 
+    [Theory]
+    [InlineData("Embedded.xlsx", "xlsx")]
+    [InlineData("Embedded", "xlsx")]
+    [InlineData("Embedded.bin", "xlsx")]
+    public void ResolveExtension_UsesInlineFileNameThenClassName(
+        string fileName,
+        string expected)
+    {
+        OleActivationService.ResolveExtension(new InlineOleObjectInfo
+        {
+            FileName = fileName,
+            ClassName = "Excel.Sheet.12",
+        }).Should().Be(expected);
+    }
+
     [Fact]
     public void TryCommitEditedPayload_ReplacesChangedBytes()
     {
@@ -78,6 +93,31 @@ public sealed class OleActivationServiceTests
         {
             try { File.Delete(unchangedPath); } catch { }
             try { File.Delete(emptyPath); } catch { }
+        }
+    }
+
+    [Fact]
+    public void TryCommitEditedPayload_UpdatesInlineObjectBytes()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"freep-inline-ole-test-{Guid.NewGuid():N}.bin");
+        try
+        {
+            byte[] original = [1, 2, 3];
+            File.WriteAllBytes(path, [8, 9]);
+            var inline = new InlineOleObjectInfo
+            {
+                EmbeddedBytes = original.ToArray(),
+                FileName = "Embedded.xlsx",
+                ClassName = "Excel.Sheet.12",
+            };
+
+            OleActivationService.TryCommitEditedPayload(inline, path, original)
+                .Should().BeTrue();
+            inline.EmbeddedBytes.Should().Equal(8, 9);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
         }
     }
 }

@@ -22,6 +22,37 @@ public sealed class InCanvasRichTextEditBuffer
 
     public string PlainText => InCanvasTextEditPlanner.ExtractPlainText(_body);
 
+    /// <summary>
+    /// Returns the inline OLE payload at a logical text position without cloning it.
+    /// Hosts use this only for activation; the edit buffer remains the owner so any
+    /// bytes written back by the external application are committed with the edit.
+    /// </summary>
+    public bool TryGetInlineOleObjectAt(int logicalPosition, out InlineOleObjectInfo? inlineObject)
+    {
+        int position = 0;
+        foreach (var paragraph in _body.Paragraphs)
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                int length = run.Text?.Length ?? 0;
+                if (run.InlineOleObject is not null
+                    && logicalPosition >= position
+                    && logicalPosition < position + Math.Max(1, length))
+                {
+                    inlineObject = run.InlineOleObject;
+                    return true;
+                }
+
+                position += length;
+            }
+
+            position++;
+        }
+
+        inlineObject = null;
+        return false;
+    }
+
     public InCanvasRichClipboardPayload CreateClipboardPayload(
         InCanvasEditorTextSelection selection) =>
         InCanvasRichClipboardPlanner.Capture(_body, selection, _typingRun);

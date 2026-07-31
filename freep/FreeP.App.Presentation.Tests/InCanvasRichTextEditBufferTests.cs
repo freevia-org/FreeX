@@ -5,6 +5,35 @@ namespace FreeP.App.Compositor.Tests;
 
 public sealed class InCanvasRichTextEditBufferTests
 {
+    [Fact]
+    public void InlineOleActivationLookupReturnsTheOwnedPayloadAtMarkerPosition()
+    {
+        var inlineObject = new InlineOleObjectInfo
+        {
+            EmbeddedBytes = [1, 2, 3],
+            FileName = "Embedded.xlsx",
+            ClassName = "Excel.Sheet.12",
+        };
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run { Text = "Before " },
+                new Run { Text = "\uFFFC", InlineOleObject = inlineObject },
+                new Run { Text = " After" },
+            }
+        });
+
+        var buffer = new InCanvasRichTextEditBuffer(body);
+
+        buffer.TryGetInlineOleObjectAt(7, out var found).Should().BeTrue();
+        found.Should().NotBeNull();
+        found!.EmbeddedBytes.Should().Equal(1, 2, 3);
+
+        buffer.TryGetInlineOleObjectAt(6, out _).Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(0, 0, 0)]
     [InlineData(1, 0, 0)]

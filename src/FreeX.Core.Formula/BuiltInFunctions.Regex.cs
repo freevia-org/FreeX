@@ -37,15 +37,22 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue RegexExtract(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        // See RegexTest: check the leftmost argument (text) first so the leftmost error wins.
+        // Resolve arguments in strict ascending index order (text, pattern, return_mode,
+        // case_sensitivity) so the leftmost error wins, matching Excel's left-to-right
+        // argument-error precedence (see RegexTest / R104). Note that case_sensitivity is the
+        // LAST parameter here, so it must not be resolved until return_mode (position 3) has
+        // already been checked -- hence resolving the pattern text and building the final Regex
+        // (which needs case_sensitivity) are two separate steps with return_mode in between.
         if (args[0] is ErrorValue e0) return e0;
 
-        if (!TryCreateRegex(args[1], args.Count > 3 ? args[3] : BlankValue.Instance, out var regex, out var error))
+        if (!TryResolveRegexPattern(args[1], out var patternText, out var error))
             return error;
         if (!TryGetOptionalMode(args, 2, defaultValue: 0, out int returnMode, out error))
             return error;
         if (returnMode is not (0 or 1 or 2))
             return ErrorValue.Value;
+        if (!TryCreateRegexFromPattern(patternText, args.Count > 3 ? args[3] : BlankValue.Instance, out var regex, out error))
+            return error;
 
         if (args[0] is RangeValue textRange)
         {
@@ -111,11 +118,16 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue RegexReplace(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        // See RegexTest: check the leftmost argument (text) first so the leftmost error wins,
-        // rather than the previous 1,4,2,3,0 resolution order surfacing a later argument's error.
+        // Resolve arguments in strict ascending index order (text, pattern, replacement,
+        // occurrence, case_sensitivity) so the leftmost error wins, matching Excel's left-to-right
+        // argument-error precedence (see RegexTest / R104) -- rather than the previous 0,1,4,2,3
+        // order that resolved case_sensitivity (the LAST parameter) right after the pattern,
+        // ahead of replacement/occurrence. Resolving the pattern text and building the final
+        // Regex (which needs case_sensitivity) are therefore two separate steps, with
+        // replacement/occurrence checked in between.
         if (args[0] is ErrorValue e0) return e0;
 
-        if (!TryCreateRegex(args[1], args.Count > 4 ? args[4] : BlankValue.Instance, out var regex, out var error))
+        if (!TryResolveRegexPattern(args[1], out var patternText, out var error))
             return error;
 
         var replacement = SingleValueOrErrorAsValue(args[2], out error);
@@ -123,6 +135,9 @@ public static partial class BuiltInFunctions
         if (replacement is ErrorValue replacementError) return replacementError;
 
         if (!TryGetOptionalInteger(args, 3, defaultValue: 0, out int occurrence, out error))
+            return error;
+
+        if (!TryCreateRegexFromPattern(patternText, args.Count > 4 ? args[4] : BlankValue.Instance, out var regex, out error))
             return error;
 
         if (args[0] is RangeValue textRange)
@@ -244,6 +259,23 @@ public static partial class BuiltInFunctions
         out ScalarValue error)
     {
         regex = new Regex("$.");
+
+        if (!TryResolveRegexPattern(patternValue, out var patternText, out error))
+            return false;
+
+        return TryCreateRegexFromPattern(patternText, caseSensitivityValue, out regex, out error);
+    }
+
+    /// <summary>
+    /// Resolves and validates the pattern argument only -- independent of case_sensitivity -- so
+    /// callers with an optional argument positioned BETWEEN pattern and case_sensitivity (e.g.
+    /// RegexExtract's return_mode, RegexReplace's replacement/occurrence) can check that argument
+    /// for an error before ever touching case_sensitivity (the last parameter in both functions),
+    /// preserving Excel's strict left-to-right argument-error precedence.
+    /// </summary>
+    private static bool TryResolveRegexPattern(ScalarValue patternValue, out string patternText, out ScalarValue error)
+    {
+        patternText = "";
         error = ErrorValue.Value;
 
         var pattern = SingleValueOrErrorAsValue(patternValue, out error);
@@ -254,17 +286,14 @@ public static partial class BuiltInFunctions
             return false;
         }
 
-        if (!TryGetRegexCaseSensitivity(caseSensitivityValue, out var options, out error))
-            return false;
-
-        var patternText = ToText(pattern);
+        var text = ToText(pattern);
 
         // Excel's REGEX* functions run on Google's RE2 engine, which deliberately omits
         // backreferences and lookaround (for linear-time matching guarantees) -- both of those
         // compile fine under .NET's full regex engine and would silently produce a different
         // result than real Excel (which errors with #VALUE!) instead of merely a different error.
         // Reject them up front so both engines agree a formula using them is invalid.
-        if (HasRe2UnsupportedConstruct(patternText))
+        if (HasRe2UnsupportedConstruct(text))
         {
             error = ErrorValue.Value;
             return false;
@@ -273,21 +302,42 @@ public static partial class BuiltInFunctions
         // RE2/Excel accepts the Python-style named-group syntax (?P<name>...); .NET only
         // recognizes (?<name>...). Translate before compiling so a pattern real Excel accepts
         // doesn't spuriously fail here with #VALUE!.
-        patternText = TranslatePythonNamedGroups(patternText);
+        text = TranslatePythonNamedGroups(text);
 
         // RE2/Excel's $ (without a /m multiline flag, which these functions never expose) is a
         // strict end-of-text anchor -- equivalent to \z. .NET's default (non-Multiline) $ instead
         // matches either the true end of the string OR immediately before a single trailing '\n'.
         // Rewrite bare, unescaped, out-of-class '$' to '\z' so a source string ending in a
         // newline behaves like real Excel instead of silently matching one character early.
-        patternText = NormalizeEndOfTextAnchor(patternText);
+        text = NormalizeEndOfTextAnchor(text);
 
         // RE2/Excel's \p{Name} accepts Unicode *script* names (e.g. \p{Greek}) in addition to
         // general categories; .NET's \p{} only recognizes general-category abbreviations and
         // "Is"-prefixed named *blocks* (e.g. \p{IsGreek}). Translate the common RE2 script names
         // real spreadsheets are likely to use to their nearest .NET named-block equivalent so
         // these don't spuriously throw ArgumentException/#VALUE! for patterns Excel accepts.
-        patternText = TranslateRe2ScriptNames(patternText);
+        text = TranslateRe2ScriptNames(text);
+
+        patternText = text;
+        return true;
+    }
+
+    /// <summary>
+    /// Compiles the final Regex from an already-resolved pattern string plus the (last-positioned)
+    /// case_sensitivity argument. Split out from <see cref="TryResolveRegexPattern"/> so callers
+    /// can resolve earlier-positioned optional arguments in between the two steps.
+    /// </summary>
+    private static bool TryCreateRegexFromPattern(
+        string patternText,
+        ScalarValue caseSensitivityValue,
+        out Regex regex,
+        out ScalarValue error)
+    {
+        regex = new Regex("$.");
+        error = ErrorValue.Value;
+
+        if (!TryGetRegexCaseSensitivity(caseSensitivityValue, out var options, out error))
+            return false;
 
         try
         {

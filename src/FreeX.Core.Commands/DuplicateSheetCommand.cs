@@ -86,7 +86,7 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         _insertIndex = sourceIndex + 1;
         _copySheetId = copyId;
         ctx.Workbook.InsertSheet(_insertIndex, copy);
-        CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId, tableRenames);
+        CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId, source.Name, copy.Name, tableRenames);
         return new CommandOutcome(true);
     }
 
@@ -118,17 +118,31 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
     /// <summary>
     /// Copies the source sheet's sheet-scoped defined names (plain ranges and formula
     /// expressions) onto the newly duplicated sheet, re-scoped to the copy — matching Excel,
-    /// which carries a sheet's local names over to a duplicated copy. The range/formula text
-    /// itself is copied verbatim, not remapped to the copy's sheet name, mirroring how cell
-    /// formulas are left unrewritten by <see cref="Sheet.Clone"/> -- except for any renamed
-    /// cloned table's structured references, which <paramref name="tableRenames"/> repoints at
-    /// the copy's own renamed table for the same reason <see cref="RewriteClonedTableReferences"/>
-    /// does for ordinary cell formulas.
+    /// which carries a sheet's local names over to a duplicated copy AND rebases any RefersTo
+    /// that pointed at the sheet's own cells onto the new copy (this is the entire point of a
+    /// sheet-local name like a per-sheet "TaxRate" used in template sheets — if it didn't
+    /// rebase, every duplicated sheet's local name would silently keep referencing the source
+    /// sheet's cells forever). A scoped named range's <see cref="GridRange"/> carries its own
+    /// Start.Sheet/End.Sheet (see <see cref="RemapScopedNamedRangeOntoCopy"/>: only rebased
+    /// when it actually points at the sheet being duplicated, exactly like
+    /// <c>Sheet.Clone.ClonePivotTable</c>'s SourceRange handling — a cross-sheet reference must
+    /// keep pointing at the original sheet). A scoped named formula's text is rebased the same
+    /// way <see cref="RewriteClonedTableReferences"/> already rebases ordinary cell formulas for
+    /// a renamed table, via <see cref="FormulaRewriter.Rewrite"/> with a <see cref="RenameSheetOp"/>
+    /// -- which only touches an EXPLICIT sheet-qualified reference matching the source sheet's
+    /// name (an unqualified reference already means "this sheet" and needs no rewrite), mirroring
+    /// <see cref="Sheet.RewriteSameSheetQualifiedFormula"/>'s same-sheet-qualified rebase already
+    /// applied to cell formulas / CF / DV / hyperlinks in <see cref="Sheet.Clone"/> -- except for
+    /// any renamed cloned table's structured references, which <paramref name="tableRenames"/>
+    /// repoints at the copy's own renamed table for the same reason
+    /// <see cref="RewriteClonedTableReferences"/> does for ordinary cell formulas.
     /// </summary>
     private static void CopyScopedNamedRangesAndFormulas(
         Workbook workbook,
         SheetId sourceSheetId,
         SheetId copySheetId,
+        string sourceSheetName,
+        string copySheetName,
         IReadOnlyList<(string OldName, string NewName)> tableRenames)
     {
         foreach (var ((name, sheetId), range) in workbook.ScopedNamedRanges.ToList())
@@ -137,7 +151,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
                 continue;
 
             workbook.TryGetScopedNamedRangeMetadata(name, sheetId, out var metadata);
-            workbook.DefineNamedRange(name, range, metadata, copySheetId);
+            var remapped = RemapScopedNamedRangeOntoCopy(range, sourceSheetId, copySheetId);
+            workbook.DefineNamedRange(name, remapped, metadata, copySheetId);
         }
 
         foreach (var ((name, sheetId), formulaText) in workbook.ScopedNamedFormulas.ToList())
@@ -145,9 +160,32 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
             if (sheetId != sourceSheetId)
                 continue;
 
-            var rewritten = RewriteFormulaForTableRenames(formulaText, tableRenames);
-            workbook.DefineNamedFormula(name, rewritten ?? formulaText, copySheetId);
+            var rebased = FormulaRewriter.Rewrite(formulaText, new RenameSheetOp(sourceSheetName, copySheetName), string.Empty)
+                ?? formulaText;
+            var rewritten = RewriteFormulaForTableRenames(rebased, tableRenames);
+            workbook.DefineNamedFormula(name, rewritten ?? rebased, copySheetId);
         }
+    }
+
+    /// <summary>
+    /// Rebases a sheet-scoped named range's <see cref="GridRange"/> onto the copy's sheet only
+    /// when it actually points at the sheet being duplicated (the overwhelmingly common case for
+    /// a sheet-local name, e.g. a per-sheet "TaxRate" used as "=TaxRate" in that sheet's own
+    /// formulas) -- a cross-sheet scoped name (e.g. a sheet-local name deliberately authored to
+    /// read another sheet's cells) must keep pointing at its original target, matching Excel's
+    /// Move-or-Copy behavior (only same-sheet references travel with the copy) and mirroring
+    /// <c>Sheet.Clone.ClonePivotTable</c>'s identical SourceRange handling. A <see cref="GridRange"/>
+    /// always has Start.Sheet == End.Sheet (enforced by its constructor), so checking Start.Sheet
+    /// alone is sufficient.
+    /// </summary>
+    private static GridRange RemapScopedNamedRangeOntoCopy(GridRange range, SheetId sourceSheetId, SheetId copySheetId)
+    {
+        if (range.Start.Sheet != sourceSheetId)
+            return range;
+
+        return new GridRange(
+            new CellAddress(copySheetId, range.Start.Row, range.Start.Col),
+            new CellAddress(copySheetId, range.End.Row, range.End.Col));
     }
 
     private static int FindSheetIndex(Workbook workbook, SheetId sheetId)

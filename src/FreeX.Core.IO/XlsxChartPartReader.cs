@@ -135,9 +135,25 @@ public static partial class XlsxChartPartReader
     private static void ApplyVerbatimSeriesFormulasIfNeeded(
         IEnumerable<XElement> allSeries,
         SheetId sheetId,
+        ChartModel chart) =>
+        ApplyVerbatimSeriesFormulasIfNeeded(allSeries, sheetId, sheetNameResolver: null, chart);
+
+    /// <summary>
+    /// R106-io-chart-series-cross-sheet: overload threading the sheet-name resolver through to
+    /// <see cref="XlsxChartSeriesRangeReader.TryCollectVerbatimFormulas"/> so a series whose
+    /// &lt;c:val&gt;/&lt;c:cat&gt; formula resolves cleanly to a DIFFERENT sheet than the chart's
+    /// own host sheet still gets captured — without the resolver, that same formula silently
+    /// "parses" against the chart's own sheet and is never flagged as needing the verbatim
+    /// round-trip path, so a mixed same-sheet + cross-sheet chart loses the cross-sheet series on
+    /// the next save (see XlsxChartXmlWriter.Series.cs GetChartSeriesStripSequence).
+    /// </summary>
+    private static void ApplyVerbatimSeriesFormulasIfNeeded(
+        IEnumerable<XElement> allSeries,
+        SheetId sheetId,
+        IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         ChartModel chart)
     {
-        var verbatim = XlsxChartSeriesRangeReader.TryCollectVerbatimFormulas(allSeries, sheetId);
+        var verbatim = XlsxChartSeriesRangeReader.TryCollectVerbatimFormulas(allSeries, sheetId, sheetNameResolver);
         if (verbatim is not null)
             chart.VerbatimSeriesFormulas = verbatim;
     }

@@ -618,7 +618,15 @@ public static partial class BuiltInFunctions
         // EvaluateMatchDirectRange, R29-lookup-repass-1) so CompareScalar's own blank-to-0/""
         // coercion gets a chance to run instead of the blank row being skipped like a foreign
         // type (text/logical).
-        int lookupClass = ApproxLookupTypeClass(lookupValue);
+        //
+        // A genuinely blank lookup_value itself must also be coerced to the numeric class
+        // (Excel treats a blank lookup_value as 0 for approximate match), the same way
+        // ApproxLookupClassForLookupValue already does for VLOOKUP/HLOOKUP/MATCH/LOOKUP
+        // (R75-formula-lookup-vhx-4-2). Using the plain ApproxLookupTypeClass here instead
+        // would classify a blank lookup_value into the dedicated "blank" class, which the
+        // filter below then treats as never matching any non-blank (e.g. numeric) candidate --
+        // silently discarding every genuine next-smaller/next-larger match (R106).
+        int lookupClass = ApproxLookupClassForLookupValue(lookupValue);
         int best = -1;
         for (int i = start; i != end; i += step)
         {

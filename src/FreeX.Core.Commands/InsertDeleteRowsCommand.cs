@@ -26,6 +26,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
+    // R106-io-hyperlink-range-shift: whole-column/row and oversized-bounded hyperlink refs live
+    // outside the CellAddress-keyed Hyperlinks/HyperlinkMetadata dictionaries above (see
+    // Sheet.RangeHyperlinks) and must be shifted independently.
+    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
@@ -126,6 +130,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.HyperlinkMetadata, _beforeRow, _count);
         _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
             ctx.Workbook, sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), sheet.Name);
+        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
+        RowColumnShiftHelpers.ShiftRangeHyperlinksRowsUp(sheet, _beforeRow, _count);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.RichTextRuns, _beforeRow, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides is RichTextRuns' address-keyed
@@ -456,6 +462,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
+        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);

@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -10,7 +11,15 @@ internal static class DuplicateSheetDrawingCloner
     {
         var zOrderIdMap = new Dictionary<DrawingObjectZOrderEntry, DrawingObjectZOrderEntry>();
         foreach (var chart in source.Charts)
-            copy.Charts.Add(CloneChart(chart, source.Id, copyId));
+        {
+            var clonedChart = CloneChart(chart, source.Id, copyId);
+            // R106-drawing-object-hyperlink-duplicate-rebase: see the matching comment on
+            // RewriteSameSheetHyperlinkTarget below -- without this, a chart's own 'Place in This
+            // Document' hyperlink to a cell on its own (duplicated) sheet kept pointing back at the
+            // SOURCE sheet instead of following the copy, unlike the equivalent cell hyperlink.
+            clonedChart.Hyperlink = RewriteSameSheetHyperlinkTarget(clonedChart.Hyperlink, source.Name, copy.Name);
+            copy.Charts.Add(clonedChart);
+        }
 
         // The DataRange remap above (in CloneChart) only handles the GridRange-typed series
         // range. Verbatim (multi-area/unparsable) series formulas, "value from cells" data-label
@@ -30,6 +39,8 @@ internal static class DuplicateSheetDrawingCloner
         foreach (var textBox in source.TextBoxes)
         {
             var cloned = CloneTextBox(textBox, copyId);
+            // R106-drawing-object-hyperlink-duplicate-rebase: see RewriteSameSheetHyperlinkTarget.
+            cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name);
             copy.TextBoxes.Add(cloned);
             zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id)] =
                 new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, cloned.Id);
@@ -38,6 +49,8 @@ internal static class DuplicateSheetDrawingCloner
         foreach (var shape in source.DrawingShapes)
         {
             var cloned = CloneDrawingShape(shape, copyId);
+            // R106-drawing-object-hyperlink-duplicate-rebase: see RewriteSameSheetHyperlinkTarget.
+            cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name);
             copy.DrawingShapes.Add(cloned);
             zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id)] =
                 new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, cloned.Id);
@@ -46,6 +59,8 @@ internal static class DuplicateSheetDrawingCloner
         foreach (var picture in source.Pictures)
         {
             var cloned = ClonePicture(picture, source.Id, source.Name, copy.Name, copyId);
+            // R106-drawing-object-hyperlink-duplicate-rebase: see RewriteSameSheetHyperlinkTarget.
+            cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name);
             copy.Pictures.Add(cloned);
             zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id)] =
                 new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, cloned.Id);
@@ -292,6 +307,57 @@ internal static class DuplicateSheetDrawingCloner
         }
 
         return current ?? formulaText;
+    }
+
+    /// <summary>
+    /// R106-drawing-object-hyperlink-duplicate-rebase: rewrites a drawing object's internal
+    /// ('Place in This Document') hyperlink target (<see cref="DrawingObjectHyperlink.Target"/> --
+    /// the exact same sheet-qualified-reference shape documented there, e.g. "Sheet1!A1" or
+    /// "'Sheet 1'!A1") so a reference that names the sheet being duplicated follows the DUPLICATE
+    /// sheet instead of continuing to point back at the SOURCE sheet -- mirroring Sheet.Clone's
+    /// identical rebase of a CELL hyperlink's <c>Sheet.Hyperlinks[addr]</c> target (guarded there by
+    /// <c>HyperlinkTargetKind.PlaceInThisDocument</c>) and the ConditionalFormat/DataValidation
+    /// formula rebase alongside it. Without this, CloneTextBox/CloneDrawingShape/ClonePicture/
+    /// CloneChart's verbatim <c>Hyperlink = ...</c> copy left a shape/text box/picture/chart's
+    /// self-referencing hyperlink jumping back to the original sheet on every Duplicate Sheet,
+    /// unlike the equivalent cell hyperlink right next to it.
+    /// <para>
+    /// An external ("Existing File or Web Page") hyperlink -- <see cref="DrawingObjectHyperlink.TargetMode"/>
+    /// == "External" -- is left completely untouched: only an internal target (TargetMode null, the
+    /// OPC default) can possibly be a same-sheet-qualified reference at all.
+    /// </para>
+    /// <para>
+    /// Duplicates (rather than reuses) Sheet.Clone's private <c>RewriteSameSheetQualifiedFormula</c>
+    /// text substitution, mirroring <see cref="RewriteFormulaForTableRenames"/> above -- that method
+    /// is private to its own file too. The string-literal-skipping machinery
+    /// <c>RewriteSameSheetQualifiedFormula</c> layers on top isn't needed here: a hyperlink Target is
+    /// never an Excel formula with quoted text runs, just a bare reference or defined name, so a
+    /// straight regex substitution is safe.
+    /// </para>
+    /// </summary>
+    private static DrawingObjectHyperlink? RewriteSameSheetHyperlinkTarget(
+        DrawingObjectHyperlink? hyperlink, string sourceSheetName, string copySheetName)
+    {
+        if (hyperlink is null || hyperlink.TargetMode is not null ||
+            string.Equals(sourceSheetName, copySheetName, StringComparison.Ordinal))
+            return hyperlink;
+
+        var newQualifier = SheetNameFormatter.QuoteIfNeeded(copySheetName) + "!";
+
+        // Already-quoted source qualifier, e.g. 'Sheet 1'!
+        var quotedOldQualifier = "'" + sourceSheetName.Replace("'", "''") + "'!";
+
+        // Bare (unquoted) source qualifier, e.g. Sheet1! -- guarded so it can't match a fragment of
+        // a longer identifier/qualifier (e.g. a source name of "Sheet1" must not match inside
+        // "OtherSheet1!") or re-touch the quoted form already handled above.
+        var pattern = "(?<![A-Za-z0-9_.'])" + Regex.Escape(sourceSheetName) + "!";
+
+        var rewritten = hyperlink.Target.Replace(quotedOldQualifier, newQualifier, StringComparison.OrdinalIgnoreCase);
+        rewritten = Regex.Replace(rewritten, pattern, _ => newQualifier, RegexOptions.IgnoreCase);
+
+        return string.Equals(rewritten, hyperlink.Target, StringComparison.Ordinal)
+            ? hyperlink
+            : hyperlink with { Target = rewritten };
     }
 
     private static FormControlModel CloneFormControl(FormControlModel control, SheetId copyId) =>
