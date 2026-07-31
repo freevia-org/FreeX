@@ -98,6 +98,16 @@ public sealed class WorkbookCellEditService
     public long GetUndoStackVersion(WorkbookId workbookId) =>
         _commandBus.GetUndoStackVersion(workbookId);
 
+    /// <summary>
+    /// Releases the recalculation engine's workbook-keyed state when the owning
+    /// session is no longer reachable by any workbook window.
+    /// </summary>
+    internal void RetireWorkbook(Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        _recalcEngine.RetireWorkbook(workbook);
+    }
+
     public RecalcReport? RecalculateIfAutomatic(Workbook workbook, IReadOnlyList<CellAddress> affectedCells)
     {
         ArgumentNullException.ThrowIfNull(workbook);

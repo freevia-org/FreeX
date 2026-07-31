@@ -2,6 +2,7 @@ using Avalonia.Input;
 using Avalonia.Headless;
 using FluentAssertions;
 using FreeX.App.Presentation.InteractionValidation;
+using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -159,6 +160,68 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
 
             return true;
         }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ReplacedValidationSessions_AreDisposedWithoutRetiringSharedSiblingDocuments()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            var firstSession = window.Session;
+            try
+            {
+                var interaction = InteractiveValidationInventory.KeyboardShortcuts
+                    .Single(scenario => scenario.Id == "shortcut.navigation.row-start")
+                    .Interactions.Single();
+
+                const int replacementStressCount = 256;
+                for (var index = 0; index < replacementStressCount; index++)
+                {
+                    var previousSession = window.Session;
+                    var result = await window.ExerciseShortcutInteractionAsync(interaction);
+
+                    result.Passed.Should().BeTrue(result.Note);
+                    AssertSessionDisposed(
+                        previousSession,
+                        $"validation replacement {index + 1} must dispose its previous session immediately");
+                }
+
+                AssertSessionDisposed(firstSession, "the first validation session was replaced");
+                window.OwnedWindows.Should().BeEmpty();
+
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                var sibling = window.CreateSharedViewForTest();
+                sibling.Show();
+                var sharedRoot = window.Session;
+                var siblingSession = sibling.Session;
+                window.Close();
+
+                AssertSessionDisposed(sharedRoot, "closing the root window disposes its view session");
+                using (siblingSession.CreateSiblingView(viewportHeight: 120, viewportWidth: 160))
+                {
+                    // A live sibling keeps the shared document available after the root closes.
+                }
+                sibling.AllowCloseWithoutDirtyPromptForParityCapture();
+                sibling.Close();
+                AssertSessionDisposed(siblingSession, "closing the final sibling disposes its view session");
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                if (window.IsVisible)
+                    window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    private static void AssertSessionDisposed(WorkbookSession session, string because)
+    {
+        var createSibling = () => session.CreateSiblingView(viewportHeight: 120, viewportWidth: 160);
+        createSibling.Should().Throw<ObjectDisposedException>(because);
     }
 
     [Theory]
