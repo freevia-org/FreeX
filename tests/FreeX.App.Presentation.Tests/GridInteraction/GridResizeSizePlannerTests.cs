@@ -1,6 +1,7 @@
 using FluentAssertions;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Calc;
+using FreeX.Core.Commands;
 
 namespace FreeX.App.Presentation.Tests.GridInteraction;
 
@@ -45,6 +46,17 @@ public sealed class GridResizeSizePlannerTests
         GridResizeSizePlanner.ClampRowSize(GridResizeSizePlanner.MaximumRowSizePixels + 100)
             .Should()
             .Be(GridResizeSizePlanner.MaximumRowSizePixels);
+
+        // R105: MaximumRowSizePixels clamps a pixel-space drag delta (it feeds
+        // SetRowHeightCommand's pixel height directly), so it must be Excel's 409.5-point row-height
+        // ceiling converted to pixels at 96 DPI (409.5 * 96/72 = 546) -- the same value
+        // AutoFitSizingService.MaximumRowHeight already uses and SetRowHeightCommand's own guard
+        // enforces (R102). This constant was previously the raw 409.5 (a points value), which
+        // silently capped interactive drag-resize below heights the command itself legally accepts.
+        GridResizeSizePlanner.MaximumRowSizePixels
+            .Should()
+            .Be(AutoFitSizingService.MaximumRowHeight)
+            .And.Be(409.5 * (96.0 / 72.0));
     }
 
     [Fact]

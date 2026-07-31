@@ -682,8 +682,8 @@ public static class PagePaginationPlanner
         // inflated budget then lets the accumulation-break walk pack far more real (visible-only)
         // content onto a single page than Excel would, collapsing the pagination onto too few
         // pages. Real Excel excludes hidden rows/columns entirely from this resolution.
-        var titleCount = CountRepeatItems(repeat, maxItem, isHidden);
-        var bodyCount = CountBodyItems(start, end, repeat, isHidden);
+        var titleCount = PageGeometryRules.CountRepeatItems(repeat, maxItem, isHidden);
+        var bodyCount = PageGeometryRules.CountBodyItems(start, end, repeat, isHidden);
         if (bodyCount == 0)
         {
             // R102-presentation-pagination-titles-cover-axis: when the print title range on this
@@ -698,6 +698,14 @@ public static class PagePaginationPlanner
             // shrinking/growing that axis's page capacity for no real fit-to-page reason.
             // Returning baseItemsPerPage unchanged here makes that derived scale exactly 1.0, so the
             // free axis is left alone too, matching the PDF-export tier's behavior.
+            //
+            // R105-presentation-pagination-titles-cover-axis-excel-unverified: whether this axis-fully-
+            // covered-by-titles state is ever reachable from a real Excel print range (and, if so, what
+            // Excel itself produces there) could not be established from this sandbox -- no Excel
+            // instance or captured fixture demonstrating it was available. This no-op (leave the free-
+            // fit capacity untouched, matching SheetPdfPageSetupResolver) is retained unchanged pending
+            // that verification; see PageGeometryRules.CountBodyItems for the shared implementation now
+            // used by both call sites.
             return baseItemsPerPage;
         }
 
@@ -705,70 +713,14 @@ public static class PagePaginationPlanner
         return Math.Max(1, bodyItemsPerPage + titleCount);
     }
 
-    /// <summary>
-    /// Counts the rows/columns in the print-title repeat range (clipped to <paramref name="maxItem"/>)
-    /// that will actually be reprinted on every page. When <paramref name="isHidden"/> is supplied,
-    /// hidden rows/columns within the repeat range are excluded -- they take no print space, so
-    /// including them here would overstate the fit-to-N-pages target the same way it would understate
-    /// the free per-page budget (R102-presentation-pagination-fit-to-pages-hidden-exclusion).
-    /// </summary>
-    private static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem, Func<uint, bool>? isHidden = null)
-    {
-        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
-            return 0;
-
-        var end = Math.Min(range.End, maxItem);
-        if (isHidden is null)
-            return end - range.Start + 1;
-
-        uint count = 0;
-        for (var value = range.Start; value <= end; value++)
-        {
-            if (!isHidden(value))
-                count++;
-        }
-
-        return count;
-    }
-
-    /// <summary>
-    /// Counts the rows/columns in [<paramref name="start"/>, <paramref name="end"/>] that are body
-    /// (non-title) items to be paginated by the fit-to-N-pages request. When <paramref name="isHidden"/>
-    /// is supplied, hidden rows/columns are excluded -- matching what
-    /// <see cref="ComputeAccumulationBreakPoints"/>/<see cref="PrintLayoutPlanner"/> actually place onto
-    /// each printed page (R102-presentation-pagination-fit-to-pages-hidden-exclusion). Counting hidden
-    /// rows/columns here would resolve the fit-to-pages target against the raw range span rather than
-    /// the real printed content, over-inflating the per-page budget derived from it.
-    /// </summary>
-    private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat, Func<uint, bool>? isHidden = null)
-    {
-        if (end < start)
-            return 0;
-
-        if (isHidden is null)
-        {
-            var count = end - start + 1;
-            if (repeat is not { } range || range.End < start || range.Start > end)
-                return count;
-
-            var overlapStart = Math.Max(start, range.Start);
-            var overlapEnd = Math.Min(end, range.End);
-            return overlapEnd >= overlapStart
-                ? count - (overlapEnd - overlapStart + 1)
-                : count;
-        }
-
-        uint visibleCount = 0;
-        for (var value = start; value <= end; value++)
-        {
-            if (IsWithinRepeatRange(repeat, value) || isHidden(value))
-                continue;
-
-            visibleCount++;
-        }
-
-        return visibleCount;
-    }
+    // R105-presentation-pagination-counting-helpers-consolidation: CountRepeatItems / CountBodyItems
+    // used to be maintained here as private near-duplicates of the identical rules in
+    // SheetPdfPageSetupResolver (PDF export path); R102 merged them into a single shared home,
+    // PageGeometryRules.CountRepeatItems / PageGeometryRules.CountBodyItems
+    // (src/FreeX.App.Presentation/PageLayout/PageGeometryRules.cs), and pointed the PDF-export
+    // resolver at it, but this planner's copies were left in place because this file was off-limits
+    // that round. Both call sites now share the one implementation; equivalence is proven by every
+    // pre-existing test in FreeX.App.Presentation.Tests/FreeX.App.Services.Tests passing unchanged.
 
     /// <summary>
     /// Builds the row page segments from a print row page plan, keeping each page's explicit,
@@ -873,9 +825,6 @@ public static class PagePaginationPlanner
         return Math.Max(MinimumPrintColumnWidth, ColumnWidthPixelMapper.ColumnWidthToPixels(chars));
     }
 
-    private static bool IsWithinRepeatRange(WorksheetRepeatRange? repeatRange, uint value) =>
-        repeatRange is { } range && value >= range.Start && value <= range.End;
-
     /// <summary>
     /// Sums the real (visible, non-hidden) size of the rows/columns in <paramref name="repeat"/>
     /// (clipped to <paramref name="maxItem"/>), the title rows/columns that are reprinted on every
@@ -926,7 +875,7 @@ public static class PagePaginationPlanner
         var pageHasValue = false;
         for (var value = startValue; value <= endValue; value++)
         {
-            if (IsWithinRepeatRange(repeat, value) || isHidden?.Invoke(value) == true)
+            if (PageGeometryRules.IsWithinRepeatRange(repeat, value) || isHidden?.Invoke(value) == true)
                 continue;
 
             var size = Math.Max(0.0, sizeOf(value));

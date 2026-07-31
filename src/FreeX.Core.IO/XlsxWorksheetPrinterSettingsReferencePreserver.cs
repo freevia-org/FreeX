@@ -46,18 +46,13 @@ internal static class XlsxWorksheetPrinterSettingsReferencePreserver
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
         {
-            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name; this method
-            // (unlike its sibling preservers) builds its own local sourceSheets/targetSheets rather
-            // than sharing XlsxSourcePackagePreservationContext, but suffers the identical bug -- a
-            // renamed sheet's load-time name no longer resolves in the current-name-keyed targetSheets,
-            // indistinguishable from a delete, silently dropping the sheet's printer-settings binding.
-            // A plain rename never changes the sheet's own worksheetN.xml part path, so fall back to
-            // matching on that path when the name lookup fails.
-            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath) &&
-                !TryResolveTargetWorksheetPathByPath(sourceSheets, targetSheets, sourceWorksheetPath, out targetWorksheetPath))
-            {
+            // R105: rename-tolerant lookup removed as inert (proven dead this round) --
+            // XlsxPackageMetadataMerger.MergeRelationshipParts merges each worksheet .rels keyed by
+            // part path (rename-stable), so the relationship arrives immune to this bug class; the
+            // pageSetup/@r:id attribute is separately carried by the metadata preserver's own
+            // already-correct native-attribute merge.
+            if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
-            }
 
             var sourceWorksheetEntry = sourceArchive.GetEntry(sourceWorksheetPath);
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
@@ -148,36 +143,6 @@ internal static class XlsxWorksheetPrinterSettingsReferencePreserver
             targetPageSetup.SetAttributeValue(relNs + "id", targetRelId);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
         }
-    }
-
-    private static bool TryResolveTargetWorksheetPathByPath(
-        IReadOnlyDictionary<string, string> sourceSheets,
-        IReadOnlyDictionary<string, string> targetSheets,
-        string sourceWorksheetPath,
-        out string targetWorksheetPath)
-    {
-        var normalizedSourcePath = XlsxPackagePath.NormalizePackagePath(sourceWorksheetPath);
-        foreach (var (candidateName, candidatePath) in targetSheets)
-        {
-            // R102-io-rename-worksheet-exclusion-sweep-1-falsepositive: reject a candidate whose name
-            // already existed at load time -- its path coincidence is a renumbering shift of that
-            // (still-existing, matched-by-name) sheet, not evidence of a rename. See
-            // XlsxRenamedSourceSheetResolver's header comment for the concrete delete+renumber repro.
-            if (sourceSheets.ContainsKey(candidateName))
-                continue;
-
-            if (string.Equals(
-                    XlsxPackagePath.NormalizePackagePath(candidatePath),
-                    normalizedSourcePath,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                targetWorksheetPath = candidatePath;
-                return true;
-            }
-        }
-
-        targetWorksheetPath = "";
-        return false;
     }
 
     private static void RemoveInvalidPageSetupRelationshipId(

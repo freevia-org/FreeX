@@ -20,16 +20,14 @@ internal static class XlsxWorksheetVmlReferencePreserver
 
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
-            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name -- resolve
-            // both the target worksheet path AND the sheet's CURRENT name (workbook only knows
-            // sheets by their current name) via the shared rename-tolerant fallback.
-            if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
-                    context, sheetName, sourceWorksheetPath, out var currentSheetName, out var targetWorksheetPath))
-            {
+            // R105: rename-tolerant lookup removed as inert (proven dead this round) --
+            // XlsxLegacyCommentPreserver re-establishes legacyDrawing later with its own correct
+            // rename handling, and XlsxHeaderFooterPicturePackageWriter regenerates the
+            // header/footer marker and VML fresh from the model before this preserver runs.
+            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
-            }
 
-            var sheet = workbook.GetSheet(currentSheetName);
+            var sheet = workbook.GetSheet(sheetName);
             if (sheet is null)
                 continue;
 

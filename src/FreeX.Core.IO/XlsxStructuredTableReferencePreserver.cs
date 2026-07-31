@@ -129,14 +129,11 @@ internal static class XlsxStructuredTableReferencePreserver
             if (!tableWorksheetPaths.Contains(sourceWorksheetPath))
                 continue;
 
-            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name -- resolve
-            // via the shared rename-tolerant fallback so a renamed sheet's structured table part
-            // relationships survive instead of being dropped like a deleted sheet's.
-            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
-                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
-            {
+            // R105: rename-tolerant lookup removed as inert (proven dead this round) --
+            // XlsxStructuredTableWriter.Save unconditionally regenerates <tableParts> and the table
+            // relationship from the model on every save, for every table FreeX can model.
+            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
-            }
 
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
             var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
