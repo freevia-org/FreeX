@@ -344,14 +344,14 @@ public sealed class PagedEditNoteRegionTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
-    // 5. Synthetic endnotes page has no body blocks
+    // 5. Synthetic endnotes page keeps final-section page chrome
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Measured overflow retains a dedicated final page with no header/footer sub-editors.
+    /// Measured overflow retains a dedicated final page with the final section's header/footer regions.
     /// </summary>
     [StaFact]
-    public void OverflowEndnotes_UseDedicatedPageWithoutHeaderFooterSubEditors()
+    public void OverflowEndnotes_UseDedicatedPageWithFinalSectionHeaderFooterEditors()
     {
         var doc = DocxReader.Read(RepositoryFile(
             "freew-fidelity-corpus", "files", "review", "endnotes.docx"));
@@ -361,10 +361,10 @@ public sealed class PagedEditNoteRegionTests
 
         panel.PageBoxes.Should().HaveCount(3);
         syntheticBox.EndnoteIds.Should().Equal(1, 2);
-        syntheticBox.HeaderSubEditor.Should().BeNull(
-            "synthetic endnotes page must have no header sub-editor");
-        syntheticBox.FooterSubEditor.Should().BeNull(
-            "synthetic endnotes page must have no footer sub-editor");
+        syntheticBox.HeaderSubEditor.Should().NotBeNull(
+            "the physical endnote page owns the final section's header region");
+        syntheticBox.FooterSubEditor.Should().NotBeNull(
+            "the physical endnote page owns the final section's footer region");
     }
 
     [StaFact]
@@ -427,17 +427,20 @@ public sealed class PagedEditNoteRegionTests
         doc.Page.MarginRightPt = 48;
         doc.Page.MarginTopPt = 54;
         doc.Page.MarginBottomPt = 60;
+        doc.Page.PageNumberStartAt = 7;
+        doc.Header = new HeaderFooter("Final-section header");
+        doc.Footer = new HeaderFooter("Final-section footer");
         doc.Blocks.Add(new Paragraph("Final landscape section"));
         doc.Endnotes[1] = new Endnote(1,
             string.Join(' ', Enumerable.Repeat("overflowing endnote content", 1000)));
 
         var (panel, _) = BuildPanel(doc);
 
-        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc);
         panel.Repaginate();
-        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc);
         panel.Rebuild();
-        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc);
     }
 
     [StaFact]
@@ -537,9 +540,18 @@ public sealed class PagedEditNoteRegionTests
         throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
     }
 
-    private static void AssertFinalSectionGeometry(PageBox box, PageSettings expected)
+    private static void AssertFinalSectionGeometry(PageBox box, TextDocument document)
     {
+        var expected = document.Page;
         box.IsEndnoteSyntheticPage.Should().BeTrue();
+        box.PageNumberText.Should().Be("8");
+        box.HeaderSubEditor.Should().NotBeNull();
+        box.FooterSubEditor.Should().NotBeNull();
+        box.HeaderSubEditor!.Model.Blocks.OfType<Paragraph>().Single().PlainText
+            .Should().Be("Final-section header");
+        box.FooterSubEditor!.Model.Blocks.OfType<Paragraph>().Single().PlainText
+            .Should().Be("Final-section footer");
+        box.OwnerSectionHf.Should().BeSameAs(document.FinalSectionHeadersFooters);
         box.PageGeometry.WidthPt.Should().Be(expected.WidthPt);
         box.PageGeometry.HeightPt.Should().Be(expected.HeightPt);
         box.PageGeometry.Landscape.Should().Be(expected.Landscape);
