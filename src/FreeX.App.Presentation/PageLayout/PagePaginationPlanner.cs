@@ -214,7 +214,9 @@ public static class PagePaginationPlanner
         IReadOnlyDictionary<uint, double> columnWidths,
         double defaultColumnWidth,
         double headerMarginInches,
-        double footerMarginInches)
+        double footerMarginInches,
+        Func<uint, bool>? isRowHidden = null,
+        Func<uint, bool>? isColumnHidden = null)
     {
         var pageSize = WorksheetPageLayout.GetPageSizeInches(paperSize, orientation);
 
@@ -225,8 +227,8 @@ public static class PagePaginationPlanner
         // header/footer margins as an ADDITIONAL reservation on top of the top/bottom margins (the old
         // PR5 formula) silently lost real body height even with the universal defaults (0.3in
         // header/footer margin under a 0.75in top/bottom margin), where Excel reserves nothing extra.
-        var bodyTopInches = Math.Max(margins.Top, headerMarginInches);
-        var bodyBottomInches = Math.Max(margins.Bottom, footerMarginInches);
+        var bodyTopInches = PageGeometryRules.ResolveBodyEdge(margins.Top, headerMarginInches);
+        var bodyBottomInches = PageGeometryRules.ResolveBodyEdge(margins.Bottom, footerMarginInches);
         var printableWidth = Math.Max(1.0, (pageSize.Width - margins.Left - margins.Right) * Dpi);
         var printableHeight = Math.Max(1.0, (pageSize.Height - bodyTopInches - bodyBottomInches) * Dpi);
 
@@ -257,28 +259,42 @@ public static class PagePaginationPlanner
 
         if (wideConstrained && !tallConstrained)
         {
-            columnsPerPage = ApplyScaleToFitCapacity(
+            // R103-print-pagination-scale-bound-1: resolve the constrained axis's own capacity
+            // first (possibly implying an unbounded shrink far outside Excel's 10%-400% scale
+            // range), but then re-derive BOTH axes -- including this constrained one -- through
+            // ApplyUniformScaleToFreeAxis, which clamps to [MinScalePercent, MaxScalePercent].
+            // Applying the raw, unclamped ApplyScaleToFitCapacity result directly to the
+            // constrained axis while the free axis gets the clamped percent would bake two
+            // different real scales into what is supposed to be one uniform scale -- exactly the
+            // divergence the "both axes constrained" branch below avoids by re-deriving both axes
+            // from the same uniformScale.
+            var unboundedColumnsPerPage = ApplyScaleToFitCapacity(
                 columnsPerPage,
                 printRange.Start.Col,
                 printRange.End.Col,
                 printTitleColumns,
                 CellAddress.MaxCol,
                 scalePercent: null,
-                scaleToFit.FitToPagesWide);
-            var uniformScale = ComputeScaleFraction(baseColumnsPerPage, columnsPerPage);
+                scaleToFit.FitToPagesWide,
+                isColumnHidden);
+            var uniformScale = ComputeScaleFraction(baseColumnsPerPage, unboundedColumnsPerPage);
+            columnsPerPage = ApplyUniformScaleToFreeAxis(baseColumnsPerPage, uniformScale);
             rowsPerPage = ApplyUniformScaleToFreeAxis(rowsPerPage, uniformScale);
         }
         else if (tallConstrained && !wideConstrained)
         {
-            rowsPerPage = ApplyScaleToFitCapacity(
+            // R103-print-pagination-scale-bound-1: see the mirror-image comment above.
+            var unboundedRowsPerPage = ApplyScaleToFitCapacity(
                 rowsPerPage,
                 printRange.Start.Row,
                 printRange.End.Row,
                 printTitleRows,
                 CellAddress.MaxRow,
                 scalePercent: null,
-                scaleToFit.FitToPagesTall);
-            var uniformScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPage);
+                scaleToFit.FitToPagesTall,
+                isRowHidden);
+            var uniformScale = ComputeScaleFraction(baseRowsPerPage, unboundedRowsPerPage);
+            rowsPerPage = ApplyUniformScaleToFreeAxis(baseRowsPerPage, uniformScale);
             columnsPerPage = ApplyUniformScaleToFreeAxis(columnsPerPage, uniformScale);
         }
         else if (wideConstrained && tallConstrained)
@@ -297,7 +313,8 @@ public static class PagePaginationPlanner
                 printTitleColumns,
                 CellAddress.MaxCol,
                 scalePercent: null,
-                scaleToFit.FitToPagesWide);
+                scaleToFit.FitToPagesWide,
+                isColumnHidden);
             var rowsPerPageIfTallOnly = ApplyScaleToFitCapacity(
                 baseRowsPerPage,
                 printRange.Start.Row,
@@ -305,11 +322,12 @@ public static class PagePaginationPlanner
                 printTitleRows,
                 CellAddress.MaxRow,
                 scalePercent: null,
-                scaleToFit.FitToPagesTall);
+                scaleToFit.FitToPagesTall,
+                isRowHidden);
 
             var widthScale = ComputeScaleFraction(baseColumnsPerPage, columnsPerPageIfWideOnly);
             var heightScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPageIfTallOnly);
-            var uniformScale = Math.Min(widthScale, heightScale);
+            var uniformScale = PageGeometryRules.ResolveUniformScale(widthScale, heightScale);
 
             columnsPerPage = ApplyUniformScaleToFreeAxis(baseColumnsPerPage, uniformScale);
             rowsPerPage = ApplyUniformScaleToFreeAxis(baseRowsPerPage, uniformScale);
@@ -325,7 +343,8 @@ public static class PagePaginationPlanner
                 printTitleRows,
                 CellAddress.MaxRow,
                 scaleToFit.ScalePercent,
-                scaleToFit.FitToPagesTall);
+                scaleToFit.FitToPagesTall,
+                isRowHidden);
             columnsPerPage = ApplyScaleToFitCapacity(
                 columnsPerPage,
                 printRange.Start.Col,
@@ -333,7 +352,8 @@ public static class PagePaginationPlanner
                 printTitleColumns,
                 CellAddress.MaxCol,
                 scaleToFit.ScalePercent,
-                scaleToFit.FitToPagesWide);
+                scaleToFit.FitToPagesWide,
+                isColumnHidden);
         }
 
         return new PageCapacityDetail(
@@ -348,17 +368,20 @@ public static class PagePaginationPlanner
     /// The "s" shrink fraction implied by going from <paramref name="baseItemsPerPage"/> (the natural,
     /// unscaled per-page item count) to <paramref name="resolvedItemsPerPage"/>: <c>s = base / resolved</c>,
     /// i.e. <c>resolved = base / s</c> -- the same relationship <see cref="ApplyScaleToFitCapacity"/>'s
-    /// explicit-percent branch uses (<c>s = percent / 100</c>).
+    /// explicit-percent branch uses (<c>s = percent / 100</c>). Public so other page-setup-driven
+    /// capacity resolvers (e.g. the PDF export tier's page-setup resolver) share this single
+    /// implementation instead of re-deriving an identical copy.
     /// </summary>
-    private static double ComputeScaleFraction(uint baseItemsPerPage, uint resolvedItemsPerPage) =>
+    public static double ComputeScaleFraction(uint baseItemsPerPage, uint resolvedItemsPerPage) =>
         resolvedItemsPerPage == 0 ? 1.0 : baseItemsPerPage / (double)resolvedItemsPerPage;
 
     /// <summary>
     /// Applies the uniform shrink fraction derived from the constrained axis to the free axis's
     /// baseline capacity, clamped to the same [<see cref="MinScalePercent"/>, <see cref="MaxScalePercent"/>]
-    /// range as an explicit scale percent.
+    /// range as an explicit scale percent. Public for the same sharing reason as
+    /// <see cref="ComputeScaleFraction"/>.
     /// </summary>
-    private static uint ApplyUniformScaleToFreeAxis(uint baseItemsPerPage, double scaleFraction)
+    public static uint ApplyUniformScaleToFreeAxis(uint baseItemsPerPage, double scaleFraction)
     {
         if (scaleFraction <= 0 || !double.IsFinite(scaleFraction))
             return baseItemsPerPage;
@@ -437,7 +460,9 @@ public static class PagePaginationPlanner
             columnWidths,
             defaultColumnWidth,
             headerMarginInches,
-            footerMarginInches);
+            footerMarginInches,
+            isRowHidden,
+            isColumnHidden);
         var capacity = detail.Capacity;
 
         // R18-print-pagination-exact-3: slice pages by the real ACCUMULATED row height / column
@@ -638,7 +663,8 @@ public static class PagePaginationPlanner
         WorksheetRepeatRange? repeat,
         uint maxItem,
         int? scalePercent,
-        int? fitToPages)
+        int? fitToPages,
+        Func<uint, bool>? isHidden = null)
     {
         if (scalePercent is { } percent and >= MinScalePercent and <= MaxScalePercent)
             return Math.Max(1, (uint)Math.Floor(baseItemsPerPage * (100d / percent)));
@@ -646,38 +672,55 @@ public static class PagePaginationPlanner
         if (fitToPages is not { } pageCount || pageCount < 1)
             return baseItemsPerPage;
 
-        var titleCount = CountRepeatItems(repeat, maxItem);
-        var bodyCount = CountBodyItems(start, end, repeat);
+        // R102-presentation-pagination-fit-to-pages-hidden-exclusion: the fit-to-N-pages target
+        // count must be resolved over VISIBLE rows/columns only, matching what
+        // ComputeAccumulationBreakPoints/PrintLayoutPlanner actually pack onto each page (both skip
+        // hidden rows/columns via this same isHidden predicate). Counting every row/column in
+        // [start,end] -- including hidden ones -- inflates bodyCount, which inflates the resolved
+        // bodyItemsPerPage/rowsPerPage target, which in turn produces a tiny uniformScale and a
+        // hugely inflated per-page body budget (BuildPlan's rowBodyBudget/columnBodyBudget). That
+        // inflated budget then lets the accumulation-break walk pack far more real (visible-only)
+        // content onto a single page than Excel would, collapsing the pagination onto too few
+        // pages. Real Excel excludes hidden rows/columns entirely from this resolution.
+        var titleCount = PageGeometryRules.CountRepeatItems(repeat, maxItem, isHidden);
+        var bodyCount = PageGeometryRules.CountBodyItems(start, end, repeat, isHidden);
         if (bodyCount == 0)
-            return Math.Max(1, titleCount);
+        {
+            // R102-presentation-pagination-titles-cover-axis: when the print title range on this
+            // axis fully covers the print range (no body items left to paginate), there is nothing
+            // for the fit-to-N-pages request to shrink on this axis, so leave the natural,
+            // avg-width/height-derived capacity untouched -- exactly SheetPdfPageSetupResolver's
+            // `if (bodyCols > 0)` no-op guard (SheetPdfPageSetupResolver.cs) for the identical case.
+            // Previously this returned Math.Max(1, titleCount), an arithmetic coincidence with no
+            // relation to baseItemsPerPage; the caller then diffed that titleCount against
+            // baseItemsPerPage via ComputeScaleFraction to derive a uniform scale and applied it to
+            // the OTHER, unrelated free axis (ApplyUniformScaleToFreeAxis), spuriously
+            // shrinking/growing that axis's page capacity for no real fit-to-page reason.
+            // Returning baseItemsPerPage unchanged here makes that derived scale exactly 1.0, so the
+            // free axis is left alone too, matching the PDF-export tier's behavior.
+            //
+            // R105-presentation-pagination-titles-cover-axis-excel-unverified: whether this axis-fully-
+            // covered-by-titles state is ever reachable from a real Excel print range (and, if so, what
+            // Excel itself produces there) could not be established from this sandbox -- no Excel
+            // instance or captured fixture demonstrating it was available. This no-op (leave the free-
+            // fit capacity untouched, matching SheetPdfPageSetupResolver) is retained unchanged pending
+            // that verification; see PageGeometryRules.CountBodyItems for the shared implementation now
+            // used by both call sites.
+            return baseItemsPerPage;
+        }
 
         var bodyItemsPerPage = (uint)Math.Ceiling(bodyCount / (double)pageCount);
         return Math.Max(1, bodyItemsPerPage + titleCount);
     }
 
-    private static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem)
-    {
-        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
-            return 0;
-
-        return Math.Min(range.End, maxItem) - range.Start + 1;
-    }
-
-    private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat)
-    {
-        if (end < start)
-            return 0;
-
-        var count = end - start + 1;
-        if (repeat is not { } range || range.End < start || range.Start > end)
-            return count;
-
-        var overlapStart = Math.Max(start, range.Start);
-        var overlapEnd = Math.Min(end, range.End);
-        return overlapEnd >= overlapStart
-            ? count - (overlapEnd - overlapStart + 1)
-            : count;
-    }
+    // R105-presentation-pagination-counting-helpers-consolidation: CountRepeatItems / CountBodyItems
+    // used to be maintained here as private near-duplicates of the identical rules in
+    // SheetPdfPageSetupResolver (PDF export path); R102 merged them into a single shared home,
+    // PageGeometryRules.CountRepeatItems / PageGeometryRules.CountBodyItems
+    // (src/FreeX.App.Presentation/PageLayout/PageGeometryRules.cs), and pointed the PDF-export
+    // resolver at it, but this planner's copies were left in place because this file was off-limits
+    // that round. Both call sites now share the one implementation; equivalence is proven by every
+    // pre-existing test in FreeX.App.Presentation.Tests/FreeX.App.Services.Tests passing unchanged.
 
     /// <summary>
     /// Builds the row page segments from a print row page plan, keeping each page's explicit,
@@ -782,9 +825,6 @@ public static class PagePaginationPlanner
         return Math.Max(MinimumPrintColumnWidth, ColumnWidthPixelMapper.ColumnWidthToPixels(chars));
     }
 
-    private static bool IsWithinRepeatRange(WorksheetRepeatRange? repeatRange, uint value) =>
-        repeatRange is { } range && value >= range.Start && value <= range.End;
-
     /// <summary>
     /// Sums the real (visible, non-hidden) size of the rows/columns in <paramref name="repeat"/>
     /// (clipped to <paramref name="maxItem"/>), the title rows/columns that are reprinted on every
@@ -835,7 +875,7 @@ public static class PagePaginationPlanner
         var pageHasValue = false;
         for (var value = startValue; value <= endValue; value++)
         {
-            if (IsWithinRepeatRange(repeat, value) || isHidden?.Invoke(value) == true)
+            if (PageGeometryRules.IsWithinRepeatRange(repeat, value) || isHidden?.Invoke(value) == true)
                 continue;
 
             var size = Math.Max(0.0, sizeOf(value));

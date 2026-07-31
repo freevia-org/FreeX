@@ -150,6 +150,41 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void GroupedChildPictureAndGeometryEdits_RouteThroughUndoableSession()
+    {
+        var session = Make();
+        var group = new SlideShape { Id = 10, Name = "Group", Kind = SlideShapeKind.Group };
+        var custom = MakeShape(11);
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100 };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 50, Y: 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        custom.CustomGeometry.Add(path);
+        var picture = new SlideShape
+        {
+            Id = 12,
+            Name = "Grouped Picture",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart { Bytes = [1, 2, 3], ContentType = "image/png" },
+        };
+        group.Children.Add(custom);
+        group.Children.Add(picture);
+        session.CurrentSlide!.Shapes.Add(group);
+
+        session.TryInsertCustomGeometryPoint(11, "custom:0:1").Should().BeTrue();
+        session.TryDeleteCustomGeometryPoint(11, "custom:0:2").Should().BeTrue();
+        session.SetPictureCrop(12, new PictureCropValues(0.1, 0.2, 0.1, 0.05)).Should().BeTrue();
+        session.SetPictureColorEffects(12, PictureColorEffectAuthoringPlanner.Grayscale()).Should().BeTrue();
+
+        picture.PictureFormat.Should().NotBeNull();
+        picture.PictureFormat!.CropLeft.Should().Be(0.1);
+        picture.PictureFormat.CropTop.Should().Be(0.2);
+        picture.PictureFormat.Grayscale.Should().BeTrue();
+        session.Bus.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
     public void ApplySmartArtLayout_RefreshesNativeDataAndDrawingCacheThroughSharedSession()
     {
         var (session, _) = MakeSmartArtSession();
@@ -313,6 +348,25 @@ public sealed class EditingSessionTests
         session.Bus.Redo();
         session.CurrentSlide.Shapes.Single().SmartArt!.Parts.Should()
             .ContainKey("ppt/diagrams/layout1.xml");
+    }
+
+    [Fact]
+    public void ApplySmartArtLayout_ResolvesNestedGroupChild()
+    {
+        var (session, smartArt) = MakeSmartArtSession();
+        var smartArtShape = session.CurrentSlide!.Shapes.Single();
+        session.CurrentSlide.Shapes.Remove(smartArtShape);
+
+        var group = new SlideShape { Id = 20, Kind = SlideShapeKind.Group };
+        group.Children.Add(smartArtShape);
+        session.CurrentSlide.Shapes.Add(group);
+
+        session.ApplySmartArtLayout(7, SmartArtLayoutPreset.BasicCycle).Should().BeTrue();
+
+        var savedSmartArt = group.Children.Single(shape => shape.Id == 7).SmartArt;
+        savedSmartArt.Should().NotBeNull();
+        savedSmartArt!.Data!.LayoutUniqueId.Should().EndWith("/layout/basicCycle");
+        session.CanUndo.Should().BeTrue();
     }
 
     [Fact]
@@ -693,6 +747,19 @@ public sealed class EditingSessionTests
     }
 
     [Fact]
+    public void InsertDefaultTextBox_AllocatesIdAfterGroupedDescendants()
+    {
+        var sess = Make();
+        var group = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        group.Children.Add(MakeShape(80));
+        sess.CurrentSlide!.Shapes.Add(group);
+
+        var inserted = sess.InsertDefaultTextBox();
+
+        inserted.Id.Should().Be(81);
+    }
+
+    [Fact]
     public void InsertMedia_AddsEmbeddedVideoAndIsUndoable()
     {
         var sess = Make();
@@ -755,6 +822,70 @@ public sealed class EditingSessionTests
         sess.CurrentSlide.Shapes.Should().HaveCount(2);
     }
 
+    [Fact]
+    public void RotateSelectedShapes_RotatesBothDirectionsAsOneUndoableOperation()
+    {
+        var sess = Make();
+        var first = MakeShape(54);
+        first.RotationDeg = 15;
+        var second = MakeShape(55);
+        second.RotationDeg = 30;
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+
+        sess.RotateSelectedRight90();
+        first.RotationDeg.Should().Be(105);
+        second.RotationDeg.Should().Be(120);
+        sess.Undo();
+        first.RotationDeg.Should().Be(15);
+        second.RotationDeg.Should().Be(30);
+
+        sess.RotateSelectedLeft90();
+        first.RotationDeg.Should().Be(-75);
+        second.RotationDeg.Should().Be(-60);
+        sess.Undo();
+        first.RotationDeg.Should().Be(15);
+        second.RotationDeg.Should().Be(30);
+    }
+
+    [Fact]
+    public void NestedGroupedSelection_ResolvesConnectorHyperlinkAutoShapeAndUngroupRoutes()
+    {
+        var sess = Make();
+        var left = MakeShape(21);
+        left.Hyperlink = new Hyperlink { Url = "https://example.test/child" };
+        var right = MakeShape(22);
+        right.OffsetXEmu = 500;
+        var inner = new SlideShape { Id = 23, Kind = SlideShapeKind.Group };
+        inner.Children.Add(left);
+        inner.Children.Add(right);
+        var outer = new SlideShape { Id = 24, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        sess.CurrentSlide!.Shapes.Add(outer);
+
+        sess.Select(left.Id);
+        sess.SelectedShapeHyperlink!.Url.Should().Be("https://example.test/child");
+        sess.ChangeSelectedAutoShapeKind(DrawingShapeKind.Diamond).Should().BeTrue();
+        left.AutoShapeKind.Should().Be(DrawingShapeKind.Diamond);
+
+        sess.Select(left.Id);
+        sess.Select(right.Id, addToSelection: true);
+        var connector = sess.InsertDefaultConnector();
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionEnd.Should().NotBeNull();
+        ConnectionSiteHelper.Resolve(connector.ConnectionStart, sess.CurrentSlide)
+            .Should().NotBe((0L, 0L));
+
+        sess.Select(inner.Id);
+        sess.UngroupSelected();
+        outer.Children.Should().Contain(left).And.Contain(right);
+        outer.Children.Should().NotContain(inner);
+        sess.Undo();
+        outer.Children.Should().ContainSingle(shape => shape.Id == inner.Id);
+    }
+
     [Theory]
     [InlineData(DrawingShapeKind.ElbowConnector)]
     [InlineData(DrawingShapeKind.CurvedConnector)]
@@ -777,6 +908,53 @@ public sealed class EditingSessionTests
         connector.ConnectionEnd!.ShapeId.Should().Be(second.Id);
     }
 
+    [Fact]
+    public void FlipSelectedShapes_TogglesAxisAndUndoRestoresIt()
+    {
+        var sess = Make();
+        var first = MakeShape(51);
+        var second = MakeShape(52);
+        sess.CurrentSlide!.Shapes.Add(first);
+        sess.CurrentSlide.Shapes.Add(second);
+
+        sess.Select(first.Id);
+        sess.Select(second.Id, addToSelection: true);
+        sess.FlipSelectedHorizontal();
+
+        first.FlipH.Should().BeTrue();
+        second.FlipH.Should().BeTrue();
+        first.FlipV.Should().BeFalse();
+        second.FlipV.Should().BeFalse();
+
+        sess.Undo();
+        first.FlipH.Should().BeFalse();
+        second.FlipH.Should().BeFalse();
+        sess.Redo();
+        first.FlipH.Should().BeTrue();
+        second.FlipH.Should().BeTrue();
+
+        sess.FlipSelectedVertical();
+        first.FlipV.Should().BeTrue();
+        second.FlipV.Should().BeTrue();
+        sess.Undo();
+        first.FlipV.Should().BeFalse();
+        second.FlipV.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FlipShape_TogglesExistingStateAndCanBeUndone()
+    {
+        var sess = Make();
+        var shape = MakeShape(53);
+        shape.FlipV = true;
+        sess.CurrentSlide!.Shapes.Add(shape);
+
+        sess.FlipShape(shape.Id, horizontal: false);
+        shape.FlipV.Should().BeFalse();
+        sess.Undo();
+        shape.FlipV.Should().BeTrue();
+    }
+
     // ── Format toggles ────────────────────────────────────────────────────────────
 
     [Fact]
@@ -794,6 +972,58 @@ public sealed class EditingSessionTests
         sess.Select(1u);
         sess.ToggleBoldOnSelection();
         run.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void NestedGroupChild_TextFormattingAndTextFrameEdits_RouteThroughSession()
+    {
+        var sess = Make();
+        var child = MakeShape(3);
+        var run = new Run { Text = "Grouped text" };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(run);
+        child.TextBody = new TextBody { Paragraphs = { paragraph } };
+
+        var inner = new SlideShape { Id = 2, Kind = SlideShapeKind.Group };
+        inner.Children.Add(child);
+        var outer = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        outer.Children.Add(inner);
+        sess.CurrentSlide!.Shapes.Add(outer);
+        sess.Select(child.Id);
+
+        sess.ToggleBoldOnSelection();
+        sess.SetFontFamilyOnSelection("Verdana");
+        sess.SetFontSizeOnSelection(18);
+        sess.SetColorOnSelection(new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56)));
+        sess.SetTextAutoFitOnSelection(TextAutoFitKind.Normal).Should().Be(1);
+        sess.SetTextVerticalTypeOnSelection(TextVerticalType.Vertical270).Should().Be(1);
+        sess.SetTextColumnCountOnSelection(2).Should().Be(1);
+
+        run.Bold.Should().BeTrue();
+        run.FontFamily.Should().Be("Verdana");
+        run.FontSizePt.Should().Be(18);
+        run.Color!.Resolved.Should().Be(new SrgbColor(0x12, 0x34, 0x56));
+        child.TextBody.AutoFitKind.Should().Be(TextAutoFitKind.Normal);
+        child.TextBody.VerticalType.Should().Be(TextVerticalType.Vertical270);
+        child.TextBody.ColumnCount.Should().Be(2);
+    }
+
+    [Fact]
+    public void NestedGroupChild_ZOrderCommandsUseContainingSiblingList()
+    {
+        var sess = Make();
+        var first = MakeShape(3);
+        var second = MakeShape(4);
+        var group = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        group.Children.Add(first);
+        group.Children.Add(second);
+        sess.CurrentSlide!.Shapes.Add(group);
+        sess.Select(first.Id);
+
+        sess.BringForward();
+        group.Children.Select(shape => shape.Id).Should().Equal(second.Id, first.Id);
+        sess.SendBackward();
+        group.Children.Select(shape => shape.Id).Should().Equal(first.Id, second.Id);
     }
 
     [Fact]

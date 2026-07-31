@@ -99,6 +99,40 @@ public sealed class AvaloniaMediaPlaybackAdapterTests
     }
 
     [Fact]
+    public void Controller_ResolvesGroupedMediaForPlaybackAndResize()
+    {
+        var factory = new FakeBackendFactory();
+        var controller = new AvaloniaSlideShowMediaController(new Canvas(), factory);
+        var slide = new Slide();
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        group.Children.Add(new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Media,
+            ExtentCxEmu = 9144000,
+            ExtentCyEmu = 6858000,
+            Media = new MediaInfo
+            {
+                IsVideo = false,
+                PlaybackStartMode = MediaPlaybackStartMode.Automatically,
+                Loop = true,
+                Bytes = [1, 2, 3],
+                ContentType = "audio/wav",
+            },
+        });
+        slide.Shapes.Add(group);
+
+        controller.EnterSlide(slide, 960, 720, 960, 720);
+
+        controller.Active.Should().ContainSingle(plan => plan.ShapeId == 42);
+        factory.Backend.Sessions.Should().ContainSingle();
+        factory.Backend.Sessions[0].PlayCount.Should().Be(1);
+
+        controller.UpdateLayout(slide, 960, 720, 1280, 720);
+        factory.Backend.Sessions[0].OpenCount.Should().Be(1);
+    }
+
+    [Fact]
     public void Controller_DoesNotAutoPlayClickSequenceMedia()
     {
         var factory = new FakeBackendFactory();

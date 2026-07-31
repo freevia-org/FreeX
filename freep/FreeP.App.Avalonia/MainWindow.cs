@@ -151,12 +151,22 @@ public sealed partial class MainWindow : Window
         ("freep.arrange.bring-forward", static editor => editor.BringForward()),
         ("freep.arrange.send-backward", static editor => editor.SendBackward()),
         ("freep.arrange.send-to-back", static editor => editor.SendToBack()),
+        ("freep.arrange.flip-horizontal", static editor => editor.FlipSelectedHorizontal()),
+        ("freep.arrange.flip-vertical", static editor => editor.FlipSelectedVertical()),
+        ("freep.arrange.rotate-left-90", static editor => editor.RotateSelectedLeft90()),
+        ("freep.arrange.rotate-right-90", static editor => editor.RotateSelectedRight90()),
         ("freep.arrange.align-left", static editor => editor.AlignLeft()),
         ("freep.arrange.align-center-h", static editor => editor.AlignCenterH()),
         ("freep.arrange.align-right", static editor => editor.AlignRight()),
         ("freep.arrange.align-top", static editor => editor.AlignTop()),
         ("freep.arrange.align-middle", static editor => editor.AlignMiddle()),
         ("freep.arrange.align-bottom", static editor => editor.AlignBottom()),
+        ("freep.arrange.align-left-to-slide", static editor => editor.AlignLeftToSlide()),
+        ("freep.arrange.align-center-h-to-slide", static editor => editor.AlignCenterHToSlide()),
+        ("freep.arrange.align-right-to-slide", static editor => editor.AlignRightToSlide()),
+        ("freep.arrange.align-top-to-slide", static editor => editor.AlignTopToSlide()),
+        ("freep.arrange.align-middle-to-slide", static editor => editor.AlignMiddleToSlide()),
+        ("freep.arrange.align-bottom-to-slide", static editor => editor.AlignBottomToSlide()),
         ("freep.arrange.distribute-h", static editor => editor.DistributeHorizontally()),
         ("freep.arrange.distribute-v", static editor => editor.DistributeVertically()),
     ];
@@ -2169,7 +2179,7 @@ public sealed partial class MainWindow : Window
         var slidePoint = _slideCanvas.CurrentTransform.ScreenToSlide(point.X, point.Y);
         var hitId = ShapeHitTester.HitTest(slide, Editor.Presentation, slidePoint.X, slidePoint.Y);
         var shape = hitId.HasValue
-            ? slide.Shapes.FirstOrDefault(candidate => candidate.Id == hitId.Value)
+            ? ShapeTreeLookup.Find(slide, hitId.Value)
             : null;
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
             return;
@@ -2267,7 +2277,7 @@ public sealed partial class MainWindow : Window
 
     internal ContextMenu? BuildTableContextMenuForTests(uint shapeId)
     {
-        var shape = Editor.CurrentSlide?.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+        var shape = Editor.CurrentSlide is { } slide ? ShapeTreeLookup.Find(slide, shapeId) : null;
         return shape?.Kind == SlideShapeKind.Table && shape.Table is not null
             ? BuildTableContextMenu(shape)
             : null;
@@ -2579,6 +2589,8 @@ public sealed partial class MainWindow : Window
         {
             r.Register(route.CommandId, new ActionRibbonCommand(() => route.Execute(Editor)));
         }
+        r.Register(RotationOptionsPlanner.CommandId,
+            new ActionRibbonCommand(OpenRotationOptionsDialog));
         r.Register(OleActivationPlanner.OpenEmbeddedObjectCommandId,
             new ActionRibbonCommand(() =>
             {
@@ -2772,6 +2784,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBoxList)));
         r.Register(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalChevronList)));
+        r.Register(SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalArrowList)));
         r.Register(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.VerticalBulletList)));
         r.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
@@ -2802,6 +2816,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicPyramid)));
         r.Register(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PyramidList)));
+        r.Register(SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.InvertedPyramid)));
         r.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.RadialCycle)));
         r.Register(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
@@ -3862,6 +3878,21 @@ public sealed partial class MainWindow : Window
             return;
 
         var dialog = new ChartProtectionOptionsDialog(Editor);
+        if (IsVisible)
+        {
+            _ = dialog.ShowDialog<bool?>(this);
+            return;
+        }
+
+        dialog.Show();
+    }
+
+    internal void OpenRotationOptionsDialog()
+    {
+        if (Editor.SelectedShapeIds.Count == 0)
+            return;
+
+        var dialog = new RotationOptionsDialog(Editor);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);
@@ -7100,12 +7131,13 @@ public sealed partial class MainWindow : Window
     private SlideShape? GetSelectedSmartArtShape()
     {
         var selectedShapeId = GetSingleSelectedShapeId();
-        return selectedShapeId is null
-            ? null
-            : Editor.CurrentSlide?.Shapes.FirstOrDefault(shape =>
-                shape.Id == selectedShapeId.Value &&
-                shape.Kind == SlideShapeKind.SmartArt &&
-                shape.SmartArt is not null);
+        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
+            return null;
+
+        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
+        return shape?.Kind == SlideShapeKind.SmartArt && shape.SmartArt is not null
+            ? shape
+            : null;
     }
 
     private PresentationTheme ResolveCurrentSlideTheme()

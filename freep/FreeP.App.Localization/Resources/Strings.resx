@@ -1126,6 +1126,36 @@
   <data name="Ribbon_Command_ArrangeSendToBack_KeyTip" xml:space="preserve">
     <value>B</value>
   </data>
+  <data name="Ribbon_Command_ArrangeFlipHorizontal_Label" xml:space="preserve">
+    <value>Flip Horizontal</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeFlipHorizontal_KeyTip" xml:space="preserve">
+    <value>H</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeFlipVertical_Label" xml:space="preserve">
+    <value>Flip Vertical</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeFlipVertical_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeRotateLeft90_Label" xml:space="preserve">
+    <value>Rotate Left 90</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeRotateLeft90_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeRotateRight90_Label" xml:space="preserve">
+    <value>Rotate Right 90</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeRotateRight90_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeRotationOptions_Label" xml:space="preserve">
+    <value>More Rotation Options</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeRotationOptions_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
   <data name="Ribbon_Command_ArrangeAlignLeft_Label" xml:space="preserve">
     <value>Align Left</value>
   </data>
@@ -1161,6 +1191,42 @@
   </data>
   <data name="Ribbon_Command_ArrangeAlignBottom_KeyTip" xml:space="preserve">
     <value>E</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignLeftToSlide_Label" xml:space="preserve">
+    <value>Align Left to Slide</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignLeftToSlide_KeyTip" xml:space="preserve">
+    <value>J</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignCenterHorizontalToSlide_Label" xml:space="preserve">
+    <value>Center Horiz. on Slide</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignCenterHorizontalToSlide_KeyTip" xml:space="preserve">
+    <value>K</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignRightToSlide_Label" xml:space="preserve">
+    <value>Align Right to Slide</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignRightToSlide_KeyTip" xml:space="preserve">
+    <value>Q</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignTopToSlide_Label" xml:space="preserve">
+    <value>Align Top to Slide</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignTopToSlide_KeyTip" xml:space="preserve">
+    <value>U</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignMiddleToSlide_Label" xml:space="preserve">
+    <value>Center Vert. on Slide</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignMiddleToSlide_KeyTip" xml:space="preserve">
+    <value>V</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignBottomToSlide_Label" xml:space="preserve">
+    <value>Align Bottom to Slide</value>
+  </data>
+  <data name="Ribbon_Command_ArrangeAlignBottomToSlide_KeyTip" xml:space="preserve">
+    <value>Z</value>
   </data>
   <data name="Ribbon_Command_ArrangeDistributeHorizontal_Label" xml:space="preserve">
     <value>Distribute Horiz.</value>
@@ -1491,6 +1557,12 @@
   </data>
   <data name="Ribbon_Command_SmartArtPyramidList_KeyTip" xml:space="preserve">
     <value>P</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtInvertedPyramid_Label" xml:space="preserve">
+    <value>Inverted Pyramid</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtInvertedPyramid_KeyTip" xml:space="preserve">
+    <value>IP</value>
   </data>
   <data name="Ribbon_Command_SmartArtRadialCycle_Label" xml:space="preserve">
     <value>Radial Cycle</value>

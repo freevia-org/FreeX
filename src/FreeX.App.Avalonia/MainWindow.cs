@@ -22108,7 +22108,6 @@ public sealed partial class MainWindow : Window
         var changingCellsBox = new TextBox
         {
             MinWidth = 170,
-            IsReadOnly = true,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(changingCellsBox, dialogChrome);
         AutomationProperties.SetName(changingCellsBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_ChangingCellsAutomationName")));
@@ -22119,7 +22118,6 @@ public sealed partial class MainWindow : Window
         var resultCellsBox = new TextBox
         {
             MinWidth = 170,
-            IsReadOnly = true,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(resultCellsBox, dialogChrome);
         AutomationProperties.SetName(resultCellsBox, "Result cells");
@@ -22258,19 +22256,6 @@ public sealed partial class MainWindow : Window
             }
         }
 
-        void LoadSelectedScenarioForEdit()
-        {
-            if (scenarioList.SelectedItem is not ScenarioManagerDialogScenarioItem item)
-                return;
-
-            nameBox.Text = item.Choice.Name;
-            commentBox.Text = item.Choice.Comment ?? "";
-            preventChangesBox.IsChecked = item.Choice.Locked;
-            hideBox.IsChecked = item.Choice.Hidden;
-            nameBox.Focus();
-            nameBox.SelectAll();
-        }
-
         void RefreshDialogPlan(string? preferredScenarioName = null)
         {
             plan = ScenarioManagerPlanner.CreateDialogPlan(_session.Workbook, preferredScenarioName ?? selectedScenarioName);
@@ -22292,6 +22277,68 @@ public sealed partial class MainWindow : Window
             changingCellsBox.Text = FormatRangeReference(_session.SelectedRange);
             summaryButton.IsEnabled = items.Length > 0;
             RefreshSelectionDetails();
+        }
+
+        SheetId? ResolveScenarioManagerSheetIdByName(string sheetName) =>
+            _session.Workbook.Sheets.FirstOrDefault(
+                sheet => string.Equals(sheet.Name, sheetName, StringComparison.OrdinalIgnoreCase))?.Id;
+
+        Control ValidationTarget(ScenarioManagerDialogValidationField field) =>
+            field switch
+            {
+                ScenarioManagerDialogValidationField.ScenarioName => nameBox,
+                ScenarioManagerDialogValidationField.ChangingCells => changingCellsBox,
+                ScenarioManagerDialogValidationField.ResultCells => resultCellsBox,
+                _ => nameBox,
+            };
+
+        bool ValidateScenarioManagerFields(ScenarioManagerDialogAction action)
+        {
+            var failure = ScenarioManagerDialogPlanner.ValidateAcceptRequest(
+                action,
+                nameBox.Text,
+                changingCellsBox.Text,
+                resultCellsBox.Text,
+                _session.ActiveSheet.Id,
+                ResolveScenarioManagerSheetIdByName);
+            if (failure is null)
+                return true;
+
+            var message = failure.Error switch
+            {
+                ScenarioManagerDialogValidationError.EnterScenarioName =>
+                    UiText.Get("ScenarioManager_EnterScenarioName"),
+                ScenarioManagerDialogValidationError.EnterValidChangingCellsReference =>
+                    UiText.Get("ScenarioManager_EnterValidChangingCellsReference"),
+                ScenarioManagerDialogValidationError.EnterValidResultCellsReference =>
+                    UiText.Get("ScenarioManager_EnterValidResultCellsReference"),
+                _ => UiText.Get("ScenarioManager_EnterScenarioDetails"),
+            };
+            errorText.Text = message;
+            errorText.IsVisible = true;
+            ShowEditIssue(message);
+            var target = ValidationTarget(failure.Field);
+            target.Focus();
+            if (target is TextBox textBox)
+                textBox.SelectAll();
+            return false;
+        }
+
+        bool TryReadScenarioManagerRanges(
+            string? text,
+            out IReadOnlyList<GridRange> ranges)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                ranges = [_session.SelectedRange];
+                return true;
+            }
+
+            return WorkbookRangeTextCodec.TryParseMany(
+                _session.ActiveSheet.Id,
+                text,
+                ResolveScenarioManagerSheetIdByName,
+                out ranges);
         }
 
         void ReportScenarioManagerFailure(WorkbookCellEditResult result)
@@ -22316,25 +22363,62 @@ public sealed partial class MainWindow : Window
             return true;
         }
 
-        void SaveCurrentValues()
+        void SaveCurrentValues(ScenarioManagerDialogAction action)
         {
-            var changingCells = CaptureScenarioManagerChangingCells(_session.SelectedRange);
-            var request = new ScenarioManagerSaveRequest(
+            if (!ValidateScenarioManagerFields(action))
+                return;
+
+            if (!TryReadScenarioManagerRanges(changingCellsBox.Text, out var ranges))
+            {
+                var message = UiText.Get("ScenarioManager_EnterValidChangingCellsReference");
+                errorText.Text = message;
+                errorText.IsVisible = true;
+                ShowEditIssue(message);
+                changingCellsBox.Focus();
+                changingCellsBox.SelectAll();
+                return;
+            }
+
+            var changingCells = CaptureScenarioManagerChangingCells(ranges);
+            var selectedDialogItem = ScenarioManagerDialogPlanner.BuildItems(_session.Workbook)
+                .FirstOrDefault(item => string.Equals(
+                    item.Name,
+                    CurrentScenarioName(),
+                    StringComparison.OrdinalIgnoreCase));
+            var accepted = ScenarioManagerDialogPlanner.ProjectAcceptResult(
+                action,
+                selectedDialogItem,
                 nameBox.Text ?? "",
+                changingCellsBox.Text ?? "",
+                resultCellsBox.Text ?? "",
+                commentBox.Text ?? "",
+                preventChangesBox.IsChecked == true,
+                hideBox.IsChecked == true);
+            var acceptedName = accepted.NewScenarioName.Trim();
+            var request = new ScenarioManagerSaveRequest(
+                acceptedName,
                 changingCells,
-                Comment: commentBox.Text);
+                ReplaceScenarioName: accepted.Action == ScenarioManagerDialogAction.Edit
+                    ? accepted.SelectedScenarioName
+                    : null,
+                Comment: accepted.CommentText,
+                Hidden: accepted.Hidden,
+                Locked: accepted.Locked);
             var savePlan = ScenarioManagerPlanner.CreateSavePlan(_session.Workbook, request);
             var result = _session.ExecuteScenarioManagerSavePlan(savePlan, request);
             if (!ApplyScenarioManagerResult(
                     result,
-                    $"Saved scenario '{(nameBox.Text ?? "").Trim()}' ({changingCells.Count} {FormatCountLabel(changingCells.Count, "cell")})"))
+                    $"Saved scenario '{acceptedName}' ({changingCells.Count} {FormatCountLabel(changingCells.Count, "cell")})"))
             {
-                nameBox.Focus();
-                nameBox.SelectAll();
+                var target = action == ScenarioManagerDialogAction.Edit
+                    ? nameBox
+                    : changingCellsBox;
+                target.Focus();
+                target.SelectAll();
                 return;
             }
 
-            RefreshDialogPlan((nameBox.Text ?? "").Trim());
+            RefreshDialogPlan(acceptedName);
             nameBox.Text = CreateScenarioManagerDefaultName(plan.Scenarios);
             commentBox.Text = "";
         }
@@ -22367,7 +22451,31 @@ public sealed partial class MainWindow : Window
 
         void CreateSummaryReport()
         {
-            var summaryPlan = ScenarioManagerPlanner.CreateSummaryReportPlan(_session.Workbook);
+            if (!ValidateScenarioManagerFields(ScenarioManagerDialogAction.Report))
+                return;
+
+            IReadOnlyList<CellAddress> resultCells = [];
+            if (!string.IsNullOrWhiteSpace(resultCellsBox.Text))
+            {
+                if (!WorkbookRangeTextCodec.TryParseMany(
+                        _session.ActiveSheet.Id,
+                        resultCellsBox.Text,
+                        ResolveScenarioManagerSheetIdByName,
+                        out var resultRanges))
+                {
+                    var message = UiText.Get("ScenarioManager_EnterValidResultCellsReference");
+                    errorText.Text = message;
+                    errorText.IsVisible = true;
+                    ShowEditIssue(message);
+                    resultCellsBox.Focus();
+                    resultCellsBox.SelectAll();
+                    return;
+                }
+
+                resultCells = resultRanges.SelectMany(range => range.AllCells()).Distinct().ToArray();
+            }
+
+            var summaryPlan = ScenarioManagerPlanner.CreateSummaryReportPlan(_session.Workbook, resultCells);
             var result = _session.ExecuteScenarioManagerSummaryReportPlan(summaryPlan);
             if (!ApplyScenarioManagerResult(
                     result,
@@ -22378,8 +22486,8 @@ public sealed partial class MainWindow : Window
         }
 
         scenarioList.SelectionChanged += (_, _) => RefreshSelectionDetails();
-        saveButton.Click += (_, _) => SaveCurrentValues();
-        editButton.Click += (_, _) => LoadSelectedScenarioForEdit();
+        saveButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Add);
+        editButton.Click += (_, _) => SaveCurrentValues(ScenarioManagerDialogAction.Edit);
         showButton.Click += (_, _) => ShowSelectedScenario();
         deleteButton.Click += (_, _) => DeleteSelectedScenario();
         summaryButton.Click += (_, _) => CreateSummaryReport();
@@ -22483,12 +22591,23 @@ public sealed partial class MainWindow : Window
         await dialog.ShowDialog(this);
     }
 
-    private IReadOnlyList<ScenarioCellValue> CaptureScenarioManagerChangingCells(GridRange range)
+    private IReadOnlyList<ScenarioCellValue> CaptureScenarioManagerChangingCells(
+        IReadOnlyList<GridRange> ranges)
     {
-        var sheet = _session.Workbook.GetSheet(range.Start.Sheet) ?? _session.ActiveSheet;
         var values = new List<ScenarioCellValue>();
-        foreach (var address in range.AllCells())
-            values.Add(new ScenarioCellValue(address, sheet.GetValue(address)));
+        var seen = new HashSet<CellAddress>();
+        foreach (var range in ranges)
+        {
+            var sheet = _session.Workbook.GetSheet(range.Start.Sheet);
+            if (sheet is null)
+                continue;
+
+            foreach (var address in range.AllCells())
+            {
+                if (seen.Add(address))
+                    values.Add(new ScenarioCellValue(address, sheet.GetValue(address)));
+            }
+        }
 
         return values;
     }

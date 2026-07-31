@@ -299,6 +299,10 @@ internal static class XlsxPivotXmlReferencePreserver
             if (!pivotWorksheetPaths.Contains(sourceWorksheetPath))
                 continue;
 
+            // R105: rename-tolerant lookup removed as inert (proven dead this round) -- the guarded
+            // code below only fires when a worksheet has a <pivotTableDefinition> as a direct child
+            // element, which is not producible OOXML: a pivot definition is always its own part
+            // referenced by relationship, so this gate can never be true.
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 

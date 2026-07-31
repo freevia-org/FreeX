@@ -20,6 +20,10 @@ internal static class XlsxWorksheetVmlReferencePreserver
 
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
+            // R105: rename-tolerant lookup removed as inert (proven dead this round) --
+            // XlsxLegacyCommentPreserver re-establishes legacyDrawing later with its own correct
+            // rename handling, and XlsxHeaderFooterPicturePackageWriter regenerates the
+            // header/footer marker and VML fresh from the model before this preserver runs.
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 

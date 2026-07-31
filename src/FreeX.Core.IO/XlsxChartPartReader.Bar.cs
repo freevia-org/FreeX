@@ -225,6 +225,7 @@ public static partial class XlsxChartPartReader
         ApplyVerbatimSeriesFormulasIfNeeded(
             barCharts.Concat(lineCharts).Concat(scatterCharts).SelectMany(c => c.Elements(ChartNs + "ser")),
             sheetId,
+            sheetNameResolver,
             result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
@@ -357,6 +358,7 @@ public static partial class XlsxChartPartReader
         ApplyVerbatimSeriesFormulasIfNeeded(
             barCharts.SelectMany(c => c.Elements(ChartNs + "ser")),
             sheetId,
+            sheetNameResolver,
             result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);

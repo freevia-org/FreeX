@@ -1,4 +1,5 @@
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Filtering;
@@ -59,7 +60,7 @@ public static class AutoFilterDropdownMenuPlanner
         if (string.IsNullOrWhiteSpace(headerText))
             headerText = textProvider.Format("AutoFilter_ColumnHeader", CellAddress.NumberToColumnName(plan.Range.Start.Col + plan.FilterColumnOffset));
 
-        var filterKind = DetectFilterKind(sheet, plan);
+        var filterKind = DetectFilterKind(workbook, sheet, plan);
         var sortLabels = GetSortLabels(filterKind, textProvider);
         var filterEntry = AutoFilterMenuCatalog.CreateFilterFamilyEntry(filterKind, textProvider);
         var colorOptions = CollectColorOptions(workbook, sheet, plan, textProvider);
@@ -169,7 +170,10 @@ public static class AutoFilterDropdownMenuPlanner
         HashSet<uint> ownedHiddenRows)
     {
         var values = new HashSet<string>(StringComparer.Ordinal);
-        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
+        // R104-app-presentation-autofilter-totalsrow-1: exclude a shown structured-table Totals
+        // Row from this scan -- it is never a filterable data row (see GetFilterableLastRow).
+        var lastRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, plan.Range);
+        for (var row = plan.Range.Start.Row + 1; row <= lastRow; row++)
         {
             if (ownedHiddenRows.Contains(row))
                 continue;
@@ -209,7 +213,10 @@ public static class AutoFilterDropdownMenuPlanner
         var seenFontColors = new HashSet<CellColor>();
         var hasNoFill = false;
 
-        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
+        // R104-app-presentation-autofilter-totalsrow-1: exclude a shown structured-table Totals
+        // Row from the color scan -- it is never a filterable data row (see GetFilterableLastRow).
+        var lastColorRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, plan.Range);
+        for (var row = plan.Range.Start.Row + 1; row <= lastColorRow; row++)
         {
             // filter-by-color-cf: offer the color Excel would actually display for this cell —
             // including any conditional-formatting-driven fill/font color — not just the cell's
@@ -310,14 +317,19 @@ public static class AutoFilterDropdownMenuPlanner
         return false;
     }
 
-    private static AutoFilterMenuFilterKind DetectFilterKind(Sheet sheet, AutoFilterDropdownPlan plan)
+    private static AutoFilterMenuFilterKind DetectFilterKind(Workbook? workbook, Sheet sheet, AutoFilterDropdownPlan plan)
     {
         var filterColumn = plan.Range.Start.Col + plan.FilterColumnOffset;
         var hasTypedValues = false;
         var allNumbers = true;
         var allDates = true;
 
-        for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
+        // R104-app-presentation-autofilter-totalsrow-1: exclude a shown structured-table Totals
+        // Row from kind detection -- its SUBTOTAL aggregate (or custom formula result / text
+        // label) is never part of the filterable data set (see GetFilterableLastRow), so it must
+        // not sway whether Excel offers Number/Date/Text Filters for this column.
+        var lastKindRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, plan.Range);
+        for (var row = plan.Range.Start.Row + 1; row <= lastKindRow; row++)
         {
             var value = sheet.GetValue(row, filterColumn);
             if (value is BlankValue)
@@ -325,7 +337,18 @@ public static class AutoFilterDropdownMenuPlanner
 
             hasTypedValues = true;
             allNumbers &= value is NumberValue;
-            allDates &= value is DateTimeValue;
+
+            // R103-app-presentation-autofilter-1-1: Excel decides the Date-Filters family purely
+            // from the cell's number format, not from any separate "date value" runtime type (it
+            // has none -- a date is just a formatted double). FreeX's formula engine mirrors that
+            // at the storage layer for literal dates (DateTimeValue), but DATE()/EDATE()/EOMONTH()
+            // and any date arithmetic (`=OrderDate+30`, `=TODAY()-7`) always compute a plain
+            // NumberValue, so a "Due Date" column built from a formula must also check the cell's
+            // resolved number format, not just the ScalarValue's CLR type, or it wrongly gets
+            // Number Filters instead of Date Filters even though it visibly displays as dates.
+            var isDate = value is DateTimeValue ||
+                (workbook is not null && value is NumberValue && IsDateFormattedFilterCell(workbook, sheet, row, filterColumn));
+            allDates &= isDate;
         }
 
         if (hasTypedValues && allDates)
@@ -333,6 +356,17 @@ public static class AutoFilterDropdownMenuPlanner
         if (hasTypedValues && allNumbers)
             return AutoFilterMenuFilterKind.Number;
         return AutoFilterMenuFilterKind.Text;
+    }
+
+    private static bool IsDateFormattedFilterCell(Workbook workbook, Sheet sheet, uint row, uint col)
+    {
+        var cell = sheet.GetCell(row, col);
+        var styleId = cell is not null && cell.StyleId != StyleId.Default
+            ? cell.StyleId
+            : sheet.GetStyleOnly(row, col) ?? StyleId.Default;
+
+        var numberFormat = workbook.GetStyle(styleId).NumberFormat;
+        return !string.IsNullOrEmpty(numberFormat) && NumberFormatter.IsDateTimeNumberFormat(numberFormat);
     }
 
     private static string FormatHexColor(CellColor color) =>

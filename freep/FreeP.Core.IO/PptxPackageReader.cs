@@ -27,6 +27,8 @@ public static class PptxPackageReader
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Adec = "http://schemas.microsoft.com/office/drawing/2017/decorative";
     private static readonly XNamespace FreePRecording = "https://freex.local/freep/recording/2026";
+    private static readonly XNamespace FreePText = "https://freex.local/freep/text/2026";
+    private const string AutoNumTemplateExtUri = "{2E2E4D2B-4E4E-4A9E-9B3A-7C2BAA5D1B7C}";
     private const string RecordingMediaArtifactsPath = "ppt/media/recordingArtifacts.xml";
 
     // ── Relationship type constants ───────────────────────────────────────────────
@@ -2753,7 +2755,7 @@ public static class PptxPackageReader
         if (uid.Contains("cycle") || uid.Contains("gear") || uid.Contains("radial"))
             return SmartArtFamily.Cycle;
 
-        if (uid.Contains("horizontalbulletlist") || uid.Contains("horizontalblocklist") || uid.Contains("verticalchevronlist"))
+        if (uid.Contains("horizontalbulletlist") || uid.Contains("horizontalblocklist") || uid.Contains("verticalchevronlist") || uid.Contains("verticalarrowlist"))
             return SmartArtFamily.List;
 
         if (uid.Contains("process") || uid.Contains("timeline") || uid.Contains("arrow") || uid.Contains("chevron")
@@ -2783,8 +2785,8 @@ public static class PptxPackageReader
         return family switch
         {
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "accentprocess" or "ascendingprocess" or "descendingprocess" or "basictimeline" or "phasedprocess" or "circleaccenttimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
-            SmartArtFamily.List => layoutId is "list1" or "list2" or "basicblocklist" or "verticalboxlist" or "verticalchevronlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "horizontalbulletlist" or "horizontalblocklist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "continuouspicturelist" or "picturegrid",
-            SmartArtFamily.Cycle => layoutId is "cycle1" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
+            SmartArtFamily.List => layoutId is "list1" or "list2" or "basicblocklist" or "verticalboxlist" or "verticalchevronlist" or "verticalarrowlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "invertedpyramid" or "horizontalbulletlist" or "horizontalblocklist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "continuouspicturelist" or "picturegrid",
+            SmartArtFamily.Cycle => layoutId is "cycle1" or "cycle2" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart" or "nameandtitleorgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",
             SmartArtFamily.Relationship => layoutId is "relationship1" or "opposingideas" or "convergingradial" or "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn" or "interlockingrings",
@@ -4214,6 +4216,13 @@ public static class PptxPackageReader
                     para.AutoNumStartAt = startAt;
                     para.AutoNumStartAtSpecified = true;
                 }
+
+                var templateExtension = pPr.Element(A + "extLst")?
+                    .Elements(A + "ext")
+                    .FirstOrDefault(extension =>
+                        string.Equals(extension.Attribute("uri")?.Value, AutoNumTemplateExtUri, StringComparison.Ordinal));
+                para.AutoNumTextTemplate = templateExtension?
+                    .Attribute(FreePText + "autoNumTemplate")?.Value;
             }
             else if (pPr.Element(A + "buBlip") is { } buBlip)
             {
@@ -4887,7 +4896,7 @@ public static class PptxPackageReader
             if (!uint.TryParse(shapeIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var shapeId))
                 continue;
 
-            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == shapeId);
+            var shape = FindShapeRecursive(slide.Shapes, shapeId);
             if (shape?.Media is null)
                 continue;
 
@@ -4910,6 +4919,20 @@ public static class PptxPackageReader
                 shape.Media.PlaybackStartMode = MediaPlaybackStartMode.InClickSequence;
             }
         }
+    }
+
+    private static SlideShape? FindShapeRecursive(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+
+            if (shape.Children.Count > 0 && FindShapeRecursive(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 
     private static XElement? FindSequence(XElement tnLst, string nodeType)

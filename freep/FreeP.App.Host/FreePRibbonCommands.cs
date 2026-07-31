@@ -123,6 +123,7 @@ internal static class FreePRibbonCommands
         Action?             onEditChartTextOptions = null,
         Action?             onEditChartAreaOptions = null,
         Action?             onEditChartProtectionOptions = null,
+        Action?             onEditRotationOptions = null,
         Action?             onInsertEmbeddedObject = null,
         Action<OleObjectInfo>? onOpenEmbeddedObject = null,
         Action?             onTransitionSound = null)
@@ -272,6 +273,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalBoxList)));
         registry.Register(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalChevronList)));
+        registry.Register(SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalArrowList)));
         registry.Register(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.VerticalBulletList)));
         registry.Register(SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
@@ -302,6 +305,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicPyramid)));
         registry.Register(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.PyramidList)));
+        registry.Register(SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.InvertedPyramid)));
         registry.Register(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.RadialCycle)));
         registry.Register(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
@@ -814,6 +819,21 @@ internal static class FreePRibbonCommands
         registry.Register("freep.arrange.send-to-back",
             new ActionRibbonCommand(() => editor.SendToBack()));
 
+        registry.Register("freep.arrange.flip-horizontal",
+            new ActionRibbonCommand(() => editor.FlipSelectedHorizontal()));
+
+        registry.Register("freep.arrange.flip-vertical",
+            new ActionRibbonCommand(() => editor.FlipSelectedVertical()));
+
+        registry.Register("freep.arrange.rotate-left-90",
+            new ActionRibbonCommand(() => editor.RotateSelectedLeft90()));
+
+        registry.Register("freep.arrange.rotate-right-90",
+            new ActionRibbonCommand(() => editor.RotateSelectedRight90()));
+
+        registry.Register(RotationOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => onEditRotationOptions?.Invoke()));
+
         registry.Register("freep.arrange.align-left",
             new ActionRibbonCommand(() => editor.AlignLeft()));
 
@@ -831,6 +851,19 @@ internal static class FreePRibbonCommands
 
         registry.Register("freep.arrange.align-bottom",
             new ActionRibbonCommand(() => editor.AlignBottom()));
+
+        registry.Register("freep.arrange.align-left-to-slide",
+            new ActionRibbonCommand(() => editor.AlignLeftToSlide()));
+        registry.Register("freep.arrange.align-center-h-to-slide",
+            new ActionRibbonCommand(() => editor.AlignCenterHToSlide()));
+        registry.Register("freep.arrange.align-right-to-slide",
+            new ActionRibbonCommand(() => editor.AlignRightToSlide()));
+        registry.Register("freep.arrange.align-top-to-slide",
+            new ActionRibbonCommand(() => editor.AlignTopToSlide()));
+        registry.Register("freep.arrange.align-middle-to-slide",
+            new ActionRibbonCommand(() => editor.AlignMiddleToSlide()));
+        registry.Register("freep.arrange.align-bottom-to-slide",
+            new ActionRibbonCommand(() => editor.AlignBottomToSlide()));
 
         registry.Register("freep.arrange.distribute-h",
             new ActionRibbonCommand(() => editor.DistributeHorizontally()));

@@ -108,10 +108,7 @@ public sealed class ReplaceSmartArtCommand : IPresentationCommand
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return;
 
-        var shape = presentation.Slides[_slideIndex].Shapes.FirstOrDefault(candidate =>
-            candidate.Id == _shapeId &&
-            candidate.Kind == SlideShapeKind.SmartArt &&
-            candidate.SmartArt is not null);
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
         if (shape?.SmartArt is not null)
             SlideCloner.CopySmartArt(shape.SmartArt, state);
     }
@@ -664,18 +661,52 @@ public sealed class SetSlideLayoutCommand : IPresentationCommand
     }
 }
 
-file static class ShapeHelper
+internal static class ShapeHelper
 {
     internal static SlideShape? Find(Presentation p, int slideIndex, uint shapeId)
     {
         if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
-        return p.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
+        return Find(p.Slides[slideIndex].Shapes, shapeId);
+    }
+
+    internal static SlideShape? Find(Slide slide, uint shapeId) =>
+        Find(slide.Shapes, shapeId);
+
+    private static SlideShape? Find(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId) return shape;
+            if (shape.Children.Count > 0 && Find(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 
     internal static List<SlideShape>? Shapes(Presentation p, int slideIndex)
     {
         if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
         return p.Slides[slideIndex].Shapes;
+    }
+
+    internal static IEnumerable<SlideShape> All(Presentation p, int slideIndex)
+    {
+        if (slideIndex < 0 || slideIndex >= p.Slides.Count)
+            yield break;
+
+        foreach (var shape in All(p.Slides[slideIndex].Shapes))
+            yield return shape;
+    }
+
+    private static IEnumerable<SlideShape> All(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            foreach (var child in All(shape.Children))
+                yield return child;
+        }
     }
 
     internal static List<SlideShape>? FindContainingList(
@@ -968,7 +999,7 @@ public sealed class MoveShapeCommand : IPresentationCommand
         foreach (var cmd in ConnectorRouter.BuildRerouteCommands(p, slideIndex, movedShapeId))
         {
             // Find the connector and capture old bounds + old route before applying.
-            var c = slide.Shapes.FirstOrDefault(sh => sh.Id == cmd.ConnectorId);
+            var c = ShapeHelper.Find(p, slideIndex, cmd.ConnectorId);
             if (c is null) continue;
             long ox = c.OffsetXEmu, oy = c.OffsetYEmu, ocx = c.ExtentCxEmu, ocy = c.ExtentCyEmu;
             var oroute = c.ElbowRoute;
@@ -986,7 +1017,7 @@ public sealed class MoveShapeCommand : IPresentationCommand
         var slide = p.Slides[slideIndex];
         foreach (var (id, ox, oy, ocx, ocy, oroute, _, _, _, _) in captures)
         {
-            var c = slide.Shapes.FirstOrDefault(s => s.Id == id);
+            var c = ShapeHelper.Find(p, slideIndex, id);
             if (c is null) continue;
             c.OffsetXEmu  = ox;
             c.OffsetYEmu  = oy;
@@ -1675,6 +1706,66 @@ public sealed class RotateShapeCommand : IPresentationCommand
         var s = ShapeHelper.Find(p, _slideIndex, _shapeId);
         if (s is null) return;
         s.RotationDeg = _oldRotationDeg;
+
+        MoveShapeCommand.RevertReroute(p, _slideIndex, _rerouteCapture);
+    }
+}
+
+/// <summary>
+/// Toggles a shape's horizontal or vertical mirror state and re-routes attached connectors.
+/// The flip flags are serialized shape semantics; this command supplies the missing authoring path.
+/// </summary>
+public sealed class FlipShapeCommand : IPresentationCommand
+{
+    private readonly int  _slideIndex;
+    private readonly uint _shapeId;
+    private readonly bool _horizontal;
+    private bool _oldFlip;
+    private bool _applied;
+
+    private List<(uint id, long ox, long oy, long ocx, long ocy, List<(long X, long Y)>? oroute, long nx, long ny, long ncx, long ncy)>?
+        _rerouteCapture;
+
+    public FlipShapeCommand(int slideIndex, uint shapeId, bool horizontal)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _horizontal = horizontal;
+    }
+
+    public string Label => _horizontal ? "Flip Horizontal" : "Flip Vertical";
+
+    public bool HasEffect(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        return shape is not null && ChartHelper.IsObjectEditable(shape);
+    }
+
+    public void Apply(Presentation p)
+    {
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null || !ChartHelper.IsObjectEditable(shape)) return;
+
+        _oldFlip = _horizontal ? shape.FlipH : shape.FlipV;
+        if (_horizontal)
+            shape.FlipH = !_oldFlip;
+        else
+            shape.FlipV = !_oldFlip;
+
+        _applied = true;
+        _rerouteCapture = MoveShapeCommand.ApplyReroute(p, _slideIndex, _shapeId);
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (!_applied) return;
+        var shape = ShapeHelper.Find(p, _slideIndex, _shapeId);
+        if (shape is null) return;
+
+        if (_horizontal)
+            shape.FlipH = _oldFlip;
+        else
+            shape.FlipV = _oldFlip;
 
         MoveShapeCommand.RevertReroute(p, _slideIndex, _rerouteCapture);
     }

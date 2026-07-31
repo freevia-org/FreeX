@@ -1,6 +1,9 @@
+using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 using WpfParagraph = System.Windows.Documents.Paragraph;
@@ -250,6 +253,7 @@ internal static class TextBodyFlowDocumentConverter
                 {
                     WpfRun wr   => wr.Text ?? string.Empty,
                     LineBreak _ => "\n",
+                    InlineUIContainer => "\uFFFC",
                     _           => string.Empty
                 };
 
@@ -331,6 +335,59 @@ internal static class TextBodyFlowDocumentConverter
 
     private static Inline ModelRunToWpfRun(ModelRun mr)
     {
+        if (mr.InlineOleObject is { } ole)
+        {
+            var label = string.IsNullOrWhiteSpace(ole.ClassName)
+                ? "OLE object"
+                : ole.ClassName;
+            var border = new Border
+            {
+                Width = 42,
+                Height = 20,
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Background = Brushes.Gainsboro,
+                ToolTip = label,
+                Child = new TextBlock
+                {
+                    Text = "OLE",
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    FontSize = 9,
+                    Foreground = Brushes.Black,
+                },
+            };
+            border.MouseLeftButtonDown += (_, args) =>
+            {
+                if (args.ClickCount >= 2 && OleActivationService.TryActivate(ole))
+                    args.Handled = true;
+            };
+            return new InlineUIContainer(border)
+            {
+                BaselineAlignment = BaselineAlignment.Center,
+            };
+        }
+
+        if (mr.InlineImage is { Bytes.Length: > 0 } image)
+        {
+            var control = new Image
+            {
+                Source = LoadBitmap(image.Bytes),
+                Stretch = Stretch.Uniform,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsHitTestVisible = false,
+            };
+            if (mr.InlineImageWidthEmu is > 0)
+                control.Width = mr.InlineImageWidthEmu.Value / 9525.0;
+            if (mr.InlineImageHeightEmu is > 0)
+                control.Height = mr.InlineImageHeightEmu.Value / 9525.0;
+
+            return new InlineUIContainer(control)
+            {
+                BaselineAlignment = BaselineAlignment.Center,
+            };
+        }
+
         // Y5: a run with Text=="\n" maps to a WPF LineBreak so soft breaks survive
         // repeated round-trips symmetrically (FromFlowDocument maps LineBreak → "\n").
         if (mr.Text == "\n")
@@ -431,6 +488,7 @@ internal static class TextBodyFlowDocumentConverter
         {
             WpfRun run => run.Text ?? string.Empty,
             LineBreak => "\n",
+            InlineUIContainer => "\uFFFC",
             _ => string.Empty,
         }));
 
@@ -454,8 +512,38 @@ internal static class TextBodyFlowDocumentConverter
         {
             WpfRun wr   => wr.Text ?? string.Empty,
             LineBreak _  => "\n",
+            InlineUIContainer => "\uFFFC",
             _            => string.Empty
         };
+
+        if (inline is InlineUIContainer { Child: Image image })
+        {
+            var source = image.Source as BitmapSource;
+            if (source is not null)
+            {
+                mr.InlineImage = new ImagePart
+                {
+                    Bytes = BitmapSourceToPng(source),
+                    ContentType = originalRun?.InlineImage?.ContentType ?? "image/png",
+                };
+            }
+
+            mr.InlineImageWidthEmu = originalRun?.InlineImageWidthEmu
+                ?? ToEmu(image.Width);
+            mr.InlineImageHeightEmu = originalRun?.InlineImageHeightEmu
+                ?? ToEmu(image.Height);
+        }
+
+        if (inline is InlineUIContainer
+            && originalRun?.InlineOleObject is { } originalOle)
+        {
+            mr.InlineOleObject = new InlineOleObjectInfo
+            {
+                EmbeddedBytes = originalOle.EmbeddedBytes.ToArray(),
+                FileName = originalOle.FileName,
+                ClassName = originalOle.ClassName,
+            };
+        }
 
         // Y1: read FontFamily LOCAL value only (not resolved/inherited).
         var localFamily = inline.ReadLocalValue(TextElement.FontFamilyProperty);
@@ -596,6 +684,37 @@ internal static class TextBodyFlowDocumentConverter
 
         return mr;
     }
+
+    private static BitmapImage? LoadBitmap(byte[] bytes)
+    {
+        try
+        {
+            using var stream = new MemoryStream(bytes, writable: false);
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;
+            bitmap.StreamSource = stream;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[] BitmapSourceToPng(BitmapSource source)
+    {
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(source));
+        using var stream = new MemoryStream();
+        encoder.Save(stream);
+        return stream.ToArray();
+    }
+
+    private static long? ToEmu(double value) =>
+        double.IsFinite(value) && value > 0 ? (long)Math.Round(value * 9525.0) : null;
 
     /// <summary>
     /// Resolves a <see cref="ThemeAwareColor"/> to a WPF <see cref="Color"/>.

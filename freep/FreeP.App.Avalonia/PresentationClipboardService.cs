@@ -415,17 +415,22 @@ internal sealed class AvaloniaPresentationClipboardService(
             if (payload is not null)
             {
                 foreach (var image in payload.GetImagePayloads())
-                    request.Editor.InsertPicture(image.Bytes, image.ContentType);
+                    request.Editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
-                    request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName);
+                    request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
+                var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
+                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
+                    : payload.Body;
                 var table = payload.ContainsTable
                     ? request.Editor.InsertTableFromClipboard(
-                        payload.Body,
+                        slideBody,
                         payload.TableColumnWidthsEmu,
                         payload.TableCellStyles)
                     : null;
-                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
-                    request.Editor.InsertTextBox(payload.Body);
+                if (table is null
+                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
+                    request.Editor.InsertTextBox(slideBody);
                 return source;
             }
 
@@ -445,17 +450,22 @@ internal sealed class AvaloniaPresentationClipboardService(
             if (payload is not null)
             {
                 foreach (var image in payload.GetImagePayloads())
-                    request.Editor.InsertPicture(image.Bytes, image.ContentType);
+                    request.Editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
-                    request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName);
+                    request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
+                var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
+                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
+                    : payload.Body;
                 var table = payload.ContainsTable
                     ? request.Editor.InsertTableFromClipboard(
-                        payload.Body,
+                        slideBody,
                         payload.TableColumnWidthsEmu,
                         payload.TableCellStyles)
                     : null;
-                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
-                    request.Editor.InsertTextBox(payload.Body);
+                if (table is null
+                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
+                    request.Editor.InsertTextBox(slideBody);
                 return source;
             }
 
@@ -495,7 +505,7 @@ internal sealed class AvaloniaPresentationClipboardService(
 
         foreach (var shapeId in selectedShapeIds)
         {
-            if (editor.CurrentSlide?.Shapes.Any(shape => shape.Id == shapeId) == true)
+            if (editor.CurrentSlide is { } slide && ShapeTreeLookup.Find(slide, shapeId) is not null)
                 editor.Select(shapeId, addToSelection: true);
         }
     }

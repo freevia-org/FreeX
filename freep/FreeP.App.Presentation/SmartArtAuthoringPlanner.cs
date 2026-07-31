@@ -82,10 +82,12 @@ public enum SmartArtLayoutPreset
     VerticalProcess,
     VerticalBoxList,
     VerticalChevronList,
+    VerticalArrowList,
     VerticalBulletList,
     HorizontalBulletList,
     HorizontalBlockList,
     BasicCycle,
+    Cycle2,
     ContinuousCycle,
     GearCycle,
     TextCycle,
@@ -97,6 +99,7 @@ public enum SmartArtLayoutPreset
     DescendingBlockList,
     BasicPyramid,
     PyramidList,
+    InvertedPyramid,
     RadialCycle,
     BasicRadial,
     RadialList,
@@ -219,6 +222,7 @@ public static class SmartArtAuthoringPlanner
     public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
     public const string VerticalChevronListLayoutCommandId = "freep.smartart.layout.vertical-chevron-list";
+    public const string VerticalArrowListLayoutCommandId = "freep.smartart.layout.vertical-arrow-list";
     public const string VerticalBulletListLayoutCommandId = "freep.smartart.layout.vertical-bullet-list";
     public const string HorizontalBulletListLayoutCommandId = "freep.smartart.layout.horizontal-bullet-list";
     public const string HorizontalBlockListLayoutCommandId = "freep.smartart.layout.horizontal-block-list";
@@ -234,6 +238,7 @@ public static class SmartArtAuthoringPlanner
     public const string DescendingBlockListLayoutCommandId = "freep.smartart.layout.descending-block-list";
     public const string BasicPyramidLayoutCommandId = "freep.smartart.layout.basic-pyramid";
     public const string PyramidListLayoutCommandId = "freep.smartart.layout.pyramid-list";
+    public const string InvertedPyramidLayoutCommandId = "freep.smartart.layout.inverted-pyramid";
     public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
     public const string BasicRadialLayoutCommandId = "freep.smartart.layout.basic-radial";
     public const string RadialListLayoutCommandId = "freep.smartart.layout.radial-list";
@@ -527,6 +532,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalChevronList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList", SmartArtFamily.List),
+            SmartArtLayoutPreset.VerticalArrowList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalBulletList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBulletList", SmartArtFamily.Hierarchy),
             SmartArtLayoutPreset.HorizontalBulletList =>
@@ -535,6 +542,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.Cycle2 =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/cycle2", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.ContinuousCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.GearCycle =>
@@ -557,6 +566,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.PyramidList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/pyramidList", SmartArtFamily.List),
+            SmartArtLayoutPreset.InvertedPyramid =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid", SmartArtFamily.List),
             SmartArtLayoutPreset.RadialCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicRadial =>

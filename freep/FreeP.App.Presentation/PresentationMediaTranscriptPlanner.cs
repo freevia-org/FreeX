@@ -952,20 +952,65 @@ public static class PresentationMediaTranscriptPlanner
             return cues;
         }
 
+        var root = document.Root;
+        var frameRate = ReadTtmlRate(root, "frameRate") ?? 30.0;
+        var frameRateMultiplier = GetTtmlAttribute(root, "frameRateMultiplier");
+        if (frameRateMultiplier is not null)
+        {
+            var multiplier = frameRateMultiplier
+                .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            if (multiplier.Length == 2
+                && double.TryParse(multiplier[0], NumberStyles.Float, CultureInfo.InvariantCulture, out var numerator)
+                && double.TryParse(multiplier[1], NumberStyles.Float, CultureInfo.InvariantCulture, out var denominator)
+                && numerator > 0
+                && denominator > 0)
+            {
+                frameRate *= numerator / denominator;
+            }
+        }
+
+        var tickRate = ReadTtmlRate(root, "tickRate") ?? 1.0;
+
         foreach (var paragraph in document.Descendants().Where(element =>
                      string.Equals(element.Name.LocalName, "p", StringComparison.OrdinalIgnoreCase)))
         {
-            if (!TryParseTtmlTime(paragraph.Attribute("begin")?.Value, out var start))
+            var inheritedBegin = TimeSpan.Zero;
+            foreach (var ancestor in paragraph.Ancestors().Reverse())
+            {
+                if (TryParseTtmlTime(
+                        GetTtmlAttribute(ancestor, "begin"),
+                        frameRate,
+                        tickRate,
+                        out var ancestorBegin))
+                {
+                    inheritedBegin += ancestorBegin;
+                }
+            }
+
+            var localBegin = TimeSpan.Zero;
+            var beginToken = GetTtmlAttribute(paragraph, "begin");
+            if (beginToken is not null
+                && !TryParseTtmlTime(beginToken, frameRate, tickRate, out localBegin))
             {
                 continue;
             }
 
+            var start = inheritedBegin + localBegin;
+
             TimeSpan end;
-            if (TryParseTtmlTime(paragraph.Attribute("end")?.Value, out var parsedEnd))
+            if (TryParseTtmlTime(
+                    GetTtmlAttribute(paragraph, "end"),
+                    frameRate,
+                    tickRate,
+                    out var parsedEnd))
             {
-                end = parsedEnd;
+                end = inheritedBegin + parsedEnd;
             }
-            else if (TryParseTtmlTime(paragraph.Attribute("dur")?.Value, out var duration))
+            else if (TryParseTtmlTime(
+                         GetTtmlAttribute(paragraph, "dur"),
+                         frameRate,
+                         tickRate,
+                         out var duration))
             {
                 end = start + duration;
             }
@@ -975,7 +1020,7 @@ public static class PresentationMediaTranscriptPlanner
             }
 
             var cueText = CollapseWhitespace(paragraph.Value);
-            if (cueText.Length == 0 || end < start)
+            if (cueText.Length == 0 || end <= start)
             {
                 continue;
             }
@@ -986,7 +1031,29 @@ public static class PresentationMediaTranscriptPlanner
         return cues;
     }
 
+    private static string? GetTtmlAttribute(XElement? element, string localName) =>
+        element?.Attributes()
+            .FirstOrDefault(attribute =>
+                string.Equals(attribute.Name.LocalName, localName, StringComparison.OrdinalIgnoreCase))
+            ?.Value;
+
+    private static double? ReadTtmlRate(XElement? root, string localName)
+    {
+        var token = GetTtmlAttribute(root, localName);
+        return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
+            && value > 0
+            ? value
+            : null;
+    }
+
     private static bool TryParseTtmlTime(string? token, out TimeSpan value)
+        => TryParseTtmlTime(token, 30.0, 1.0, out value);
+
+    private static bool TryParseTtmlTime(
+        string? token,
+        double frameRate,
+        double tickRate,
+        out TimeSpan value)
     {
         value = default;
         if (string.IsNullOrWhiteSpace(token))
@@ -1016,6 +1083,50 @@ public static class PresentationMediaTranscriptPlanner
             }
 
             value = new TimeSpan(checked((long)Math.Round(amount * multiplier)));
+            return true;
+        }
+
+        if (normalized.EndsWith('f')
+            && double.TryParse(
+                normalized[..^1],
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var frames)
+            && frames >= 0
+            && frameRate > 0)
+        {
+            value = TimeSpan.FromSeconds(frames / frameRate);
+            return true;
+        }
+
+        if (normalized.EndsWith('t')
+            && double.TryParse(
+                normalized[..^1],
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out var ticks)
+            && ticks >= 0
+            && tickRate > 0)
+        {
+            value = TimeSpan.FromSeconds(ticks / tickRate);
+            return true;
+        }
+
+        var clockParts = normalized.Replace(';', ':').Split(':');
+        if (clockParts.Length == 4
+            && int.TryParse(clockParts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var clockHours)
+            && int.TryParse(clockParts[1], NumberStyles.None, CultureInfo.InvariantCulture, out var clockMinutes)
+            && int.TryParse(clockParts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var clockSeconds)
+            && double.TryParse(clockParts[3], NumberStyles.Float, CultureInfo.InvariantCulture, out var clockFrames)
+            && clockHours >= 0
+            && clockMinutes >= 0
+            && clockSeconds >= 0
+            && clockFrames >= 0
+            && frameRate > 0)
+        {
+            value = TimeSpan.FromHours(clockHours)
+                + TimeSpan.FromMinutes(clockMinutes)
+                + TimeSpan.FromSeconds(clockSeconds + clockFrames / frameRate);
             return true;
         }
 

@@ -29,8 +29,16 @@ public sealed class SetRowHeightCommand : IWorkbookCommand
     {
         if (!IsValidRowRange(_startRow, _endRow))
             return CommandGuards.RejectRowRangeOutsideWorksheetBounds();
-        if (_height is { } height && (!double.IsFinite(height) || height is < 0 or > 409.5))
-            return new CommandOutcome(false, "Row height must be from 0 to 409.5.");
+        // R102: Sheet.RowHeights stores pixels at 96 DPI (see RowColumnSizingPlanner's doc comment
+        // and AutoFitSizingService.MaximumRowHeight), while Excel's own "0 to 409.5" ceiling is
+        // expressed in points. Every caller of this constructor already passes a pixel value
+        // (RowColumnSizingPlanner.CreateRowHeightCommand converts the dialog's point entry via
+        // PixelsPerPoint; AutoFit and interactive drag paths feed pixel values directly), so the
+        // guard must compare against that same cap converted to pixels -- AutoFitSizingService
+        // .MaximumRowHeight (409.5 * 96/72 = 546) -- not the raw points number, or legal heights
+        // between ~307pt and 409.5pt (409.5px..546px) are wrongly rejected/dropped.
+        if (_height is { } height && (!double.IsFinite(height) || height is < 0 || height > AutoFitSizingService.MaximumRowHeight))
+            return new CommandOutcome(false, $"Row height must be from 0 to {AutoFitSizingService.MaximumRowHeight:0.###} pixels (409.5 points).");
 
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)

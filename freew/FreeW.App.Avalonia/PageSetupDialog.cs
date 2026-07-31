@@ -110,9 +110,11 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         var actions = PageLayoutDialogChrome.Actions(Accept, () => Close(null));
         actions.Margin = new Thickness(14, 12, 14, 12);
         Grid.SetRow(actions, 2);
+        // Keep the logical/visual child order aligned with the WPF authority: the action row
+        // precedes the tab content even though Grid rows place it at the bottom on screen.
+        root.Children.Add(actions);
         root.Children.Add(tabs);
         root.Children.Add(_status);
-        root.Children.Add(actions);
         Content = root;
 
         Opened += (_, _) => PageLayoutDialogChrome.FocusAndSelect(_top);
@@ -152,11 +154,11 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         panel.Children.Add(PageSetupRow("Footer from edge (pt):", _footerDistance));
         panel.Children.Add(PageSetupRow("Vertical alignment:", _verticalAlignment));
 
-        var launchers = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 12, 0, 0) };
-        var lineNumbers = new Button { Content = "Line Numbers..." };
-        var borders = new Button { Content = "Borders..." };
-        AvaloniaCompactDialogChrome.ApplyButton(lineNumbers, DialogChromeStyle, minWidth: 112);
-        AvaloniaCompactDialogChrome.ApplyButton(borders, DialogChromeStyle, minWidth: 92);
+        var launchers = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 10, 0, 0) };
+        var lineNumbers = new Button { Content = "Line Numbers\u2026" };
+        var borders = new Button { Content = "Borders\u2026" };
+        AvaloniaCompactDialogChrome.ApplyButton(lineNumbers, DialogChromeStyle, minWidth: 110);
+        AvaloniaCompactDialogChrome.ApplyButton(borders, DialogChromeStyle, minWidth: 110);
         lineNumbers.Click += (_, _) =>
         {
             _lineNumbersRequested = true;

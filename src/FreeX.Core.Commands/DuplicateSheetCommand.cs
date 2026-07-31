@@ -10,6 +10,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
     private readonly string? _requestedName;
     private SheetId? _copySheetId;
     private int _insertIndex;
+    private List<SlicerModel>? _clonedSlicers;
+    private List<TimelineModel>? _clonedTimelines;
 
     public string Label => "Duplicate Sheet";
 
@@ -51,6 +53,14 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
 
         DuplicateSheetDrawingCloner.CopyDrawingCollections(source, copy, copyId);
 
+        // R103: Slicers/Timelines are workbook-level collections keyed to a host sheet only
+        // indirectly (SlicerModel.SourceSheetName / TimelineModel.SourceSheetName), so
+        // CopyDrawingCollections above -- which only ever sees the two Sheet objects, not the
+        // owning Workbook -- can never reach them. Without this, a slicer/timeline filtering a
+        // pivot table on the duplicated sheet silently vanished from the copy even though the
+        // pivot table itself is faithfully cloned, unlike real Excel's Duplicate Sheet/Move-or-Copy.
+        (_clonedSlicers, _clonedTimelines) = DuplicateSheetDrawingCloner.CopySlicersAndTimelines(ctx.Workbook, source, copy);
+
         // R17-table-listobject-3: Sheet.Clone copies StructuredTables verbatim (same Id, Name,
         // and DisplayName as the source's tables), which would otherwise leave two tables in the
         // workbook sharing an identity -> corrupt XLSX (Excel repairs by dropping a table) and
@@ -76,30 +86,63 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
         _insertIndex = sourceIndex + 1;
         _copySheetId = copyId;
         ctx.Workbook.InsertSheet(_insertIndex, copy);
-        CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId, tableRenames);
+        CopyScopedNamedRangesAndFormulas(ctx.Workbook, _sourceSheetId, copyId, source.Name, copy.Name, tableRenames);
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
-        if (_copySheetId.HasValue)
-            ctx.Workbook.RemoveSheet(_copySheetId.Value);
+        if (!_copySheetId.HasValue)
+            return;
+
+        // R103: undo the workbook-level Slicer/Timeline clones CopySlicersAndTimelines added --
+        // Workbook.RemoveSheet only removes the Sheet itself and its named ranges, it has no idea
+        // Slicers/Timelines exist (they're keyed to a host sheet only indirectly, by name), so
+        // without this a Duplicate-Sheet-then-Undo would leave the cloned slicer/timeline behind,
+        // now dangling (SourceSheetName pointing at a sheet name that no longer exists).
+        if (_clonedSlicers is { Count: > 0 })
+        {
+            foreach (var slicer in _clonedSlicers)
+                ctx.Workbook.Slicers.Remove(slicer);
+        }
+
+        if (_clonedTimelines is { Count: > 0 })
+        {
+            foreach (var timeline in _clonedTimelines)
+                ctx.Workbook.Timelines.Remove(timeline);
+        }
+
+        ctx.Workbook.RemoveSheet(_copySheetId.Value);
     }
 
     /// <summary>
     /// Copies the source sheet's sheet-scoped defined names (plain ranges and formula
     /// expressions) onto the newly duplicated sheet, re-scoped to the copy — matching Excel,
-    /// which carries a sheet's local names over to a duplicated copy. The range/formula text
-    /// itself is copied verbatim, not remapped to the copy's sheet name, mirroring how cell
-    /// formulas are left unrewritten by <see cref="Sheet.Clone"/> -- except for any renamed
-    /// cloned table's structured references, which <paramref name="tableRenames"/> repoints at
-    /// the copy's own renamed table for the same reason <see cref="RewriteClonedTableReferences"/>
-    /// does for ordinary cell formulas.
+    /// which carries a sheet's local names over to a duplicated copy AND rebases any RefersTo
+    /// that pointed at the sheet's own cells onto the new copy (this is the entire point of a
+    /// sheet-local name like a per-sheet "TaxRate" used in template sheets — if it didn't
+    /// rebase, every duplicated sheet's local name would silently keep referencing the source
+    /// sheet's cells forever). A scoped named range's <see cref="GridRange"/> carries its own
+    /// Start.Sheet/End.Sheet (see <see cref="RemapScopedNamedRangeOntoCopy"/>: only rebased
+    /// when it actually points at the sheet being duplicated, exactly like
+    /// <c>Sheet.Clone.ClonePivotTable</c>'s SourceRange handling — a cross-sheet reference must
+    /// keep pointing at the original sheet). A scoped named formula's text is rebased the same
+    /// way <see cref="RewriteClonedTableReferences"/> already rebases ordinary cell formulas for
+    /// a renamed table, via <see cref="FormulaRewriter.Rewrite"/> with a <see cref="RenameSheetOp"/>
+    /// -- which only touches an EXPLICIT sheet-qualified reference matching the source sheet's
+    /// name (an unqualified reference already means "this sheet" and needs no rewrite), mirroring
+    /// <see cref="Sheet.RewriteSameSheetQualifiedFormula"/>'s same-sheet-qualified rebase already
+    /// applied to cell formulas / CF / DV / hyperlinks in <see cref="Sheet.Clone"/> -- except for
+    /// any renamed cloned table's structured references, which <paramref name="tableRenames"/>
+    /// repoints at the copy's own renamed table for the same reason
+    /// <see cref="RewriteClonedTableReferences"/> does for ordinary cell formulas.
     /// </summary>
     private static void CopyScopedNamedRangesAndFormulas(
         Workbook workbook,
         SheetId sourceSheetId,
         SheetId copySheetId,
+        string sourceSheetName,
+        string copySheetName,
         IReadOnlyList<(string OldName, string NewName)> tableRenames)
     {
         foreach (var ((name, sheetId), range) in workbook.ScopedNamedRanges.ToList())
@@ -108,7 +151,8 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
                 continue;
 
             workbook.TryGetScopedNamedRangeMetadata(name, sheetId, out var metadata);
-            workbook.DefineNamedRange(name, range, metadata, copySheetId);
+            var remapped = RemapScopedNamedRangeOntoCopy(range, sourceSheetId, copySheetId);
+            workbook.DefineNamedRange(name, remapped, metadata, copySheetId);
         }
 
         foreach (var ((name, sheetId), formulaText) in workbook.ScopedNamedFormulas.ToList())
@@ -116,9 +160,32 @@ public sealed class DuplicateSheetCommand : IWorkbookCommand, IWholeWorkbookReca
             if (sheetId != sourceSheetId)
                 continue;
 
-            var rewritten = RewriteFormulaForTableRenames(formulaText, tableRenames);
-            workbook.DefineNamedFormula(name, rewritten ?? formulaText, copySheetId);
+            var rebased = FormulaRewriter.Rewrite(formulaText, new RenameSheetOp(sourceSheetName, copySheetName), string.Empty)
+                ?? formulaText;
+            var rewritten = RewriteFormulaForTableRenames(rebased, tableRenames);
+            workbook.DefineNamedFormula(name, rewritten ?? rebased, copySheetId);
         }
+    }
+
+    /// <summary>
+    /// Rebases a sheet-scoped named range's <see cref="GridRange"/> onto the copy's sheet only
+    /// when it actually points at the sheet being duplicated (the overwhelmingly common case for
+    /// a sheet-local name, e.g. a per-sheet "TaxRate" used as "=TaxRate" in that sheet's own
+    /// formulas) -- a cross-sheet scoped name (e.g. a sheet-local name deliberately authored to
+    /// read another sheet's cells) must keep pointing at its original target, matching Excel's
+    /// Move-or-Copy behavior (only same-sheet references travel with the copy) and mirroring
+    /// <c>Sheet.Clone.ClonePivotTable</c>'s identical SourceRange handling. A <see cref="GridRange"/>
+    /// always has Start.Sheet == End.Sheet (enforced by its constructor), so checking Start.Sheet
+    /// alone is sufficient.
+    /// </summary>
+    private static GridRange RemapScopedNamedRangeOntoCopy(GridRange range, SheetId sourceSheetId, SheetId copySheetId)
+    {
+        if (range.Start.Sheet != sourceSheetId)
+            return range;
+
+        return new GridRange(
+            new CellAddress(copySheetId, range.Start.Row, range.Start.Col),
+            new CellAddress(copySheetId, range.End.Row, range.End.Col));
     }
 
     private static int FindSheetIndex(Workbook workbook, SheetId sheetId)

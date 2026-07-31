@@ -549,6 +549,46 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void ReaderWriter_Cycle2_AdmitsLiveGeometryAndPreservesNativeIdentity()
+    {
+        var corpusPath = FindRenderCompareCorpusFile("14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(corpusPath);
+        var slide = presentation.Slides.Single(candidate => candidate.Shapes.Any(shape =>
+            shape.Kind == SlideShapeKind.SmartArt
+            && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/cycle2", StringComparison.OrdinalIgnoreCase) == true));
+        var smartArt = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        smartArt.Data.LayoutUniqueId.Should().EndWith("/cycle2");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "cycle2 is now admitted only after the shared ellipse-ring geometry exists");
+        smartArt.Data.Nodes.Select(node => node.Text)
+            .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
+
+        var liveShapes = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Where(shape => shape.Text is not null)
+            .Select(shape => shape.Text!.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Idea", "Plan", "Execute", "Review", "Improve"]);
+        liveShapes.Count(shape => Math.Abs(shape.RotationDeg) > 0.1)
+            .Should().Be(5, "the five live cycle2 arrows carry tangent rotations");
+
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath);
+        var reopenedSmartArt = reopened.Slides.SelectMany(candidate => candidate.Shapes)
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt
+                && shape.SmartArt?.Data?.LayoutUniqueId.EndsWith("/cycle2", StringComparison.OrdinalIgnoreCase) == true)
+            .SmartArt!;
+        reopenedSmartArt.Data.Should().NotBeNull();
+        reopenedSmartArt.Data!.LayoutUniqueId.Should().EndWith("/cycle2");
+        reopenedSmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        reopenedSmartArt.Data.Nodes.Select(node => node.Text)
+            .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
+    }
+
+    [Fact]
     public void Reader_SmartArt_PictureCaptionList_ImportsNodePictures()
     {
         var nodeTexts = new[] { "Alpha caption", "Beta caption" };
@@ -970,6 +1010,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.FunnelProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.VerticalArrowList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.ContinuousCycle, SmartArtFamily.Cycle)]
@@ -983,6 +1024,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.PyramidList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.InvertedPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicRadial, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.RadialList, SmartArtFamily.Cycle)]
@@ -2385,6 +2427,24 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesVerticalArrowListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList",
+            nodes: [("id1", "Step 1"), ("id2", "Step 2"), ("id3", "Step 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "verticalArrowList is admitted to the shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Step 1", "Step 2", "Step 3");
+    }
+
+    [Fact]
     public void Compositor_VerticalChevronListSmartArt_RendersAllNodesBeyondOriginalTwelveItemCutoff()
     {
         var nodes = Enumerable.Range(1, 13)
@@ -2465,6 +2525,23 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "pyramidList has a shared live geometry planner and must not fall back to the cached drawing on import");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Foundation", "Growth", "Vision");
+    }
+
+    [Fact]
+    public void Reader_ParsesInvertedPyramidAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid",
+            nodes: [("id1", "Market"), ("id2", "Product"), ("id3", "Team"), ("id4", "Task")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Market", "Product", "Team", "Task");
     }
 
     [Fact]
@@ -2718,6 +2795,76 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "basicMatrix is in the bounded shared live-layout planner");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("People", "Process", "Platform", "Proof");
+    }
+
+    [Fact]
+    public void ReaderWriter_PreservesNineNodeBasicMatrixOrderAndLiveRendering()
+    {
+        var nodeTexts = Enumerable.Range(0, 9).Select(i => $"Node {i + 1}").ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix",
+            nodes: nodeTexts.Select((text, index) => ($"id{index + 1}", text)).ToArray(),
+            parOfConnections: []);
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        smartArt.Data.Nodes.Select(node => node.Text).Should().Equal(nodeTexts);
+
+        var liveShapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Should().HaveCount(9);
+        liveShapes.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodeTexts);
+
+        smartArt.Data.Nodes[^1].Text = "Node 9 edited";
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        reopened.Data.Should().NotBeNull();
+        reopened.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        reopened.Data.Nodes.Select(node => node.Text).Should().Equal(
+            nodeTexts[..^1].Append("Node 9 edited"));
+    }
+
+    [Fact]
+    public void ReaderWriter_PreservesTitleOnlyTitledMatrixAsLiveEditableState()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+            nodes: [("id1", "Title only")],
+            parOfConnections: []);
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        var liveShapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Should().ContainSingle();
+        liveShapes[0].Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text
+            .Should().Be("Title only");
+
+        smartArt.Data.Nodes[0].Text = "Edited title";
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        reopened.Data.Should().NotBeNull();
+        reopened.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        reopened.Data.Nodes.Select(node => node.Text).Should().Equal("Edited title");
     }
 
     [Fact]
@@ -3781,6 +3928,29 @@ public sealed class SmartArtTests : IDisposable
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared top-to-bottom pyramid DrawOps");
         liveShapes.Select(op => op.BoundsDip.Width)
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared widening pyramid segment geometry");
+    }
+
+    [Fact]
+    public void Compositor_InvertedPyramidSmartArt_RendersSharedLiveSegments()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid",
+            nodes: [("n1", "Market"), ("n2", "Product"), ("n3", "Team"), ("n4", "Task")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(4);
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Product", "Team", "Task");
+        liveShapes.Select(op => op.BoundsDip.Y).Should().BeInAscendingOrder();
+        liveShapes.Select(op => op.BoundsDip.Width).Should().BeInDescendingOrder();
     }
 
     [Fact]

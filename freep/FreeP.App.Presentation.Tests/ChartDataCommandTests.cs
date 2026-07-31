@@ -53,6 +53,18 @@ public sealed class ChartDataCommandTests
         return session;
     }
 
+    private static (Presentation p, PresentationCommandBus bus, uint chartShapeId) MakeGroupedChartPresentation()
+    {
+        var (p, bus, chartShapeId) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes.Single(shape => shape.Id == chartShapeId);
+        p.Slides[0].Shapes.Remove(chart);
+
+        var group = new SlideShape { Id = 99, Name = "Group", Kind = SlideShapeKind.Group };
+        group.Children.Add(chart);
+        p.Slides[0].Shapes.Add(group);
+        return (p, bus, chartShapeId);
+    }
+
     // ════════════════════════════════════════════════════════════════════════════════
     // SetChartCellValueCommand
     // ════════════════════════════════════════════════════════════════════════════════
@@ -63,6 +75,19 @@ public sealed class ChartDataCommandTests
         var (p, bus, id) = MakeChartPresentation();
         bus.Execute(new SetChartCellValueCommand(0, id, seriesIndex: 0, categoryIndex: 1, value: 999.0));
         p.Slides[0].Shapes[0].Chart!.Series[0].Values[1].Should().Be(999.0);
+    }
+
+    [Fact]
+    public void SetChartCellValue_GroupedChart_UpdatesValueAndSupportsUndo()
+    {
+        var (p, bus, id) = MakeGroupedChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Children[0].Chart!;
+
+        bus.Execute(new SetChartCellValueCommand(0, id, 0, 1, 999.0));
+        chart.Series[0].Values[1].Should().Be(999.0);
+
+        bus.Undo();
+        chart.Series[0].Values[1].Should().Be(200.0);
     }
 
     [Fact]

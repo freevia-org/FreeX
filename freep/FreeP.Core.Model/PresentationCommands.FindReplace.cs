@@ -90,20 +90,8 @@ public sealed class ReplaceOneCommand : IPresentationCommand
         return row.Cells[m.TableCol].TextBody;
     }
 
-    private static SlideShape? FindShape(Slide slide, uint shapeId)
-    {
-        // Search top-level shapes and group children (one level deep, matching search).
-        foreach (var s in slide.Shapes)
-        {
-            if (s.Id == shapeId) return s;
-            if (s.Kind == SlideShapeKind.Group)
-            {
-                foreach (var c in s.Children)
-                    if (c.Id == shapeId) return c;
-            }
-        }
-        return null;
-    }
+    private static SlideShape? FindShape(Slide slide, uint shapeId) =>
+        ShapeHelper.Find(slide, shapeId);
 }
 
 /// <summary>
@@ -212,15 +200,6 @@ public sealed class ReplaceAllCommand : IPresentationCommand
         return row.Cells[m.TableCol].TextBody;
     }
 
-    private static SlideShape? FindShape(Slide slide, uint shapeId)
-    {
-        foreach (var s in slide.Shapes)
-        {
-            if (s.Id == shapeId) return s;
-            if (s.Kind == SlideShapeKind.Group)
-                foreach (var c in s.Children)
-                    if (c.Id == shapeId) return c;
-        }
-        return null;
-    }
+    private static SlideShape? FindShape(Slide slide, uint shapeId) =>
+        ShapeHelper.Find(slide, shapeId);
 }

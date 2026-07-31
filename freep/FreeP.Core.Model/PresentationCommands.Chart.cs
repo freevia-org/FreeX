@@ -13,7 +13,7 @@ internal static class ChartHelper
     internal static ChartShape? Find(Presentation p, int slideIndex, uint shapeId)
     {
         if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
-        var shape = p.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
+        var shape = ShapeHelper.Find(p, slideIndex, shapeId);
         return shape?.Chart;
     }
 

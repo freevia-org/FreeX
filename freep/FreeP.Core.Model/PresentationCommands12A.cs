@@ -13,7 +13,37 @@ file static class ShapeHelper12A
     internal static SlideShape? Find(Presentation p, int slideIndex, uint shapeId)
     {
         if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
-        return p.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
+        return Find(p.Slides[slideIndex].Shapes, shapeId);
+    }
+
+    private static SlideShape? Find(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId) return shape;
+            if (shape.Children.Count > 0 && Find(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
+    internal static List<SlideShape>? ContainingShapes(Presentation p, int slideIndex, uint shapeId)
+    {
+        if (slideIndex < 0 || slideIndex >= p.Slides.Count) return null;
+        return FindContainingList(p.Slides[slideIndex].Shapes, shapeId);
+    }
+
+    private static List<SlideShape>? FindContainingList(List<SlideShape> shapes, uint shapeId)
+    {
+        if (shapes.Any(shape => shape.Id == shapeId)) return shapes;
+        foreach (var shape in shapes)
+        {
+            if (shape.Children.Count > 0 && FindContainingList(shape.Children, shapeId) is { } childList)
+                return childList;
+        }
+
+        return null;
     }
 
     internal static List<SlideShape>? Shapes(Presentation p, int slideIndex)
@@ -172,6 +202,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
     private SlideShape?        _group;
     private int                _groupZIdx;
     private List<SlideShape>?  _children;
+    private List<SlideShape>?  _parentShapes;
 
     public UngroupShapeCommand(int slideIndex, uint groupId)
     {
@@ -189,7 +220,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
     public void Apply(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = ShapeHelper12A.ContainingShapes(p, _slideIndex, _groupId);
         if (shapes is null) return;
 
         _groupZIdx = shapes.FindIndex(s => s.Id == _groupId);
@@ -199,6 +230,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
         if (_group.Kind != SlideShapeKind.Group) return;
 
         _children = _group.Children.ToList();
+        _parentShapes = shapes;
         shapes.RemoveAt(_groupZIdx);
 
         // Insert children at the group's former z-position (in order).
@@ -211,7 +243,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
     public void Revert(Presentation p)
     {
-        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        var shapes = _parentShapes;
         if (shapes is null || _group is null || _children is null) return;
 
         // Remove freed children.
@@ -224,6 +256,7 @@ public sealed class UngroupShapeCommand : IPresentationCommand
 
         _group    = null;
         _children = null;
+        _parentShapes = null;
     }
 }
 
@@ -337,6 +370,71 @@ public enum DistributeKind { Horizontal, Vertical }
 /// Evenly spaces ≥3 selected shapes along the given axis within the selection's bounding box.
 /// For &lt;3 shapes this is a no-op. Undo restores original positions.
 /// </summary>
+/// <summary>
+/// Aligns each selected shape against the slide canvas rather than the selection bounds.
+/// This is the PowerPoint "Align to Slide" mode and is undoable as one command.
+/// </summary>
+public sealed class AlignShapesToSlideCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly List<uint> _shapeIds;
+    private readonly AlignKind _kind;
+    private List<(uint id, long oldX, long oldY)>? _saved;
+
+    public AlignShapesToSlideCommand(int slideIndex, IEnumerable<uint> shapeIds, AlignKind kind)
+    {
+        _slideIndex = slideIndex;
+        _shapeIds = shapeIds.ToList();
+        _kind = kind;
+    }
+
+    public string Label => $"Align {_kind} to Slide";
+
+    public bool HasEffect(Presentation p) => _shapeIds.Count > 0 &&
+        p.SlideSizeCxEmu > 0 && p.SlideSizeCyEmu > 0;
+
+    public void Apply(Presentation p)
+    {
+        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        if (shapes is null || _shapeIds.Count == 0) return;
+
+        var targets = _shapeIds
+            .Select(id => shapes.FirstOrDefault(s => s.Id == id))
+            .Where(s => s is not null)
+            .ToList();
+        if (targets.Count == 0) return;
+
+        _saved = new List<(uint, long, long)>();
+        foreach (var s in targets)
+        {
+            _saved.Add((s!.Id, s.OffsetXEmu, s.OffsetYEmu));
+            switch (_kind)
+            {
+                case AlignKind.Left: s.OffsetXEmu = 0; break;
+                case AlignKind.CenterH: s.OffsetXEmu = (p.SlideSizeCxEmu - s.ExtentCxEmu) / 2; break;
+                case AlignKind.Right: s.OffsetXEmu = p.SlideSizeCxEmu - s.ExtentCxEmu; break;
+                case AlignKind.Top: s.OffsetYEmu = 0; break;
+                case AlignKind.Middle: s.OffsetYEmu = (p.SlideSizeCyEmu - s.ExtentCyEmu) / 2; break;
+                case AlignKind.Bottom: s.OffsetYEmu = p.SlideSizeCyEmu - s.ExtentCyEmu; break;
+            }
+        }
+    }
+
+    public void Revert(Presentation p)
+    {
+        var shapes = ShapeHelper12A.Shapes(p, _slideIndex);
+        if (shapes is null || _saved is null) return;
+        foreach (var (id, oldX, oldY) in _saved)
+        {
+            var s = shapes.FirstOrDefault(sh => sh.Id == id);
+            if (s is null) continue;
+            s.OffsetXEmu = oldX;
+            s.OffsetYEmu = oldY;
+        }
+        _saved = null;
+    }
+}
+
 public sealed class DistributeShapesCommand : IPresentationCommand
 {
     private readonly int              _slideIndex;

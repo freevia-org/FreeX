@@ -7,7 +7,7 @@ internal static class PresentationModelCloneHelper
         if (slideIndex < 0 || slideIndex >= presentation.Slides.Count)
             return null;
 
-        var shape = presentation.Slides[slideIndex].Shapes.FirstOrDefault(s => s.Id == shapeId);
+        var shape = ShapeHelper.Find(presentation, slideIndex, shapeId);
         return shape?.Table;
     }
 
@@ -204,6 +204,7 @@ internal static class PresentationModelCloneHelper
             AutoNumType = source.AutoNumType,
             AutoNumStartAt = source.AutoNumStartAt,
             AutoNumStartAtSpecified = source.AutoNumStartAtSpecified,
+            AutoNumTextTemplate = source.AutoNumTextTemplate,
             MarginLeftEmu = source.MarginLeftEmu,
             IndentEmu = source.IndentEmu,
             BulletColor = source.BulletColor,
@@ -239,9 +240,23 @@ internal static class PresentationModelCloneHelper
                 ContentType = source.ContentType
             };
 
+    private static InlineOleObjectInfo? CloneInlineOleObject(InlineOleObjectInfo? source) =>
+        source is null
+            ? null
+            : new InlineOleObjectInfo
+            {
+                EmbeddedBytes = source.EmbeddedBytes.ToArray(),
+                FileName = source.FileName,
+                ClassName = source.ClassName,
+            };
+
     private static Run CloneRun(Run source) => new()
     {
         Text = source.Text,
+        InlineImage = CloneImagePart(source.InlineImage),
+        InlineImageWidthEmu = source.InlineImageWidthEmu,
+        InlineImageHeightEmu = source.InlineImageHeightEmu,
+        InlineOleObject = CloneInlineOleObject(source.InlineOleObject),
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,

@@ -50,9 +50,10 @@ public static class PresentationClipboardSelectionCodec
         if (shapes.Count == 0)
             return [];
 
-        var selectedIds = shapes.Select(static shape => shape.Id).ToHashSet();
         var clipboardSlide = SlideCloner.CloneSlide(slide);
-        clipboardSlide.Shapes.RemoveAll(shape => !selectedIds.Contains(shape.Id));
+        clipboardSlide.Shapes.Clear();
+        foreach (var shape in shapes)
+            clipboardSlide.Shapes.Add(SlideCloner.CloneShape(shape));
 
         // Keep only the selected slide content while retaining the source presentation's
         // theme/layout context. The writer reads these models but does not mutate them.
@@ -104,7 +105,7 @@ public static class PresentationClipboardContentFactory
             return null;
 
         var selected = editor.SelectedShapeIds
-            .Select(id => slide.Shapes.FirstOrDefault(shape => shape.Id == id))
+            .Select(id => FindShape(slide.Shapes, id))
             .Where(static shape => shape is not null)
             .Select(static shape => shape!)
             .ToArray();
@@ -137,6 +138,20 @@ public static class PresentationClipboardContentFactory
         var text = ExtractText(selected);
         var content = new PresentationClipboardContent(selectionBytes, pngBytes, text, ownerToken);
         return content.IsEmpty ? null : content;
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 
     public static string? ExtractText(IEnumerable<SlideShape> shapes)

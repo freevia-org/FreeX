@@ -252,6 +252,26 @@ public sealed class Run
 {
     public string Text { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Inline picture carried by a rich-text editing run. The run's text is the single
+    /// object-replacement character (U+FFFC), so caret and selection offsets remain stable
+    /// across WPF and Avalonia editors. Null means this is an ordinary text run.
+    /// </summary>
+    public ImagePart? InlineImage { get; set; }
+
+    /// <summary>Authored inline-picture width in EMUs, when the source supplied one.</summary>
+    public long? InlineImageWidthEmu { get; set; }
+
+    /// <summary>Authored inline-picture height in EMUs, when the source supplied one.</summary>
+    public long? InlineImageHeightEmu { get; set; }
+
+    /// <summary>
+    /// Inline embedded object carried by a rich-text editing run. The run's text is the
+    /// single object-replacement character (U+FFFC), matching inline-picture caret behavior.
+    /// Null means this is not an inline OLE object.
+    /// </summary>
+    public InlineOleObjectInfo? InlineOleObject { get; set; }
+
     /// <summary>Font family name, or null to inherit from paragraph/layout/master.</summary>
     public string? FontFamily { get; set; }
 
@@ -414,6 +434,14 @@ public sealed class Paragraph
     /// Rich-editor split continuations clear this flag on the new paragraph.
     /// </summary>
     public bool AutoNumStartAtSpecified { get; set; }
+
+    /// <summary>
+    /// Optional renderer-neutral level-text template retained from external rich text.
+    /// Substitutions use <c>%1</c> through <c>%9</c> for the corresponding list levels;
+    /// literal punctuation and text are preserved. When null, the standard
+    /// <see cref="AutoNumType"/> formatter is authoritative.
+    /// </summary>
+    public string? AutoNumTextTemplate { get; set; }
 
     /// <summary>
     /// Left margin (indent from shape inset) in EMU from <c>a:pPr marL=</c>.

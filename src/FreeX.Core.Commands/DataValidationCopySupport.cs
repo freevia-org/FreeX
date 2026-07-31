@@ -9,14 +9,24 @@ internal static class DataValidationCopySupport
         CloneValidation(source, source.AppliesTo);
 
     public static DataValidation CloneValidation(DataValidation source, GridRange range) =>
-        CloneValidation(source, range, hostSheetName: null, rowDelta: 0, colDelta: 0);
+        CloneValidation(source, range, hostSheetName: null, pasteOp: null);
 
+    // Back-compat overload for callers that only ever perform a uniform per-cell translation
+    // (Format Painter, the Clear/Set-validation subtract-and-replace loops) and never transpose.
     public static DataValidation CloneValidation(
         DataValidation source,
         GridRange range,
         string? hostSheetName,
         int rowDelta,
         int colDelta,
+        bool includeAdditionalRanges = true) =>
+        CloneValidation(source, range, hostSheetName, new PasteOffsetOp(rowDelta, colDelta), includeAdditionalRanges);
+
+    public static DataValidation CloneValidation(
+        DataValidation source,
+        GridRange range,
+        string? hostSheetName,
+        RewriteOperation? pasteOp,
         bool includeAdditionalRanges = true)
     {
         var clone = new DataValidation
@@ -24,8 +34,8 @@ internal static class DataValidationCopySupport
             AppliesTo = range,
             Type = source.Type,
             Operator = source.Operator,
-            Formula1 = RewriteValidationFormula(source.Formula1, source.Type, hostSheetName, rowDelta, colDelta),
-            Formula2 = RewriteValidationFormula(source.Formula2, source.Type, hostSheetName, rowDelta, colDelta),
+            Formula1 = RewriteValidationFormula(source.Formula1, source.Type, hostSheetName, pasteOp),
+            Formula2 = RewriteValidationFormula(source.Formula2, source.Type, hostSheetName, pasteOp),
             AllowBlank = source.AllowBlank,
             ShowDropdown = source.ShowDropdown,
             AlertStyle = source.AlertStyle,
@@ -48,9 +58,17 @@ internal static class DataValidationCopySupport
         return clone;
     }
 
-    private static string? RewriteValidationFormula(string? formula, DvType type, string? hostSheetName, int rowDelta, int colDelta)
+    // pasteOp is a PasteTransposeOp (axis-swapping) for a transpose paste and a PasteOffsetOp
+    // (uniform per-cell translation) otherwise -- mirrors PasteConditionalFormatsCommand's
+    // pasteOp selection (CloneRuleForDestination), which applies the identical distinction to
+    // ConditionalFormat.FormulaText for the same reason: transpose swaps a relative reference's
+    // own (row,col) offset from the rule's own anchor onto the new anchor, which is NOT the
+    // uniform (rowDelta,colDelta) translation PasteOffsetOp performs.
+    private static string? RewriteValidationFormula(string? formula, DvType type, string? hostSheetName, RewriteOperation? pasteOp)
     {
-        if (string.IsNullOrWhiteSpace(formula) || hostSheetName is null || (rowDelta == 0 && colDelta == 0))
+        if (string.IsNullOrWhiteSpace(formula) || hostSheetName is null || pasteOp is null)
+            return formula;
+        if (pasteOp is PasteOffsetOp { RowDelta: 0, ColDelta: 0 })
             return formula;
 
         // Real DV formulas are stored per OOXML convention with NO leading '=' (see
@@ -81,7 +99,7 @@ internal static class DataValidationCopySupport
         // inline list-literal separator (e.g. "1,2,3") -- FormulaRewriter is a full AST rewriter and
         // handles the former fine, while the latter simply fails to parse as an expression and falls
         // through to the unchanged-formula return below.
-        var rewritten = FormulaRewriter.Rewrite(expression, new PasteOffsetOp(rowDelta, colDelta), hostSheetName);
+        var rewritten = FormulaRewriter.Rewrite(expression, pasteOp, hostSheetName);
         if (rewritten is null)
             return formula;
 

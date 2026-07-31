@@ -76,6 +76,8 @@ public static class ClipboardTablePlanner
             table.Rows.Add(row);
         }
 
+        ApplyMergeTopology(table);
+
         return true;
     }
 
@@ -83,13 +85,29 @@ public static class ClipboardTablePlanner
         TableCell cell,
         InCanvasRichClipboardTableCellStyle style)
     {
-        if (style.FillRgb is { } fillRgb)
+        if (style.FillPattern is { Length: > 0 } pattern)
+        {
+            var foreground = new ThemeAwareColor(SrgbColor.FromRgb(
+                style.FillForegroundRgb ?? style.FillRgb ?? 0));
+            var background = new ThemeAwareColor(SrgbColor.FromRgb(
+                style.FillBackgroundRgb ?? style.FillRgb ?? 0xFFFFFF));
+            cell.Fill = new ShapeFill.Pattern(pattern, foreground, background);
+        }
+        else if (style.FillRgb is { } fillRgb)
+        {
             cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fillRgb));
+        }
         cell.Anchor = style.Anchor;
         cell.InsetLeftPt = style.InsetLeftPt;
         cell.InsetRightPt = style.InsetRightPt;
         cell.InsetTopPt = style.InsetTopPt;
         cell.InsetBottomPt = style.InsetBottomPt;
+        cell.HMerge = style.HorizontalMergeContinuation;
+        cell.VMerge = style.VerticalMergeContinuation;
+        if (style.HorizontalMergeStart)
+            cell.GridSpan = 2;
+        if (style.VerticalMergeStart)
+            cell.RowSpan = 2;
 
         TableCellBorders? borders = null;
         borders = AssignBorder(borders, style.Left, TableCellBorderSide.Left);
@@ -119,6 +137,53 @@ public static class ClipboardTablePlanner
             case TableCellBorderSide.Bottom: borders.Bottom = outline; break;
         }
         return borders;
+    }
+
+    private static void ApplyMergeTopology(TableShape table)
+    {
+        for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            for (int column = 0; column < row.Cells.Count; column++)
+            {
+                var anchor = row.Cells[column];
+                if (anchor.GridSpan <= 1)
+                    continue;
+
+                int span = 1;
+                for (int continuation = column + 1;
+                     continuation < row.Cells.Count && row.Cells[continuation].HMerge;
+                     continuation++)
+                {
+                    span++;
+                }
+
+                anchor.GridSpan = span;
+            }
+        }
+
+        for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            for (int column = 0; column < row.Cells.Count; column++)
+            {
+                var anchor = row.Cells[column];
+                if (anchor.RowSpan <= 1)
+                    continue;
+
+                int span = 1;
+                for (int continuationRow = rowIndex + 1;
+                     continuationRow < table.Rows.Count
+                     && column < table.Rows[continuationRow].Cells.Count
+                     && table.Rows[continuationRow].Cells[column].VMerge;
+                     continuationRow++)
+                {
+                    span++;
+                }
+
+                anchor.RowSpan = span;
+            }
+        }
     }
 
     private static List<TextBody> SplitCells(Paragraph source)

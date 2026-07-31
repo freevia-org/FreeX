@@ -20,6 +20,125 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
+    public async Task InlineImageRun_IsRetainedBySharedVisualPlan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Before" },
+                    new Run
+                    {
+                        Text = "\uFFFC",
+                        InlineImage = new ImagePart
+                        {
+                            Bytes = [0x01, 0x02],
+                            ContentType = "image/png",
+                        },
+                        InlineImageWidthEmu = 228_600,
+                        InlineImageHeightEmu = 114_300,
+                    },
+                    new Run { Text = "After" },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC);
+            var run = editor.RichTextView.VisualPlan.Paragraphs.Single().Runs[1];
+            run.Text.Should().Be("\uFFFC");
+            run.InlineImage!.Bytes.Should().Equal(0x01, 0x02);
+            run.InlineImageWidthEmu.Should().Be(228_600);
+            run.InlineImageHeightEmu.Should().Be(114_300);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task InlineOleRun_IsRetainedBySharedVisualPlan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Before" },
+                    new Run
+                    {
+                        Text = "\uFFFC",
+                        InlineOleObject = new InlineOleObjectInfo
+                        {
+                            EmbeddedBytes = [0x01, 0x02, 0x03],
+                            FileName = "Embedded.xlsx",
+                            ClassName = "Excel.Sheet.12",
+                        },
+                    },
+                    new Run { Text = "After" },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC);
+            var run = editor.RichTextView.VisualPlan.Paragraphs.Single().Runs[1];
+            run.Text.Should().Be("\uFFFC");
+            run.InlineOleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+            run.InlineOleObject.FileName.Should().Be("Embedded.xlsx");
+            run.InlineOleObject.ClassName.Should().Be("Excel.Sheet.12");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task InlineImageRun_ReservesAuthoredWidthForFollowingText()
+    {
+        await Session.Dispatch(async () =>
+        {
+            byte[] png = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Before" },
+                    new Run
+                    {
+                        Text = "\uFFFC",
+                        InlineImage = new ImagePart { Bytes = png, ContentType = "image/png" },
+                        InlineImageWidthEmu = 228_600,
+                        InlineImageHeightEmu = 114_300,
+                    },
+                    new Run { Text = "After" },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 7;
+                editor.SelectionEnd = 7;
+                double imageFollowingX = editor.RichTextView.CaretRect.X;
+
+                editor.Text = "BeforeAfter";
+                editor.SelectionStart = 6;
+                editor.SelectionEnd = 6;
+                double plainFollowingX = editor.RichTextView.CaretRect.X;
+
+                (imageFollowingX - plainFollowingX).Should().BeGreaterThan(20);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Editor_UsesSharedBodyWrapPolicyForInputAndRichLayout()
     {
         await Session.Dispatch(() =>
@@ -214,6 +333,55 @@ public sealed class AvaloniaRichTextEditorTests
                 customTransfer.Add(customItem);
 
                 (await editor.PasteDataTransferAsync(customTransfer)).Should().BeTrue();
+                editor.Text.Should().Be("custom");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ClipboardPaste_CustomPayloadPrecedesXamlPackageRtfAndPlainText()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var editor = new AvaloniaRichTextEditor(
+                InCanvasRichClipboardPayload.FromPlainText("target").Body,
+                backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 0;
+                editor.SelectionEnd = editor.Text.Length;
+                using var transfer = new DataTransfer();
+                var item = new DataTransferItem();
+                var customPayload = InCanvasRichClipboardPayload.FromPlainText("custom");
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.RichTextPlatformFormat
+                        : AvaloniaRichTextEditor.RichTextFormat,
+                    InCanvasRichClipboardPlanner.Serialize(customPayload));
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalXamlPackageWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalXamlPackageLinuxFormat,
+                    CreateXamlPackage(
+                        "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Bold>ignored package</Bold></Paragraph></FlowDocument>"));
+                item.Set(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaRichTextEditor.ExternalRtfWindowsFormat
+                        : AvaloniaRichTextEditor.ExternalRtfLinuxFormat,
+                    Encoding.ASCII.GetBytes(@"{\rtf1\ansi ignored rtf}"));
+                item.SetText("plain fallback");
+                transfer.Add(item);
+
+                (await editor.PasteDataTransferAsync(transfer)).Should().BeTrue();
                 editor.Text.Should().Be("custom");
             }
             finally

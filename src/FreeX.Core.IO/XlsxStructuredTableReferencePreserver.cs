@@ -129,6 +129,9 @@ internal static class XlsxStructuredTableReferencePreserver
             if (!tableWorksheetPaths.Contains(sourceWorksheetPath))
                 continue;
 
+            // R105: rename-tolerant lookup removed as inert (proven dead this round) --
+            // XlsxStructuredTableWriter.Save unconditionally regenerates <tableParts> and the table
+            // relationship from the model on every save, for every table FreeX can model.
             if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 

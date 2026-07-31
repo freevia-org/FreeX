@@ -18,13 +18,34 @@ public sealed record InCanvasRichClipboardTableCellStyle(
     double? InsetLeftPt = null,
     double? InsetRightPt = null,
     double? InsetTopPt = null,
-    double? InsetBottomPt = null);
+    double? InsetBottomPt = null,
+    bool HorizontalMergeStart = false,
+    bool HorizontalMergeContinuation = false,
+    bool VerticalMergeStart = false,
+    bool VerticalMergeContinuation = false,
+    string? FillPattern = null,
+    int? FillForegroundRgb = null,
+    int? FillBackgroundRgb = null);
 
-/// <summary>One image payload carried by an external rich clipboard fragment.</summary>
-public sealed record InCanvasRichClipboardImage(byte[] Bytes, string ContentType);
+/// <summary>
+/// One image payload carried by an external rich clipboard fragment. Width and height are
+/// optional authored display extents in EMUs; older clipboard payloads and XAML images may omit
+/// them and continue to use the normal insertion bounds.
+/// </summary>
+public sealed record InCanvasRichClipboardImage(
+    byte[] Bytes,
+    string ContentType,
+    long? WidthEmu = null,
+    long? HeightEmu = null);
 
-/// <summary>One embedded object payload carried by an external rich clipboard fragment.</summary>
-public sealed record InCanvasRichClipboardObject(byte[] Bytes, string FileName);
+/// <summary>
+/// One embedded object payload carried by an external rich clipboard fragment.
+/// ClassName preserves the source OLE class when a provider supplies one.
+/// </summary>
+public sealed record InCanvasRichClipboardObject(
+    byte[] Bytes,
+    string FileName,
+    string? ClassName = null);
 
 /// <summary>
 /// Renderer-neutral rich clipboard payload used by both desktop editors. The model fragment is
@@ -98,10 +119,13 @@ public sealed record InCanvasRichClipboardPayload(
         TableCellStyles?.ToArray(),
         ImagePayloads?.Select(image => new InCanvasRichClipboardImage(
             image.Bytes.ToArray(),
-            image.ContentType)).ToArray(),
+            image.ContentType,
+            image.WidthEmu,
+            image.HeightEmu)).ToArray(),
         ObjectPayloads?.Select(obj => new InCanvasRichClipboardObject(
             obj.Bytes.ToArray(),
-            obj.FileName)).ToArray());
+            obj.FileName,
+            obj.ClassName)).ToArray());
 
     internal static Run? RunFromStyle(InCanvasEditorTextStyleState? style) => style is null
         ? null
@@ -158,6 +182,48 @@ public static class InCanvasRichClipboardPlanner
             payload.Body);
     }
 
+    /// <summary>
+    /// Creates the body used by the slide-level fallback when inline images are emitted as
+    /// separate picture shapes. The rich editor keeps the replacement character and image
+    /// payload together; a slide text box must not receive that marker as visible text.
+    /// </summary>
+    public static TextBody CloneBodyForSlideFallback(TextBody source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var body = TextBodyModelCloner.CloneTextBody(source)!;
+
+        foreach (var paragraph in body.Paragraphs)
+        {
+            var cleanedRuns = new List<Run>(paragraph.Runs.Count);
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.InlineImage is null
+                    && run.InlineOleObject is null
+                    && !run.Text.Contains('\uFFFC', StringComparison.Ordinal))
+                {
+                    cleanedRuns.Add(run);
+                    continue;
+                }
+
+                var text = run.Text.Replace("\uFFFC", string.Empty, StringComparison.Ordinal);
+                if (text.Length == 0)
+                    continue;
+
+                run.Text = text;
+                run.InlineImage = null;
+                run.InlineImageWidthEmu = null;
+                run.InlineImageHeightEmu = null;
+                run.InlineOleObject = null;
+                cleanedRuns.Add(run);
+            }
+
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(cleanedRuns);
+        }
+
+        return body;
+    }
+
     public static byte[] Serialize(InCanvasRichClipboardPayload payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
@@ -183,7 +249,9 @@ public static class InCanvasRichClipboardPlanner
                     && !string.IsNullOrWhiteSpace(image.ContentType))
                 .Select(image => new InCanvasRichClipboardImage(
                     image.Bytes!,
-                    image.ContentType!))
+                    image.ContentType!,
+                    image.WidthEmu,
+                    image.HeightEmu))
                 .ToArray();
             var firstImage = imagePayloads?.FirstOrDefault();
             return new InCanvasRichClipboardPayload(
@@ -201,7 +269,8 @@ public static class InCanvasRichClipboardPlanner
                         && !string.IsNullOrWhiteSpace(obj.FileName))
                     .Select(obj => new InCanvasRichClipboardObject(
                         obj.Bytes!,
-                        obj.FileName!))
+                        obj.FileName!,
+                        obj.ClassName))
                     .ToArray());
         }
         catch (JsonException)
@@ -354,11 +423,14 @@ public static class InCanvasRichClipboardPlanner
         {
             ContentType = image.ContentType,
             Bytes = image.Bytes.ToArray(),
+            WidthEmu = image.WidthEmu,
+            HeightEmu = image.HeightEmu,
         }).ToList(),
         ObjectPayloads = payload.GetObjectPayloads().Select(obj => new ClipboardObjectDto
         {
             FileName = obj.FileName,
             Bytes = obj.Bytes.ToArray(),
+            ClassName = obj.ClassName,
         }).ToList(),
     };
 
@@ -389,6 +461,7 @@ public static class InCanvasRichClipboardPlanner
         AutoNumType = paragraph.AutoNumType,
         AutoNumStartAt = paragraph.AutoNumStartAt,
         AutoNumStartAtSpecified = paragraph.AutoNumStartAtSpecified,
+        AutoNumTextTemplate = paragraph.AutoNumTextTemplate,
         MarginLeftEmu = paragraph.MarginLeftEmu,
         IndentEmu = paragraph.IndentEmu,
         BulletColor = ToDto(paragraph.BulletColor),
@@ -416,6 +489,19 @@ public static class InCanvasRichClipboardPlanner
     private static ClipboardRunDto ToDto(Run run) => new ClipboardRunDto
     {
         Text = run.Text,
+        InlineImage = run.InlineImage is null ? null : new ClipboardImageDto
+        {
+            ContentType = run.InlineImage.ContentType,
+            Bytes = run.InlineImage.Bytes.ToArray(),
+            WidthEmu = run.InlineImageWidthEmu,
+            HeightEmu = run.InlineImageHeightEmu,
+        },
+        InlineOleObject = run.InlineOleObject is null ? null : new ClipboardObjectDto
+        {
+            FileName = run.InlineOleObject.FileName,
+            Bytes = run.InlineOleObject.EmbeddedBytes.ToArray(),
+            ClassName = run.InlineOleObject.ClassName,
+        },
         FontFamily = run.FontFamily,
         FontSizePt = run.FontSizePt,
         BaselineOffset = run.BaselineOffset,
@@ -533,6 +619,7 @@ public static class InCanvasRichClipboardPlanner
             AutoNumType = dto.AutoNumType,
             AutoNumStartAt = dto.AutoNumStartAt,
             AutoNumStartAtSpecified = dto.AutoNumStartAtSpecified,
+            AutoNumTextTemplate = dto.AutoNumTextTemplate,
             MarginLeftEmu = dto.MarginLeftEmu,
             IndentEmu = dto.IndentEmu,
             BulletColor = FromDto(dto.BulletColor),
@@ -565,6 +652,23 @@ public static class InCanvasRichClipboardPlanner
         : new Run
         {
             Text = dto.Text ?? string.Empty,
+            InlineImage = dto.InlineImage is { Bytes.Length: > 0 } image
+                ? new ImagePart
+                {
+                    ContentType = image.ContentType ?? "image/png",
+                    Bytes = image.Bytes!,
+                }
+                : null,
+            InlineImageWidthEmu = dto.InlineImage?.WidthEmu,
+            InlineImageHeightEmu = dto.InlineImage?.HeightEmu,
+            InlineOleObject = dto.InlineOleObject is { Bytes.Length: > 0 } obj
+                ? new InlineOleObjectInfo
+                {
+                    EmbeddedBytes = obj.Bytes!,
+                    FileName = obj.FileName ?? "Embedded.bin",
+                    ClassName = obj.ClassName,
+                }
+                : null,
             FontFamily = dto.FontFamily,
             FontSizePt = dto.FontSizePt,
             BaselineOffset = dto.BaselineOffset,
@@ -830,6 +934,7 @@ public static class InCanvasRichClipboardPlanner
         public AutoNumType AutoNumType { get; set; }
         public int AutoNumStartAt { get; set; }
         public bool AutoNumStartAtSpecified { get; set; }
+        public string? AutoNumTextTemplate { get; set; }
         public long? MarginLeftEmu { get; set; }
         public long? IndentEmu { get; set; }
         public ClipboardColorDto? BulletColor { get; set; }
@@ -856,17 +961,22 @@ public static class InCanvasRichClipboardPlanner
     {
         public string? ContentType { get; set; }
         public byte[]? Bytes { get; set; }
+        public long? WidthEmu { get; set; }
+        public long? HeightEmu { get; set; }
     }
 
     private sealed class ClipboardObjectDto
     {
         public string? FileName { get; set; }
         public byte[]? Bytes { get; set; }
+        public string? ClassName { get; set; }
     }
 
     private sealed class ClipboardRunDto
     {
         public string? Text { get; set; }
+        public ClipboardImageDto? InlineImage { get; set; }
+        public ClipboardObjectDto? InlineOleObject { get; set; }
         public string? FontFamily { get; set; }
         public double? FontSizePt { get; set; }
         public int? BaselineOffset { get; set; }

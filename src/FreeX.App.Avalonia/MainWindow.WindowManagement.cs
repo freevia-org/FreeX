@@ -95,10 +95,12 @@ public sealed partial class MainWindow : Window
             return;
 
         _autosaveCoordinator?.NotifyAutosaveSaved();
-        _session.WorkbookChanged -= Session_WorkbookChanged;
+        var previousSession = _session;
+        previousSession.WorkbookChanged -= Session_WorkbookChanged;
         _session = replacement;
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
+        previousSession.Dispose();
         WindowRegistry.RefreshWindowNumbering();
     }
 
@@ -230,6 +232,7 @@ public sealed partial class MainWindow : Window
         // rest of the session.
         HiddenWindows.Remove(this);
         _session.WorkbookChanged -= Session_WorkbookChanged;
+        _session.Dispose();
         WindowRegistry.Unregister(this);
         // If this window was part of a side-by-side pair, clear the pair so the partner window
         // is not left broadcasting to a closed window.

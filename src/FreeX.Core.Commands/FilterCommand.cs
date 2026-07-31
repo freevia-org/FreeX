@@ -90,13 +90,18 @@ public sealed class FilterCommand : IWorkbookCommand
 
         ApplyToStructuredTableIfMatched(sheet);
 
+        WorksheetAutoFilterColumnModel? newAutoFilterColumn = null;
+        if (_allowedValues.Count > 0)
+        {
+            var (nonBlankValues, includeBlank) = SplitBlankSentinel(_allowedValues);
+            newAutoFilterColumn = new WorksheetAutoFilterColumnModel((int)_filterColOffset, nonBlankValues, includeBlank);
+        }
+
         _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
             sheet,
             _range,
             (int)_filterColOffset,
-            _allowedValues.Count == 0
-                ? null
-                : new WorksheetAutoFilterColumnModel((int)_filterColOffset, _allowedValues));
+            newAutoFilterColumn);
 
         // R91-meta-3: a filter can hide/show rows without moving any data, so a banded structured
         // table's stripes must re-flow around the newly-hidden rows exactly like they already do
@@ -131,12 +136,37 @@ public sealed class FilterCommand : IWorkbookCommand
                 .Where(fc => fc.ColumnId != (int)_filterColOffset)
                 .ToList();
             if (_allowedValues.Count > 0)
-                filterColumns.Add(new StructuredTableFilterColumnModel((int)_filterColOffset, _allowedValues));
+            {
+                var (nonBlankValues, includeBlank) = SplitBlankSentinel(_allowedValues);
+                filterColumns.Add(new StructuredTableFilterColumnModel((int)_filterColOffset, nonBlankValues, includeBlank));
+            }
             filterColumns.Sort(static (a, b) => a.ColumnId.CompareTo(b.ColumnId));
 
             sheet.StructuredTables[i] = StructuredTableDesignCommandHelpers.CopyTable(table, filterColumns: filterColumns);
             return;
         }
+    }
+
+    /// <summary>
+    /// R102-commands-filter-blank-sentinel-1: the checklist dropdown represents a selected
+    /// '(Blanks)' entry as a literal "" sentinel inside <see cref="_allowedValues"/> (mirroring
+    /// <see cref="FilterValueFormatter.ToText"/>'s <c>BlankValue =&gt; ""</c>), because a plain
+    /// flat allowed-values list has no separate "include blank" slot of its own. But
+    /// ECMA-376's CT_Filters schema (and every producer including Excel itself) represents
+    /// "include blank cells in this AutoFilter selection" exclusively via the parent
+    /// <c>&lt;filters blank="1"/&gt;</c> attribute -- never via an empty-string
+    /// <c>&lt;filter val=""/&gt;</c> entry, which XlsxWorksheetAutoFilterXmlMapper/
+    /// XlsxStructuredTableWriter would otherwise emit verbatim since they serialize every
+    /// entry in Values unconditionally. Split the "" sentinel out here, at the one choke point
+    /// both the worksheet-AutoFilter and structured-table model-construction call sites in this
+    /// class go through, so neither can forget to convert it into IncludeBlank=true.
+    /// </summary>
+    private static (IReadOnlyList<string> Values, bool IncludeBlank) SplitBlankSentinel(IReadOnlyList<string> allowedValues)
+    {
+        if (!allowedValues.Contains(""))
+            return (allowedValues, false);
+
+        return ([.. allowedValues.Where(value => value.Length != 0)], true);
     }
 
     private static void RecomputeHiddenRows(Sheet sheet, GridRange range)
@@ -708,6 +738,79 @@ internal static class WorksheetAutoFilterColumnSync
     private static bool IsMatchingRange(WorksheetAutoFilterModel autoFilter, GridRange range) =>
         string.Equals(autoFilter.Reference, range.ToString(), StringComparison.OrdinalIgnoreCase);
 }
+
+/// <summary>
+/// R106-commands-autofilter-table-sync-1: mirrors an interactively-applied Top 10/Above-Average/
+/// custom-criterion AutoFilter criterion into a structured table's own
+/// <see cref="StructuredTableModel.FilterColumns"/> -- the same job
+/// <see cref="FilterCommand.ApplyToStructuredTableIfMatched"/> already does for a plain value-list
+/// filter (finding H18) -- whenever <c>range</c> is exactly a structured table's
+/// <see cref="StructuredTableModel.Range"/> (the shape
+/// <c>AutoFilterRangeResolver.TryGetEffectiveAutoFilterRange</c> hands back for a table's own
+/// header-cell filter dropdown). Without this, Top10/Above-Average/Custom-criterion filters applied
+/// from a Table's dropdown hid/showed rows correctly in the live session but were silently dropped
+/// from the table's saved &lt;autoFilter&gt; XML on save/reload -- only the sibling
+/// <see cref="WorksheetAutoFilterColumnSync"/> path was covered for these commands, which is (by
+/// design) a no-op for a table range, since tables carry their own &lt;autoFilter&gt; inside the
+/// table part rather than a worksheet-level one.
+/// </summary>
+internal static class StructuredTableFilterColumnSync
+{
+    /// <summary>
+    /// Replaces (or removes, when <paramref name="newColumn"/> is <c>null</c>) the
+    /// <see cref="StructuredTableFilterColumnModel"/> entry for <paramref name="columnId"/> on the
+    /// structured table whose <see cref="StructuredTableModel.Range"/> exactly matches
+    /// <paramref name="range"/>. Returns a snapshot of the previous
+    /// <see cref="StructuredTableModel.FilterColumns"/> list for undo (via <see cref="Restore"/>), or
+    /// <c>null</c> when no structured table matches <paramref name="range"/> (e.g. the range is a
+    /// plain worksheet AutoFilter range instead).
+    /// </summary>
+    public static StructuredTableFilterColumnSnapshot? Apply(
+        Sheet sheet,
+        GridRange range,
+        int columnId,
+        StructuredTableFilterColumnModel? newColumn)
+    {
+        for (var i = 0; i < sheet.StructuredTables.Count; i++)
+        {
+            var table = sheet.StructuredTables[i];
+            if (!table.Range.Equals(range))
+                continue;
+
+            var previous = new List<StructuredTableFilterColumnModel>(table.FilterColumns);
+
+            var filterColumns = table.FilterColumns
+                .Where(fc => fc.ColumnId != columnId)
+                .ToList();
+            if (newColumn is not null)
+                filterColumns.Add(newColumn);
+            filterColumns.Sort(static (a, b) => a.ColumnId.CompareTo(b.ColumnId));
+
+            sheet.StructuredTables[i] = StructuredTableDesignCommandHelpers.CopyTable(table, filterColumns: filterColumns);
+            return new StructuredTableFilterColumnSnapshot(table.Id, previous);
+        }
+
+        return null;
+    }
+
+    /// <summary>Undoes an <see cref="Apply"/> call, restoring the exact previous list contents.</summary>
+    public static void Restore(Sheet sheet, StructuredTableFilterColumnSnapshot? snapshot)
+    {
+        if (snapshot is not { } value)
+            return;
+        if (!CommandGuards.TryFindStructuredTableIndex(sheet, value.TableId, out var tableIndex))
+            return;
+
+        var table = sheet.StructuredTables[tableIndex];
+        sheet.StructuredTables[tableIndex] = StructuredTableDesignCommandHelpers.CopyTable(
+            table, filterColumns: value.PreviousFilterColumns);
+    }
+}
+
+/// <summary>Snapshot captured by <see cref="StructuredTableFilterColumnSync.Apply"/> for undo.</summary>
+internal readonly record struct StructuredTableFilterColumnSnapshot(
+    int TableId,
+    List<StructuredTableFilterColumnModel> PreviousFilterColumns);
 
 internal readonly struct FilterAllowedValueMatcher
 {

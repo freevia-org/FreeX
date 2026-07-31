@@ -287,6 +287,7 @@ public sealed partial class NativeJsonAdapter
                 PointDataLabelFormats = NonNullChartList(chartDto.PointDataLabelFormats),
                 SeriesRangeDataLabels = NonNullChartList(chartDto.SeriesRangeDataLabels),
                 SeriesOrderOverrides = NonNullChartList(chartDto.SeriesOrderOverrides),
+                SeriesNameOverrides = NonNullChartList(chartDto.SeriesNameOverrides),
                 MultiLevelCategoryXml = NonNullChartList(chartDto.MultiLevelCategoryXml),
                 PointMarkerFormats = NonNullChartList(chartDto.PointMarkerFormats),
                 UseComboLineForSecondarySeries = chartDto.UseComboLineForSecondarySeries,

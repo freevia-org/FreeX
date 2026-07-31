@@ -3231,9 +3231,16 @@ public sealed class WorkbookSessionTests
         sheet.DataValidations.Should().Contain(rule =>
             rule.AppliesTo == sourceRange &&
             rule.Formula1 == "=C1>0");
+        // R102: Custom-formula DV relative references must be AXIS-SWAPPED on a transposed paste,
+        // not uniformly shifted. Source anchor A1, reference C1 is offset (row +0, col +2) from it;
+        // transposing swaps that to (row +2, col +0) from the new anchor D3 => D5. This assertion
+        // previously read "=F3>0" (the pre-fix shifted value); updated for the DataValidationCopySupport
+        // transpose-axis-swap fix (round102, sibling of the ConditionalFormat transpose fix in the
+        // same round) once real Excel's Paste Special > Validation + Transpose semantics were
+        // confirmed to axis-swap relative references exactly like transposed cell formulas do.
         sheet.DataValidations.Should().ContainSingle(rule =>
             rule.AppliesTo == new GridRange(d3, new CellAddress(sheet.Id, 4, 4)) &&
-            rule.Formula1 == "=F3>0" &&
+            rule.Formula1 == "=D5>0" &&
             rule.ErrorTitle == "Source rule");
 
         var undo = session.UndoLastEdit();
@@ -3783,13 +3790,17 @@ public sealed class WorkbookSessionTests
         result.AffectedCells.Should().BeEmpty();
         session.SelectedRange.Should().Be(new GridRange(summaryD3, new CellAddress(summary.Id, 4, 4)));
         session.IsWorkbookGrouped.Should().BeTrue();
+        // R102: same axis-swap as the single-sheet test above -- source anchor A1's C1 reference
+        // (row +0, col +2) becomes (row +2, col +0) from each grouped sheet's own D3 anchor => D5.
+        // Was "=F3>0" (pre-fix shifted value); updated for the DataValidationCopySupport
+        // transpose-axis-swap fix (round102).
         summary.DataValidations.Should().ContainSingle(rule =>
             rule.AppliesTo == new GridRange(summaryD3, new CellAddress(summary.Id, 4, 4)) &&
-            rule.Formula1 == "=F3>0" &&
+            rule.Formula1 == "=D5>0" &&
             rule.ErrorTitle == "Source rule");
         details.DataValidations.Should().ContainSingle(rule =>
             rule.AppliesTo == new GridRange(detailsD3, new CellAddress(details.Id, 4, 4)) &&
-            rule.Formula1 == "=F3>0" &&
+            rule.Formula1 == "=D5>0" &&
             rule.ErrorTitle == "Source rule");
         hidden.DataValidations.Should().ContainSingle(rule =>
             rule.AppliesTo == hiddenRule.AppliesTo &&

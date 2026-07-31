@@ -1,0 +1,232 @@
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using FluentAssertions;
+using Xunit;
+
+namespace FreeX.Core.IO.Tests;
+
+/// <summary>
+/// R101-io-source-package-snapshot-hyperlink-guard: <see cref="XlsxFileAdapter"/>'s patch-safety
+/// fingerprint (<c>WriteDrawingChartFingerprint</c>/<c>WriteDrawingPictureFingerprint</c>/
+/// <c>WriteDrawingTextBoxFingerprint</c>/<c>WriteDrawingShapeFingerprint</c> in
+/// <c>XlsxFileAdapter.SourcePackageSnapshot.cs</c>) does not compare <c>DrawingObjectHyperlink</c>
+/// fields (r97 added the field to <see cref="Model.DrawingShapeModel"/>/<see cref="Model.TextBoxModel"/>/
+/// <see cref="Model.PictureModel"/>; r98 added <see cref="Model.ChartModel"/>'s copy). Both rounds
+/// judged the omission harmless because NO <c>IWorkbookCommand</c> in <c>FreeX.Core.Commands</c> can
+/// currently SET a new hyperlink value onto one of these fields -- every occurrence is either the LOAD
+/// path populating the field from the source package, or a clone/paste/duplicate path copying an
+/// EXISTING object's own <c>Hyperlink</c> value onto its copy (no new data is introduced, so a
+/// cell-patch save that skips the fingerprint-guarded full rebuild can never disagree with what's
+/// already on disk).
+/// <para>
+/// AUDIT (this round): re-verified -- the premise still holds today (see the enumeration this test
+/// performs below). But leaving that premise unchecked is a latent trap: the day a real "Edit Object
+/// Hyperlink" command is added, a plain cell edit elsewhere in the same save would still take the cheap
+/// cell-patch path (which copies the drawing/chart parts byte-for-byte) and silently discard the new
+/// hyperlink, because nothing in the patch-safety fingerprint would detect the change. This test is that
+/// guard: it fails the moment any file under <c>src/FreeX.Core.Commands</c> assigns something OTHER than
+/// a plain copy-forward of an existing object's own <c>Hyperlink</c> property (e.g.
+/// <c>Hyperlink = shape.Hyperlink</c>) to a <c>Hyperlink</c> property -- signaling that
+/// <c>WriteDrawingChartFingerprint</c>/<c>WriteDrawingPictureFingerprint</c>/
+/// <c>WriteDrawingTextBoxFingerprint</c>/<c>WriteDrawingShapeFingerprint</c> must be updated to include
+/// the new field BEFORE that command can safely ship.
+/// </para>
+/// </summary>
+public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
+{
+    // Matches a `Hyperlink = <rhs>` assignment (object-initializer style `Hyperlink = expr,`, a plain
+    // statement `x.Hyperlink = expr;`, or a LAST member of an object/`with`-initializer
+    // `Hyperlink = expr }` with no trailing comma), capturing the right-hand side. Word-bounded so it
+    // never matches `HyperlinkMetadata = ...` or `Hyperlinks[...] = ...` (unrelated cell-hyperlink
+    // fields). The negative lookahead excludes `Hyperlink => ...` (a switch/pattern arm, e.g.
+    // `ConditionalFormulaScalarFunctionKind.Hyperlink => ...`) and `Hyperlink == ...` (an equality
+    // comparison), neither of which is an assignment.
+    // The terminator class includes `}` (R102-multiline-hyperlink-guard-scan) so a last-member
+    // initializer entry with no trailing comma is still recognized as terminated, and the pattern is
+    // matched against the WHOLE FILE TEXT (not line-by-line) so a multi-line RHS -- e.g. a wrapped
+    // ternary `Hyperlink = flag\n    ? new DrawingObjectHyperlink(a, b, c)\n    : null;` -- is not
+    // silently skipped just because its terminator lands on a different line than `Hyperlink =`.
+    private static readonly Regex HyperlinkAssignmentPattern = new(
+        @"\bHyperlink\s*=(?![=>])\s*([^,;}]+)[,;}]",
+        RegexOptions.Compiled);
+
+    // FreeX.Core.Commands files known to declare/assign an UNRELATED "Hyperlink" identifier that has
+    // nothing to do with DrawingObjectHyperlink/ChartModel.Hyperlink -- SortCommand's SortCellPayload
+    // carries a per-cell `string? Hyperlink` (the plain cell hyperlink TARGET string, mirroring
+    // sheet.Hyperlinks) purely so a row reorder can move it along with the rest of the cell's data; it
+    // is never a DrawingObjectHyperlink and is out of scope for this guard.
+    private static readonly System.Collections.Generic.HashSet<string> UnrelatedHyperlinkIdentifierFiles = new(
+        StringComparer.OrdinalIgnoreCase)
+    {
+        "SortCommand.cs"
+    };
+
+    // A pure copy-forward of an existing object's own Hyperlink property, e.g. `shape.Hyperlink`,
+    // `chartPart.Hyperlink`, `picturePart.Hyperlink` -- introduces no new data, so it can never desync
+    // the patch-safety fingerprint (the source object's own Hyperlink already went through the exact
+    // same fingerprint gap on ITS OWN save, which is a pre-existing, already-accepted no-op case: the
+    // value being copied was never itself settable by a command either).
+    private static readonly Regex AllowedCopyForwardRhs = new(
+        @"^\w+(\.\w+)*\.Hyperlink$",
+        RegexOptions.Compiled);
+
+    // REVIEWED-AND-SAFE (R106-drawing-object-hyperlink-duplicate-rebase audit): this guard fired
+    // exactly as designed when DuplicateSheetDrawingCloner.CopyDrawingCollections started assigning
+    // `cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name)` --
+    // a computed (non-copy-forward) value, breaking the "no command can SET a hyperlink" premise this
+    // test's class doc describes. AUDITED: still NOT a patch-safety hole, for a reason independent of
+    // the fingerprint gap this guard polices. DuplicateSheetCommand adds a brand-new sheet that has no
+    // corresponding worksheet part in the ORIGINAL source package snapshot; XlsxFileAdapter's cell-patch
+    // eligibility check (PackageAllowsCellPatchSave in XlsxFileAdapter.SourcePackageSnapshot.cs) walks
+    // every live sheet and requires a source-package worksheet path for each one via
+    // worksheetPathMap.SheetPathsByName -- the new sheet has none, so that walk fails with
+    // "package_guard_sheet_path_missing" and blocks cell-patch save for the WHOLE workbook, forcing the
+    // full ClosedXML rebuild (which recomputes the drawing/chart XML from the current model, including
+    // the now-rebased Hyperlink) every single time a just-duplicated sheet is still present at save time.
+    // The cheap cell-patch path (the one this guard's fingerprint actually gates) is therefore
+    // categorically unreachable for this assignment -- the same conclusion R97_DrawingObjectHyperlinkCopyTests'
+    // class doc already draws for the sibling verbatim-copy-forward Hyperlink assignments this cloner
+    // makes. So the fingerprint methods do NOT need to start comparing Hyperlink for this case; only this
+    // allowlist needed updating, so the guard keeps working for the NEXT command that sets a
+    // drawing/chart Hyperlink outside of DuplicateSheetDrawingCloner's sheet-duplication path (where the
+    // same argument would not apply).
+    // Note: HyperlinkAssignmentPattern's RHS capture group ([^,;}]+) stops at the FIRST comma, so for a
+    // multi-argument call like `RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name)`
+    // the captured `rhs` is only the truncated `RewriteSameSheetHyperlinkTarget(cloned.Hyperlink` prefix
+    // (no closing paren, no trailing arguments) -- matched here accordingly.
+    private static readonly Regex AllowedRewriteSameSheetHyperlinkTargetRhs = new(
+        @"^RewriteSameSheetHyperlinkTarget\(\w+(\.\w+)*\.Hyperlink$",
+        RegexOptions.Compiled);
+
+    [Fact]
+    public void NoCommandAssignsANewDrawingOrChartHyperlinkValue_WithoutUpdatingThePatchSafetyFingerprint()
+    {
+        var commandsDirectory = Path.Combine(FindRepositoryRoot(), "src", "FreeX.Core.Commands");
+        Directory.Exists(commandsDirectory).Should().BeTrue($"expected {commandsDirectory} to exist");
+
+        var violations = ScanForViolations(commandsDirectory);
+
+        violations.Should().BeEmpty(
+            "no FreeX.Core.Commands command may set a new drawing/chart Hyperlink value until the " +
+            "patch-safety fingerprint covers it (see this test's class-level doc comment):\n" +
+            string.Join("\n", violations));
+    }
+
+    /// <summary>
+    /// The actual production scan: enumerates every *.cs file under <paramref name="commandsDirectory"/>
+    /// and reports every non-copy-forward <c>Hyperlink =</c> assignment. Extracted so the R102 regression
+    /// tests below can drive this EXACT code path (not a hand-rolled duplicate that could silently drift
+    /// out of sync with it) against synthetic fixture files.
+    /// </summary>
+    private static System.Collections.Generic.List<string> ScanForViolations(string commandsDirectory)
+    {
+        var violations = new System.Collections.Generic.List<string>();
+
+        foreach (var filePath in Directory.EnumerateFiles(commandsDirectory, "*.cs", SearchOption.AllDirectories))
+        {
+            if (filePath.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") ||
+                filePath.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
+                continue;
+
+            if (UnrelatedHyperlinkIdentifierFiles.Contains(Path.GetFileName(filePath)))
+                continue;
+
+            // Matched against the FULL FILE TEXT (not File.ReadAllLines + per-line matching) so a
+            // multi-line RHS is still caught even when its terminator (`,`/`;`/`}`) lands on a
+            // different line than the `Hyperlink =` token itself (R102-multiline-hyperlink-guard-scan).
+            // Comments are stripped first: once matching spans the whole file, a `//` comment (or a
+            // doc-comment example) that happens to mention "Hyperlink = ..." with no terminator on its
+            // own line would otherwise bleed into the NEXT real code line's terminator and get
+            // misreported as a violation (or, worse, swallow a real one). Line structure (and therefore
+            // line-number bookkeeping below) is preserved by blanking rather than deleting text.
+            var text = StripCommentsPreservingLineNumbers(File.ReadAllText(filePath));
+            foreach (Match match in HyperlinkAssignmentPattern.Matches(text))
+            {
+                var rhs = match.Groups[1].Value.Trim();
+                if (AllowedCopyForwardRhs.IsMatch(rhs) || AllowedRewriteSameSheetHyperlinkTargetRhs.IsMatch(rhs))
+                    continue;
+
+                var lineNumber = text.AsSpan(0, match.Index).Count('\n') + 1;
+                var snippet = match.Value.Trim().Replace('\n', ' ').Replace('\r', ' ');
+
+                violations.Add(
+                    $"{Path.GetFileName(filePath)}:{lineNumber}: `{snippet}` -- assigns a " +
+                    "non-copy-forward value to a Hyperlink property. If this is a NEW " +
+                    "DrawingObjectHyperlink/ChartModel.Hyperlink mutation capability, " +
+                    "WriteDrawingChartFingerprint/WriteDrawingPictureFingerprint/" +
+                    "WriteDrawingTextBoxFingerprint/WriteDrawingShapeFingerprint in " +
+                    "XlsxFileAdapter.SourcePackageSnapshot.cs must be updated to compare the " +
+                    "Hyperlink field BEFORE this command ships, or a cell-patch save elsewhere in " +
+                    "the same file will silently discard the hyperlink change.");
+            }
+        }
+
+        return violations;
+    }
+
+    // Matches a `/* ... */` block comment (including `/** ... */` doc-comment blocks), across lines.
+    private static readonly Regex BlockCommentPattern = new(@"/\*.*?\*/", RegexOptions.Compiled | RegexOptions.Singleline);
+
+    // Matches a `//` (or `///`) line comment to end-of-line. The negative lookbehind for `:` avoids
+    // treating a `://` inside a string literal (e.g. a `"https://..."` URL) as a comment start -- good
+    // enough for this heuristic scan since none of today's files pair a URL literal with an unterminated
+    // `Hyperlink =` on the same line.
+    private static readonly Regex LineCommentPattern = new(@"(?<!:)//.*", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Blanks out comment text so it can never be mistaken for code, while preserving every original
+    /// newline (and therefore line count) so line-number reporting on the caller's match indices stays
+    /// accurate.
+    /// </summary>
+    private static string StripCommentsPreservingLineNumbers(string text)
+    {
+        text = BlockCommentPattern.Replace(text, m => new string('\n', m.Value.Count(c => c == '\n')));
+        text = LineCommentPattern.Replace(text, string.Empty);
+        return text;
+    }
+
+    /// <summary>
+    /// Internal seam used by <see cref="R102_DrawingChartHyperlinkPatchSafetyGuardMultilineScanTests"/>
+    /// to drive the real scan against synthetic fixture directories.
+    /// </summary>
+    internal static System.Collections.Generic.List<string> ScanForViolationsForTesting(string commandsDirectory)
+        => ScanForViolations(commandsDirectory);
+
+    /// <summary>
+    /// No-regression sibling: proves the scan itself actually inspects real files and isn't vacuously
+    /// passing over an empty/misconfigured directory enumeration.
+    /// </summary>
+    [Fact]
+    public void Scan_ActuallyExaminesKnownCopyForwardSites()
+    {
+        var commandsDirectory = Path.Combine(FindRepositoryRoot(), "src", "FreeX.Core.Commands");
+        var clonerPath = Path.Combine(commandsDirectory, "DuplicateSheetDrawingCloner.cs");
+        File.Exists(clonerPath).Should().BeTrue();
+
+        var content = File.ReadAllText(clonerPath);
+        content.Should().Contain("Hyperlink = shape.Hyperlink");
+        content.Should().Contain("Hyperlink = chart.Hyperlink");
+
+        // Confirm the allowed-copy-forward regex actually matches these known-safe sites (otherwise
+        // the main guard test above would be flagging them as false-positive violations).
+        AllowedCopyForwardRhs.IsMatch("shape.Hyperlink").Should().BeTrue();
+        AllowedCopyForwardRhs.IsMatch("chart.Hyperlink").Should().BeTrue();
+        AllowedCopyForwardRhs.IsMatch("new DrawingObjectHyperlink(target, mode, tooltip)").Should().BeFalse();
+        AllowedCopyForwardRhs.IsMatch("null").Should().BeFalse();
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root (FreeX.slnx) above " + AppContext.BaseDirectory);
+    }
+}

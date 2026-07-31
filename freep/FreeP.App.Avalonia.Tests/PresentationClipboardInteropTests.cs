@@ -141,6 +141,39 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public void Copy_groupedChild_ExportsTheSelectedDescendant()
+    {
+        var editor = CreateEmptyEditor();
+        var child = new SlideShape
+        {
+            Id = 72,
+            Name = "Grouped clipboard child",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            TextBody = BuildTextBody("Grouped child"),
+        };
+        var group = new SlideShape { Id = 71, Kind = SlideShapeKind.Group };
+        group.Children.Add(child);
+        editor.CurrentSlide!.Shapes.Add(group);
+        editor.Select(child.Id);
+
+        var content = PresentationClipboardContentFactory.CreateSelection(
+            editor,
+            static (_, _, _) => [],
+            "test-owner");
+
+        content.Should().NotBeNull();
+        var decoded = PresentationClipboardSelectionCodec.Deserialize(content!.SelectionBytes!);
+        decoded.Should().ContainSingle();
+        decoded[0].Id.Should().Be(child.Id);
+        decoded[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Grouped child");
+    }
+
+    [Fact]
     public async Task Avalonia_data_transfer_maps_custom_bitmap_and_text_formats()
     {
         await Session.Dispatch(async () =>
@@ -233,6 +266,35 @@ public sealed class PresentationClipboardInteropTests
 
             content.RtfBytes.Should().Equal(rtf);
             content.HasRichText.Should().BeTrue();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Avalonia_data_transfer_round_trips_wpf_xamlpackage_platform_format()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var xamlPackage = Encoding.UTF8.GetBytes("wpf-xamlpackage");
+            var transfer = AvaloniaPresentationSystemClipboard.BuildDataTransfer(
+                new PresentationClipboardContent(XamlPackageBytes: xamlPackage),
+                out var bitmap);
+            try
+            {
+                bitmap.Should().BeNull();
+                transfer.Formats.Should().Contain(
+                    OperatingSystem.IsWindows()
+                        ? AvaloniaPresentationSystemClipboard.ExternalXamlPackageWindowsFormat
+                        : AvaloniaPresentationSystemClipboard.ExternalXamlPackageLinuxFormat);
+
+                var content = await AvaloniaPresentationSystemClipboard.ReadDataTransferAsync(transfer);
+
+                content.XamlPackageBytes.Should().Equal(xamlPackage);
+                content.HasXamlPackage.Should().BeTrue();
+            }
+            finally
+            {
+                ((IDisposable)transfer).Dispose();
+            }
         }, CancellationToken.None);
     }
 
@@ -437,6 +499,25 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task External_Rtf_picture_preserves_display_dimensions()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi{\pict\pngblip\picwgoal1440\pichgoal720 "
+                    + Convert.ToHexString(Png) + "}}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
+        var picture = editor.CurrentSlide!.Shapes.Single();
+        picture.ExtentCxEmu.Should().Be(914_400);
+        picture.ExtentCyEmu.Should().Be(457_200);
+    }
+
+    [Fact]
     public async Task External_Rtf_multiple_pictures_are_all_pasted_as_editable_shapes()
     {
         var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };
@@ -478,6 +559,7 @@ public sealed class PresentationClipboardInteropTests
         objectShape.Kind.Should().Be(SlideShapeKind.Ole);
         objectShape.OleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
         objectShape.OleObject.EmbeddedExtension.Should().Be("docx");
+        objectShape.OleObject.ProgId.Should().Be("Word.Document.12");
         editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
             .Select(run => run.Text)
             .Should().ContainSingle()
@@ -494,7 +576,9 @@ public sealed class PresentationClipboardInteropTests
                 XamlPackageBytes: CreateXamlPackage("""
                     <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
                       <Table><TableRowGroup><TableRow>
-                        <TableCell><Paragraph><Italic>Q1</Italic></Paragraph></TableCell>
+                        <TableCell Background="#FFF2F2F2" Padding="4,2,6,8"
+                                   BorderBrush="#FF1F4E79" BorderThickness="1,2,3,4"
+                                   VerticalContentAlignment="Center"><Paragraph><Hyperlink NavigateUri="https://example.test/q1"><Italic>Q1</Italic></Hyperlink></Paragraph></TableCell>
                         <TableCell><Paragraph>42</Paragraph></TableCell>
                       </TableRow></TableRowGroup></Table>
                     </FlowDocument>
@@ -513,9 +597,130 @@ public sealed class PresentationClipboardInteropTests
         shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
             .Single().Text.Should().Be("Q1");
         shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
+            .Single().Hyperlink!.Url.Should().Be("https://example.test/q1");
+        shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
             .Single().Italic.Should().BeTrue();
+        var firstCell = shape.Table.Rows[0].Cells[0];
+        firstCell.Fill.Should().BeOfType<ShapeFill.Solid>().Which.Color.Resolved
+            .Should().Be(SrgbColor.FromRgb(0xF2F2F2));
+        firstCell.Anchor.Should().Be(TableCellAnchor.Middle);
+        firstCell.InsetLeftPt.Should().Be(3);
+        firstCell.InsetBottomPt.Should().Be(6);
+        firstCell.Borders!.Left.Should().BeOfType<ShapeOutline.Visible>().Which.WidthPt.Should().Be(0.75);
+        firstCell.Borders.Bottom.Should().BeOfType<ShapeOutline.Visible>().Which.WidthPt.Should().Be(3);
         shape.Table.Rows[0].Cells[1].TextBody!.Paragraphs.Single().Runs
             .Single().Text.Should().Be("42");
+    }
+
+    [Fact]
+    public async Task XamlPackage_list_preserves_numbering_style()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage("""
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                                  xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                      <FlowDocument.Resources>
+                        <ResourceDictionary>
+                          <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
+                          <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                          <sys:Double x:Key="BodySize">18</sys:Double>
+                          <Style x:Key="ListBase">
+                            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                            <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
+                            <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                          </Style>
+                          <Style x:Key="ListText" BasedOn="{StaticResource ListBase}">
+                            <Setter Property="FontWeight" Value="Bold" />
+                          </Style>
+                        </ResourceDictionary>
+                      </FlowDocument.Resources>
+                      <List MarkerStyle="UpperLatin" StartIndex="4">
+                        <ListItem><Paragraph Style="{StaticResource ListText}">Four</Paragraph></ListItem>
+                        <ListItem><Paragraph>Five</Paragraph></ListItem>
+                      </List>
+                    </FlowDocument>
+                    """)),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+        var body = editor.CurrentSlide!.Shapes.Single().TextBody!;
+        body.Paragraphs.Should().HaveCount(2);
+        body.Paragraphs[0].BulletKind.Should().Be(BulletKind.Auto);
+        body.Paragraphs[0].AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
+        body.Paragraphs[0].AutoNumStartAt.Should().Be(4);
+        body.Paragraphs[0].Runs.Single().Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5597));
+        body.Paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
+        body.Paragraphs[0].Runs.Single().FontSizePt.Should().Be(13.5);
+        body.Paragraphs[0].Runs.Single().Bold.Should().BeTrue();
+        body.Paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task XamlPackage_preserves_baseline_alignment()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage("""
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                      <Paragraph>
+                        <Run Text="base" />
+                        <Run BaselineAlignment="Superscript" Text="up" />
+                        <Run BaselineAlignment="Subscript" Text="down" />
+                      </Paragraph>
+                    </FlowDocument>
+                    """)),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single().Runs
+            .Select(run => run.BaselineOffset)
+            .Should().Equal(null, 10_000, -10_000);
+    }
+
+    [Fact]
+    public async Task XamlPackage_preserves_flow_direction()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" FlowDirection=\"RightToLeft\"><Paragraph><Run Text=\"אבג\"/><Run FlowDirection=\"LeftToRight\" Text=\"LTR\"/></Paragraph></FlowDocument>")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        var paragraph = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single();
+        paragraph.RightToLeft.Should().BeTrue();
+        paragraph.Runs.Select(run => run.RightToLeft).Should().Equal(true, false);
+    }
+
+    [Fact]
+    public async Task XamlPackage_preserves_text_alignment()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" TextAlignment=\"Center\"><Paragraph>centered</Paragraph><Paragraph TextAlignment=\"Right\">right</Paragraph></FlowDocument>")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Select(paragraph => paragraph.Align)
+            .Should().Equal(TextAlign.Center, TextAlign.Right);
     }
 
     [Fact]
@@ -553,7 +758,7 @@ Header\cell Value\cell\row}")),
                 XamlPackageBytes: CreateXamlPackage(
                     """
                     <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-                      <BlockUIContainer><Image Source="Images/pasted.png" /></BlockUIContainer>
+                      <BlockUIContainer><Image Source="Images/pasted.png" Width="96" Height="48" /></BlockUIContainer>
                     </FlowDocument>
                     """,
                     ("Images/pasted.png", imageBytes))),
@@ -568,6 +773,8 @@ Header\cell Value\cell\row}")),
         picture.Kind.Should().Be(SlideShapeKind.Picture);
         picture.Picture!.ContentType.Should().Be("image/png");
         picture.Picture.Bytes.Should().Equal(imageBytes);
+        picture.ExtentCxEmu.Should().Be(914400);
+        picture.ExtentCyEmu.Should().Be(457200);
     }
 
     [Fact]

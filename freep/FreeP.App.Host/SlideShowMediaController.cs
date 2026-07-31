@@ -212,7 +212,7 @@ public sealed class SlideShowMediaController
         _slideDipH = slideDipH;
         _activeSlide = slide;
 
-        foreach (var shape in slide.Shapes)
+        foreach (var shape in ShapeTreeLookup.Enumerate(slide))
         {
             if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
                 continue;
@@ -252,7 +252,7 @@ public sealed class SlideShowMediaController
 
         foreach (var slot in _slots)
         {
-            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == slot.ShapeId);
+            var shape = ShapeTreeLookup.Find(slide, slot.ShapeId);
             if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
                 continue;
 

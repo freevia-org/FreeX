@@ -18,17 +18,16 @@ public sealed class TabsDialog : FreeWDialogWindow
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;
 
     private TabsDialogState _state;
-    private readonly ListBox _stops = new() { MinHeight = 110, MinWidth = 260 };
-    private readonly TextBox _position = new() { Width = 100 };
+    private readonly ListBox _stops = new() { Height = 120, MinWidth = 150 };
+    private readonly TextBox _position = new() { MinWidth = 120 };
     private readonly ComboBox _alignment = new() { MinWidth = 120 };
     private readonly ComboBox _leader = new() { MinWidth = 120 };
-    private readonly TextBox _defaultTab = new() { Width = 100 };
-    private readonly TextBlock _status = new() { IsVisible = false, Foreground = Brushes.Red };
+    private readonly TextBox _defaultTab = new() { MinWidth = 120 };
 
     public TabsDialog(IReadOnlyList<TabStop> tabStops, double defaultTabStopPt)
     {
         Title = "Tabs";
-        Width = 420;
+        Width = 340;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -52,16 +51,24 @@ public sealed class TabsDialog : FreeWDialogWindow
             _leader.SelectedIndex = selection.LeaderIndex;
         };
 
-        var outer = new StackPanel { Margin = new Thickness(16) };
-        outer.Children.Add(new TextBlock { Text = "Tab stop position:", FontWeight = FontWeight.SemiBold });
-        outer.Children.Add(_stops);
+        var grid = new Grid { Margin = new Thickness(14) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var row = 0; row < 7; row++)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        var editGrid = TwoColumnGrid();
-        AddRow(editGrid, 0, "Position:", _position);
-        AddRow(editGrid, 1, "Alignment:", _alignment);
-        AddRow(editGrid, 2, "Leader:", _leader);
-        AddRow(editGrid, 3, "Default tabs:", _defaultTab);
-        outer.Children.Add(editGrid);
+        AddRow(grid, 0, "Tab stop position (pt):", _position);
+        AddRow(grid, 1, "Stops:", _stops);
+        AddRow(grid, 2, "Alignment:", _alignment);
+        AddRow(grid, 3, "Leader:", _leader);
+        AddRow(grid, 4, "Default tab stops (pt):", _defaultTab);
+
+        // Keep the Avalonia grid's fractional row rounding aligned with the WPF authority. The
+        // shared four-pixel row margins remain the default; these are only the targeted one-pixel
+        // compensations needed to prevent drift through the compact control stack.
+        _position.Margin = new Thickness(0, 4, 0, 3);
+        _alignment.Margin = new Thickness(0, 4, 0, 3);
+        _defaultTab.Margin = new Thickness(0, 4, 0, 5);
 
         var set = Button("Set", (_, _) => SetStop());
         var clear = Button("Clear", (_, _) =>
@@ -74,16 +81,35 @@ public sealed class TabsDialog : FreeWDialogWindow
             _state = TabsDialogPlanner.ClearAll(_state);
             RefreshRows(selectedIndex: -1);
         });
-        outer.Children.Add(ButtonRow(set, clear, clearAll));
+        var actions = AvaloniaDialogButtonRowFactory.CreateRow(
+            [set, clear, clearAll],
+            new Thickness(0, 8, 0, 0),
+            AvaloniaCompactDialogChrome.WindowsStyle with { ActionSpacing = 6 });
+        actions.HorizontalAlignment = HorizontalAlignment.Left;
+        Grid.SetRow(actions, 5);
+        Grid.SetColumn(actions, 1);
+        grid.Children.Add(actions);
 
-        outer.Children.Add(_status);
-        var ok = Button("OK", (_, _) => Accept());
-        ok.IsDefault = true;
-        var cancel = Button("Cancel", (_, _) => Close(null));
-        cancel.IsCancel = true;
-        outer.Children.Add(ButtonRow(ok, cancel));
-        Content = outer;
+        var buttons = AvaloniaDialogButtonRowFactory.CreateOkCancel(
+            Accept,
+            () => Close(null),
+            buttonWidth: 72,
+            rowMargin: new Thickness(0, 10, 0, 0));
+        Grid.SetRow(buttons, 6);
+        Grid.SetColumn(buttons, 1);
+        grid.Children.Add(buttons);
+        Content = grid;
 
+        Opened += (_, _) =>
+        {
+            // Avalonia's TextBox template contributes seven extra pixels on this route after the
+            // shared chrome pass. WPF's authority TextBox is 26 px high; apply that host-template
+            // compensation after the shared pass so the grid rows and action rows line up as one unit.
+            var textBoxStyle = AvaloniaCompactDialogChrome.WindowsStyle with { TextBoxHeight = 26 };
+            AvaloniaCompactDialogChrome.ApplyTextBox(_position, textBoxStyle);
+            AvaloniaCompactDialogChrome.ApplyTextBox(_defaultTab, textBoxStyle);
+            AvaloniaCompactDialogChrome.FocusAndSelect(_position);
+        };
         KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
@@ -115,25 +141,30 @@ public sealed class TabsDialog : FreeWDialogWindow
             ApplyResult(editor, result);
     }
 
-    private void SetStop()
+    private async void SetStop()
     {
         var request = new TabsDialogSetRequest(_position.Text, _alignment.SelectedIndex, _leader.SelectedIndex);
         if (!TabsDialogPlanner.TrySetStop(_state, request, DialogCulture, out var plan, out var error))
         {
-            ShowStatus(TabsDialogPlanner.ValidationMessageFor(error));
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                TabsDialogPlanner.ValidationMessageFor(error),
+                Title ?? "Tabs");
             return;
         }
 
         _state = plan!.State;
         RefreshRows(plan.SelectedIndex);
-        _status.IsVisible = false;
     }
 
-    private void Accept()
+    private async void Accept()
     {
         if (!TabsDialogPlanner.TryBuildResult(_state, _defaultTab.Text, DialogCulture, out var result, out var error))
         {
-            ShowStatus(TabsDialogPlanner.ValidationMessageFor(error));
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                this,
+                TabsDialogPlanner.ValidationMessageFor(error),
+                Title ?? "Tabs");
             return;
         }
 
@@ -146,23 +177,8 @@ public sealed class TabsDialog : FreeWDialogWindow
         _stops.SelectedIndex = selectedIndex >= 0 && selectedIndex < _state.Rows.Count ? selectedIndex : -1;
     }
 
-    private void ShowStatus(string message)
-    {
-        _status.Text = message;
-        _status.IsVisible = true;
-    }
-
-    private static Grid TwoColumnGrid()
-    {
-        var grid = new Grid { Margin = new Thickness(0, 10, 0, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        return grid;
-    }
-
     private static void AddRow(Grid grid, int row, string label, Control control)
     {
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var text = new TextBlock
         {
             Text = label,
@@ -178,25 +194,19 @@ public sealed class TabsDialog : FreeWDialogWindow
         grid.Children.Add(control);
     }
 
-    private static StackPanel ButtonRow(params Button[] buttons)
-    {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0)
-        };
-        foreach (var button in buttons)
-            row.Children.Add(button);
-        return row;
-    }
-
     private static Button Button(string text, EventHandler<RoutedEventArgs> click)
     {
-        var button = new Button { Content = text, MinWidth = 76, Margin = new Thickness(6, 0, 0, 0) };
+        var button = new Button { Content = text, MinWidth = 72 };
+        AvaloniaCompactDialogChrome.ApplyButton(button, AvaloniaCompactDialogChrome.WindowsStyle, 72);
         button.Click += click;
         return button;
     }
+
+    internal TextBox PositionBoxForTest => _position;
+    internal TextBox DefaultTabStopBoxForTest => _defaultTab;
+    internal ListBox StopsForTest => _stops;
+    internal ComboBox AlignmentBoxForTest => _alignment;
+    internal ComboBox LeaderBoxForTest => _leader;
 }
 
 public sealed class BordersAndShadingDialog : FreeWDialogWindow

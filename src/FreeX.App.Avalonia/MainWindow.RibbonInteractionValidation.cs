@@ -228,7 +228,7 @@ public sealed partial class MainWindow
         _sheetTabsHost.Content = null;
         _activeCellBorder = null;
         if (replaceSession || _session.Workbook.Sheets.Count == 0)
-            _session = CreateDisposableRibbonSession();
+            ReplaceSession(CreateDisposableRibbonSession());
         _selectedDrawingObjectKind = null;
         _selectedDrawingObjectId = null;
         _ribbonContextSource.OnSelectionCleared();
@@ -248,7 +248,6 @@ public sealed partial class MainWindow
         try
         {
             CloseOwnedWindows(validationWindow.OwnedWindows.ToArray());
-            validationWindow._session = CreateDisposableRibbonSession();
             if (validationWindow.IsVisible)
                 validationWindow.Close();
             validationWindow.Content = null;

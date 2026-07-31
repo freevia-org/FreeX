@@ -40,9 +40,17 @@ public sealed partial class XlsxFileAdapter
         using var sourceStream = sourcePackage.OpenRead();
         using var sourceArchive = new ZipArchive(sourceStream, ZipArchiveMode.Read, leaveOpen: false);
         using var generatedArchive = new ZipArchive(generatedPackage, ZipArchiveMode.Update, leaveOpen: true);
-        var context = XlsxSourcePackagePreservationContext.TryCreate(sourceArchive, generatedArchive);
+        var context = XlsxSourcePackagePreservationContext.TryCreate(
+            sourceArchive,
+            generatedArchive,
+            workbook,
+            sourcePackage.SourceSheetIdsByLocalId);
         var sourceParts = InspectSourcePackageParts(sourceArchive);
-        var removedWorksheetPackageParts = GetExcludedWorksheetPackagePartPaths(sourceArchive, context, workbook);
+        var removedWorksheetPackageParts = GetExcludedWorksheetPackagePartPaths(
+            sourceArchive,
+            context,
+            workbook,
+            sourcePackage.SourceSheetIdsByLocalId ?? []);
         var excludedSourceParts = removedWorksheetPackageParts
             .Concat(XlsxWorksheetThreadedCommentMapper.GetSourcePackagePartExclusions(sourceArchive, workbook))
             .Concat(XlsxDigitalSignaturePackagePolicy.GetEditedSaveExclusions(sourceArchive))
@@ -195,24 +203,41 @@ public sealed partial class XlsxFileAdapter
     private static IReadOnlySet<string> GetExcludedWorksheetPackagePartPaths(
         ZipArchive sourceArchive,
         XlsxSourcePackagePreservationContext? context,
-        Workbook workbook)
+        Workbook workbook,
+        IReadOnlyList<SheetId> sourceSheetIdsByLocalId)
     {
         var excludedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (context is null)
             return excludedPaths;
 
+        // R102-io-rename-worksheet-exclusion-1: context.SourceSheets is keyed by each sheet's name AS
+        // LOADED, while context.TargetSheets is keyed by its name in the FRESHLY GENERATED package --
+        // i.e. AFTER any in-session rename has already been applied and re-serialized. A plain lookup
+        // of the old (load-time) name against the new-name-keyed dictionary therefore fails for every
+        // renamed sheet, exactly like a genuine delete, and every part that survives only via this
+        // source-preservation passthrough (e.g. a legacy queryTable/"Get External Data" binding, which
+        // FreeX has no in-model representation of at all) gets silently dropped on save whenever its
+        // sheet is renamed. Resolve each load-time name to its CURRENT name first, via the same
+        // rename-stable Sheet.Id identity XlsxWorkbookMetadataPreserver's defined-name-scope remap
+        // already relies on (sourceSheetIdsByLocalId) -- a sheet that still exists keeps its Sheet.Id
+        // across any number of renames, so looking that Id up in the live workbook recovers its
+        // current name regardless of how it's been renamed since load. A sheet whose Sheet.Id is gone
+        // from the live workbook has genuinely been deleted, and correctly falls through unresolved.
+        var currentNameByLoadTimeName = ResolveCurrentSheetNamesByLoadTimeName(context, workbook, sourceSheetIdsByLocalId);
+
         var sourceWorksheetPaths = context.SourceSheets
             .Select(pair => new
             {
                 pair.Key,
-                SourcePath = XlsxPackagePath.NormalizePackagePath(pair.Value)
+                SourcePath = XlsxPackagePath.NormalizePackagePath(pair.Value),
+                CurrentName = currentNameByLoadTimeName.TryGetValue(pair.Key, out var mapped) ? mapped : pair.Key
             })
             .Where(pair => IsWorksheetPartPath(pair.SourcePath))
             .ToList();
 
         foreach (var sourceSheet in sourceWorksheetPaths)
         {
-            if (!context.TargetSheets.TryGetValue(sourceSheet.Key, out var targetPath) ||
+            if (!context.TargetSheets.TryGetValue(sourceSheet.CurrentName, out var targetPath) ||
                 !string.Equals(
                     sourceSheet.SourcePath,
                     XlsxPackagePath.NormalizePackagePath(targetPath),
@@ -224,7 +249,7 @@ public sealed partial class XlsxFileAdapter
         }
 
         var removedWorksheetPaths = sourceWorksheetPaths
-            .Where(pair => !context.TargetSheets.ContainsKey(pair.Key))
+            .Where(pair => !context.TargetSheets.ContainsKey(pair.CurrentName))
             .Select(pair => pair.SourcePath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (removedWorksheetPaths.Count == 0)
@@ -235,7 +260,7 @@ public sealed partial class XlsxFileAdapter
         // second loop — O(N²) archive reads for N retained sheets. We instead memoize each retained sheet's
         // dep set here and derive the "outside this sheet" predicate from reference-count data.
         var retainedDepsBySheetPath = sourceWorksheetPaths
-            .Where(pair => context.TargetSheets.ContainsKey(pair.Key))
+            .Where(pair => context.TargetSheets.ContainsKey(pair.CurrentName))
             .ToDictionary(
                 pair => pair.SourcePath,
                 pair => (IReadOnlySet<string>)GetRelationshipDependencyPaths(sourceArchive, pair.SourcePath, context.PackageRelNs)
@@ -265,10 +290,14 @@ public sealed partial class XlsxFileAdapter
 
         foreach (var sourceSheet in sourceWorksheetPaths)
         {
-            if (!context.TargetSheets.ContainsKey(sourceSheet.Key))
+            if (!context.TargetSheets.ContainsKey(sourceSheet.CurrentName))
                 continue;
 
-            var sheet = workbook.GetSheet(sourceSheet.Key);
+            // Look the sheet up by its CURRENT name (see currentNameByLoadTimeName above) so a
+            // renamed sheet's own legacy-drawing header/footer dependencies are still resolved
+            // against the live Sheet object, not silently skipped because sourceSheet.Key (the
+            // load-time name) no longer names anything in the live workbook.
+            var sheet = workbook.GetSheet(sourceSheet.CurrentName);
             if (sheet is null || XlsxHeaderFooterPictureReaderWriter.HasPictures(sheet))
                 continue;
 
@@ -293,6 +322,45 @@ public sealed partial class XlsxFileAdapter
         }
 
         return excludedPaths;
+    }
+
+    // R102-io-rename-worksheet-exclusion-1: maps each sheet's load-time name (as it appeared in the
+    // pristine source package) to its CURRENT name in the live workbook, using the same rename-stable
+    // Sheet.Id identity XlsxWorkbookMetadataPreserver.MergeDefinedNames already relies on to
+    // disambiguate a rename from a delete+add-a-different-sheet. sourceSheetIdsByLocalId[i] is the
+    // Sheet.Id the sheet at position i had at the moment this source snapshot became the pristine
+    // baseline (see XlsxFileAdapter.SourcePackageSnapshot's SourceSheetIdsByLocalId doc comment); a
+    // sheet whose Id no longer exists in workbook.Sheets has genuinely been deleted and is simply
+    // absent from the returned map (callers fall back to the load-time name, which then correctly
+    // fails to match anything in context.TargetSheets).
+    private static Dictionary<string, string> ResolveCurrentSheetNamesByLoadTimeName(
+        XlsxSourcePackagePreservationContext context,
+        Workbook workbook,
+        IReadOnlyList<SheetId> sourceSheetIdsByLocalId)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (sourceSheetIdsByLocalId.Count == 0)
+            return map;
+
+        var sheetElements = context.SourceWorkbookXml.Root?
+            .Element(context.WorkbookNs + "sheets")?
+            .Elements(context.WorkbookNs + "sheet")
+            .ToList()
+            ?? [];
+
+        for (var localId = 0; localId < sheetElements.Count && localId < sourceSheetIdsByLocalId.Count; localId++)
+        {
+            var loadTimeName = sheetElements[localId].Attribute("name")?.Value;
+            if (string.IsNullOrWhiteSpace(loadTimeName))
+                continue;
+
+            var originalSheetId = sourceSheetIdsByLocalId[localId];
+            var currentSheet = workbook.GetSheet(originalSheetId);
+            if (currentSheet is not null)
+                map[loadTimeName] = currentSheet.Name;
+        }
+
+        return map;
     }
 
     // R28-io-connections-querytable-deep-1: when a retained sheet's worksheet part is renumbered on

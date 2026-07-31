@@ -45,6 +45,7 @@ internal static class FreePCommandInventory
     {
         var wpf = Collect(FreePRibbon.Build(FreePRibbonCapabilities.Wpf), "WPF");
         var avalonia = Collect(FreePRibbon.Build(FreePRibbonCapabilities.Avalonia), "Avalonia");
+        EnsureSmartArtSourceCoverage(wpf, avalonia);
         var commandIds = wpf.Keys.Concat(avalonia.Keys)
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
@@ -75,7 +76,7 @@ internal static class FreePCommandInventory
         return new InventoryDocument(
             SchemaVersion: 1,
             GeneratedBy: "tools/Generate-FreePCommandParityInventory.ps1",
-            Source: "freep/FreeP.Ribbon.Definitions FreePRibbon.Build(FreePRibbonCapabilities.Wpf/Avalonia)",
+            Source: "freep/FreeP.Ribbon.Definitions FreePRibbon.Build(FreePRibbonCapabilities.Wpf/Avalonia) plus freep/FreeP.App.Presentation SmartArtLayoutPreset",
             Notes: "Raw missing counts preserve one-sided generated profile surface counts. Actionable missing counts exclude platform-only commands so Avalonia shell and backed profile commands are not reported as WPF or Avalonia implementation gaps. Platform-only rows are allowed only when the note names the intended shell/profile variance and the WPF shell route that carries the behavior. Workflow evidence rows track bounded FreeP WPF/Avalonia parity-depth slices that are not command gaps.",
             Summary: new InventorySummary(
                 TotalCommands: commands.Length,
@@ -94,6 +95,19 @@ internal static class FreePCommandInventory
                 WorkflowEvidenceRows: workflowEvidence.Count),
             WorkflowEvidence: workflowEvidence,
             Commands: commands);
+    }
+
+    private static void EnsureSmartArtSourceCoverage(
+        IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> wpf,
+        IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> avalonia)
+    {
+        // Derived from SmartArtLayoutPreset.Cycle2 through SlideObjectInsertionPlanner and
+        // FreePRibbon's Enum.GetValues gallery projection. Keep this guard here so the
+        // generated inventory cannot silently omit a newly authored SmartArt route.
+        const string cycle2CommandId = "freep.insert-smartart-cycle2";
+        if (!wpf.ContainsKey(cycle2CommandId) || !avalonia.ContainsKey(cycle2CommandId))
+            throw new InvalidOperationException(
+                $"The generated WPF/Avalonia command profiles must expose the source SmartArt layout {cycle2CommandId}.");
     }
 
     private static IReadOnlyList<WorkflowEvidenceEntry> BuildWorkflowEvidence() =>
@@ -195,7 +209,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host/SlideShowMediaController.cs",
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs"
             ],
-            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, nested caption sidecars keep package entries plus relationship targets after semantic slide edits, colliding native caption relationship ids remap away from writer-owned poster/media ids while retargeting p20media:caption metadata, basic TTML/DFXP sidecars retain package bytes/content-type overrides while the shared planner parses paragraph cues with clock or unit timing, and both WPF and Avalonia slideshow playback now surface available cues from the active media clock. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, advanced timing/style/accessibility semantics, and real microphone/camera/playback/capture-device behavior remain deferred."),
+            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, nested caption sidecars keep package entries plus relationship targets after semantic slide edits, colliding native caption relationship ids remap away from writer-owned poster/media ids while retargeting p20media:caption metadata, and the shared planner now resolves TTML/DFXP inherited body/div offsets plus frame/tick clocks before both WPF and Avalonia slideshow playback surface available cues from the active media clock. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, advanced timing/style/accessibility semantics, and real microphone/camera/playback/capture-device behavior remain deferred."),
         new(
             EvidenceId: "freep.presenter.ink.execution",
             Area: "Presenter ink, laser, and persistence execution",
@@ -385,12 +399,13 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.table.inline-text.workflow-depth",
             Area: "Rich inline table-cell text editing, paragraph formatting, selection, and persistence",
             Status: "shared-planner-and-host-evidence",
-            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner and renderer-neutral rich clipboard routes with WPF RichTextBox and Avalonia native-input/custom-rich-surface adapters, including bounded external RTF ingestion",
+            HostCoverage: "WPF/Avalonia shared TableCellEditPlanner and renderer-neutral rich clipboard routes with WPF RichTextBox and Avalonia native-input/custom-rich-surface adapters, including bounded external RTF and XamlPackage ingestion with editable native table cell styles",
             EvidenceDocs:
             [
                 "docs/parity/freep-rich-clipboard-wave15-20260727.md",
                 "docs/parity/freep-rich-effects-clipboard-wave16-20260727.md",
                 "docs/parity/freep-external-rtf-paste-wave17-20260727.md",
+                "docs/parity/freep-wave74-xamlpackage-clipboard-parity-20260731.md",
                 "docs/parity/freep-rich-table-cell-editing-shared-visual-2026-07-27.md",
                 "docs/parity/freep-table-cell-rich-editor-fidelity-2026-07-03.md",
                 "docs/parity/freep-list-gallery-image-bullet-ui-2026-07-05.md",
@@ -415,8 +430,13 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Avalonia.Tests/PresentationClipboardInteropTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs",
                 "freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs"
+                ,"freep/FreeP.App.Presentation/ExternalXamlClipboardPlanner.cs"
+                ,"freep/FreeP.App.Host.Tests/OsClipboardServiceTests.cs"
+                ,"freep/FreeP.App.Host.Tests/WpfRichTextClipboardAdapterTests.cs"
+                ,"freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs"
+                ,"freep/FreeP.App.Avalonia.Tests/PresentationClipboardInteropTests.cs"
             ],
-            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including all modeled inline effects, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF paste in Avalonia. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. XamlPackage import, unsupported RTF destinations and controls, richer RTF lists/objects/fields, broader IME/RTL/FlowDocument behavior, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
+            RemainingWork: "WPF/Avalonia now share mixed-run and paragraph-preserving edits, marker sequencing, selection/caret rendering, rich copy/cut/paste payloads including modeled inline effects, inline picture/object placement, external OLE activation, plain-text clipboard interoperability, picture-bullet picker payload execution, paragraph authoring, PPTX media-part persistence, Tab/Shift+Tab navigation, focused-editor keyboard ownership, commit/cancel routing, and bounded common external RTF and XamlPackage ingestion in Avalonia, including editable native table cell fill, border, inset, vertical-anchor styles, safe run-level hyperlinks, and bounded list markers. Avalonia still uses a custom rich surface over a native TextBox rather than a framework-native RichTextBox. Unsupported XamlPackage resources and FlowDocument controls, nested inline tables, unsupported RTF destinations and controls, richer RTF lists/fields, broader IME/RTL/FlowDocument behavior, in-place OLE hosting, and PowerPoint-authoritative list-gallery/rich-editor visual baselines remain deferred."),
         new(
             EvidenceId: "freep.clipboard.external-rtf-depth",
             Area: "External RTF list, paragraph-layout, hyperlink, and field paste depth",
@@ -427,6 +447,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-external-rtf-paste-wave18-20260727.md",
                 "docs/parity/freep-external-rtf-tables-wave19-20260727.md",
                 "docs/parity/freep-external-rtf-picture-paste-20260730.md",
+                "docs/parity/freep-external-rtf-list-level-templates-20260731.md",
                 "docs/parity/freep-external-rtf-file-hyperlink-20260729.md",
                 "docs/parity/freep-external-rtf-field-runs-20260730.md",
                 "docs/parity/freep-external-rtf-object-results-20260730.md"
@@ -434,12 +455,14 @@ internal static class FreePCommandInventory
             Verification:
             [
                 "freep/FreeP.App.Presentation/ExternalRichTextClipboardPlanner.cs",
+                "freep/FreeP.App.Presentation/ClipboardTablePlanner.cs",
                 "freep/FreeP.App.Presentation.Tests/ExternalRichTextClipboardTests.cs",
+                "freep/FreeP.App.Presentation.Tests/InCanvasRichClipboardTests.cs",
                 "freep/FreeP.App.Rendering.Avalonia.Tests/AvaloniaRichTextEditorTests.cs",
                 "freep/FreeP.App.Rendering.Wpf/WpfRichTextClipboardAdapter.cs",
                 "freep/FreeP.App.Host.Tests/WpfRichTextClipboardAdapterTests.cs"
             ],
-            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, guarded http/https/mailto/file HYPERLINK field results with remote file hosts blocked, safe non-hyperlink field tokens with cached result text, visible embedded-object result text while ignoring binary OLE payloads, common trowd/cellx/cell/row plus nestcell/nestrow table boundaries as WPF-compatible tab-delimited cells and paragraph-delimited rows, and validated PNG/JPEG \\pict payloads as slide-level picture shapes while retaining custom-v2 > RTF > plain-text precedence. Because TextBody has no inline table node, cell widths, borders, fills, vertical alignment, merges, nested-table structure, and table geometry are flattened rather than persisted. XamlPackage import, editable OLE embedding, unsupported RTF destinations and controls, complex Word field calculation, RTL/IME nuances, complete Word list-template numbering, inline picture/object runs, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
+            RemainingWork: "The bounded subset now preserves common Word/LibreOffice list markers, nested levels, bounded multi-level level-text substitutions, continuation/restart intent where the existing model can represent it, paragraph alignment/indent/spacing, guarded http/https/mailto/file HYPERLINK field results with remote file hosts blocked, safe non-hyperlink field tokens with cached result text, visible embedded-object result text with inline placement and external activation, common trowd/cellx/cell/row plus nestcell/nestrow table boundaries, merged-cell topology from clmgf/clmrg/clvmgf/clvmrg, common cell pattern shading from clcbpat/clcfpat/clshdng and hatch controls for standalone native slide tables, and validated PNG/JPEG \\pict payloads as slide-level picture shapes while retaining custom-v2 > RTF > plain-text precedence. Because TextBody has no inline table node, in-canvas tables remain flattened; nested-table structure and other advanced table layout properties remain deferred. Unsupported XamlPackage resources and controls, unsupported RTF destinations and controls, complex Word field calculation, RTL/IME nuances, broader Word list-template numbering beyond the bounded level-text substitutions, in-place OLE hosting, and PowerPoint-authoritative external RTF visual baselines remain deferred."),
         new(
             EvidenceId: "freep.header-footer.placeholder-creation",
             Area: "Header/Footer date, footer, and slide-number placeholder creation",
@@ -1694,7 +1717,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "basicMatrix and matrix1 now use the bounded shared matrix-family live-layout path for up to four parsed nodes as renderer-neutral quadrant rectangles. Unsupported matrix siblings and matrix diagrams with more than four parsed nodes remain on cached drawing fallback. PowerPoint-authoritative visual baselines and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "basicMatrix and matrix1 use the bounded shared matrix-family live-layout path for parsed nodes in deterministic two-column row-major rectangles, retaining the four-node quadrant geometry; larger inputs continue into additional rows. Unsupported matrix siblings, PowerPoint-authoritative visual baselines, and broader SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.titled-matrix",

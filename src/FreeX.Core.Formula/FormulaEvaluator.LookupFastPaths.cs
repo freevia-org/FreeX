@@ -350,9 +350,18 @@ public sealed partial class FormulaEvaluator
 
         var lookupIndex = (int)rawIndex;
         bool approximate;
-        if (rangeLookupValue is BlankValue)
+        if (node.Arguments.Count <= 3)
         {
+            // Genuinely omitted (no 4th argument node at all) -> Excel's friendly TRUE default.
             approximate = true;
+        }
+        else if (rangeLookupValue is BlankValue)
+        {
+            // Present but blank -- a trailing comma (VLOOKUP(A1,B:D,2,)) or a genuinely blank-cell
+            // reference -- coerces to the logical natural-zero FALSE (exact match), mirroring the
+            // slow path's VlookupScalar/HlookupScalar (BuiltInFunctions.Lookup.Legacy.cs). This is
+            // NOT the same as omitted, even though both evaluate to BlankValue.Instance.
+            approximate = false;
         }
         else
         {
@@ -862,7 +871,12 @@ public sealed partial class FormulaEvaluator
         // text or bool candidate can never be a numeric "next larger/smaller" match, mirroring
         // BuiltInFunctions.Lookup.Modern.cs's TryFindApproximateMatchIndexLinear (the general,
         // non-fast-path XMATCH/XLOOKUP implementation).
-        var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
+        //
+        // A genuinely blank lookup_value must be coerced to the numeric class here too (Excel
+        // treats a blank lookup_value as 0 for approximate match), mirroring
+        // ApproxLookupClassForLookupValue's use in the legacy VLOOKUP/HLOOKUP/MATCH/LOOKUP fast
+        // paths (R75-formula-lookup-vhx-4-2 / R106).
+        var lookupClass = BuiltInFunctions.ApproxLookupClassForLookupValue(lookupValue);
         var best = -1;
         ScalarValue bestValue = BlankValue.Instance;
         for (var index = start; index != end; index += step)

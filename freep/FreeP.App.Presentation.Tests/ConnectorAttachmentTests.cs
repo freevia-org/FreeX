@@ -204,6 +204,35 @@ public sealed class ConnectorAttachmentTests
         movedConnector.ExtentCyEmu.Should().Be(700);
     }
 
+    [Fact]
+    public void MoveShape_ReroutesConnectorNestedWithAttachedShapes()
+    {
+        var (_, bus, slide) = MakePresentation();
+        var start = MakeRect(1, 1000, 1000, 2000, 1000);
+        var end = MakeRect(2, 6000, 1000, 2000, 1000);
+        var connector = MakeConnector(3,
+            start: new ConnectorAttachment { ShapeId = start.Id, SiteIndex = 2 },
+            end: new ConnectorAttachment { ShapeId = end.Id, SiteIndex = 0 });
+        var group = new SlideShape { Id = 10, Kind = SlideShapeKind.Group };
+        group.Children.Add(start);
+        group.Children.Add(end);
+        group.Children.Add(connector);
+        slide.Shapes.Add(group);
+
+        bus.Execute(new MoveShapeCommand(0, start.Id, 500, 0));
+
+        connector.OffsetXEmu.Should().Be(3500);
+        connector.OffsetYEmu.Should().Be(1500);
+        connector.ExtentCxEmu.Should().Be(2500);
+        connector.ExtentCyEmu.Should().Be(1);
+
+        bus.Undo();
+        connector.OffsetXEmu.Should().Be(0);
+        connector.OffsetYEmu.Should().Be(0);
+        connector.ExtentCxEmu.Should().Be(100);
+        connector.ExtentCyEmu.Should().Be(100);
+    }
+
     [Theory]
     [InlineData(Free.Shared.Drawing.DrawingShapeKind.Parallelogram, 0, 10, 50)]
     [InlineData(Free.Shared.Drawing.DrawingShapeKind.Parallelogram, 2, 90, 50)]

@@ -28,6 +28,9 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
+    // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
+    // bounded hyperlink refs shift independently of the CellAddress-keyed dictionaries above.
+    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
@@ -39,6 +42,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     private List<RowColumnShiftHelpers.ChartSeriesColumnMappingsWorkbookSnapshot>? _chartSeriesColumnMappingsSnapshot;
+    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingColumnsUp — every SeriesIndex-keyed
+    // per-series/per-point chart override (SeriesFormats, PointFillColors, trendline/error-bar
+    // series index, legend entries, etc.), tracked separately from the two snapshots above (which
+    // only cover DataRange and SeriesColumnMappings).
+    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
     // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionColumnsUp/
     // Down — tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
@@ -123,6 +131,8 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.HyperlinkMetadata, _beforeCol, _count);
         _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
             ctx.Workbook, sheet, new InsertColsOp(sheet.Name, _beforeCol, _count), sheet.Name);
+        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
+        RowColumnShiftHelpers.ShiftRangeHyperlinksColumnsUp(sheet, _beforeCol, _count);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentColumnsUp(sheet.RichTextRuns, _beforeCol, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides must shift in lockstep with its
@@ -143,6 +153,10 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         _chartSeriesColumnMappingsSnapshot = RowColumnShiftHelpers.CaptureChartSeriesColumnMappings(ctx.Workbook);
+        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
+        // R102: must run BEFORE ShiftChartColumnsUp below — it needs each chart's PRE-insert
+        // DataRange to tell whether _beforeCol lands strictly inside the plotted data-column span.
+        RowColumnShiftHelpers.ShiftChartSeriesFormattingColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.ShiftChartColumnsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.ShiftChartSeriesColumnMappingsUp(ctx.Workbook, _sheetId, _beforeCol, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new InsertColsOp(sheet.Name, _beforeCol, _count));
@@ -354,6 +368,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
+        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
@@ -364,6 +379,7 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartSeriesColumnMappings(ctx.Workbook, _chartSeriesColumnMappingsSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 
@@ -524,6 +540,9 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
+    // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
+    // bounded hyperlink refs shift/delete independently of the CellAddress-keyed dictionaries above.
+    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
@@ -535,6 +554,11 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
     private List<RowColumnShiftHelpers.ChartSeriesColumnMappingsWorkbookSnapshot>? _chartSeriesColumnMappingsSnapshot;
+    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingColumnsDown — every SeriesIndex-keyed
+    // per-series/per-point chart override (SeriesFormats, PointFillColors, trendline/error-bar
+    // series index, legend entries, etc.), tracked separately from the two snapshots above (which
+    // only cover DataRange and SeriesColumnMappings).
+    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
     // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionColumnsUp/
     // Down — tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
@@ -626,6 +650,8 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.HyperlinkMetadata, _startCol, _count);
         _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
             ctx.Workbook, sheet, new DeleteColsOp(sheet.Name, _startCol, _count), sheet.Name);
+        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
+        RowColumnShiftHelpers.ShiftRangeHyperlinksColumnsDown(sheet, _startCol, _count);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentColumnsDown(sheet.RichTextRuns, _startCol, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides must shift/delete in lockstep with its
@@ -646,6 +672,10 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
         _chartSeriesColumnMappingsSnapshot = RowColumnShiftHelpers.CaptureChartSeriesColumnMappings(ctx.Workbook);
+        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
+        // R102: must run BEFORE ShiftChartColumnsDown below — it needs each chart's PRE-delete
+        // DataRange to tell which plotted series positions the deleted band actually removed.
+        RowColumnShiftHelpers.ShiftChartSeriesFormattingColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
         RowColumnShiftHelpers.ShiftChartColumnsDown(ctx.Workbook, _sheetId, _startCol, _count);
         RowColumnShiftHelpers.ShiftChartSeriesColumnMappingsDown(ctx.Workbook, _sheetId, _startCol, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new DeleteColsOp(sheet.Name, _startCol, _count));
@@ -677,9 +707,19 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         // and reflows immediately after any structural edit.
         _tableRebandSnapshot = RebandTablesAfterColumnDelete(ctx.Workbook, sheet);
 
+        // R103-commands-dependency-deleted-band-1: mirror DeleteRowsCommand's Apply-side fix (and
+        // DeleteCellsCommand's `_range.AllCells()` fix in InsertDeleteCellsCommand.cs) for the band
+        // this delete PERMANENTLY removes. deletedSnapshot holds every cell that lived inside
+        // [_startCol, endCol] (already ClearCell'd above) -- neither
+        // RelocatedFormulaCellsPendingDependencyRefresh/VacatedAddressesForShiftedFormulaCells
+        // (shifted-survivors only) nor _formulaSnapshot (populated by RewriteAllFormulas, which scans
+        // the sheet AFTER the deleted band was cleared) ever surfaces these addresses. Without this a
+        // formula cell inside the deleted band that is never re-occupied by a relocated survivor
+        // leaves its stale DependencyGraph precedent/dependent entries in place forever.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot)
-                .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot)),
+                .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot))
+                .Concat(deletedSnapshot.Select(s => s.ToAddress(_sheetId))),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
@@ -844,6 +884,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
+        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.
@@ -855,6 +896,7 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartSeriesColumnMappings(ctx.Workbook, _chartSeriesColumnMappingsSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 

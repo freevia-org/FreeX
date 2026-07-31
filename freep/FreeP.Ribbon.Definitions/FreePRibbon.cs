@@ -313,6 +313,16 @@ public static class FreePRibbon
             RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeSendBackwardCommand.KeyTip);
         group.Medium("freep.arrange.send-to-back", FreePRibbonText.ArrangeSendToBackCommand.Label,
             RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeSendToBackCommand.KeyTip);
+        group.Medium("freep.arrange.flip-horizontal", FreePRibbonText.ArrangeFlipHorizontalCommand.Label,
+            RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.ArrangeFlipHorizontalCommand.KeyTip);
+        group.Medium("freep.arrange.flip-vertical", FreePRibbonText.ArrangeFlipVerticalCommand.Label,
+            RibbonCommandIconKind.Align, FreePRibbonText.ArrangeFlipVerticalCommand.KeyTip);
+        group.Medium("freep.arrange.rotate-left-90", FreePRibbonText.ArrangeRotateLeft90Command.Label,
+            RibbonCommandIconKind.Rotate, FreePRibbonText.ArrangeRotateLeft90Command.KeyTip);
+        group.Medium("freep.arrange.rotate-right-90", FreePRibbonText.ArrangeRotateRight90Command.Label,
+            RibbonCommandIconKind.Rotate, FreePRibbonText.ArrangeRotateRight90Command.KeyTip);
+        group.Medium(RotationOptionsPlanner.CommandId, FreePRibbonText.ArrangeRotationOptionsCommand.Label,
+            RibbonCommandIconKind.Rotate, FreePRibbonText.ArrangeRotationOptionsCommand.KeyTip);
         group.Separator();
         group.Medium("freep.arrange.align-left", FreePRibbonText.ArrangeAlignLeftCommand.Label,
             RibbonCommandIconKind.AlignLeft, FreePRibbonText.ArrangeAlignLeftCommand.KeyTip);
@@ -326,6 +336,18 @@ public static class FreePRibbon
             RibbonCommandIconKind.Align, FreePRibbonText.ArrangeAlignMiddleCommand.KeyTip);
         group.Medium("freep.arrange.align-bottom", FreePRibbonText.ArrangeAlignBottomCommand.Label,
             RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeAlignBottomCommand.KeyTip);
+        group.Medium("freep.arrange.align-left-to-slide", FreePRibbonText.ArrangeAlignLeftToSlideCommand.Label,
+            RibbonCommandIconKind.AlignLeft, FreePRibbonText.ArrangeAlignLeftToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-center-h-to-slide", FreePRibbonText.ArrangeAlignCenterHorizontalToSlideCommand.Label,
+            RibbonCommandIconKind.AlignCenter, FreePRibbonText.ArrangeAlignCenterHorizontalToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-right-to-slide", FreePRibbonText.ArrangeAlignRightToSlideCommand.Label,
+            RibbonCommandIconKind.AlignRight, FreePRibbonText.ArrangeAlignRightToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-top-to-slide", FreePRibbonText.ArrangeAlignTopToSlideCommand.Label,
+            RibbonCommandIconKind.ArrowUp, FreePRibbonText.ArrangeAlignTopToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-middle-to-slide", FreePRibbonText.ArrangeAlignMiddleToSlideCommand.Label,
+            RibbonCommandIconKind.Align, FreePRibbonText.ArrangeAlignMiddleToSlideCommand.KeyTip);
+        group.Medium("freep.arrange.align-bottom-to-slide", FreePRibbonText.ArrangeAlignBottomToSlideCommand.Label,
+            RibbonCommandIconKind.ArrowDown, FreePRibbonText.ArrangeAlignBottomToSlideCommand.KeyTip);
         group.Separator();
         group.Medium("freep.arrange.distribute-h", FreePRibbonText.ArrangeDistributeHorizontalCommand.Label,
             RibbonCommandIconKind.AlignCenter, FreePRibbonText.ArrangeDistributeHorizontalCommand.KeyTip);
@@ -807,6 +829,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.VerticalChevronListLayoutCommandId,
                 FreePRibbonText.SmartArtVerticalChevronListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtVerticalChevronListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
+                FreePRibbonText.SmartArtVerticalArrowListCommand.Label, RibbonCommandIconKind.ArrowDown,
+                FreePRibbonText.SmartArtVerticalArrowListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
                 FreePRibbonText.SmartArtVerticalBulletListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtVerticalBulletListCommand.KeyTip);
@@ -852,6 +877,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
                 FreePRibbonText.SmartArtPyramidListCommand.Label, RibbonCommandIconKind.Rectangle,
                 FreePRibbonText.SmartArtPyramidListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
+                FreePRibbonText.SmartArtInvertedPyramidCommand.Label, RibbonCommandIconKind.Rectangle,
+                FreePRibbonText.SmartArtInvertedPyramidCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 FreePRibbonText.SmartArtRadialCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtRadialCycleCommand.KeyTip);

@@ -14,7 +14,11 @@ public sealed record InCanvasRichTextVisualRun(
     bool Strikethrough,
     bool? RightToLeft,
     int? BaselineOffset,
-    ThemeAwareColor? Color);
+    ThemeAwareColor? Color,
+    ImagePart? InlineImage = null,
+    long? InlineImageWidthEmu = null,
+    long? InlineImageHeightEmu = null,
+    InlineOleObjectInfo? InlineOleObject = null);
 
 public sealed record InCanvasRichTextVisualParagraph(
     int ParagraphIndex,
@@ -86,7 +90,11 @@ public static class InCanvasRichTextVisualPlanner
                     run.Strikethrough,
                     run.RightToLeft,
                     run.BaselineOffset,
-                    run.Color));
+                    run.Color,
+                    run.InlineImage,
+                    run.InlineImageWidthEmu,
+                    run.InlineImageHeightEmu,
+                    run.InlineOleObject));
                 runStart += run.Text.Length;
             }
 
@@ -107,9 +115,11 @@ public static class InCanvasRichTextVisualPlanner
                             paragraph.AutoNumType,
                             paragraph.AutoNumStartAt,
                             paragraph.AutoNumStartAtSpecified);
-                        bulletText = PresentationListMarkerPlanner.FormatAutoNumber(
+                        bulletText = markerState.FormatTemplate(
+                            paragraph.Level,
                             paragraph.AutoNumType,
-                            value);
+                            value,
+                            paragraph.AutoNumTextTemplate);
                         break;
                     }
                     default:

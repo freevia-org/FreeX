@@ -34,8 +34,7 @@ public sealed class SetChartTextOptionsCommand : IPresentationCommand
     }
 
     private ChartShape? FindChart(Presentation presentation) =>
-        presentation.Slides.ElementAtOrDefault(_slideIndex)?.Shapes
-            .FirstOrDefault(shape => shape.Id == _shapeId)?.Chart;
+        ShapeHelper.Find(presentation, _slideIndex, _shapeId)?.Chart;
 
     private static ChartTextOptions ReadOptions(ChartShape chart)
     {

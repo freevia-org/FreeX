@@ -637,7 +637,7 @@ public partial class MainWindow
         if (SheetGrid.SelectedRange is not { } range) return;
         ApplyStyleDiff(new StyleDiff(FontSize: fontSize));
 
-        var newHeight = FontSizePlanner.EstimateFittingRowHeight(fontSize);
+        var newHeight = Math.Min(AutoFitSizingService.MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
         var ranges = GetCurrentSelectionRanges(range);
         var command = SelectionStyleCommandPlanner.CreateRangeCommand(
             CurrentGroupedEditSheetIds(),

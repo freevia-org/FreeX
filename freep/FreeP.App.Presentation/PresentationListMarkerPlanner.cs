@@ -50,6 +50,44 @@ public sealed class PresentationListMarkerContinuationState
 
         return value;
     }
+
+    /// <summary>
+    /// Expands an external level-text template after <see cref="Next"/> has advanced
+    /// the current level. A template uses %1..%9 for list levels and keeps all other
+    /// punctuation/literal text verbatim.
+    /// </summary>
+    public string FormatTemplate(
+        int currentLevel,
+        AutoNumType currentType,
+        int currentValue,
+        string? template)
+    {
+        if (string.IsNullOrEmpty(template))
+            return PresentationListMarkerPlanner.FormatAutoNumber(currentType, currentValue);
+
+        int clampedCurrentLevel = Math.Clamp(currentLevel, 0, _counters.Length - 1);
+        var result = new System.Text.StringBuilder(template.Length + 8);
+        for (int index = 0; index < template.Length; index++)
+        {
+            if (template[index] == '%' && index + 1 < template.Length
+                && template[index + 1] is >= '1' and <= '9')
+            {
+                int level = template[++index] - '1';
+                int value = level == clampedCurrentLevel
+                    ? currentValue
+                    : _active[level] ? _counters[level] : 1;
+                AutoNumType type = level == clampedCurrentLevel
+                    ? currentType
+                    : _types[level] ?? currentType;
+                result.Append(PresentationListMarkerPlanner.FormatNumberCore(type, value));
+                continue;
+            }
+
+            result.Append(template[index]);
+        }
+
+        return result.ToString();
+    }
 }
 
 public static class PresentationListMarkerPlanner
@@ -59,20 +97,35 @@ public static class PresentationListMarkerPlanner
         int normalizedValue = Math.Max(1, value);
         return type switch
         {
-            AutoNumType.ArabicPeriod => $"{normalizedValue}.",
-            AutoNumType.ArabicParenR => $"{normalizedValue})",
-            AutoNumType.ArabicParenBoth => $"({normalizedValue})",
-            AutoNumType.RomanUcPeriod => $"{ToRoman(normalizedValue, upper: true)}.",
-            AutoNumType.RomanLcPeriod => $"{ToRoman(normalizedValue, upper: false)}.",
-            AutoNumType.RomanUcParenR => $"{ToRoman(normalizedValue, upper: true)})",
-            AutoNumType.RomanLcParenR => $"{ToRoman(normalizedValue, upper: false)})",
-            AutoNumType.AlphaUcPeriod => $"{ToAlpha(normalizedValue, upper: true)}.",
-            AutoNumType.AlphaLcPeriod => $"{ToAlpha(normalizedValue, upper: false)}.",
-            AutoNumType.AlphaUcParenR => $"{ToAlpha(normalizedValue, upper: true)})",
-            AutoNumType.AlphaLcParenR => $"{ToAlpha(normalizedValue, upper: false)})",
-            AutoNumType.AlphaUcParenBoth => $"({ToAlpha(normalizedValue, upper: true)})",
-            AutoNumType.AlphaLcParenBoth => $"({ToAlpha(normalizedValue, upper: false)})",
-            _ => $"{normalizedValue}.",
+            AutoNumType.ArabicPeriod => $"{FormatNumberCore(type, normalizedValue)}.",
+            AutoNumType.ArabicParenR => $"{FormatNumberCore(type, normalizedValue)})",
+            AutoNumType.ArabicParenBoth => $"({FormatNumberCore(type, normalizedValue)})",
+            AutoNumType.RomanUcPeriod => $"{FormatNumberCore(type, normalizedValue)}.",
+            AutoNumType.RomanLcPeriod => $"{FormatNumberCore(type, normalizedValue)}.",
+            AutoNumType.RomanUcParenR => $"{FormatNumberCore(type, normalizedValue)})",
+            AutoNumType.RomanLcParenR => $"{FormatNumberCore(type, normalizedValue)})",
+            AutoNumType.AlphaUcPeriod => $"{FormatNumberCore(type, normalizedValue)}.",
+            AutoNumType.AlphaLcPeriod => $"{FormatNumberCore(type, normalizedValue)}.",
+            AutoNumType.AlphaUcParenR => $"{FormatNumberCore(type, normalizedValue)})",
+            AutoNumType.AlphaLcParenR => $"{FormatNumberCore(type, normalizedValue)})",
+            AutoNumType.AlphaUcParenBoth => $"({FormatNumberCore(type, normalizedValue)})",
+            AutoNumType.AlphaLcParenBoth => $"({FormatNumberCore(type, normalizedValue)})",
+            _ => $"{FormatNumberCore(type, normalizedValue)}.",
+        };
+    }
+
+    internal static string FormatNumberCore(AutoNumType type, int value)
+    {
+        int normalizedValue = Math.Max(1, value);
+        return type switch
+        {
+            AutoNumType.RomanUcPeriod or AutoNumType.RomanUcParenR => ToRoman(normalizedValue, upper: true),
+            AutoNumType.RomanLcPeriod or AutoNumType.RomanLcParenR => ToRoman(normalizedValue, upper: false),
+            AutoNumType.AlphaUcPeriod or AutoNumType.AlphaUcParenR or AutoNumType.AlphaUcParenBoth =>
+                ToAlpha(normalizedValue, upper: true),
+            AutoNumType.AlphaLcPeriod or AutoNumType.AlphaLcParenR or AutoNumType.AlphaLcParenBoth =>
+                ToAlpha(normalizedValue, upper: false),
+            _ => normalizedValue.ToString(),
         };
     }
 

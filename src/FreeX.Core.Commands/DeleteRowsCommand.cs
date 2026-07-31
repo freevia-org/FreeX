@@ -32,6 +32,9 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
+    // R106-io-hyperlink-range-shift: see Sheet.RangeHyperlinks -- whole-column/row and oversized-
+    // bounded hyperlink refs shift/delete independently of the CellAddress-keyed dictionaries above.
+    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
@@ -42,6 +45,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<uint>? _rowPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown -- every SeriesIndex-keyed
+    // per-series/per-point collection on a Switch-Row/Column chart whose plotted series span this
+    // delete overlaps must be captured here (undo) since the remap mutates them in place / drops rows.
+    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
     // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionRowsDown —
     // tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
@@ -141,6 +148,8 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.HyperlinkMetadata, _startRow, _count);
         _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
             ctx.Workbook, sheet, new DeleteRowsOp(sheet.Name, _startRow, _count), sheet.Name);
+        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
+        RowColumnShiftHelpers.ShiftRangeHyperlinksRowsDown(sheet, _startRow, _count);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentRowsDown(sheet.RichTextRuns, _startRow, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides must shift/delete in lockstep with its
@@ -160,6 +169,11 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        // R102: must run BEFORE ShiftChartRowsDown below -- it needs each chart's PRE-delete
+        // DataRange to tell whether the deleted band overlaps a Switch-Row/Column chart's plotted
+        // series span (see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown).
+        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
+        RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         RowColumnShiftHelpers.ShiftChartRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count));
         RowColumnShiftHelpers.ShiftAddressBearingRowsDown(ctx.Workbook, sheet, _addressStateSnapshot, _startRow, _count);
@@ -224,9 +238,21 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         // immediately after any row delete just like it does after an insert.
         _tableRebandSnapshot = RebandTablesAfterRowDelete(ctx.Workbook, sheet);
 
+        // R103-commands-dependency-deleted-band-1: mirror DeleteCellsCommand's Apply-side fix
+        // (InsertDeleteCellsCommand.cs, `_range.AllCells()`) for the band that this delete
+        // PERMANENTLY removes. deletedSnapshot holds every cell that lived inside [_startRow, endRow]
+        // (already ClearCell'd above) -- unlike shiftedSnapshot, none of these addresses are ever fed
+        // into RelocatedFormulaCellsPendingDependencyRefresh/VacatedAddressesForShiftedFormulaCells
+        // (both shifted-only) or _formulaSnapshot (populated by RewriteAllFormulas, which scans the
+        // sheet AFTER the deleted band was cleared, so it can never see a formula cell that lived
+        // there). Without this, a formula cell inside the deleted band that is never re-occupied by a
+        // relocated survivor (e.g. it was the last formula in its column) leaves its stale
+        // DependencyGraph precedent/dependent entries in place forever, since
+        // WorkbookCellEditService.UpdateFormulaDependencies only ever visits AffectedCells.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot)
-                .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot)),
+                .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot))
+                .Concat(deletedSnapshot.Select(s => s.ToAddress(_sheetId))),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
@@ -394,6 +420,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
+        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         // Full-rebuild overload: rules removed during deletion must be re-added here.
@@ -404,6 +431,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 

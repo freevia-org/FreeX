@@ -413,17 +413,22 @@ public sealed class OsClipboardService
             if (payload is not null)
             {
                 foreach (var image in payload.GetImagePayloads())
-                    editor.InsertPicture(image.Bytes, image.ContentType);
+                    editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
-                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName);
+                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
+                var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
+                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
+                    : payload.Body;
                 var table = payload.ContainsTable
                     ? editor.InsertTableFromClipboard(
-                        payload.Body,
+                        slideBody,
                         payload.TableColumnWidthsEmu,
                         payload.TableCellStyles)
                     : null;
-                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
-                    editor.InsertTextBox(payload.Body);
+                if (table is null
+                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
+                    editor.InsertTextBox(slideBody);
                 return source;
             }
 
@@ -443,17 +448,22 @@ public sealed class OsClipboardService
             if (payload is not null)
             {
                 foreach (var image in payload.GetImagePayloads())
-                    editor.InsertPicture(image.Bytes, image.ContentType);
+                    editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
-                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName);
+                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
+                var slideBody = payload.GetImagePayloads().Count > 0
+                    || payload.GetObjectPayloads().Count > 0
+                    ? InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body)
+                    : payload.Body;
                 var table = payload.ContainsTable
                     ? editor.InsertTableFromClipboard(
-                        payload.Body,
+                        slideBody,
                         payload.TableColumnWidthsEmu,
                         payload.TableCellStyles)
                     : null;
-                if (table is null && !string.IsNullOrWhiteSpace(payload.PlainText))
-                    editor.InsertTextBox(payload.Body);
+                if (table is null
+                    && !string.IsNullOrWhiteSpace(InCanvasTextEditPlanner.ExtractPlainText(slideBody)))
+                    editor.InsertTextBox(slideBody);
                 return source;
             }
 

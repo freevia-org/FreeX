@@ -26,6 +26,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<KeyValuePair<CellAddress, string>>? _hyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, HyperlinkMetadata>>? _hyperlinkMetadataSnapshot;
     private List<RowColumnShiftHelpers.HyperlinkOtherSheetChange>? _otherSheetHyperlinkBookmarkSnapshot;
+    // R106-io-hyperlink-range-shift: whole-column/row and oversized-bounded hyperlink refs live
+    // outside the CellAddress-keyed Hyperlinks/HyperlinkMetadata dictionaries above (see
+    // Sheet.RangeHyperlinks) and must be shifted independently.
+    private List<KeyValuePair<string, GridRange>>? _rangeHyperlinkSnapshot;
     private List<KeyValuePair<CellAddress, IReadOnlyList<CellTextRun>>>? _richTextRunsSnapshot;
     private List<KeyValuePair<CellAddress, CellPhoneticGuide>>? _phoneticGuideSnapshot;
     private List<(DataValidation Rule, GridRange AppliesTo, List<GridRange> AdditionalRanges)>? _dataValidationSnapshot;
@@ -36,6 +40,10 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<uint>? _rowPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp -- every SeriesIndex-keyed
+    // per-series/per-point collection on a Switch-Row/Column chart whose plotted series span this
+    // insert falls strictly inside must be captured here (undo) since the remap mutates them in place.
+    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
     // R86-commands-insert-move-refadjust-5-1: a chart's own drawing position (Left/Top) is never
     // cell-anchored (see RowColumnShiftHelpers.ShiftChartPositionRowsUp), so it must be captured and
     // shifted separately from _chartSnapshot above, which only tracks DataRange.
@@ -122,6 +130,8 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.HyperlinkMetadata, _beforeRow, _count);
         _otherSheetHyperlinkBookmarkSnapshot = RowColumnShiftHelpers.ShiftHyperlinkBookmarks(
             ctx.Workbook, sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), sheet.Name);
+        _rangeHyperlinkSnapshot = RowColumnShiftHelpers.CaptureRangeHyperlinks(sheet);
+        RowColumnShiftHelpers.ShiftRangeHyperlinksRowsUp(sheet, _beforeRow, _count);
         _richTextRunsSnapshot = RowColumnShiftHelpers.CaptureDictionary(sheet.RichTextRuns);
         RowColumnShiftHelpers.ShiftCommentRowsUp(sheet.RichTextRuns, _beforeRow, _count);
         // R78-selfreg-twin-sweep-2: sheet.CellPhoneticGuides is RichTextRuns' address-keyed
@@ -142,6 +152,13 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.ShiftSortedSetUp(sheet.RowPageBreaks, _beforeRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        // R102: must run BEFORE ShiftChartRowsUp below -- it needs each chart's PRE-insert DataRange
+        // to tell whether _beforeRow falls strictly inside a Switch-Row/Column chart's plotted series
+        // span (see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp -- every SeriesIndex-keyed
+        // collection on such a chart must move in lockstep with the inserted row(s), the row-axis twin
+        // of ShiftChartSeriesFormattingColumnsUp above).
+        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
+        RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         RowColumnShiftHelpers.ShiftChartRowsUp(ctx.Workbook, _sheetId, _beforeRow, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count));
         // R86-commands-insert-move-refadjust-5-1: see ShiftChartPositionRowsUp — rows before
@@ -445,6 +462,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RestoreDictionary(sheet.Hyperlinks, _hyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.HyperlinkMetadata, _hyperlinkMetadataSnapshot);
         RowColumnShiftHelpers.RestoreHyperlinkBookmarks(ctx.Workbook, _otherSheetHyperlinkBookmarkSnapshot);
+        RowColumnShiftHelpers.RestoreRangeHyperlinks(sheet, _rangeHyperlinkSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.RichTextRuns, _richTextRunsSnapshot);
         RowColumnShiftHelpers.RestoreDictionary(sheet.CellPhoneticGuides, _phoneticGuideSnapshot);
         RowColumnShiftHelpers.RestoreRuleRangesInPlace(sheet, _dataValidationSnapshot, _conditionalFormatSnapshot);
@@ -454,6 +472,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 

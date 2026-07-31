@@ -89,8 +89,16 @@ internal static class XlsxWorksheetDrawingPartMerger
         var targetDrawingPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
-            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the sheet's LOAD-TIME name;
+            // a plain rename makes a direct lookup against context.TargetSheets (keyed by CURRENT
+            // name) fail even though the sheet's own worksheet part -- and thus its drawing -- is
+            // completely unaffected. Resolve via XlsxRenamedSourceSheetResolver so a renamed sheet's
+            // drawing still gets merged instead of being silently skipped like a deleted sheet's.
+            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
+                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
+            {
                 continue;
+            }
 
             var sourceDrawingPath = GetWorksheetDrawingPath(sourceArchive, sourceWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs, context);
             var targetDrawingPath = GetWorksheetDrawingPath(targetArchive, targetWorksheetPath, context.WorkbookNs, context.RelNs, context.PackageRelNs);

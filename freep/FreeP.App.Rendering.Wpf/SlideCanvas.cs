@@ -3439,6 +3439,7 @@ public sealed class SlideCanvas : FrameworkElement
         // Select pattern geometry based on preset
         return pat.Preset switch
         {
+            "pct0" => new SolidColorBrush(bg),
             "pct5" => BuildDotPatternBrush(bg, fg, 4, 4, 1, 0.25),
             "pct10" => BuildDotPatternBrush(bg, fg, 4, 4, 1, 0.5),
             "pct20" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 0.75),
@@ -3449,6 +3450,7 @@ public sealed class SlideCanvas : FrameworkElement
             "pct60" => BuildDotPatternBrush(fg, bg, 4, 4, 3, 1.5),
             "pct75" => BuildDotPatternBrush(fg, bg, 4, 4, 2, 1.0),
             "pct90" => BuildDotPatternBrush(fg, bg, 4, 4, 1, 0.25),
+            "pct100" => new SolidColorBrush(fg),
             "horzStripe" => BuildStripePatternBrush(bg, fg, horizontal: true),
             "vertStripe" => BuildStripePatternBrush(bg, fg, horizontal: false),
             "ltHorz" => BuildStripePatternBrush(bg, fg, horizontal: true),

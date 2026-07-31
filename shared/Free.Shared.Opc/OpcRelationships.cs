@@ -238,7 +238,10 @@ public static class OpcRelationships
         return map;
     }
 
-    public static string NextRelationshipId(XDocument relsXml, XNamespace? relationshipsNamespace = null)
+    public static string NextRelationshipId(
+        XDocument relsXml,
+        XNamespace? relationshipsNamespace = null,
+        IReadOnlyCollection<string>? additionalReservedIds = null)
     {
         var ns = relationshipsNamespace ?? Namespace;
         var used = relsXml.Root?
@@ -247,6 +250,20 @@ public static class OpcRelationships
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .ToHashSet(StringComparer.OrdinalIgnoreCase)
             ?? [];
+
+        // R102-io-external-link-authoring-mint-collision-1: a caller can know about r:id values that
+        // are already claimed elsewhere in the package (e.g. an unbacked <externalReference>
+        // placeholder in workbook.xml that deliberately has no Relationship element yet) but that
+        // this document's own Relationship elements can't reveal on their own. Folding those into the
+        // "used" set here keeps the newly minted id from colliding with one of them.
+        if (additionalReservedIds is not null)
+        {
+            foreach (var reservedId in additionalReservedIds)
+            {
+                if (!string.IsNullOrWhiteSpace(reservedId))
+                    used.Add(reservedId);
+            }
+        }
 
         for (var i = 1; ; i++)
         {
@@ -263,7 +280,8 @@ public static class OpcRelationships
         string targetPart,
         string relationshipType,
         Func<string, string, string> resolveRelationshipTarget,
-        Func<string, string, string> createRelationshipTarget)
+        Func<string, string, string> createRelationshipTarget,
+        IReadOnlyCollection<string>? additionalReservedIdsForMinting = null)
     {
         var root = relsXml.Root;
         if (root is null)
@@ -287,7 +305,7 @@ public static class OpcRelationships
                 return relationship.Attribute("Id")?.Value ?? string.Empty;
         }
 
-        var id = NextRelationshipId(relsXml, relationshipsNamespace);
+        var id = NextRelationshipId(relsXml, relationshipsNamespace, additionalReservedIdsForMinting);
         root.Add(new XElement(
             relationshipsNamespace + "Relationship",
             new XAttribute("Id", id),

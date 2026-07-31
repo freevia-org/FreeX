@@ -70,6 +70,7 @@ public static partial class XlsxChartPartReader
         ApplyVerbatimSeriesFormulasIfNeeded(
             pieFamilyChart.Elements(ChartNs + "ser"),
             sheetId,
+            sheetNameResolver,
             result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);
@@ -162,6 +163,7 @@ public static partial class XlsxChartPartReader
         ApplyVerbatimSeriesFormulasIfNeeded(
             bubbleChart.Elements(ChartNs + "ser"),
             sheetId,
+            sheetNameResolver,
             result);
         XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
         XlsxChartSanitizer.SanitizeLoadedChart(result);

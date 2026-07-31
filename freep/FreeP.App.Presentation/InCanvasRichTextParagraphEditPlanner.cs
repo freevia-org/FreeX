@@ -30,6 +30,7 @@ public static class InCanvasRichTextParagraphEditPlanner
             AutoNumType = source.AutoNumType,
             AutoNumStartAt = source.AutoNumStartAt,
             AutoNumStartAtSpecified = source.AutoNumStartAtSpecified && !clearAutoNumStartAtSpecified,
+            AutoNumTextTemplate = source.AutoNumTextTemplate,
             MarginLeftEmu = source.MarginLeftEmu,
             IndentEmu = source.IndentEmu,
             BulletColor = source.BulletColor,

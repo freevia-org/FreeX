@@ -220,7 +220,7 @@ public static class PasteCommandFactory
             // silently combine values with no format applied (R30-clipboard-paste-special-ops-1).
             if (mode == PasteCellsMode.Formats)
             {
-                return new PasteFormatsCommand(
+                var specialFormatsCommand = new PasteFormatsCommand(
                     targetSheetId,
                     sourceCells
                         .Where(c => !options.SkipBlanks || !IsBlank(c.Cell))
@@ -234,6 +234,22 @@ public static class PasteCommandFactory
                                     (int)destination.Col - (int)sourceRange.Start.Col),
                             c.Cell.StyleId))
                         .ToList());
+
+                // A Formats-only paste must carry the source's merged-region structure to the
+                // destination just like the tiled path (BuildTiledMergedRegionCommands below) and the
+                // mode==All Paste Special path (specialCarriesFormatting a few lines down) already do --
+                // otherwise the exact same user action (Paste Special > Formats on a copied merged
+                // cell) merges or doesn't merge the destination purely depending on whether the
+                // destination happens to be a whole-number tile of the source (R103-paste-formats-merge-1).
+                if (options.Operation == PasteSpecialOperation.None &&
+                    sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange)))
+                {
+                    return new CompositeWorkbookCommand(
+                        "Paste Special",
+                        [specialFormatsCommand, new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, options.Transpose)]);
+                }
+
+                return specialFormatsCommand;
             }
 
             var specialCells = new List<(CellAddress Source, Cell Cell)>(sourceCells.Count);
@@ -403,12 +419,27 @@ public static class PasteCommandFactory
 
         if (mode == PasteCellsMode.Formats)
         {
-            return new PasteFormatsCommand(
+            var plainFormatsCommand = new PasteFormatsCommand(
                 targetSheetId,
                 sourceCells
                     .Where(c => !options.SkipBlanks || !IsBlank(c.Cell))
                     .Select(c => (PasteCommandCellFactory.Shift(c.Source, targetSheetId, rowDelta, colDelta), c.Cell.StyleId))
                     .ToList());
+
+            // Same merge carry-over as the special-options Formats branch above and the tiled path
+            // below -- see R103-paste-formats-merge-1. This is the common case (plain Paste Special >
+            // Formats onto a same-size destination), so it is the primary fix for the reported
+            // inconsistency: copying a merged cell and pasting Formats-only onto another single cell
+            // must merge the destination exactly as the tiled/mode==All paths already do.
+            if (options.Operation == PasteSpecialOperation.None &&
+                sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange)))
+            {
+                return new CompositeWorkbookCommand(
+                    "Paste",
+                    [plainFormatsCommand, new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, options.Transpose)]);
+            }
+
+            return plainFormatsCommand;
         }
 
         var edits = new List<(CellAddress Address, Cell Cell)>(sourceCells.Count);

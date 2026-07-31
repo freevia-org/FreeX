@@ -355,6 +355,28 @@ public sealed class FindReplaceCommandTests
     }
 
     [Fact]
+    public void ReplaceOne_NestedGroupChild_ChangesTextAndIsUndoable()
+    {
+        var p = Helpers.MakePresentation(1);
+        var child = Helpers.MakeShape(3, "hello world");
+        var innerGroup = new SlideShape { Id = 2, Kind = SlideShapeKind.Group };
+        innerGroup.Children.Add(child);
+        var outerGroup = new SlideShape { Id = 1, Kind = SlideShapeKind.Group };
+        outerGroup.Children.Add(innerGroup);
+        p.Slides[0].Shapes.Add(outerGroup);
+
+        var bus = new PresentationCommandBus(p);
+        var sess = new EditingSession(p, bus);
+        var match = sess.FindAll("hello").Should().ContainSingle().Subject;
+
+        sess.ReplaceOne(match, "goodbye");
+        child.TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("goodbye world");
+
+        sess.Undo();
+        child.TextBody.Paragraphs[0].Runs[0].Text.Should().Be("hello world");
+    }
+
+    [Fact]
     public void ReplaceOne_OnlyChangesMatchedSubstring_NotRest()
     {
         var (p, sess) = MakeSessionWithShape(1, "aaa bbb aaa");

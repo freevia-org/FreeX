@@ -398,6 +398,15 @@ public static partial class NumberFormatter
         return new DateTime(roundedTicks, dateTime.Kind);
     }
 
+    /// <summary>
+    /// Public entry point for callers outside this partial class (e.g. AutoFilter's dropdown/
+    /// checklist planners in FreeX.App.Presentation) that need to know whether a cell's number
+    /// format string is date/time-like -- mirroring Excel, which has no separate "date value"
+    /// runtime type distinct from a formatted double: a cell is a date purely because its number
+    /// format displays it as one. See R103-app-presentation-autofilter-1-1.
+    /// </summary>
+    public static bool IsDateTimeNumberFormat(string format) => IsDateTimeFormat(format);
+
     // Detect date/time format: has date/time tokens and no digit-only tokens
     private static bool IsDateTimeFormat(string format)
     {

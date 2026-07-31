@@ -913,6 +913,12 @@ public sealed partial class NativeJsonAdapter
         public double FontSize { get; set; } = 11;
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public CellFontScheme FontScheme { get; set; } = CellFontScheme.None;
+        // Not JsonIgnore(WhenWritingDefault): the business default is 1 (not the CLR default of 0
+        // that attribute checks against), so that condition would never actually suppress anything.
+        public int Charset { get; set; } = 1;
+        // Not JsonIgnore(WhenWritingDefault): the business default is 2 (not the CLR default of 0
+        // that attribute checks against), so that condition would never actually suppress anything.
+        public int FontFamily { get; set; } = 2;
         public bool Bold { get; set; }
         public bool Italic { get; set; }
         public bool Underline { get; set; }

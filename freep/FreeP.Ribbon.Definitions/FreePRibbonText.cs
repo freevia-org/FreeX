@@ -353,12 +353,23 @@ internal static class FreePRibbonText
     public static RibbonText ArrangeBringForwardCommand { get; } = new("Ribbon_Command_ArrangeBringForward_Label", "Ribbon_Command_ArrangeBringForward_KeyTip");
     public static RibbonText ArrangeSendBackwardCommand { get; } = new("Ribbon_Command_ArrangeSendBackward_Label", "Ribbon_Command_ArrangeSendBackward_KeyTip");
     public static RibbonText ArrangeSendToBackCommand { get; } = new("Ribbon_Command_ArrangeSendToBack_Label", "Ribbon_Command_ArrangeSendToBack_KeyTip");
+    public static RibbonText ArrangeFlipHorizontalCommand { get; } = new("Ribbon_Command_ArrangeFlipHorizontal_Label", "Ribbon_Command_ArrangeFlipHorizontal_KeyTip");
+    public static RibbonText ArrangeFlipVerticalCommand { get; } = new("Ribbon_Command_ArrangeFlipVertical_Label", "Ribbon_Command_ArrangeFlipVertical_KeyTip");
+    public static RibbonText ArrangeRotateLeft90Command { get; } = new("Ribbon_Command_ArrangeRotateLeft90_Label", "Ribbon_Command_ArrangeRotateLeft90_KeyTip");
+    public static RibbonText ArrangeRotateRight90Command { get; } = new("Ribbon_Command_ArrangeRotateRight90_Label", "Ribbon_Command_ArrangeRotateRight90_KeyTip");
+    public static RibbonText ArrangeRotationOptionsCommand { get; } = new("Ribbon_Command_ArrangeRotationOptions_Label", "Ribbon_Command_ArrangeRotationOptions_KeyTip");
     public static RibbonText ArrangeAlignLeftCommand { get; } = new("Ribbon_Command_ArrangeAlignLeft_Label", "Ribbon_Command_ArrangeAlignLeft_KeyTip");
     public static RibbonText ArrangeAlignCenterHorizontalCommand { get; } = new("Ribbon_Command_ArrangeAlignCenterHorizontal_Label", "Ribbon_Command_ArrangeAlignCenterHorizontal_KeyTip");
     public static RibbonText ArrangeAlignRightCommand { get; } = new("Ribbon_Command_ArrangeAlignRight_Label", "Ribbon_Command_ArrangeAlignRight_KeyTip");
     public static RibbonText ArrangeAlignTopCommand { get; } = new("Ribbon_Command_ArrangeAlignTop_Label", "Ribbon_Command_ArrangeAlignTop_KeyTip");
     public static RibbonText ArrangeAlignMiddleCommand { get; } = new("Ribbon_Command_ArrangeAlignMiddle_Label", "Ribbon_Command_ArrangeAlignMiddle_KeyTip");
     public static RibbonText ArrangeAlignBottomCommand { get; } = new("Ribbon_Command_ArrangeAlignBottom_Label", "Ribbon_Command_ArrangeAlignBottom_KeyTip");
+    public static RibbonText ArrangeAlignLeftToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignLeftToSlide_Label", "Ribbon_Command_ArrangeAlignLeftToSlide_KeyTip");
+    public static RibbonText ArrangeAlignCenterHorizontalToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignCenterHorizontalToSlide_Label", "Ribbon_Command_ArrangeAlignCenterHorizontalToSlide_KeyTip");
+    public static RibbonText ArrangeAlignRightToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignRightToSlide_Label", "Ribbon_Command_ArrangeAlignRightToSlide_KeyTip");
+    public static RibbonText ArrangeAlignTopToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignTopToSlide_Label", "Ribbon_Command_ArrangeAlignTopToSlide_KeyTip");
+    public static RibbonText ArrangeAlignMiddleToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignMiddleToSlide_Label", "Ribbon_Command_ArrangeAlignMiddleToSlide_KeyTip");
+    public static RibbonText ArrangeAlignBottomToSlideCommand { get; } = new("Ribbon_Command_ArrangeAlignBottomToSlide_Label", "Ribbon_Command_ArrangeAlignBottomToSlide_KeyTip");
     public static RibbonText ArrangeDistributeHorizontalCommand { get; } = new("Ribbon_Command_ArrangeDistributeHorizontal_Label", "Ribbon_Command_ArrangeDistributeHorizontal_KeyTip");
     public static RibbonText ArrangeDistributeVerticalCommand { get; } = new("Ribbon_Command_ArrangeDistributeVertical_Label", "Ribbon_Command_ArrangeDistributeVertical_KeyTip");
 
@@ -401,6 +412,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtVerticalProcessCommand { get; } = new("Ribbon_Command_SmartArtVerticalProcess_Label", "Ribbon_Command_SmartArtVerticalProcess_KeyTip");
     public static RibbonText SmartArtVerticalBoxListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBoxList_Label", "Ribbon_Command_SmartArtVerticalBoxList_KeyTip");
     public static RibbonText SmartArtVerticalChevronListCommand { get; } = new("Ribbon_Command_SmartArtVerticalChevronList_Label", "Ribbon_Command_SmartArtVerticalChevronList_KeyTip");
+    public static RibbonText SmartArtVerticalArrowListCommand { get; } = new("Ribbon_Command_SmartArtVerticalArrowList_Label", "Ribbon_Command_SmartArtVerticalArrowList_KeyTip");
     public static RibbonText SmartArtVerticalBulletListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBulletList_Label", "Ribbon_Command_SmartArtVerticalBulletList_KeyTip");
     public static RibbonText SmartArtHorizontalBulletListCommand { get; } = new("Ribbon_Command_SmartArtHorizontalBulletList_Label", "Ribbon_Command_SmartArtHorizontalBulletList_KeyTip");
     public static RibbonText SmartArtHorizontalBlockListCommand { get; } = new("Ribbon_Command_SmartArtHorizontalBlockList_Label", "Ribbon_Command_SmartArtHorizontalBlockList_KeyTip");
@@ -416,6 +428,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtDescendingBlockListCommand { get; } = new("Ribbon_Command_SmartArtDescendingBlockList_Label", "Ribbon_Command_SmartArtDescendingBlockList_KeyTip");
     public static RibbonText SmartArtBasicPyramidCommand { get; } = new("Ribbon_Command_SmartArtBasicPyramid_Label", "Ribbon_Command_SmartArtBasicPyramid_KeyTip");
     public static RibbonText SmartArtPyramidListCommand { get; } = new("Ribbon_Command_SmartArtPyramidList_Label", "Ribbon_Command_SmartArtPyramidList_KeyTip");
+    public static RibbonText SmartArtInvertedPyramidCommand { get; } = new("Ribbon_Command_SmartArtInvertedPyramid_Label", "Ribbon_Command_SmartArtInvertedPyramid_KeyTip");
     public static RibbonText SmartArtRadialCycleCommand { get; } = new("Ribbon_Command_SmartArtRadialCycle_Label", "Ribbon_Command_SmartArtRadialCycle_KeyTip");
     public static RibbonText SmartArtBasicRadialCommand { get; } = new("Ribbon_Command_SmartArtBasicRadial_Label", "Ribbon_Command_SmartArtBasicRadial_KeyTip");
     public static RibbonText SmartArtRadialListCommand { get; } = new("Ribbon_Command_SmartArtRadialList_Label", "Ribbon_Command_SmartArtRadialList_KeyTip");

@@ -16,7 +16,7 @@ namespace FreeP.App.Compositor;
 ///   <see cref="SmartArtFamily.List"/>      — vertical stack of boxes
 ///   <see cref="SmartArtFamily.Cycle"/>     — N boxes on a circle with arrow connectors
 ///   <see cref="SmartArtFamily.Hierarchy"/> — tree (root top, children below, connector lines)
-///   <see cref="SmartArtFamily.Matrix"/>    — up to four boxes in a quadrant grid
+///   <see cref="SmartArtFamily.Matrix"/>    — two-column grid of boxes with additional rows
 ///
 /// Returns null for <see cref="SmartArtFamily.Unknown"/> → compositor falls back to cached drawing.
 ///
@@ -132,6 +132,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalChevronListLayout(data.LayoutUniqueId))
             return LayoutVerticalChevronList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsVerticalArrowListLayout(data.LayoutUniqueId))
+            return LayoutVerticalArrowList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsHorizontalBulletListLayout(data.LayoutUniqueId))
             return LayoutHorizontalBulletList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -150,8 +153,14 @@ public static class SmartArtLayoutEngine
         if (IsPyramidListLayout(data.LayoutUniqueId))
             return LayoutPyramidList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsInvertedPyramidLayout(data.LayoutUniqueId))
+            return LayoutInvertedPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsTitledMatrixLayout(data.LayoutUniqueId))
             return LayoutTitledMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
+        if (IsCycle2Layout(data.LayoutUniqueId))
+            return LayoutCycle2(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan, theme);
 
         if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy3Layout(data.LayoutUniqueId))
             return LayoutHierarchy3(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
@@ -473,6 +482,42 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
+    /// Inverted Pyramid geometry keeps the authored layout identity distinct
+    /// from Pyramid List while producing editable descending bands.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutInvertedPyramid(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var shapes = new List<SlideShape>();
+        var outerPadX = (long)(fcx * OuterPaddingFrac);
+        var outerPadY = (long)(fcy * OuterPaddingFrac);
+        var gapY = Math.Max((long)(fcy * 0.01), 1L);
+        var innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        var availableH = Math.Max(fcy - 2 * outerPadY - Math.Max(nodes.Count - 1, 0) * gapY, 1L);
+        var bandH = Math.Max(availableH / Math.Max(nodes.Count, 1), 1L);
+        var minimumWidthFraction = nodes.Count == 1 ? 1.0 : 0.30;
+        var currentY = fy + outerPadY;
+
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var progress = nodes.Count == 1 ? 1.0 : (double)index / (nodes.Count - 1);
+            var widthFraction = 1.0 - ((1.0 - minimumWidthFraction) * progress);
+            var bandW = Math.Max((long)(innerW * widthFraction), 1L);
+            var x = fx + outerPadX + (innerW - bandW) / 2;
+            var nodeStyle = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.List);
+            var kind = index == nodes.Count - 1 ? DrawingShapeKind.Triangle : DrawingShapeKind.Trapezoid;
+            shapes.Add(MakeBox(
+                (uint)(540 + index), nodes[index].Text, nodeStyle,
+                x, currentY, bandW, bandH, NodeFontSizePt, kind));
+            currentY += bandH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
     /// Bending Process uses a two-track zig-zag: each stage advances horizontally while
     /// alternating between the upper and lower track.  The diagonal connectors preserve
     /// the authored sequence without collapsing the preset into the generic single-row
@@ -597,11 +642,11 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
     {
-        if (nodes.Count < 2 || string.IsNullOrWhiteSpace(nodes[0].Text))
+        if (nodes.Count == 0 || string.IsNullOrWhiteSpace(nodes[0].Text))
             return null;
 
         var bodyNodes = nodes.Skip(1).ToList();
-        int columns = bodyNodes.Count == 1 ? 1 : 2;
+        int columns = bodyNodes.Count <= 1 ? 1 : 2;
         int rows = (bodyNodes.Count + columns - 1) / columns;
 
         long outerPadX = (long)(fcx * OuterPaddingFrac);
@@ -617,7 +662,9 @@ public static class SmartArtLayoutEngine
 
         long bodyW = fcx - 2 * outerPadX;
         long boxW = Math.Max((bodyW - (columns - 1) * gapX) / columns, 1L);
-        long boxH = Math.Max((bodyH - (rows - 1) * gapY) / rows, 1L);
+        long boxH = rows > 0
+            ? Math.Max((bodyH - (rows - 1) * gapY) / rows, 1L)
+            : 1L;
 
         var shapes = new List<SlideShape>(bodyNodes.Count + 1)
         {
@@ -1062,6 +1109,42 @@ public static class SmartArtLayoutEngine
         {
             var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, leftX, curY, boxW, boxH));
+            curY += boxH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Vertical Arrow List geometry: editable down-arrow stages stack from top
+    /// to bottom and use the shared list style plan. The arrow bodies carry the
+    /// progression cue, so no separate connector shapes are emitted.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutVerticalArrowList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>(n);
+        if (n == 0)
+            return shapes;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = Math.Max((long)(fcy * GapFrac * 0.65), 1L);
+        long boxW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availableH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long boxH = Math.Max(availableH / n, 1L);
+        long curY = fy + outerPadY;
+
+        for (int i = 0; i < n; i++)
+        {
+            var style = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                (uint)(760 + i), nodes[i].Text, style,
+                fx + outerPadX, curY, boxW, boxH,
+                NodeFontSizePt, DrawingShapeKind.DownArrow));
             curY += boxH + gapY;
         }
 
@@ -2369,6 +2452,87 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// PowerPoint's cycle2 layout places two to seven equal ellipse nodes around an
+    /// elliptical ring and inserts tangent right-arrow shapes between consecutive
+    /// nodes. The native layout definition caps the child count at seven; larger or
+    /// malformed diagrams return null and remain on the cached drawing path.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutCycle2(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan,
+        PresentationTheme theme)
+    {
+        if (nodes.Count is < 2 or > 7)
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long innerW = Math.Max(fcx - 2 * padX, 1L);
+        long innerH = Math.Max(fcy - 2 * padY, 1L);
+        double centerX = fx + padX + innerW / 2.0;
+        double centerY = fy + padY + innerH / 2.0;
+        double radiusX = innerW * 0.27;
+        double radiusY = innerH * 0.34;
+        long diameter = Math.Max(
+            Math.Min((long)(innerW * 0.18), (long)(innerH * 0.28)),
+            1L);
+        double angleStep = 360.0 / nodes.Count;
+        var centers = new (double X, double Y)[nodes.Count];
+        var shapes = new List<SlideShape>(nodes.Count * 2);
+        var arrowStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Cycle) with
+        {
+            Fill = new ThemeAwareColor(SmartArtStylePlanner.ResolveNeutralConnector(theme))
+        };
+        uint id = 860;
+
+        // Arrows are emitted first so their heads remain behind the ellipse nodes.
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            double angle = (-90 + i * angleStep) * Math.PI / 180.0;
+            centers[i] = (centerX + radiusX * Math.Cos(angle), centerY + radiusY * Math.Sin(angle));
+        }
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var from = centers[i];
+            var to = centers[(i + 1) % nodes.Count];
+            double midX = (from.X + to.X) / 2.0;
+            double midY = (from.Y + to.Y) / 2.0;
+            double midAngle = (-90 + (i + 0.5) * angleStep) + 90.0;
+            var arrow = MakeBox(
+                id++, string.Empty, arrowStyle,
+                (long)(midX - diameter * 0.135),
+                (long)(midY - diameter * 0.17),
+                Math.Max((long)(diameter * 0.27), 1L),
+                Math.Max((long)(diameter * 0.34), 1L),
+                NodeFontSizePt,
+                DrawingShapeKind.RightArrow);
+            arrow.Name = $"SmartArt_Cycle2_Arrow_{i}";
+            arrow.TextBody = null;
+            arrow.Outline = ShapeOutline.None.Instance;
+            arrow.RotationDeg = midAngle;
+            shapes.Add(arrow);
+        }
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Cycle);
+            var center = centers[i];
+            shapes.Add(MakeBox(
+                id++, nodes[i].Text, nodeStyle,
+                (long)(center.X - diameter / 2.0),
+                (long)(center.Y - diameter / 2.0),
+                diameter,
+                diameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
     // ── Hierarchy layout ───────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -3173,6 +3337,15 @@ public static class SmartArtLayoutEngine
         return string.Equals(id.Split('/').Last(), "verticalchevronlist", StringComparison.Ordinal);
     }
 
+    private static bool IsVerticalArrowListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalarrowlist", StringComparison.Ordinal);
+    }
+
     private static bool IsVerticalBulletListLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
@@ -3216,6 +3389,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "pyramidlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsInvertedPyramidLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "invertedpyramid", StringComparison.Ordinal);
     }
 
     private static bool IsTitledMatrixLayout(string uniqueId)
@@ -3312,5 +3494,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "interlockingrings", StringComparison.Ordinal);
+    }
+
+    private static bool IsCycle2Layout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "cycle2", StringComparison.Ordinal);
     }
 }

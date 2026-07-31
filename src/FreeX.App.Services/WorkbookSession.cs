@@ -9,7 +9,7 @@ using CoreSortKey = FreeX.Core.Commands.SortKey;
 
 namespace FreeX.App.Services;
 
-public sealed class WorkbookSession
+public sealed class WorkbookSession : IDisposable
 {
     private sealed record InternalClipboard(
         GridRange SourceRange,
@@ -125,7 +125,6 @@ public sealed class WorkbookSession
                 StringComparison.OrdinalIgnoreCase);
     }
 
-    private const double MaximumRowHeight = 409.5;
     private const string MultiRangeClipboardErrorSuffix =
         " does not support multiple selected ranges yet.";
 
@@ -138,6 +137,9 @@ public sealed class WorkbookSession
     private readonly IViewportService _viewportService;
     private readonly bool _includeObjects;
     private readonly WorkbookSession? _sharedDocumentStateOwner;
+    private int _siblingViewCount;
+    private int _isDisposed;
+    private int _documentRetired;
     private string? _currentFilePath;
     private WorkbookFileAccessIdentity? _currentFileAccessIdentity;
     private XlsxFeatureReport? _currentXlsxFeatureReport;
@@ -350,19 +352,81 @@ public sealed class WorkbookSession
     /// </summary>
     public WorkbookSession CreateSiblingView(double viewportHeight, double viewportWidth)
     {
+        ThrowIfDisposed();
         var documentOwner = _sharedDocumentStateOwner ?? this;
-        var sibling = new WorkbookSession(
-            _source,
-            _adapters,
-            _cellEditService,
-            new WorkbookSheetSelectionService(),
-            new ViewportService(),
-            viewportHeight,
-            viewportWidth,
-            _includeObjects,
-            documentOwner);
-        sibling.InitializeSiblingView(ActiveSheet.Id);
-        return sibling;
+        documentOwner.AcquireSiblingView();
+        try
+        {
+            var sibling = new WorkbookSession(
+                _source,
+                _adapters,
+                _cellEditService,
+                new WorkbookSheetSelectionService(),
+                new ViewportService(),
+                viewportHeight,
+                viewportWidth,
+                _includeObjects,
+                documentOwner);
+            sibling.InitializeSiblingView(ActiveSheet.Id);
+            return sibling;
+        }
+        catch
+        {
+            documentOwner.ReleaseSiblingView();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Releases this view's event subscriptions and, once every sibling view has
+    /// gone away, retires the shared workbook from the recalculation and XLSX
+    /// source-package state. Root and sibling sessions therefore have explicit,
+    /// bounded ownership without allowing one window to invalidate another
+    /// window's shared document.
+    /// </summary>
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _isDisposed, 1) != 0)
+            return;
+
+        WorkbookChanged = null;
+        if (_sharedDocumentStateOwner is { } owner)
+        {
+            owner.ReleaseSiblingView();
+            return;
+        }
+
+        TryRetireDocument();
+    }
+
+    private void AcquireSiblingView() =>
+        Interlocked.Increment(ref _siblingViewCount);
+
+    private void ReleaseSiblingView()
+    {
+        if (Interlocked.Decrement(ref _siblingViewCount) == 0 &&
+            Volatile.Read(ref _isDisposed) != 0)
+        {
+            TryRetireDocument();
+        }
+    }
+
+    private void TryRetireDocument()
+    {
+        if (Volatile.Read(ref _siblingViewCount) != 0 ||
+            Interlocked.Exchange(ref _documentRetired, 1) != 0)
+        {
+            return;
+        }
+
+        _cellEditService.RetireWorkbook(Workbook);
+        XlsxFileAdapter.DetachSourcePackage(Workbook);
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (Volatile.Read(ref _isDisposed) != 0)
+            throw new ObjectDisposedException(nameof(WorkbookSession));
     }
 
     private void InitializeSiblingView(SheetId sheetId)
@@ -5386,7 +5450,7 @@ public sealed class WorkbookSession
     }
 
     private static double GetFittingRowHeight(double fontSize) =>
-        Math.Min(MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
+        Math.Min(AutoFitSizingService.MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
 
     private static bool HasBorderPresetChanges(
         GridRange range,

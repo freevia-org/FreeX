@@ -704,6 +704,22 @@ public sealed partial class Sheet
     public Dictionary<CellAddress, HyperlinkMetadata> HyperlinkMetadata { get; } = [];
 
     /// <summary>
+    /// R106-io-hyperlink-range-shift: whole-column ("C:C"), whole-row ("3:3"), and oversized
+    /// bounded-range (over 100,000 cells) hyperlink refs. These can never enter
+    /// <see cref="Hyperlinks"/>/<see cref="HyperlinkMetadata"/> (both are single-<see cref="CellAddress"/>-
+    /// keyed, and ClosedXML would otherwise materialize one entry per cell in the range -- up to ~1M
+    /// entries for a whole column). Key is the ORIGINAL ref string exactly as first read from the
+    /// source file (a stable identity used to re-correlate with the pristine source-package XML
+    /// snapshot at save time); value is the CURRENT (live) <see cref="GridRange"/>, kept up to date by
+    /// every row/column insert or delete the session performs via RowColumnShiftHelpers, mirroring how
+    /// DataValidation/ConditionalFormat ranges are shifted. A whole-column/row range's GridRange spans
+    /// the full row extent (1..<see cref="CellAddress.MaxRow"/>) or column extent
+    /// (1..<see cref="CellAddress.MaxCol"/>) respectively, so the same shift helpers that already
+    /// special-case a full-column/row selection apply unchanged.
+    /// </summary>
+    public Dictionary<string, GridRange> RangeHyperlinks { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// Per-cell rich-text run sequences, keyed by cell address.
     /// Only populated when a text cell has more than one run <em>or</em> a run deviates from the
     /// cell's <see cref="CellStyle"/>.  The plain-text value in <c>Cell.Value</c> (a

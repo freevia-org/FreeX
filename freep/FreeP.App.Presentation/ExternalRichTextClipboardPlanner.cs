@@ -43,6 +43,7 @@ public static class ExternalRichTextClipboardPlanner
             ListTable,
             ListOverrideTable,
             ListLevelText,
+            ListLevelNumbers,
             FieldInstruction,
             Object,
             ObjectClass,
@@ -62,11 +63,19 @@ public static class ExternalRichTextClipboardPlanner
         {
             public int NumberFormat { get; set; }
             public int StartAt { get; set; } = 1;
+            public bool NumberFormatSpecified { get; set; }
+            public bool StartAtSpecified { get; set; }
+            public int? LeftIndentTwips { get; set; }
+            public int? FirstLineIndentTwips { get; set; }
+            public string? BulletChar { get; set; }
+            public string LevelTextTemplate { get; set; } = string.Empty;
         }
 
         private sealed class ListOverrideDefinition
         {
             public int ListId { get; set; }
+            public Dictionary<int, int> StartAtByLevel { get; } = new();
+            public Dictionary<int, ListLevelDefinition> FormattingByLevel { get; } = new();
         }
 
         private sealed class FieldContext
@@ -92,6 +101,9 @@ public static class ExternalRichTextClipboardPlanner
             private double _borderWidthPt = 0.75;
 
             public int? FillRgb { get; set; }
+            public string? FillPattern { get; set; }
+            public int? FillForegroundRgb { get; set; }
+            public int? FillBackgroundRgb { get; set; }
             public InCanvasRichClipboardTableBorder? Left { get; private set; }
             public InCanvasRichClipboardTableBorder? Right { get; private set; }
             public InCanvasRichClipboardTableBorder? Top { get; private set; }
@@ -101,6 +113,10 @@ public static class ExternalRichTextClipboardPlanner
             public double? InsetRightPt { get; set; }
             public double? InsetTopPt { get; set; }
             public double? InsetBottomPt { get; set; }
+            public bool HorizontalMergeStart { get; set; }
+            public bool HorizontalMergeContinuation { get; set; }
+            public bool VerticalMergeStart { get; set; }
+            public bool VerticalMergeContinuation { get; set; }
 
             public void BeginBorder(TableCellBorderSide side)
             {
@@ -137,12 +153,22 @@ public static class ExternalRichTextClipboardPlanner
                     InsetLeftPt,
                     InsetRightPt,
                     InsetTopPt,
-                    InsetBottomPt);
+                    InsetBottomPt,
+                    HorizontalMergeStart,
+                    HorizontalMergeContinuation,
+                    VerticalMergeStart,
+                    VerticalMergeContinuation,
+                    FillPattern,
+                    FillForegroundRgb,
+                    FillBackgroundRgb ?? FillRgb);
             }
 
             public void Reset()
             {
                 FillRgb = null;
+                FillPattern = null;
+                FillForegroundRgb = null;
+                FillBackgroundRgb = null;
                 Left = null;
                 Right = null;
                 Top = null;
@@ -154,6 +180,10 @@ public static class ExternalRichTextClipboardPlanner
                 InsetRightPt = null;
                 InsetTopPt = null;
                 InsetBottomPt = null;
+                HorizontalMergeStart = false;
+                HorizontalMergeContinuation = false;
+                VerticalMergeStart = false;
+                VerticalMergeContinuation = false;
             }
 
             private void CommitBorder()
@@ -191,6 +221,8 @@ public static class ExternalRichTextClipboardPlanner
             public bool ItalicSet;
             public bool Underline;
             public bool Strikethrough;
+            public int? BaselineOffset;
+            public RunTextCaps Caps;
             public bool? RunRightToLeft;
             public int ColorIndex;
             public int UnicodeSkip = 1;
@@ -213,6 +245,7 @@ public static class ExternalRichTextClipboardPlanner
             public Hyperlink? Hyperlink;
             public bool InTable;
             public int TableNesting;
+            public int ListLevelTextPrefixBytesRemaining;
 
             public State Clone() => (State)MemberwiseClone();
         }
@@ -224,6 +257,8 @@ public static class ExternalRichTextClipboardPlanner
             bool Italic,
             bool Underline,
             bool Strikethrough,
+            int? BaselineOffset,
+            RunTextCaps Caps,
             bool? RunRightToLeft,
             SrgbColor? Color,
             bool BoldSet,
@@ -261,12 +296,19 @@ public static class ExternalRichTextClipboardPlanner
         private int _currentListLevelIndex = -1;
         private ListOverrideDefinition? _currentListOverride;
         private int _currentListOverrideId;
+        private int _currentListOverrideLevel = -1;
+        private bool _currentListOverrideStartsAt;
+        private ListLevelDefinition? _currentListOverrideLevelDefinition;
         private LegacyListDefinition? _legacyList;
         private readonly HashSet<(int ListId, int Level)> _seenListLevels = new();
         private readonly List<byte> _pictureBytes = new();
         private readonly List<InCanvasRichClipboardImage> _picturePayloads = new();
         private int _picturePendingNibble = -1;
         private bool _pictureCaptureStarted;
+        private int? _pictureWidthGoalTwips;
+        private int? _pictureHeightGoalTwips;
+        private double _pictureScaleX = 100;
+        private double _pictureScaleY = 100;
         private readonly StringBuilder _objectClass = new();
         private readonly StringBuilder _objectName = new();
         private readonly List<byte> _objectBytes = new();
@@ -355,6 +397,8 @@ public static class ExternalRichTextClipboardPlanner
                     }
                     if (_state.Destination == Destination.ObjectData)
                         FinalizeObjectCapture();
+                    if (_state.Destination == Destination.Picture)
+                        FinalizePictureCapture();
                     State restoredState = _states.Pop();
                     if (_hasActiveStyle && !SameStyle(_activeStyle, CurrentStyle(restoredState)))
                         FlushActiveRun();
@@ -476,6 +520,17 @@ public static class ExternalRichTextClipboardPlanner
                     {
                         _currentListOverride = new ListOverrideDefinition();
                         _currentListOverrideId = 0;
+                        _currentListOverrideLevel = -1;
+                        _currentListOverrideStartsAt = false;
+                        _currentListOverrideLevelDefinition = null;
+                    }
+                    break;
+                case "lfolevel":
+                    if (_state.Destination == Destination.ListOverrideTable && _currentListOverride is not null)
+                    {
+                        _currentListOverrideLevel = Math.Clamp(_currentListOverrideLevel + 1, 0, 8);
+                        _currentListOverrideStartsAt = false;
+                        _currentListOverrideLevelDefinition = null;
                     }
                     break;
                 case "listlevel":
@@ -484,6 +539,14 @@ public static class ExternalRichTextClipboardPlanner
                         _currentListLevelIndex = Math.Clamp(_currentListLevelIndex + 1, 0, 8);
                         _currentListLevel = new ListLevelDefinition();
                         _currentList.Levels[_currentListLevelIndex] = _currentListLevel;
+                    }
+                    else if (_state.Destination == Destination.ListOverrideTable
+                             && _currentListOverride is not null
+                             && _currentListOverrideLevel >= 0)
+                    {
+                        _currentListOverrideLevelDefinition = new ListLevelDefinition();
+                        _currentListOverride.FormattingByLevel[_currentListOverrideLevel] =
+                            _currentListOverrideLevelDefinition;
                     }
                     break;
                 case "listid":
@@ -519,15 +582,53 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "levelnfc":
                     if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                    {
                         _currentListLevel.NumberFormat = Math.Clamp(value, 0, 255);
+                        _currentListLevel.NumberFormatSpecified = true;
+                    }
+                    else if (_state.Destination == Destination.ListOverrideTable
+                             && _currentListOverrideLevelDefinition is not null)
+                    {
+                        _currentListOverrideLevelDefinition.NumberFormat = Math.Clamp(value, 0, 255);
+                        _currentListOverrideLevelDefinition.NumberFormatSpecified = true;
+                    }
                     break;
                 case "levelstartat":
                     if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                    {
                         _currentListLevel.StartAt = Math.Clamp(value, 1, 1_000_000);
+                        _currentListLevel.StartAtSpecified = true;
+                    }
+                    else if (_state.Destination == Destination.ListOverrideTable
+                             && _currentListOverride is not null
+                             && _currentListOverrideLevel >= 0)
+                    {
+                        var startAt = Math.Clamp(value, 1, 1_000_000);
+                        if (_currentListOverrideStartsAt)
+                            _currentListOverride.StartAtByLevel[_currentListOverrideLevel] = startAt;
+                        if (_currentListOverrideLevelDefinition is not null)
+                        {
+                            _currentListOverrideLevelDefinition.StartAt = startAt;
+                            _currentListOverrideLevelDefinition.StartAtSpecified = true;
+                        }
+                    }
+                    break;
+                case "listoverridestart":
+                case "listoverridestartat":
+                    if (_state.Destination == Destination.ListOverrideTable && _currentListOverride is not null)
+                        _currentListOverrideStartsAt = value != 0;
                     break;
                 case "leveltext":
                     _state.Destination = Destination.ListLevelText;
                     _state.SkipOutput = true;
+                    // The first hex byte is the RTF level-text length marker.
+                    _state.ListLevelTextPrefixBytesRemaining = 1;
+                    break;
+                case "levelnumbers":
+                    _state.Destination = Destination.ListLevelNumbers;
+                    _state.SkipOutput = true;
+                    // The first hex byte is the number of level-number bytes.
+                    _state.ListLevelTextPrefixBytesRemaining = 1;
                     break;
                 case "field":
                     _state.Field = new FieldContext();
@@ -605,8 +706,28 @@ public static class ExternalRichTextClipboardPlanner
                     FinalizePictureCapture();
                     _pictureCaptureStarted = true;
                     _picturePendingNibble = -1;
+                    _pictureWidthGoalTwips = null;
+                    _pictureHeightGoalTwips = null;
+                    _pictureScaleX = 100;
+                    _pictureScaleY = 100;
                     _state.Destination = Destination.Picture;
                     _state.SkipOutput = true;
+                    break;
+                case "picwgoal":
+                    if (_state.Destination == Destination.Picture && parameter is { } widthGoal)
+                        _pictureWidthGoalTwips = Math.Clamp(widthGoal, 1, 100_000_000);
+                    break;
+                case "pichgoal":
+                    if (_state.Destination == Destination.Picture && parameter is { } heightGoal)
+                        _pictureHeightGoalTwips = Math.Clamp(heightGoal, 1, 100_000_000);
+                    break;
+                case "picscalex":
+                    if (_state.Destination == Destination.Picture && parameter is { } scaleX)
+                        _pictureScaleX = Math.Clamp(scaleX, 1, 1_000);
+                    break;
+                case "picscaley":
+                    if (_state.Destination == Destination.Picture && parameter is { } scaleY)
+                        _pictureScaleY = Math.Clamp(scaleY, 1, 1_000);
                     break;
                 case "pngblip":
                     break;
@@ -636,6 +757,19 @@ public static class ExternalRichTextClipboardPlanner
                 case "strike":
                 case "striked": _state.Strikethrough = value != 0; break;
                 case "strike0": _state.Strikethrough = false; break;
+                case "super": _state.BaselineOffset = RtfBaselineOffset(parameter ?? 6); break;
+                case "sub": _state.BaselineOffset = -RtfBaselineOffset(parameter ?? 6); break;
+                case "up":
+                    if (parameter is { } up)
+                        _state.BaselineOffset = RtfBaselineOffset(up);
+                    break;
+                case "dn":
+                    if (parameter is { } down)
+                        _state.BaselineOffset = -RtfBaselineOffset(down);
+                    break;
+                case "nosupersub": _state.BaselineOffset = null; break;
+                case "caps": _state.Caps = value != 0 ? RunTextCaps.All : RunTextCaps.None; break;
+                case "scaps": _state.Caps = value != 0 ? RunTextCaps.Small : RunTextCaps.None; break;
                 case "rtlch": _state.RunRightToLeft = true; break;
                 case "ltrch": _state.RunRightToLeft = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
@@ -646,7 +780,11 @@ public static class ExternalRichTextClipboardPlanner
                     if (parameter is { } unicode)
                     {
                         short signed = unchecked((short)unicode);
-                        AppendText(((char)signed).ToString());
+                        string text = ((char)signed).ToString();
+                        if (_state.Destination == Destination.ListLevelText)
+                            CaptureListLevelTextChar(text);
+                        else
+                            AppendText(text);
                         _state.UnicodeFallbackRemaining = _state.UnicodeSkip;
                     }
                     break;
@@ -680,8 +818,24 @@ public static class ExternalRichTextClipboardPlanner
                 case "qj": _state.ParagraphAlignment = TextAlign.Justify; break;
                 case "rtlpar": _state.ParagraphRightToLeft = true; break;
                 case "ltrpar": _state.ParagraphRightToLeft = false; break;
-                case "li": _state.LeftIndentTwips = parameter is { } left ? Math.Clamp(left, -100_000, 100_000) : 0; break;
-                case "fi": _state.FirstLineIndentTwips = parameter is { } first ? Math.Clamp(first, -100_000, 100_000) : 0; break;
+                case "li":
+                    var leftIndent = parameter is { } left ? Math.Clamp(left, -100_000, 100_000) : 0;
+                    if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                        _currentListLevel.LeftIndentTwips = leftIndent;
+                    else if (_state.Destination == Destination.ListOverrideTable && _currentListOverrideLevelDefinition is not null)
+                        _currentListOverrideLevelDefinition.LeftIndentTwips = leftIndent;
+                    else
+                        _state.LeftIndentTwips = leftIndent;
+                    break;
+                case "fi":
+                    var firstIndent = parameter is { } first ? Math.Clamp(first, -100_000, 100_000) : 0;
+                    if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                        _currentListLevel.FirstLineIndentTwips = firstIndent;
+                    else if (_state.Destination == Destination.ListOverrideTable && _currentListOverrideLevelDefinition is not null)
+                        _currentListOverrideLevelDefinition.FirstLineIndentTwips = firstIndent;
+                    else
+                        _state.FirstLineIndentTwips = firstIndent;
+                    break;
                 case "sb": _state.SpaceBeforeTwips = parameter is { } before ? Math.Clamp(before, -100_000, 100_000) : 0; break;
                 case "sa": _state.SpaceAfterTwips = parameter is { } after ? Math.Clamp(after, -100_000, 100_000) : 0; break;
                 case "pn":
@@ -746,7 +900,26 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "clcbpat":
                     _pendingCellStyle.FillRgb = ResolveColorRgb(value);
+                    _pendingCellStyle.FillBackgroundRgb = _pendingCellStyle.FillRgb;
                     break;
+                case "clcfpat":
+                    _pendingCellStyle.FillForegroundRgb = ResolveColorRgb(value);
+                    break;
+                case "clshdng":
+                    _pendingCellStyle.FillPattern = PatternForPercentage(value);
+                    break;
+                case "clbghoriz": _pendingCellStyle.FillPattern = "horzStripe"; break;
+                case "clbgvert": _pendingCellStyle.FillPattern = "vertStripe"; break;
+                case "clbgfdiag": _pendingCellStyle.FillPattern = "upDiag"; break;
+                case "clbgbdiag": _pendingCellStyle.FillPattern = "diagStripe"; break;
+                case "clbgcross": _pendingCellStyle.FillPattern = "cross"; break;
+                case "clbgdcross": _pendingCellStyle.FillPattern = "diagCross"; break;
+                case "clbgdkhoriz": _pendingCellStyle.FillPattern = "ltHorz"; break;
+                case "clbgdkvert": _pendingCellStyle.FillPattern = "ltVert"; break;
+                case "clbgdkfdiag": _pendingCellStyle.FillPattern = "ltUpDiag"; break;
+                case "clbgdkbdiag": _pendingCellStyle.FillPattern = "ltDnDiag"; break;
+                case "clbgdkcross": _pendingCellStyle.FillPattern = "smGrid"; break;
+                case "clbgdkdcross": _pendingCellStyle.FillPattern = "diagCross"; break;
                 case "clbrdrl": _pendingCellStyle.BeginBorder(TableCellBorderSide.Left); break;
                 case "clbrdrr": _pendingCellStyle.BeginBorder(TableCellBorderSide.Right); break;
                 case "clbrdrt": _pendingCellStyle.BeginBorder(TableCellBorderSide.Top); break;
@@ -767,6 +940,10 @@ public static class ExternalRichTextClipboardPlanner
                 case "clpadr": _pendingCellStyle.InsetRightPt = ToCellInsetPoints(value); break;
                 case "clpadt": _pendingCellStyle.InsetTopPt = ToCellInsetPoints(value); break;
                 case "clpadb": _pendingCellStyle.InsetBottomPt = ToCellInsetPoints(value); break;
+                case "clmgf": _pendingCellStyle.HorizontalMergeStart = true; break;
+                case "clmrg": _pendingCellStyle.HorizontalMergeContinuation = true; break;
+                case "clvmgf": _pendingCellStyle.VerticalMergeStart = true; break;
+                case "clvmrg": _pendingCellStyle.VerticalMergeContinuation = true; break;
                 case "trleft":
                 case "trgaph":
                 case "trrh":
@@ -830,6 +1007,26 @@ public static class ExternalRichTextClipboardPlanner
             {
                 if (value == (byte)';')
                     AddColorTableEntry();
+                return;
+            }
+
+            if (_state.Destination == Destination.ListLevelText)
+            {
+                if (_state.ListLevelTextPrefixBytesRemaining > 0)
+                {
+                    _state.ListLevelTextPrefixBytesRemaining--;
+                    return;
+                }
+
+                if (value is not (byte)';' and not (byte)'\r' and not (byte)'\n')
+                    CaptureListLevelTextByte(value);
+                return;
+            }
+
+            if (_state.Destination == Destination.ListLevelNumbers)
+            {
+                if (_state.ListLevelTextPrefixBytesRemaining > 0)
+                    _state.ListLevelTextPrefixBytesRemaining--;
                 return;
             }
 
@@ -921,14 +1118,66 @@ public static class ExternalRichTextClipboardPlanner
                 return;
 
             byte[] payload = _pictureBytes.ToArray();
-            if (HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
-                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/png"));
-            else if (HasPrefix(payload, [0xFF, 0xD8, 0xFF]))
-                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/jpeg"));
+            long? widthEmu = ToPictureExtentEmu(_pictureWidthGoalTwips, _pictureScaleX);
+            long? heightEmu = ToPictureExtentEmu(_pictureHeightGoalTwips, _pictureScaleY);
+            string? contentType = HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+                ? "image/png"
+                : HasPrefix(payload, [0xFF, 0xD8, 0xFF])
+                    ? "image/jpeg"
+                    : null;
+            if (contentType is not null)
+            {
+                var image = new InCanvasRichClipboardImage(payload, contentType, widthEmu, heightEmu);
+                _picturePayloads.Add(image);
+                FlushActiveRun();
+                EnsureParagraph();
+                ApplyParagraphState(_body.Paragraphs[^1]);
+                var style = CurrentStyle();
+                _body.Paragraphs[^1].Runs.Add(new Run
+                {
+                    Text = "\uFFFC",
+                    InlineImage = new ImagePart
+                    {
+                        Bytes = payload,
+                        ContentType = contentType,
+                    },
+                    InlineImageWidthEmu = widthEmu,
+                    InlineImageHeightEmu = heightEmu,
+                    FontFamily = style.FontFamily,
+                    FontSizePt = style.FontSizePt,
+                    Bold = style.Bold,
+                    BoldSet = style.BoldSet,
+                    Italic = style.Italic,
+                    ItalicSet = style.ItalicSet,
+                    Underline = style.Underline,
+                    Strikethrough = style.Strikethrough,
+                    BaselineOffset = style.BaselineOffset,
+                    Caps = style.Caps,
+                    RightToLeft = style.RunRightToLeft,
+                    Color = style.Color is { } color ? new ThemeAwareColor(color) : null,
+                    Hyperlink = style.Hyperlink,
+                });
+            }
 
             _pictureBytes.Clear();
             _picturePendingNibble = -1;
             _pictureCaptureStarted = false;
+            _pictureWidthGoalTwips = null;
+            _pictureHeightGoalTwips = null;
+            _pictureScaleX = 100;
+            _pictureScaleY = 100;
+        }
+
+        private static long? ToPictureExtentEmu(int? twips, double scalePercent)
+        {
+            if (twips is not > 0 || !double.IsFinite(scalePercent) || scalePercent <= 0)
+                return null;
+
+            double scaledTwips = twips.Value * Math.Clamp(scalePercent, 1, 1_000) / 100.0;
+            return Math.Clamp(
+                (long)Math.Round(scaledTwips * 635.0),
+                9_525L,
+                63_500_000_000L);
         }
 
         private void FinalizeObjectCapture()
@@ -938,9 +1187,41 @@ public static class ExternalRichTextClipboardPlanner
 
             if (_objectBytes.Count > 0)
             {
-                _objectPayloads.Add(new InCanvasRichClipboardObject(
-                    _objectBytes.ToArray(),
-                    ResolveObjectFileName()));
+                byte[] bytes = _objectBytes.ToArray();
+                string fileName = ResolveObjectFileName();
+                string? className = ResolveObjectClassName();
+                _objectPayloads.Add(new InCanvasRichClipboardObject(bytes, fileName, className));
+
+                // Keep object order and caret semantics inside the rich editor. The detached
+                // payload list remains for slide-level fallback insertion, while this marker
+                // lets a rich-text paste retain the object at its authored inline position.
+                FlushActiveRun();
+                EnsureParagraph();
+                ApplyParagraphState(_body.Paragraphs[^1]);
+                var style = CurrentStyle();
+                _body.Paragraphs[^1].Runs.Add(new Run
+                {
+                    Text = "\uFFFC",
+                    InlineOleObject = new InlineOleObjectInfo
+                    {
+                        EmbeddedBytes = bytes,
+                        FileName = fileName,
+                        ClassName = className,
+                    },
+                    FontFamily = style.FontFamily,
+                    FontSizePt = style.FontSizePt,
+                    Bold = style.Bold,
+                    BoldSet = style.BoldSet,
+                    Italic = style.Italic,
+                    ItalicSet = style.ItalicSet,
+                    Underline = style.Underline,
+                    Strikethrough = style.Strikethrough,
+                    BaselineOffset = style.BaselineOffset,
+                    Caps = style.Caps,
+                    RightToLeft = style.RunRightToLeft,
+                    Color = style.Color is { } color ? new ThemeAwareColor(color) : null,
+                    Hyperlink = style.Hyperlink,
+                });
             }
 
             _objectBytes.Clear();
@@ -962,6 +1243,12 @@ public static class ExternalRichTextClipboardPlanner
             if (objectClass.Contains("powerpoint", StringComparison.OrdinalIgnoreCase))
                 return "Embedded.pptx";
             return "Embedded.bin";
+        }
+
+        private string? ResolveObjectClassName()
+        {
+            var className = _objectClass.ToString().Trim();
+            return className.Length == 0 ? null : className;
         }
 
         private static bool HasPrefix(byte[] value, byte[] prefix)
@@ -1137,6 +1424,8 @@ public static class ExternalRichTextClipboardPlanner
                 state.Italic,
                 state.Underline,
                 state.Strikethrough,
+                state.BaselineOffset,
+                state.Caps,
                 state.RunRightToLeft,
                 color,
                 state.BoldSet,
@@ -1152,6 +1441,25 @@ public static class ExternalRichTextClipboardPlanner
 
         private static double ToCellInsetPoints(int twips) =>
             Math.Clamp(twips / 20.0, 0.0, 72.0);
+
+        private static string PatternForPercentage(int percentage)
+        {
+            int[] supported = [0, 5, 10, 20, 25, 30, 40, 50, 60, 75, 90, 100];
+            int normalized = Math.Clamp(percentage, 0, 100);
+            int nearest = supported.OrderBy(value => Math.Abs(value - normalized)).First();
+            return $"pct{nearest}";
+        }
+
+        // RTF up/dn values are half-points; the shared run model stores the
+        // equivalent DrawingML-style thousandths of a percent of the font size.
+        private int RtfBaselineOffset(int halfPoints)
+        {
+            double fontSizePt = _state.FontSizePt ?? 12.0;
+            return (int)Math.Clamp(
+                Math.Round(halfPoints * 50_000.0 / fontSizePt),
+                1,
+                100_000);
+        }
 
         private void FlushActiveRun()
         {
@@ -1174,6 +1482,8 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
+                BaselineOffset = _activeStyle.BaselineOffset,
+                Caps = _activeStyle.Caps,
                 RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
@@ -1202,6 +1512,8 @@ public static class ExternalRichTextClipboardPlanner
             && left.Italic == right.Italic
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
+            && left.BaselineOffset == right.BaselineOffset
+            && left.Caps == right.Caps
             && left.RunRightToLeft == right.RunRightToLeft
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
@@ -1219,6 +1531,8 @@ public static class ExternalRichTextClipboardPlanner
             _state.ItalicSet = true;
             _state.Underline = false;
             _state.Strikethrough = false;
+            _state.BaselineOffset = null;
+            _state.Caps = RunTextCaps.None;
             _state.RunRightToLeft = null;
             _state.ColorIndex = 0;
         }
@@ -1270,20 +1584,112 @@ public static class ExternalRichTextClipboardPlanner
                 return;
             }
 
-            if (level.NumberFormat == 23)
+            var formattingOverride = listOverride.FormattingByLevel.TryGetValue(
+                _state.ListLevel,
+                out var overrideLevel)
+                ? overrideLevel
+                : null;
+            int numberFormat = formattingOverride is { NumberFormatSpecified: true }
+                ? formattingOverride.NumberFormat
+                : level.NumberFormat;
+            if ((formattingOverride?.LeftIndentTwips ?? level.LeftIndentTwips) is { } overrideLeftIndent
+                && _state.LeftIndentTwips is null)
+                paragraph.MarginLeftEmu = ToEmu(overrideLeftIndent);
+            if ((formattingOverride?.FirstLineIndentTwips ?? level.FirstLineIndentTwips) is { } overrideFirstIndent
+                && _state.FirstLineIndentTwips is null)
+                paragraph.IndentEmu = ToEmu(overrideFirstIndent);
+
+            if (numberFormat == 23)
             {
                 paragraph.BulletKind = BulletKind.Char;
-                paragraph.BulletChar = "\u2022";
+                paragraph.BulletChar = (formattingOverride?.BulletChar ?? level.BulletChar) ?? "\u2022";
                 paragraph.AutoNumStartAtSpecified = false;
                 return;
             }
 
             paragraph.BulletKind = BulletKind.Auto;
-            paragraph.AutoNumType = MapAutoNumType(level.NumberFormat);
-            paragraph.AutoNumStartAt = level.StartAt;
+            string levelTextTemplate = formattingOverride?.LevelTextTemplate ?? level.LevelTextTemplate;
+            paragraph.AutoNumType = MapAutoNumType(
+                numberFormat,
+                levelTextTemplate);
+            paragraph.AutoNumTextTemplate = ContainsLevelSubstitution(levelTextTemplate)
+                ? levelTextTemplate
+                : null;
+            paragraph.AutoNumStartAt = listOverride.StartAtByLevel.TryGetValue(_state.ListLevel, out var overrideStartAt)
+                ? overrideStartAt
+                : formattingOverride is { StartAtSpecified: true }
+                    ? formattingOverride.StartAt
+                    : level.StartAt;
             bool firstOccurrence = !paragraph.AutoNumStartAtSpecified
                 && _seenListLevels.Add((overrideId, _state.ListLevel));
             paragraph.AutoNumStartAtSpecified |= firstOccurrence;
+        }
+
+        private void CaptureListLevelTextByte(byte value)
+        {
+            var level = _state.Destination == Destination.ListOverrideTable
+                ? _currentListOverrideLevelDefinition
+                : _currentListLevel;
+            if (level is null)
+                return;
+
+            // RTF level-text stores level substitutions as zero-based control bytes
+            // (0x00 = current level 0, 0x01 = level 1, ...). Keep them as the
+            // renderer-neutral %1..%9 form instead of silently dropping them.
+            if (value <= 8)
+            {
+                string token = $"%{value + 1}";
+                if (level.LevelTextTemplate.Length + token.Length <= 64)
+                    level.LevelTextTemplate += token;
+                return;
+            }
+
+            string candidate = DecodeByte(value);
+            if (candidate.Length == 0 || char.IsControl(candidate[0]) || candidate[0] == ';')
+                return;
+
+            if (level.NumberFormat == 23)
+            {
+                if (level.BulletChar is null)
+                    level.BulletChar = candidate;
+                return;
+            }
+
+            if (level.LevelTextTemplate.Length + candidate.Length <= 64)
+                level.LevelTextTemplate += candidate;
+        }
+
+        private void CaptureListLevelTextChar(string text)
+        {
+            var level = _state.Destination == Destination.ListOverrideTable
+                ? _currentListOverrideLevelDefinition
+                : _currentListLevel;
+            if (level is null || string.IsNullOrEmpty(text))
+                return;
+
+            if (level.NumberFormat == 23)
+            {
+                if (level.BulletChar is null)
+                    level.BulletChar = text;
+                return;
+            }
+
+            if (level.LevelTextTemplate.Length + text.Length <= 64)
+                level.LevelTextTemplate += text;
+        }
+
+        private static bool ContainsLevelSubstitution(string? template)
+        {
+            if (string.IsNullOrEmpty(template))
+                return false;
+
+            for (int index = 0; index + 1 < template.Length; index++)
+            {
+                if (template[index] == '%' && template[index + 1] is >= '1' and <= '9')
+                    return true;
+            }
+
+            return false;
         }
 
         private void AppendFieldInstruction(string text)
@@ -1356,14 +1762,28 @@ public static class ExternalRichTextClipboardPlanner
 
         private static double? ToPoints(int? twips) => twips / 20.0;
 
-        private static AutoNumType MapAutoNumType(int numberFormat) => numberFormat switch
+        private static AutoNumType MapAutoNumType(int numberFormat, string? levelTextTemplate)
         {
-            1 => AutoNumType.RomanUcPeriod,
-            2 => AutoNumType.RomanLcPeriod,
-            3 => AutoNumType.AlphaUcPeriod,
-            4 => AutoNumType.AlphaLcPeriod,
-            _ => AutoNumType.ArabicPeriod,
-        };
+            bool opensWithParen = levelTextTemplate?.Contains('(') == true;
+            bool closesWithParen = levelTextTemplate?.EndsWith(')') == true;
+            bool hasBothParens = opensWithParen && closesWithParen;
+
+            return numberFormat switch
+            {
+                0 => hasBothParens
+                    ? AutoNumType.ArabicParenBoth
+                    : closesWithParen ? AutoNumType.ArabicParenR : AutoNumType.ArabicPeriod,
+                1 => closesWithParen ? AutoNumType.RomanUcParenR : AutoNumType.RomanUcPeriod,
+                2 => closesWithParen ? AutoNumType.RomanLcParenR : AutoNumType.RomanLcPeriod,
+                3 => hasBothParens
+                    ? AutoNumType.AlphaUcParenBoth
+                    : closesWithParen ? AutoNumType.AlphaUcParenR : AutoNumType.AlphaUcPeriod,
+                4 => hasBothParens
+                    ? AutoNumType.AlphaLcParenBoth
+                    : closesWithParen ? AutoNumType.AlphaLcParenR : AutoNumType.AlphaLcPeriod,
+                _ => AutoNumType.ArabicPeriod,
+            };
+        }
 
         private void ResetColorTable()
         {

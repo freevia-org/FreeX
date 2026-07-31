@@ -717,6 +717,41 @@ public sealed class BulletsAutofitTests
     }
 
     [Fact]
+    public void RoundTrip_AutoNumLevelTextTemplate_PreservesMultiLevelMarker()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            AutoNumStartAtSpecified = true,
+            AutoNumTextTemplate = "%1.",
+            Runs = { new Run { Text = "Root", FontSizePt = 18 } },
+        });
+        body.Paragraphs.Add(new Paragraph
+        {
+            Level = 1,
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.ArabicPeriod,
+            AutoNumTextTemplate = "%1.%2.",
+            Runs = { new Run { Text = "Child", FontSizePt = 18 } },
+        });
+
+        var presentation = MakePresentation();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(MakeShapeWithText(body));
+
+        using var stream = new System.IO.MemoryStream();
+        FreeP.Core.IO.PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var roundTripped = FreeP.Core.IO.PptxPackageReader.Read(stream);
+
+        roundTripped.Slides[0].Shapes[0].TextBody!.Paragraphs
+            .Select(paragraph => paragraph.AutoNumTextTemplate)
+            .Should().Equal("%1.", "%1.%2.");
+    }
+
+    [Fact]
     public void RoundTrip_LegacyProgrammaticNonDefaultStartAt_RemainsSerialized()
     {
         var body = new TextBody();

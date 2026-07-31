@@ -46,6 +46,11 @@ internal static class XlsxWorksheetPrinterSettingsReferencePreserver
 
         foreach (var (sheetName, sourceWorksheetPath) in sourceSheets)
         {
+            // R105: rename-tolerant lookup removed as inert (proven dead this round) --
+            // XlsxPackageMetadataMerger.MergeRelationshipParts merges each worksheet .rels keyed by
+            // part path (rename-stable), so the relationship arrives immune to this bug class; the
+            // pageSetup/@r:id attribute is separately carried by the metadata preserver's own
+            // already-correct native-attribute merge.
             if (!targetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
                 continue;
 

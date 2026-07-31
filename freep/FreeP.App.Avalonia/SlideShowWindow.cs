@@ -533,7 +533,7 @@ public sealed class SlideShowWindow : Window
         return new WindowsRecordingCaptureBackend(
             windowsMetadata,
             new WindowsRecordingDeviceCatalog(),
-            new WindowsNativeRecordingCaptureEngine(metadata.AdapterName));
+            new WindowsNativeRecordingCaptureEngine(windowsMetadata.AdapterName));
 #else
         return new WindowsRecordingCaptureBackend(windowsMetadata);
 #endif
@@ -3539,7 +3539,7 @@ public sealed class SlideShowWindow : Window
 
         foreach (var shapeId in animatedShapeIds)
         {
-            var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
+            var shape = ShapeTreeLookup.Find(slide, shapeId);
             if (shape is null) continue;
 
             if (SlideShowAnimationBuildPlanner.IsParagraphBuild(slide, shapeId))

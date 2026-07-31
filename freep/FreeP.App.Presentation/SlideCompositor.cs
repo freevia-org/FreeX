@@ -1165,7 +1165,7 @@ public static class SlideCompositor
             && shape.Fill is ShapeFill.Solid cycleArrowFill
             && cycleArrowFill.Color.SchemeColor?.Slot == ThemeColorSlot.Accent1)
         {
-            shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(ResolveSmartArtNeutralConnector(theme)));
+            shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(SmartArtStylePlanner.ResolveNeutralConnector(theme)));
         }
 
         foreach (var child in shape.Children)
@@ -1187,15 +1187,6 @@ public static class SlideCompositor
             return SrgbColor.FromRgb(0xCCD2D8);
 
         return ThemeColorTransform.ApplyShade(lt2, 0.88);
-    }
-
-    private static SrgbColor ResolveSmartArtNeutralConnector(PresentationTheme theme)
-    {
-        var lt2 = theme.ColorScheme[ThemeColorSlot.Lt2];
-        if (lt2 == SrgbColor.FromRgb(0xE8E8E8))
-            return SrgbColor.FromRgb(0xAAB6C1);
-
-        return ThemeColorTransform.ApplyShade(lt2, 0.72);
     }
 
     /// <summary>Returns a default accent color for the given zero-based series index using the theme.</summary>
@@ -1775,13 +1766,16 @@ public static class SlideCompositor
 
                 case BulletKind.Auto:
                 {
-                    bulletText = PresentationListMarkerPlanner.FormatAutoNumber(
+                    int value = autoNumState.Next(
+                        para.Level,
                         effectiveAutoNumType,
-                        autoNumState.Next(
-                            para.Level,
-                            effectiveAutoNumType,
-                            para.AutoNumStartAt,
-                            para.AutoNumStartAtSpecified));
+                        para.AutoNumStartAt,
+                        para.AutoNumStartAtSpecified);
+                    bulletText = autoNumState.FormatTemplate(
+                        para.Level,
+                        effectiveAutoNumType,
+                        value,
+                        para.AutoNumTextTemplate);
                     break;
                 }
 

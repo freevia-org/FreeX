@@ -523,6 +523,51 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Cycle2_UsesNativeEllipseRingAndTangentArrows()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Idea", "Plan", "Execute", "Review", "Improve");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/cycle2";
+        data.IsLiveLayoutSupported = true;
+        var theme = DefaultTheme();
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, theme);
+
+        shapes.Should().NotBeNull("cycle2 is admitted through its bounded native geometry");
+        shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().HaveCount(5, "cycle2 has one ellipse per editable node");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .Should().HaveCount(5, "cycle2 has one tangent arrow between each pair of nodes");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().OnlyContain(shape =>
+                shape.OffsetXEmu >= FrameX && shape.OffsetYEmu >= FrameY
+                && shape.OffsetXEmu + shape.ExtentCxEmu <= FrameX + FrameCx
+                && shape.OffsetYEmu + shape.ExtentCyEmu <= FrameY + FrameCy);
+        var arrows = shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow).ToArray();
+        arrows.Select(shape => shape.RotationDeg)
+            .Should().OnlyContain(rotation => Math.Abs(rotation) > 0.1);
+        arrows.Select(shape => shape.Fill)
+            .Should().AllBeOfType<ShapeFill.Solid>();
+        arrows.Select(shape => ((ShapeFill.Solid)shape.Fill!).Color.Resolved)
+            .Should().OnlyContain(color => color == SmartArtStylePlanner.ResolveNeutralConnector(theme));
+    }
+
+    [Fact]
+    public void Cycle2_RejectsMoreThanNativeChildLimitForCachedFallback()
+    {
+        var data = MakeData(
+            SmartArtFamily.Cycle,
+            Enumerable.Range(1, 8).Select(index => $"Item {index}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/cycle2";
+        data.IsLiveLayoutSupported = true;
+
+        SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())
+            .Should().BeNull("cycle2's native definition caps the live geometry at seven nodes");
+    }
+
+    [Fact]
     public void ContinuousCycle_ReturnsLiveCircularBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "Plan", "Build", "Review", "Launch");
@@ -1511,6 +1556,23 @@ public sealed class SmartArtLayoutTests
             .Should().BeInAscendingOrder("verticalChevronList preserves the authored node order");
     }
 
+    [Fact]
+    public void VerticalArrowList_ReturnsOrderedLiveDownArrowsWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.List, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalArrowList";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("verticalArrowList is admitted to the shared list-family layout planner");
+        shapes!.Should().HaveCount(3);
+        shapes.Select(s => s.AutoShapeKind).Should().AllBeEquivalentTo(DrawingShapeKind.DownArrow);
+        shapes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C");
+        shapes.Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder("verticalArrowList preserves the authored node order");
+    }
+
     [Theory]
     [InlineData(13)]
     [InlineData(20)]
@@ -1636,6 +1698,24 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void InvertedPyramid_ReturnsLiveDescendingBandsWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.List, "Market", "Product", "Team", "Task");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid";
+
+        var shapes = SmartArtLayoutEngine.Layout(
+            data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("invertedPyramid remains live for editable list nodes");
+        shapes!.Should().HaveCount(4);
+        shapes.Should().OnlyContain(shape => shape.Kind == SlideShapeKind.AutoShape);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Product", "Team", "Task");
+        shapes.Select(shape => shape.ExtentCxEmu).Should().BeInDescendingOrder();
+        shapes[^1].AutoShapeKind.Should().Be(DrawingShapeKind.Triangle);
+    }
+
+    [Fact]
     public void BasicMatrix_ReturnsLiveQuadrantBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.Matrix, "People", "Process", "Platform", "Proof");
@@ -1742,6 +1822,65 @@ public sealed class SmartArtLayoutTests
             (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
             (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
         }
+    }
+
+    [Theory]
+    [InlineData(5, 2, 3)]
+    [InlineData(6, 2, 3)]
+    [InlineData(7, 2, 4)]
+    [InlineData(9, 2, 5)]
+    public void BasicMatrix_PreservesDeterministicTwoColumnRowMajorGrid(
+        int nodeCount, int expectedColumns, int expectedRows)
+    {
+        var nodeTexts = Enumerable.Range(0, nodeCount).Select(i => $"Node {i + 1}").ToArray();
+        var data = MakeData(SmartArtFamily.Matrix, nodeTexts);
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
+
+        var result = SmartArtLayoutEngine.Layout(
+            data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().NotBeNull();
+        var boxes = result!.ToList();
+        boxes.Should().HaveCount(nodeCount);
+        boxes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle);
+        boxes.Select(shape => shape.PlainText).Should().Equal(nodeTexts);
+        boxes.Select(shape => shape.OffsetXEmu).Distinct().Should().HaveCount(expectedColumns);
+        boxes.Select(shape => shape.OffsetYEmu).Distinct().Should().HaveCount(expectedRows);
+
+        for (var i = 0; i < boxes.Count; i++)
+        {
+            var shape = boxes[i];
+            shape.TextBody.Should().NotBeNull();
+            shape.TextBody!.Wrap.Should().BeTrue();
+            shape.TextBody.Anchor.Should().Be(VerticalAnchor.Middle);
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+
+            var row = i / expectedColumns;
+            var column = i % expectedColumns;
+            if (column > 0)
+                shape.OffsetXEmu.Should().BeGreaterThan(boxes[i - 1].OffsetXEmu + boxes[i - 1].ExtentCxEmu);
+            if (row > 0)
+                shape.OffsetYEmu.Should().BeGreaterThan(boxes[i - expectedColumns].OffsetYEmu + boxes[i - expectedColumns].ExtentCyEmu);
+        }
+    }
+
+    [Fact]
+    public void TitledMatrix_TitleOnly_UsesLiveTitleBand()
+    {
+        var data = MakeData(SmartArtFamily.Matrix, "Title only");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
+
+        var shapes = SmartArtLayoutEngine.Layout(
+            data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("a title-only matrix remains a valid editable SmartArt state");
+        shapes!.Should().ContainSingle();
+        shapes[0].PlainText.Should().Be("Title only");
+        shapes[0].ExtentCxEmu.Should().BeLessThanOrEqualTo(FrameCx);
+        shapes[0].ExtentCyEmu.Should().BeLessThanOrEqualTo(FrameCy);
     }
 
     [Fact]
@@ -4007,6 +4146,64 @@ public sealed class SmartArtLayoutTests
             .Should().NotContain("Cached matrix fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().BeEmpty("matrix SmartArt emits quadrant boxes only, with no connector DrawOps");
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(9)]
+    public void Compositor_BasicMatrix_MoreThanFourNodes_UsesLiveGridOverCachedDrawing(int nodeCount)
+    {
+        var nodeTexts = Enumerable.Range(0, nodeCount).Select(i => $"Live {i + 1}").ToArray();
+        var data = MakeData(SmartArtFamily.Matrix, nodeTexts);
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 24,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "Cached matrix fallback" } } }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 76,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var shapeOps = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        shapeOps.Should().HaveCount(nodeCount);
+        shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodeTexts);
+        shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().NotContain("Cached matrix fallback");
+        shapeOps.Should().OnlyContain(op => op.Text != null && op.BoundsDip.Width > 0 && op.BoundsDip.Height > 0);
     }
 
     [Fact]

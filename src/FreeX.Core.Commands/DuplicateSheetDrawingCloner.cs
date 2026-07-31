@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -10,7 +11,15 @@ internal static class DuplicateSheetDrawingCloner
     {
         var zOrderIdMap = new Dictionary<DrawingObjectZOrderEntry, DrawingObjectZOrderEntry>();
         foreach (var chart in source.Charts)
-            copy.Charts.Add(CloneChart(chart, source.Id, copyId));
+        {
+            var clonedChart = CloneChart(chart, source.Id, copyId);
+            // R106-drawing-object-hyperlink-duplicate-rebase: see the matching comment on
+            // RewriteSameSheetHyperlinkTarget below -- without this, a chart's own 'Place in This
+            // Document' hyperlink to a cell on its own (duplicated) sheet kept pointing back at the
+            // SOURCE sheet instead of following the copy, unlike the equivalent cell hyperlink.
+            clonedChart.Hyperlink = RewriteSameSheetHyperlinkTarget(clonedChart.Hyperlink, source.Name, copy.Name);
+            copy.Charts.Add(clonedChart);
+        }
 
         // The DataRange remap above (in CloneChart) only handles the GridRange-typed series
         // range. Verbatim (multi-area/unparsable) series formulas, "value from cells" data-label
@@ -30,6 +39,8 @@ internal static class DuplicateSheetDrawingCloner
         foreach (var textBox in source.TextBoxes)
         {
             var cloned = CloneTextBox(textBox, copyId);
+            // R106-drawing-object-hyperlink-duplicate-rebase: see RewriteSameSheetHyperlinkTarget.
+            cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name);
             copy.TextBoxes.Add(cloned);
             zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, textBox.Id)] =
                 new DrawingObjectZOrderEntry(SelectionPaneObjectKind.TextBox, cloned.Id);
@@ -38,6 +49,8 @@ internal static class DuplicateSheetDrawingCloner
         foreach (var shape in source.DrawingShapes)
         {
             var cloned = CloneDrawingShape(shape, copyId);
+            // R106-drawing-object-hyperlink-duplicate-rebase: see RewriteSameSheetHyperlinkTarget.
+            cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name);
             copy.DrawingShapes.Add(cloned);
             zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, shape.Id)] =
                 new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Shape, cloned.Id);
@@ -46,6 +59,8 @@ internal static class DuplicateSheetDrawingCloner
         foreach (var picture in source.Pictures)
         {
             var cloned = ClonePicture(picture, source.Id, source.Name, copy.Name, copyId);
+            // R106-drawing-object-hyperlink-duplicate-rebase: see RewriteSameSheetHyperlinkTarget.
+            cloned.Hyperlink = RewriteSameSheetHyperlinkTarget(cloned.Hyperlink, source.Name, copy.Name);
             copy.Pictures.Add(cloned);
             zOrderIdMap[new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id)] =
                 new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, cloned.Id);
@@ -65,6 +80,124 @@ internal static class DuplicateSheetDrawingCloner
 
         foreach (var control in source.FormControls)
             copy.FormControls.Add(CloneFormControl(control, copyId));
+    }
+
+    /// <summary>
+    /// R103: clones every workbook-level Slicer/Timeline anchored on <paramref name="source"/> (via
+    /// <see cref="SlicerModel.SourceSheetName"/> / <see cref="TimelineModel.SourceSheetName"/>) onto
+    /// <paramref name="copy"/>. Unlike every other floating-object kind (Charts, TextBoxes,
+    /// DrawingShapes, Pictures, Sparklines, FormControls), Slicers/Timelines are NOT part of
+    /// <c>Sheet</c>'s own drawing collections -- they live in workbook-level
+    /// <see cref="Workbook.Slicers"/>/<see cref="Workbook.Timelines"/>, keyed to a host sheet only
+    /// indirectly by name -- so <see cref="CopyDrawingCollections"/> (which only ever sees
+    /// <paramref name="source"/>/<paramref name="copy"/>, not the owning <see cref="Workbook"/>) can
+    /// never reach them. Without this, Duplicate Sheet / Move-or-Copy silently dropped any slicer or
+    /// timeline that was filtering a pivot table (or table) on the duplicated sheet, even though the
+    /// pivot table itself is faithfully cloned -- unlike real Excel, which copies the slicer/timeline
+    /// along with it.
+    /// <para>
+    /// <see cref="SlicerModel.Name"/>/<see cref="TimelineModel.Name"/> and
+    /// <c>CacheName</c> are given workbook-unique values (mirroring
+    /// <c>DuplicateSheetCommand.UniquifyClonedTables</c> for cloned structured tables) so the copy
+    /// doesn't collide with the source's slicer/timeline identity, and
+    /// <see cref="SlicerModel.PackagePart"/>/<see cref="TimelineModel.PackagePart"/> are left blank so
+    /// <c>XlsxSlicerTimelineWriter</c> allocates the clone its own package part on save instead of
+    /// aliasing the source's (mirroring <c>IsSourceLoaded = false</c> on <see cref="ClonePicture"/>/
+    /// <see cref="CloneTextBox"/>/<see cref="CloneDrawingShape"/> above).
+    /// </para>
+    /// <see cref="SlicerModel.DrawingAnchor"/>/<see cref="TimelineModel.DrawingAnchor"/> need no
+    /// remapping (unlike a chart/shape/picture's sheet-qualified anchor address): it is a bare
+    /// column/row-offset pair with no embedded <see cref="SheetId"/>, so it already describes a valid
+    /// position on the copy sheet's own drawing layer as-is.
+    /// </summary>
+    internal static (List<SlicerModel> Slicers, List<TimelineModel> Timelines) CopySlicersAndTimelines(
+        Workbook workbook, Sheet source, Sheet copy)
+    {
+        var clonedSlicers = new List<SlicerModel>();
+        var clonedTimelines = new List<TimelineModel>();
+
+        foreach (var slicer in workbook.Slicers
+                     .Where(s => string.Equals(s.SourceSheetName, source.Name, StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var clone = new SlicerModel
+            {
+                Name = GenerateUniqueName(workbook.Slicers.Select(s => s.Name), slicer.Name),
+                Caption = slicer.Caption,
+                CacheName = GenerateUniqueName(workbook.Slicers.Select(s => s.CacheName), slicer.CacheName),
+                SourcePivotTableName = slicer.SourcePivotTableName,
+                SourceFieldName = slicer.SourceFieldName,
+                StyleName = slicer.StyleName,
+                PackagePart = string.Empty,
+                DrawingAnchor = slicer.DrawingAnchor,
+                DrawingShapeName = slicer.DrawingShapeName,
+                ColumnCount = slicer.ColumnCount,
+                ShowCaption = slicer.ShowCaption,
+                SourceSheetName = copy.Name,
+                SourceTableId = slicer.SourceTableId,
+                SourceTableColumnId = slicer.SourceTableColumnId,
+                CacheItems = slicer.CacheItems,
+                AvailableItems = slicer.AvailableItems,
+                SelectionCaptured = slicer.SelectionCaptured
+            };
+            clone.SelectedItems.AddRange(slicer.SelectedItems);
+            workbook.Slicers.Add(clone);
+            clonedSlicers.Add(clone);
+        }
+
+        foreach (var timeline in workbook.Timelines
+                     .Where(t => string.Equals(t.SourceSheetName, source.Name, StringComparison.OrdinalIgnoreCase))
+                     .ToList())
+        {
+            var clone = new TimelineModel
+            {
+                Name = GenerateUniqueName(workbook.Timelines.Select(t => t.Name), timeline.Name),
+                Caption = timeline.Caption,
+                CacheName = GenerateUniqueName(workbook.Timelines.Select(t => t.CacheName), timeline.CacheName),
+                SourcePivotTableName = timeline.SourcePivotTableName,
+                SourceFieldName = timeline.SourceFieldName,
+                StyleName = timeline.StyleName,
+                StartDate = timeline.StartDate,
+                EndDate = timeline.EndDate,
+                SelectedStartDate = timeline.SelectedStartDate,
+                SelectedEndDate = timeline.SelectedEndDate,
+                PackagePart = string.Empty,
+                DrawingAnchor = timeline.DrawingAnchor,
+                DrawingShapeName = timeline.DrawingShapeName,
+                SourceSheetName = copy.Name,
+                Level = timeline.Level,
+                SelectionLevel = timeline.SelectionLevel,
+                ScrollPosition = timeline.ScrollPosition
+            };
+            workbook.Timelines.Add(clone);
+            clonedTimelines.Add(clone);
+        }
+
+        return (clonedSlicers, clonedTimelines);
+    }
+
+    /// <summary>
+    /// Generates a workbook-unique name for a cloned Slicer/Timeline's Name or CacheName, trying
+    /// <paramref name="baseName"/> unchanged first (only relevant if a caller ever needs the exact
+    /// source name and it happens to already be free), then <c>baseName_2</c>, <c>baseName_3</c>, ...
+    /// against <paramref name="existingNames"/> -- mirrors
+    /// <c>DuplicateSheetCommand.GenerateUniqueTableName</c>'s numbered-suffix scheme for cloned
+    /// structured tables.
+    /// </summary>
+    private static string GenerateUniqueName(IEnumerable<string> existingNames, string baseName)
+    {
+        var existing = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
+        if (existing.Add(baseName))
+            return baseName;
+
+        for (var n = 2; n < 10_000; n++)
+        {
+            var candidate = $"{baseName}_{n}";
+            if (!existing.Contains(candidate))
+                return candidate;
+        }
+
+        return $"{baseName}_{Guid.NewGuid():N}";
     }
 
     /// <summary>
@@ -174,6 +307,57 @@ internal static class DuplicateSheetDrawingCloner
         }
 
         return current ?? formulaText;
+    }
+
+    /// <summary>
+    /// R106-drawing-object-hyperlink-duplicate-rebase: rewrites a drawing object's internal
+    /// ('Place in This Document') hyperlink target (<see cref="DrawingObjectHyperlink.Target"/> --
+    /// the exact same sheet-qualified-reference shape documented there, e.g. "Sheet1!A1" or
+    /// "'Sheet 1'!A1") so a reference that names the sheet being duplicated follows the DUPLICATE
+    /// sheet instead of continuing to point back at the SOURCE sheet -- mirroring Sheet.Clone's
+    /// identical rebase of a CELL hyperlink's <c>Sheet.Hyperlinks[addr]</c> target (guarded there by
+    /// <c>HyperlinkTargetKind.PlaceInThisDocument</c>) and the ConditionalFormat/DataValidation
+    /// formula rebase alongside it. Without this, CloneTextBox/CloneDrawingShape/ClonePicture/
+    /// CloneChart's verbatim <c>Hyperlink = ...</c> copy left a shape/text box/picture/chart's
+    /// self-referencing hyperlink jumping back to the original sheet on every Duplicate Sheet,
+    /// unlike the equivalent cell hyperlink right next to it.
+    /// <para>
+    /// An external ("Existing File or Web Page") hyperlink -- <see cref="DrawingObjectHyperlink.TargetMode"/>
+    /// == "External" -- is left completely untouched: only an internal target (TargetMode null, the
+    /// OPC default) can possibly be a same-sheet-qualified reference at all.
+    /// </para>
+    /// <para>
+    /// Duplicates (rather than reuses) Sheet.Clone's private <c>RewriteSameSheetQualifiedFormula</c>
+    /// text substitution, mirroring <see cref="RewriteFormulaForTableRenames"/> above -- that method
+    /// is private to its own file too. The string-literal-skipping machinery
+    /// <c>RewriteSameSheetQualifiedFormula</c> layers on top isn't needed here: a hyperlink Target is
+    /// never an Excel formula with quoted text runs, just a bare reference or defined name, so a
+    /// straight regex substitution is safe.
+    /// </para>
+    /// </summary>
+    private static DrawingObjectHyperlink? RewriteSameSheetHyperlinkTarget(
+        DrawingObjectHyperlink? hyperlink, string sourceSheetName, string copySheetName)
+    {
+        if (hyperlink is null || hyperlink.TargetMode is not null ||
+            string.Equals(sourceSheetName, copySheetName, StringComparison.Ordinal))
+            return hyperlink;
+
+        var newQualifier = SheetNameFormatter.QuoteIfNeeded(copySheetName) + "!";
+
+        // Already-quoted source qualifier, e.g. 'Sheet 1'!
+        var quotedOldQualifier = "'" + sourceSheetName.Replace("'", "''") + "'!";
+
+        // Bare (unquoted) source qualifier, e.g. Sheet1! -- guarded so it can't match a fragment of
+        // a longer identifier/qualifier (e.g. a source name of "Sheet1" must not match inside
+        // "OtherSheet1!") or re-touch the quoted form already handled above.
+        var pattern = "(?<![A-Za-z0-9_.'])" + Regex.Escape(sourceSheetName) + "!";
+
+        var rewritten = hyperlink.Target.Replace(quotedOldQualifier, newQualifier, StringComparison.OrdinalIgnoreCase);
+        rewritten = Regex.Replace(rewritten, pattern, _ => newQualifier, RegexOptions.IgnoreCase);
+
+        return string.Equals(rewritten, hyperlink.Target, StringComparison.Ordinal)
+            ? hyperlink
+            : hyperlink with { Target = rewritten };
     }
 
     private static FormControlModel CloneFormControl(FormControlModel control, SheetId copyId) =>

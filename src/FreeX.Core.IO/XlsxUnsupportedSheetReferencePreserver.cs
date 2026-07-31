@@ -300,8 +300,12 @@ internal static class XlsxUnsupportedSheetReferencePreserver
         var rebindings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var sourceSheet in context.SourceSheets)
         {
+            // R102-io-rename-worksheet-exclusion-sweep-1: sourceSheet.Key is the LOAD-TIME name --
+            // resolve via the shared rename-tolerant fallback so an unsupported-sheet-part reference
+            // into a renamed (but not renumbered) worksheet doesn't dangle.
             if (!IsWorksheetPartPath(sourceSheet.Value) ||
-                !context.TargetSheets.TryGetValue(sourceSheet.Key, out var targetPath) ||
+                !XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
+                    context, sourceSheet.Key, sourceSheet.Value, out var targetPath) ||
                 !IsWorksheetPartPath(targetPath) ||
                 string.Equals(sourceSheet.Value, targetPath, StringComparison.OrdinalIgnoreCase))
             {

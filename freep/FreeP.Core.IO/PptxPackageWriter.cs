@@ -39,6 +39,8 @@ public static class PptxPackageWriter
     private static readonly XNamespace P188    = "http://schemas.microsoft.com/office/powerpoint/2018/8/main";
     private static readonly XNamespace P20Media = "http://schemas.microsoft.com/office/powerpoint/2020/media";
     private static readonly XNamespace FreePRecording = "https://freex.local/freep/recording/2026";
+    private static readonly XNamespace FreePText = "https://freex.local/freep/text/2026";
+    private const string AutoNumTemplateExtUri = "{2E2E4D2B-4E4E-4A9E-9B3A-7C2BAA5D1B7C}";
     private const string DecorativeExtUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
     private const string RecordingMediaArtifactsPath = "ppt/media/recordingArtifacts.xml";
 
@@ -2132,7 +2134,7 @@ public static class PptxPackageWriter
     private static XElement? BuildTimingEl(Slide slide)
     {
         var animations = slide.Animations;
-        var timedMedia = slide.Shapes
+        var timedMedia = AllShapes(slide.Shapes)
             .Where(shape => shape.Kind == SlideShapeKind.Media
                 && (shape.Media?.PlaybackStartMode == MediaPlaybackStartMode.Automatically
                     || shape.Media?.Loop == true))
@@ -4142,6 +4144,16 @@ public static class PptxPackageWriter
                     new XAttribute("algn", algn)));
             }
             pPr.Add(tabLst);
+            hasPPr = true;
+        }
+
+        if (para.BulletKind == BulletKind.Auto
+            && !string.IsNullOrWhiteSpace(para.AutoNumTextTemplate))
+        {
+            pPr.Add(new XElement(A + "extLst",
+                new XElement(A + "ext",
+                    new XAttribute("uri", AutoNumTemplateExtUri),
+                    new XAttribute(FreePText + "autoNumTemplate", para.AutoNumTextTemplate))));
             hasPPr = true;
         }
 

@@ -41,6 +41,302 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesAuthoredInlineWhitespace_AndIgnoresIndentation()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph>
+                <Run Text="left" />
+                <Run Text=" " />
+                <Bold xml:space="preserve"> right </Bold>
+              </Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("left  right ");
+        payload.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("left", " ", " right ");
+        payload.Body.Paragraphs.Single().Runs[2].Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesBaselineAlignmentAndStyleInheritance()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="ScriptText">
+                    <Setter Property="BaselineAlignment" Value="Superscript" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph>
+                <Run Text="base" />
+                <Run BaselineAlignment="Superscript" Text="up" />
+                <Span BaselineAlignment="Subscript">down</Span>
+                <Run BaselineAlignment="Baseline" Text="normal" />
+              </Paragraph>
+              <Paragraph Style="{StaticResource ScriptText}">styled up</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs[0].Runs.Select(run => run.BaselineOffset)
+            .Should().Equal(null, 10_000, -10_000, null);
+        paragraphs[1].Runs.Single().BaselineOffset.Should().Be(10_000);
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesFlowDirectionInheritanceAndOverrides()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          FlowDirection="RightToLeft">
+              <Paragraph>
+                <Run Text="אבג" />
+                <Run FlowDirection="LeftToRight" Text="LTR" />
+              </Paragraph>
+              <Paragraph FlowDirection="LeftToRight">plain direction</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs.Select(paragraph => paragraph.RightToLeft)
+            .Should().Equal(true, false);
+        paragraphs[0].Runs.Select(run => run.RightToLeft)
+            .Should().Equal(true, false);
+        paragraphs[1].Runs.Single().RightToLeft.Should().BeFalse();
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesTextAlignmentInheritanceAndOverrides()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          TextAlignment="Center">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="JustifiedText">
+                    <Setter Property="TextAlignment" Value="Justify" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph>inherited center</Paragraph>
+              <Paragraph TextAlignment="Right">direct right</Paragraph>
+              <Paragraph Style="{StaticResource JustifiedText}">styled justify</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Select(paragraph => paragraph.Align)
+            .Should().Equal(TextAlign.Center, TextAlign.Right, TextAlign.Justify);
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_ResolvesSolidColorBrushResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <SolidColorBrush x:Key="AccentBrush" Color="#FF2F5597" />
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Foreground="{StaticResource AccentBrush}">Resource colored</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Single().Runs.Single().Color!.Resolved
+            .Should().Be(SrgbColor.FromRgb(0x2F5597));
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_ResolvesFontFamilyAndSizeResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          xmlns:sys="clr-namespace:System;assembly=mscorlib">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                  <sys:Double x:Key="BodySize">18</sys:Double>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph FontFamily="{DynamicResource BodyFont}"
+                         FontSize="{StaticResource BodySize}">Resource typography</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var run = payload!.Body.Paragraphs.Single().Runs.Single();
+        run.FontFamily.Should().Be("Aptos");
+        run.FontSizePt.Should().Be(13.5);
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_AppliesTextSettersFromReferencedStyleResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          xmlns:sys="clr-namespace:System;assembly=mscorlib">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <SolidColorBrush x:Key="BodyBrush" Color="#FF1F4E79" />
+                  <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                  <sys:Double x:Key="BodySize">16</sys:Double>
+                  <Style x:Key="BodyText">
+                    <Setter Property="Foreground" Value="{StaticResource BodyBrush}" />
+                    <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
+                    <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                    <Setter Property="FontWeight" Value="Bold" />
+                    <Setter Property="TextDecorations" Value="Underline" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Style="{StaticResource BodyText}">Styled paragraph</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var run = payload!.Body.Paragraphs.Single().Runs.Single();
+        run.FontFamily.Should().Be("Aptos");
+        run.FontSizePt.Should().Be(12);
+        run.Bold.Should().BeTrue();
+        run.Underline.Should().BeTrue();
+        run.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_ResolvesBasedOnStyleChainsWithoutLooping()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <Style x:Key="BaseText">
+                    <Setter Property="FontFamily" Value="Aptos" />
+                    <Setter Property="FontSize" Value="14" />
+                  </Style>
+                  <Style x:Key="HeadingText" BasedOn="{StaticResource BaseText}">
+                    <Setter Property="FontWeight" Value="Bold" />
+                  </Style>
+                  <Style x:Key="LoopA" BasedOn="{StaticResource LoopB}" />
+                  <Style x:Key="LoopB" BasedOn="{StaticResource LoopA}" />
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Style="{StaticResource HeadingText}">Heading</Paragraph>
+              <Paragraph Style="{StaticResource LoopA}">Loop remains safe</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
+        paragraphs[0].Runs.Single().FontSizePt.Should().Be(10.5);
+        paragraphs[0].Runs.Single().Bold.Should().BeTrue();
+        paragraphs[1].Runs.Single().Text.Should().Be("Loop remains safe");
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesAllowedHyperlinks_AndBlocksUnsafeSchemes()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph>
+                <Hyperlink NavigateUri="https://example.test/docs" ToolTip="Open docs">Docs</Hyperlink>
+                <Hyperlink NavigateUri="javascript:alert(1)">Unsafe</Hyperlink>
+                <Run NavigateUri="mailto:help@example.test" Text="Mail" />
+              </Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs[0].Text.Should().Be("Docs");
+        runs[0].Hyperlink.Should().NotBeNull();
+        runs[0].Hyperlink!.Url.Should().Be("https://example.test/docs");
+        runs[0].Hyperlink!.Tooltip.Should().Be("Open docs");
+        runs[1].Text.Should().Be("Unsafe");
+        runs[1].Hyperlink.Should().BeNull();
+        runs[2].Text.Should().Be("Mail");
+        runs[2].Hyperlink!.Url.Should().Be("mailto:help@example.test");
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesListMarkerStylesAndNestedLevels()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <List MarkerStyle="Decimal" StartIndex="3">
+                <ListItem><Paragraph>Three</Paragraph></ListItem>
+                <ListItem>
+                  <Paragraph>Four</Paragraph>
+                  <List MarkerStyle="LowerLatin"><ListItem><Paragraph>Nested</Paragraph></ListItem></List>
+                </ListItem>
+              </List>
+              <List MarkerStyle="Circle"><ListItem><Paragraph>Circle</Paragraph></ListItem></List>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs.Should().HaveCount(4);
+        paragraphs[0].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[0].AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        paragraphs[0].AutoNumStartAt.Should().Be(3);
+        paragraphs[0].AutoNumStartAtSpecified.Should().BeTrue();
+        paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
+        paragraphs[2].Level.Should().Be(1);
+        paragraphs[2].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[2].AutoNumType.Should().Be(AutoNumType.AlphaLcPeriod);
+        paragraphs[3].BulletKind.Should().Be(BulletKind.Char);
+        paragraphs[3].BulletChar.Should().Be("\u25E6");
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_FlattensTablesLikeWpfProjection_AndPreservesCellFormatting()
     {
         const string xaml = """
@@ -78,7 +374,7 @@ public sealed class ExternalRichTextClipboardTests
     {
         const string xaml = """
             <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-              <BlockUIContainer><Image Source="Images/first.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/first.png" Width="96" Height="48" /></BlockUIContainer>
               <BlockUIContainer><Image Source="Images/second.jpg" /></BlockUIContainer>
             </FlowDocument>
             """;
@@ -94,10 +390,42 @@ public sealed class ExternalRichTextClipboardTests
         payload!.GetImagePayloads().Should().HaveCount(2);
         payload.GetImagePayloads()[0].Bytes.Should().Equal(first);
         payload.GetImagePayloads()[0].ContentType.Should().Be("image/png");
+        payload.GetImagePayloads()[0].WidthEmu.Should().Be(914400);
+        payload.GetImagePayloads()[0].HeightEmu.Should().Be(457200);
         payload.GetImagePayloads()[1].Bytes.Should().Equal(second);
         payload.GetImagePayloads()[1].ContentType.Should().Be("image/jpeg");
+        payload.GetImagePayloads()[1].WidthEmu.Should().BeNull();
+        payload.GetImagePayloads()[1].HeightEmu.Should().BeNull();
         payload.ImageBytes.Should().Equal(first);
         payload.ImageContentType.Should().Be("image/png");
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_PreservesInlineImageRunOrderAndExtent()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph><Run Text="Before"/><Image Source="Images/inline.png" Width="24" Height="12"/><Run Text="After"/></Paragraph>
+            </FlowDocument>
+            """;
+        var bytes = new byte[] { 0x01, 0x02, 0x03 };
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml, ("Images/inline.png", bytes)));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Before\uFFFCAfter");
+        payload.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Before", "\uFFFC", "After");
+        var inline = payload.Body.Paragraphs.Single().Runs[1];
+        inline.InlineImage!.Bytes.Should().Equal(bytes);
+        inline.InlineImageWidthEmu.Should().Be(228_600);
+        inline.InlineImageHeightEmu.Should().Be(114_300);
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened!.Body.Paragraphs.Single().Runs[1].InlineImage!.Bytes.Should().Equal(bytes);
+        reopened.Body.Paragraphs.Single().Runs[1].InlineImageWidthEmu.Should().Be(228_600);
     }
 
     [Fact]
@@ -145,6 +473,43 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfSuperscriptAndSubscript_PreserveBaselineControls()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}\f0\fs24 H\super i\sub j\nosupersub k\up12 u\dn6 d}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("H", "i", "j", "k", "u", "d");
+        runs[0].BaselineOffset.Should().BeNull();
+        runs[1].BaselineOffset.Should().Be(25_000);
+        runs[2].BaselineOffset.Should().Be(-25_000);
+        runs[3].BaselineOffset.Should().BeNull();
+        runs[4].BaselineOffset.Should().Be(50_000);
+        runs[5].BaselineOffset.Should().Be(-25_000);
+    }
+
+    [Fact]
+    public void RtfCapsControls_PreserveRunCapitalizationSemantics()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}\f0\fs24 a\caps b\caps0 c\scaps d\scaps0 e}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("a", "b", "c", "d", "e");
+        runs[0].Caps.Should().Be(RunTextCaps.None);
+        runs[1].Caps.Should().Be(RunTextCaps.All);
+        runs[2].Caps.Should().Be(RunTextCaps.None);
+        runs[3].Caps.Should().Be(RunTextCaps.Small);
+        runs[4].Caps.Should().Be(RunTextCaps.None);
+    }
+
+    [Fact]
     public void RtfPict_PreservesPngPayloadAlongsideText()
     {
         var png = Convert.FromBase64String(
@@ -158,7 +523,33 @@ public sealed class ExternalRichTextClipboardTests
         payload!.HasImage.Should().BeTrue();
         payload.ImageContentType.Should().Be("image/png");
         payload.ImageBytes.Should().Equal(png);
-        payload.PlainText.Should().Be("Before  After");
+        payload.PlainText.Should().Be("Before \uFFFC After");
+        payload.Body.Paragraphs.Single().Runs
+            .Any(run => run.InlineImage is { } image && image.Bytes.SequenceEqual(png))
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void RtfPict_PreservesAuthoredDisplayDimensionsAndScale()
+    {
+        var png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi{\pict\pngblip\picwgoal1440\pichgoal720\picscalex50\picscaley200 "
+            + Convert.ToHexString(png) + "}}");
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+
+        payload.Should().NotBeNull();
+        var image = payload!.GetImagePayloads().Should().ContainSingle().Subject;
+        image.WidthEmu.Should().Be(457_200);
+        image.HeightEmu.Should().Be(914_400);
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened.Should().NotBeNull();
+        reopened!.GetImagePayloads().Single().WidthEmu.Should().Be(457_200);
+        reopened.GetImagePayloads().Single().HeightEmu.Should().Be(914_400);
     }
 
     [Fact]
@@ -193,7 +584,7 @@ public sealed class ExternalRichTextClipboardTests
         payload.GetImagePayloads()[0].ContentType.Should().Be("image/png");
         payload.GetImagePayloads()[1].Bytes.Should().Equal(second);
         payload.GetImagePayloads()[1].ContentType.Should().Be("image/jpeg");
-        payload.PlainText.Should().Be("Before  middle  After");
+        payload.PlainText.Should().Be("Before \uFFFC middle \uFFFC After");
 
         var reopened = InCanvasRichClipboardPlanner.Deserialize(
             InCanvasRichClipboardPlanner.Serialize(payload));
@@ -213,10 +604,16 @@ public sealed class ExternalRichTextClipboardTests
         var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
 
         payload.Should().NotBeNull();
-        payload!.PlainText.Should().Be("Before Embedded result After");
+        payload!.PlainText.Should().Be("Before \uFFFCEmbedded result After");
         payload.GetObjectPayloads().Should().ContainSingle();
         payload.GetObjectPayloads()[0].Bytes.Should().Equal(0x01, 0x02, 0x03);
         payload.GetObjectPayloads()[0].FileName.Should().Be("Embedded.docx");
+        payload.GetObjectPayloads()[0].ClassName.Should().Be("Word.Document.12");
+        var inline = payload.Body.Paragraphs.Single().Runs
+            .Single(run => run.InlineOleObject is not null);
+        inline.Text.Should().Be("\uFFFC");
+        inline.InlineOleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+        inline.InlineOleObject.FileName.Should().Be("Embedded.docx");
 
         var restored = InCanvasRichClipboardPlanner.Deserialize(
             InCanvasRichClipboardPlanner.Serialize(payload));
@@ -224,6 +621,35 @@ public sealed class ExternalRichTextClipboardTests
         restored!.GetObjectPayloads().Should().ContainSingle();
         restored.GetObjectPayloads()[0].Bytes.Should().Equal(0x01, 0x02, 0x03);
         restored.GetObjectPayloads()[0].FileName.Should().Be("Embedded.docx");
+        restored.GetObjectPayloads()[0].ClassName.Should().Be("Word.Document.12");
+        restored.Body.Paragraphs.Single().Runs
+            .Single(run => run.InlineOleObject is not null)
+            .InlineOleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
+
+        var slideBody = InCanvasRichClipboardPlanner.CloneBodyForSlideFallback(payload.Body);
+        InCanvasTextEditPlanner.ExtractPlainText(slideBody)
+            .Should().Be("Before Embedded result After");
+        slideBody.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .All(run => run.InlineOleObject is null)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void RtfObject_PreservesCustomOleClassThroughInsertionMetadata()
+    {
+        const string rtf =
+            @"{\rtf1\ansi{\object{\*\objclass Vendor.Custom.Widget.7}{\*\objdata 0102}{\result Widget}}}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var source = payload!.GetObjectPayloads().Should().ContainSingle().Subject;
+        source.FileName.Should().Be("Embedded.bin");
+        source.ClassName.Should().Be("Vendor.Custom.Widget.7");
+
+        var ole = OleInsertionPlanner.CreatePayload(source.Bytes, source.FileName, source.ClassName);
+        ole.ProgId.Should().Be("Vendor.Custom.Widget.7");
+        ole.OleObjXml.Should().Contain("progId=\"Vendor.Custom.Widget.7\"");
     }
 
     [Fact]
@@ -323,6 +749,128 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void WordListTable_UsesCustomLevelTextGlyphForBulletLevels()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid7
+{\listlevel\levelnfc23\levelstartat1\leveltext\'01\u9654?;\levelnumbers;}
+}}
+{\listoverridetable{\listoverride\listid7\ls7}}
+\pard\ls7\ilvl0 Custom bullet}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Custom bullet");
+        var paragraph = payload.Body.Paragraphs.Single();
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("▶");
+    }
+
+    [Fact]
+    public void WordListTable_UsesLevelTextPunctuationForExistingAutoNumberVariants()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid8
+{\listlevel\levelnfc3\levelstartat1\leveltext\'02\'00);\levelnumbers;}
+}}
+{\listoverridetable{\listoverride\listid8\ls8}}
+\pard\ls8\ilvl0 Alpha list}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Single().AutoNumType.Should().Be(AutoNumType.AlphaUcParenR);
+    }
+
+    [Fact]
+    public void WordListTable_PreservesMultiLevelLevelTextTemplateAndRichClipboardRoundTrip()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid9
+{\listlevel\levelnfc0\levelstartat1\leveltext\'02\'00.;\levelnumbers\'01;}
+{\listlevel\levelnfc0\levelstartat1\leveltext\'04\'00.\'01.;\levelnumbers\'01\'02;}
+}}
+{\listoverridetable{\listoverride\listid9\ls9}}
+\pard\ls9\ilvl0 Root\par
+\pard\ls9\ilvl1 Child}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs[0].AutoNumTextTemplate.Should().Be("%1.");
+        payload.Body.Paragraphs[1].AutoNumTextTemplate.Should().Be("%1.%2.");
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs.Select(paragraph => paragraph.AutoNumTextTemplate)
+            .Should().Equal("%1.", "%1.%2.");
+    }
+
+    [Fact]
+    public void WordListOverride_StartAtRestart_IsAppliedOnlyToItsFirstParagraph()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid1
+{\listlevel\levelnfc0\levelstartat1\leveltext\'02\'00.;\levelnumbers\'01;}
+}}
+{\listoverridetable
+{\listoverride\listid1\listoverridecount1
+{\lfolevel\listoverridestart\levelstartat7}\ls1}}
+\pard\ls1\ilvl0 Restarted\par
+\pard\ls1\ilvl0 Continues}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Should().HaveCount(2);
+        var first = payload.Body.Paragraphs[0];
+        first.BulletKind.Should().Be(BulletKind.Auto);
+        first.AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        first.AutoNumStartAt.Should().Be(7);
+        first.AutoNumStartAtSpecified.Should().BeTrue();
+
+        var continuation = payload.Body.Paragraphs[1];
+        continuation.AutoNumStartAt.Should().Be(7);
+        continuation.AutoNumStartAtSpecified.Should().BeFalse();
+    }
+
+    [Fact]
+    public void WordListOverride_FormattingLevel_PreservesBulletAndIndentGeometry()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid1
+{\listlevel\levelnfc0\levelstartat1\leveltext\'02\'00.;\levelnumbers\'01;}
+}}
+{\listoverridetable
+{\listoverride\listid1\listoverridecount1
+{\lfolevel\listoverrideformat1
+{\listlevel\levelnfc23\levelstartat1\li1440\fi-360\leveltext\'01\u8226?;\levelnumbers;}}
+\ls1}}
+\pard\ls1\ilvl0 Overridden}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var paragraph = payload!.Body.Paragraphs.Single();
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("\u2022");
+        paragraph.MarginLeftEmu.Should().Be(914400);
+        paragraph.IndentEmu.Should().Be(-228600);
+    }
+
+    [Fact]
     public void WordTableControls_FlattenRowsAndCellsLikeWpfProjection_AndPreserveCellFormatting()
     {
         const string rtf =
@@ -367,6 +915,72 @@ Header\cell Value\cell\row}";
         payload.TableCellStyles[0].InsetTopPt.Should().Be(3);
         payload.TableCellStyles[0].InsetBottomPt.Should().Be(9);
         payload.TableCellStyles[1].FillRgb.Should().BeNull();
+    }
+
+    [Fact]
+    public void WordTableCellShading_PreservesPatternAndForegroundBackgroundColors()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\colortbl;\red255\green255\blue255;\red31\green78\blue121;\red242\green242\blue242;}
+\trowd\clcbpat1\clcfpat2\clbghoriz\cellx1440\clcbpat3\clcfpat2\clbgcross\cellx2880
+\clcbpat3\clshdng100\cellx4320
+Header\cell Body\cell Solid\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.TableCellStyles.Should().HaveCount(3);
+        payload.TableCellStyles![0].FillPattern.Should().Be("horzStripe");
+        payload.TableCellStyles[0].FillForegroundRgb.Should().Be(0x1F4E79);
+        payload.TableCellStyles[0].FillBackgroundRgb.Should().Be(0xFFFFFF);
+        payload.TableCellStyles[1].FillPattern.Should().Be("cross");
+        payload.TableCellStyles[2].FillPattern.Should().Be("pct100");
+
+        ClipboardTablePlanner.TryBuildStandaloneTable(
+            payload.Body,
+            payload.TableColumnWidthsEmu,
+            payload.TableCellStyles,
+            out var table).Should().BeTrue();
+
+        var firstFill = table.Rows[0].Cells[0].Fill.Should().BeOfType<ShapeFill.Pattern>().Subject;
+        firstFill.Preset.Should().Be("horzStripe");
+        firstFill.ForegroundColor.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        firstFill.BackgroundColor.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFFFF));
+    }
+
+    [Fact]
+    public void WordTableMergeControls_PreserveNativeGridAndRowSpans()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+\trowd\clmgf\cellx1440\clmrg\cellx2880\cellx4320
+Merged\cell\cell Tail\cell\row
+\trowd\clvmgf\cellx1440\cellx2880
+Top\cell Right\cell\row
+\trowd\clvmrg\cellx1440\cellx2880
+\cell Bottom\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.TableCellStyles.Should().HaveCount(7);
+        payload.TableCellStyles![0].HorizontalMergeStart.Should().BeTrue();
+        payload.TableCellStyles[1].HorizontalMergeContinuation.Should().BeTrue();
+        payload.TableCellStyles[3].VerticalMergeStart.Should().BeTrue();
+        payload.TableCellStyles[5].VerticalMergeContinuation.Should().BeTrue();
+
+        ClipboardTablePlanner.TryBuildStandaloneTable(
+            payload.Body,
+            payload.TableColumnWidthsEmu,
+            payload.TableCellStyles,
+            out var table).Should().BeTrue();
+
+        table.Rows[0].Cells[0].GridSpan.Should().Be(2);
+        table.Rows[0].Cells[1].HMerge.Should().BeTrue();
+        table.Rows[0].Cells[2].GridSpan.Should().Be(1);
+        table.Rows[1].Cells[0].RowSpan.Should().Be(2);
+        table.Rows[2].Cells[0].VMerge.Should().BeTrue();
     }
 
     [Fact]

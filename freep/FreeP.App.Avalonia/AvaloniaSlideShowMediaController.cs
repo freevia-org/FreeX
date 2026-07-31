@@ -88,7 +88,7 @@ internal sealed class AvaloniaSlideShowMediaController
 
         foreach (var slot in _slots)
         {
-            var shape = slide.Shapes.FirstOrDefault(candidate => candidate.Id == slot.ShapeId);
+            var shape = ShapeTreeLookup.Find(slide, slot.ShapeId);
             if (shape?.Media is null || shape.Kind != SlideShapeKind.Media)
                 continue;
 
@@ -135,7 +135,7 @@ internal sealed class AvaloniaSlideShowMediaController
         if (!_active.Any(plan => plan.HasSource) || !EnsureBackend())
             return;
 
-        foreach (var shape in slide.Shapes.Where(shape =>
+        foreach (var shape in ShapeTreeLookup.Enumerate(slide).Where(shape =>
                      shape.Kind == SlideShapeKind.Media && shape.Media is not null))
         {
             var plan = _active.First(media => media.ShapeId == shape.Id);

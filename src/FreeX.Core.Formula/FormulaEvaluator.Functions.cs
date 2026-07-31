@@ -285,17 +285,54 @@ public sealed partial class FormulaEvaluator
                 // the TEXTSPLIT pad_with special case above.
                 expandedArgs.Add(TextSplitOmittedDelimiterArgumentValue.Instance);
             }
-            else if (arg is OmittedArgumentNode && IsOmittedOptionalOrdinalArgument(functionName, argIndex))
+            // R102: this branch used to ALSO cover FIND/SEARCH's start_num, LEFT/RIGHT's num_chars,
+            // and SUBSTITUTE's instance_num (plus the FINDB/SEARCHB/LEFTB/RIGHTB byte-count
+            // variants) via a shared IsOmittedOptionalOrdinalArgument(functionName, argIndex)
+            // predicate. That was WRONG for those five function families specifically: per
+            // Parser.ParseArgumentList, OmittedArgumentNode is produced ONLY for an argument slot
+            // that is explicitly PRESENT but empty (a trailing comma, e.g. LEFT("abc",) -- there is
+            // no LATER argument for that comma to help reach, since num_chars/start_num/instance_num
+            // is each of those five functions' ONLY (and therefore last) optional argument). A
+            // genuinely OMITTED trailing argument (e.g. LEFT("abc")) never produces a node at all;
+            // the args list for that call is simply shorter, which every one of these functions
+            // already detects via its own `args.Count > N` check. So forcing that explicitly-blank
+            // last argument into the SAME "genuinely omitted, use the smart default" treatment as a
+            // fully-absent argument was backwards from Excel, which treats a present-but-blank
+            // numeric argument like any other blank-cell numeric coercion (coerces to 0) when there
+            // is no later argument the blank could have been skipping to reach -- exactly the
+            // omitted-vs-blank distinction VLOOKUP's range_lookup makes, just the other direction
+            // (omitted->TRUE, blank->FALSE there; omitted->default, blank->0 here). E.g. real
+            // Excel's LEFT("abc",) is "" (num_chars coerced to 0), not "a" (the num_chars-omitted
+            // default of 1); FIND("a","abc",) is #VALUE! (start_num coerced to 0, which every
+            // FIND/SEARCH/SUBSTITUTE domain check already rejects as < 1), not the omitted default
+            // (which succeeds from the start of the text / replaces every occurrence). That part of
+            // the branch was removed for those five, letting their OmittedArgumentNode fall through
+            // to the generic EvaluateNode(OmittedArgumentNode) => BlankValue.Instance case below --
+            // the SAME value a blank-cell reference already produces -- so their existing
+            // `args.Count > N` genuinely-omitted check and BlankValue-coerces-to-0 domain check
+            // (both already present, see e.g. BuiltInFunctions.TextCore.Slice.cs's Left/Right) now
+            // naturally see the correct case without any further change.
+            //
+            // TEXTBEFORE/TEXTAFTER's instance_num (argIndex 2) is DELIBERATELY KEPT here, unlike its
+            // five siblings above: unlike them, instance_num is a MIDDLE optional argument --
+            // match_mode, match_end and if_not_found all follow it -- so a real, extremely common
+            // Excel idiom is skipping instance_num via a blank comma specifically to reach one of
+            // those LATER arguments while still wanting instance_num's ordinary default (e.g.
+            // TEXTBEFORE(text,delim,,1) to set match_mode=1 without caring about instance_num, or
+            // TEXTBEFORE("Socrates"," ",,,1) -- a real Microsoft documentation example -- to set
+            // match_end=1). Excel's own designers evidently did not want every such call to hit the
+            // instanceNum==0 domain error (BuiltInFunctions.TextSplit.cs's TryTextBeforeAfterOptions)
+            // just because the user skipped past instance_num to specify a later argument -- unlike
+            // VLOOKUP's range_lookup (the LAST argument, no later argument to reach) or the five
+            // siblings above (each argument here is likewise its function's ONLY optional argument,
+            // with nothing after it), where there is no such ergonomic pressure and Excel's ordinary
+            // blank-coerces-to-0 rule applies untouched. This is confirmed by this codebase's own
+            // pre-existing test suite (ExcelParityModernTextTests' documented-Excel-results and
+            // case-insensitive-search theories), which exercises exactly this "blank instance_num to
+            // reach match_mode/match_end" pattern and expects the DEFAULT (not an error) -- left
+            // passing, unchanged, by keeping this branch scoped down to just these two entries.
+            else if (arg is OmittedArgumentNode && functionName is "TEXTBEFORE" or "TEXTAFTER" && argIndex == 2)
             {
-                // TEXTBEFORE/TEXTAFTER's instance_num, FIND/SEARCH's start_num, LEFT/RIGHT's
-                // num_chars, and SUBSTITUTE's instance_num must each fall back to their normal
-                // default only when the argument slot itself is genuinely omitted -- not when an
-                // explicit argument merely evaluates to blank (e.g. a reference to an empty cell,
-                // which Excel coerces to numeric 0 for these arguments instead, per the same
-                // omitted-vs-blank-reference distinction VLOOKUP's range_lookup makes). The generic
-                // EvaluateNode(OmittedArgumentNode) fallback below returns the same BlankValue.Instance
-                // singleton a blank-cell reference produces, so the two cases must be told apart
-                // here, before evaluation -- mirroring the TEXTSPLIT pad_with special case above.
                 expandedArgs.Add(OmittedOptionalOrdinalArgumentValue.Instance);
             }
             else if (arg is NamedRangeNode named)
@@ -466,26 +503,6 @@ public sealed partial class FormulaEvaluator
             return ErrorValue.Ref;
         }
     }
-
-    /// <summary>
-    /// Identifies the specific (function, argument-index) slots whose optional numeric argument must
-    /// be distinguished from an explicit blank-cell reference: TEXTBEFORE/TEXTAFTER's instance_num
-    /// (index 2), FIND/SEARCH's start_num (index 2), LEFT/RIGHT's num_chars (index 1),
-    /// SUBSTITUTE's instance_num (index 3), and the byte-count variants FINDB/SEARCHB's start_num
-    /// (index 2) and LEFTB/RIGHTB's num_bytes (index 1), which need the identical distinction as
-    /// their non-B siblings. See the OmittedArgumentNode branch above for why.
-    /// </summary>
-    private static bool IsOmittedOptionalOrdinalArgument(string functionName, int argIndex) =>
-        (functionName, argIndex) switch
-        {
-            ("TEXTBEFORE", 2) or ("TEXTAFTER", 2) => true,
-            ("FIND", 2) or ("SEARCH", 2) => true,
-            ("FINDB", 2) or ("SEARCHB", 2) => true,
-            ("LEFT", 1) or ("RIGHT", 1) => true,
-            ("LEFTB", 1) or ("RIGHTB", 1) => true,
-            ("SUBSTITUTE", 3) => true,
-            _ => false
-        };
 
     /// <summary>
     /// Expands a 3-D sheet-span aggregate argument (e.g. Sheet1:Sheet3!A1 or Sheet1:Sheet3!A1:B5)
@@ -837,14 +854,29 @@ public sealed partial class FormulaEvaluator
 }
 
 /// <summary>
-/// Sentinel substituted (by the OmittedArgumentNode branch in FormulaEvaluator.Functions.cs's
-/// argument-expansion loop) for a genuinely-omitted optional ordinal argument -- TEXTBEFORE/
-/// TEXTAFTER's instance_num, FIND/SEARCH's start_num, LEFT/RIGHT's num_chars, and SUBSTITUTE's
-/// instance_num -- so those functions' argument parsers can tell "the argument slot itself was
-/// omitted" (use the normal default) apart from "an explicit argument evaluates to blank" (e.g. a
-/// reference to an empty cell, which Excel coerces to numeric 0 instead). Both cases would otherwise
-/// evaluate to the same BlankValue.Instance singleton. Mirrors TextSplitOmittedPadArgumentValue,
-/// which solves the identical problem for TEXTSPLIT's pad_with.
+/// R102: a genuinely-omitted-or-equivalent optional ordinal argument marker, now produced two ways:
+/// (1) upstream, by the OmittedArgumentNode branch in FormulaEvaluator.Functions.cs's
+/// argument-expansion loop, but ONLY for TEXTBEFORE/TEXTAFTER's instance_num (argIndex 2) -- kept
+/// there deliberately because instance_num is a MIDDLE optional argument (match_mode/match_end/
+/// if_not_found follow it), so a blank instance_num used purely to skip past it and reach one of
+/// those later arguments must still mean "use the default", not "coerce to 0 and error"; and (2)
+/// SUBSTITUTE's own internal "instance_num was never given at all" marker, substituted purely
+/// locally in Substitute() (`args.Count > 3 ? args[3] : Instance`) for a genuinely-omitted 4th
+/// argument, telling that apart from a PRESENT argument that merely evaluates to blank (a trailing
+/// comma, e.g. SUBSTITUTE(a,b,c,), or a reference to an empty cell -- both of which Excel coerces
+/// to numeric 0 instead of "replace all", since instance_num is SUBSTITUTE's only, and therefore
+/// last, optional argument -- no later argument a blank could be skipping to reach). This type used
+/// to also be produced upstream for FIND/SEARCH's start_num and LEFT/RIGHT's num_chars (plus their
+/// FINDB/SEARCHB/LEFTB/RIGHTB byte-count variants) -- each of those is likewise its function's ONLY
+/// optional argument, so (like SUBSTITUTE) there is no later argument to reach and Excel's ordinary
+/// blank-coerces-to-0 numeric rule applies untouched; producing this sentinel for a mere
+/// trailing-comma-empty argument there conflated it with genuine omission and gave the wrong Excel
+/// result (e.g. real Excel's LEFT("abc",) is "" -- num_chars coerced to 0 -- not "a", the
+/// num_chars-OMITTED default). That part of the upstream branch was removed; a trailing-comma-empty
+/// argument for those five functions now evaluates like any other blank-cell reference
+/// (BlankValue.Instance) via the generic EvaluateNode(OmittedArgumentNode) fallback, and each
+/// function's existing BlankValue-coerces-to-0 domain check already does the right thing with no
+/// further change needed.
 /// </summary>
 internal sealed record OmittedOptionalOrdinalArgumentValue : ScalarValue
 {

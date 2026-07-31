@@ -99,10 +99,12 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("picturelineup")
             .And.Contain("picturegrid")
             .And.Contain("pyramidlist")
+            .And.Contain("invertedpyramid")
             .And.Contain("relationship1")
             .And.Contain("opposingideas")
             .And.Contain("convergingradial")
             .And.Contain("interlockingrings")
+            .And.Contain("cycle2")
             .And.Contain("verticalprocess")
             .And.Contain("horizontalhierarchy")
             .And.Contain("hierarchy3");

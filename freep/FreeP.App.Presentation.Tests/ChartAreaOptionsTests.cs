@@ -113,6 +113,35 @@ public sealed class ChartAreaOptionsTests
     }
 
     [Fact]
+    public void SetChartAreaOptions_GroupedChart_UpdatesAndUndoRestores()
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape
+        {
+            ChartAreaFill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xFFFFFF))),
+        };
+        var chartShape = new SlideShape { Id = 7, Kind = SlideShapeKind.Chart, Chart = chart };
+        var group = new SlideShape { Id = 8, Kind = SlideShapeKind.Group };
+        group.Children.Add(chartShape);
+        slide.Shapes.Add(group);
+        presentation.Slides.Add(slide);
+        var bus = new PresentationCommandBus(presentation);
+
+        bus.Execute(new SetChartAreaOptionsCommand(
+            0,
+            chartShape.Id,
+            new ChartAreaOptions(
+                ChartAreaFormattingTarget.ChartArea,
+                new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x1F4E79))),
+                null)));
+
+        ((ShapeFill.Solid)chart.ChartAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+        bus.Undo();
+        ((ShapeFill.Solid)chart.ChartAreaFill!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFFFFFF));
+    }
+
+    [Fact]
     public void SetChartAreaOptions_RoundTripsExplicitNoFillAndNoOutline()
     {
         var presentation = new Presentation();

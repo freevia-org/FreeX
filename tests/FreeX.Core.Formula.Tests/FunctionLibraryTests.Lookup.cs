@@ -111,14 +111,46 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Vlookup_OmittedRangeLookup_DefaultsToApproximateMatch()
+    public void R102_Vlookup_GenuinelyOmittedRangeLookup_DefaultsToApproximateMatch()
     {
+        // No 4th argument at all (not even a trailing comma) -> Excel's friendly TRUE default.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1)),   (1, 2, new TextValue("one")),
             (2, 1, new NumberValue(10)),  (2, 2, new TextValue("ten")),
             (3, 1, new NumberValue(100)), (3, 2, new TextValue("hundred")));
 
-        _eval.Evaluate("=VLOOKUP(15,A1:B3,2,)", sheet).Should().Be(new TextValue("ten"));
+        _eval.Evaluate("=VLOOKUP(15,A1:B3,2)", sheet).Should().Be(new TextValue("ten"));
+    }
+
+    [Fact]
+    public void R102_Vlookup_TrailingCommaEmptyRangeLookup_ForcesExactMatch_ReturnsNA()
+    {
+        // A trailing comma with nothing after it (VLOOKUP(...,2,)) is Excel's well-documented
+        // "leave range_lookup blank for exact match" idiom: the slot is PRESENT but blank, which
+        // coerces to FALSE (exact match), NOT the same as the argument being genuinely omitted.
+        // 15 has no exact match in the first column ({1,10,100}), so this must return #N/A --
+        // not "ten" (which would be the approximate-match hit these two forms were previously,
+        // incorrectly, conflated to produce).
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),   (1, 2, new TextValue("one")),
+            (2, 1, new NumberValue(10)),  (2, 2, new TextValue("ten")),
+            (3, 1, new NumberValue(100)), (3, 2, new TextValue("hundred")));
+
+        _eval.Evaluate("=VLOOKUP(15,A1:B3,2,)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void R102_Vlookup_TrailingCommaEmptyRangeLookup_ExactHit_StillReturnsValue()
+    {
+        // Same idiom, but with a lookup value that DOES have an exact match -- confirms the
+        // trailing-comma-blank slot really does force exact-match semantics (not just "break"
+        // approximate matching).
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)),   (1, 2, new TextValue("one")),
+            (2, 1, new NumberValue(10)),  (2, 2, new TextValue("ten")),
+            (3, 1, new NumberValue(100)), (3, 2, new TextValue("hundred")));
+
+        _eval.Evaluate("=VLOOKUP(10,A1:B3,2,)", sheet).Should().Be(new TextValue("ten"));
     }
 
     [Fact]
@@ -221,13 +253,37 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Hlookup_OmittedRangeLookup_DefaultsToApproximateMatch()
+    public void R102_Hlookup_GenuinelyOmittedRangeLookup_DefaultsToApproximateMatch()
+    {
+        // No 4th argument at all -> Excel's friendly TRUE default (mirrors VLOOKUP's R102 tests).
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)), (1, 3, new NumberValue(100)),
+            (2, 1, new TextValue("one")), (2, 2, new TextValue("ten")), (2, 3, new TextValue("hundred")));
+
+        _eval.Evaluate("=HLOOKUP(15,A1:C2,2)", sheet).Should().Be(new TextValue("ten"));
+    }
+
+    [Fact]
+    public void R102_Hlookup_TrailingCommaEmptyRangeLookup_ForcesExactMatch_ReturnsNA()
+    {
+        // Trailing comma (present-but-blank slot) forces exact match, per the same
+        // omitted-vs-blank distinction as VLOOKUP (R102). 15 has no exact match in row 1
+        // ({1,10,100}), so this must return #N/A, not the approximate hit "ten".
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)), (1, 3, new NumberValue(100)),
+            (2, 1, new TextValue("one")), (2, 2, new TextValue("ten")), (2, 3, new TextValue("hundred")));
+
+        _eval.Evaluate("=HLOOKUP(15,A1:C2,2,)", sheet).Should().Be(ErrorValue.NA);
+    }
+
+    [Fact]
+    public void R102_Hlookup_TrailingCommaEmptyRangeLookup_ExactHit_StillReturnsValue()
     {
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1)), (1, 2, new NumberValue(10)), (1, 3, new NumberValue(100)),
             (2, 1, new TextValue("one")), (2, 2, new TextValue("ten")), (2, 3, new TextValue("hundred")));
 
-        _eval.Evaluate("=HLOOKUP(15,A1:C2,2,)", sheet).Should().Be(new TextValue("ten"));
+        _eval.Evaluate("=HLOOKUP(10,A1:C2,2,)", sheet).Should().Be(new TextValue("ten"));
     }
 
     [Fact]

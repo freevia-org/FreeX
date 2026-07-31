@@ -260,6 +260,12 @@ internal static class WpfRichTextClipboardAdapter
                         return inline.ContentStart;
                     remaining--;
                 }
+                else if (inline is InlineUIContainer)
+                {
+                    if (remaining <= 1)
+                        return inline.ContentStart;
+                    remaining--;
+                }
             }
         }
 

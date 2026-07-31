@@ -585,6 +585,28 @@ public sealed class OsClipboardServiceTests
         editor.CurrentSlide.Shapes[0].Picture!.ContentType.Should().Be("image/png");
         editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
             .Should().Contain(run => run.Text.Contains("Caption ", StringComparison.Ordinal));
+        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Select(run => run.Text)
+            .Should().NotContain(text => text.Contains('\uFFFC', StringComparison.Ordinal));
+    }
+
+    [StaFact]
+    public void Paste_ExternalRtfPicture_PreservesDisplayDimensions()
+    {
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Caption {\pict\pngblip\picwgoal1440\pichgoal720 "
+            + Convert.ToHexString(_minPng) + "} After}");
+        var fake = new FakeOsClipboard { RtfBytes = rtf };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        service.PasteWithResult(editor).Should().Be(PresentationClipboardPasteSource.RichText);
+        var picture = editor.CurrentSlide!.Shapes[0];
+        picture.ExtentCxEmu.Should().Be(914_400);
+        picture.ExtentCyEmu.Should().Be(457_200);
     }
 
     [StaFact]
@@ -629,10 +651,9 @@ public sealed class OsClipboardServiceTests
         objectShape.Kind.Should().Be(SlideShapeKind.Ole);
         objectShape.OleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
         objectShape.OleObject.EmbeddedExtension.Should().Be("docx");
-        editor.CurrentSlide.Shapes[1].TextBody!.Paragraphs.Single().Runs
-            .Select(run => run.Text)
-            .Should().ContainSingle()
-            .Which.Should().Be("Before Embedded result After");
+        InCanvasTextEditPlanner.ExtractPlainText(
+                editor.CurrentSlide.Shapes[1].TextBody)
+            .Should().Be("Before Embedded result After");
     }
 
     [StaFact]
@@ -641,7 +662,9 @@ public sealed class OsClipboardServiceTests
         const string xaml = """
             <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
               <Table><TableRowGroup><TableRow>
-                <TableCell><Paragraph><Bold>Q1</Bold></Paragraph></TableCell>
+                <TableCell Background="#FFF2F2F2" Padding="4,2,6,8"
+                           BorderBrush="#FF1F4E79" BorderThickness="1,2,3,4"
+                           VerticalContentAlignment="Center"><Paragraph><Bold>Q1</Bold></Paragraph></TableCell>
                 <TableCell><Paragraph>42</Paragraph></TableCell>
               </TableRow></TableRowGroup></Table>
             </FlowDocument>
@@ -669,6 +692,18 @@ public sealed class OsClipboardServiceTests
             .Single().Text.Should().Be("Q1");
         shape.Table.Rows[0].Cells[0].TextBody!.Paragraphs.Single().Runs
             .Single().Bold.Should().BeTrue();
+        var firstCell = shape.Table.Rows[0].Cells[0];
+        firstCell.Fill.Should().BeOfType<ShapeFill.Solid>().Which.Color.Resolved
+            .Should().Be(SrgbColor.FromRgb(0xF2F2F2));
+        firstCell.Anchor.Should().Be(TableCellAnchor.Middle);
+        firstCell.InsetLeftPt.Should().Be(3);
+        firstCell.InsetTopPt.Should().Be(1.5);
+        firstCell.InsetRightPt.Should().Be(4.5);
+        firstCell.InsetBottomPt.Should().Be(6);
+        firstCell.Borders!.Left.Should().BeOfType<ShapeOutline.Visible>().Which.WidthPt.Should().Be(0.75);
+        firstCell.Borders.Top.Should().BeOfType<ShapeOutline.Visible>().Which.WidthPt.Should().Be(1.5);
+        firstCell.Borders.Right.Should().BeOfType<ShapeOutline.Visible>().Which.WidthPt.Should().Be(2.25);
+        firstCell.Borders.Bottom.Should().BeOfType<ShapeOutline.Visible>().Which.WidthPt.Should().Be(3);
         shape.Table.Rows[0].Cells[1].TextBody!.Paragraphs.Single().Runs
             .Single().Text.Should().Be("42");
     }
@@ -731,7 +766,7 @@ Header\cell Value\cell\row}"),
     {
         const string xaml = """
             <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-              <BlockUIContainer><Image Source="Images/pasted.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/pasted.png" Width="96" Height="48" /></BlockUIContainer>
             </FlowDocument>
             """;
         var fake = new FakeOsClipboard
@@ -750,6 +785,8 @@ Header\cell Value\cell\row}"),
         picture.Kind.Should().Be(SlideShapeKind.Picture);
         picture.Picture!.ContentType.Should().Be("image/png");
         picture.Picture.Bytes.Should().Equal(_minPng);
+        picture.ExtentCxEmu.Should().Be(914400);
+        picture.ExtentCyEmu.Should().Be(457200);
     }
 
     [StaFact]

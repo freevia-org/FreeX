@@ -572,6 +572,36 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void HitTestTriggerShape_ResolvesGroupedTriggerShape()
+    {
+        var slide = new Slide();
+        var trigger = new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+        };
+        var group = new SlideShape { Id = 41, Kind = SlideShapeKind.Group };
+        group.Children.Add(trigger);
+        slide.Shapes.Add(group);
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 100,
+            TriggerShapeId = trigger.Id,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick,
+        });
+
+        SlideShowHostPlanner.HitTestTriggerShape(slide, new SlideShowPoint(48, 48))
+            .Should().Be(trigger.Id);
+    }
+
+    [Fact]
     public void HitTestHyperlink_ResolvesTheRunUnderThePointer()
     {
         var first = new Hyperlink { Url = "https://first.example.com" };

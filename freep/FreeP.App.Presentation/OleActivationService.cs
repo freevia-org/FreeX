@@ -30,23 +30,47 @@ public static class OleActivationService
     /// </summary>
     public static bool TryActivate(OleObjectInfo? oleObject)
     {
-        return BeginActivation(oleObject) is not null;
+        if (oleObject is null)
+            return false;
+
+        return BeginActivation(
+            oleObject.EmbeddedBytes,
+            ResolveExtension(oleObject),
+            updatedBytes => oleObject.EmbeddedBytes = updatedBytes) is not null;
     }
 
-    private static OleActivationSession? BeginActivation(OleObjectInfo? oleObject)
+    /// <summary>
+    /// Activates an embedded object carried by a rich-text replacement run. The
+    /// same temporary-file lifecycle as slide OLE objects is used, and edits made
+    /// by the external application are written back to the inline payload.
+    /// </summary>
+    public static bool TryActivate(InlineOleObjectInfo? inlineObject)
     {
-        if (oleObject is null || oleObject.EmbeddedBytes.Length == 0)
+        if (inlineObject is null)
+            return false;
+
+        return BeginActivation(
+            inlineObject.EmbeddedBytes,
+            ResolveExtension(inlineObject),
+            updatedBytes => inlineObject.EmbeddedBytes = updatedBytes) is not null;
+    }
+
+    private static OleActivationSession? BeginActivation(
+        IReadOnlyList<byte> embeddedBytes,
+        string extension,
+        Action<byte[]> updatePayload)
+    {
+        if (embeddedBytes.Count == 0)
             return null;
 
-        string extension = ResolveExtension(oleObject);
         string directory = Path.Combine(Path.GetTempPath(), "FreeP", "Ole");
         string path = Path.Combine(directory, $"embedded-{Guid.NewGuid():N}.{extension}");
-        byte[] originalBytes = oleObject.EmbeddedBytes.ToArray();
+        byte[] originalBytes = embeddedBytes.ToArray();
 
         try
         {
             Directory.CreateDirectory(directory);
-            File.WriteAllBytes(path, oleObject.EmbeddedBytes);
+            File.WriteAllBytes(path, originalBytes);
             var startInfo = new ProcessStartInfo
             {
                 FileName = path,
@@ -63,8 +87,8 @@ public static class OleActivationService
             var session = new OleActivationSession(
                 process,
                 path,
-                oleObject,
                 originalBytes,
+                updatePayload,
                 CompleteSession);
             ActiveSessions[process.Id] = session;
             session.StartWatching();
@@ -82,6 +106,28 @@ public static class OleActivationService
         string path,
         IReadOnlyList<byte> originalBytes)
     {
+        return TryCommitEditedPayload(
+            path,
+            originalBytes,
+            updatedBytes => oleObject.EmbeddedBytes = updatedBytes);
+    }
+
+    internal static bool TryCommitEditedPayload(
+        InlineOleObjectInfo inlineObject,
+        string path,
+        IReadOnlyList<byte> originalBytes)
+    {
+        return TryCommitEditedPayload(
+            path,
+            originalBytes,
+            updatedBytes => inlineObject.EmbeddedBytes = updatedBytes);
+    }
+
+    private static bool TryCommitEditedPayload(
+        string path,
+        IReadOnlyList<byte> originalBytes,
+        Action<byte[]> updatePayload)
+    {
         try
         {
             if (!File.Exists(path))
@@ -92,7 +138,7 @@ public static class OleActivationService
                 || updatedBytes.SequenceEqual(originalBytes))
                 return false;
 
-            oleObject.EmbeddedBytes = updatedBytes;
+            updatePayload(updatedBytes);
             return true;
         }
         catch
@@ -105,7 +151,10 @@ public static class OleActivationService
     {
         try
         {
-            TryCommitEditedPayload(session.OleObject, session.Path, session.OriginalBytes);
+            TryCommitEditedPayload(
+                session.Path,
+                session.OriginalBytes,
+                session.UpdatePayload);
         }
         finally
         {
@@ -126,22 +175,22 @@ public static class OleActivationService
         private readonly Action<OleActivationSession> _complete;
         private int _completed;
 
-        public OleObjectInfo OleObject { get; }
         public string Path { get; }
         public byte[] OriginalBytes { get; }
+        public Action<byte[]> UpdatePayload { get; }
         public int ProcessId => _process.Id;
 
         public OleActivationSession(
             Process process,
             string path,
-            OleObjectInfo oleObject,
             byte[] originalBytes,
+            Action<byte[]> updatePayload,
             Action<OleActivationSession> complete)
         {
             _process = process;
             Path = path;
-            OleObject = oleObject;
             OriginalBytes = originalBytes;
+            UpdatePayload = updatePayload;
             _complete = complete;
         }
 
@@ -178,6 +227,25 @@ public static class OleActivationService
             return contentExtension;
 
         return "bin";
+    }
+
+    public static string ResolveExtension(InlineOleObjectInfo inlineObject)
+    {
+        string extension = NormalizeExtension(Path.GetExtension(inlineObject.FileName));
+        if (extension != "bin")
+            return extension;
+
+        return inlineObject.ClassName?.Trim().ToLowerInvariant() switch
+        {
+            "excel.sheet.12" => "xlsx",
+            "excel.sheetmacroenabled.12" => "xlsm",
+            "excel.sheet.8" => "xls",
+            "word.document.12" => "docx",
+            "word.document.8" => "doc",
+            "powerpoint.show.12" => "pptx",
+            "powerpoint.show.8" => "ppt",
+            _ => "bin",
+        };
     }
 
     private static string NormalizeExtension(string? extension)

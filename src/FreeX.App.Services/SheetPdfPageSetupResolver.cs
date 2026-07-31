@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
@@ -121,8 +122,8 @@ public static class SheetPdfPageSetupResolver
         double RowSize(uint row) => ResolveRowHeightPixels(sheet, row);
         double ColumnSize(uint col) => ResolveColumnWidthPixels(sheet, col);
 
-        var rowScale = ComputeScaleFraction(detail.BaseRowsPerPage, detail.Capacity.RowsPerPage);
-        var columnScale = ComputeScaleFraction(detail.BaseColumnsPerPage, detail.Capacity.ColumnsPerPage);
+        var rowScale = PagePaginationPlanner.ComputeScaleFraction(detail.BaseRowsPerPage, detail.Capacity.RowsPerPage);
+        var columnScale = PagePaginationPlanner.ComputeScaleFraction(detail.BaseColumnsPerPage, detail.Capacity.ColumnsPerPage);
 
         var rowTitleSize = ComputeRepeatRangeSize(sheet.PrintTitleRows, CellAddress.MaxRow, sheet.IsRowEffectivelyHidden, RowSize);
         var columnTitleSize = ComputeRepeatRangeSize(sheet.PrintTitleColumns, CellAddress.MaxCol, sheet.IsColEffectivelyHidden, ColumnSize);
@@ -189,8 +190,8 @@ public static class SheetPdfPageSetupResolver
         // capacity (rows/cols per page) disagreed with both Excel and the WPF print path -- and with
         // WorkbookPdfContentBuilder.BuildPageWithPageSetup's own actual content rect below, which
         // already only insets by the plain margins (mT/mB) and discards headerBandPt/footerBandPt.
-        var bodyTopPx    = Math.Max(marginTopPx, headerBandPx);
-        var bodyBottomPx = Math.Max(marginBottomPx, footerBandPx);
+        var bodyTopPx    = PageGeometryRules.ResolveBodyEdge(marginTopPx, headerBandPx);
+        var bodyBottomPx = PageGeometryRules.ResolveBodyEdge(marginBottomPx, footerBandPx);
 
         var printableWidthPx  = Math.Max(1.0, pageWidthPx  - marginLeftPx - marginRightPx);
         var printableHeightPx = Math.Max(1.0, pageHeightPx - bodyTopPx - bodyBottomPx);
@@ -238,28 +239,28 @@ public static class SheetPdfPageSetupResolver
 
             if (wideConstrained && !tallConstrained)
             {
-                var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
+                var bodyCols = PageGeometryRules.CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns, sheet.IsColEffectivelyHidden);
                 if (bodyCols > 0)
                 {
-                    var titleCols = CountRepeatItems(sheet.PrintTitleColumns, CellAddress.MaxCol);
+                    var titleCols = PageGeometryRules.CountRepeatItems(sheet.PrintTitleColumns, CellAddress.MaxCol, sheet.IsColEffectivelyHidden);
                     var wide = scaleToFit.FitToPagesWide!.Value;
                     var bodyColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)wide));
                     baseColsPerPage = Math.Max(1u, bodyColsPerPage + titleCols);
-                    var uniformScale = ComputeScaleFraction(naturalColsPerPage, baseColsPerPage);
-                    baseRowsPerPage = ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
+                    var uniformScale = PagePaginationPlanner.ComputeScaleFraction(naturalColsPerPage, baseColsPerPage);
+                    baseRowsPerPage = PagePaginationPlanner.ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
                 }
             }
             else if (tallConstrained && !wideConstrained)
             {
-                var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
+                var bodyRows = PageGeometryRules.CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows, sheet.IsRowEffectivelyHidden);
                 if (bodyRows > 0)
                 {
-                    var titleRows = CountRepeatItems(sheet.PrintTitleRows, CellAddress.MaxRow);
+                    var titleRows = PageGeometryRules.CountRepeatItems(sheet.PrintTitleRows, CellAddress.MaxRow, sheet.IsRowEffectivelyHidden);
                     var tall = scaleToFit.FitToPagesTall!.Value;
                     var bodyRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)tall));
                     baseRowsPerPage = Math.Max(1u, bodyRowsPerPage + titleRows);
-                    var uniformScale = ComputeScaleFraction(naturalRowsPerPage, baseRowsPerPage);
-                    baseColsPerPage = ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
+                    var uniformScale = PagePaginationPlanner.ComputeScaleFraction(naturalRowsPerPage, baseRowsPerPage);
+                    baseColsPerPage = PagePaginationPlanner.ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
                 }
             }
             else if (wideConstrained && tallConstrained)
@@ -276,29 +277,29 @@ public static class SheetPdfPageSetupResolver
                 // at 100% used to still force exactly 5 row-pages even though the column-driven
                 // shrink alone would have collapsed it to ~2).
                 var colsIfWideOnly = naturalColsPerPage;
-                var bodyCols = CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns);
+                var bodyCols = PageGeometryRules.CountBodyItems(printRange.Start.Col, printRange.End.Col, sheet.PrintTitleColumns, sheet.IsColEffectivelyHidden);
                 if (bodyCols > 0)
                 {
-                    var titleCols = CountRepeatItems(sheet.PrintTitleColumns, CellAddress.MaxCol);
+                    var titleCols = PageGeometryRules.CountRepeatItems(sheet.PrintTitleColumns, CellAddress.MaxCol, sheet.IsColEffectivelyHidden);
                     var bodyColsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyCols / (double)scaleToFit.FitToPagesWide!.Value));
                     colsIfWideOnly = Math.Max(1u, bodyColsPerPage + titleCols);
                 }
 
                 var rowsIfTallOnly = naturalRowsPerPage;
-                var bodyRows = CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows);
+                var bodyRows = PageGeometryRules.CountBodyItems(printRange.Start.Row, printRange.End.Row, sheet.PrintTitleRows, sheet.IsRowEffectivelyHidden);
                 if (bodyRows > 0)
                 {
-                    var titleRows = CountRepeatItems(sheet.PrintTitleRows, CellAddress.MaxRow);
+                    var titleRows = PageGeometryRules.CountRepeatItems(sheet.PrintTitleRows, CellAddress.MaxRow, sheet.IsRowEffectivelyHidden);
                     var bodyRowsPerPage = Math.Max(1u, (uint)Math.Ceiling(bodyRows / (double)scaleToFit.FitToPagesTall!.Value));
                     rowsIfTallOnly = Math.Max(1u, bodyRowsPerPage + titleRows);
                 }
 
-                var widthScale = ComputeScaleFraction(naturalColsPerPage, colsIfWideOnly);
-                var heightScale = ComputeScaleFraction(naturalRowsPerPage, rowsIfTallOnly);
-                var uniformScale = Math.Min(widthScale, heightScale);
+                var widthScale = PagePaginationPlanner.ComputeScaleFraction(naturalColsPerPage, colsIfWideOnly);
+                var heightScale = PagePaginationPlanner.ComputeScaleFraction(naturalRowsPerPage, rowsIfTallOnly);
+                var uniformScale = PageGeometryRules.ResolveUniformScale(widthScale, heightScale);
 
-                baseColsPerPage = ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
-                baseRowsPerPage = ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
+                baseColsPerPage = PagePaginationPlanner.ApplyUniformScaleToFreeAxis(naturalColsPerPage, uniformScale);
+                baseRowsPerPage = PagePaginationPlanner.ApplyUniformScaleToFreeAxis(naturalRowsPerPage, uniformScale);
             }
             else
             {
@@ -413,9 +414,6 @@ public static class SheetPdfPageSetupResolver
         return Math.Max(MinimumColumnWidthPx, ColumnWidthPixelMapper.ColumnWidthToPixels(chars));
     }
 
-    private static bool IsWithinRepeatRange(WorksheetRepeatRange? repeatRange, uint value) =>
-        repeatRange is { } range && value >= range.Start && value <= range.End;
-
     /// <summary>
     /// Sums the real (visible, non-hidden) size of the rows/columns in <paramref name="repeat"/>
     /// (clipped to <paramref name="maxItem"/>) -- the title rows/columns that are reprinted on every
@@ -468,7 +466,7 @@ public static class SheetPdfPageSetupResolver
         var pageHasValue = false;
         for (var value = startValue; value <= endValue; value++)
         {
-            if (IsWithinRepeatRange(repeat, value) || isHidden?.Invoke(value) == true)
+            if (PageGeometryRules.IsWithinRepeatRange(repeat, value) || isHidden?.Invoke(value) == true)
                 continue;
 
             var size = Math.Max(0.0, sizeOf(value));
@@ -508,52 +506,12 @@ public static class SheetPdfPageSetupResolver
     private static uint UnboundedAxisCapacity(uint start, uint end) =>
         end >= start ? (uint)Math.Min(uint.MaxValue - 1L, (long)(end - start) + 2L) : 1u;
 
-    /// <summary>
-    /// The "s" shrink fraction implied by going from <paramref name="naturalItemsPerPage"/> (the
-    /// natural, unscaled per-page item count) to <paramref name="constrainedItemsPerPage"/>:
-    /// <c>s = natural / constrained</c> -- mirrors <c>PagePaginationPlanner.ComputeScaleFraction</c>.
-    /// </summary>
-    private static double ComputeScaleFraction(uint naturalItemsPerPage, uint constrainedItemsPerPage) =>
-        constrainedItemsPerPage == 0 ? 1.0 : naturalItemsPerPage / (double)constrainedItemsPerPage;
-
-    /// <summary>
-    /// Applies the uniform shrink fraction derived from the constrained axis to the free axis's
-    /// natural capacity, clamped to the same [10, 400] scale-percent range Excel supports for an
-    /// explicit scale -- mirrors <c>PagePaginationPlanner.ApplyUniformScaleToFreeAxis</c>.
-    /// </summary>
-    private static uint ApplyUniformScaleToFreeAxis(uint naturalItemsPerPage, double scaleFraction)
-    {
-        if (scaleFraction <= 0 || !double.IsFinite(scaleFraction))
-            return naturalItemsPerPage;
-
-        var percent = Math.Clamp(scaleFraction * 100.0, 10.0, 400.0);
-        return Math.Max(1u, (uint)Math.Floor(naturalItemsPerPage * (100d / percent)));
-    }
-
-    /// <summary>
-    /// Counts the rows/columns in a repeat (print titles) range, clipped to <paramref name="maxItem"/>.
-    /// Mirrors <c>PagePaginationPlanner.CountRepeatItems</c> so the title count added back onto the
-    /// body-only capacity (R76-services-print-pagination-4-1) matches the WPF path exactly.
-    /// </summary>
-    private static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem)
-    {
-        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
-            return 0;
-
-        return Math.Min(range.End, maxItem) - range.Start + 1;
-    }
-
-    private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat)
-    {
-        if (end < start) return 0;
-        var count = end - start + 1;
-        if (repeat is not { } range || range.End < start || range.Start > end)
-            return count;
-
-        var overlapStart = Math.Max(start, range.Start);
-        var overlapEnd   = Math.Min(end,   range.End);
-        return overlapEnd >= overlapStart
-            ? count - (overlapEnd - overlapStart + 1)
-            : count;
-    }
+    // CountRepeatItems / CountBodyItems / IsWithinRepeatRange used to be maintained here as private
+    // near-duplicates of PagePaginationPlanner's helpers of the same shape. R102 consolidated both
+    // into PageGeometryRules.CountRepeatItems / PageGeometryRules.CountBodyItems /
+    // PageGeometryRules.IsWithinRepeatRange (src/FreeX.App.Presentation/PageLayout/PageGeometryRules.cs)
+    // after the hidden-row/column counting bug was found to have drifted between the two copies --
+    // this file's copy was fixed alongside PagePaginationPlanner's, then both were merged into one
+    // shared, tested implementation so the PDF-export and desktop-print pagination paths can no
+    // longer independently regress on this rule.
 }

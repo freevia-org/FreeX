@@ -5890,6 +5890,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
+                SmartArtAuthoringPlanner.VerticalArrowListLayoutCommandId,
                 SmartArtAuthoringPlanner.VerticalBulletListLayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
@@ -5898,6 +5899,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicPyramidLayoutCommandId,
                 SmartArtAuthoringPlanner.PyramidListLayoutCommandId,
+                SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicRadialLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialListLayoutCommandId,
@@ -6356,6 +6358,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_inverted_pyramid_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.List,
+                "urn:microsoft.com/office/officeart/2005/8/layout/invertedPyramid",
+                ["Market", "Product", "Team", "Task"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 540 and < 560)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(4, "Avalonia host consumes the shared inverted-pyramid bands");
+        liveShapes.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Product", "Team", "Task");
+        liveShapes.Select(op => op.BoundsDip.Y).Should().BeInAscendingOrder();
+        liveShapes.Select(op => op.BoundsDip.Width).Should().BeInDescendingOrder();
+    }
+
+    [Fact]
     public async Task SmartArt_radial_venn_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];
@@ -6741,12 +6772,23 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.arrange.bring-forward")]
     [InlineData("freep.arrange.send-backward")]
     [InlineData("freep.arrange.send-to-back")]
+    [InlineData("freep.arrange.flip-horizontal")]
+    [InlineData("freep.arrange.flip-vertical")]
+    [InlineData("freep.arrange.rotate-left-90")]
+    [InlineData("freep.arrange.rotate-right-90")]
+    [InlineData("freep.arrange.rotation-options")]
     [InlineData("freep.arrange.align-left")]
     [InlineData("freep.arrange.align-center-h")]
     [InlineData("freep.arrange.align-right")]
     [InlineData("freep.arrange.align-top")]
     [InlineData("freep.arrange.align-middle")]
     [InlineData("freep.arrange.align-bottom")]
+    [InlineData("freep.arrange.align-left-to-slide")]
+    [InlineData("freep.arrange.align-center-h-to-slide")]
+    [InlineData("freep.arrange.align-right-to-slide")]
+    [InlineData("freep.arrange.align-top-to-slide")]
+    [InlineData("freep.arrange.align-middle-to-slide")]
+    [InlineData("freep.arrange.align-bottom-to-slide")]
     [InlineData("freep.arrange.distribute-h")]
     [InlineData("freep.arrange.distribute-v")]
     public async Task Ribbon_arrange_commands_are_registered(string commandId)

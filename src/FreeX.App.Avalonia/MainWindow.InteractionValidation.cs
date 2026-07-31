@@ -483,7 +483,7 @@ public sealed partial class MainWindow
     {
         CloseOwnedWindows(OwnedWindows.ToArray());
         if (replaceSession || _session.Workbook.Sheets.Count == 0)
-            _session = CreateDisposableRibbonSession();
+            ReplaceSession(CreateDisposableRibbonSession());
 
         _session.CancelFormulaEdit();
         _formulaBoxEditOriginalText = null;

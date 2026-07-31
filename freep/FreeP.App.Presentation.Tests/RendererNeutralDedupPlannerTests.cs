@@ -132,6 +132,23 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void SlideShowMediaInteractionPlanner_ResolvesGroupedMedia()
+    {
+        var slide = new Slide();
+        var group = new SlideShape { Id = 99, Kind = SlideShapeKind.Group };
+        var media = MediaShape(42, 2, 3, 4, 2, embedded: true);
+        group.Children.Add(media);
+        slide.Shapes.Add(group);
+
+        var plan = SlideShowMediaInteractionPlanner.BuildSlidePlan(slide, 10, 10, 10, 10);
+
+        plan.Should().ContainSingle();
+        plan[0].ShapeId.Should().Be(42);
+        SlideShowMediaInteractionPlanner.PlanClick(slide, 10, 10, 10, 10, 3, 4)
+            .Media!.ShapeId.Should().Be(42);
+    }
+
+    [Fact]
     public void SlideShowMediaInteractionPlanner_RecomputesLetterboxBoundsAfterCanvasResize()
     {
         var slide = new Slide();

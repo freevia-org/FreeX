@@ -157,6 +157,11 @@ public sealed partial class Sheet
             copy.RichTextRuns[RemapAddress(address, newId)] = runs;
         foreach (var (address, guide) in CellPhoneticGuides)
             copy.CellPhoneticGuides[RemapAddress(address, newId)] = guide;
+        // R106-io-hyperlink-range-shift: the key is the original load-time ref string (sheet-
+        // independent identity) and is copied verbatim; only the live GridRange value is rebased
+        // onto the new sheet id, mirroring RemapRange's use for print areas/allow-edit ranges below.
+        foreach (var (originalRef, range) in RangeHyperlinks)
+            copy.RangeHyperlinks[originalRef] = RemapRange(range, newId);
 
         // Allow-edit ranges (protection)
         copy.ProtectionPermissions.Clear();
@@ -170,7 +175,7 @@ public sealed partial class Sheet
             copy.CustomProperties.Add(property);
 
         foreach (var pt in PivotTables)
-            copy.PivotTables.Add(ClonePivotTable(pt, newId));
+            copy.PivotTables.Add(ClonePivotTable(pt, Id, newId));
 
         foreach (var table in StructuredTables)
             copy.StructuredTables.Add(CloneStructuredTable(table, newId));
@@ -190,7 +195,39 @@ public sealed partial class Sheet
     private void CopyCellContentTo(Sheet copy, SheetId newId)
     {
         foreach (var (address, cell) in EnumerateCells())
-            copy.SetCell(RemapAddress(address, newId), cell.Clone());
+        {
+            var clonedCell = cell.Clone();
+
+            // R104: rebase an explicit same-sheet-qualified formula reference (e.g. "Sheet1!A1"
+            // typed/pasted on Sheet1 itself) onto the copy, mirroring the same rebase already
+            // applied to ConditionalFormat.FormulaText / DataValidation.Formula1-2 (below) and to
+            // hyperlink targets/bookmarks (above) -- otherwise RecalcEngine resolves the
+            // unrewritten qualifier by live sheet-name lookup and the duplicate's formula keeps
+            // pointing at the ORIGINAL sheet instead of following the copy, unlike every other
+            // same-sheet-qualified formula surface in this method.
+            if (clonedCell.FormulaText is { } formulaText)
+            {
+                var rewritten = RewriteSameSheetQualifiedFormula(formulaText, Name, copy.Name);
+                if (!string.Equals(rewritten, formulaText, StringComparison.Ordinal))
+                {
+                    var arrayMode = clonedCell.ArrayMode;
+                    var legacyArrayRows = clonedCell.LegacyArrayRows;
+                    var legacyArrayCols = clonedCell.LegacyArrayCols;
+                    // The FormulaText setter clears CachedAst (so the rewritten text re-parses
+                    // instead of reusing the stale AST built from the original text) but also
+                    // resets ArrayMode/LegacyArrayRows/LegacyArrayCols to "freshly authored"
+                    // defaults, which would silently discard a loaded legacy CSE array formula's
+                    // extent -- restore them so this rebase doesn't change anything else about
+                    // the cell.
+                    clonedCell.FormulaText = rewritten;
+                    clonedCell.ArrayMode = arrayMode;
+                    clonedCell.LegacyArrayRows = legacyArrayRows;
+                    clonedCell.LegacyArrayCols = legacyArrayCols;
+                }
+            }
+
+            copy.SetCell(RemapAddress(address, newId), clonedCell);
+        }
 
         foreach (var ((row, col), styleId) in GetStyleOnlyEntries())
             copy.SetStyleOnly(row, col, styleId);
@@ -221,13 +258,23 @@ public sealed partial class Sheet
         }
     }
 
-    private static PivotTableModel ClonePivotTable(PivotTableModel pt, SheetId newId)
+    private static PivotTableModel ClonePivotTable(PivotTableModel pt, SheetId sourceSheetId, SheetId newId)
     {
         var clonedPt = new PivotTableModel
         {
             Name        = pt.Name,
             CacheId     = pt.CacheId,
-            SourceRange = RemapRange(pt.SourceRange, newId),
+            // Only remap SourceRange onto the copy when it actually points at the sheet being
+            // duplicated -- a cross-sheet SourceRange (e.g. a pivot table on its own sheet reading
+            // data from a Data sheet, Excel's normal "PivotTable on new sheet, data on the original
+            // sheet" pattern) must keep pointing at the original source sheet, matching Excel's
+            // Duplicate Sheet behavior (only same-sheet references travel with the copy) and
+            // mirroring DuplicateSheetDrawingCloner.CloneChart's identical DataRange handling.
+            SourceRange = pt.SourceRange.Start.Sheet == sourceSheetId
+                ? RemapRange(pt.SourceRange, newId)
+                : pt.SourceRange,
+            // TargetRange/LastRenderedRange describe where the pivot itself is RENDERED, which
+            // always lives on this sheet -- so these always travel with the copy.
             TargetRange = RemapRange(pt.TargetRange, newId),
             LastRenderedRange = pt.LastRenderedRange is { } lastRenderedRange ? RemapRange(lastRenderedRange, newId) : null,
             PackagePart = pt.PackagePart,
@@ -499,14 +546,74 @@ public sealed partial class Sheet
 
         // Bare (unquoted) source qualifier, e.g. Sheet1! — guarded so it can't match a fragment
         // of a longer identifier/qualifier (e.g. a source name of "Sheet1" must not match inside
-        // "OtherSheet1!") or re-touch the quoted form already handled above.
+        // "OtherSheet1!") or re-touch the quoted form already handled above. This ALSO already
+        // correctly rebases the source name when it is the END endpoint of a bare 3-D sheet span
+        // (e.g. "Other:Sheet1!") since the ':' immediately before the name isn't excluded by the
+        // lookbehind — only the START endpoint of a span (e.g. "Sheet1:Other!", where the source
+        // name is followed by ':' rather than '!') needs the dedicated handling below.
         var pattern = "(?<![A-Za-z0-9_.'])" + Regex.Escape(sourceSheetName) + "!";
+
+        // R106: 3-D sheet-span endpoint handling (e.g. "=SUM(Sheet1:Sheet3!A1)" authored on
+        // Sheet1 itself). A span qualifier is either fully bare ("Sheet1:Sheet3!") when NEITHER
+        // endpoint name needs quoting, or wholly quoted as a single token ("'Sheet1:Last
+        // Sheet'!") when EITHER does — Excel never quotes just one endpoint of a span, see
+        // FormulaSerializer.WriteRangeRef/WriteSheetSpanName — so all four combinations (source as
+        // span start/end, crossed with bare/quoted span text) are matched below and the WHOLE
+        // qualifier is rebuilt with BuildSpanQualifier (fresh quoting decision based on the final
+        // start/end names), rather than text-substituting just the source name's fragment in
+        // place. The latter would produce a malformed mixed qualifier like "Other:'New Name'!"
+        // whenever the new copy's name needs quoting but the original span didn't. This mirrors
+        // FormulaRewriter.RewriteRange's AST-based 3-D span endpoint rebase for RenameSheetOp
+        // (FormulaRewriter.cs:310-336), which already treats a same-sheet span endpoint the same
+        // as a simple same-sheet qualifier for this class of sheet-identity-changing operation.
+        var escapedSource = sourceSheetName.Replace("'", "''", StringComparison.Ordinal);
+        var bareSpanStart = new Regex(
+            "(?<![A-Za-z0-9_.'])" + Regex.Escape(sourceSheetName) + @":(?<other>[A-Za-z0-9_.]+)!",
+            RegexOptions.IgnoreCase);
+        var bareSpanEnd = new Regex(
+            @"(?<![A-Za-z0-9_.'])(?<other>[A-Za-z0-9_.]+):" + Regex.Escape(sourceSheetName) + "!",
+            RegexOptions.IgnoreCase);
+        var quotedSpanStart = new Regex(
+            "'" + Regex.Escape(escapedSource) + @":(?<other>(?:[^']|'')*)'!",
+            RegexOptions.IgnoreCase);
+        var quotedSpanEnd = new Regex(
+            @"'(?<other>(?:[^']|'')*):" + Regex.Escape(escapedSource) + "'!",
+            RegexOptions.IgnoreCase);
 
         return ReplaceOutsideStringLiterals(formula, segment =>
         {
-            var rewritten = segment.Replace(quotedOldQualifier, newQualifier, StringComparison.OrdinalIgnoreCase);
+            // Span forms are handled first (on the untouched segment) so the later plain-quoted /
+            // bare single-qualifier substitutions below never get a chance to partially rewrite
+            // just one side of an already-handled span.
+            var rewritten = quotedSpanStart.Replace(segment, m =>
+                BuildSpanQualifier(newSheetName, UnescapeQuotedSheetName(m.Groups["other"].Value)) + "!");
+            rewritten = quotedSpanEnd.Replace(rewritten, m =>
+                BuildSpanQualifier(UnescapeQuotedSheetName(m.Groups["other"].Value), newSheetName) + "!");
+            rewritten = bareSpanStart.Replace(rewritten, m =>
+                BuildSpanQualifier(newSheetName, m.Groups["other"].Value) + "!");
+            rewritten = bareSpanEnd.Replace(rewritten, m =>
+                BuildSpanQualifier(m.Groups["other"].Value, newSheetName) + "!");
+
+            rewritten = rewritten.Replace(quotedOldQualifier, newQualifier, StringComparison.OrdinalIgnoreCase);
             return Regex.Replace(rewritten, pattern, _ => newQualifier, RegexOptions.IgnoreCase);
         });
+    }
+
+    private static string UnescapeQuotedSheetName(string escaped) =>
+        escaped.Replace("''", "'", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Builds a 3-D sheet-span qualifier ("Start:End" or, if either name needs quoting, the
+    /// whole-span-quoted "'Start:End'" form), mirroring <c>FormulaSerializer.WriteSheetSpanName</c>
+    /// so a rebased span's text stays in the same canonical shape the formula engine itself emits.
+    /// </summary>
+    private static string BuildSpanQualifier(string startName, string endName)
+    {
+        if (!SheetNameFormatter.NeedsQuoting(startName) && !SheetNameFormatter.NeedsQuoting(endName))
+            return startName + ":" + endName;
+
+        return "'" + startName.Replace("'", "''", StringComparison.Ordinal) + ":" +
+               endName.Replace("'", "''", StringComparison.Ordinal) + "'";
     }
 
     /// <summary>
