@@ -7,6 +7,7 @@ using Avalonia.Media;
 
 using FreeX.App.Avalonia.Charts;
 using FreeX.App.Presentation.Charts;
+using FreeX.App.Presentation.DrawingInteraction;
 using FreeX.Core.Model;
 
 using AvaloniaGrid = Avalonia.Controls.Grid;
@@ -89,7 +90,7 @@ public sealed partial class MainWindow
             Height = Math.Max(1, height),
             Background = Brushes.Transparent,
             ClipToBounds = false,
-            Cursor = new Cursor(StandardCursorType.Hand),
+            Cursor = Cursor.Default,
             Focusable = true,
         };
 
@@ -97,6 +98,24 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(container, $"Chart {ChartDisplayName(chart)}");
         AutomationProperties.SetHelpText(container, UiText.Get("ChartLoc_SelectChartHelpText"));
         AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
+
+        // WPF shows a move cursor over a chart body and directional resize cursors over the
+        // selected chart's handles. Keep the hover affordance driven by the same portable hit-test
+        // used by TryBeginChartDrag so Linux never advertises a different interaction than a press
+        // can actually start.
+        container.PointerMoved += (_, args) =>
+        {
+            var point = args.GetCurrentPoint(container).Position;
+            var kind = ResolveChartHoverDragKind(
+                selected,
+                new LayoutPoint(point.X, point.Y),
+                width,
+                height);
+            container.Cursor = kind == ObjectDragKind.None
+                ? Cursor.Default
+                : DrawingObjectDragCursor(kind);
+        };
+        container.PointerExited += (_, _) => container.Cursor = Cursor.Default;
 
         container.PointerPressed += (_, args) =>
         {
@@ -140,6 +159,25 @@ public sealed partial class MainWindow
             container.Children.Add(CreateChartSelectionAdorner(width, height));
 
         return container;
+    }
+
+    internal static ObjectDragKind ResolveChartHoverDragKind(
+        bool selected,
+        LayoutPoint position,
+        double width,
+        double height)
+    {
+        if (!double.IsFinite(width) || !double.IsFinite(height) || width <= 0 || height <= 0)
+            return ObjectDragKind.None;
+
+        if (!selected)
+            return ObjectDragKind.Move;
+
+        return ObjectDragPlanner.HitTestHandle(
+            position,
+            new LayoutRect(0, 0, width, height),
+            ChartHandleSize,
+            DrawingObjectHandleHitPadding);
     }
 
     private void SelectChart(ChartModel chart)

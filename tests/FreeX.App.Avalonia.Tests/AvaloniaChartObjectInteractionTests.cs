@@ -106,6 +106,37 @@ public sealed class AvaloniaChartObjectInteractionTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(0, 0, ObjectDragKind.ResizeNW)]
+    [InlineData(100, 0, ObjectDragKind.ResizeN)]
+    [InlineData(200, 0, ObjectDragKind.ResizeNE)]
+    [InlineData(200, 50, ObjectDragKind.ResizeE)]
+    [InlineData(200, 100, ObjectDragKind.ResizeSE)]
+    [InlineData(100, 100, ObjectDragKind.ResizeS)]
+    [InlineData(0, 100, ObjectDragKind.ResizeSW)]
+    [InlineData(0, 50, ObjectDragKind.ResizeW)]
+    public void ChartHoverCursor_UsesDirectionalResizeKindAtEachHandle(
+        double x,
+        double y,
+        ObjectDragKind expected)
+    {
+        MainWindow.ResolveChartHoverDragKind(true, new LayoutPoint(x, y), 200, 100)
+            .Should().Be(expected);
+    }
+
+    [Fact]
+    public void ChartHoverCursor_UsesMoveForBodyAndUnselectedChart_AndClearsOutside()
+    {
+        MainWindow.ResolveChartHoverDragKind(true, new LayoutPoint(100, 50), 200, 100)
+            .Should().Be(ObjectDragKind.Move);
+        MainWindow.ResolveChartHoverDragKind(false, new LayoutPoint(100, 50), 200, 100)
+            .Should().Be(ObjectDragKind.Move);
+        MainWindow.ResolveChartHoverDragKind(true, new LayoutPoint(-20, 50), 200, 100)
+            .Should().Be(ObjectDragKind.None);
+        MainWindow.ResolveChartHoverDragKind(true, new LayoutPoint(100, 50), 0, 100)
+            .Should().Be(ObjectDragKind.None);
+    }
+
     private static object CreateChartDragSession(
         ChartModel chart,
         Control container,
