@@ -417,7 +417,7 @@ internal sealed class AvaloniaPresentationClipboardService(
                 foreach (var image in payload.GetImagePayloads())
                     request.Editor.InsertPicture(image.Bytes, image.ContentType);
                 foreach (var obj in payload.GetObjectPayloads())
-                    request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName);
+                    request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var table = payload.ContainsTable
                     ? request.Editor.InsertTableFromClipboard(
                         payload.Body,
@@ -447,7 +447,7 @@ internal sealed class AvaloniaPresentationClipboardService(
                 foreach (var image in payload.GetImagePayloads())
                     request.Editor.InsertPicture(image.Bytes, image.ContentType);
                 foreach (var obj in payload.GetObjectPayloads())
-                    request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName);
+                    request.Editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var table = payload.ContainsTable
                     ? request.Editor.InsertTableFromClipboard(
                         payload.Body,

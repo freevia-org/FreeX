@@ -23,8 +23,14 @@ public sealed record InCanvasRichClipboardTableCellStyle(
 /// <summary>One image payload carried by an external rich clipboard fragment.</summary>
 public sealed record InCanvasRichClipboardImage(byte[] Bytes, string ContentType);
 
-/// <summary>One embedded object payload carried by an external rich clipboard fragment.</summary>
-public sealed record InCanvasRichClipboardObject(byte[] Bytes, string FileName);
+/// <summary>
+/// One embedded object payload carried by an external rich clipboard fragment.
+/// ClassName preserves the source OLE class when a provider supplies one.
+/// </summary>
+public sealed record InCanvasRichClipboardObject(
+    byte[] Bytes,
+    string FileName,
+    string? ClassName = null);
 
 /// <summary>
 /// Renderer-neutral rich clipboard payload used by both desktop editors. The model fragment is
@@ -101,7 +107,8 @@ public sealed record InCanvasRichClipboardPayload(
             image.ContentType)).ToArray(),
         ObjectPayloads?.Select(obj => new InCanvasRichClipboardObject(
             obj.Bytes.ToArray(),
-            obj.FileName)).ToArray());
+            obj.FileName,
+            obj.ClassName)).ToArray());
 
     internal static Run? RunFromStyle(InCanvasEditorTextStyleState? style) => style is null
         ? null
@@ -201,7 +208,8 @@ public static class InCanvasRichClipboardPlanner
                         && !string.IsNullOrWhiteSpace(obj.FileName))
                     .Select(obj => new InCanvasRichClipboardObject(
                         obj.Bytes!,
-                        obj.FileName!))
+                        obj.FileName!,
+                        obj.ClassName))
                     .ToArray());
         }
         catch (JsonException)
@@ -359,6 +367,7 @@ public static class InCanvasRichClipboardPlanner
         {
             FileName = obj.FileName,
             Bytes = obj.Bytes.ToArray(),
+            ClassName = obj.ClassName,
         }).ToList(),
     };
 
@@ -862,6 +871,7 @@ public static class InCanvasRichClipboardPlanner
     {
         public string? FileName { get; set; }
         public byte[]? Bytes { get; set; }
+        public string? ClassName { get; set; }
     }
 
     private sealed class ClipboardRunDto

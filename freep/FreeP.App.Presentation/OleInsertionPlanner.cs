@@ -11,7 +11,10 @@ public static class OleInsertionPlanner
 
     private static readonly XNamespace Presentation = "http://schemas.openxmlformats.org/presentationml/2006/main";
 
-    public static OleObjectInfo CreatePayload(byte[] bytes, string fileName)
+    public static OleObjectInfo CreatePayload(
+        byte[] bytes,
+        string fileName,
+        string? sourceProgId = null)
     {
         ArgumentNullException.ThrowIfNull(bytes);
         if (bytes.Length == 0)
@@ -19,7 +22,9 @@ public static class OleInsertionPlanner
 
         var extension = NormalizeExtension(Path.GetExtension(fileName));
         var contentType = ContentTypeFor(extension);
-        var progId = ProgIdFor(extension);
+        var progId = string.IsNullOrWhiteSpace(sourceProgId)
+            ? ProgIdFor(extension)
+            : sourceProgId.Trim();
         var oleObj = new XElement(
             Presentation + "oleObj",
             new XAttribute("type", "Embed"),

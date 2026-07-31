@@ -1031,7 +1031,8 @@ public static class ExternalRichTextClipboardPlanner
             {
                 _objectPayloads.Add(new InCanvasRichClipboardObject(
                     _objectBytes.ToArray(),
-                    ResolveObjectFileName()));
+                    ResolveObjectFileName(),
+                    ResolveObjectClassName()));
             }
 
             _objectBytes.Clear();
@@ -1053,6 +1054,12 @@ public static class ExternalRichTextClipboardPlanner
             if (objectClass.Contains("powerpoint", StringComparison.OrdinalIgnoreCase))
                 return "Embedded.pptx";
             return "Embedded.bin";
+        }
+
+        private string? ResolveObjectClassName()
+        {
+            var className = _objectClass.ToString().Trim();
+            return className.Length == 0 ? null : className;
         }
 
         private static bool HasPrefix(byte[] value, byte[] prefix)

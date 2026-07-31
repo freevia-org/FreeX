@@ -254,6 +254,7 @@ public sealed class ExternalRichTextClipboardTests
         payload.GetObjectPayloads().Should().ContainSingle();
         payload.GetObjectPayloads()[0].Bytes.Should().Equal(0x01, 0x02, 0x03);
         payload.GetObjectPayloads()[0].FileName.Should().Be("Embedded.docx");
+        payload.GetObjectPayloads()[0].ClassName.Should().Be("Word.Document.12");
 
         var restored = InCanvasRichClipboardPlanner.Deserialize(
             InCanvasRichClipboardPlanner.Serialize(payload));
@@ -261,6 +262,25 @@ public sealed class ExternalRichTextClipboardTests
         restored!.GetObjectPayloads().Should().ContainSingle();
         restored.GetObjectPayloads()[0].Bytes.Should().Equal(0x01, 0x02, 0x03);
         restored.GetObjectPayloads()[0].FileName.Should().Be("Embedded.docx");
+        restored.GetObjectPayloads()[0].ClassName.Should().Be("Word.Document.12");
+    }
+
+    [Fact]
+    public void RtfObject_PreservesCustomOleClassThroughInsertionMetadata()
+    {
+        const string rtf =
+            @"{\rtf1\ansi{\object{\*\objclass Vendor.Custom.Widget.7}{\*\objdata 0102}{\result Widget}}}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var source = payload!.GetObjectPayloads().Should().ContainSingle().Subject;
+        source.FileName.Should().Be("Embedded.bin");
+        source.ClassName.Should().Be("Vendor.Custom.Widget.7");
+
+        var ole = OleInsertionPlanner.CreatePayload(source.Bytes, source.FileName, source.ClassName);
+        ole.ProgId.Should().Be("Vendor.Custom.Widget.7");
+        ole.OleObjXml.Should().Contain("progId=\"Vendor.Custom.Widget.7\"");
     }
 
     [Fact]

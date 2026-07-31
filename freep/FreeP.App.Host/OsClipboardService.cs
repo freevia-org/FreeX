@@ -415,7 +415,7 @@ public sealed class OsClipboardService
                 foreach (var image in payload.GetImagePayloads())
                     editor.InsertPicture(image.Bytes, image.ContentType);
                 foreach (var obj in payload.GetObjectPayloads())
-                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName);
+                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var table = payload.ContainsTable
                     ? editor.InsertTableFromClipboard(
                         payload.Body,
@@ -445,7 +445,7 @@ public sealed class OsClipboardService
                 foreach (var image in payload.GetImagePayloads())
                     editor.InsertPicture(image.Bytes, image.ContentType);
                 foreach (var obj in payload.GetObjectPayloads())
-                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName);
+                    editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var table = payload.ContainsTable
                     ? editor.InsertTableFromClipboard(
                         payload.Body,
