@@ -3838,6 +3838,53 @@ public sealed class GestureHandlerAltSnapTests
     }
 
     [Fact]
+    public async Task GestureHandler_MultiSelectionMove_BelowStartThresholdDoesNotCommit()
+    {
+        await Run(() =>
+        {
+            var presentation = Presentation.CreateEmpty();
+            var slide = presentation.Slides[0];
+            slide.Shapes.Clear();
+            var first = new SlideShape
+            {
+                Id = 1,
+                OffsetXEmu = 914400L,
+                OffsetYEmu = 457200L,
+                ExtentCxEmu = 914400L,
+                ExtentCyEmu = 914400L,
+            };
+            var second = new SlideShape
+            {
+                Id = 2,
+                OffsetXEmu = 2743200L,
+                OffsetYEmu = 457200L,
+                ExtentCxEmu = 914400L,
+                ExtentCyEmu = 914400L,
+            };
+            slide.Shapes.Add(first);
+            slide.Shapes.Add(second);
+
+            var editor = new EditingSession(
+                presentation,
+                new PresentationCommandBus(presentation));
+            editor.Select(first.Id);
+            editor.Select(second.Id, addToSelection: true);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+            var handler = new AvaloniaCanvasGestureHandler(
+                canvas,
+                editor,
+                new SelectionAdornerLayer());
+
+            handler.SeedMoveStateForTests(new Point(100, 100));
+            handler.CompleteGestureForTests(new Point(102, 100));
+
+            first.OffsetXEmu.Should().Be(914400L);
+            second.OffsetXEmu.Should().Be(2743200L);
+            editor.CanUndo.Should().BeFalse("a sub-threshold multi-selection move is not a user action");
+        });
+    }
+
+    [Fact]
     public async Task RebuiltEditor_DetachesStalePointerHandler_AndCapturesSelectedShape()
     {
         await Run(() =>

@@ -143,6 +143,47 @@ public sealed class CanvasEditingTests
     }
     // ── SlideTransform ────────────────────────────────────────────────────────────
 
+    [StaFact]
+    public void GestureHandler_MultiSelectionMove_BelowStartThresholdDoesNotCommit()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var first = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 914400L,
+            OffsetYEmu = 457200L,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 914400L,
+        };
+        var second = new SlideShape
+        {
+            Id = 2,
+            OffsetXEmu = 2743200L,
+            OffsetYEmu = 457200L,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 914400L,
+        };
+        slide.Shapes.Add(first);
+        slide.Shapes.Add(second);
+
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        editor.Select(first.Id);
+        editor.Select(second.Id, addToSelection: true);
+        var canvas = new SlideCanvas();
+        var handler = new CanvasGestureHandler(canvas, editor);
+
+        handler.SeedMoveStateForTests(new Point(100, 100));
+        handler.CompleteGestureForTests(new Point(102, 100));
+
+        first.OffsetXEmu.Should().Be(914400L);
+        second.OffsetXEmu.Should().Be(2743200L);
+        editor.CanUndo.Should().BeFalse("a sub-threshold multi-selection move is not a user action");
+    }
+
     [Fact]
     public void SlideTransform_Compute_CorrectScale_CenteredSlide()
     {

@@ -934,6 +934,22 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         _gesture               = GestureKind.Resize;
     }
 
+    internal void SeedMoveStateForTests(Point startScreen)
+    {
+        if (_editor.CurrentSlide is null)
+            throw new InvalidOperationException("A current slide is required to seed a move gesture.");
+
+        _dragStartScreen = startScreen;
+        _dragStarted = false;
+        _moveStartShapes = CanvasGesturePlanner.CaptureMoveState(
+            _editor.CurrentSlide,
+            _editor.SelectedShapeIds);
+        _gesture = GestureKind.Move;
+    }
+
+    internal void CompleteGestureForTests(Point currentScreen) =>
+        CompleteGesture(currentScreen, _canvas.CurrentTransform, KeyModifiers.None);
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     internal bool IsGestureActiveForTests => _gesture != GestureKind.None;

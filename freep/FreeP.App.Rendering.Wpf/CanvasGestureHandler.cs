@@ -38,6 +38,7 @@ public sealed class CanvasGestureHandler
 
     private GestureKind                     _gesture = GestureKind.None;
     private Point                           _dragStartScreen;          // screen px at start
+    private bool                            _dragStarted;
 
     // ── Move ──────────────────────────────────────────────────────────────────────────────────
     private IReadOnlyList<CanvasMoveShapeState>? _moveStartShapes;
@@ -366,6 +367,7 @@ public sealed class CanvasGestureHandler
     {
         _gesture = GestureKind.None;
 
+        _dragStarted = false;
         _moveStartShapes = null;
         _dragStartScreen = default;
         _resizeShapeId = 0;
@@ -392,12 +394,18 @@ public sealed class CanvasGestureHandler
     {
         _gesture          = GestureKind.Move;
         _dragStartScreen  = screenPt;
+        _dragStarted      = false;
         _moveStartShapes = CanvasGesturePlanner.CaptureMoveState(slide, _editor.SelectedShapeIds);
         _canvas.CaptureMouse();
     }
 
     private void PreviewMove(Point screenPt, SlideTransform xf, Slide slide)
     {
+        var drag = ReduceDrag(screenPt);
+        if (!drag.DragStarted)
+            return;
+        _dragStarted = drag.DragStarted;
+
         if (_moveStartShapes is null)
             return;
 
@@ -418,13 +426,8 @@ public sealed class CanvasGestureHandler
     private void CommitMove(Point screenPt, SlideTransform xf)
     {
         if (_moveStartShapes is null) return;
-        var drag = CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
-            StartScreen: ToGesturePoint(_dragStartScreen),
-            CurrentScreen: ToGesturePoint(screenPt),
-            DragStarted: true,
-            StartThresholdPx: 0,
-            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
-        if (!drag.ShouldCommit) return;
+        var drag = ReduceDrag(screenPt);
+        if (!_dragStarted || !drag.ShouldCommit) return;
 
         var plan = CanvasGesturePlanner.PlanMove(new CanvasMoveRequest(
             StartScreen: ToGesturePoint(_dragStartScreen),
@@ -448,6 +451,7 @@ public sealed class CanvasGestureHandler
 
         _gesture               = GestureKind.Resize;
         _dragStartScreen       = screenPt;
+        _dragStarted           = false;
         _resizeShapeId         = shapeId;
         _resizeOrigX           = s.OffsetXEmu;
         _resizeOrigY           = s.OffsetYEmu;
@@ -460,6 +464,11 @@ public sealed class CanvasGestureHandler
 
     private void PreviewResize(Point screenPt, SlideTransform xf)
     {
+        var drag = ReduceDrag(screenPt);
+        if (!drag.DragStarted)
+            return;
+        _dragStarted = drag.DragStarted;
+
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
         var r = SlideCanvasGeometryPlanner.EmuBoundsToScreen(nx, ny, ncx, ncy, ToCoreTransform(xf));
         _adorner.UpdatePreview(ToWpfRect(r));
@@ -467,6 +476,10 @@ public sealed class CanvasGestureHandler
 
     private void CommitResize(Point screenPt, SlideTransform xf)
     {
+        var drag = ReduceDrag(screenPt);
+        if (!_dragStarted || !drag.ShouldCommit)
+            return;
+
         var (nx, ny, ncx, ncy) = ComputeResizeBounds(screenPt, xf);
         _editor.ResizeShape(_resizeShapeId, nx, ny, ncx, ncy);
     }
@@ -511,6 +524,7 @@ public sealed class CanvasGestureHandler
 
         _gesture        = GestureKind.Rotate;
         _dragStartScreen= screenPt;
+        _dragStarted    = false;
         _rotateShapeId  = shapeId;
         _rotateOrigDeg  = s.RotationDeg;
 
@@ -524,6 +538,11 @@ public sealed class CanvasGestureHandler
 
     private void PreviewRotate(Point screenPt, SlideTransform xf)
     {
+        var drag = ReduceDrag(screenPt);
+        if (!drag.DragStarted)
+            return;
+        _dragStarted = drag.DragStarted;
+
         double angle = ComputeRotationAngle(screenPt, xf);
         // Show preview using selection rect with rotation hint
         if (_editor.CurrentSlide is not null && _editor.Presentation is not null)
@@ -540,6 +559,10 @@ public sealed class CanvasGestureHandler
 
     private void CommitRotate(Point screenPt, SlideTransform xf)
     {
+        var drag = ReduceDrag(screenPt);
+        if (!_dragStarted || !drag.ShouldCommit)
+            return;
+
         double angle = ComputeRotationAngle(screenPt, xf);
         _editor.RotateShape(_rotateShapeId, angle);
     }
@@ -813,8 +836,25 @@ public sealed class CanvasGestureHandler
         _resizeOrigCy = shape.ExtentCyEmu;
         _resizeOrigRotationDeg = shape.RotationDeg;
         _resizeHandle = handle;
+        _dragStarted = false;
         _gesture = GestureKind.Resize;
     }
+
+    internal void SeedMoveStateForTests(Point startScreen)
+    {
+        if (_editor.CurrentSlide is null)
+            throw new InvalidOperationException("A current slide is required to seed a move gesture.");
+
+        _dragStartScreen = startScreen;
+        _dragStarted = false;
+        _moveStartShapes = CanvasGesturePlanner.CaptureMoveState(
+            _editor.CurrentSlide,
+            _editor.SelectedShapeIds);
+        _gesture = GestureKind.Move;
+    }
+
+    internal void CompleteGestureForTests(Point currentScreen) =>
+        CompleteGesture(currentScreen, _canvas.CurrentTransform);
 
     private bool TryHandleCustomGeometryKey(Key key)
     {
@@ -835,6 +875,14 @@ public sealed class CanvasGestureHandler
             _geometryHandleName = null;
         return handled;
     }
+
+    private CanvasDragReducerPlan ReduceDrag(Point screenPt) =>
+        CanvasGesturePlanner.ReduceDrag(new CanvasDragReducerRequest(
+            StartScreen: ToGesturePoint(_dragStartScreen),
+            CurrentScreen: ToGesturePoint(screenPt),
+            DragStarted: _dragStarted,
+            StartThresholdPx: CanvasGesturePlanner.DefaultDragStartThresholdPx,
+            CommitThresholdPx: CanvasGesturePlanner.MeaningfulDragCommitThresholdPx));
 
     // ── Cursor feedback ───────────────────────────────────────────────────────────────────────
 
