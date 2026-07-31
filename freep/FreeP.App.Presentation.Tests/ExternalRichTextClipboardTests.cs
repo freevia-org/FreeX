@@ -360,6 +360,36 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void WordListOverride_StartAtRestart_IsAppliedOnlyToItsFirstParagraph()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid1
+{\listlevel\levelnfc0\levelstartat1\leveltext\'02\'00.;\levelnumbers\'01;}
+}}
+{\listoverridetable
+{\listoverride\listid1\listoverridecount1
+{\lfolevel\listoverridestart\levelstartat7}\ls1}}
+\pard\ls1\ilvl0 Restarted\par
+\pard\ls1\ilvl0 Continues}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Should().HaveCount(2);
+        var first = payload.Body.Paragraphs[0];
+        first.BulletKind.Should().Be(BulletKind.Auto);
+        first.AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        first.AutoNumStartAt.Should().Be(7);
+        first.AutoNumStartAtSpecified.Should().BeTrue();
+
+        var continuation = payload.Body.Paragraphs[1];
+        continuation.AutoNumStartAt.Should().Be(7);
+        continuation.AutoNumStartAtSpecified.Should().BeFalse();
+    }
+
+    [Fact]
     public void WordTableControls_FlattenRowsAndCellsLikeWpfProjection_AndPreserveCellFormatting()
     {
         const string rtf =

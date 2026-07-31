@@ -67,6 +67,7 @@ public static class ExternalRichTextClipboardPlanner
         private sealed class ListOverrideDefinition
         {
             public int ListId { get; set; }
+            public Dictionary<int, int> StartAtByLevel { get; } = new();
         }
 
         private sealed class FieldContext
@@ -265,6 +266,8 @@ public static class ExternalRichTextClipboardPlanner
         private int _currentListLevelIndex = -1;
         private ListOverrideDefinition? _currentListOverride;
         private int _currentListOverrideId;
+        private int _currentListOverrideLevel = -1;
+        private bool _currentListOverrideStartsAt;
         private LegacyListDefinition? _legacyList;
         private readonly HashSet<(int ListId, int Level)> _seenListLevels = new();
         private readonly List<byte> _pictureBytes = new();
@@ -480,6 +483,15 @@ public static class ExternalRichTextClipboardPlanner
                     {
                         _currentListOverride = new ListOverrideDefinition();
                         _currentListOverrideId = 0;
+                        _currentListOverrideLevel = -1;
+                        _currentListOverrideStartsAt = false;
+                    }
+                    break;
+                case "lfolevel":
+                    if (_state.Destination == Destination.ListOverrideTable && _currentListOverride is not null)
+                    {
+                        _currentListOverrideLevel = Math.Clamp(_currentListOverrideLevel + 1, 0, 8);
+                        _currentListOverrideStartsAt = false;
                     }
                     break;
                 case "listlevel":
@@ -528,6 +540,17 @@ public static class ExternalRichTextClipboardPlanner
                 case "levelstartat":
                     if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
                         _currentListLevel.StartAt = Math.Clamp(value, 1, 1_000_000);
+                    else if (_state.Destination == Destination.ListOverrideTable
+                             && _currentListOverride is not null
+                             && _currentListOverrideStartsAt
+                             && _currentListOverrideLevel >= 0)
+                        _currentListOverride.StartAtByLevel[_currentListOverrideLevel] =
+                            Math.Clamp(value, 1, 1_000_000);
+                    break;
+                case "listoverridestart":
+                case "listoverridestartat":
+                    if (_state.Destination == Destination.ListOverrideTable && _currentListOverride is not null)
+                        _currentListOverrideStartsAt = value != 0;
                     break;
                 case "leveltext":
                     _state.Destination = Destination.ListLevelText;
@@ -1316,7 +1339,9 @@ public static class ExternalRichTextClipboardPlanner
 
             paragraph.BulletKind = BulletKind.Auto;
             paragraph.AutoNumType = MapAutoNumType(level.NumberFormat);
-            paragraph.AutoNumStartAt = level.StartAt;
+            paragraph.AutoNumStartAt = listOverride.StartAtByLevel.TryGetValue(_state.ListLevel, out var overrideStartAt)
+                ? overrideStartAt
+                : level.StartAt;
             bool firstOccurrence = !paragraph.AutoNumStartAtSpecified
                 && _seenListLevels.Add((overrideId, _state.ListLevel));
             paragraph.AutoNumStartAtSpecified |= firstOccurrence;
