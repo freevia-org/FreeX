@@ -67,6 +67,34 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
     }
 
     [Fact]
+    public async Task FormulaBar_PointModeReverseExtension_PreservesDirectionalAnchor()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateWindowWithCleanSheet(out var sheet);
+            var formulaCell = new CellAddress(sheet.Id, 1, 1);
+            window.Session.SelectCell(formulaCell);
+            window.BeginFormulaEditForTest(formulaCell, "=");
+
+            window.RaiseFormulaBoxKeyDownForTest(Press(Key.Right));
+            window.RaiseFormulaBoxKeyDownForTest(Press(Key.Down));
+            var extendUp = Press(Key.Up, KeyModifiers.Shift);
+            window.RaiseFormulaBoxKeyDownForTest(extendUp);
+
+            extendUp.Handled.Should().BeTrue();
+            window.FormulaBoxTextForTest.Should().Be("=B1:B2");
+            window.Session.SelectedRange.Should().Be(new GridRange(
+                new CellAddress(sheet.Id, 1, 2),
+                new CellAddress(sheet.Id, 2, 2)));
+            window.Session.ActiveCell.Should().Be(new CellAddress(sheet.Id, 2, 2),
+                "the reverse Shift+Arrow extension must retain the formula-point anchor");
+
+            window.RaiseFormulaBoxKeyDownForTest(Press(Key.Escape));
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task FormulaBar_ShiftF8AddMode_AppendsKeyboardCreatedAreas()
     {
         await Session.Dispatch(() =>

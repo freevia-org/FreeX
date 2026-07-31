@@ -796,9 +796,14 @@ public sealed class WorkbookSession : IDisposable
     /// Selects a range while a formula is being edited, keeping the formula's source cell
     /// separate from the pointed-to worksheet selection. This is the state Excel exposes while
     /// formula point mode is active: the grid highlights the reference range, but Enter still
-    /// commits the edit to <paramref name="formulaEditAddress"/>.
+    /// commits the edit to <paramref name="formulaEditAddress"/>. When supplied,
+    /// <paramref name="selectionAnchor"/> preserves the directional cell that started the
+    /// formula-point gesture instead of normalizing the active cell to the range's top-left.
     /// </summary>
-    public void SelectRangeForFormulaEdit(GridRange range, CellAddress formulaEditAddress)
+    public void SelectRangeForFormulaEdit(
+        GridRange range,
+        CellAddress formulaEditAddress,
+        CellAddress? selectionAnchor = null)
     {
         ValidateSelectionRange(range, nameof(range));
         if (!IsValidAddress(formulaEditAddress) || Workbook.GetSheet(formulaEditAddress.Sheet) is null)
@@ -806,8 +811,14 @@ public sealed class WorkbookSession : IDisposable
                 nameof(formulaEditAddress),
                 "The formula edit cell must belong to an existing worksheet and be inside the worksheet bounds.");
 
+        var activeCell = selectionAnchor ?? range.Start;
+        if (!range.Contains(activeCell))
+            throw new ArgumentOutOfRangeException(
+                nameof(selectionAnchor),
+                "The formula selection anchor must be inside the selected range.");
+
         SetSelectedRanges(range, [range]);
-        ActiveCell = range.Start;
+        ActiveCell = activeCell;
         ActiveSheet.ActiveRow = ActiveCell.Row;
         ActiveSheet.ActiveCol = ActiveCell.Col;
         FormulaEditAddress = formulaEditAddress;

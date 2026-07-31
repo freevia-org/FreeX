@@ -25,6 +25,8 @@ public sealed partial class MainWindowFormulaBarSyncTests
         private readonly FieldInfo _currentSheetIdField;
         private readonly FieldInfo _formulaEditCellField;
         private readonly FieldInfo _formulaRangeEntryModeField;
+        private readonly PropertyInfo _selectionAnchorProperty;
+        private readonly FieldInfo _selectionCursorField;
         private readonly FieldInfo _inlineEditorField;
         private readonly MethodInfo _commitEdit;
         private readonly MethodInfo _commitEditAcrossSelection;
@@ -67,6 +69,12 @@ public sealed partial class MainWindowFormulaBarSyncTests
             _formulaRangeEntryModeField = typeof(MainWindow)
                 .GetField("_formulaRangeEntryMode", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_formulaRangeEntryMode");
+            _selectionAnchorProperty = typeof(MainWindow)
+                .GetProperty("_selectionAnchor", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingMemberException(nameof(MainWindow), "_selectionAnchor");
+            _selectionCursorField = typeof(MainWindow)
+                .GetField("_selectionCursor", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?? throw new MissingFieldException(nameof(MainWindow), "_selectionCursor");
             _inlineEditorField = typeof(MainWindow)
                 .GetField("_inlineEditor", BindingFlags.Instance | BindingFlags.NonPublic)
                 ?? throw new MissingFieldException(nameof(MainWindow), "_inlineEditor");
@@ -152,6 +160,10 @@ public sealed partial class MainWindowFormulaBarSyncTests
         public string FormulaBarText => ((TextBox)_window.FindName("FormulaBar")).Text;
 
         public bool FormulaRangeEntryMode => (bool)_formulaRangeEntryModeField.GetValue(_window)!;
+
+        public CellAddress? SelectionAnchor => (CellAddress?)_selectionAnchorProperty.GetValue(_window);
+
+        public CellAddress? SelectionCursor => (CellAddress?)_selectionCursorField.GetValue(_window);
 
         public string CellAddressBoxText => CellAddressBox.Text;
 

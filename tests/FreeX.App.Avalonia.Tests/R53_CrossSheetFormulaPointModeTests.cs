@@ -297,6 +297,41 @@ public sealed class R53_CrossSheetFormulaPointModeTests
     }
 
     [Fact]
+    public async Task FormulaPointingReverseExtendsThreeDSheetRange_PreservesDirectionalAnchor()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var startSheet = window.Session.Workbook.AddSheet("Sheet2");
+                var endSheet = window.Session.Workbook.AddSheet("Sheet3");
+                var source = new CellAddress(sourceSheet.Id, 1, 1);
+                var formulaBox = GetField<global::Avalonia.Controls.TextBox>(window, "_formulaBox");
+
+                window.BeginFormulaEditForTest(source, "=");
+                formulaBox.Text = "=SUM(";
+                window.SetFormulaBoxSelectionForTest(formulaBox.Text.Length, 0);
+                window.RaiseSheetTabModifierClickForTest(startSheet.Id, KeyModifiers.None);
+                window.RaiseSheetTabModifierClickForTest(endSheet.Id, KeyModifiers.Shift);
+                Invoke<bool>(window, "TryInsertFormulaPointReference", new CellAddress(endSheet.Id, 2, 2))
+                    .Should().BeTrue();
+                Invoke<bool>(window, "TryApplyFormulaRangeSelection", new CellAddress(endSheet.Id, 1, 1), true)
+                    .Should().BeTrue();
+
+                formulaBox.Text.Should().Be("=SUM(Sheet2:Sheet3!A1:B2");
+                window.Session.ActiveCell.Should().Be(new CellAddress(endSheet.Id, 2, 2),
+                    "reverse 3-D formula pointing must retain the original cell anchor");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineCaretMovedOutsideLiveReference_DropsThreeDSheetSpan()
     {
         await Session.Dispatch(() =>

@@ -58,6 +58,23 @@ public sealed partial class MainWindowFormulaBarSyncTests
     }
 
     [Fact]
+    public void FormulaRangeSelection_ReverseExtension_PreservesDirectionalAnchor()
+    {
+        StaTestRunner.Run(() =>
+        {
+            using var harness = MainWindowHarness.Create();
+
+            BeginFormulaEdit(harness, "formulaBar");
+            harness.ApplyFormulaRangeSelection(2, 2, extend: false).Should().BeTrue();
+            harness.ApplyFormulaRangeSelection(1, 1, extend: true).Should().BeTrue();
+
+            harness.FormulaBarText.Should().Be("=SUM(A1:B2");
+            harness.SelectionAnchor.Should().Be(new CellAddress(harness.CurrentSheetId, 2, 2));
+            harness.SelectionCursor.Should().Be(new CellAddress(harness.CurrentSheetId, 1, 1));
+        });
+    }
+
+    [Fact]
     public void FormulaRangeSelection_FormulaBarClick_InsertsReferenceAndKeepsFocus()
     {
         StaTestRunner.Run(() =>

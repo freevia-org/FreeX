@@ -10056,7 +10056,7 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
-        _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
+        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
         _formulaRangeSelectionAnchor = range.Start;
         _formulaRangeSelectionCursor = range.End;
         _formulaReferenceStart = edit.ReferenceStart;
@@ -10197,7 +10197,7 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
-        _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
+        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, selectionAnchor);
         _formulaRangeSelectionAnchor = selectionAnchor;
         _formulaRangeSelectionCursor = selectionCursor;
         _formulaReferenceStart = edit.ReferenceStart;
@@ -10760,7 +10760,7 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
-        _session.SelectRangeForFormulaEdit(range, formulaCell.Value);
+        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
         _formulaRangeSelectionAnchor = range.Start;
         _formulaRangeSelectionCursor = range.End;
         _formulaReferenceStart = edit.ReferenceStart;
