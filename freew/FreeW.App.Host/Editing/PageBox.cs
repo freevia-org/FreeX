@@ -279,7 +279,7 @@ internal sealed class PageBox : Border
             var noteRegion = BuildNoteRegion(
                 sourceModel, footnoteIds ?? Array.Empty<int>(),
                 endnoteIds ?? Array.Empty<int>(),
-                marginLeft, marginRight, isEndnoteBox);
+                marginLeft, marginRight, contentWidth, isEndnoteBox);
             Grid.SetRow(noteRegion, 2);
             stack.Children.Add(noteRegion);
         }
@@ -610,11 +610,11 @@ internal sealed class PageBox : Border
         IReadOnlyList<int> endnoteIds,
         double marginLeft,
         double marginRight,
+        double contentWidth,
         bool isEndnotePage)
     {
         var panel = new StackPanel { Orientation = Orientation.Vertical };
         double textSizePx = FootnoteTextSizePt * (96.0 / 72.0);
-        var (contentWidth, _) = PageLayout.ContentAreaDip(model.Page);
         var plan = footnoteIds.Count > 0
             ? DocumentNoteRegionPlanner.BuildFootnoteRegion(model, footnoteIds, pageNumber: 1, contentWidth)
             : DocumentNoteRegionPlanner.BuildEndnoteRegion(model, endnoteIds, pageNumber: 1, contentWidth, isEndnotePage);

@@ -73,6 +73,40 @@ public sealed class PagedEditNoteRegionTests
             .Should().Contain(1, "footnote ID 1 must appear on page box 0");
     }
 
+    [StaFact]
+    public void FootnoteRegion_UsesOwningSectionContentWidth()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Footnotes[1] = new Footnote(1, "Narrow-section footnote.");
+        var narrowPage = new PageSettings
+        {
+            WidthPt = 200,
+            HeightPt = 400,
+            MarginLeftPt = 50,
+            MarginRightPt = 50,
+            MarginTopPt = 36,
+            MarginBottomPt = 36
+        };
+        var firstSection = new Paragraph
+        {
+            SectionBreak = new Section(narrowPage, SectionBreakKind.NextPage)
+        };
+        firstSection.Runs.Add(new Run("Narrow section"));
+        firstSection.Runs.Add(Run.FootnoteReference(1));
+        doc.Blocks.Add(firstSection);
+        doc.Blocks.Add(new Paragraph("Normal-width final section"));
+
+        var (panel, _) = BuildPanel(doc);
+
+        var footnoteBox = panel.PageBoxes.Single(box => box.FootnoteIds.Count > 0);
+        var grid = footnoteBox.Child.Should().BeOfType<System.Windows.Controls.Grid>().Subject;
+        var noteRegion = grid.Children.OfType<System.Windows.Controls.StackPanel>().Single();
+        var separator = noteRegion.Children.OfType<System.Windows.Controls.Border>().Single();
+        var (expectedContentWidth, _) = PageLayout.ContentAreaDip(narrowPage);
+        separator.Width.Should().BeApproximately(expectedContentWidth, 0.01);
+    }
+
     /// <summary>
     /// The footnote IDs on the page box must match the IDs used in the body run references —
     /// confirming the number shown next to the note text matches the in-body superscript.
