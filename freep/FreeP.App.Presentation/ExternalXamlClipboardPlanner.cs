@@ -149,7 +149,7 @@ public static class ExternalXamlClipboardPlanner
         var paragraph = new Paragraph();
         var inherited = ReadInheritedStyle(element, resources);
         var style = ReadStyle(element, inherited, resources);
-        ApplyParagraphProperties(element, paragraph);
+        ApplyParagraphProperties(element, paragraph, style);
         paragraph.RightToLeft = style.RightToLeft;
         ApplyListProperties(element, paragraph);
         ReadInlineNodes(element, paragraph, inherited, resources, ref outputCharacters);
@@ -525,6 +525,9 @@ public static class ExternalXamlClipboardPlanner
         if (TryReadFlowDirection(AttributeValue(element, "FlowDirection"), out var rightToLeft))
             style = style with { RightToLeft = rightToLeft };
 
+        if (TryReadTextAlignment(AttributeValue(element, "TextAlignment"), out var alignment))
+            style = style with { ParagraphAlignment = alignment };
+
         var localName = element.Name.LocalName;
         if (localName.Equals("Bold", StringComparison.OrdinalIgnoreCase))
             style = style with { Bold = true, BoldSet = true };
@@ -627,6 +630,11 @@ public static class ExternalXamlClipboardPlanner
             case "flowdirection":
                 return TryReadFlowDirection(value, out var rightToLeft)
                     ? style with { RightToLeft = rightToLeft }
+                    : style;
+
+            case "textalignment":
+                return TryReadTextAlignment(value, out var alignment)
+                    ? style with { ParagraphAlignment = alignment }
                     : style;
 
             case "foreground":
@@ -766,17 +774,12 @@ public static class ExternalXamlClipboardPlanner
             : value;
     }
 
-    private static void ApplyParagraphProperties(XElement element, Paragraph paragraph)
+    private static void ApplyParagraphProperties(
+        XElement element,
+        Paragraph paragraph,
+        XamlTextStyle style)
     {
-        var alignment = AttributeValue(element, "TextAlignment");
-        paragraph.Align = alignment?.ToLowerInvariant() switch
-        {
-            "center" => TextAlign.Center,
-            "right" => TextAlign.Right,
-            "justify" => TextAlign.Justify,
-            _ when string.Equals(alignment, "left", StringComparison.OrdinalIgnoreCase) => TextAlign.Left,
-            _ => null,
-        };
+        paragraph.Align = style.ParagraphAlignment;
 
         var margin = AttributeValue(element, "Margin")?.Split(',', StringSplitOptions.TrimEntries);
         if (margin is { Length: 4 })
@@ -840,6 +843,34 @@ public static class ExternalXamlClipboardPlanner
                 return true;
             case "lefttoright":
             case "ltr":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryReadTextAlignment(string? value, out TextAlign alignment)
+    {
+        alignment = TextAlign.Left;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "left":
+                alignment = TextAlign.Left;
+                return true;
+            case "center":
+                alignment = TextAlign.Center;
+                return true;
+            case "right":
+                alignment = TextAlign.Right;
+                return true;
+            case "justify":
+                alignment = TextAlign.Justify;
+                return true;
+            case "distributed":
+                alignment = TextAlign.Distributed;
                 return true;
             default:
                 return false;
@@ -1007,7 +1038,8 @@ public static class ExternalXamlClipboardPlanner
         ThemeAwareColor? Color,
         Hyperlink? Hyperlink,
         int? BaselineOffset = null,
-        bool? RightToLeft = null);
+        bool? RightToLeft = null,
+        TextAlign? ParagraphAlignment = null);
 
     private sealed record XamlStyleResource(
         string? BasedOn,
