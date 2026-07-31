@@ -69,6 +69,41 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesListMarkerStylesAndNestedLevels()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <List MarkerStyle="Decimal" StartIndex="3">
+                <ListItem><Paragraph>Three</Paragraph></ListItem>
+                <ListItem>
+                  <Paragraph>Four</Paragraph>
+                  <List MarkerStyle="LowerLatin"><ListItem><Paragraph>Nested</Paragraph></ListItem></List>
+                </ListItem>
+              </List>
+              <List MarkerStyle="Circle"><ListItem><Paragraph>Circle</Paragraph></ListItem></List>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs.Should().HaveCount(4);
+        paragraphs[0].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[0].AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        paragraphs[0].AutoNumStartAt.Should().Be(3);
+        paragraphs[0].AutoNumStartAtSpecified.Should().BeTrue();
+        paragraphs[1].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
+        paragraphs[2].Level.Should().Be(1);
+        paragraphs[2].BulletKind.Should().Be(BulletKind.Auto);
+        paragraphs[2].AutoNumType.Should().Be(AutoNumType.AlphaLcPeriod);
+        paragraphs[3].BulletKind.Should().Be(BulletKind.Char);
+        paragraphs[3].BulletChar.Should().Be("\u25E6");
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_FlattensTablesLikeWpfProjection_AndPreservesCellFormatting()
     {
         const string xaml = """
@@ -106,7 +141,7 @@ public sealed class ExternalRichTextClipboardTests
     {
         const string xaml = """
             <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-              <BlockUIContainer><Image Source="Images/first.png" /></BlockUIContainer>
+              <BlockUIContainer><Image Source="Images/first.png" Width="96" Height="48" /></BlockUIContainer>
               <BlockUIContainer><Image Source="Images/second.jpg" /></BlockUIContainer>
             </FlowDocument>
             """;
@@ -122,8 +157,12 @@ public sealed class ExternalRichTextClipboardTests
         payload!.GetImagePayloads().Should().HaveCount(2);
         payload.GetImagePayloads()[0].Bytes.Should().Equal(first);
         payload.GetImagePayloads()[0].ContentType.Should().Be("image/png");
+        payload.GetImagePayloads()[0].WidthEmu.Should().Be(914400);
+        payload.GetImagePayloads()[0].HeightEmu.Should().Be(457200);
         payload.GetImagePayloads()[1].Bytes.Should().Equal(second);
         payload.GetImagePayloads()[1].ContentType.Should().Be("image/jpeg");
+        payload.GetImagePayloads()[1].WidthEmu.Should().BeNull();
+        payload.GetImagePayloads()[1].HeightEmu.Should().BeNull();
         payload.ImageBytes.Should().Equal(first);
         payload.ImageContentType.Should().Be("image/png");
     }
