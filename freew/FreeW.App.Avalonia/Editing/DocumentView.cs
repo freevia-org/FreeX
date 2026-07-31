@@ -3268,8 +3268,9 @@ public sealed class DocumentView : Control
     /// matches what is on screen; it paginates the single continuous column by the page height from
     /// <see cref="TextDocument.Page"/>.
     /// <para>
-    /// NOTE: This is a text-region export. Tables/images/decorations remain outside this draw-op
-    /// adapter, but the already-paginated headers, footers, footnotes, and endnotes are included.
+    /// The adapter emits the already-laid-out table cell surfaces before the cell/body glyphs,
+    /// together with the already-paginated headers, footers, footnotes, and endnotes. Images,
+    /// floating objects, and other decorations remain outside this bounded draw-op slice.
     /// </para>
     /// </summary>
     public Free.Shared.Pdf.PdfContentDocument BuildPdfContent()
@@ -3361,15 +3362,217 @@ public sealed class DocumentView : Control
 
         Flush();
 
-        // The live Avalonia layout has already resolved page ownership, field text, wrapping, and
-        // note bands. Carry those same text regions into the PDF model so export does not silently
-        // lose document chrome that Print Preview visibly shows.
+        // Table cell rectangles are already in page space and are painted below glyphs by the live
+        // Avalonia renderer. Reuse those same items for PDF export; do not remeasure or paginate a
+        // second time. A clipped fragment is emitted only for the page whose media box contains it.
         void EnsurePage(int pageIndex)
         {
             while (pagesOps.Count <= pageIndex)
                 pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
         }
 
+        var tableOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+
+        void EnsureTablePage(int pageIndex)
+        {
+            while (tableOpsByPage.Count <= pageIndex)
+                tableOpsByPage.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
+        }
+
+        static Free.Shared.Pdf.PdfColor SolidBrushColor(IBrush? brush) =>
+            brush is ISolidColorBrush solid
+                ? new Free.Shared.Pdf.PdfColor(solid.Color.R, solid.Color.G, solid.Color.B)
+                : Free.Shared.Pdf.PdfColor.Black;
+
+        void AddTableEdge(
+            List<Free.Shared.Pdf.PdfDrawOp> ops,
+            TableCellBorderVisualEdge edge,
+            string colorHex,
+            double widthDip,
+            BorderLineStyle style,
+            Rect sourceRect,
+            Rect clippedRect,
+            double pageTopDip)
+        {
+            var edgeIsOnPage = edge switch
+            {
+                TableCellBorderVisualEdge.Top => sourceRect.Top >= pageTopDip - 0.01
+                    && sourceRect.Top <= pageTopDip + _pageHeightPx + 0.01,
+                TableCellBorderVisualEdge.Bottom => sourceRect.Bottom >= pageTopDip - 0.01
+                    && sourceRect.Bottom <= pageTopDip + _pageHeightPx + 0.01,
+                TableCellBorderVisualEdge.Left => sourceRect.Left >= _pageLeft - 0.01
+                    && sourceRect.Left <= _pageLeft + _pageWidth + 0.01,
+                TableCellBorderVisualEdge.Right => sourceRect.Right >= _pageLeft - 0.01
+                    && sourceRect.Right <= _pageLeft + _pageWidth + 0.01,
+                _ => false,
+            };
+            if (!edgeIsOnPage)
+                return;
+
+            var color = ParseColor(colorHex);
+            var widthPt = Math.Max(0.1, widthDip / PxPerPoint);
+
+            (double X1, double Y1, double X2, double Y2) Points(double offsetDip) => edge switch
+            {
+                TableCellBorderVisualEdge.Top =>
+                    (clippedRect.Left, sourceRect.Top + offsetDip,
+                        clippedRect.Right, sourceRect.Top + offsetDip),
+                TableCellBorderVisualEdge.Bottom =>
+                    (clippedRect.Left, sourceRect.Bottom - offsetDip,
+                        clippedRect.Right, sourceRect.Bottom - offsetDip),
+                TableCellBorderVisualEdge.Left =>
+                    (sourceRect.Left + offsetDip, clippedRect.Top,
+                        sourceRect.Left + offsetDip, clippedRect.Bottom),
+                TableCellBorderVisualEdge.Right =>
+                    (sourceRect.Right - offsetDip, clippedRect.Top,
+                        sourceRect.Right - offsetDip, clippedRect.Bottom),
+                _ => (0, 0, 0, 0),
+            };
+
+            void AddLine(double offsetDip)
+            {
+                var (x1Dip, y1Dip, x2Dip, y2Dip) = Points(offsetDip);
+                var x1Pt = (x1Dip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+                var x2Pt = (x2Dip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+                var y1Pt = pageHeightPt - ((y1Dip - pageTopDip) / PxPerPoint);
+                var y2Pt = pageHeightPt - ((y2Dip - pageTopDip) / PxPerPoint);
+                ops.Add(new Free.Shared.Pdf.PdfLine(
+                    x1Pt, y1Pt, x2Pt, y2Pt, color, widthPt));
+            }
+
+            if (style == BorderLineStyle.Double)
+            {
+                var offset = Math.Max(1.0, widthDip * 1.5) / 2.0;
+                AddLine(-offset);
+                AddLine(offset);
+            }
+            else
+            {
+                // The shared PDF draw-op vocabulary has no dash pattern. Dashed, dotted, and wave
+                // cell borders therefore use a solid-line PDF fallback.
+                AddLine(0);
+            }
+        }
+
+        void AddTableOpsForPage(
+            int pageIndex,
+            Rect sourceRect,
+            IBrush? fill,
+            bool hasTableBorder,
+            TableCellBorderVisualPlan? cellBorderPlan)
+        {
+            var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
+            var pageBottomDip = pageTopDip + _pageHeightPx;
+            var clippedLeft = Math.Max(sourceRect.Left, _pageLeft);
+            var clippedTop = Math.Max(sourceRect.Top, pageTopDip);
+            var clippedRight = Math.Min(sourceRect.Right, _pageLeft + _pageWidth);
+            var clippedBottom = Math.Min(sourceRect.Bottom, pageBottomDip);
+            if (clippedRight <= clippedLeft || clippedBottom <= clippedTop)
+                return;
+
+            var clippedRect = new Rect(
+                clippedLeft,
+                clippedTop,
+                clippedRight - clippedLeft,
+                clippedBottom - clippedTop);
+            var ops = tableOpsByPage[pageIndex];
+            var xPt = (clippedRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+            var yPt = pageHeightPt - ((clippedRect.Bottom - pageTopDip) / PxPerPoint);
+            var widthPt = clippedRect.Width / PxPerPoint;
+            var heightPt = clippedRect.Height / PxPerPoint;
+
+            if (fill is ISolidColorBrush solid && solid.Color.A > 0)
+            {
+                ops.Add(new Free.Shared.Pdf.PdfFillRect(
+                    xPt, yPt, widthPt, heightPt, SolidBrushColor(solid)));
+            }
+
+            var tableBorderColor = new Free.Shared.Pdf.PdfColor(0x9A, 0x9A, 0x9A);
+            var tableBorderWidthPt = 0.75 / PxPerPoint;
+            if (hasTableBorder)
+            {
+                var fullyInsidePage = sourceRect.Left >= _pageLeft - 0.01
+                    && sourceRect.Right <= _pageLeft + _pageWidth + 0.01
+                    && sourceRect.Top >= pageTopDip - 0.01
+                    && sourceRect.Bottom <= pageBottomDip + 0.01;
+                if (fullyInsidePage)
+                {
+                    var sourceXPt = (sourceRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+                    var sourceYPt = pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint);
+                    ops.Add(new Free.Shared.Pdf.PdfStrokeRect(
+                        sourceXPt,
+                        sourceYPt,
+                        sourceRect.Width / PxPerPoint,
+                        sourceRect.Height / PxPerPoint,
+                        tableBorderColor,
+                        tableBorderWidthPt));
+                }
+                else
+                {
+                    foreach (var edge in new[]
+                    {
+                        TableCellBorderVisualEdge.Top,
+                        TableCellBorderVisualEdge.Bottom,
+                        TableCellBorderVisualEdge.Left,
+                        TableCellBorderVisualEdge.Right,
+                    })
+                    {
+                        AddTableEdge(
+                            ops,
+                            edge,
+                            "#9A9A9A",
+                            0.75,
+                            BorderLineStyle.Single,
+                            sourceRect,
+                            clippedRect,
+                            pageTopDip);
+                    }
+                }
+            }
+
+            if (cellBorderPlan is null)
+                return;
+
+            foreach (var edge in cellBorderPlan.Edges.Where(edge => edge.IsVisible))
+            {
+                AddTableEdge(
+                    ops,
+                    edge.Edge,
+                    edge.ColorHex,
+                    edge.WidthDip,
+                    edge.Style,
+                    sourceRect,
+                    clippedRect,
+                    pageTopDip);
+            }
+        }
+
+        var tablePageCount = Math.Max(_pageCount, pagesOps.Count);
+        for (var pageIndex = 0; pageIndex < tablePageCount; pageIndex++)
+        {
+            EnsureTablePage(pageIndex);
+            foreach (var (rect, fill, border, cellBorderPlan) in _rects)
+            {
+                var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
+                var pageBottomDip = pageTopDip + _pageHeightPx;
+                if (rect.Bottom <= pageTopDip || rect.Top >= pageBottomDip
+                    || rect.Right <= _pageLeft || rect.Left >= _pageLeft + _pageWidth)
+                    continue;
+
+                AddTableOpsForPage(pageIndex, rect, fill, border, cellBorderPlan);
+            }
+
+            if (tableOpsByPage[pageIndex].Count > 0)
+            {
+                EnsurePage(pageIndex);
+                // Cell surfaces are below all text, matching the on-screen renderer's pass order.
+                pagesOps[pageIndex].InsertRange(0, tableOpsByPage[pageIndex]);
+            }
+        }
+
+        // The live Avalonia layout has already resolved page ownership, field text, wrapping, and
+        // note bands. Carry those same text regions into the PDF model so export does not silently
+        // lose document chrome that Print Preview visibly shows.
         void AddTextRegion(string text, RunFormatting fmt, double xDip, double yDip)
         {
             if (string.IsNullOrEmpty(text))
