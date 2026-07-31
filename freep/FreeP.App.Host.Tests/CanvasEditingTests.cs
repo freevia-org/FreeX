@@ -4,6 +4,7 @@ using FreeP.App.Compositor;
 using FreeP.App.Host;
 using FreeP.App.Rendering.Wpf;
 using Free.Shared.Drawing;
+using Free.Shared.Ribbon;
 // Disambiguate: this test file exercises the WPF ShapeHitTester compatibility facade.
 // The implementation lives in FreeP.App.Compositor.
 using ShapeHitTester = FreeP.App.Rendering.Wpf.ShapeHitTester;
@@ -584,6 +585,47 @@ public sealed class CanvasEditingTests
         canvas.SetEditPointsMode(false);
 
         canvas.EditPointsEnabled.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void SlideCanvas_ReattachEditing_PreservesEditPointsMode()
+    {
+        var canvas = new SlideCanvas();
+        var presentation = Presentation.CreateEmpty();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var overlay = new System.Windows.Controls.Canvas();
+
+        canvas.AttachEditing(editor, overlay);
+        canvas.SetEditPointsMode(false);
+        canvas.AttachEditing(editor, overlay);
+
+        canvas.EditPointsEnabled.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void WpfEditPointsRibbonState_FollowsSharedModePlannerAndCanvas()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var registry = FreePRibbonCommands.Build(
+                new RibbonStateStore(),
+                window.Editor,
+                getEditPointsEnabled: () => window.SlideCanvas.EditPointsEnabled,
+                setEditPointsEnabled: enabled => window.SlideCanvas.SetEditPointsMode(enabled));
+            registry.TryGet(PresentationEditPointsModePlanner.CommandId, out var registered)
+                .Should().BeTrue();
+            var command = registered.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+
+            command.GetState().IsChecked.Should().BeTrue();
+            command.Execute(RibbonCommandContext.Empty);
+            command.GetState().IsChecked.Should().BeFalse();
+            window.SlideCanvas.EditPointsEnabled.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
     }
 
     [Fact]

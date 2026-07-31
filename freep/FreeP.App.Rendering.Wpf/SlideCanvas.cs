@@ -123,12 +123,14 @@ public sealed class SlideCanvas : FrameworkElement
     /// </summary>
     public void AttachEditing(EditingSession editor, Canvas textOverlay)
     {
+        var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
         // Detach previous handler if any (don't re-add adorner on every call)
         _textEditor?.Dispose();
         ActiveTextEditShapeId = null;
         _textEditor      = null;
         _tableCellEditor = null;
         _gestureHandler  = new CanvasGestureHandler(this, editor);
+        _gestureHandler.EditPointsEnabled = editPointsEnabled;
         ApplyViewShowState(_viewShowState);
         _textOverlay     = textOverlay;
         _textEditor      = new InCanvasTextEditor(this, editor, textOverlay);

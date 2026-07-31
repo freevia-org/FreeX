@@ -3202,6 +3202,36 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_edit_points_toggle_uses_shared_mode_planner_and_live_canvas_state()
+    {
+        var found = false;
+        var stateful = false;
+        var initiallyChecked = false;
+        var checkedAfterExecute = true;
+        var canvasEnabledAfterExecute = true;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            found = registry.TryGet(PresentationEditPointsModePlanner.CommandId, out var command);
+            stateful = command is IRibbonStatefulCommand;
+            var statefulCommand = command as IRibbonStatefulCommand;
+            initiallyChecked = statefulCommand?.GetState().IsChecked ?? false;
+            command!.Execute(RibbonCommandContext.Empty);
+            checkedAfterExecute = statefulCommand?.GetState().IsChecked == true;
+            canvasEnabledAfterExecute = window.EditPointsEnabledForTests;
+        });
+
+        if (!ran) return;
+        found.Should().BeTrue();
+        stateful.Should().BeTrue();
+        initiallyChecked.Should().BeTrue();
+        checkedAfterExecute.Should().BeFalse();
+        canvasEnabledAfterExecute.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Ribbon_animation_commands_route_through_shared_planner()
     {
         var foundFade = false;

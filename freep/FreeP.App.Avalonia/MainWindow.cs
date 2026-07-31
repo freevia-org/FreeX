@@ -609,6 +609,7 @@ public sealed partial class MainWindow : Window
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveLaterCommandId)?.DisabledReason;
     internal bool IsAnimationPaneVisible => _animationPaneHost?.IsVisible == true;
+    internal bool EditPointsEnabledForTests => _slideCanvas.EditPointsEnabled;
     internal int AnimationPaneItemCount => LastAnimationPaneTimelinePlan?.Items.Count ?? 0;
     internal int AnimationPaneRenderedItemCount => _animationPaneItemsPanel?.Children.Count ?? 0;
     internal string AnimationPaneHeading => LastAnimationPaneWorkflowEvidencePlan?.View.Heading
@@ -9800,7 +9801,8 @@ public sealed partial class MainWindow : Window
     private sealed class EditPointsToggleCommand(SlideCanvas canvas) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context) =>
-            canvas.SetEditPointsMode(!canvas.EditPointsEnabled);
+            canvas.SetEditPointsMode(
+                PresentationEditPointsModePlanner.BuildTogglePlan(canvas.EditPointsEnabled).NextIsEnabled);
 
         public RibbonCommandState GetState() => new(
             IsEnabled: true,

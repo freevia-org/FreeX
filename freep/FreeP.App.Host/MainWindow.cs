@@ -502,6 +502,8 @@ public sealed partial class MainWindow : Window
             // Wave 16B: Animation pane toggle.
             onAnimPane:         () => ToggleAnimationPane(),
             onTransitionSound:  () => PickTransitionSound(),
+            getEditPointsEnabled: () => SlideCanvas?.EditPointsEnabled ?? true,
+            setEditPointsEnabled: enabled => SlideCanvas?.SetEditPointsMode(enabled),
             onTablePicker:      () => OpenTablePicker(),
             onHeaderFooter:     focus => OpenHeaderFooterDialog(focus),
             getViewShowState:   () => _viewShowState,

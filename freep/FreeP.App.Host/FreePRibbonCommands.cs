@@ -127,7 +127,9 @@ internal static class FreePRibbonCommands
         Action?             onInsertEmbeddedObject = null,
         Action<OleObjectInfo>? onOpenEmbeddedObject = null,
         Func<bool>?          tryOpenInlineEmbeddedObject = null,
-        Action?             onTransitionSound = null)
+        Action?             onTransitionSound = null,
+        Func<bool>?          getEditPointsEnabled = null,
+        Action<bool>?         setEditPointsEnabled = null)
     {
         var registry = new RibbonCommandRegistry();
         registry.Register("freep.undo",
@@ -812,9 +814,11 @@ internal static class FreePRibbonCommands
                     });
             }));
 
-        registry.Register("freep.arrange.edit-points",
-            new EditorToggleCommand(stateStore, "freep.arrange.edit-points",
-                () => onEditPoints?.Invoke(), initialChecked: true));
+        registry.Register(PresentationEditPointsModePlanner.CommandId,
+            getEditPointsEnabled is not null && setEditPointsEnabled is not null
+                ? new EditPointsToggleCommand(stateStore, getEditPointsEnabled, setEditPointsEnabled)
+                : new EditorToggleCommand(stateStore, PresentationEditPointsModePlanner.CommandId,
+                    () => onEditPoints?.Invoke(), initialChecked: true));
 
         registry.Register("freep.arrange.bring-to-front",
             new ActionRibbonCommand(() => editor.BringToFront()));
@@ -1509,6 +1513,36 @@ internal static class FreePRibbonCommands
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: _checked);
+    }
+
+    private sealed class EditPointsToggleCommand : IRibbonStatefulCommand
+    {
+        private readonly RibbonStateStore _stateStore;
+        private readonly Func<bool> _getEnabled;
+        private readonly Action<bool> _setEnabled;
+        private readonly RibbonCommandId _id = PresentationEditPointsModePlanner.CommandId;
+
+        public EditPointsToggleCommand(
+            RibbonStateStore stateStore,
+            Func<bool> getEnabled,
+            Action<bool> setEnabled)
+        {
+            _stateStore = stateStore;
+            _getEnabled = getEnabled;
+            _setEnabled = setEnabled;
+            SyncState();
+        }
+
+        public void Execute(RibbonCommandContext context)
+        {
+            var plan = PresentationEditPointsModePlanner.BuildTogglePlan(_getEnabled());
+            _setEnabled(plan.NextIsEnabled);
+            SyncState();
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: _getEnabled());
+
+        private void SyncState() => _stateStore.SetChecked(_id, GetState().IsChecked);
     }
 
     private sealed class TransitionToggleCommand : IRibbonStatefulCommand
