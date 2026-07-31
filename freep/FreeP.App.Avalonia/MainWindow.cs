@@ -2617,8 +2617,15 @@ public sealed partial class MainWindow : Window
         r.Register(OleActivationPlanner.OpenEmbeddedObjectCommandId,
             new ActionRibbonCommand(() =>
             {
-                if (Editor.SelectedOleObject is { } ole)
-                    OleActivationService.TryActivate(ole);
+                OleActivationPlanner.TryOpenInlineFirst(
+                    () => _textEditor?.TryActivateInlineOleObject() == true,
+                    () =>
+                    {
+                        if (Editor.SelectedOleObject is not { } ole)
+                            return false;
+                        OleActivationService.TryActivate(ole);
+                        return true;
+                    });
             }));
         r.Register(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
             new ActionRibbonCommand(() => _ = InsertEmbeddedObjectFromFileAsync()));
