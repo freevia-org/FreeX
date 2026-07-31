@@ -44,7 +44,9 @@ public static class OleActivationService
     /// same temporary-file lifecycle as slide OLE objects is used, and edits made
     /// by the external application are written back to the inline payload.
     /// </summary>
-    public static bool TryActivate(InlineOleObjectInfo? inlineObject)
+    public static bool TryActivate(
+        InlineOleObjectInfo? inlineObject,
+        Action<byte[]>? onPayloadUpdated = null)
     {
         if (inlineObject is null)
             return false;
@@ -52,7 +54,11 @@ public static class OleActivationService
         return BeginActivation(
             inlineObject.EmbeddedBytes,
             ResolveExtension(inlineObject),
-            updatedBytes => inlineObject.EmbeddedBytes = updatedBytes) is not null;
+            updatedBytes =>
+            {
+                inlineObject.EmbeddedBytes = updatedBytes;
+                onPayloadUpdated?.Invoke(updatedBytes);
+            }) is not null;
     }
 
     private static OleActivationSession? BeginActivation(

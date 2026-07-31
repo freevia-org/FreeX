@@ -114,7 +114,10 @@ public sealed class EditingSession
     /// keeps external edits attached to the model even when a host text overlay commits as it
     /// loses focus to the external OLE application.
     /// </summary>
-    public bool TryActivateInlineOleObject(uint shapeId, int logicalPosition)
+    public bool TryActivateInlineOleObject(
+        uint shapeId,
+        int logicalPosition,
+        Action<byte[]>? onPayloadUpdated = null)
     {
         var shape = CurrentSlide is { } slide
             ? FindShape(slide.Shapes, shapeId)
@@ -122,9 +125,11 @@ public sealed class EditingSession
         if (shape?.TextBody is null)
             return false;
 
-        var buffer = new InCanvasRichTextEditBuffer(shape.TextBody);
-        return buffer.TryGetInlineOleObjectAt(logicalPosition, out var inlineObject)
-            && OleActivationService.TryActivate(inlineObject);
+        return InCanvasRichTextEditBuffer.FindInlineOleObjectAt(
+            shape.TextBody,
+            logicalPosition,
+            out var inlineObject)
+            && OleActivationService.TryActivate(inlineObject, onPayloadUpdated);
     }
 
     /// <summary>

@@ -281,6 +281,11 @@ internal sealed class AvaloniaRichTextEditor : Grid
             || (position > 0 && tryActivateAt(position - 1));
     }
 
+    internal bool UpdateInlineOleObjectAt(
+        int logicalPosition,
+        IReadOnlyList<byte> embeddedBytes) =>
+        _buffer.UpdateInlineOleObjectAt(logicalPosition, embeddedBytes);
+
     internal bool ApplyHyperlink(Hyperlink? hyperlink) =>
         ApplyMutation(() => _buffer.ApplyHyperlink(hyperlink, Selection));
 

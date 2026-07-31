@@ -95,7 +95,10 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _active
         && _textBox is not null
         && _textBox.TryActivateInlineOleObject(
-            position => _editor.TryActivateInlineOleObject(_editingShapeId, position));
+            position => _editor.TryActivateInlineOleObject(
+                _editingShapeId,
+                position,
+                updatedBytes => _textBox?.UpdateInlineOleObjectAt(position, updatedBytes)));
 
     /// <summary>True while a table cell is being edited in the rich overlay editor.</summary>
     public bool IsCellEditActive => _cellEditActive;

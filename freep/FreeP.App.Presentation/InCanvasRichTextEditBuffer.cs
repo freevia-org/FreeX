@@ -28,9 +28,25 @@ public sealed class InCanvasRichTextEditBuffer
     /// bytes written back by the external application are committed with the edit.
     /// </summary>
     public bool TryGetInlineOleObjectAt(int logicalPosition, out InlineOleObjectInfo? inlineObject)
+        => FindInlineOleObjectAt(_body, logicalPosition, out inlineObject);
+
+    /// <summary>
+    /// Finds an inline OLE payload in an existing text body without cloning it.
+    /// Activation uses this overload so external edits update the live shape model.
+    /// </summary>
+    public static bool FindInlineOleObjectAt(
+        TextBody? body,
+        int logicalPosition,
+        out InlineOleObjectInfo? inlineObject)
     {
+        if (body is null)
+        {
+            inlineObject = null;
+            return false;
+        }
+
         int position = 0;
-        foreach (var paragraph in _body.Paragraphs)
+        foreach (var paragraph in body.Paragraphs)
         {
             foreach (var run in paragraph.Runs)
             {
@@ -51,6 +67,20 @@ public sealed class InCanvasRichTextEditBuffer
 
         inlineObject = null;
         return false;
+    }
+
+    /// <summary>Refreshes one local inline OLE snapshot after external activation saves it.</summary>
+    public bool UpdateInlineOleObjectAt(
+        int logicalPosition,
+        IReadOnlyList<byte> embeddedBytes)
+    {
+        ArgumentNullException.ThrowIfNull(embeddedBytes);
+        if (!TryGetInlineOleObjectAt(logicalPosition, out var inlineObject)
+            || inlineObject is null)
+            return false;
+
+        inlineObject.EmbeddedBytes = embeddedBytes.ToArray();
+        return true;
     }
 
     public InCanvasRichClipboardPayload CreateClipboardPayload(
