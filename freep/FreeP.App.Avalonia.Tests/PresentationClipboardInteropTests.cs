@@ -141,6 +141,39 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public void Copy_groupedChild_ExportsTheSelectedDescendant()
+    {
+        var editor = CreateEmptyEditor();
+        var child = new SlideShape
+        {
+            Id = 72,
+            Name = "Grouped clipboard child",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 1828800,
+            ExtentCyEmu = 914400,
+            TextBody = BuildTextBody("Grouped child"),
+        };
+        var group = new SlideShape { Id = 71, Kind = SlideShapeKind.Group };
+        group.Children.Add(child);
+        editor.CurrentSlide!.Shapes.Add(group);
+        editor.Select(child.Id);
+
+        var content = PresentationClipboardContentFactory.CreateSelection(
+            editor,
+            static (_, _, _) => [],
+            "test-owner");
+
+        content.Should().NotBeNull();
+        var decoded = PresentationClipboardSelectionCodec.Deserialize(content!.SelectionBytes!);
+        decoded.Should().ContainSingle();
+        decoded[0].Id.Should().Be(child.Id);
+        decoded[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Grouped child");
+    }
+
+    [Fact]
     public async Task Avalonia_data_transfer_maps_custom_bitmap_and_text_formats()
     {
         await Session.Dispatch(async () =>
