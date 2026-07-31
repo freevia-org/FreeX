@@ -37,7 +37,8 @@ public sealed record InCanvasRichTextVisualParagraph(
     ThemeAwareColor? BulletColor = null,
     double IndentDip = 0,
     double HangingDip = 0,
-    bool RightToLeft = false)
+    bool RightToLeft = false,
+    IReadOnlyList<ResolvedTabStop>? TabStops = null)
 {
     public int GlobalEnd => GlobalStart + Text.Length;
 }
@@ -140,6 +141,15 @@ public static class InCanvasRichTextVisualPlanner
             double hangingDip = paragraph.IndentEmu is { } indent && indent < 0
                 ? -indent / EmuPerDip
                 : 0;
+            var tabStops = paragraph.TabStops
+                .Where(tabStop => tabStop.PositionEmu > 0)
+                .OrderBy(tabStop => tabStop.PositionEmu)
+                .Select(tabStop => new ResolvedTabStop
+                {
+                    PositionDip = tabStop.PositionEmu / EmuPerDip,
+                    Alignment = tabStop.Alignment,
+                })
+                .ToArray();
 
             paragraphs.Add(new InCanvasRichTextVisualParagraph(
                 paragraphIndex,
@@ -159,7 +169,8 @@ public static class InCanvasRichTextVisualPlanner
                 hangingDip,
                 paragraph.RightToLeft ?? body.LstStyle?.Resolve(paragraph.Level)?.RightToLeft
                     ?? body.DefaultParaRightToLeft
-                    ?? false));
+                    ?? false,
+                tabStops));
 
             globalStart += text.Length + (paragraphIndex + 1 < body.Paragraphs.Count ? 1 : 0);
         }

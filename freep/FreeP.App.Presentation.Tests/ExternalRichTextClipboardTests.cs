@@ -518,6 +518,56 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfTabStops_PreservePositionsAlignmentResetAndRichClipboardRoundTrip()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+\pard\tqc\tx1440\tqr\tx2880\tqdec\tx4320 First\tab Center\tab 12.50\par
+\pard\tx720 Second}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Should().HaveCount(2);
+        payload.Body.Paragraphs[0].TabStops.Select(stop =>
+                (stop.PositionEmu, stop.Alignment))
+            .Should().Equal(
+                (914_400L, TabStopAlignment.Center),
+                (1_828_800L, TabStopAlignment.Right),
+                (2_743_200L, TabStopAlignment.Decimal));
+        payload.Body.Paragraphs[1].TabStops.Should().ContainSingle()
+            .Which.Should().Match<TabStop>(stop =>
+                stop.PositionEmu == 457_200L
+                && stop.Alignment == TabStopAlignment.Left);
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+
+        reopened.Should().NotBeNull();
+        reopened!.Body.Paragraphs[0].TabStops.Select(stop =>
+                (stop.PositionEmu, stop.Alignment))
+            .Should().Equal(
+                (914_400L, TabStopAlignment.Center),
+                (1_828_800L, TabStopAlignment.Right),
+                (2_743_200L, TabStopAlignment.Decimal));
+    }
+
+    [Fact]
+    public void RtfTabStops_GroupLocalControlsDoNotLeakAfterGroupClose()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\pard\tx1440 Outer {\tqc\tx2880 Inner} After}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Single().TabStops.Should().ContainSingle()
+            .Which.Should().Match<TabStop>(stop =>
+                stop.PositionEmu == 914_400L
+                && stop.Alignment == TabStopAlignment.Left);
+    }
+
+    [Fact]
     public void RtfNestedTable_PreservesRecursiveInlineTableAndSurroundingText()
     {
         const string rtf =
