@@ -97,6 +97,32 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesFlowDirectionInheritanceAndOverrides()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          FlowDirection="RightToLeft">
+              <Paragraph>
+                <Run Text="אבג" />
+                <Run FlowDirection="LeftToRight" Text="LTR" />
+              </Paragraph>
+              <Paragraph FlowDirection="LeftToRight">plain direction</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var paragraphs = payload!.Body.Paragraphs;
+        paragraphs.Select(paragraph => paragraph.RightToLeft)
+            .Should().Equal(true, false);
+        paragraphs[0].Runs.Select(run => run.RightToLeft)
+            .Should().Equal(true, false);
+        paragraphs[1].Runs.Single().RightToLeft.Should().BeFalse();
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_ResolvesSolidColorBrushResources()
     {
         const string xaml = """

@@ -687,6 +687,25 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task XamlPackage_preserves_flow_direction()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                XamlPackageBytes: CreateXamlPackage(
+                    "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" FlowDirection=\"RightToLeft\"><Paragraph><Run Text=\"אבג\"/><Run FlowDirection=\"LeftToRight\" Text=\"LTR\"/></Paragraph></FlowDocument>")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.XamlPackage);
+
+        var paragraph = editor.CurrentSlide!.Shapes.Single().TextBody!.Paragraphs.Single();
+        paragraph.RightToLeft.Should().BeTrue();
+        paragraph.Runs.Select(run => run.RightToLeft).Should().Equal(true, false);
+    }
+
+    [Fact]
     public async Task External_Rtf_table_preserves_solid_cell_style()
     {
         var clipboard = new FakeSystemClipboard

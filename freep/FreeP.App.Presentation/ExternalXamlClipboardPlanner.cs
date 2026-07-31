@@ -147,10 +147,12 @@ public static class ExternalXamlClipboardPlanner
         ref int outputCharacters)
     {
         var paragraph = new Paragraph();
-        var style = ReadStyle(element, default, resources);
+        var inherited = ReadInheritedStyle(element, resources);
+        var style = ReadStyle(element, inherited, resources);
         ApplyParagraphProperties(element, paragraph);
+        paragraph.RightToLeft = style.RightToLeft;
         ApplyListProperties(element, paragraph);
-        ReadInlineNodes(element, paragraph, style, resources, ref outputCharacters);
+        ReadInlineNodes(element, paragraph, inherited, resources, ref outputCharacters);
         body.Paragraphs.Add(paragraph);
     }
 
@@ -276,10 +278,11 @@ public static class ExternalXamlClipboardPlanner
                         AddRun("\n", paragraph, default, ref outputCharacters);
 
                     var cellParagraph = cellParagraphs[paragraphIndex];
+                    var inherited = ReadInheritedStyle(cellParagraph, resources);
                     ReadInlineNodes(
                         cellParagraph,
                         paragraph,
-                        ReadStyle(cellParagraph, default, resources),
+                        inherited,
                         resources,
                         ref outputCharacters);
                 }
@@ -455,6 +458,7 @@ public static class ExternalXamlClipboardPlanner
             Underline = style.Underline,
             Strikethrough = style.Strikethrough,
             BaselineOffset = style.BaselineOffset,
+            RightToLeft = style.RightToLeft,
             Color = style.Color,
             Hyperlink = style.Hyperlink,
         });
@@ -517,6 +521,9 @@ public static class ExternalXamlClipboardPlanner
 
         if (TryReadBaselineOffset(AttributeValue(element, "BaselineAlignment"), out var baselineOffset))
             style = style with { BaselineOffset = baselineOffset };
+
+        if (TryReadFlowDirection(AttributeValue(element, "FlowDirection"), out var rightToLeft))
+            style = style with { RightToLeft = rightToLeft };
 
         var localName = element.Name.LocalName;
         if (localName.Equals("Bold", StringComparison.OrdinalIgnoreCase))
@@ -615,6 +622,11 @@ public static class ExternalXamlClipboardPlanner
             case "baselinealignment":
                 return TryReadBaselineOffset(value, out var baselineOffset)
                     ? style with { BaselineOffset = baselineOffset }
+                    : style;
+
+            case "flowdirection":
+                return TryReadFlowDirection(value, out var rightToLeft)
+                    ? style with { RightToLeft = rightToLeft }
                     : style;
 
             case "foreground":
@@ -814,6 +826,36 @@ public static class ExternalXamlClipboardPlanner
         }
     }
 
+    private static bool TryReadFlowDirection(string? value, out bool rightToLeft)
+    {
+        rightToLeft = false;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "righttoleft":
+            case "rtl":
+                rightToLeft = true;
+                return true;
+            case "lefttoright":
+            case "ltr":
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static XamlTextStyle ReadInheritedStyle(
+        XElement element,
+        XamlResourceCatalog resources)
+    {
+        var style = default(XamlTextStyle);
+        foreach (var ancestor in element.Ancestors().Reverse())
+            style = ReadStyle(ancestor, style, resources);
+        return style;
+    }
+
     private static long? ReadImageExtentEmu(XElement element, string attributeName)
     {
         if (!TryParseDip(AttributeValue(element, attributeName), out var dip)
@@ -964,7 +1006,8 @@ public static class ExternalXamlClipboardPlanner
         bool ItalicSet,
         ThemeAwareColor? Color,
         Hyperlink? Hyperlink,
-        int? BaselineOffset = null);
+        int? BaselineOffset = null,
+        bool? RightToLeft = null);
 
     private sealed record XamlStyleResource(
         string? BasedOn,
