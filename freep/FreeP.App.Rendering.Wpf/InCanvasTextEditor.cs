@@ -99,9 +99,26 @@ public sealed class InCanvasTextEditor : IDisposable
         int position = LogicalOffsetAt(
             _richBox.Document,
             _richBox.Selection.IsEmpty ? _richBox.CaretPosition : _richBox.Selection.Start);
-        return _editor.TryActivateInlineOleObject(_editingShapeId, position)
-            || (position > 0
-                && _editor.TryActivateInlineOleObject(_editingShapeId, position - 1));
+
+        bool TryActivateAt(int logicalPosition) =>
+            _editor.TryActivateInlineOleObject(
+                _editingShapeId,
+                logicalPosition,
+                updatedBytes =>
+                {
+                    if (_shapeParagraphBody is not null
+                        && InCanvasRichTextEditBuffer.FindInlineOleObjectAt(
+                            _shapeParagraphBody,
+                            logicalPosition,
+                            out var snapshot)
+                        && snapshot is not null)
+                    {
+                        snapshot.EmbeddedBytes = updatedBytes.ToArray();
+                    }
+                });
+
+        return TryActivateAt(position)
+            || (position > 0 && TryActivateAt(position - 1));
     }
 
     /// <summary>Activates the rich-text editor for the given shape.</summary>

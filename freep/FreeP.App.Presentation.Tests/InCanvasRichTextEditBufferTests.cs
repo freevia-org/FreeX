@@ -34,6 +34,46 @@ public sealed class InCanvasRichTextEditBufferTests
         buffer.TryGetInlineOleObjectAt(6, out _).Should().BeFalse();
     }
 
+    [Fact]
+    public void InlineOleActivationLookupCanReturnTheLiveModelPayloadWithoutCloning()
+    {
+        var inlineObject = new InlineOleObjectInfo { EmbeddedBytes = [1, 2, 3] };
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs = { new Run { Text = "\uFFFC", InlineOleObject = inlineObject } },
+        });
+
+        InCanvasRichTextEditBuffer.FindInlineOleObjectAt(body, 0, out var found)
+            .Should().BeTrue();
+        found.Should().BeSameAs(inlineObject);
+
+        found!.EmbeddedBytes = [8, 9];
+        body.Paragraphs[0].Runs[0].InlineOleObject!.EmbeddedBytes.Should().Equal(8, 9);
+    }
+
+    [Fact]
+    public void InlineOleSnapshotCanRefreshAfterExternalActivation()
+    {
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "\uFFFC",
+                    InlineOleObject = new InlineOleObjectInfo { EmbeddedBytes = [1] },
+                },
+            },
+        });
+        var buffer = new InCanvasRichTextEditBuffer(body);
+
+        buffer.UpdateInlineOleObjectAt(0, [7, 8]).Should().BeTrue();
+        buffer.TryGetInlineOleObjectAt(0, out var refreshed).Should().BeTrue();
+        refreshed!.EmbeddedBytes.Should().Equal(7, 8);
+    }
+
     [Theory]
     [InlineData(0, 0, 0)]
     [InlineData(1, 0, 0)]
