@@ -2184,12 +2184,13 @@ else
     # row therefore uses its calibrated screenshot position directly; adding the
     # decorated window Y would place the click 38px below the rendered row.
     pane_row_y=$(( pane_top_offset + 58 ))
-    # Click the collapsed group's padded upper-left interior. Its child icon/text
-    # surfaces can consume pointer presses without bubbling to the Button.
-    pane_group_x=$(( X + WIDTH - 120 ))
+    # The 1280px family harness renders Advanced Animation immediately after the
+    # Timing group. Target the command's blank/icon column so child label content
+    # cannot consume the press without bubbling to the split button.
+    pane_group_x=$(( X + WIDTH - 192 ))
     pane_group_y=$(( Y + 90 ))
-    pane_menu_x=$(( X + WIDTH - 95 ))
-    # The one-item flyout is rendered below the 76px collapsed group. scrot's
+    pane_menu_x=$(( X + WIDTH - 192 ))
+    # The one-item flyout is rendered below the Advanced Animation command. scrot's
     # focused-window image starts at app-local zero, so its visible center is
     # the app-relative offset 150 (root-screen Y + 150 for xdotool here).
     pane_menu_y=$(( Y + 150 ))
@@ -2204,7 +2205,7 @@ else
         printf 'pane-header-geometry=%s\n' "$pane_header_geometry"
         printf 'pane-row-geometry=%s\n' "$pane_row_geometry"
         printf 'seed=FREEP_PHYSICAL_ANIMATION_PANE_SEED=1\n'
-        printf 'open-route=physical pointer click on collapsed Advanced Animation group then flyout item\n'
+        printf 'open-route=physical pointer click on Advanced Animation command then flyout item\n'
         printf 'interaction=pointer row selection plus ribbon close/reopen\n'
     } > "$output/animation-pane-calibration.txt"
 
@@ -2280,7 +2281,7 @@ else
     } > "$output/animation-pane-physical-workflow-proof.txt"
     if $pane_opened && $pane_row_visible && $row_selected && $pane_closed && $pane_reopened; then
         record_evidence_set "animation-pane-physical-workflow" "passed" \
-            "The seeded real FreeP animation pane opened through physical clicks on the collapsed Advanced Animation group and its flyout item, exposed its animation row, changed semantic selection pixels after a physical row click, then closed and reopened through the same route with the row still visible." \
+            "The seeded real FreeP animation pane opened through physical clicks on the Advanced Animation command and its flyout item, exposed its animation row, changed semantic selection pixels after a physical row click, then closed and reopened through the same route with the row still visible." \
             "animation-pane-calibration.txt" "animation-pane-physical-workflow-proof.txt" \
             "animation-pane-command-menu-open.png" \
             "animation-pane-before.png" "animation-pane-open.png" "animation-pane-row-selected.png" \
