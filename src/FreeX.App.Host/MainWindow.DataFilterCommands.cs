@@ -117,7 +117,10 @@ public partial class MainWindow
             colorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range),
             cellColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range, SortOn.CellColor),
             fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, range, SortOn.FontColor),
-            hasHeaders: hasHeaders)
+            hasHeaders: hasHeaders,
+            iconWorkbook: _workbook,
+            iconSheet: sheet,
+            iconRange: range)
         {
             Owner = this
         };

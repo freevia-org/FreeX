@@ -58,6 +58,43 @@ public static partial class XlsxChartPartReader
             }
         }
 
+        // R110-io-chart-series-embedded-scatter: mirrors XlsxChartPartReader.Bar.cs's
+        // TryReadBarChart fallback — a Scatter series carries its point data in <c:xVal>/<c:yVal>
+        // instead of <c:cat>/<c:val>, so the embedded-data helpers are called with "yVal"/"xVal" as
+        // the value/category container names (matching DetectSeriesInRows below, which already
+        // overrides the default "val" container the same way for Scatter).
+        var allScatterSeriesElements = scatterCharts.SelectMany(c => c.Elements(ChartNs + "ser")).ToList();
+        var scatterEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(
+                                      allScatterSeriesElements, sheetId, valueContainerName: "yVal", categoryContainerName: "xVal")
+                                  ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(
+                                      allScatterSeriesElements, sheetId, sheetNameResolver, valueContainerName: "yVal", categoryContainerName: "xVal");
+        if (scatterEmbeddedData is not null)
+        {
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
+            result.SecondaryAxisSeriesIndexes = result.SecondaryAxisSeriesIndexes
+                .Distinct()
+                .Order()
+                .ToList();
+            result.ShowSecondaryAxis = result.SecondaryAxisSeriesIndexes.Count > 0;
+            result.FirstRowIsHeader = hasTitleRange;
+            result.EmbeddedSeriesData = scatterEmbeddedData;
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                allScatterSeriesElements,
+                sheetId,
+                sheetNameResolver,
+                valueContainerName: "yVal");
+            ApplyVerbatimSeriesFormulasIfNeeded(allScatterSeriesElements, sheetId, sheetNameResolver, result);
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
+        }
+
         if (ranges.Count == 0)
         {
             chart = new ChartModel();

@@ -971,29 +971,19 @@ public partial class MainWindow
     // Takes an explicit frozen-row count (THIS window's effective Freeze Panes state --
     // R89-freeze-split-per-window-1) rather than a Sheet, so callers pass viewState.FrozenRows
     // instead of ever falling back to the shared Sheet.FrozenRows.
-    private static int CountScrollableRows(ViewportModel viewport, uint frozenRows)
-    {
-        var count = 0;
-        foreach (var row in viewport.RowMetrics)
-        {
-            if (row.Row > frozenRows)
-                count++;
-        }
+    //
+    // Delegates to the guarded FreeX.Core.Calc.ViewportService.CountScrollableRows (R110), which
+    // excludes the zero-height RowMetric placeholders PrependScrolledPastMergeAnchorRows inserts
+    // for a merge anchor that has scrolled above the window. A naive `row.Row > frozenRows` count
+    // (this method's previous body) counted those placeholders too, inflating both the scrollbar's
+    // ViewportSize/LargeChange and the Page Up/Down jump distance by one row per placeholder
+    // whenever the viewport had scrolled into a tall merge -- real Excel's Page Up/Down always
+    // jumps by exactly one screenful of genuinely on-screen rows.
+    private static int CountScrollableRows(ViewportModel viewport, uint frozenRows) =>
+        Math.Max(1, ViewportService.CountScrollableRows(viewport.RowMetrics, frozenRows));
 
-        return Math.Max(1, count);
-    }
-
-    private static int CountScrollableColumns(ViewportModel viewport, uint frozenCols)
-    {
-        var count = 0;
-        foreach (var column in viewport.ColMetrics)
-        {
-            if (column.Col > frozenCols)
-                count++;
-        }
-
-        return Math.Max(1, count);
-    }
+    private static int CountScrollableColumns(ViewportModel viewport, uint frozenCols) =>
+        Math.Max(1, ViewportService.CountScrollableColumns(viewport.ColMetrics, frozenCols));
 
     public static (uint TopRow, uint LeftCol) CalculateViewportOrigin(
         Sheet? sheet,

@@ -54,6 +54,35 @@ public static partial class XlsxChartPartReader
             seriesIndex++;
         }
 
+        // R110-io-chart-series-embedded-pie: mirrors XlsxChartPartReader.Bar.cs's TryReadBarChart
+        // fallback — when all val/cat formulas are named ranges or all cross-sheet cell refs,
+        // `ranges` stays empty and this function used to unconditionally return false, silently
+        // dropping the whole Pie/Doughnut/3D-Pie chart from the workbook on load.
+        var allPieSeriesElements = pieFamilyChart.Elements(ChartNs + "ser").ToList();
+        var pieEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(allPieSeriesElements, sheetId)
+                              ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(allPieSeriesElements, sheetId, sheetNameResolver);
+        if (pieEmbeddedData is not null)
+        {
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
+            result.FirstRowIsHeader = hasTitleRange;
+            result.FirstColIsCategories = hasCategoryRange;
+            result.EmbeddedSeriesData = pieEmbeddedData;
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                allPieSeriesElements,
+                sheetId,
+                sheetNameResolver);
+            ApplyVerbatimSeriesFormulasIfNeeded(allPieSeriesElements, sheetId, sheetNameResolver, result);
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
+        }
+
         if (ranges.Count == 0)
         {
             chart = new ChartModel();
@@ -145,6 +174,38 @@ public static partial class XlsxChartPartReader
             XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
             XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
             seriesIndex++;
+        }
+
+        // R110-io-chart-series-embedded-bubble: mirrors XlsxChartPartReader.Bar.cs's TryReadBarChart
+        // fallback — a Bubble series carries its point data in <c:xVal>/<c:yVal> instead of
+        // <c:cat>/<c:val>, so the embedded-data helpers are called with "yVal"/"xVal" as the
+        // value/category container names (matching TryReadSeriesValueColumn/DetectSeriesInRows
+        // below, which already override the default "val" container the same way for Bubble).
+        var allBubbleSeriesElements = bubbleChart.Elements(ChartNs + "ser").ToList();
+        var bubbleEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(
+                                     allBubbleSeriesElements, sheetId, valueContainerName: "yVal", categoryContainerName: "xVal")
+                                 ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(
+                                     allBubbleSeriesElements, sheetId, sheetNameResolver, valueContainerName: "yVal", categoryContainerName: "xVal");
+        if (bubbleEmbeddedData is not null)
+        {
+            var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;
+            result.DataRange = ranges.Count > 0
+                ? XlsxChartSeriesRangeReader.UnionRanges(ranges)
+                : new GridRange(
+                    new CellAddress(placeholderSheet, 1, 1),
+                    new CellAddress(placeholderSheet, 1, 1));
+            result.FirstRowIsHeader = hasTitleRange;
+            result.EmbeddedSeriesData = bubbleEmbeddedData;
+            result.SeriesInRows = XlsxChartSeriesRangeReader.DetectSeriesInRows(
+                allBubbleSeriesElements,
+                sheetId,
+                sheetNameResolver,
+                valueContainerName: "yVal");
+            ApplyVerbatimSeriesFormulasIfNeeded(allBubbleSeriesElements, sheetId, sheetNameResolver, result);
+            XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+            XlsxChartSanitizer.SanitizeLoadedChart(result);
+            chart = result;
+            return true;
         }
 
         if (ranges.Count == 0)

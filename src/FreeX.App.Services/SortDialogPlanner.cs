@@ -15,6 +15,14 @@ public sealed record SortOnChoice(string Label);
 
 public sealed record SortColorChoice(string Label);
 
+/// <summary>
+/// A single "Sort On: Cell Icon" choice, mirroring <see cref="SortColorChoice"/>. The label is an
+/// opaque "IconSet:IconId" token (e.g. "3Arrows:2"), not localized text -- the host UI renders the
+/// actual icon swatch, exactly as <see cref="SortColorChoice"/> renders a color swatch rather than
+/// text for its hex-string label.
+/// </summary>
+public sealed record SortIconChoice(string Label);
+
 public sealed record SortDialogOptions(
     bool CaseSensitive = false,
     bool LeftToRight = false,
@@ -29,7 +37,11 @@ public sealed record SortDialogPlannerText(
     string OrderOnTop,
     string OrderOnBottom,
     string ColumnLabelFormat,
-    string RowLabelFormat)
+    string RowLabelFormat,
+    // Appended (not inserted above) with a default value so every existing positional call site
+    // (WPF SortDialog.Types.cs, Avalonia MainWindow.cs, ...) keeps compiling unchanged; hosts that
+    // want to surface "Sort On: Cell Icon" pass this explicitly once they wire the combo entry.
+    string SortOnCellIcon = "Cell Icon")
 {
     public static SortDialogPlannerText Default { get; } = new(
         "Cell Values",
@@ -40,7 +52,8 @@ public sealed record SortDialogPlannerText(
         "On Top",
         "On Bottom",
         "Column {0}",
-        "Row {0}");
+        "Row {0}",
+        "Cell Icon");
 
     public string FormatColumnLabel(string columnName) =>
         string.Format(CultureInfo.CurrentCulture, ColumnLabelFormat, columnName);
@@ -55,7 +68,9 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
     private bool _ascending;
     private string _sortOn;
     private string _targetColor = "";
+    private string _targetIcon = "";
     private IReadOnlyList<SortColorChoice> _colorChoices = [new SortColorChoice("")];
+    private IReadOnlyList<SortIconChoice> _iconChoices = [new SortIconChoice("")];
     private SortDialogPlannerText _text;
 
     public SortDialogLevel(uint columnOffset, bool ascending, SortDialogPlannerText? text = null)
@@ -96,10 +111,18 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
         set => SetField(ref _targetColor, value);
     }
 
+    public string TargetIcon
+    {
+        get => _targetIcon;
+        set => SetField(ref _targetIcon, value);
+    }
+
     public IReadOnlyList<SortDirectionChoice> OrderChoices =>
         SortDialogPlanner.BuildOrderChoices(SortOn, _text);
 
     public IReadOnlyList<SortColorChoice> ColorChoices => _colorChoices;
+
+    public IReadOnlyList<SortIconChoice> IconChoices => _iconChoices;
 
     internal SortDialogPlannerText Text => _text;
 
@@ -108,11 +131,12 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
         ColumnOffset == other.ColumnOffset &&
         Ascending == other.Ascending &&
         string.Equals(SortOn, other.SortOn, StringComparison.Ordinal) &&
-        string.Equals(TargetColor, other.TargetColor, StringComparison.OrdinalIgnoreCase);
+        string.Equals(TargetColor, other.TargetColor, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(TargetIcon, other.TargetIcon, StringComparison.Ordinal);
 
     public override bool Equals(object? obj) => Equals(obj as SortDialogLevel);
 
-    public override int GetHashCode() => HashCode.Combine(ColumnOffset, Ascending, SortOn, TargetColor.ToUpperInvariant());
+    public override int GetHashCode() => HashCode.Combine(ColumnOffset, Ascending, SortOn, TargetColor.ToUpperInvariant(), TargetIcon);
 
     public override string ToString() => $"Column offset {ColumnOffset}, {(Ascending ? "Ascending" : "Descending")}";
 
@@ -125,11 +149,21 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
         OnPropertyChanged(nameof(ColorChoices));
     }
 
+    public void SetIconChoices(IReadOnlyList<SortIconChoice> iconChoices)
+    {
+        _iconChoices = iconChoices.Count == 0 ? [new SortIconChoice("")] : iconChoices;
+        if (!string.IsNullOrWhiteSpace(TargetIcon) &&
+            !_iconChoices.Any(choice => string.Equals(choice.Label, TargetIcon, StringComparison.Ordinal)))
+            TargetIcon = "";
+        OnPropertyChanged(nameof(IconChoices));
+    }
+
     internal void SetPlannerText(SortDialogPlannerText text)
     {
         var previousCellValuesLabel = _text.SortOnCellValues;
         var previousCellColorLabel = _text.SortOnCellColor;
         var previousFontColorLabel = _text.SortOnFontColor;
+        var previousCellIconLabel = _text.SortOnCellIcon;
         _text = text;
 
         if (string.Equals(SortOn, previousCellValuesLabel, StringComparison.Ordinal))
@@ -138,6 +172,8 @@ public sealed class SortDialogLevel : IEquatable<SortDialogLevel>, INotifyProper
             SortOn = text.SortOnCellColor;
         else if (string.Equals(SortOn, previousFontColorLabel, StringComparison.Ordinal))
             SortOn = text.SortOnFontColor;
+        else if (string.Equals(SortOn, previousCellIconLabel, StringComparison.Ordinal))
+            SortOn = text.SortOnCellIcon;
         else
             OnPropertyChanged(nameof(OrderChoices));
     }
@@ -167,7 +203,12 @@ public static class SortDialogPlanner
         foreach (var level in normalized)
         {
             var sortOn = SortOnFromLabel(level.SortOn, resolvedText);
-            keys.Add(new CoreSortKey(level.ColumnOffset, level.Ascending, sortOn, TargetColorFromText(level.TargetColor, sortOn)));
+            keys.Add(new CoreSortKey(
+                level.ColumnOffset,
+                level.Ascending,
+                sortOn,
+                TargetColorFromText(level.TargetColor, sortOn),
+                TargetIcon: TargetIconFromText(level.TargetIcon, sortOn)));
         }
 
         return keys;
@@ -196,7 +237,7 @@ public static class SortDialogPlanner
         SortDialogPlannerText? text = null)
     {
         var resolvedText = ResolveText(text);
-        return SortOnFromLabel(sortOn, resolvedText) is SortOn.CellColor or SortOn.FontColor
+        return SortOnFromLabel(sortOn, resolvedText) is SortOn.CellColor or SortOn.FontColor or SortOn.CellIcon
             ? BuildColorDirectionChoices(resolvedText)
             : BuildDirectionChoices(resolvedText);
     }
@@ -274,6 +315,8 @@ public static class SortDialogPlanner
             };
             replacement.SetColorChoices(existing.ColorChoices);
             replacement.TargetColor = existing.TargetColor;
+            replacement.SetIconChoices(existing.IconChoices);
+            replacement.TargetIcon = existing.TargetIcon;
             updated[index] = replacement;
         }
 
@@ -430,6 +473,59 @@ public static class SortDialogPlanner
         };
     }
 
+    /// <summary>
+    /// Scans the single column (<paramref name="columnOffset"/>, relative to
+    /// <paramref name="range"/>.Start.Col) that a "Sort On: Cell Icon" level actually targets for
+    /// the icon-set icon each data cell resolves to (via <see cref="SortCommand.GetEffectiveIcon"/>,
+    /// the same effective-icon resolution <see cref="FreeX.Core.Commands.SortCommand"/> uses when it
+    /// actually sorts), mirroring <see cref="BuildColorChoices(Workbook, Sheet, GridRange, SortOn, uint, bool)"/>'s
+    /// per-level color-swatch scan. The header row is excluded when <paramref name="hasHeaders"/> is
+    /// set. Each choice's <see cref="SortIconChoice.Label"/> is an opaque "IconSet:IconId" token that
+    /// round-trips through <see cref="BuildSortKeys"/> back into a <see cref="CfIconOverride"/> target.
+    /// </summary>
+    public static IReadOnlyList<SortIconChoice> BuildIconChoices(
+        Workbook workbook,
+        Sheet? sheet,
+        GridRange range,
+        uint columnOffset,
+        bool hasHeaders)
+    {
+        if (sheet is null)
+            return [new SortIconChoice("")];
+
+        var col = range.Start.Col + columnOffset;
+        if (col > range.End.Col)
+            return [new SortIconChoice("")];
+
+        var columnRange = new GridRange(
+            new CellAddress(range.Start.Sheet, range.Start.Row, col),
+            new CellAddress(range.Start.Sheet, range.End.Row, col));
+        var dataRange = ExcludeHeaderRow(columnRange, hasHeaders);
+
+        var icons = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var address in dataRange.AllCells())
+        {
+            var icon = SortCommand.GetEffectiveIcon(workbook, sheet, address, sheet.GetCell(address));
+            if (icon is { } resolvedIcon)
+                icons.Add(FormatIconToken(resolvedIcon));
+        }
+
+        var choices = new List<SortIconChoice>(icons.Count + 1) { new("") };
+        foreach (var icon in icons)
+            choices.Add(new SortIconChoice(icon));
+        return choices;
+    }
+
+    public static IReadOnlyList<SortIconChoice> BuildIconChoicesForSortOn(
+        string? sortOn,
+        IReadOnlyList<SortIconChoice> iconChoices,
+        SortDialogPlannerText? text = null)
+    {
+        return SortOnFromLabel(sortOn, text) == SortOn.CellIcon
+            ? iconChoices
+            : [new SortIconChoice("")];
+    }
+
     public static GridRange ExcludeHeaderRow(GridRange range, bool hasHeaders)
     {
         if (!hasHeaders || range.Start.Row >= range.End.Row)
@@ -449,6 +545,8 @@ public static class SortDialogPlanner
                 string.Equals(value, SortDialogPlannerText.Default.SortOnCellColor, StringComparison.Ordinal) => SortOn.CellColor,
             var value when string.Equals(value, resolvedText.SortOnFontColor, StringComparison.Ordinal) ||
                 string.Equals(value, SortDialogPlannerText.Default.SortOnFontColor, StringComparison.Ordinal) => SortOn.FontColor,
+            var value when string.Equals(value, resolvedText.SortOnCellIcon, StringComparison.Ordinal) ||
+                string.Equals(value, SortDialogPlannerText.Default.SortOnCellIcon, StringComparison.Ordinal) => SortOn.CellIcon,
             _ => SortOn.CellValues
         };
     }
@@ -513,6 +611,8 @@ public static class SortDialogPlanner
         };
         clone.SetColorChoices(level.ColorChoices);
         clone.TargetColor = level.TargetColor;
+        clone.SetIconChoices(level.IconChoices);
+        clone.TargetIcon = level.TargetIcon;
         return clone;
     }
 
@@ -560,6 +660,39 @@ public static class SortDialogPlanner
             return null;
 
         return TryParseColorText(text ?? "", out var color) ? color : null;
+    }
+
+    private static CfIconOverride? TargetIconFromText(string? text, SortOn sortOn)
+    {
+        if (sortOn != SortOn.CellIcon)
+            return null;
+
+        return TryParseIconToken(text ?? "");
+    }
+
+    private static string FormatIconToken(CfIconOverride icon) => $"{icon.IconSet}:{icon.IconId}";
+
+    /// <summary>
+    /// Parses a "IconSet:IconId" token produced by <see cref="FormatIconToken"/> /
+    /// <see cref="BuildIconChoices"/> back into a <see cref="CfIconOverride"/>. Returns
+    /// <see langword="null"/> for the empty "(none)" choice or any malformed token, mirroring
+    /// <see cref="TryParseColorText"/>'s "unrecognized text means no target" behavior.
+    /// </summary>
+    private static CfIconOverride? TryParseIconToken(string text)
+    {
+        var normalized = text.Trim();
+        if (normalized.Length == 0)
+            return null;
+
+        var separatorIndex = normalized.LastIndexOf(':');
+        if (separatorIndex <= 0 || separatorIndex == normalized.Length - 1)
+            return null;
+
+        var iconSet = normalized[..separatorIndex];
+        var iconIdText = normalized[(separatorIndex + 1)..];
+        return int.TryParse(iconIdText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var iconId) && iconId >= 0
+            ? new CfIconOverride(iconSet, iconId)
+            : null;
     }
 
     private static bool TryParseColorText(string text, out CellColor color)

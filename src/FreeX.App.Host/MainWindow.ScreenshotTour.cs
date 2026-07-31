@@ -2312,7 +2312,10 @@ public partial class MainWindow
             rowChoices: SortDialog.BuildRowChoices(context.SortRange),
             colorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange),
             cellColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.CellColor),
-            fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.FontColor))
+            fontColorChoices: SortDialog.BuildColorChoices(_workbook, sheet, context.SortRange, SortOn.FontColor),
+            iconWorkbook: _workbook,
+            iconSheet: sheet,
+            iconRange: context.SortRange)
         {
             Owner = this
         };
@@ -8134,7 +8137,10 @@ public partial class MainWindow
                 rowChoices: SortDialog.BuildRowChoices(context.TableRange),
                 colorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange),
                 cellColorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.CellColor),
-                fontColorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.FontColor))
+                fontColorChoices: SortDialog.BuildColorChoices(_workbook, context.Sheet, context.TableRange, SortOn.FontColor),
+                iconWorkbook: _workbook,
+                iconSheet: context.Sheet,
+                iconRange: context.TableRange)
             {
                 Owner = this
             };

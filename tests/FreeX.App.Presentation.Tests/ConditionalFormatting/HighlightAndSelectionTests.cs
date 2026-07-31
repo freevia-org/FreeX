@@ -68,4 +68,71 @@ public sealed class HighlightAndSelectionTests
 
         ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 5, stats).Should().BeFalse();
     }
+
+    // R110_: print/PDF's portable evaluator must honor Excel's "Equal or Above/Below Average" and
+    // "N standard deviations above/below average" AboveAverage variants exactly like the on-screen
+    // grid engine (ViewportConditionalFormatEvaluator.MatchesAboveAverage), not just the plain
+    // average comparison.
+
+    [Fact]
+    public void R110_EqualAverage_IncludesValuesEqualToTheMean()
+    {
+        var rule = new ConditionalFormat { RuleType = CfRuleType.AboveAverage, AboveAverage = true, EqualAverage = true };
+        var stats = ConditionalFormatStatistics.FromValues([1, 2, 3, 4, 5]); // avg = 3
+
+        // Plain (non-equal) AboveAverage excludes the mean itself -- EqualAverage must include it.
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 3, stats).Should().BeTrue();
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 2, stats).Should().BeFalse();
+    }
+
+    [Fact]
+    public void R110_EqualAverage_BelowVariant_IncludesValuesEqualToTheMean()
+    {
+        var rule = new ConditionalFormat { RuleType = CfRuleType.AboveAverage, AboveAverage = false, EqualAverage = true };
+        var stats = ConditionalFormatStatistics.FromValues([1, 2, 3, 4, 5]); // avg = 3
+
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 3, stats).Should().BeTrue();
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 4, stats).Should().BeFalse();
+    }
+
+    [Fact]
+    public void R110_StdDevCount_ShiftsThresholdByNStandardDeviationsAboveMean()
+    {
+        // [2, 4, 4, 4, 5, 5, 7, 9] has mean 5, sample stdDev 2.138 (STDEV semantics).
+        var values = new double[] { 2, 4, 4, 4, 5, 5, 7, 9 };
+        var stats = ConditionalFormatStatistics.FromValues(values);
+        stats.StdDev.Should().BeApproximately(2.13809, 0.0001);
+
+        var rule = new ConditionalFormat { RuleType = CfRuleType.AboveAverage, AboveAverage = true, StdDevCount = 1 };
+        // threshold = 5 + 1*2.13809 = 7.138 -- 9 clears it, 7 does not (plain AboveAverage(>5)
+        // would wrongly select 7 too).
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 9, stats).Should().BeTrue();
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 7, stats).Should().BeFalse();
+    }
+
+    [Fact]
+    public void R110_StdDevCount_ShiftsThresholdByNStandardDeviationsBelowMean()
+    {
+        var values = new double[] { 2, 4, 4, 4, 5, 5, 7, 9 };
+        var stats = ConditionalFormatStatistics.FromValues(values);
+
+        var rule = new ConditionalFormat { RuleType = CfRuleType.AboveAverage, AboveAverage = false, StdDevCount = 1 };
+        // threshold = 5 - 2.138 = 2.862 -- 2 clears it, 4 does not (plain BelowAverage(<5)
+        // would wrongly select 4 too).
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 2, stats).Should().BeTrue();
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 4, stats).Should().BeFalse();
+    }
+
+    [Fact]
+    public void R110_StdDevCount_SinglePointRange_FallsBackToPlainAverageComparison()
+    {
+        // Fewer than 2 numeric points => no variance => stdDev is 0 => threshold collapses to the
+        // plain average, matching the engine's fallback for an unavailable stdDev.
+        var stats = ConditionalFormatStatistics.FromValues([5]);
+        stats.StdDev.Should().Be(0);
+
+        var rule = new ConditionalFormat { RuleType = CfRuleType.AboveAverage, AboveAverage = true, StdDevCount = 2 };
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 6, stats).Should().BeTrue();
+        ConditionalFormatEvaluator.MatchesAboveBelowAverage(rule, 5, stats).Should().BeFalse();
+    }
 }

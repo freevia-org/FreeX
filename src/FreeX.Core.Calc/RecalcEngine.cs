@@ -104,6 +104,12 @@ public sealed class RecalcEngine
     /// <summary>Test-only: current dependency-plan cache dictionary entry count.</summary>
     internal int DependencyPlanCacheCountForTests => _dependencyPlanCache.Count;
 
+    /// <summary>Test-only: current anchor-&gt;dependents forward-map entry count (see <see cref="_anchorArraySpillDependents"/>).</summary>
+    internal int AnchorArraySpillDependentsCountForTests => _anchorArraySpillDependents.Count;
+
+    /// <summary>Test-only: current dependent-&gt;anchors reverse-map entry count (see <see cref="_anchorArraySpillDependentAnchors"/>).</summary>
+    internal int AnchorArraySpillDependentAnchorsCountForTests => _anchorArraySpillDependentAnchors.Count;
+
     /// <summary>Test-only: current dependency-plan cache FIFO order queue entry count.</summary>
     internal int DependencyPlanCacheOrderCountForTests => _dependencyPlanCacheOrder.Count;
 
@@ -1346,6 +1352,70 @@ public sealed class RecalcEngine
     }
 
     /// <summary>
+    /// Purge every <see cref="_anchorArraySpillDependents"/>/<see cref="_anchorArraySpillDependentAnchors"/>
+    /// entry that references one of <paramref name="sheetIds"/> from either side, so a closed
+    /// workbook's (or a since-deleted sheet's) ANCHORARRAY(anchor,end) spill-union bookkeeping does
+    /// not leak in this shared, app-lifetime engine forever -- see <see cref="PurgeSheetsFromSharedState"/>.
+    /// Two independent scans are needed: a dependent formula cell can live on a retired sheet while
+    /// its anchor lives elsewhere (or vice versa), so purging only one direction would leave the
+    /// other side's stale CellAddress reachable from a surviving workbook's live recalc.
+    /// </summary>
+    private void PurgeAnchorArraySpillTrackingForSheets(HashSet<SheetId> sheetIds)
+    {
+        // Dependents (formula cells) whose own sheet is retired: fully clear their tracking, which
+        // also removes them from whichever anchors' forward-map sets they were registered under
+        // (including anchors on sheets NOT in sheetIds).
+        if (_anchorArraySpillDependentAnchors.Count > 0)
+        {
+            List<CellAddress>? retiredDependents = null;
+            foreach (var dependent in _anchorArraySpillDependentAnchors.Keys)
+            {
+                if (sheetIds.Contains(dependent.Sheet))
+                    (retiredDependents ??= []).Add(dependent);
+            }
+
+            if (retiredDependents is not null)
+            {
+                foreach (var dependent in retiredDependents)
+                    ClearAnchorArraySpillTracking(dependent);
+            }
+        }
+
+        // Anchors whose own sheet is retired: drop the forward-map entry, and scrub this now-gone
+        // anchor out of the reverse map's list for any surviving dependent (a dependent can outlive
+        // its anchor when only the anchor's sheet -- not the dependent's -- is being purged, e.g.
+        // R95-calc-deleted-sheet-leak's partial-workbook Delete Sheet path).
+        if (_anchorArraySpillDependents.Count == 0)
+            return;
+
+        List<CellAddress>? retiredAnchors = null;
+        foreach (var anchor in _anchorArraySpillDependents.Keys)
+        {
+            if (sheetIds.Contains(anchor.Sheet))
+                (retiredAnchors ??= []).Add(anchor);
+        }
+
+        if (retiredAnchors is null)
+            return;
+
+        foreach (var anchor in retiredAnchors)
+        {
+            if (!_anchorArraySpillDependents.Remove(anchor, out var dependents))
+                continue;
+
+            foreach (var dependent in dependents)
+            {
+                if (!_anchorArraySpillDependentAnchors.TryGetValue(dependent, out var anchorList))
+                    continue;
+
+                anchorList.Remove(anchor);
+                if (anchorList.Count == 0)
+                    _anchorArraySpillDependentAnchors.Remove(dependent);
+            }
+        }
+    }
+
+    /// <summary>
     /// If <paramref name="anchorCell"/> is itself the anchor of one or more live
     /// ANCHORARRAY(anchor,end) spill-union dependencies (<see cref="_anchorArraySpillDependents"/>),
     /// re-run <see cref="RegisterFormulaDependencies"/> for each of those dependents so their
@@ -1761,10 +1831,11 @@ public sealed class RecalcEngine
     /// <summary>
     /// Shared purge of every SheetId-keyed piece of this engine's shared state for the given
     /// sheets: dependency graph edges, volatile-cell registrations, spill-blocked anchors,
-    /// non-iterative/active-iterative cyclic-cell markers, and cached dependency plans (plus their
-    /// FIFO eviction-order companion queue). Used both by <see cref="RetireWorkbook"/> (a whole
-    /// workbook's sheets, at close) and by <see cref="RebuildFormulaDependencies"/> (just the
-    /// sheets that dropped out of a still-open workbook since its last call).
+    /// non-iterative/active-iterative cyclic-cell markers, ANCHORARRAY spill-union anchor/dependent
+    /// tracking, and cached dependency plans (plus their FIFO eviction-order companion queue). Used
+    /// both by <see cref="RetireWorkbook"/> (a whole workbook's sheets, at close) and by
+    /// <see cref="RebuildFormulaDependencies"/> (just the sheets that dropped out of a still-open
+    /// workbook since its last call).
     /// </summary>
     private void PurgeSheetsFromSharedState(HashSet<SheetId> sheetIds)
     {
@@ -1776,6 +1847,7 @@ public sealed class RecalcEngine
         _spillBlockedAnchors.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
         _cyclicCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
         _activeIterativeCyclicCells.RemoveWhere(cell => sheetIds.Contains(cell.Sheet));
+        PurgeAnchorArraySpillTrackingForSheets(sheetIds);
 
         if (_dependencyPlanCache.Count == 0)
             return;

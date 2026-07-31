@@ -357,7 +357,13 @@ public static class ConditionalFormatEvaluator
     }
 
     /// <summary>True when the value is above (or, when <see cref="ConditionalFormat.AboveAverage"/>
-    /// is false, below) the range average.</summary>
+    /// is false, below) the range average. Honors <see cref="ConditionalFormat.EqualAverage"/>
+    /// (Excel's "Equal or Above/Below Average" variant, which turns the comparison into &gt;=/&lt;=)
+    /// and <see cref="ConditionalFormat.StdDevCount"/> (Excel's "N standard deviations
+    /// above/below average" variant, which shifts the threshold to <c>average ± N * stdDev</c>
+    /// instead of the plain average). Mirrors
+    /// <c>ViewportConditionalFormatEvaluator.MatchesAboveAverage</c>, the engine this is a portable
+    /// port of, so printed/exported output matches the on-screen grid.</summary>
     public static bool MatchesAboveBelowAverage(ConditionalFormat rule, double cellValue, ConditionalFormatStatistics stats)
     {
         ArgumentNullException.ThrowIfNull(rule);
@@ -366,7 +372,15 @@ public static class ConditionalFormatEvaluator
         if (!double.IsFinite(cellValue) || stats.Count == 0)
             return false;
 
-        return rule.AboveAverage ? cellValue > stats.Average : cellValue < stats.Average;
+        var threshold = stats.Average;
+        if (rule.StdDevCount is { } n && n > 0)
+            threshold = rule.AboveAverage
+                ? stats.Average + n * stats.StdDev
+                : stats.Average - n * stats.StdDev;
+
+        return rule.AboveAverage
+            ? (rule.EqualAverage ? cellValue >= threshold : cellValue > threshold)
+            : (rule.EqualAverage ? cellValue <= threshold : cellValue < threshold);
     }
 
     private static bool ResolveThreshold(

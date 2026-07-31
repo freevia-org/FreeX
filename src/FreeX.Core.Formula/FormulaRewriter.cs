@@ -6,9 +6,17 @@ namespace FreeX.Core.Formula;
 
 public abstract record RewriteOperation;
 public sealed record InsertRowsOp(string SheetName, uint BeforeRow, uint Count) : RewriteOperation;
-public sealed record DeleteRowsOp(string SheetName, uint StartRow,  uint Count) : RewriteOperation;
+// DeletedTableNames: structured tables hosted on SheetName whose entire Range fell inside the
+// deleted band [StartRow, StartRow+Count-1] -- a row delete that fully consumes a table's range is
+// exactly as destructive to the table's identity as deleting its host sheet (see
+// RowColumnShiftHelpers.ShiftStructuredTables), so any remaining Table[...] structured reference to
+// it must collapse to #REF!, mirroring DeleteSheetOp.DeletedTableNames below. Optional/defaulted so
+// existing callers that only rewrite cell/range refs keep compiling unchanged.
+public sealed record DeleteRowsOp(string SheetName, uint StartRow,  uint Count, IReadOnlyList<string>? DeletedTableNames = null) : RewriteOperation;
 public sealed record InsertColsOp(string SheetName, uint BeforeCol, uint Count) : RewriteOperation;
-public sealed record DeleteColsOp(string SheetName, uint StartCol,  uint Count) : RewriteOperation;
+// DeletedTableNames: same as DeleteRowsOp.DeletedTableNames above, for a column delete that fully
+// consumes a table's range.
+public sealed record DeleteColsOp(string SheetName, uint StartCol,  uint Count, IReadOnlyList<string>? DeletedTableNames = null) : RewriteOperation;
 public sealed record PasteOffsetOp(int RowDelta, int ColDelta)                  : RewriteOperation;
 // Transpose paste: a relative reference's (row,col) offset from the COPIED block's own anchor
 // (SourceAnchorRow/Col) is axis-swapped and re-anchored at the DESTINATION block's anchor
@@ -192,18 +200,18 @@ public static class FormulaRewriter
     private static FormulaNode RewriteStructuredReference(
         StructuredReferenceNode sr, RewriteOperation op, ref bool changed)
     {
-        if (op is DeleteSheetOp delSheet)
+        // The table's own host sheet was deleted, or a row/column delete fully consumed the
+        // table's range -- either way the table no longer exists anywhere in the workbook, so
+        // every remaining Table[...] reference to it is exactly as dead as a deleted defined
+        // name, and Excel shows #REF! (never #NAME?) for that case.
+        if (!string.IsNullOrEmpty(sr.TableName) && MatchesDeletedTable(sr.TableName, op))
         {
-            // The table's own host sheet was deleted, so it no longer exists anywhere in the
-            // workbook -- every remaining Table[...] reference to it is exactly as dead as a
-            // deleted defined name, and Excel shows #REF! (never #NAME?) for that case.
-            if (!string.IsNullOrEmpty(sr.TableName) && MatchesDeletedTable(sr.TableName, delSheet))
-            {
-                changed = true;
-                return new ErrorNode(ErrorValue.Ref);
-            }
-            return sr;
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
         }
+
+        if (op is DeleteSheetOp or DeleteRowsOp or DeleteColsOp)
+            return sr;
 
         if (op is not RenameTableOp rename ||
             string.IsNullOrEmpty(sr.TableName) ||
@@ -219,15 +227,14 @@ public static class FormulaRewriter
     private static FormulaNode RewriteStructuredCurrentRowReference(
         StructuredCurrentRowReferenceNode scr, RewriteOperation op, ref bool changed)
     {
-        if (op is DeleteSheetOp delSheet)
+        if (!string.IsNullOrEmpty(scr.TableName) && MatchesDeletedTable(scr.TableName, op))
         {
-            if (!string.IsNullOrEmpty(scr.TableName) && MatchesDeletedTable(scr.TableName, delSheet))
-            {
-                changed = true;
-                return new ErrorNode(ErrorValue.Ref);
-            }
-            return scr;
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
         }
+
+        if (op is DeleteSheetOp or DeleteRowsOp or DeleteColsOp)
+            return scr;
 
         if (op is not RenameTableOp rename ||
             string.IsNullOrEmpty(scr.TableName) ||
@@ -240,12 +247,24 @@ public static class FormulaRewriter
         return scr with { TableName = rename.NewTableName };
     }
 
-    private static bool MatchesDeletedTable(string tableName, DeleteSheetOp op)
+    // Shared by both the DeleteSheetOp case (table's whole host sheet removed) and the
+    // DeleteRowsOp/DeleteColsOp case (a row/column delete fully consumed the table's range,
+    // freeing its name workbook-wide the same way -- see RowColumnShiftHelpers.ShiftStructuredTables).
+    // Every other op carries no DeletedTableNames and so never matches.
+    private static bool MatchesDeletedTable(string tableName, RewriteOperation op)
     {
-        if (op.DeletedTableNames is null)
+        var deletedTableNames = op switch
+        {
+            DeleteSheetOp delSheet => delSheet.DeletedTableNames,
+            DeleteRowsOp delRows   => delRows.DeletedTableNames,
+            DeleteColsOp delCols   => delCols.DeletedTableNames,
+            _ => null
+        };
+
+        if (deletedTableNames is null)
             return false;
 
-        foreach (var deletedTable in op.DeletedTableNames)
+        foreach (var deletedTable in deletedTableNames)
         {
             if (string.Equals(deletedTable, tableName, StringComparison.OrdinalIgnoreCase))
                 return true;

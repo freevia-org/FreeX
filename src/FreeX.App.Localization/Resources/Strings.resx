@@ -12364,6 +12364,12 @@ Saved PDF file:&#xD;
   <data name="Sort_Color" xml:space="preserve">
     <value>Color</value>
   </data>
+  <data name="Sort_Icon" xml:space="preserve">
+    <value>Icon</value>
+  </data>
+  <data name="Sort_SortOnCellIcon" xml:space="preserve">
+    <value>Cell Icon</value>
+  </data>
   <data name="PivotFieldFilter_OpenPivotTableLabelFilterDialog" xml:space="preserve">
     <value>Open PivotTable label filter dialog</value>
   </data>

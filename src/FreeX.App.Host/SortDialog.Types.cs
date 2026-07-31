@@ -13,12 +13,14 @@ public sealed partial class SortDialog
         UiText.Get("Sort_OrderOnTop"),
         UiText.Get("Sort_OrderOnBottom"),
         UiText.Get("Sort_ColumnLabel"),
-        UiText.Get("Sort_RowLabel"));
+        UiText.Get("Sort_RowLabel"),
+        UiText.Get("Sort_SortOnCellIcon"));
 
     private static IReadOnlyList<SortOnChoice> SortOnChoices =>
         [
             new(PlannerText.SortOnCellValues),
             new(PlannerText.SortOnCellColor),
-            new(PlannerText.SortOnFontColor)
+            new(PlannerText.SortOnFontColor),
+            new(PlannerText.SortOnCellIcon)
         ];
 }

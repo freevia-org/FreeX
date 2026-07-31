@@ -1135,7 +1135,12 @@ internal static class XlsxWorksheetChartWriter
             index++;
         }
 
-        return new MarkerAxis(index, Math.Min(remaining, Math.Max(0, defaultSize)));
+        // R110: the walk exhausted every column/row (e.g. because most of the sheet is hidden,
+        // so remaining pixel distance never fit within a visible column/row). `index` is now
+        // `maxIndex`, one past Excel's real zero-based ceiling (16383 columns / 1048575 rows) --
+        // matching XlsxDrawingAnchorApplier's read-side MaxColumnIndexZeroBased/MaxRowIndexZeroBased.
+        // Clamp so we never write an out-of-range <xdr:col>/<xdr:row> that Excel would reject/repair.
+        return new MarkerAxis(maxIndex - 1, Math.Min(remaining, Math.Max(0, defaultSize)));
     }
 
     private readonly record struct MarkerAxis(uint Index, double Offset);

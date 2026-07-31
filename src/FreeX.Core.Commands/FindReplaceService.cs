@@ -235,6 +235,7 @@ public static class FindReplaceService
                     comparison,
                     matchEntireCell,
                     options.LookIn,
+                    replacementFormat is not null,
                     out var newCell,
                     workbook))
             {
@@ -305,7 +306,12 @@ public static class FindReplaceService
         Workbook? workbook = null)
     {
         command = null!;
-        if (string.IsNullOrEmpty(searchText))
+        // A blank "Find what" is only meaningful here when it is paired with a Format criterion
+        // on the Replace side (Excel's format-only Replace: reformat every Find-format match
+        // without touching cell text) -- see TryCreateReplacementCell's allowFormatOnly handling
+        // below. With no replacementFormat, an empty searchText can never build a text
+        // substitution, so bail immediately exactly as before.
+        if (string.IsNullOrEmpty(searchText) && replacementFormat is null)
             return false;
 
         var comparison = matchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
@@ -317,6 +323,7 @@ public static class FindReplaceService
                 comparison,
                 matchEntireCell,
                 lookIn,
+                replacementFormat is not null,
                 out var newCell,
                 workbook))
         {
@@ -370,6 +377,7 @@ public static class FindReplaceService
         StringComparison comparison,
         bool matchEntireCell,
         FindLookIn lookIn,
+        bool allowFormatOnly,
         out Cell newCell,
         Workbook? workbook = null)
     {
@@ -406,9 +414,29 @@ public static class FindReplaceService
             FindLookIn.Values => !cell.HasFormula && workbook is null,
             _ => false
         };
-        if (currentText is null ||
-            !TryCreateReplacementText(currentText, searchText, replaceText, comparison, matchEntireCell, out var newText))
+        if (currentText is null)
             return false;
+
+        string newText;
+        if (string.IsNullOrEmpty(searchText))
+        {
+            // Format-only replace (blank "Find what"/"Replace with" paired with a Format
+            // criterion, see Find()'s RequiredFormat handling): there is no text to substitute --
+            // Find() already matched this cell purely on its format, using an empty searchText
+            // that matches every candidate's text. Pass currentText through unchanged rather than
+            // failing, so the caller still gets a (no-op-value) edit for this address; that edit
+            // is what TryReplaceAll/TryCreateReplacementCommand key their ApplyStyleCommand
+            // (replacementFormat) emission off of. allowFormatOnly is only ever true when the
+            // caller actually has a replacementFormat to apply (see call sites), so this can never
+            // fire for a plain blank search with no format criterion.
+            if (!allowFormatOnly)
+                return false;
+            newText = currentText;
+        }
+        else if (!TryCreateReplacementText(currentText, searchText, replaceText, comparison, matchEntireCell, out newText))
+        {
+            return false;
+        }
 
         if (lookIn == FindLookIn.Formulas && cell.HasFormula)
         {

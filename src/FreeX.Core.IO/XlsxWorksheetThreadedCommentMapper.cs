@@ -534,6 +534,11 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 .GroupBy(comment => comment.ParentId!, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.ToList(), StringComparer.OrdinalIgnoreCase);
 
+            // R110: tracks which repliesByParentId keys got consumed by a matching root below, so
+            // the orphaned-group recovery pass after this loop knows which groups were never
+            // reachable via the root-only enumeration.
+            var matchedParentIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var root in parsedComments.Where(comment => comment.ParentId is null))
             {
                 if (root.Row is not { } row || root.Col is not { } col)
@@ -565,6 +570,62 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     threadedComment = threadedComment with { Replies = replies };
 
                 comments.Add((row, col, threadedComment));
+                if (root.Id is not null)
+                    matchedParentIds.Add(root.Id);
+            }
+
+            // R110: a reply group whose parentId never matched any root's Id in this part is an
+            // orphaned thread -- the root <threadedComment> element is missing (a non-Excel writer,
+            // a hand-edit, or an Excel co-authoring merge conflict can produce this; genuine
+            // desktop-Excel delete flows always remove a thread's root and replies together).
+            // Previously the loop above was the ONLY enumeration path over parsedComments, so any
+            // such group sat unconsumed in repliesByParentId and its text/author/timestamps/mentions
+            // were silently dropped -- and because this runs on LOAD, the very next Save made that
+            // loss permanent (WriteThreadedCommentsPart only re-serializes what reached
+            // Sheet.ThreadedComments). Recover what we can: promote the group's own earliest member
+            // that actually carries a cell address (real Excel replies never carry <ref>; only a
+            // non-standard producer would put one on a "reply") to stand in as a synthetic root, and
+            // keep the remaining members as its replies -- matching how other Excel-ecosystem tools
+            // recover orphaned threads. When no member of the group carries an address there is no
+            // cell to attach the content to at all, so it cannot be represented in the
+            // per-cell-keyed Sheet.ThreadedComments model; surface that loss via a diagnostic instead
+            // of dropping it in total silence.
+            foreach (var (parentId, group) in repliesByParentId)
+            {
+                if (matchedParentIds.Contains(parentId))
+                    continue;
+
+                var anchorIndex = group.FindIndex(candidate => candidate.Row is not null && candidate.Col is not null);
+                if (anchorIndex < 0)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[XlsxWorksheetThreadedCommentMapper] Dropping {group.Count} orphaned threaded comment " +
+                        $"repl{(group.Count == 1 ? "y" : "ies")} with parentId '{parentId}': the root threadedComment " +
+                        "is missing from this part and no member of the reply group carries a cell address to " +
+                        "recover it under.");
+                    continue;
+                }
+
+                var anchor = group[anchorIndex];
+                var remainingReplies = group
+                    .Where((_, index) => index != anchorIndex)
+                    .Select(ToCommentReply)
+                    .ToList();
+
+                var syntheticRoot = new ThreadedComment(anchor.Text, anchor.Author)
+                {
+                    CreatedAtUtc = anchor.TimestampUtc,
+                    ModifiedAtUtc = GetThreadModifiedAt(anchor.TimestampUtc, remainingReplies),
+                    IsResolved = anchor.IsResolved,
+                    Id = anchor.Id,
+                    MentionsXml = anchor.MentionsXml,
+                    SourcePersonId = anchor.SourcePersonId,
+                    MentionedPersonDisplayNames = anchor.MentionedPersonDisplayNames
+                };
+                if (remainingReplies.Count > 0)
+                    syntheticRoot = syntheticRoot with { Replies = remainingReplies };
+
+                comments.Add((anchor.Row!.Value, anchor.Col!.Value, syntheticRoot));
             }
         }
         catch

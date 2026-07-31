@@ -15,12 +15,14 @@ public sealed class ConditionalFormatStatistics
         double min,
         double max,
         double average,
+        double stdDev,
         IReadOnlyList<double> sortedValues)
     {
         Count = count;
         Min = min;
         Max = max;
         Average = average;
+        StdDev = stdDev;
         SortedValues = sortedValues;
     }
 
@@ -36,6 +38,13 @@ public sealed class ConditionalFormatStatistics
     /// <summary>Arithmetic mean of the numeric values, or 0 when the range has no numeric values.</summary>
     public double Average { get; }
 
+    /// <summary>
+    /// Sample standard deviation (STDEV semantics) of the numeric values, or 0 when the range has
+    /// fewer than two numeric values (matching <c>ViewportConditionalFormatEvaluator</c>, the engine
+    /// this mirrors -- there is no variance to speak of with 0 or 1 points).
+    /// </summary>
+    public double StdDev { get; }
+
     /// <summary>Numeric values sorted ascending (for percentile thresholds).</summary>
     public IReadOnlyList<double> SortedValues { get; }
 
@@ -48,6 +57,7 @@ public sealed class ConditionalFormatStatistics
         ArgumentNullException.ThrowIfNull(values);
 
         double sum = 0;
+        double sumSq = 0;
         double min = double.MaxValue;
         double max = double.MinValue;
         var count = 0;
@@ -58,6 +68,7 @@ public sealed class ConditionalFormatStatistics
                 continue;
 
             sum += v;
+            sumSq += v * v;
             if (v < min) min = v;
             if (v > max) max = v;
             sorted.Add(v);
@@ -65,11 +76,19 @@ public sealed class ConditionalFormatStatistics
         }
 
         sorted.Sort();
+        var average = count > 0 ? sum / count : 0;
+        // Sample standard deviation (STDEV semantics), matching
+        // ViewportConditionalFormatEvaluator.PrecomputeAggregates -- the engine this mirrors -- for
+        // Excel's "N standard deviations above/below average" conditional format rule.
+        var stdDev = count > 1
+            ? Math.Sqrt(Math.Max(0, (sumSq - count * average * average) / (count - 1)))
+            : 0;
         return new ConditionalFormatStatistics(
             count,
             count > 0 ? min : 0,
             count > 0 ? max : 0,
-            count > 0 ? sum / count : 0,
+            average,
+            stdDev,
             sorted);
     }
 

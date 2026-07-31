@@ -7165,6 +7165,14 @@ public sealed partial class XlsxFileAdapter
                     if (deletedFormula is not null && deletedFormula.HasAttributes)
                         return false;
 
+                    // Mirror the shared-string bookkeeping RewriteLiteralCellValue performs for the
+                    // overwrite case (R52-io-sst-shared-inline-3-1): a deleted/cleared cell that was a
+                    // t="s" shared-string reference must also count toward sharedStringReferencesRemoved
+                    // so the caller decrements xl/sharedStrings.xml's <sst count="..."> total. Otherwise
+                    // the count is permanently overstated after a Delete-key/clear-contents action.
+                    if (string.Equals(cell.Attribute("t")?.Value, "s", StringComparison.Ordinal))
+                        sharedStringReferencesRemoved++;
+
                     cell.Remove();
                 }
                 else if (change.Kind == XlsxCellValuePatchKind.FormulaTextAndCachedValue)

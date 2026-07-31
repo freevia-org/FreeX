@@ -1352,6 +1352,12 @@ public partial class MainWindow
         IWorkbookCommand CreateCommand()
         {
             var currentRange = SheetGrid.SelectedRange ?? range;
+            // R110-insert-copied-cells-multiarea-1: forward clip.SourceAreas (mirrors the r108 fix
+            // to the plain Ctrl+V path at ExecutePaste above) so the CF/DV carry inside
+            // InsertCopiedCellsPlanner.CreateCommand's PasteCommandFactory call restricts itself to
+            // the ACTUAL copied areas of a multi-area (Ctrl+click) source selection instead of
+            // treating its whole bounding box -- including the untouched gap between disjoint
+            // areas -- as copied.
             return InsertCopiedCellsPlanner.CreateCommand(
                 _workbook,
                 _currentSheetId,
@@ -1359,7 +1365,8 @@ public partial class MainWindow
                 clip.Cells,
                 currentRange,
                 choice,
-                isCut: clip.IsCut);
+                isCut: clip.IsCut,
+                sourceAreas: clip.SourceAreas);
         }
 
         var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);

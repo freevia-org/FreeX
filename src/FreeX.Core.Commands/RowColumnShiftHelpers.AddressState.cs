@@ -1404,6 +1404,40 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
+    // R110-formula-structuredref-rowcoldelete-ref: find the structured tables on `sheet` whose
+    // ENTIRE range would be consumed by a row delete of [startRow, startRow+count-1] -- i.e. the
+    // same "nothing survives" condition ShiftStructuredTables below detects via
+    // AddressShift.ShiftRange(table.Range) returning null. Computed independently (over the
+    // live, not-yet-mutated sheet.StructuredTables) so DeleteRowsCommand.Apply can feed the
+    // result into every FormulaRewriter pass (cell formulas, named formulas, CF/DV rules, chart
+    // verbatim formulas) as DeleteRowsOp.DeletedTableNames -- mirroring how DeleteSheetOp already
+    // carries its own DeletedTableNames to convert dangling Table[...] structured references to
+    // #REF! instead of leaving them to evaluate as #NAME? once StructuredReferenceResolver can no
+    // longer find the table. Must be called BEFORE ShiftStructuredTables/ShiftAddressBearingState
+    // runs (which clears and rebuilds sheet.StructuredTables from the shifted snapshot).
+    internal static List<string> FindStructuredTablesRemovedByRowDelete(Sheet sheet, uint startRow, uint count)
+    {
+        List<string>? removed = null;
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (ShiftRangeRowsDown(table.Range, startRow, count) is null)
+                (removed ??= []).Add(table.Name);
+        }
+        return removed ?? [];
+    }
+
+    // Column-delete counterpart of FindStructuredTablesRemovedByRowDelete above.
+    internal static List<string> FindStructuredTablesRemovedByColumnDelete(Sheet sheet, uint startCol, uint count)
+    {
+        List<string>? removed = null;
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (ShiftRangeColumnsDown(table.Range, startCol, count) is null)
+                (removed ??= []).Add(table.Name);
+        }
+        return removed ?? [];
+    }
+
     private static void ShiftStructuredTables(Workbook workbook, Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
         sheet.StructuredTables.Clear();
