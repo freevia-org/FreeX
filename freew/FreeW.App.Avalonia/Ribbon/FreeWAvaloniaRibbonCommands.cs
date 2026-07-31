@@ -257,8 +257,9 @@ internal static class FreeWAvaloniaRibbonCommands
         // AV-INSERT: Insert-tab depth. Table dropdown (default + sized presets), page break, picture
         // (file-picker via host callback), shape, text box, and a symbol palette.
         r.Register("freew.insert-table", new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
-        // Table size presets (dropdown items). The top-level "freew.table" id opens the menu (no-op).
-        r.Register("freew.table", new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        // Match WPF's primary face: clicking the Table dropdown button inserts a 2x2 table;
+        // clicking its arrow still exposes the sized presets below.
+        r.Register("freew.table", new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
         r.Register("freew.table-2x2", new ActionRibbonCommand(() => editor.InsertTable(2, 2)));
         r.Register("freew.table-3x3", new ActionRibbonCommand(() => editor.InsertTable(3, 3)));
         r.Register("freew.table-4x4", new ActionRibbonCommand(() => editor.InsertTable(4, 4)));

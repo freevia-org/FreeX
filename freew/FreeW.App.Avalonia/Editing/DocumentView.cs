@@ -19907,9 +19907,25 @@ public sealed class DocumentView : Control
         public int BlockIndex;
         public int RunIndex;
         public ChartScene Scene = new(
-            ChartKind.Column, ChartVisualGeometryKind.Bars,
-            new ChartSceneRect(0, 0, 1, 1), new ChartSceneRect(0, 0, 1, 1),
-            null, [], [], 0, [], [], [], [], [], [], [], []);
+            Kind: ChartKind.Column,
+            GeometryKind: ChartVisualGeometryKind.Bars,
+            StyleId: 0,
+            ColorSchemeId: "colorful1",
+            QuickLayoutId: 0,
+            FrameBounds: new ChartSceneRect(0, 0, 1, 1),
+            PlotBounds: new ChartSceneRect(0, 0, 1, 1),
+            PlotFillHex: null,
+            PaletteHex: [],
+            Categories: [],
+            SeriesCount: 0,
+            GridLines: [],
+            AxisLines: [],
+            Bars: [],
+            LineSeries: [],
+            Markers: [],
+            Slices: [],
+            Texts: [],
+            Legend: []);
     }
 
     private sealed class FloatingWordArtData
