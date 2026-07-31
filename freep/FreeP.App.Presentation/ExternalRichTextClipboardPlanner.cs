@@ -397,6 +397,8 @@ public static class ExternalRichTextClipboardPlanner
                     }
                     if (_state.Destination == Destination.ObjectData)
                         FinalizeObjectCapture();
+                    if (_state.Destination == Destination.Picture)
+                        FinalizePictureCapture();
                     State restoredState = _states.Pop();
                     if (_hasActiveStyle && !SameStyle(_activeStyle, CurrentStyle(restoredState)))
                         FlushActiveRun();
@@ -1118,10 +1120,44 @@ public static class ExternalRichTextClipboardPlanner
             byte[] payload = _pictureBytes.ToArray();
             long? widthEmu = ToPictureExtentEmu(_pictureWidthGoalTwips, _pictureScaleX);
             long? heightEmu = ToPictureExtentEmu(_pictureHeightGoalTwips, _pictureScaleY);
-            if (HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
-                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/png", widthEmu, heightEmu));
-            else if (HasPrefix(payload, [0xFF, 0xD8, 0xFF]))
-                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/jpeg", widthEmu, heightEmu));
+            string? contentType = HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+                ? "image/png"
+                : HasPrefix(payload, [0xFF, 0xD8, 0xFF])
+                    ? "image/jpeg"
+                    : null;
+            if (contentType is not null)
+            {
+                var image = new InCanvasRichClipboardImage(payload, contentType, widthEmu, heightEmu);
+                _picturePayloads.Add(image);
+                FlushActiveRun();
+                EnsureParagraph();
+                ApplyParagraphState(_body.Paragraphs[^1]);
+                var style = CurrentStyle();
+                _body.Paragraphs[^1].Runs.Add(new Run
+                {
+                    Text = "\uFFFC",
+                    InlineImage = new ImagePart
+                    {
+                        Bytes = payload,
+                        ContentType = contentType,
+                    },
+                    InlineImageWidthEmu = widthEmu,
+                    InlineImageHeightEmu = heightEmu,
+                    FontFamily = style.FontFamily,
+                    FontSizePt = style.FontSizePt,
+                    Bold = style.Bold,
+                    BoldSet = style.BoldSet,
+                    Italic = style.Italic,
+                    ItalicSet = style.ItalicSet,
+                    Underline = style.Underline,
+                    Strikethrough = style.Strikethrough,
+                    BaselineOffset = style.BaselineOffset,
+                    Caps = style.Caps,
+                    RightToLeft = style.RunRightToLeft,
+                    Color = style.Color is { } color ? new ThemeAwareColor(color) : null,
+                    Hyperlink = style.Hyperlink,
+                });
+            }
 
             _pictureBytes.Clear();
             _picturePendingNibble = -1;

@@ -243,6 +243,9 @@ internal static class PresentationModelCloneHelper
     private static Run CloneRun(Run source) => new()
     {
         Text = source.Text,
+        InlineImage = CloneImagePart(source.InlineImage),
+        InlineImageWidthEmu = source.InlineImageWidthEmu,
+        InlineImageHeightEmu = source.InlineImageHeightEmu,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,
