@@ -1682,9 +1682,18 @@ public sealed class EditingSession
     /// <summary>
     /// Creates and inserts a picture shape from raw image bytes onto the current slide.
     /// </summary>
-    public SlideShape InsertPicture(byte[] imageBytes, string contentType = "image/png")
+    public SlideShape InsertPicture(
+        byte[] imageBytes,
+        string contentType = "image/png",
+        long? widthEmu = null,
+        long? heightEmu = null)
     {
         var (x, y, cx, cy) = DefaultShapeBounds();
+        if (widthEmu is > 0 && heightEmu is > 0)
+        {
+            cx = Math.Clamp(widthEmu.Value, 9_525L, 63_500_000_000L);
+            cy = Math.Clamp(heightEmu.Value, 9_525L, 63_500_000_000L);
+        }
         var shape = new SlideShape
         {
             Id          = NextShapeId(),

@@ -413,7 +413,7 @@ public sealed class OsClipboardService
             if (payload is not null)
             {
                 foreach (var image in payload.GetImagePayloads())
-                    editor.InsertPicture(image.Bytes, image.ContentType);
+                    editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
                     editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var table = payload.ContainsTable
@@ -443,7 +443,7 @@ public sealed class OsClipboardService
             if (payload is not null)
             {
                 foreach (var image in payload.GetImagePayloads())
-                    editor.InsertPicture(image.Bytes, image.ContentType);
+                    editor.InsertPicture(image.Bytes, image.ContentType, image.WidthEmu, image.HeightEmu);
                 foreach (var obj in payload.GetObjectPayloads())
                     editor.InsertEmbeddedObject(obj.Bytes, obj.FileName, obj.ClassName);
                 var table = payload.ContainsTable

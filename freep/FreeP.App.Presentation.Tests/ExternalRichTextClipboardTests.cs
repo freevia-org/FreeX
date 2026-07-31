@@ -199,6 +199,29 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfPict_PreservesAuthoredDisplayDimensionsAndScale()
+    {
+        var png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi{\pict\pngblip\picwgoal1440\pichgoal720\picscalex50\picscaley200 "
+            + Convert.ToHexString(png) + "}}");
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(rtf);
+
+        payload.Should().NotBeNull();
+        var image = payload!.GetImagePayloads().Should().ContainSingle().Subject;
+        image.WidthEmu.Should().Be(457_200);
+        image.HeightEmu.Should().Be(914_400);
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened.Should().NotBeNull();
+        reopened!.GetImagePayloads().Single().WidthEmu.Should().Be(457_200);
+        reopened.GetImagePayloads().Single().HeightEmu.Should().Be(914_400);
+    }
+
+    [Fact]
     public void RtfPict_RecognizesJpegSignature()
     {
         byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xD9];

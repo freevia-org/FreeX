@@ -20,8 +20,16 @@ public sealed record InCanvasRichClipboardTableCellStyle(
     double? InsetTopPt = null,
     double? InsetBottomPt = null);
 
-/// <summary>One image payload carried by an external rich clipboard fragment.</summary>
-public sealed record InCanvasRichClipboardImage(byte[] Bytes, string ContentType);
+/// <summary>
+/// One image payload carried by an external rich clipboard fragment. Width and height are
+/// optional authored display extents in EMUs; older clipboard payloads and XAML images may omit
+/// them and continue to use the normal insertion bounds.
+/// </summary>
+public sealed record InCanvasRichClipboardImage(
+    byte[] Bytes,
+    string ContentType,
+    long? WidthEmu = null,
+    long? HeightEmu = null);
 
 /// <summary>
 /// One embedded object payload carried by an external rich clipboard fragment.
@@ -104,7 +112,9 @@ public sealed record InCanvasRichClipboardPayload(
         TableCellStyles?.ToArray(),
         ImagePayloads?.Select(image => new InCanvasRichClipboardImage(
             image.Bytes.ToArray(),
-            image.ContentType)).ToArray(),
+            image.ContentType,
+            image.WidthEmu,
+            image.HeightEmu)).ToArray(),
         ObjectPayloads?.Select(obj => new InCanvasRichClipboardObject(
             obj.Bytes.ToArray(),
             obj.FileName,
@@ -190,7 +200,9 @@ public static class InCanvasRichClipboardPlanner
                     && !string.IsNullOrWhiteSpace(image.ContentType))
                 .Select(image => new InCanvasRichClipboardImage(
                     image.Bytes!,
-                    image.ContentType!))
+                    image.ContentType!,
+                    image.WidthEmu,
+                    image.HeightEmu))
                 .ToArray();
             var firstImage = imagePayloads?.FirstOrDefault();
             return new InCanvasRichClipboardPayload(
@@ -362,6 +374,8 @@ public static class InCanvasRichClipboardPlanner
         {
             ContentType = image.ContentType,
             Bytes = image.Bytes.ToArray(),
+            WidthEmu = image.WidthEmu,
+            HeightEmu = image.HeightEmu,
         }).ToList(),
         ObjectPayloads = payload.GetObjectPayloads().Select(obj => new ClipboardObjectDto
         {
@@ -865,6 +879,8 @@ public static class InCanvasRichClipboardPlanner
     {
         public string? ContentType { get; set; }
         public byte[]? Bytes { get; set; }
+        public long? WidthEmu { get; set; }
+        public long? HeightEmu { get; set; }
     }
 
     private sealed class ClipboardObjectDto

@@ -283,6 +283,10 @@ public static class ExternalRichTextClipboardPlanner
         private readonly List<InCanvasRichClipboardImage> _picturePayloads = new();
         private int _picturePendingNibble = -1;
         private bool _pictureCaptureStarted;
+        private int? _pictureWidthGoalTwips;
+        private int? _pictureHeightGoalTwips;
+        private double _pictureScaleX = 100;
+        private double _pictureScaleY = 100;
         private readonly StringBuilder _objectClass = new();
         private readonly StringBuilder _objectName = new();
         private readonly List<byte> _objectBytes = new();
@@ -672,8 +676,28 @@ public static class ExternalRichTextClipboardPlanner
                     FinalizePictureCapture();
                     _pictureCaptureStarted = true;
                     _picturePendingNibble = -1;
+                    _pictureWidthGoalTwips = null;
+                    _pictureHeightGoalTwips = null;
+                    _pictureScaleX = 100;
+                    _pictureScaleY = 100;
                     _state.Destination = Destination.Picture;
                     _state.SkipOutput = true;
+                    break;
+                case "picwgoal":
+                    if (_state.Destination == Destination.Picture && parameter is { } widthGoal)
+                        _pictureWidthGoalTwips = Math.Clamp(widthGoal, 1, 100_000_000);
+                    break;
+                case "pichgoal":
+                    if (_state.Destination == Destination.Picture && parameter is { } heightGoal)
+                        _pictureHeightGoalTwips = Math.Clamp(heightGoal, 1, 100_000_000);
+                    break;
+                case "picscalex":
+                    if (_state.Destination == Destination.Picture && parameter is { } scaleX)
+                        _pictureScaleX = Math.Clamp(scaleX, 1, 1_000);
+                    break;
+                case "picscaley":
+                    if (_state.Destination == Destination.Picture && parameter is { } scaleY)
+                        _pictureScaleY = Math.Clamp(scaleY, 1, 1_000);
                     break;
                 case "pngblip":
                     break;
@@ -1034,14 +1058,32 @@ public static class ExternalRichTextClipboardPlanner
                 return;
 
             byte[] payload = _pictureBytes.ToArray();
+            long? widthEmu = ToPictureExtentEmu(_pictureWidthGoalTwips, _pictureScaleX);
+            long? heightEmu = ToPictureExtentEmu(_pictureHeightGoalTwips, _pictureScaleY);
             if (HasPrefix(payload, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]))
-                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/png"));
+                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/png", widthEmu, heightEmu));
             else if (HasPrefix(payload, [0xFF, 0xD8, 0xFF]))
-                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/jpeg"));
+                _picturePayloads.Add(new InCanvasRichClipboardImage(payload, "image/jpeg", widthEmu, heightEmu));
 
             _pictureBytes.Clear();
             _picturePendingNibble = -1;
             _pictureCaptureStarted = false;
+            _pictureWidthGoalTwips = null;
+            _pictureHeightGoalTwips = null;
+            _pictureScaleX = 100;
+            _pictureScaleY = 100;
+        }
+
+        private static long? ToPictureExtentEmu(int? twips, double scalePercent)
+        {
+            if (twips is not > 0 || !double.IsFinite(scalePercent) || scalePercent <= 0)
+                return null;
+
+            double scaledTwips = twips.Value * Math.Clamp(scalePercent, 1, 1_000) / 100.0;
+            return Math.Clamp(
+                (long)Math.Round(scaledTwips * 635.0),
+                9_525L,
+                63_500_000_000L);
         }
 
         private void FinalizeObjectCapture()

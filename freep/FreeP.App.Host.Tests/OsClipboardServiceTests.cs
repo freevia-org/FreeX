@@ -588,6 +588,24 @@ public sealed class OsClipboardServiceTests
     }
 
     [StaFact]
+    public void Paste_ExternalRtfPicture_PreservesDisplayDimensions()
+    {
+        var rtf = Encoding.ASCII.GetBytes(
+            @"{\rtf1\ansi Caption {\pict\pngblip\picwgoal1440\pichgoal720 "
+            + Convert.ToHexString(_minPng) + "} After}");
+        var fake = new FakeOsClipboard { RtfBytes = rtf };
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var service = new OsClipboardService(fake, new StubShapeRenderer());
+
+        service.PasteWithResult(editor).Should().Be(PresentationClipboardPasteSource.RichText);
+        var picture = editor.CurrentSlide!.Shapes[0];
+        picture.ExtentCxEmu.Should().Be(914_400);
+        picture.ExtentCyEmu.Should().Be(457_200);
+    }
+
+    [StaFact]
     public void Paste_ExternalRtfMultiplePictures_InsertsEveryPictureAndText()
     {
         var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };

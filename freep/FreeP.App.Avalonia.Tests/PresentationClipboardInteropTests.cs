@@ -499,6 +499,25 @@ public sealed class PresentationClipboardInteropTests
     }
 
     [Fact]
+    public async Task External_Rtf_picture_preserves_display_dimensions()
+    {
+        var clipboard = new FakeSystemClipboard
+        {
+            Content = new PresentationClipboardContent(
+                RtfBytes: Encoding.ASCII.GetBytes(
+                    @"{\rtf1\ansi{\pict\pngblip\picwgoal1440\pichgoal720 "
+                    + Convert.ToHexString(Png) + "}}")),
+        };
+        var editor = CreateEmptyEditor();
+        var service = new AvaloniaPresentationClipboardService(clipboard, new StubRenderer());
+
+        (await service.PasteAsync(editor)).Should().Be(PresentationClipboardPasteSource.RichText);
+        var picture = editor.CurrentSlide!.Shapes.Single();
+        picture.ExtentCxEmu.Should().Be(914_400);
+        picture.ExtentCyEmu.Should().Be(457_200);
+    }
+
+    [Fact]
     public async Task External_Rtf_multiple_pictures_are_all_pasted_as_editable_shapes()
     {
         var jpeg = new byte[] { 0xFF, 0xD8, 0xFF, 0xD9 };
