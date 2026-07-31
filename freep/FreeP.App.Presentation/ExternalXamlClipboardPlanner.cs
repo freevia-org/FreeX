@@ -8,7 +8,7 @@ namespace FreeP.App.Compositor;
 
 /// <summary>
 /// Converts the bounded FlowDocument subset commonly carried by WPF XamlPackage clipboard data
-/// into the renderer-neutral rich-text payload. Package resources and unsupported controls are
+/// into the renderer-neutral rich-text payload. Unsupported package resources and controls are
 /// deliberately ignored; callers can continue to RTF or plain-text fallback. FlowDocument tables
 /// use the same tab-delimited row projection as the external RTF path because TextBody has no
 /// inline table node.
@@ -65,6 +65,7 @@ public static class ExternalXamlClipboardPlanner
         try
         {
             var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            var resources = ReadResources(document);
             var images = document
                 .Descendants()
                 .Where(element => element.Name.LocalName.Equals("Image", StringComparison.OrdinalIgnoreCase))
@@ -107,9 +108,9 @@ public static class ExternalXamlClipboardPlanner
             foreach (var element in blockElements)
             {
                 if (element.Name.LocalName == "Table")
-                    ReadTable(element, body, tableCellStyles, ref outputCharacters);
+                    ReadTable(element, body, tableCellStyles, resources, ref outputCharacters);
                 else
-                    ReadParagraph(element, body, ref outputCharacters);
+                    ReadParagraph(element, body, resources, ref outputCharacters);
 
                 if (outputCharacters > MaxOutputCharacters)
                     return null;
@@ -138,13 +139,14 @@ public static class ExternalXamlClipboardPlanner
     private static void ReadParagraph(
         XElement element,
         TextBody body,
+        XamlResourceCatalog resources,
         ref int outputCharacters)
     {
         var paragraph = new Paragraph();
-        var style = ReadStyle(element, default);
+        var style = ReadStyle(element, default, resources);
         ApplyParagraphProperties(element, paragraph);
         ApplyListProperties(element, paragraph);
-        ReadInlineNodes(element, paragraph, style, ref outputCharacters);
+        ReadInlineNodes(element, paragraph, style, resources, ref outputCharacters);
         body.Paragraphs.Add(paragraph);
     }
 
@@ -228,6 +230,7 @@ public static class ExternalXamlClipboardPlanner
         XElement table,
         TextBody body,
         List<InCanvasRichClipboardTableCellStyle> tableCellStyles,
+        XamlResourceCatalog resources,
         ref int outputCharacters)
     {
         var rows = table
@@ -272,7 +275,8 @@ public static class ExternalXamlClipboardPlanner
                     ReadInlineNodes(
                         cellParagraph,
                         paragraph,
-                        ReadStyle(cellParagraph, default),
+                        ReadStyle(cellParagraph, default, resources),
+                        resources,
                         ref outputCharacters);
                 }
             }
@@ -319,9 +323,10 @@ public static class ExternalXamlClipboardPlanner
         XElement element,
         Paragraph paragraph,
         XamlTextStyle inherited,
+        XamlResourceCatalog resources,
         ref int outputCharacters)
     {
-        var style = ReadStyle(element, inherited);
+        var style = ReadStyle(element, inherited, resources);
         foreach (var node in element.Nodes())
         {
             if (node is XText text)
@@ -343,7 +348,7 @@ public static class ExternalXamlClipboardPlanner
                     // outer document walk; never duplicate their text in the parent.
                     break;
                 default:
-                    ReadInlineElement(child, paragraph, style, ref outputCharacters);
+                    ReadInlineElement(child, paragraph, style, resources, ref outputCharacters);
                     break;
             }
         }
@@ -353,9 +358,10 @@ public static class ExternalXamlClipboardPlanner
         XElement element,
         Paragraph paragraph,
         XamlTextStyle inherited,
+        XamlResourceCatalog resources,
         ref int outputCharacters)
     {
-        var style = ReadStyle(element, inherited);
+        var style = ReadStyle(element, inherited, resources);
         if (element.Name.LocalName == "Run"
             && element.Attribute("Text") is { } textAttribute)
         {
@@ -373,7 +379,7 @@ public static class ExternalXamlClipboardPlanner
             if (node is XText text)
                 AddText(text.Value, paragraph, style, ref outputCharacters);
             else if (node is XElement child && child.Name.LocalName != "Paragraph")
-                ReadInlineElement(child, paragraph, style, ref outputCharacters);
+                ReadInlineElement(child, paragraph, style, resources, ref outputCharacters);
         }
     }
 
@@ -415,14 +421,30 @@ public static class ExternalXamlClipboardPlanner
         });
     }
 
-    private static XamlTextStyle ReadStyle(XElement element, XamlTextStyle inherited)
+    private static XamlTextStyle ReadStyle(
+        XElement element,
+        XamlTextStyle inherited,
+        XamlResourceCatalog resources)
     {
         var style = inherited;
-        var family = AttributeValue(element, "FontFamily");
+        var styleReference = AttributeValue(element, "Style");
+        if (TryReadResourceKey(styleReference, out var styleKey)
+            && resources.Styles.TryGetValue(styleKey, out var resourceStyle))
+        {
+            foreach (var setter in resourceStyle.Setters)
+                style = ApplyStyleSetter(style, setter.Key, setter.Value, resources);
+        }
+
+        var family = ResolveTextResource(
+            AttributeValue(element, "FontFamily"),
+            resources.FontFamilies);
         if (!string.IsNullOrWhiteSpace(family))
             style = style with { FontFamily = family.Trim() };
 
-        if (TryReadDouble(element, "FontSize", out var dipSize) && dipSize > 0)
+        var fontSize = ResolveTextResource(
+            AttributeValue(element, "FontSize"),
+            resources.FontSizes);
+        if (TryParseDip(fontSize, out var dipSize) && dipSize > 0)
             style = style with { FontSizePt = dipSize * 0.75 };
 
         var weight = AttributeValue(element, "FontWeight");
@@ -459,7 +481,7 @@ public static class ExternalXamlClipboardPlanner
         if (localName.Equals("Underline", StringComparison.OrdinalIgnoreCase))
             style = style with { Underline = true };
 
-        var foreground = AttributeValue(element, "Foreground");
+        var foreground = ResolveColorResource(AttributeValue(element, "Foreground"), resources.Colors);
         if (TryParseColor(foreground, out var color))
             style = style with { Color = color };
 
@@ -480,6 +502,184 @@ public static class ExternalXamlClipboardPlanner
         }
 
         return style;
+    }
+
+    private static XamlTextStyle ApplyStyleSetter(
+        XamlTextStyle style,
+        string property,
+        string? value,
+        XamlResourceCatalog resources)
+    {
+        var propertyName = property.Contains('.')
+            ? property[(property.LastIndexOf('.') + 1)..]
+            : property;
+        switch (propertyName.ToLowerInvariant())
+        {
+            case "fontfamily":
+                var family = ResolveTextResource(value, resources.FontFamilies);
+                return string.IsNullOrWhiteSpace(family)
+                    ? style
+                    : style with { FontFamily = family.Trim() };
+
+            case "fontsize":
+                var fontSize = ResolveTextResource(value, resources.FontSizes);
+                return TryParseDip(fontSize, out var dipSize) && dipSize > 0
+                    ? style with { FontSizePt = dipSize * 0.75 }
+                    : style;
+
+            case "fontweight":
+                var bold = !string.IsNullOrWhiteSpace(value)
+                    && (value.Equals("Bold", StringComparison.OrdinalIgnoreCase)
+                        || (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var weight)
+                            && weight >= 700));
+                return style with { Bold = bold, BoldSet = true };
+
+            case "fontstyle":
+                var italic = value?.Equals("Italic", StringComparison.OrdinalIgnoreCase) == true
+                    || value?.Equals("Oblique", StringComparison.OrdinalIgnoreCase) == true;
+                return style with { Italic = italic, ItalicSet = true };
+
+            case "textdecorations":
+                var decorations = value ?? string.Empty;
+                return style with
+                {
+                    Underline = decorations.Contains("Underline", StringComparison.OrdinalIgnoreCase),
+                    Strikethrough = decorations.Contains("Strikethrough", StringComparison.OrdinalIgnoreCase),
+                };
+
+            case "foreground":
+                var foreground = ResolveColorResource(value, resources.Colors);
+                return TryParseColor(foreground, out var color)
+                    ? style with { Color = color }
+                    : style;
+
+            default:
+                return style;
+        }
+    }
+
+    private static XamlResourceCatalog ReadResources(XDocument document)
+    {
+        var colors = new Dictionary<string, string>(StringComparer.Ordinal);
+        var fontFamilies = new Dictionary<string, string>(StringComparer.Ordinal);
+        var fontSizes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var styles = new Dictionary<string, XamlStyleResource>(StringComparer.Ordinal);
+        foreach (var resource in document.Descendants())
+        {
+            var key = AttributeValue(resource, "Key");
+            if (string.IsNullOrWhiteSpace(key))
+                continue;
+
+            if (resource.Name.LocalName.Equals("SolidColorBrush", StringComparison.OrdinalIgnoreCase)
+                && TryParseColor(AttributeValue(resource, "Color"), out _))
+            {
+                colors[key] = AttributeValue(resource, "Color")!;
+            }
+            else if (resource.Name.LocalName.Equals("FontFamily", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(resource.Value))
+            {
+                fontFamilies[key] = resource.Value.Trim();
+            }
+            else if (resource.Name.LocalName is "Double" or "Single" or "Decimal" or "Int32"
+                && TryParseDip(resource.Value, out _))
+            {
+                fontSizes[key] = resource.Value.Trim();
+            }
+            else if (resource.Name.LocalName.Equals("Style", StringComparison.OrdinalIgnoreCase))
+            {
+                var setters = resource
+                    .Elements()
+                    .Where(element => element.Name.LocalName.Equals("Setter", StringComparison.OrdinalIgnoreCase))
+                    .Select(element =>
+                    {
+                        var property = AttributeValue(element, "Property");
+                        return (Property: property, Value: AttributeValue(element, "Value"));
+                    })
+                    .Where(setter => !string.IsNullOrWhiteSpace(setter.Property))
+                    .ToDictionary(
+                        setter => setter.Property!,
+                        setter => setter.Value,
+                        StringComparer.OrdinalIgnoreCase);
+                styles[key] = new XamlStyleResource(setters);
+            }
+        }
+
+        return new XamlResourceCatalog(colors, fontFamilies, fontSizes, styles);
+    }
+
+    private static bool TryReadResourceKey(string? value, out string key)
+    {
+        key = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var reference = value.Trim();
+        if (reference.Length < 3 || reference[0] != '{' || reference[^1] != '}')
+            return false;
+
+        var parts = reference[1..^1]
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2
+            || (!parts[0].Equals("StaticResource", StringComparison.OrdinalIgnoreCase)
+                && !parts[0].Equals("DynamicResource", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        key = parts[1];
+        return key.Length > 0;
+    }
+
+    private static string? ResolveTextResource(
+        string? value,
+        IReadOnlyDictionary<string, string> resources)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return value;
+
+        var reference = value.Trim();
+        if (reference.Length < 3 || reference[0] != '{' || reference[^1] != '}')
+            return value;
+
+        var parts = reference[1..^1]
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2
+            || (!parts[0].Equals("StaticResource", StringComparison.OrdinalIgnoreCase)
+                && !parts[0].Equals("DynamicResource", StringComparison.OrdinalIgnoreCase)))
+        {
+            return value;
+        }
+
+        return resources.TryGetValue(parts[1], out var resolved) ? resolved : value;
+    }
+
+    private static string? ResolveColorResource(
+        string? value,
+        IReadOnlyDictionary<string, string> colorResources)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return value;
+
+        var reference = value.Trim();
+        if (reference.Length < 3
+            || reference[0] != '{'
+            || reference[^1] != '}')
+        {
+            return value;
+        }
+
+        var parts = reference[1..^1]
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2
+            || (!parts[0].Equals("StaticResource", StringComparison.OrdinalIgnoreCase)
+                && !parts[0].Equals("DynamicResource", StringComparison.OrdinalIgnoreCase)))
+        {
+            return value;
+        }
+
+        return colorResources.TryGetValue(parts[1], out var color)
+            ? color
+            : value;
     }
 
     private static void ApplyParagraphProperties(XElement element, Paragraph paragraph)
@@ -670,4 +870,13 @@ public static class ExternalXamlClipboardPlanner
         bool ItalicSet,
         ThemeAwareColor? Color,
         Hyperlink? Hyperlink);
+
+    private sealed record XamlStyleResource(
+        IReadOnlyDictionary<string, string?> Setters);
+
+    private sealed record XamlResourceCatalog(
+        IReadOnlyDictionary<string, string> Colors,
+        IReadOnlyDictionary<string, string> FontFamilies,
+        IReadOnlyDictionary<string, string> FontSizes,
+        IReadOnlyDictionary<string, XamlStyleResource> Styles);
 }

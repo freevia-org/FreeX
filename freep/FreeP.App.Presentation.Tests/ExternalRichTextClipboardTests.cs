@@ -41,6 +41,93 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_ResolvesSolidColorBrushResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <SolidColorBrush x:Key="AccentBrush" Color="#FF2F5597" />
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Foreground="{StaticResource AccentBrush}">Resource colored</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Single().Runs.Single().Color!.Resolved
+            .Should().Be(SrgbColor.FromRgb(0x2F5597));
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_ResolvesFontFamilyAndSizeResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          xmlns:sys="clr-namespace:System;assembly=mscorlib">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                  <sys:Double x:Key="BodySize">18</sys:Double>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph FontFamily="{DynamicResource BodyFont}"
+                         FontSize="{StaticResource BodySize}">Resource typography</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var run = payload!.Body.Paragraphs.Single().Runs.Single();
+        run.FontFamily.Should().Be("Aptos");
+        run.FontSizePt.Should().Be(13.5);
+    }
+
+    [Fact]
+    public void XamlPackageFlowDocument_AppliesTextSettersFromReferencedStyleResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                          xmlns:sys="clr-namespace:System;assembly=mscorlib">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <SolidColorBrush x:Key="BodyBrush" Color="#FF1F4E79" />
+                  <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                  <sys:Double x:Key="BodySize">16</sys:Double>
+                  <Style x:Key="BodyText">
+                    <Setter Property="Foreground" Value="{StaticResource BodyBrush}" />
+                    <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
+                    <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                    <Setter Property="FontWeight" Value="Bold" />
+                    <Setter Property="TextDecorations" Value="Underline" />
+                  </Style>
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Style="{StaticResource BodyText}">Styled paragraph</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        var run = payload!.Body.Paragraphs.Single().Runs.Single();
+        run.FontFamily.Should().Be("Aptos");
+        run.FontSizePt.Should().Be(12);
+        run.Bold.Should().BeTrue();
+        run.Underline.Should().BeTrue();
+        run.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_PreservesAllowedHyperlinks_AndBlocksUnsafeSchemes()
     {
         const string xaml = """

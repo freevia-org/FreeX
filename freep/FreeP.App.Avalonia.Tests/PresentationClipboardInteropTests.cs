@@ -619,9 +619,24 @@ public sealed class PresentationClipboardInteropTests
         {
             Content = new PresentationClipboardContent(
                 XamlPackageBytes: CreateXamlPackage("""
-                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+                    <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                                  xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                      <FlowDocument.Resources>
+                        <ResourceDictionary>
+                          <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
+                          <FontFamily x:Key="BodyFont">Aptos</FontFamily>
+                          <sys:Double x:Key="BodySize">18</sys:Double>
+                          <Style x:Key="ListText">
+                            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                            <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
+                            <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                            <Setter Property="FontWeight" Value="Bold" />
+                          </Style>
+                        </ResourceDictionary>
+                      </FlowDocument.Resources>
                       <List MarkerStyle="UpperLatin" StartIndex="4">
-                        <ListItem><Paragraph>Four</Paragraph></ListItem>
+                        <ListItem><Paragraph Style="{StaticResource ListText}">Four</Paragraph></ListItem>
                         <ListItem><Paragraph>Five</Paragraph></ListItem>
                       </List>
                     </FlowDocument>
@@ -636,6 +651,10 @@ public sealed class PresentationClipboardInteropTests
         body.Paragraphs[0].BulletKind.Should().Be(BulletKind.Auto);
         body.Paragraphs[0].AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
         body.Paragraphs[0].AutoNumStartAt.Should().Be(4);
+        body.Paragraphs[0].Runs.Single().Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5597));
+        body.Paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
+        body.Paragraphs[0].Runs.Single().FontSizePt.Should().Be(13.5);
+        body.Paragraphs[0].Runs.Single().Bold.Should().BeTrue();
         body.Paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
     }
 
