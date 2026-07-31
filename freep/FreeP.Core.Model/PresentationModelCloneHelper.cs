@@ -227,6 +227,7 @@ internal static class PresentationModelCloneHelper
             {
                 PositionEmu = tabStop.PositionEmu,
                 Alignment = tabStop.Alignment,
+                Leader = tabStop.Leader,
             });
 
         foreach (var run in source.Runs)

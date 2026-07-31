@@ -1655,7 +1655,8 @@ public static class SlideCompositor
                 ? para.TabStops.Select(t => new ResolvedTabStop
                     {
                         PositionDip = t.PositionEmu / EmuPerDip,
-                        Alignment   = t.Alignment
+                        Alignment   = t.Alignment,
+                        Leader      = t.Leader
                     }).ToList()
                 : Array.Empty<ResolvedTabStop>();
 

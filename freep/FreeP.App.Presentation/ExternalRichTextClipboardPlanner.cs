@@ -263,6 +263,7 @@ public static class ExternalRichTextClipboardPlanner
             public int? SpaceAfterTwips;
             public List<TabStop> TabStops { get; set; } = new();
             public TabStopAlignment PendingTabStopAlignment { get; set; }
+            public TabStopLeader PendingTabStopLeader { get; set; }
             public FieldContext? Field;
             public Hyperlink? Hyperlink;
             public bool InTable;
@@ -277,6 +278,7 @@ public static class ExternalRichTextClipboardPlanner
                     {
                         PositionEmu = stop.PositionEmu,
                         Alignment = stop.Alignment,
+                        Leader = stop.Leader,
                     })
                     .ToList();
                 return clone;
@@ -903,6 +905,30 @@ public static class ExternalRichTextClipboardPlanner
                     if (_state.Destination == Destination.Body)
                         _state.PendingTabStopAlignment = TabStopAlignment.Decimal;
                     break;
+                case "tlnone":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopLeader = TabStopLeader.None;
+                    break;
+                case "tldot":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopLeader = TabStopLeader.Dots;
+                    break;
+                case "tlhyph":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopLeader = TabStopLeader.Hyphens;
+                    break;
+                case "tlul":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopLeader = TabStopLeader.Underscore;
+                    break;
+                case "tlth":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopLeader = TabStopLeader.ThickLine;
+                    break;
+                case "tleq":
+                    if (_state.Destination == Destination.Body)
+                        _state.PendingTabStopLeader = TabStopLeader.Equal;
+                    break;
                 case "tx":
                     if (_state.Destination == Destination.Body
                         && parameter is > 0 and <= 100_000_000)
@@ -912,6 +938,7 @@ public static class ExternalRichTextClipboardPlanner
                         {
                             PositionEmu = positionEmu,
                             Alignment = _state.PendingTabStopAlignment,
+                            Leader = _state.PendingTabStopLeader,
                         };
                         int existing = _state.TabStops.FindIndex(
                             candidate => candidate.PositionEmu == positionEmu);
@@ -922,6 +949,7 @@ public static class ExternalRichTextClipboardPlanner
                         _state.TabStops.Sort(
                             (left, right) => left.PositionEmu.CompareTo(right.PositionEmu));
                         _state.PendingTabStopAlignment = TabStopAlignment.Left;
+                        _state.PendingTabStopLeader = TabStopLeader.None;
                     }
                     break;
                 case "pn":
@@ -2084,6 +2112,7 @@ public static class ExternalRichTextClipboardPlanner
             _state.SpaceAfterTwips = null;
             _state.TabStops.Clear();
             _state.PendingTabStopAlignment = TabStopAlignment.Left;
+            _state.PendingTabStopLeader = TabStopLeader.None;
             _state.InTable = false;
             _state.TableNesting = 0;
         }
@@ -2107,6 +2136,7 @@ public static class ExternalRichTextClipboardPlanner
                 {
                     PositionEmu = tabStop.PositionEmu,
                     Alignment = tabStop.Alignment,
+                    Leader = tabStop.Leader,
                 });
             }
 

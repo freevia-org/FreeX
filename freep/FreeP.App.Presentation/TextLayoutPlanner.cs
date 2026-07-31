@@ -75,7 +75,8 @@ public readonly record struct TextBulletPlacement(
 public readonly record struct TextTabSegmentPlacement(
     int RunIndex,
     string Text,
-    double X);
+    double X,
+    TabStopLeader Leader = TabStopLeader.None);
 
 /// <summary>
 /// Renderer-neutral visual placement for one paragraph run.  <see cref="RunIndex"/>
@@ -717,6 +718,7 @@ public static class TextLayoutPlanner
 
         var tokens = CreateTabTokens(paragraph);
         double currentX = startX;
+        var pendingLeader = TabStopLeader.None;
         var placements = new List<TextTabSegmentPlacement>(tokens.Count);
 
         for (int tokenIndex = 0; tokenIndex < tokens.Count; tokenIndex++)
@@ -725,6 +727,9 @@ public static class TextLayoutPlanner
             var run = paragraph.Runs[token.RunIndex];
 
             if (token.IsTab)
+            {
+                pendingLeader = FindNextTabStop(tabStops, currentX - startX)?.Leader
+                    ?? TabStopLeader.None;
                 currentX = AdvanceToTabStop(
                     paragraph,
                     tokens,
@@ -733,6 +738,7 @@ public static class TextLayoutPlanner
                     startX,
                     tabStops,
                     measureText);
+            }
 
             if (token.Text.Length == 0)
                 continue;
@@ -740,7 +746,9 @@ public static class TextLayoutPlanner
             placements.Add(new TextTabSegmentPlacement(
                 token.RunIndex,
                 token.Text,
-                currentX));
+                currentX,
+                pendingLeader));
+            pendingLeader = TabStopLeader.None;
             currentX += measureText(run, token.Text);
         }
 

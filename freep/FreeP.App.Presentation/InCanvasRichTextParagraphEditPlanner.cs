@@ -49,6 +49,7 @@ public static class InCanvasRichTextParagraphEditPlanner
             {
                 PositionEmu = tabStop.PositionEmu,
                 Alignment = tabStop.Alignment,
+                Leader = tabStop.Leader,
             });
 
         return copy;
