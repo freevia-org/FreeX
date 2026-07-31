@@ -8014,7 +8014,7 @@ public static partial class AccessibilityCheckerService
             return FormulaComplexTextResult(real, imaginary, left.Suffix);
         }
 
-        private static ScalarValue EvaluateFormulaComplexPower(
+        private ScalarValue EvaluateFormulaComplexPower(
             (double Real, double Imaginary, string Suffix, ErrorValue? Error) source,
             ScalarValue exponentValue)
         {
@@ -8288,7 +8288,7 @@ public static partial class AccessibilityCheckerService
         private static string FormatFormulaComplexNumber(double value) =>
             value.ToString("G15", CultureInfo.InvariantCulture);
 
-        private static bool TryGetFormulaComplexNumber(ScalarValue value, out double number)
+        private bool TryGetFormulaComplexNumber(ScalarValue value, out double number)
         {
             switch (value)
             {
@@ -8454,7 +8454,7 @@ public static partial class AccessibilityCheckerService
             return false;
         }
 
-        private static bool TryGetFormulaConvertNumber(ScalarValue value, out double number)
+        private bool TryGetFormulaConvertNumber(ScalarValue value, out double number)
         {
             switch (value)
             {
@@ -8478,7 +8478,7 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static bool TryParseFormulaConvertNumberText(string text, out double number)
+        private bool TryParseFormulaConvertNumberText(string text, out double number)
         {
             var candidate = text.Trim();
 
@@ -9602,7 +9602,7 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
-        private static bool TryGetFormulaOptionalInteger(
+        private bool TryGetFormulaOptionalInteger(
             ScalarValue source,
             int defaultValue,
             out int value,
@@ -10251,7 +10251,7 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static bool TryGetFormulaRegexCaseSensitivity(
+        private bool TryGetFormulaRegexCaseSensitivity(
             ScalarValue source,
             out RegexOptions options,
             out ScalarValue error)
@@ -10479,7 +10479,7 @@ public static partial class AccessibilityCheckerService
             return new RangeValue(cells);
         }
 
-        private static ScalarValue FormulaBahtTextScalar(ScalarValue input)
+        private ScalarValue FormulaBahtTextScalar(ScalarValue input)
         {
             if (input is ErrorValue error)
                 return error;
@@ -10645,7 +10645,7 @@ public static partial class AccessibilityCheckerService
             return value is BoolValue or NumberValue or DateTimeValue or BlankValue;
         }
 
-        private static ScalarValue FormulaCharScalar(ScalarValue value)
+        private ScalarValue FormulaCharScalar(ScalarValue value)
         {
             if (value is ErrorValue error)
                 return error;
@@ -10704,7 +10704,7 @@ public static partial class AccessibilityCheckerService
             return FormulaTextScalarResult(builder.ToString());
         }
 
-        private static ScalarValue FormulaReptScalar(ScalarValue value, ScalarValue timesValue)
+        private ScalarValue FormulaReptScalar(ScalarValue value, ScalarValue timesValue)
         {
             if (value is ErrorValue valueError)
                 return valueError;
@@ -10725,7 +10725,7 @@ public static partial class AccessibilityCheckerService
             return FormulaReptText(text, times);
         }
 
-        private static ScalarValue FormulaSubstituteScalar(
+        private ScalarValue FormulaSubstituteScalar(
             ScalarValue textValue,
             ScalarValue oldTextValue,
             ScalarValue newTextValue,
@@ -10770,7 +10770,7 @@ public static partial class AccessibilityCheckerService
             return FormulaSubstituteText(text, oldText, newText, instanceNum);
         }
 
-        private static ScalarValue FormulaSubstituteText(
+        private ScalarValue FormulaSubstituteText(
             string text,
             string oldText,
             string newText,
@@ -10802,7 +10802,7 @@ public static partial class AccessibilityCheckerService
             return FormulaTextScalarResult(text.Replace(oldText, newText, StringComparison.Ordinal));
         }
 
-        private static ScalarValue FormulaReplaceScalar(
+        private ScalarValue FormulaReplaceScalar(
             ScalarValue value,
             ScalarValue startValue,
             ScalarValue countValue,
@@ -10871,7 +10871,7 @@ public static partial class AccessibilityCheckerService
             return FormulaTextScalarResult(text[..start] + newText + text[end..]);
         }
 
-        private static ScalarValue FormulaLenBScalar(ScalarValue value)
+        private ScalarValue FormulaLenBScalar(ScalarValue value)
         {
             if (value is ErrorValue error)
                 return error;
@@ -10881,7 +10881,7 @@ public static partial class AccessibilityCheckerService
                 : ErrorValue.Value;
         }
 
-        private static ScalarValue FormulaByteSliceScalar(
+        private ScalarValue FormulaByteSliceScalar(
             ScalarValue value,
             ScalarValue countValue,
             bool fromRight)
@@ -10910,7 +10910,7 @@ public static partial class AccessibilityCheckerService
                 : FormulaTextScalarResult(FormulaSliceDbcsBytes(text, 0, byteCount));
         }
 
-        private static ScalarValue FormulaMidBScalar(
+        private ScalarValue FormulaMidBScalar(
             ScalarValue value,
             ScalarValue startValue,
             ScalarValue lengthValue)
@@ -10940,7 +10940,7 @@ public static partial class AccessibilityCheckerService
             return FormulaTextScalarResult(FormulaSliceDbcsBytes(text, (int)rawStart - 1, (int)rawLength));
         }
 
-        private static ScalarValue FormulaFindSearchBScalar(
+        private ScalarValue FormulaFindSearchBScalar(
             ScalarValue findValue,
             ScalarValue withinValue,
             ScalarValue startValue,
@@ -11207,7 +11207,7 @@ public static partial class AccessibilityCheckerService
         }
 
 
-        private static bool TryGetFormulaTextScalarNumber(ScalarValue value, out double number)
+        private bool TryGetFormulaTextScalarNumber(ScalarValue value, out double number)
         {
             switch (value)
             {
@@ -11231,7 +11231,7 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static bool TryParseFormulaTextScalarNumber(string text, out double number)
+        private bool TryParseFormulaTextScalarNumber(string text, out double number)
         {
             var candidate = text.Trim();
             var percentCount = 0;
@@ -16127,7 +16127,7 @@ public static partial class AccessibilityCheckerService
         private static RangeValue SingleFormulaFinancialArray(ScalarValue value) =>
             new(new[,] { { value } });
 
-        private static bool TryCollectFormulaFinancialRangeNumbers(
+        private bool TryCollectFormulaFinancialRangeNumbers(
             RangeValue range,
             out List<double> numbers,
             out ErrorValue? error)
@@ -16163,7 +16163,7 @@ public static partial class AccessibilityCheckerService
             return (count, null);
         }
 
-        private static bool AppendFormulaFinancialRangeNumbers(
+        private bool AppendFormulaFinancialRangeNumbers(
             RangeValue range,
             List<double> numbers,
             out ErrorValue? error)
@@ -16181,7 +16181,7 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
-        private static bool AppendFormulaFinancialValueNumber(
+        private bool AppendFormulaFinancialValueNumber(
             ScalarValue value,
             bool isDirectArgument,
             List<double> numbers,
@@ -16251,7 +16251,7 @@ public static partial class AccessibilityCheckerService
             return false;
         }
 
-        private static bool TryGetFormulaFinancialScalarNumber(
+        private bool TryGetFormulaFinancialScalarNumber(
             ScalarValue value,
             out double number,
             out ErrorValue? error)
@@ -16331,7 +16331,7 @@ public static partial class AccessibilityCheckerService
             return FormulaFinancialNumberResult(rate);
         }
 
-        private static bool NormalizeFormulaFinancialDateSerialsToYearFractions(List<double> serials)
+        private bool NormalizeFormulaFinancialDateSerialsToYearFractions(List<double> serials)
         {
             if (serials.Count == 0 ||
                 !TryFormulaFinancialSerialToDate(serials[0], out var firstDate))
@@ -16350,7 +16350,7 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
-        private static bool TryFormulaFinancialSerialToDate(double serial, out DateTime date)
+        private bool TryFormulaFinancialSerialToDate(double serial, out DateTime date)
         {
             date = default;
             if (!double.IsFinite(serial))
@@ -17590,7 +17590,7 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static ScalarValue FormulaFinancialFvScheduleScalar(double principal, ScalarValue scheduleSource)
+        private ScalarValue FormulaFinancialFvScheduleScalar(double principal, ScalarValue scheduleSource)
         {
             if (!double.IsFinite(principal))
                 return ErrorValue.Num;
@@ -17733,7 +17733,7 @@ public static partial class AccessibilityCheckerService
                 "AMORDEGRC", new NumberValue(cost), new NumberValue(datePurchased), new NumberValue(firstPeriod),
                 new NumberValue(salvage), new NumberValue(period), new NumberValue(rate), new NumberValue(basis));
 
-        private static ScalarValue FormulaFinancialAmorlincScalar(
+        private ScalarValue FormulaFinancialAmorlincScalar(
             double cost,
             double datePurchased,
             double firstPeriod,
@@ -17745,7 +17745,7 @@ public static partial class AccessibilityCheckerService
                 "AMORLINC", new NumberValue(cost), new NumberValue(datePurchased), new NumberValue(firstPeriod),
                 new NumberValue(salvage), new NumberValue(period), new NumberValue(rate), new NumberValue(basis));
 
-        private static bool TryGetFormulaFinancialAmortizationArguments(
+        private bool TryGetFormulaFinancialAmortizationArguments(
             double cost,
             double datePurchased,
             double firstPeriod,
@@ -17927,7 +17927,7 @@ public static partial class AccessibilityCheckerService
                 new NumberValue(rate), new NumberValue(price), new NumberValue(redemption),
                 new NumberValue(frequency), new NumberValue(basis));
 
-        private static bool TryGetFormulaFinancialOddFirstCouponDates(
+        private bool TryGetFormulaFinancialOddFirstCouponDates(
             double settlement,
             double maturity,
             double issue,
@@ -17954,7 +17954,7 @@ public static partial class AccessibilityCheckerService
                 settlementDate > issueDate;
         }
 
-        private static bool TryGetFormulaFinancialOddLastCouponDates(
+        private bool TryGetFormulaFinancialOddLastCouponDates(
             double settlement,
             double maturity,
             double lastInterest,
@@ -18121,7 +18121,7 @@ public static partial class AccessibilityCheckerService
             return (end.Year - start.Year) * 360d + (end.Month - start.Month) * 30d + (endDay - startDay);
         }
 
-        private static bool TryValidateFormulaFinancialBondSchedule(
+        private bool TryValidateFormulaFinancialBondSchedule(
             double settlement,
             double maturity,
             int frequency,
@@ -18136,7 +18136,7 @@ public static partial class AccessibilityCheckerService
                 TryGetFormulaFinancialBondDates(settlement, maturity, out settlementDate, out maturityDate);
         }
 
-        private static bool TryGetFormulaFinancialBondDates(
+        private bool TryGetFormulaFinancialBondDates(
             double settlement,
             double maturity,
             out DateTime settlementDate,
@@ -18417,7 +18417,7 @@ public static partial class AccessibilityCheckerService
             return negative ? -total : total;
         }
 
-        private static bool TryGetFormulaFinancialDate(double serial, out DateTime date) =>
+        private bool TryGetFormulaFinancialDate(double serial, out DateTime date) =>
             TryGetFormulaFinancialCouponDate(serial, out date);
 
         private static bool TryGetFormulaFinancialCouponArguments(
@@ -18485,7 +18485,7 @@ public static partial class AccessibilityCheckerService
             return basis is >= 0 and <= 4;
         }
 
-        private static ScalarValue FormulaFinancialCouponScalar(
+        private ScalarValue FormulaFinancialCouponScalar(
             ConditionalFormulaScalarFunctionKind kind,
             double settlement,
             double maturity,
@@ -18528,7 +18528,7 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static bool TryGetFormulaFinancialCouponDate(double serial, out DateTime date)
+        private bool TryGetFormulaFinancialCouponDate(double serial, out DateTime date)
         {
             date = default;
             if (!double.IsFinite(serial) ||
@@ -19477,7 +19477,7 @@ public static partial class AccessibilityCheckerService
 
             value = MapFormulaTextScalarArguments(
                 new[] { numberSource, decimalsSource, noCommasSource },
-                static arguments => FormulaFixedScalar(arguments[0], arguments[1], arguments[2]));
+                arguments => FormulaFixedScalar(arguments[0], arguments[1], arguments[2]));
             return true;
         }
 
@@ -19537,7 +19537,7 @@ public static partial class AccessibilityCheckerService
                 : ErrorValue.Value;
         }
 
-        private static ScalarValue FormulaFixedScalar(
+        private ScalarValue FormulaFixedScalar(
             ScalarValue value,
             ScalarValue decimalsValue,
             ScalarValue noCommasValue)
@@ -19559,7 +19559,7 @@ public static partial class AccessibilityCheckerService
             return FormulaTextFormatRoundedNumber(number, decimals, useCommas: !noCommas);
         }
 
-        private static ScalarValue FormulaDollarScalar(ScalarValue value, ScalarValue decimalsValue)
+        private ScalarValue FormulaDollarScalar(ScalarValue value, ScalarValue decimalsValue)
         {
             if (value is ErrorValue valueError)
                 return valueError;
@@ -19605,7 +19605,7 @@ public static partial class AccessibilityCheckerService
             return FormulaTextScalarResult(rounded.ToString(format, CultureInfo.InvariantCulture));
         }
 
-        private static bool TryGetFormulaTextFormattingNumber(
+        private bool TryGetFormulaTextFormattingNumber(
             ScalarValue value,
             out double number,
             out ErrorValue? error)
@@ -19626,7 +19626,7 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
-        private static bool TryGetFormulaTextFormattingInteger(
+        private bool TryGetFormulaTextFormattingInteger(
             ScalarValue value,
             out int integer,
             out ErrorValue? error)
@@ -19928,7 +19928,7 @@ public static partial class AccessibilityCheckerService
                 _ => value.ToString() ?? string.Empty
             };
 
-        private static bool TryEvaluateFormulaDateValue(string text, out double serial)
+        private bool TryEvaluateFormulaDateValue(string text, out double serial)
         {
             serial = 0;
             if (TryParseFormulaExcelFakeLeapDayValueText(text, out _))
@@ -20079,7 +20079,7 @@ public static partial class AccessibilityCheckerService
             return years;
         }
 
-        private static bool TryEvaluateFormulaDatedifYD(DateTime start, DateTime end, out double result)
+        private bool TryEvaluateFormulaDatedifYD(DateTime start, DateTime end, out double result)
         {
             result = 0;
             try
@@ -20531,7 +20531,7 @@ public static partial class AccessibilityCheckerService
             return TryAppendFormulaWorkdayHoliday(value, holidays, out error);
         }
 
-        private static bool TryAppendFormulaWorkdayHoliday(
+        private bool TryAppendFormulaWorkdayHoliday(
             ScalarValue value,
             HashSet<DateTime> holidays,
             out ErrorValue? error)
@@ -20729,7 +20729,7 @@ public static partial class AccessibilityCheckerService
             return count;
         }
 
-        private static int CountFormulaWorkdaysInclusive(DateTime lo, DateTime hi, IReadOnlyList<bool> weekendMask)
+        private int CountFormulaWorkdaysInclusive(DateTime lo, DateTime hi, IReadOnlyList<bool> weekendMask)
         {
             var totalDays = (int)(hi - lo).TotalDays + 1;
             var fullWeeks = totalDays / 7;
@@ -21294,7 +21294,7 @@ public static partial class AccessibilityCheckerService
             return weekday != 0 || returnType == 3;
         }
 
-        private static bool TryEvaluateFormulaWeeknum(double serial, int returnType, out int weeknum)
+        private bool TryEvaluateFormulaWeeknum(double serial, int returnType, out int weeknum)
         {
             weeknum = 0;
             if (returnType == 21)
@@ -21333,7 +21333,7 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static bool TryEvaluateFormulaIsoWeeknum(double serial, out int weeknum)
+        private bool TryEvaluateFormulaIsoWeeknum(double serial, out int weeknum)
         {
             weeknum = 0;
             if (!IsValidFormulaWeekDateSerial(serial))
@@ -21362,7 +21362,7 @@ public static partial class AccessibilityCheckerService
         private static bool IsValidFormulaTimeSerial(double serial) =>
             double.IsFinite(serial) && serial >= 0 && serial <= 2958465.0;
 
-        private static int FormulaExcelDowToMonIndex(DateTime date)
+        private int FormulaExcelDowToMonIndex(DateTime date)
         {
             var serial = (int)Math.Floor(FormulaDateToExcelSerial(date));
             return FormulaExcelDowToMonIndex(serial);
@@ -21370,22 +21370,19 @@ public static partial class AccessibilityCheckerService
 
         private static int FormulaExcelDowToMonIndex(int serial) => ((serial + 5) % 7 + 7) % 7;
 
-        private static DateTime FormulaExcelSerialToDate(double serial) =>
-            new DateTime(1899, 12, 30).AddDays(serial < 60 ? serial + 1 : serial);
+        private DateTime FormulaExcelSerialToDate(double serial) =>
+            ExcelDateSystem.SerialToDate(serial, workbook.Uses1904DateSystem);
 
-        private static double FormulaDateToExcelSerial(DateTime date)
-        {
-            var serial = (date - new DateTime(1899, 12, 30)).TotalDays;
-            return date < new DateTime(1900, 3, 1) ? serial - 1 : serial;
-        }
+        private double FormulaDateToExcelSerial(DateTime date) =>
+            ExcelDateSystem.DateToSerial(date, workbook.Uses1904DateSystem);
 
-        private static bool TryGetFormulaDateSerial(DateTime date, out double serial)
+        private bool TryGetFormulaDateSerial(DateTime date, out double serial)
         {
             serial = FormulaDateToExcelSerial(date.Date);
             return double.IsFinite(serial);
         }
 
-        private static bool TryCreateFormulaDateValue(
+        private bool TryCreateFormulaDateValue(
             int year,
             int month,
             int day,
@@ -21403,7 +21400,7 @@ public static partial class AccessibilityCheckerService
             var date = new DateTime(year, month, day);
             try
             {
-                var serial = date.ToOADate();
+                var serial = FormulaDateToExcelSerial(date);
                 if (!double.IsFinite(serial))
                     return false;
 
@@ -21420,21 +21417,14 @@ public static partial class AccessibilityCheckerService
             }
         }
 
-        private static bool TrySerialToDate(double serial, out DateTime date)
+        private bool TrySerialToDate(double serial, out DateTime date)
         {
             date = default;
-            if (!double.IsFinite(serial))
+            if (!ExcelDateSystem.TrySerialToDate(serial, workbook.Uses1904DateSystem, out var resolved))
                 return false;
 
-            try
-            {
-                date = DateTime.FromOADate(serial).Date;
-                return true;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
+            date = resolved.Date;
+            return true;
         }
 
         private static bool IsLastDayOfFebruary(DateTime date) =>
@@ -24436,7 +24426,7 @@ public static partial class AccessibilityCheckerService
                 aggregateRange = resolvedAggregateRange;
             }
 
-            var criteria = FormulaConditionalCriteriaMatcher.Create(criteriaValue);
+            var criteria = FormulaConditionalCriteriaMatcher.Create(criteriaValue, workbook.Uses1904DateSystem);
             var total = 0d;
             var count = 0;
             var flatCount = range.RowCount * range.ColCount;
@@ -24503,7 +24493,7 @@ public static partial class AccessibilityCheckerService
                 return true;
             }
 
-            var criteria = FormulaConditionalCriteriaMatcher.Create(criteriaValue);
+            var criteria = FormulaConditionalCriteriaMatcher.Create(criteriaValue, workbook.Uses1904DateSystem);
             var count = 0;
             for (var row = 0; row < range.RowCount; row++)
             {
@@ -24745,7 +24735,7 @@ public static partial class AccessibilityCheckerService
 
                 pairs[pairIndex] = new FormulaConditionalCriteriaPair(
                     criteriaRange,
-                    FormulaConditionalCriteriaMatcher.Create(criteriaValue));
+                    FormulaConditionalCriteriaMatcher.Create(criteriaValue, workbook.Uses1904DateSystem));
             }
 
             if (shapeRange is null)
@@ -24984,7 +24974,7 @@ public static partial class AccessibilityCheckerService
                 _bool = boolean;
             }
 
-            public static FormulaConditionalCriteriaMatcher Create(ScalarValue criteria)
+            public static FormulaConditionalCriteriaMatcher Create(ScalarValue criteria, bool uses1904DateSystem)
             {
                 if (criteria is BlankValue)
                     return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.TextEquals, text: string.Empty);
@@ -25004,7 +24994,7 @@ public static partial class AccessibilityCheckerService
                 var criteriaText = text.Value;
                 if (TrySplitFormulaConditionalCriteriaComparison(criteriaText, out var op, out var rhs))
                 {
-                    if (TryParseFormulaConditionalCriteriaNumber(rhs, out var rhsNumber))
+                    if (TryParseFormulaConditionalCriteriaNumber(rhs, uses1904DateSystem, out var rhsNumber))
                     {
                         return new FormulaConditionalCriteriaMatcher(
                             FormulaConditionalCriteriaMatcherKind.NumericComparison,
@@ -25027,7 +25017,7 @@ public static partial class AccessibilityCheckerService
                 if (IsFormulaConditionalWildcardCriteria(criteriaText))
                     return new FormulaConditionalCriteriaMatcher(FormulaConditionalCriteriaMatcherKind.WildcardText, text: criteriaText);
 
-                if (TryParseFormulaConditionalCriteriaNumber(criteriaText, out var numericCriteria))
+                if (TryParseFormulaConditionalCriteriaNumber(criteriaText, uses1904DateSystem, out var numericCriteria))
                 {
                     return new FormulaConditionalCriteriaMatcher(
                         FormulaConditionalCriteriaMatcherKind.NumericOrTextEquals,
@@ -25172,7 +25162,7 @@ public static partial class AccessibilityCheckerService
             return false;
         }
 
-        private static bool TryParseFormulaConditionalCriteriaNumber(string text, out double number)
+        private static bool TryParseFormulaConditionalCriteriaNumber(string text, bool uses1904DateSystem, out double number)
         {
             var trimmed = text.Trim();
             var percentCount = 0;
@@ -25202,7 +25192,7 @@ public static partial class AccessibilityCheckerService
             {
                 number = IsFormulaConditionalCriteriaTimeOnlyText(trimmed)
                     ? dateTime.TimeOfDay.TotalDays
-                    : FormulaDateToExcelSerial(dateTime);
+                    : ExcelDateSystem.DateToSerial(dateTime, uses1904DateSystem);
                 return true;
             }
 
@@ -25458,7 +25448,7 @@ public static partial class AccessibilityCheckerService
             return text.Length > 0;
         }
 
-        private static bool TryCollectFormulaDatabaseAggregateMatches(
+        private bool TryCollectFormulaDatabaseAggregateMatches(
             RangeValue database,
             int fieldColumn,
             RangeValue criteria,
@@ -25509,7 +25499,7 @@ public static partial class AccessibilityCheckerService
             return true;
         }
 
-        private static bool TryCreateFormulaDatabaseAggregateCriteriaRows(
+        private bool TryCreateFormulaDatabaseAggregateCriteriaRows(
             RangeValue database,
             RangeValue criteria,
             out List<FormulaDatabaseAggregateCriteriaRow> criteriaRows)
@@ -25536,7 +25526,7 @@ public static partial class AccessibilityCheckerService
 
                     pairs.Add(new FormulaDatabaseAggregateCriteriaPair(
                         databaseColumn,
-                        FormulaConditionalCriteriaMatcher.Create(criteriaValue)));
+                        FormulaConditionalCriteriaMatcher.Create(criteriaValue, workbook.Uses1904DateSystem)));
                 }
 
                 if (!impossibleRow)

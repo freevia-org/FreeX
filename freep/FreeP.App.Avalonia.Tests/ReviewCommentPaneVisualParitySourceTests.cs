@@ -32,4 +32,39 @@ public sealed class ReviewCommentPaneVisualParitySourceTests
         wpf.Should().Contain("MinWidth = 64");
         wpf.Should().Contain("MinWidth = 220");
     }
+
+    [Fact]
+    public void WpfAndAvaloniaReviewCommentInteractions_KeepResolveReplyAndSelectionOnTheSharedSession()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var avalonia = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Avalonia",
+            "MainWindow.cs"));
+        var wpf = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Host",
+            "MainWindow.cs"));
+
+        AssertSharedCommentWorkflowForwarders(avalonia);
+        AssertSharedCommentWorkflowForwarders(wpf);
+
+        avalonia.Should().Contain(
+            "border.PointerPressed += (_, _) => SelectReviewComment(comment.CommentIndex);");
+        avalonia.Should().Contain("if (comment.IsSelected && comment.CanReply)");
+
+        wpf.Should().Contain(
+            "cardHost.MouseLeftButtonDown += (_, _) => SelectReviewComment(cm.CommentIndex);");
+        wpf.Should().Contain("if (!cm.IsSelected || !cm.CanReply)");
+    }
+
+    private static void AssertSharedCommentWorkflowForwarders(string source)
+    {
+        source.Should().Contain("_reviewWorkflowSession.SelectReviewComment(");
+        source.Should().Contain("=> _reviewWorkflowSession.ResolveSelectedComment");
+        source.Should().Contain("=> _reviewWorkflowSession.ReopenSelectedComment()");
+        source.Should().Contain("=> _reviewWorkflowSession.ReplyToSelectedComment");
+    }
 }

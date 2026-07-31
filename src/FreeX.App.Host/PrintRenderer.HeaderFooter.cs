@@ -31,6 +31,7 @@ public static partial class PrintRenderer
         double marginLeft,
         double marginRight,
         double marginTop,
+        double marginBottom,
         double headerMargin,
         double footerMargin,
         PrintGridMeasurement measurement,
@@ -82,6 +83,7 @@ public static partial class PrintRenderer
             pageH,
             marginLeft,
             marginRight,
+            marginBottom,
             headerMargin,
             footerMargin,
             pageHeader,
@@ -115,12 +117,25 @@ public static partial class PrintRenderer
         // Defensive fit-to-page shrink: even after applying the configured scale, guard against residual
         // overflow on this page's own content (e.g. an oversized merged row) the same way the portable
         // PDF path does, relative to the already-scaled size -- never scale up here, only shrink further.
+        //
+        // R101-app-host-uniform-residual-scale-1: both overflow ratios must be derived from the SAME
+        // pre-clamp scaleRatio and combined with PageGeometryRules.ResolveUniformScale (Math.Min), not
+        // applied sequentially -- applying the width clamp first and then multiplying the height clamp
+        // on top of the ALREADY-width-shrunk ratio (the previous code here) computes
+        // scaleRatio*widthFitScale*heightFitScale (a PRODUCT of both shrinks) whenever both axes
+        // overflow at once, over-shrinking relative to the uniform-scale rule every other tier in this
+        // codebase applies (PageContentRenderModelBuilder.ResolveScaleRatio,
+        // WorkbookPdfContentBuilder.ComputeActualGridSizes) -- e.g. a 10% width overflow and a 20%
+        // height overflow used to compound to a ~28% shrink here instead of the correct, uniform 20%.
         var scaledPrintedWidth = printedWidth * scaleRatio;
         var scaledPrintedHeight = printedHeight * scaleRatio;
-        if (scaledPrintedWidth > printableW && scaledPrintedWidth > 0)
-            scaleRatio = Math.Min(scaleRatio, scaleRatio * (printableW / scaledPrintedWidth));
-        if (scaledPrintedHeight > printableH && scaledPrintedHeight > 0)
-            scaleRatio = Math.Min(scaleRatio, scaleRatio * (printableH / scaledPrintedHeight));
+        var widthFitScale = scaledPrintedWidth > printableW && scaledPrintedWidth > 0
+            ? printableW / scaledPrintedWidth
+            : 1.0;
+        var heightFitScale = scaledPrintedHeight > printableH && scaledPrintedHeight > 0
+            ? printableH / scaledPrintedHeight
+            : 1.0;
+        scaleRatio *= PageGeometryRules.ResolveUniformScale(widthFitScale, heightFitScale);
         if (!double.IsFinite(scaleRatio) || scaleRatio <= 0)
             scaleRatio = 1.0;
 
@@ -138,7 +153,7 @@ public static partial class PrintRenderer
         // already computed for this same page, causing the header text to visually collide with the
         // first printed row whenever Header margin &gt; Top margin.
         var contentLeft = marginLeft + xOffset;
-        var contentTop = Math.Max(marginTop, headerMargin) + yOffset;
+        var contentTop = PageGeometryRules.ResolveBodyEdge(marginTop, headerMargin) + yOffset;
         var gridLeft = contentLeft + measurement.HeaderWidth * scaleRatio;
         var gridTop = contentTop + measurement.HeaderHeight * scaleRatio;
 

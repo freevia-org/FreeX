@@ -86,6 +86,18 @@ public sealed class PivotValueFieldSettingsParitySourceTests
     }
 
     [Fact]
+    public void AvaloniaValueFieldSettings_UsesLocalizedShowValuesAsValidationMessages()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs"));
+
+        source.Should().Contain("PivotValueFieldPlanner.ValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem)");
+        source.Should().Contain("PivotValueFieldPlanner.DescribeValidationError(validationError)");
+        source.Should().Contain("ShowEditIssue(UiText.Get(errorPlan.ResourceKey));");
+        source.Should().Contain("FocusInvalidShowValuesAsInput(valueFieldTabs!, baseFieldBox, baseItemBox, baseFieldIndex);");
+        source.Should().NotContain("PivotValueFieldPlanner.TryValidateShowValuesAs(showValuesAs, baseFieldIndex, baseItem");
+    }
+
+    [Fact]
     public void SharedValueFieldResultPlanner_RoundTripsNumberFormatSelection()
     {
         var field = new FreeX.Core.Model.PivotDataFieldModel(

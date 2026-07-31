@@ -1,3 +1,4 @@
+using System.Xml.Linq;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -411,6 +412,10 @@ internal static partial class RowColumnShiftHelpers
         public List<ChartSeriesVerbatimFormulas>? VerbatimSeriesFormulas { get; init; }
         // Per-series data-label formula snapshot: (SeriesIndex, Formula?)
         public List<(int SeriesIndex, string? Formula)>? DataLabelFormulas { get; init; }
+        // R100: snapshot of the verbatim multi-level category <c:cat> raw-XML entries so a
+        // structural-edit undo restores the pre-edit <c:f> formula text alongside the other
+        // verbatim collections (see RewriteMultiLevelCategoryXml).
+        public List<ChartSeriesRawXmlEntry>? MultiLevelCategoryXml { get; init; }
         // Custom error-bar plus/minus range-source formulas (R16-chart-datasource-editing-1).
         // ErrorBarsCaptured distinguishes "chart had error-bar formulas" from "not captured".
         public bool ErrorBarsCaptured { get; init; }
@@ -456,14 +461,19 @@ internal static partial class RowColumnShiftHelpers
 
             var hasErrorBars = chart.ErrorBarPlusRangeFormula is not null || chart.ErrorBarMinusRangeFormula is not null;
 
-            result.Add(verbatim is not null || dlFormulas is not null || hasErrorBars
+            List<ChartSeriesRawXmlEntry>? multiLevelCategory = null;
+            if (chart.MultiLevelCategoryXml is { Count: > 0 } mlc)
+                multiLevelCategory = new List<ChartSeriesRawXmlEntry>(mlc); // records are immutable — safe to share
+
+            result.Add(verbatim is not null || dlFormulas is not null || hasErrorBars || multiLevelCategory is not null
                 ? new ChartVerbatimSnapshot
                 {
                     VerbatimSeriesFormulas    = verbatim,
                     DataLabelFormulas         = dlFormulas,
                     ErrorBarsCaptured         = hasErrorBars,
                     ErrorBarPlusRangeFormula  = chart.ErrorBarPlusRangeFormula,
-                    ErrorBarMinusRangeFormula = chart.ErrorBarMinusRangeFormula
+                    ErrorBarMinusRangeFormula = chart.ErrorBarMinusRangeFormula,
+                    MultiLevelCategoryXml     = multiLevelCategory
                 }
                 : null);
         }
@@ -542,7 +552,63 @@ internal static partial class RowColumnShiftHelpers
                 chart.ErrorBarPlusRangeFormula = newPlus;
             if (!ReferenceEquals(newMinus, chart.ErrorBarMinusRangeFormula))
                 chart.ErrorBarMinusRangeFormula = newMinus;
+
+            // R100: the verbatim <c:cat><c:multiLvlStrRef> raw-XML capture carries its own
+            // <c:f> source-range formula, embedded inside the raw XML string rather than as a
+            // scalar property, so it needs its own rewrite pass alongside VerbatimSeriesFormulas
+            // above — otherwise a grouped/multi-level category axis keeps pointing at the
+            // pre-edit cells after a structural row/column insert or delete.
+            if (chart.MultiLevelCategoryXml is { Count: > 0 } mlc)
+            {
+                for (int i = 0; i < mlc.Count; i++)
+                {
+                    var entry = mlc[i];
+                    var rewritten = RewriteMultiLevelCategoryXml(entry.RawXml, op, hostSheetName);
+                    if (rewritten is not null && rewritten != entry.RawXml)
+                        mlc[i] = entry with { RawXml = rewritten };
+                }
+            }
         }
+    }
+
+    private static readonly XNamespace ChartXmlNamespace = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+
+    /// <summary>
+    /// Rewrites the &lt;c:f&gt; source-range formula(s) embedded inside a captured
+    /// &lt;c:cat&gt;&lt;c:multiLvlStrRef&gt; raw-XML string (see
+    /// <see cref="ChartModel.MultiLevelCategoryXml"/>), using the same
+    /// <see cref="FormulaRewriter"/> path used for every other chart formula. Returns null
+    /// (leave untouched) if the payload fails to parse or contains no &lt;c:f&gt;.
+    /// </summary>
+    private static string? RewriteMultiLevelCategoryXml(string rawXml, RewriteOperation op, string hostSheetName)
+    {
+        XElement element;
+        try
+        {
+            element = XElement.Parse(rawXml);
+        }
+        catch
+        {
+            // Malformed captured payload; leave it untouched rather than lose it.
+            return null;
+        }
+
+        bool anyChanged = false;
+        foreach (var f in element.Descendants(ChartXmlNamespace + "f").ToList())
+        {
+            var formula = f.Value;
+            if (string.IsNullOrEmpty(formula))
+                continue;
+
+            var rewritten = RewriteVerbatimFormula(formula, op, hostSheetName);
+            if (rewritten is not null && rewritten != formula)
+            {
+                f.Value = rewritten;
+                anyChanged = true;
+            }
+        }
+
+        return anyChanged ? element.ToString(SaveOptions.DisableFormatting) : null;
     }
 
     /// <summary>
@@ -605,6 +671,13 @@ internal static partial class RowColumnShiftHelpers
             {
                 chart.ErrorBarPlusRangeFormula = snap.ErrorBarPlusRangeFormula;
                 chart.ErrorBarMinusRangeFormula = snap.ErrorBarMinusRangeFormula;
+            }
+
+            // R100: undo restores the pre-edit multi-level category <c:cat> raw XML.
+            if (snap.MultiLevelCategoryXml is not null)
+            {
+                chart.MultiLevelCategoryXml.Clear();
+                chart.MultiLevelCategoryXml.AddRange(snap.MultiLevelCategoryXml);
             }
         }
     }
@@ -707,5 +780,98 @@ internal static partial class RowColumnShiftHelpers
         }
         parts.Add(text[start..]);
         return parts.ToArray();
+    }
+
+    /// <summary>
+    /// R100: rewrites every chart on every sheet in the workbook whose verbatim series
+    /// formulas (Val/Cat/Tx/BubbleSize), series-range data-label source formulas, or
+    /// error-bar range formulas reference the table <paramref name="op"/> is renaming --
+    /// the chart-formula counterpart of <see cref="RewriteRuleFormulas"/> for CF/DV rules,
+    /// used by <c>RenameStructuredTableCommand</c> so a table rename fixes every chart in
+    /// the workbook, not just cell formulas and CF/DV rules.
+    /// <para>
+    /// Deliberately does NOT reuse <see cref="RewriteChartVerbatimFormulas(Sheet, RewriteOperation, string)"/>
+    /// / <see cref="RewriteVerbatimFormula"/>: those pre-split each formula on every
+    /// unquoted top-level comma to support OOXML's parenthesised multi-area range union
+    /// syntax (e.g. <c>(Sheet1!$A$1:$A$5,Sheet1!$C$1:$C$5)</c>), but a structured reference
+    /// like <c>Table1[[#Headers],[Values]]</c> contains an unquoted comma INSIDE its own
+    /// bracket pair -- that splitter would corrupt it into two bogus fragments. A table-name
+    /// rename can never touch a multi-area union in the first place (unions are plain cell
+    /// ranges, never structured references), so this instead runs each formula through
+    /// <see cref="FormulaRewriter.Rewrite"/> whole, with no pre-splitting -- mirroring how
+    /// <c>DuplicateSheetDrawingCloner.RewriteClonedChartTableReferences</c> hit and solved
+    /// the exact same trap for the single-sheet duplicate-sheet path. Revert is handled by
+    /// the existing <see cref="CaptureChartVerbatimFormulas(Workbook)"/> /
+    /// <see cref="RestoreChartVerbatimFormulas(Workbook, List{ChartVerbatimWorkbookSnapshot})"/>
+    /// pair (they snapshot/restore whole records, so BubbleSizeFormula and error bars are
+    /// covered automatically).
+    /// </para>
+    /// </summary>
+    internal static void RewriteAllChartFormulasForTableRename(Workbook workbook, RenameTableOp op)
+    {
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var chart in sheet.Charts)
+            {
+                if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
+                {
+                    for (var i = 0; i < vf.Count; i++)
+                    {
+                        var entry = vf[i];
+                        var newVal = RewriteWholeChartFormula(entry.ValFormula, op);
+                        var newCat = RewriteWholeChartFormula(entry.CatFormula, op);
+                        var newTx = RewriteWholeChartFormula(entry.TxFormula, op);
+                        var newBubble = RewriteWholeChartFormula(entry.BubbleSizeFormula, op);
+                        if (!string.Equals(newVal, entry.ValFormula, StringComparison.Ordinal) ||
+                            !string.Equals(newCat, entry.CatFormula, StringComparison.Ordinal) ||
+                            !string.Equals(newTx, entry.TxFormula, StringComparison.Ordinal) ||
+                            !string.Equals(newBubble, entry.BubbleSizeFormula, StringComparison.Ordinal))
+                        {
+                            vf[i] = entry with
+                            {
+                                ValFormula = newVal,
+                                CatFormula = newCat,
+                                TxFormula = newTx,
+                                BubbleSizeFormula = newBubble
+                            };
+                        }
+                    }
+                }
+
+                if (chart.SeriesRangeDataLabels is { Count: > 0 } dl)
+                {
+                    for (var i = 0; i < dl.Count; i++)
+                    {
+                        var entry = dl[i];
+                        var rewritten = RewriteWholeChartFormula(entry.Formula, op);
+                        if (!string.Equals(rewritten, entry.Formula, StringComparison.Ordinal))
+                            dl[i] = entry with { Formula = rewritten };
+                    }
+                }
+
+                var newPlus = RewriteWholeChartFormula(chart.ErrorBarPlusRangeFormula, op);
+                var newMinus = RewriteWholeChartFormula(chart.ErrorBarMinusRangeFormula, op);
+                if (!string.Equals(newPlus, chart.ErrorBarPlusRangeFormula, StringComparison.Ordinal))
+                    chart.ErrorBarPlusRangeFormula = newPlus;
+                if (!string.Equals(newMinus, chart.ErrorBarMinusRangeFormula, StringComparison.Ordinal))
+                    chart.ErrorBarMinusRangeFormula = newMinus;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Runs a single chart verbatim-formula string through <see cref="FormulaRewriter.Rewrite"/>
+    /// whole (no comma pre-splitting -- see <see cref="RewriteAllChartFormulasForTableRename"/>).
+    /// The host-sheet-name parameter ordinary structural rewrites need is irrelevant for a
+    /// <see cref="RenameTableOp"/>: it matches purely by table name, with no
+    /// sheet-qualification concept, so any non-null placeholder is safe to pass (mirrors
+    /// <c>DuplicateSheetCommand.RewriteFormulaForTableRenames</c>).
+    /// </summary>
+    private static string? RewriteWholeChartFormula(string? formulaText, RenameTableOp op)
+    {
+        if (string.IsNullOrWhiteSpace(formulaText))
+            return formulaText;
+
+        return FormulaRewriter.Rewrite(formulaText, op, string.Empty) ?? formulaText;
     }
 }

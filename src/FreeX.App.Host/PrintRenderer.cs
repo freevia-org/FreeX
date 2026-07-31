@@ -47,6 +47,7 @@ public static partial class PrintRenderer
         var marginLeft = printPlan.Metrics.MarginLeft;
         var marginRight = printPlan.Metrics.MarginRight;
         var marginTop = printPlan.Metrics.MarginTop;
+        var marginBottom = printPlan.Metrics.MarginBottom;
         var headerMargin = printPlan.Metrics.HeaderMargin;
         var footerMargin = printPlan.Metrics.FooterMargin;
 
@@ -123,6 +124,7 @@ public static partial class PrintRenderer
                 marginLeft,
                 marginRight,
                 marginTop,
+                marginBottom,
                 headerMargin,
                 footerMargin,
                 measurement,

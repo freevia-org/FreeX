@@ -73,7 +73,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                     "zoomScaleNormal", "zoomScaleSheetLayoutView", "zoomScalePageLayoutView"
                 ]);
 
-            RefreshPerViewModeZoom(sheetView, sheet, pvAttrs);
+            RefreshPerViewModeZoom(sheetView, sheet, pvAttrs, metadata?.Get(XlsxWorksheetLayoutMetadataReader.LoadedViewModeBagKey));
 
             // Excel marks exactly one sheetView (the active tab) with tabSelected="1" and omits the
             // attribute on every other sheet; sync it here from the live Workbook.ActiveSheetIndex on
@@ -152,7 +152,8 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
     private static void RefreshPerViewModeZoom(
         XElement sheetView,
         Sheet sheet,
-        IReadOnlyDictionary<string, string>? pvAttrs)
+        IReadOnlyDictionary<string, string>? pvAttrs,
+        string? loadedViewModeRaw)
     {
         foreach (var attributeName in PerViewModeZoomAttributeNames)
         {
@@ -160,7 +161,8 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, attributeName, staleValue);
         }
 
-        var currentZoomAttribute = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal) switch
+        var currentViewMode = XlsxWorksheetValueSanitizer.ValidEnumOrDefault(sheet.ViewMode, WorksheetViewMode.Normal);
+        var currentZoomAttribute = currentViewMode switch
         {
             WorksheetViewMode.PageBreakPreview => "zoomScaleSheetLayoutView",
             WorksheetViewMode.PageLayout => "zoomScalePageLayoutView",
@@ -169,18 +171,37 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
 
         var zoomValue = sheet.ZoomPercent.ToString(CultureInfo.InvariantCulture);
 
+        // If we know the view mode this sheetView was actually loaded with (see
+        // XlsxWorksheetLayoutMetadataReader.ReadWorksheetPrimaryViewMetadata's LoadedViewModeBagKey)
+        // and the sheet is STILL in that exact same mode, there is no possibility a mode switch ever
+        // happened this session -- so the live zoom cannot have been merely inherited from some other
+        // mode. In that case the current mode's own attribute must be updated unconditionally to the
+        // live zoom, even if it happens to numerically coincide with another mode's remembered value
+        // (e.g. the user deliberately sets Normal's zoom to the same 150% Page Layout remembers from
+        // an earlier session): a coincidence check would otherwise misclassify that genuine change as
+        // "inherited" and silently drop it (see R100_ZoomChangedToCoincidentallyMatchingOtherModeValue_
+        // StillPersistsToCurrentModesAttribute).
+        if (loadedViewModeRaw is not null &&
+            XlsxWorksheetXmlValueParser.ParseWorksheetViewMode(loadedViewModeRaw) == currentViewMode)
+        {
+            XlsxWorksheetNativeMetadataHelpers.TrySetNativeAttribute(sheetView, currentZoomAttribute, zoomValue);
+            return;
+        }
+
         // FreeX models a single live Sheet.ZoomPercent shared by all three view modes (no per-view-
         // mode zoom memory of its own -- see the type comment above), so switching view mode with no
         // zoom action at all simply carries the PREVIOUS mode's zoom value into ZoomPercent
         // unchanged. Blindly overwriting the newly-current mode's own remembered zoomScale<Mode>
         // attribute with that merely-inherited value would silently discard Excel's genuine
         // per-mode zoom memory for a save that never touched zoom (see the regression this guards
-        // against). Without a dedicated "did the user actually zoom while in this mode" model flag,
-        // the only available signal is whether the live value matches one of the file's OTHER
-        // per-mode zoom attributes as loaded: if so, it was almost certainly just inherited from the
-        // mode the user switched out of, so the current mode's own stale value (already reseeded
-        // above) is left untouched. Only a live value that matches none of the other modes' loaded
-        // zoom is treated as a genuine zoom change and persisted into the current mode's attribute.
+        // against). When we don't positively know the mode is unchanged since load (either the mode
+        // really did just change, or -- for a sheet with no LoadedViewModeBagKey signal at all -- we
+        // simply don't know), the only available signal is whether the live value matches one of the
+        // file's OTHER per-mode zoom attributes as loaded: if so, it was almost certainly just
+        // inherited from the mode the user switched out of, so the current mode's own stale value
+        // (already reseeded above) is left untouched. Only a live value that matches none of the
+        // other modes' loaded zoom is treated as a genuine zoom change and persisted into the
+        // current mode's attribute.
         var matchesAnotherModesLoadedZoom = pvAttrs is not null &&
             PerViewModeZoomAttributeNames.Any(attributeName =>
                 attributeName != currentZoomAttribute &&

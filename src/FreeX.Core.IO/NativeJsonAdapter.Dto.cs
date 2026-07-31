@@ -920,9 +920,15 @@ public sealed partial class NativeJsonAdapter
         public bool Superscript { get; set; }
         public bool Subscript { get; set; }
         public CellColor FontColor { get; set; } = CellColor.Black;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ThemeColorReferenceDto? FontThemeColor { get; set; }
         public CellColor? FillColor { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ThemeColorReferenceDto? FillThemeColor { get; set; }
         public CellFillPatternStyle FillPatternStyle { get; set; }
         public CellColor? FillPatternColor { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ThemeColorReferenceDto? FillPatternThemeColor { get; set; }
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public CellGradientFillDto? GradientFill { get; set; }
         public CellBorderDto? BorderTop { get; set; }

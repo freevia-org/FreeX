@@ -6945,6 +6945,84 @@ public partial class FileAdapterSmokeTests
         loadedStyle.Hidden.Should().BeTrue();
     }
 
+    // R100: cell-level theme-color bindings (FontThemeColor/FillThemeColor/FillPatternThemeColor)
+    // must round-trip through the native .fxl adapter the same way CellBorder.ThemeColor already does,
+    // so a theme-linked cell color keeps following the workbook theme after a save/load cycle (parity
+    // with the XLSX-path fix in R19_ThemeCellColorTests.cs).
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_CellStyleThemeColors()
+    {
+        var workbook = new Workbook("StyleThemeNativeTest");
+        var sheet = workbook.AddSheet("S1");
+        var address = new CellAddress(sheet.Id, 6, 7);
+        var cell = Cell.FromValue(new TextValue("themed"));
+        cell.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(12, 34, 56),
+            FontThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.25),
+            FillColor = new CellColor(200, 210, 220),
+            FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, -0.4),
+            FillPatternStyle = CellFillPatternStyle.DarkGrid,
+            FillPatternColor = new CellColor(90, 80, 70),
+            FillPatternThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1),
+        });
+        sheet.SetCell(address, cell);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedCell = loaded.GetSheetAt(0).GetCell(new CellAddress(loaded.GetSheetAt(0).Id, 6, 7));
+        loadedCell.Should().NotBeNull();
+        var loadedStyle = loaded.GetStyle(loadedCell!.StyleId);
+
+        loadedStyle.FontThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.25));
+        loadedStyle.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent1, -0.4));
+        loadedStyle.FillPatternThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.1));
+
+        // Baked-fallback colors must still be preserved alongside the theme bindings.
+        loadedStyle.FontColor.Should().Be(new CellColor(12, 34, 56));
+        loadedStyle.FillColor.Should().Be(new CellColor(200, 210, 220));
+        loadedStyle.FillPatternColor.Should().Be(new CellColor(90, 80, 70));
+    }
+
+    // R100 sibling: styles with NO theme-color bindings must still round-trip as before (null stays null),
+    // guarding against the new mapper always materializing a default WorkbookThemeColorReference.
+    [Fact]
+    public void NativeJsonAdapter_RoundTrip_CellStyleWithoutThemeColors_StaysNull()
+    {
+        var workbook = new Workbook("StyleNoThemeNativeTest");
+        var sheet = workbook.AddSheet("S1");
+        var address = new CellAddress(sheet.Id, 8, 9);
+        var cell = Cell.FromValue(new TextValue("plain"));
+        cell.StyleId = workbook.RegisterStyle(new CellStyle
+        {
+            FontColor = new CellColor(1, 2, 3),
+            FillColor = new CellColor(4, 5, 6),
+        });
+        sheet.SetCell(address, cell);
+
+        var ms = new MemoryStream();
+        var adapter = new NativeJsonAdapter();
+        adapter.Save(workbook, ms);
+        ms.Position = 0;
+
+        var loaded = adapter.Load(ms);
+
+        var loadedCell = loaded.GetSheetAt(0).GetCell(new CellAddress(loaded.GetSheetAt(0).Id, 8, 9));
+        loadedCell.Should().NotBeNull();
+        var loadedStyle = loaded.GetStyle(loadedCell!.StyleId);
+
+        loadedStyle.FontThemeColor.Should().BeNull();
+        loadedStyle.FillThemeColor.Should().BeNull();
+        loadedStyle.FillPatternThemeColor.Should().BeNull();
+        loadedStyle.FontColor.Should().Be(new CellColor(1, 2, 3));
+        loadedStyle.FillColor.Should().Be(new CellColor(4, 5, 6));
+    }
+
     [Fact]
     public void NativeJsonAdapter_RoundTrip_StyleOnlyCells()
     {
@@ -13018,18 +13096,19 @@ public partial class FileAdapterSmokeTests
         externalReferences.Should().NotBeNull();
         externalReferences!.Attribute("customExternalReferencesFlag").Should().BeNull();
         externalReferences.Element(workbookNs + "nativeExternalReferencesChild").Should().BeNull();
-        // R96-io-external-link-preserver-1: the fixture's THIRD entry (a literal duplicate of the
-        // first, resolved, r:id) still collapses into the first entry -- that pre-existing dedup
-        // behavior is unchanged. But the SECOND entry (a blank r:id, unresolvable) must now reserve
-        // its own ordinal slot instead of being silently dropped, exactly like
-        // XlsxExternalLinkMetadataReader already does on the read side for the same shape of input
-        // (see R96_ExternalLinkOrdinalPositionAfterUnresolvedReferenceTests) -- dropping it would
-        // shift any later externalReference's Excel '[n]' bracket-index down by one relative to what
-        // the source file encoded.
+        // R96-io-external-link-preserver-1 (SECOND entry, blank r:id) + R101-io-external-link-
+        // preserver-duplicate-rid (THIRD entry, a literal duplicate of the first, resolved, r:id):
+        // both must now reserve their own ordinal slot instead of being silently dropped/collapsed,
+        // exactly like XlsxExternalLinkMetadataReader already does on the read side for the same
+        // shape of input (see R96_ExternalLinkOrdinalPositionAfterUnresolvedReferenceTests). Before
+        // the r101 fix, the duplicate THIRD entry collapsed into the first entry's slot (a post-hoc
+        // "already emitted this targetRelId" dedup skipped re-adding it) -- silently shifting any
+        // later externalReference's Excel '[n]' bracket-index down by one relative to what the
+        // source file encoded. Dropping either entry would be equally observable damage.
         var externalReferenceElements = externalReferences
             .Elements(workbookNs + "externalReference")
             .ToList();
-        externalReferenceElements.Should().HaveCount(2, "the blank second entry must reserve an empty placeholder ordinal slot, not be dropped");
+        externalReferenceElements.Should().HaveCount(3, "the blank second entry and the duplicate-r:id third entry must each reserve their own ordinal slot, not be dropped or collapsed");
 
         var externalReference = externalReferenceElements[0];
         externalReference.Attribute(relNs + "id")!.Value.Should().Be("rIdFreeXExternalLink");
@@ -13038,14 +13117,26 @@ public partial class FileAdapterSmokeTests
         var workbookRelsXml = LoadPackageXml(archive.GetEntry("xl/_rels/workbook.xml.rels")!);
         workbookRelsXml.ToString().Should().Contain("externalLink1.xml");
 
-        var placeholder = externalReferenceElements[1];
-        var placeholderRelId = placeholder.Attribute(relNs + "id")!.Value;
-        placeholderRelId.Should().NotBeNullOrWhiteSpace();
-        placeholder.Elements().Should().BeEmpty();
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var blankPlaceholder = externalReferenceElements[1];
+        var blankPlaceholderRelId = blankPlaceholder.Attribute(relNs + "id")!.Value;
+        blankPlaceholderRelId.Should().NotBeNullOrWhiteSpace();
+        blankPlaceholder.Elements().Should().BeEmpty();
         workbookRelsXml.Root!
-            .Elements(XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships") + "Relationship")
-            .Any(relationship => relationship.Attribute("Id")?.Value == placeholderRelId)
-            .Should().BeFalse("the reserved placeholder slot must stay unbacked by any relationship, exactly like the blank r:id already was in the source");
+            .Elements(packageRelNs + "Relationship")
+            .Any(relationship => relationship.Attribute("Id")?.Value == blankPlaceholderRelId)
+            .Should().BeFalse("the reserved placeholder slot for the blank r:id must stay unbacked by any relationship, exactly like the blank r:id already was in the source");
+
+        var duplicatePlaceholder = externalReferenceElements[2];
+        var duplicatePlaceholderRelId = duplicatePlaceholder.Attribute(relNs + "id")!.Value;
+        duplicatePlaceholderRelId.Should().NotBeNullOrWhiteSpace();
+        duplicatePlaceholderRelId.Should().NotBe(blankPlaceholderRelId, "the two reserved placeholders must not collide with each other's minted r:id");
+        duplicatePlaceholder.Elements().Should().BeEmpty();
+        workbookRelsXml.Root!
+            .Elements(packageRelNs + "Relationship")
+            .Any(relationship => relationship.Attribute("Id")?.Value == duplicatePlaceholderRelId)
+            .Should().BeFalse("the reserved placeholder slot for the duplicate r:id must stay unbacked by any relationship, mirroring the read side's treatment of a repeated r:id as its own blank slot");
     }
 
     [Fact]
