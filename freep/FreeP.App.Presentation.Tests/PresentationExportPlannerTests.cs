@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -969,6 +970,43 @@ public sealed class PresentationExportPlannerTests
         plan.HeaderFooterPlaceholders
             .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.SlideNumber)
             .Text.Should().Be("1", "visible slide-number intent gets deterministic metadata even before notes-master IO is modeled");
+    }
+
+    [Fact]
+    public void NotesPagePreviewPlan_ResolvesUncachedDateAndSlideNumberFields()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide
+        {
+            Title = "Field notes",
+            HfVisibility = new HfFlags
+            {
+                ShowDate = true,
+                ShowSlideNum = true
+            }
+        };
+        slide.Notes = MakeTextBody("Talk track");
+        slide.Shapes.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.DateTime,
+            string.Empty,
+            "datetime1",
+            cachedText: string.Empty));
+        slide.Shapes.Add(MakeHeaderFooterPlaceholder(
+            PlaceholderType.SlideNumber,
+            string.Empty,
+            "slidenum",
+            cachedText: string.Empty));
+        presentation.Slides.Add(slide);
+
+        var plan = PresentationNotesPagePreviewPlanner.Build(presentation, currentSlideIndex: 0);
+
+        plan.HeaderFooterPlaceholders
+            .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.DateTime)
+            .Text.Should().Be(DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture));
+        plan.HeaderFooterPlaceholders
+            .Single(placeholder => placeholder.Kind == PresentationNotesPagePlaceholderKind.SlideNumber)
+            .Text.Should().Be("1");
     }
 
     [Fact]

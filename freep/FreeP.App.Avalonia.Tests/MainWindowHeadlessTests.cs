@@ -3208,6 +3208,10 @@ public sealed class MainWindowHeadlessTests
         var foundDuration = false;
         var foundDelay = false;
         var foundPane = false;
+        var paneStateful = false;
+        var paneInitiallyChecked = true;
+        var paneCheckedAfterShow = false;
+        var paneCheckedAfterHide = true;
         AnimationPreset? preset = null;
         int? duration = null;
         int? delay = null;
@@ -3231,11 +3235,15 @@ public sealed class MainWindowHeadlessTests
             foundDuration = registry.TryGet("freep.anim.duration", out var durationCommand);
             foundDelay = registry.TryGet("freep.anim.delay", out var delayCommand);
             foundPane = registry.TryGet("freep.anim.pane", out var pane);
+            paneStateful = pane is IRibbonStatefulCommand;
+            var paneState = pane as IRibbonStatefulCommand;
+            paneInitiallyChecked = paneState?.GetState().IsChecked ?? true;
 
             fade!.Execute(RibbonCommandContext.Empty);
             durationCommand!.Execute(RibbonCommandContext.ForSelectedValue("1.50s"));
             delayCommand!.Execute(RibbonCommandContext.ForSelectedValue("0.25s"));
             pane!.Execute(RibbonCommandContext.Empty);
+            paneCheckedAfterShow = paneState?.GetState().IsChecked == true;
 
             var animation = window.Editor.CurrentSlideAnimations.Single();
             preset = animation.Preset;
@@ -3249,13 +3257,20 @@ public sealed class MainWindowHeadlessTests
             previewEnabled = window.IsAnimationPanePreviewEnabled;
             playbackControls = window.AnimationPanePlaybackControls.ToArray();
             paneRows = window.AnimationPaneRenderedRows.ToArray();
+
+            pane.Execute(RibbonCommandContext.Empty);
+            paneCheckedAfterHide = paneState?.GetState().IsChecked == true;
         });
 
         if (!ran) return;
         foundFade.Should().BeTrue("animation effects must be registered through the Avalonia registry");
         foundDuration.Should().BeTrue("duration must be registered through the Avalonia registry");
         foundDelay.Should().BeTrue("delay must be registered through the Avalonia registry");
-        foundPane.Should().BeTrue("pane command is exposed as a conservative callback/no-op intent");
+        foundPane.Should().BeTrue("the animation pane command must be registered");
+        paneStateful.Should().BeTrue("WPF exposes the animation pane command as a stateful ribbon toggle");
+        paneInitiallyChecked.Should().BeFalse("the animation pane starts closed");
+        paneCheckedAfterShow.Should().BeTrue("the checked state must follow the open pane");
+        paneCheckedAfterHide.Should().BeFalse("the checked state must follow the closed pane");
         preset.Should().Be(AnimationPreset.Fade);
         duration.Should().Be(1500);
         delay.Should().Be(250);

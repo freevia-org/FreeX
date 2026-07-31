@@ -2473,14 +2473,60 @@ public sealed class SlideCanvas : FrameworkElement
                 text,
                 flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight).Width);
 
+        double previousEndX = startX;
         foreach (var segment in plan.Segments)
         {
+            var run = para.Runs[segment.RunIndex];
             var ft = BuildSingleRunFormattedTextAt(
-                para.Runs[segment.RunIndex],
+                run,
                 segment.Text,
                 flowDirection: para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight);
+
+            DrawTabLeaderWpf(
+                dc,
+                run,
+                segment.Leader,
+                previousEndX,
+                segment.X,
+                startY,
+                para.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight);
             dc.DrawText(ft, new Point(segment.X, startY));
+            previousEndX = segment.X + ft.WidthIncludingTrailingWhitespace;
         }
+    }
+
+    private static void DrawTabLeaderWpf(
+        DrawingContext dc,
+        ResolvedRun run,
+        TabStopLeader leader,
+        double startX,
+        double endX,
+        double y,
+        FlowDirection flowDirection)
+    {
+        var glyph = TextLayoutPlanner.GetTabLeaderGlyph(leader);
+        double width = endX - startX;
+        if (glyph == '\0' || width < 1)
+            return;
+
+        var glyphText = BuildSingleRunFormattedTextAt(
+            run,
+            glyph.ToString(),
+            flowDirection: flowDirection);
+        double glyphWidth = glyphText.WidthIncludingTrailingWhitespace;
+        if (glyphWidth <= 0)
+            return;
+
+        int count = (int)Math.Floor(width / glyphWidth);
+        if (count <= 0)
+            return;
+
+        dc.DrawText(
+            BuildSingleRunFormattedTextAt(
+                run,
+                new string(glyph, count),
+                flowDirection: flowDirection),
+            new Point(startX, y));
     }
 
     /// <summary>

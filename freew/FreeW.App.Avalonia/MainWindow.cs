@@ -101,6 +101,7 @@ public sealed partial class MainWindow : Window
     private readonly OutlineView _outlineView;
     private Control? _ribbonControl;
     private IRibbonCommandRegistry? _ribbonRegistry;
+    private int _ribbonStateRefreshCount;
     private bool _ribbonKeyTipsVisible;
     private Border? _findBar;
     private FindReplaceDialog? _findReplaceDialog;
@@ -471,6 +472,7 @@ public sealed partial class MainWindow : Window
         _navPane.IsVisible = !_navPane.IsVisible;
         if (_navPane.IsVisible)
             _navPane.Refresh();
+        RefreshRibbonCommandStates();
     }
 
     /// <summary>
@@ -482,6 +484,7 @@ public sealed partial class MainWindow : Window
         _reviewingPane.IsVisible = !_reviewingPane.IsVisible;
         if (_reviewingPane.IsVisible)
             _reviewingPane.Refresh();
+        RefreshRibbonCommandStates();
     }
 
     /// <summary>
@@ -506,6 +509,7 @@ public sealed partial class MainWindow : Window
         _revealPane.IsVisible = !_revealPane.IsVisible;
         if (_revealPane.IsVisible)
             _revealPane.Refresh();
+        RefreshRibbonCommandStates();
     }
 
     /// <summary>
@@ -1700,12 +1704,15 @@ public sealed partial class MainWindow : Window
             SetPrintLayout: () => SetViewMode(DocumentViewMode.PrintLayout),
             SetWebLayout:   () => SetViewMode(DocumentViewMode.WebLayout),
             SetDraftView:   () => SetViewMode(DocumentViewMode.Draft),
-            IsPrintLayoutActive: () => !_outlineMode && !_pagedEditMode && _editor.ViewMode == DocumentViewMode.PrintLayout,
-            IsWebLayoutActive: () => !_outlineMode && !_pagedEditMode && _editor.ViewMode == DocumentViewMode.WebLayout,
-            IsDraftViewActive: () => !_outlineMode && !_pagedEditMode && _editor.ViewMode == DocumentViewMode.Draft,
+            IsPrintLayoutActive: () => !_outlineMode && !_pagedEditMode &&
+                _editor.ViewMode == DocumentViewMode.PrintLayout,
+            IsWebLayoutActive: () => !_outlineMode && !_pagedEditMode &&
+                _editor.ViewMode == DocumentViewMode.WebLayout,
+            IsDraftViewActive: () => !_outlineMode && !_pagedEditMode &&
+                _editor.ViewMode == DocumentViewMode.Draft,
             IsNavigationPaneVisible: () => _navPane.IsVisible,
-            IsReviewingPaneVisible: () => _reviewingPane.IsVisible,
             IsRevealFormattingVisible: () => _revealPane.IsVisible,
+            IsReviewingPaneVisible: () => _reviewingPane.IsVisible,
             SetOutlineView: ToggleOutlineView,
             IsOutlineViewActive: () => _outlineMode,
             OpenFontDialog:      () => _ = OpenFontDialogAsync(),
@@ -1910,7 +1917,11 @@ public sealed partial class MainWindow : Window
             definition,
             registry,
             contextSource: contextSource,
-            afterExecute: () => _editor.Focus(),
+            afterExecute: () =>
+            {
+                RefreshRibbonCommandStates();
+                _editor.Focus();
+            },
             palette: RibbonVisualPalette.FromTheme(App.ActiveTheme),
             onFileTabSelected: () => _ = ShowBackstageAsync());
         HasToolbar = true;
@@ -2492,6 +2503,7 @@ public sealed partial class MainWindow : Window
         _outlineView.Refresh();
         UpdateViewModeButtons();
         UpdateStatus();
+        RefreshRibbonCommandStates();
     }
 
     private void LeaveOutlineView(bool restorePriorView = true)
@@ -2505,6 +2517,7 @@ public sealed partial class MainWindow : Window
             _workspace.Child = _liveWorkspaceContent;
         UpdateViewModeButtons();
         UpdateStatus();
+        RefreshRibbonCommandStates();
         _editor.Focus();
     }
 
@@ -2521,6 +2534,7 @@ public sealed partial class MainWindow : Window
         if (_viewDepthPlan.IsSplitActive)
             RefreshSplitPreviewSnapshot();
         UpdateViewModeButtons();
+        RefreshRibbonCommandStates();
         _editor.Focus();
     }
 
@@ -2565,6 +2579,7 @@ public sealed partial class MainWindow : Window
 
         UpdateViewModeButtons();
         UpdateStatus();
+        RefreshRibbonCommandStates();
         _editor.Focus();
     }
 
@@ -2632,6 +2647,7 @@ public sealed partial class MainWindow : Window
 
         UpdateViewModeButtons();
         UpdateStatus();
+        RefreshRibbonCommandStates();
         _editor.Focus();
     }
 
@@ -2664,6 +2680,7 @@ public sealed partial class MainWindow : Window
     internal bool IsNavigationPaneVisibleForTests => _navPane.IsVisible;
     internal bool IsRevealPaneVisibleForTests => _revealPane.IsVisible;
     internal bool IsReviewingPaneVisibleForTests => _reviewingPane.IsVisible;
+    internal int RibbonStateRefreshCountForTests => _ribbonStateRefreshCount;
     internal void SetReadModePaneVisibilityForTests(bool navigation, bool reveal, bool reviewing)
     {
         _navPane.IsVisible = navigation;
@@ -3930,6 +3947,7 @@ public sealed partial class MainWindow : Window
         if (_ribbonControl is null || _ribbonRegistry is null)
             return;
 
+        _ribbonStateRefreshCount++;
         AvaloniaRibbonRenderer.SyncToggleStates(
             _ribbonControl,
             _ribbonRegistry,
