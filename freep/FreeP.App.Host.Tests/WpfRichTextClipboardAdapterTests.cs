@@ -213,6 +213,28 @@ public sealed class WpfRichTextClipboardAdapterTests
     }
 
     [StaFact]
+    public void TryPasteDataObject_PreservesXamlFlowDirection()
+    {
+        const string xaml =
+            "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" FlowDirection=\"RightToLeft\"><Paragraph><Run Text=\"אבג\"/><Run FlowDirection=\"LeftToRight\" Text=\"LTR\"/></Paragraph></FlowDocument>";
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(
+            DataFormats.XamlPackage,
+            new MemoryStream(CreateXamlPackage(xaml)),
+            autoConvert: false);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        updated!.Paragraphs.Single().RightToLeft.Should().BeTrue();
+        updated.Paragraphs.Single().Runs.Select(run => run.RightToLeft)
+            .Should().Equal(true, false);
+    }
+
+    [StaFact]
     public void BuildDataObject_PublishesFreePAndNativeRichFormats()
     {
         var source = Body();
