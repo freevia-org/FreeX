@@ -36,6 +36,20 @@ internal static class ExternalSheetReferenceResolver
         return (link, sheetIndex.Value);
     }
 
+    /// <summary>
+    /// True when <paramref name="sheetName"/> has the bracketed external-workbook shape
+    /// (<c>[book]sheet</c> or <c>[n]sheet</c>), regardless of whether it actually resolves against
+    /// <paramref name="workbook"/>'s cached <see cref="ExternalLinkModel"/> data via
+    /// <see cref="TryResolve"/>. Callers use this to distinguish "this really is an external-workbook
+    /// reference that just can't be resolved right now" -- e.g. a numeric index landing on a
+    /// broken-source-reference placeholder link (see XlsxExternalLinkMetadataReader) with no cached
+    /// sheets at all, or a sheet name absent from an otherwise-resolvable link's cached SheetNames --
+    /// from "this is simply a bad/unknown local sheet name", which must genuinely evaluate to #REF!
+    /// rather than have a stale value preserved forever.
+    /// </summary>
+    public static bool IsExternalReferenceSyntax(string sheetName) =>
+        TrySplitBracketedReference(sheetName, out _, out _);
+
     private static bool TrySplitBracketedReference(string sheetName, out string book, out string sheet)
     {
         book = "";
@@ -314,6 +328,23 @@ public sealed partial class FormulaEvaluator
                     "preserving the last-known loaded value instead of recomputing to blank.");
             }
 
+            // The bracketed reference has the external-workbook shape but couldn't be resolved at
+            // all -- e.g. a numeric index landing on a broken-source-reference placeholder link (see
+            // XlsxExternalLinkMetadataReader's blank/duplicate/unresolvable r:id handling) with no
+            // cached sheets, or a sheet name absent from an otherwise-resolvable link's cached
+            // SheetNames. This is still an external-workbook reference Excel would keep showing its
+            // last-known cached value for (flagging it as broken only once the user runs Edit Links >
+            // Update Values), not a genuine local #REF!. Throw the same exception the resolved-but-
+            // uncached branch above uses so RecalcEngine's external-workbook-reference preservation
+            // guard fires here too, instead of returning ErrorValue.Ref as a normal result that would
+            // get stored straight into the cell and permanently clobber its loaded value.
+            if (ExternalSheetReferenceResolver.IsExternalReferenceSyntax(sheetName))
+            {
+                throw new FormulaParseException(
+                    $"External reference '{sheetName}' could not be resolved against the workbook's " +
+                    "external links; preserving the last-known loaded value instead of recomputing to #REF!.");
+            }
+
             return ErrorValue.Ref;
         }
 
@@ -337,7 +368,23 @@ public sealed partial class FormulaEvaluator
             if (target is null)
             {
                 var external = ExternalSheetReferenceResolver.TryResolve(_workbook, sheetName);
-                if (external is not { } resolved) return [ErrorValue.Ref];
+                if (external is not { } resolved)
+                {
+                    // Mirror the scalar GetCellValue(sheetName, ...) behavior: a bracketed reference
+                    // that has the external-workbook shape but couldn't be resolved at all (broken
+                    // placeholder link, or sheet name absent from the link's cached SheetNames) must
+                    // still preserve the cell's last-known loaded value via RecalcEngine's guard,
+                    // rather than returning ErrorValue.Ref as a normal result that clobbers it.
+                    if (ExternalSheetReferenceResolver.IsExternalReferenceSyntax(sheetName))
+                    {
+                        throw new FormulaParseException(
+                            $"External reference '{sheetName}' could not be resolved against the " +
+                            "workbook's external links; preserving the last-known loaded value instead " +
+                            "of recomputing to #REF!.");
+                    }
+
+                    return [ErrorValue.Ref];
+                }
 
                 var externalValues = CreateRangeValueList(r0, c0, r1, c1);
                 if (externalValues is null) return [new RangeMaterializationErrorValue(ErrorValue.Ref)];

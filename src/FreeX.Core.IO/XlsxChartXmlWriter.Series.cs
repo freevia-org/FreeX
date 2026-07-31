@@ -164,15 +164,16 @@ internal static partial class XlsxChartXmlWriter
             // heuristic reflects live worksheet data that has no relation to the verbatim range, and
             // choosing the wrong ref type here would nest a captured <c:numCache> inside a <c:strRef>
             // (or vice versa), which is schema-invalid.
-            var verbatimCategoryCache = verbatim?.CatFormula is not null
-                ? TryParseChartXml(verbatim.CatCacheXml)
-                : null;
-            var effectiveCategoryIsNumeric = verbatim?.CatFormula is not null
-                ? verbatimCategoryCache?.Name.LocalName == "numCache"
-                : categoryIsNumeric;
+            XElement? verbatimCategoryCache = null;
+            var effectiveCategoryIsNumeric = categoryIsNumeric;
+            if (verbatim?.CatFormula is not null)
+            {
+                verbatimCategoryCache = ResolveVerbatimCategoryCacheXml(workbook, sheet.Id, verbatim.CatFormula, verbatim.CatCacheXml, chartNs, out var catIsNumeric);
+                effectiveCategoryIsNumeric = catIsNumeric;
+            }
             var valueCache = verbatim?.ValFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), GetStripNumberFormatCode(workbook, sheet, layout, strip), chartNs)
-                : TryParseChartXml(verbatim.ValCacheXml);
+                : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.ValFormula, verbatim.ValCacheXml, chartNs);
             var categoryCache = verbatim?.CatFormula is not null
                 ? verbatimCategoryCache
                 : (categoryStripValues is not null
@@ -326,6 +327,142 @@ internal static partial class XlsxChartXmlWriter
 
     private static ChartSeriesVerbatimFormulas? GetVerbatimFormulas(ChartModel chart, int seriesIndex) =>
         chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
+
+    /// <summary>
+    /// R107-io-chart-series-verbatim-refresh: attempts to resolve a verbatim series container's
+    /// formula against the CURRENT workbook and read the CURRENT cell values it points at, so the
+    /// caller can rebuild a fresh cache instead of re-emitting the frozen snapshot captured when
+    /// the source file was originally opened (see <see cref="ChartSeriesVerbatimFormulas"/>).
+    /// <para>
+    /// <paramref name="formula"/> was only ever captured verbatim because, at load time, it either
+    /// could not be parsed as a rectangular range at all (named range, multi-area reference, or
+    /// external-workbook link — <c>XlsxChartSeriesRangeReader.TryParseFormulaRange</c> returns
+    /// false), or it resolved cleanly but to a sheet OTHER than the chart's own host sheet
+    /// (R106-io-chart-series-cross-sheet). Real Excel has no notion of a chart writer "confined" to
+    /// one sheet: an ordinary cross-sheet series formula always shows the CURRENT cell values on
+    /// every save. So whenever the formula still resolves — its target sheet still exists and the
+    /// range collapses to a single row or single column (the only shape a flat cache can express) —
+    /// this reads today's values fresh. Only a genuinely unparsable formula, or one whose target
+    /// sheet was since deleted, or one that resolves to a non-strip (multi-row-and-column)
+    /// rectangle, returns false and leaves the caller to fall back to the frozen verbatim cache —
+    /// mirroring Excel, which also cannot show live data for an unresolvable name/link without
+    /// recalculating it itself.
+    /// </para>
+    /// </summary>
+    private static bool TryReadVerbatimRangeCurrentValues(
+        Workbook workbook,
+        SheetId hostSheetId,
+        string formula,
+        out ScalarValue[] values,
+        out string formatCode,
+        out bool isNumeric)
+    {
+        values = [];
+        formatCode = "General";
+        isNumeric = false;
+
+        // A multi-area union (e.g. "Data!$A$1,Data!$A$3") has no single rectangular range to
+        // resolve at all. TryParseFormulaRange only inspects the text after the LAST '!' in the
+        // string, so a comma-joined formula like this one would otherwise be misread as a
+        // reference to whatever single cell follows that last '!' (here, cell A3) instead of being
+        // rejected — silently fabricating a cache from the wrong cell. Reject up front so this
+        // always falls back to the frozen verbatim cache, exactly like a genuinely unparsable
+        // formula.
+        if (formula.Contains(',', StringComparison.Ordinal))
+            return false;
+
+        var sheetNameResolver = workbook.Sheets.ToDictionary(s => s.Name, s => s.Id, StringComparer.OrdinalIgnoreCase);
+        if (!XlsxChartSeriesRangeReader.TryParseFormulaRange(formula, hostSheetId, sheetNameResolver, out var range))
+            return false;
+
+        var targetSheet = workbook.GetSheet(range.Start.Sheet);
+        if (targetSheet is null)
+            return false;
+
+        var isSingleColumn = range.Start.Col == range.End.Col;
+        if (!isSingleColumn && range.Start.Row != range.End.Row)
+            return false;
+
+        var count = isSingleColumn ? (int)range.RowCount : (int)range.ColCount;
+        var resolved = new ScalarValue[count];
+        for (var i = 0; i < count; i++)
+        {
+            resolved[i] = isSingleColumn
+                ? targetSheet.GetValue(range.Start.Row + (uint)i, range.Start.Col)
+                : targetSheet.GetValue(range.Start.Row, range.Start.Col + (uint)i);
+        }
+        values = resolved;
+
+        var hasAnyValue = false;
+        var allNumericOrBlank = true;
+        foreach (var value in resolved)
+        {
+            if (value is BlankValue)
+                continue;
+            hasAnyValue = true;
+            if (value is not NumberValue and not DateTimeValue)
+            {
+                allNumericOrBlank = false;
+                break;
+            }
+        }
+        isNumeric = hasAnyValue && allNumericOrBlank;
+
+        var firstCell = targetSheet.GetCell(range.Start.Row, range.Start.Col);
+        if (firstCell is not null)
+        {
+            var code = workbook.GetStyle(firstCell.StyleId).NumberFormat;
+            if (!string.IsNullOrEmpty(code))
+                formatCode = code;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// R107-io-chart-series-verbatim-refresh: resolves a verbatim VALUE container (val/xVal/yVal/
+    /// bubbleSize — always numeric, mirroring the ordinary recomputed-strip path which never checks
+    /// point type before calling <see cref="BuildNumCacheXml"/>). Rebuilds fresh from the current
+    /// workbook when the formula still resolves; falls back to the frozen
+    /// <paramref name="cachedXml"/> only when it cannot be resolved at all.
+    /// </summary>
+    private static XElement? ResolveVerbatimValueCacheXml(
+        Workbook workbook,
+        SheetId hostSheetId,
+        string formula,
+        string? cachedXml,
+        XNamespace chartNs) =>
+        TryReadVerbatimRangeCurrentValues(workbook, hostSheetId, formula, out var values, out var formatCode, out _)
+            ? BuildNumCacheXml(values, formatCode, chartNs)
+            : TryParseChartXml(cachedXml);
+
+    /// <summary>
+    /// R107-io-chart-series-verbatim-refresh: resolves a verbatim CATEGORY container (cat — may be
+    /// numeric/date or text), setting <paramref name="isNumeric"/> so the caller can also pick the
+    /// matching numRef-vs-strRef container type. Rebuilds fresh from the current workbook when the
+    /// formula still resolves; falls back to the frozen <paramref name="cachedXml"/> (and that
+    /// cache's own root-element name to decide numeric-ness — see R103-io-chart-series-verbatim-
+    /// cache) only when it cannot be resolved at all.
+    /// </summary>
+    private static XElement? ResolveVerbatimCategoryCacheXml(
+        Workbook workbook,
+        SheetId hostSheetId,
+        string formula,
+        string? cachedXml,
+        XNamespace chartNs,
+        out bool isNumeric)
+    {
+        if (TryReadVerbatimRangeCurrentValues(workbook, hostSheetId, formula, out var values, out var formatCode, out isNumeric))
+        {
+            return isNumeric
+                ? BuildNumCacheXml(values, formatCode, chartNs)
+                : BuildStrCacheXml(values, chartNs);
+        }
+
+        var frozen = TryParseChartXml(cachedXml);
+        isNumeric = frozen?.Name.LocalName == "numCache";
+        return frozen;
+    }
 
     /// <summary>
     /// R103-io-chart-series-tx-1: returns the captured &lt;c:tx&gt; formula for this series (see
@@ -540,10 +677,10 @@ internal static partial class XlsxChartXmlWriter
                 ?? FormatStripRange(layout, sheet.Name, strip);
             var xValueCache = verbatim?.CatFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, xValueStrip), chartNs)
-                : TryParseChartXml(verbatim.CatCacheXml);
+                : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.CatFormula, verbatim.CatCacheXml, chartNs);
             var yValueCache = verbatim?.ValFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), GetStripNumberFormatCode(workbook, sheet, layout, strip), chartNs)
-                : TryParseChartXml(verbatim.ValCacheXml);
+                : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.ValFormula, verbatim.ValCacheXml, chartNs);
 
             var txElement = ResolveSeriesTitleXml(chart, sheet, layout, strip, seriesIndex, chartNs, verbatim?.TxFormula);
 
@@ -657,13 +794,13 @@ internal static partial class XlsxChartXmlWriter
                 ?? FormatStripRange(layout, sheet.Name, sizeStrip);
             var xValueCache = verbatim?.CatFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, xValueStrip), chartNs)
-                : TryParseChartXml(verbatim.CatCacheXml);
+                : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.CatFormula, verbatim.CatCacheXml, chartNs);
             var yValueCache = verbatim?.ValFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, yValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, yValueStrip), chartNs)
-                : TryParseChartXml(verbatim.ValCacheXml);
+                : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.ValFormula, verbatim.ValCacheXml, chartNs);
             var sizeCache = verbatim?.BubbleSizeFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, sizeStrip), GetStripNumberFormatCode(workbook, sheet, layout, sizeStrip), chartNs)
-                : TryParseChartXml(verbatim.BubbleSizeCacheXml);
+                : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.BubbleSizeFormula, verbatim.BubbleSizeCacheXml, chartNs);
 
             var txElement = ResolveSeriesTitleXml(chart, sheet, layout, yValueStrip, seriesIndex, chartNs, verbatim?.TxFormula);
 
@@ -725,15 +862,16 @@ internal static partial class XlsxChartXmlWriter
             // R103-io-chart-series-verbatim-cache: see the identical comment in BuildChartSeries —
             // the ref-type choice for a verbatim category must follow the captured cache's own root
             // element name, not the live-worksheet heuristic.
-            var verbatimCategoryCache = verbatim?.CatFormula is not null
-                ? TryParseChartXml(verbatim.CatCacheXml)
-                : null;
-            var effectiveCategoryIsNumeric = verbatim?.CatFormula is not null
-                ? verbatimCategoryCache?.Name.LocalName == "numCache"
-                : categoryIsNumeric;
+            XElement? verbatimCategoryCache = null;
+            var effectiveCategoryIsNumeric = categoryIsNumeric;
+            if (verbatim?.CatFormula is not null)
+            {
+                verbatimCategoryCache = ResolveVerbatimCategoryCacheXml(workbook, sheet.Id, verbatim.CatFormula, verbatim.CatCacheXml, chartNs, out var catIsNumeric);
+                effectiveCategoryIsNumeric = catIsNumeric;
+            }
             var valueCache = verbatim?.ValFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, valueStrip), GetStripNumberFormatCode(workbook, sheet, layout, valueStrip), chartNs)
-                : TryParseChartXml(verbatim.ValCacheXml);
+                : ResolveVerbatimValueCacheXml(workbook, sheet.Id, verbatim.ValFormula, verbatim.ValCacheXml, chartNs);
             var categoryCache = verbatim?.CatFormula is not null
                 ? verbatimCategoryCache
                 : (categoryStripValues is not null

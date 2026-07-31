@@ -32,6 +32,26 @@ namespace FreeX.Core.IO.Tests;
 /// <c>WriteDrawingTextBoxFingerprint</c>/<c>WriteDrawingShapeFingerprint</c> must be updated to include
 /// the new field BEFORE that command can safely ship.
 /// </para>
+/// <para>
+/// AUDIT (R106, Duplicate Sheet): fired for <c>DuplicateSheetDrawingCloner</c>'s rebase of a
+/// duplicated sheet's own drawing hyperlinks. Not a hole -- a just-duplicated sheet has no
+/// worksheet path in the source package, so <c>PackageAllowsCellPatchSave</c> always forces the
+/// full rebuild for that save. Allowlisted via <c>AllowedRewriteSameSheetHyperlinkTargetRhs</c>.
+/// </para>
+/// <para>
+/// AUDIT (R108, Rename/Delete Sheet): fired again for <c>RenameSheetCommand</c>/
+/// <c>RemoveSheetCommand</c>'s R107 drawing-object hyperlink rewrite in <c>SheetCommands.cs</c>.
+/// Also not a hole, but via a DIFFERENT mechanism than R106 (traced concretely rather than assumed):
+/// a rename changes the live <c>Sheet.Name</c> away from the key <c>PackageAllowsCellPatchSave</c>'s
+/// <c>worksheetPathMap.SheetPathsByName</c> lookup uses (the PRISTINE baseline's name), so that
+/// lookup fails with <c>"package_guard_sheet_path_missing"</c>; a delete leaves an unmatched
+/// worksheet part in the archive, failing with <c>"package_guard_unmatched_worksheet_part"</c>.
+/// Either way the full rebuild is forced for the whole workbook, independent of the hyperlink
+/// rewrite -- confirmed both by existing tests (<c>R102_RenameSheetPreservedPartsTests</c> asserts
+/// <c>LastSaveDiagnostics.Path == XlsxSavePath.FullSave</c> for a plain rename) and by a direct
+/// real-Load/real-Command/real-Save probe against a shape hyperlink during this audit. Allowlisted
+/// via <c>AllowedDrawingObjectHyperlinkRewriterRhs</c>/<c>AllowedDrawingObjectHyperlinkUndoRestoreRhs</c>.
+/// </para>
 /// </summary>
 public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
 {
@@ -99,6 +119,58 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
         @"^RewriteSameSheetHyperlinkTarget\(\w+(\.\w+)*\.Hyperlink$",
         RegexOptions.Compiled);
 
+    // REVIEWED-AND-SAFE (R108-rename-delete-sheet-drawing-hyperlink-rewrite audit): this guard
+    // fired again when R107 made RenameSheetCommand/RemoveSheetCommand's Apply methods start
+    // assigning `shape.Hyperlink = rewrittenDrawingObjectHyperlink` (and the TextBox/Picture/Chart
+    // siblings) in SheetCommands.cs -- a computed (non-copy-forward) value produced by the
+    // file-local DrawingObjectHyperlinkRewriter.Rewrite helper, breaking the "no command can SET a
+    // hyperlink" premise again, the same way DuplicateSheetDrawingCloner's rebase did in R106.
+    // AUDITED: still NOT a patch-safety hole, but for a DIFFERENT reason than R106's duplicate-sheet
+    // case (a rename/delete is a different operation than a duplication and reaches the patch-path
+    // guard through a different check -- this was traced concretely, not assumed from R106's
+    // conclusion). PackageAllowsCellPatchSave (XlsxFileAdapter.SourcePackageSnapshot.cs) builds
+    // `sheetsByWorksheetPath` by looking up each LIVE `sheet.Name` in the source package's
+    // `worksheetPathMap.SheetPathsByName` (keyed by the sheet names as they were in the PRISTINE
+    // baseline, i.e. before this session's edits). A rename changes the live Sheet.Name but the
+    // baseline map still has the OLD name as its key, so that lookup unconditionally fails with
+    // blockReason "package_guard_sheet_path_missing", forcing the full ClosedXML rebuild (which
+    // recomputes drawing/chart XML from the current model, including the now-rewritten Hyperlink)
+    // for the WHOLE workbook every time ANY sheet has been renamed -- independent of whether a
+    // hyperlink was touched at all. A delete forces the same outcome even more directly: the
+    // deleted sheet's own worksheetN.xml entry survives in the source archive with no matching live
+    // sheet, so the unmatched-worksheet-part sweep over `archive.Entries` fails with
+    // "package_guard_unmatched_worksheet_part" first. Both are proven by EXISTING, already-green
+    // tests independent of this audit -- R102_RenameSheetPreservedPartsTests's four cases each
+    // assert `adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, "renaming a sheet
+    // is a structural edit that must not go through the cell-value patch shortcut")` -- so the cheap
+    // cell-patch path this guard's fingerprint actually gates is categorically unreachable for
+    // either command whenever the rewrite could have fired. This was additionally verified directly
+    // against the real product entry point (real Load -> RenameSheetCommand/RemoveSheetCommand ->
+    // real Save) during this audit: a workbook with a shape hyperlink, renamed/deleted then saved,
+    // reports `LastSaveDiagnostics.Path == XlsxSavePath.FullSave` in both cases. So the fingerprint
+    // methods do NOT need to start comparing Hyperlink for this case either; only this allowlist
+    // needed updating, so the guard keeps working for the NEXT command that sets a drawing/chart
+    // Hyperlink outside of a full-rebuild-forcing sheet-identity operation.
+    // The two RHS shapes below are the local variable names SheetCommands.cs uses for this pass,
+    // deliberately spelled out as compound, feature-specific identifiers (NOT the generic bare
+    // "rewritten"/"oldValue" R107 originally used) specifically so this allowlist entry stays
+    // narrow: a genuinely new, unrelated non-copy-forward Hyperlink assignment elsewhere that
+    // happens to also use a short generic local name would NOT match either pattern below and would
+    // still trip this guard as intended.
+    private static readonly Regex AllowedDrawingObjectHyperlinkRewriterRhs = new(
+        @"^rewrittenDrawingObjectHyperlink$",
+        RegexOptions.Compiled);
+
+    // The Undo/Revert side of the same pass: restores the object's OWN pre-rewrite Hyperlink value
+    // from a snapshot captured at Apply time (`_drawingShapeHyperlinkRenameSnapshot.Add((shape,
+    // shape.Hyperlink))` etc.) -- semantically a pure copy-forward/restore of data the object
+    // already carried, just routed through a captured tuple instead of a direct `x.Hyperlink`
+    // property-access expression (so it cannot match AllowedCopyForwardRhs above), and introduces no
+    // new data whatsoever.
+    private static readonly Regex AllowedDrawingObjectHyperlinkUndoRestoreRhs = new(
+        @"^savedDrawingObjectHyperlink$",
+        RegexOptions.Compiled);
+
     [Fact]
     public void NoCommandAssignsANewDrawingOrChartHyperlinkValue_WithoutUpdatingThePatchSafetyFingerprint()
     {
@@ -144,7 +216,10 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
             foreach (Match match in HyperlinkAssignmentPattern.Matches(text))
             {
                 var rhs = match.Groups[1].Value.Trim();
-                if (AllowedCopyForwardRhs.IsMatch(rhs) || AllowedRewriteSameSheetHyperlinkTargetRhs.IsMatch(rhs))
+                if (AllowedCopyForwardRhs.IsMatch(rhs) ||
+                    AllowedRewriteSameSheetHyperlinkTargetRhs.IsMatch(rhs) ||
+                    AllowedDrawingObjectHyperlinkRewriterRhs.IsMatch(rhs) ||
+                    AllowedDrawingObjectHyperlinkUndoRestoreRhs.IsMatch(rhs))
                     continue;
 
                 var lineNumber = text.AsSpan(0, match.Index).Count('\n') + 1;

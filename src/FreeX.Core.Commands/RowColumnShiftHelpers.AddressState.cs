@@ -281,7 +281,7 @@ internal static partial class RowColumnShiftHelpers
 
         var snapshots = new List<PivotCacheSourceSnapshot>(workbook.PivotCaches.Count);
         foreach (var cache in workbook.PivotCaches)
-            snapshots.Add(new PivotCacheSourceSnapshot(cache, cache.SourceSheetName, cache.SourceReference));
+            snapshots.Add(new PivotCacheSourceSnapshot(cache, cache.SourceSheetName, cache.SourceReference, cache.SourceTableId));
 
         return snapshots;
     }
@@ -390,7 +390,12 @@ internal static partial class RowColumnShiftHelpers
         sheet.StructuredTables.AddRange(snapshot.StructuredTables);
 
         foreach (var entry in snapshot.PivotCaches)
+        {
             entry.Cache.SourceReference = entry.SourceReference;
+            // R107-round2: undoes ShiftStructuredTables's orphan-id pin (if any) the same way every
+            // other field on this snapshot is put back — see PivotCacheSourceSnapshot.SourceTableId.
+            entry.Cache.SourceTableId = entry.SourceTableId;
+        }
 
         workbook.Scenarios.Clear();
         workbook.Scenarios.AddRange(snapshot.Scenarios);
@@ -493,7 +498,7 @@ internal static partial class RowColumnShiftHelpers
         ShiftCrossSheetPictureRefs(workbook, snapshot, shift);
         ShiftSparklines(sheet, snapshot, shift);
         ShiftPivotTables(workbook, snapshot, shift);
-        ShiftStructuredTables(sheet, snapshot, shift);
+        ShiftStructuredTables(workbook, sheet, snapshot, shift);
         ShiftPivotCaches(snapshot, shift);
         ShiftScenarios(workbook, snapshot, shift);
         ShiftFormControls(sheet, snapshot, shift);
@@ -1399,13 +1404,27 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
-    private static void ShiftStructuredTables(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
+    private static void ShiftStructuredTables(Workbook workbook, Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
         sheet.StructuredTables.Clear();
         foreach (var table in snapshot.StructuredTables)
         {
             if (shift.ShiftRange(table.Range) is { } range)
+            {
                 sheet.StructuredTables.Add(CopyStructuredTableWithRange(table, range, shift));
+                continue;
+            }
+
+            // R107-round2: a row/column delete that fully consumes a structured table's range is a
+            // THIRD way (alongside Convert to Range and Delete Sheet) a table's name gets freed
+            // workbook-wide -- shift.ShiftRange returning null here means the table itself is gone,
+            // not merely resized. Pin any never-refreshed table-backed pivot cache's SourceTableId the
+            // same way those two sites do (see CommandGuards.PinOrphanedPivotCacheSourceTableIds), so
+            // a later rename/create onto the freed name can't get silently rebound to by the next
+            // refresh's null-id fallback. Undo is handled by RestoreAddressBearingState restoring
+            // every cache's SourceTableId from the snapshot taken before this shift ran (see
+            // CapturePivotCaches/PivotCacheSourceSnapshot) -- no separate unpin list needed here.
+            CommandGuards.PinOrphanedPivotCacheSourceTableIds(workbook, table);
         }
     }
 
@@ -2199,7 +2218,12 @@ internal readonly record struct PivotTableAddressSnapshot(
 internal readonly record struct PivotCacheSourceSnapshot(
     PivotCacheModel Cache,
     string? SourceSheetName,
-    string? SourceReference);
+    string? SourceReference,
+    // R107-round2: captured BEFORE any shift runs, so RestoreAddressBearingState can put
+    // SourceTableId back to whatever it was pre-Apply -- undoing ShiftStructuredTables's orphan pin
+    // (see its doc comment) without a separate tracked list, exactly like SourceReference already does
+    // for ShiftPivotCaches's own mutation.
+    int? SourceTableId);
 
 internal readonly record struct FormControlAddressSnapshot(
     FormControlModel Control,

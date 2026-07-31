@@ -82,6 +82,65 @@ public static class CommandGuards
         return null;
     }
 
+    /// <summary>
+    /// R107-round2: shared "a structured table's name is about to be freed" guard for every command
+    /// that removes a <see cref="StructuredTableModel"/> from a sheet's <c>StructuredTables</c>
+    /// collection — Convert to Range, Delete Sheet, and a row/column delete that fully consumes the
+    /// table's range are the three known ways this happens (see PivotTableRefreshService.Refresh's
+    /// id-or-name fallback doc comment for the full hazard). A table-backed pivot cache that has never
+    /// been refreshed since the file was loaded (the normal starting state — WorkbookOpenService never
+    /// calls PivotTableRefreshService.Refresh at open time) still identifies its source purely by
+    /// <see cref="PivotCacheModel.SourceTableName"/>, with <see cref="PivotCacheModel.SourceTableId"/>
+    /// left null. Left alone, that dangling name is exactly what a later rename (or a brand-new table)
+    /// reusing the freed name would collide with — the next refresh's null-id fallback would then
+    /// resolve the dangling name against that unrelated table and silently rebind the pivot to its
+    /// data. Pinning every such cache's SourceTableId to the removed table's own (now-orphaned) id at
+    /// the moment the name is freed closes that: the id-based lookup in
+    /// PivotTableRefreshService.Refresh then leaves the pivot's last-known extent untouched instead of
+    /// ever falling back to a name match against a decoy. A cache that has already established a
+    /// different SourceTableId (the post-first-refresh state) is left untouched — this never touches
+    /// pivot caches that are already correctly bound. Returns the caches that were pinned so the
+    /// caller can null <see cref="PivotCacheModel.SourceTableId"/> back out via
+    /// <see cref="UnpinOrphanedPivotCacheSourceTableIds"/> on Undo.
+    ///
+    /// Also ratchets <see cref="Workbook.NextStructuredTableIdWatermark"/> up to at least
+    /// <paramref name="removedTable"/>'s id, unconditionally (even when no pivot cache matches it by
+    /// name). This is the ONLY point every table-removal path funnels through, so it is also where a
+    /// table that predates any in-session <c>CreateStructuredTableCommand</c> call (e.g. one loaded
+    /// straight from a file, whose id the watermark has never seen) gets its id remembered before it's
+    /// gone — otherwise a table removed as the very first structured-table action in a session (nothing
+    /// yet having called NextTableId while it was still live to raise the live-scanned max) would let a
+    /// same-session <c>CreateStructuredTableCommand</c> immediately hand its id right back out. This
+    /// also protects a table-connected <see cref="SlicerModel.SourceTableId"/> (which is pure id-based,
+    /// with no name fallback of its own to guard) from silently re-attaching to an unrelated new table
+    /// that reused its old, dead table's id.
+    /// </summary>
+    public static List<PivotCacheModel> PinOrphanedPivotCacheSourceTableIds(Workbook workbook, StructuredTableModel removedTable)
+    {
+        workbook.NextStructuredTableIdWatermark = Math.Max(workbook.NextStructuredTableIdWatermark, removedTable.Id);
+
+        List<PivotCacheModel>? orphaned = null;
+        foreach (var cache in workbook.PivotCaches)
+        {
+            if (cache.SourceType != PivotCacheSourceType.Table || cache.SourceTableId is not null)
+                continue;
+            if (!string.Equals(cache.SourceTableName, removedTable.Name, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            (orphaned ??= []).Add(cache);
+            cache.SourceTableId = removedTable.Id;
+        }
+
+        return orphaned ?? [];
+    }
+
+    /// <summary>Undoes <see cref="PinOrphanedPivotCacheSourceTableIds"/>: puts SourceTableId back to null.</summary>
+    public static void UnpinOrphanedPivotCacheSourceTableIds(IReadOnlyList<PivotCacheModel> orphanedCaches)
+    {
+        foreach (var cache in orphanedCaches)
+            cache.SourceTableId = null;
+    }
+
     public static CommandOutcome RejectPivotTableNameRequired() =>
         new(false, PivotTableNameRequiredMessage);
 

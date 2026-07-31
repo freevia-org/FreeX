@@ -278,6 +278,13 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
     // filter-funnel icon never shows "active" (BuildActiveAutoFilterColumns/DecorateAutoFilterHeaderCell
     // only look at sheet.AutoFilter.FilterColumns) and the criterion is silently dropped on save/reload.
     private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
+    // R107-commands-autofilter-table-color-sync-1: WorksheetAutoFilterColumnSync above is a no-op
+    // whenever _range is a structured table's own Range (tables carry their own <autoFilter> rather
+    // than a worksheet-level one) -- keep the TABLE's own FilterColumns model in sync too, mirroring
+    // TopBottomFilterCommand/FilterConditionCommand's R106 fix for the same gap, otherwise a Filter by
+    // Cell Color applied from a Table's header dropdown hides/shows rows live but is silently dropped
+    // from the table's <autoFilter> XML on save/reload.
+    private StructuredTableFilterColumnSnapshot? _tableFilterSnapshot;
 
     public string Label => "Filter by Cell Color";
 
@@ -338,6 +345,19 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
                 NativeFiltersAttributes: null,
                 NativeFilterXmls: []));
 
+        // R107-commands-autofilter-table-color-sync-1: mirror the same colour criterion into the
+        // owning structured table's FilterColumns model (a no-op when _range isn't a table's own
+        // Range). See StructuredTableFilterColumnModel.ColorFilter's doc comment for why the dxfId
+        // is resolved later, at save time, rather than here.
+        _tableFilterSnapshot = StructuredTableFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new StructuredTableFilterColumnModel((int)_filterColOffset, Values: [])
+            {
+                ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: true, Color: _fillColor)
+            });
+
         return new CommandOutcome(true);
     }
 
@@ -348,6 +368,7 @@ public sealed class CellFillColorFilterCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+        StructuredTableFilterColumnSync.Restore(sheet, _tableFilterSnapshot);
         _undoSnapshot.Restore(sheet);
     }
 }
@@ -360,6 +381,8 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
     private FilterUndoSnapshot _undoSnapshot;
     // R87-commands-autofilter-sort-5-1: see CellFillColorFilterCommand's field of the same name.
     private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
+    // R107-commands-autofilter-table-color-sync-1: see CellFillColorFilterCommand's field of the same name.
+    private StructuredTableFilterColumnSnapshot? _tableFilterSnapshot;
 
     public string Label => "Filter by No Fill";
 
@@ -420,6 +443,17 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
                 NativeFiltersAttributes: null,
                 NativeFilterXmls: []));
 
+        // R107-commands-autofilter-table-color-sync-1: see CellFillColorFilterCommand's call of the
+        // same shape.
+        _tableFilterSnapshot = StructuredTableFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new StructuredTableFilterColumnModel((int)_filterColOffset, Values: [])
+            {
+                ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: true)
+            });
+
         return new CommandOutcome(true);
     }
 
@@ -430,6 +464,7 @@ public sealed class CellNoFillColorFilterCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+        StructuredTableFilterColumnSync.Restore(sheet, _tableFilterSnapshot);
         _undoSnapshot.Restore(sheet);
     }
 }
@@ -443,6 +478,8 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
     private FilterUndoSnapshot _undoSnapshot;
     // R87-commands-autofilter-sort-5-1: see CellFillColorFilterCommand's field of the same name.
     private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
+    // R107-commands-autofilter-table-color-sync-1: see CellFillColorFilterCommand's field of the same name.
+    private StructuredTableFilterColumnSnapshot? _tableFilterSnapshot;
 
     public string Label => "Filter by Font Color";
 
@@ -503,6 +540,17 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
                 NativeFiltersAttributes: null,
                 NativeFilterXmls: []));
 
+        // R107-commands-autofilter-table-color-sync-1: see CellFillColorFilterCommand's call of the
+        // same shape.
+        _tableFilterSnapshot = StructuredTableFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new StructuredTableFilterColumnModel((int)_filterColOffset, Values: [])
+            {
+                ColorFilter = new WorksheetAutoFilterColorFilterModel(CellColor: false, Color: _fontColor)
+            });
+
         return new CommandOutcome(true);
     }
 
@@ -513,6 +561,7 @@ public sealed class CellFontColorFilterCommand : IWorkbookCommand
 
         var sheet = ctx.GetSheet(_sheetId);
         WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+        StructuredTableFilterColumnSync.Restore(sheet, _tableFilterSnapshot);
         _undoSnapshot.Restore(sheet);
     }
 }

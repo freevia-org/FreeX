@@ -78,6 +78,24 @@ public sealed class GridResizeSizePlannerTests
     }
 
     [Fact]
+    public void ClampRowSize_CommitsDragHeightsBetweenTheOldPointsCapAndTheRealPixelCap()
+    {
+        // Regression guard for the points/pixels mismatch described above, pinned at a height that
+        // sits strictly between the old (wrong) 409.5 ceiling and the correct 546 one. A drag to 500px
+        // is legal -- SetRowHeightCommand accepts it since R102, and Format > Row Height / AutoFit can
+        // both produce it -- but the points-valued ceiling silently truncated it to 409.5, capping
+        // interactive drag-resize ~33% short of Excel's real maximum on the row axis only. Asserting
+        // pass-through (not just the constant's value) is what makes this fail against the old cap.
+        const double dragToPixels = 500.0;
+        dragToPixels.Should().BeGreaterThan(409.5).And.BeLessThan(GridResizeSizePlanner.MaximumRowSizePixels);
+
+        GridResizeSizePlanner.ClampRowSize(dragToPixels).Should().Be(dragToPixels);
+
+        // The same drag on the column axis was never affected (its ceiling was already pixel-space).
+        GridResizeSizePlanner.ClampColumnSize(dragToPixels).Should().Be(dragToPixels);
+    }
+
+    [Fact]
     public void ClampColumnSize_PassesThroughValuesWithinRange()
     {
         GridResizeSizePlanner.ClampColumnSize(123.5).Should().Be(123.5);

@@ -150,6 +150,45 @@ public sealed partial class AutoFilterDialogTests
     }
 
     [Theory]
+    [InlineData(AutoFilterMenuFilterKind.Number)]
+    [InlineData(AutoFilterMenuFilterKind.Date)]
+    public void R107_GetSecondRowCriteriaOptions_ExcludesUncombinableSpecialCriteria(AutoFilterMenuFilterKind filterKind)
+    {
+        var criteriaOptions = AutoFilterDialog.GetCriteriaOptions(filterKind);
+
+        var secondRowOptions = AutoFilterDialog.GetSecondRowCriteriaOptions(criteriaOptions);
+
+        secondRowOptions.Should().NotContain(option => AutoFilterDialogCriteriaPlanner.IsBetweenOption(option));
+        secondRowOptions.Should().NotContain(option => AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option));
+        secondRowOptions.Should().NotContain(option => AutoFilterDialogCriteriaPlanner.IsAverageOption(option));
+        secondRowOptions.Count.Should().BeLessThan(criteriaOptions.Count);
+
+        // Every excluded option must still be a real row-1 option -- this is a filter, not a typo that
+        // happens to drop unrelated entries too.
+        foreach (var option in criteriaOptions)
+        {
+            if (!secondRowOptions.Contains(option))
+            {
+                (AutoFilterDialogCriteriaPlanner.IsBetweenOption(option) ||
+                    AutoFilterDialogCriteriaPlanner.IsTopBottomOption(option) ||
+                    AutoFilterDialogCriteriaPlanner.IsAverageOption(option))
+                    .Should()
+                    .BeTrue($"'{option.CriteriaPrefix}' was dropped from row 2 for no recognized reason");
+            }
+        }
+    }
+
+    [Fact]
+    public void R107_GetSecondRowCriteriaOptions_TextFamilyHasNoSpecialCriteriaToExclude()
+    {
+        var criteriaOptions = AutoFilterDialog.GetCriteriaOptions(AutoFilterMenuFilterKind.Text);
+
+        AutoFilterDialog.GetSecondRowCriteriaOptions(criteriaOptions)
+            .Should()
+            .Equal(criteriaOptions);
+    }
+
+    [Theory]
     [InlineData("And", ">10", "<20", "and:>10|<20")]
     [InlineData("Or", "begins:Red", "ends:Apple", "or:begins:Red|ends:Apple")]
     public void BuildCompositeCriteriaText_ComposesExcelCustomFilterRows(

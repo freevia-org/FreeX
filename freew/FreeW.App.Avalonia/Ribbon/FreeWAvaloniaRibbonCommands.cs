@@ -1074,8 +1074,8 @@ internal static class FreeWAvaloniaRibbonCommands
             callbacks.OpenBookmarkManagerDialog ?? callbacks.OpenBookmarkDialog ?? (() => { })));
 
         // ── Cover Page ───────────────────────────────────────────────────────
-        // The top-level dropdown opener is a no-op; each preset prepends a cover-page block layout.
-        r.Register("freew.cover-page",         new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        // The split-button face inserts the WPF default; each preset prepends its cover-page block layout.
+        r.Register("freew.cover-page",         new ActionRibbonCommand(() => editor.InsertCoverPage(CoverPagePreset.Default)));
         r.Register("freew.cover-page.default", new ActionRibbonCommand(() => editor.InsertCoverPage(CoverPagePreset.Default)));
         r.Register("freew.cover-page.banded",  new ActionRibbonCommand(() => editor.InsertCoverPage(CoverPagePreset.Banded)));
         r.Register("freew.cover-page.motion",  new ActionRibbonCommand(() => editor.InsertCoverPage(CoverPagePreset.Motion)));
@@ -1104,8 +1104,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.quick-parts.snippet", new ActionRibbonCommand(callbacks.OpenQuickPartDialog ?? (() => { })));
 
         // ── Equation ─────────────────────────────────────────────────────────
-        // The opener no-op; each preset inserts an inline OMML equation (default = E=mc²).
-        r.Register("freew.equation",           new ActionRibbonCommand(() => { /* dropdown opener */ }));
+        // The split-button face inserts the WPF default; each preset inserts an inline OMML equation.
+        r.Register("freew.equation",           new ActionRibbonCommand(() => editor.InsertEquation()));
         r.Register("freew.equation.default",   new ActionRibbonCommand(() => editor.InsertEquation()));
         r.Register("freew.equation.fraction",  new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.Fraction("a", "b")]))));
         r.Register("freew.equation.script",    new ActionRibbonCommand(() => editor.InsertEquation(new Equation([MathRun.SubSuperscript("x", "n", "2")]))));

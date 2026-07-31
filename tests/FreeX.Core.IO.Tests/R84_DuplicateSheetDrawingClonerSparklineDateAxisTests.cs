@@ -86,4 +86,83 @@ public sealed class R84_DuplicateSheetDrawingClonerSparklineDateAxisTests
         var copiedSparkline = workbook.Sheets[1].Sparklines.Should().ContainSingle().Subject;
         copiedSparkline.DateAxisRange.Should().BeNull();
     }
+
+    // R107-cmd-duplicate-sheet-sparkline-cross-sheet-datarange (bug case): a sparkline hosted on the
+    // sheet being duplicated but sourced from a DIFFERENT sheet's data (a normal, supported
+    // cross-sheet sparkline -- see XlsxSparklineMapper) must keep its DataRange pointing at the
+    // original source-data sheet on the duplicate, not get silently rewritten onto the copy sheet's
+    // own (likely blank/unrelated) cells. Mirrors CloneChart's same-sheet-only DataRange guard.
+    [Fact]
+    public void DuplicateSheet_SparklineWithCrossSheetDataRange_LeavesDataRangeOnOriginalSheet()
+    {
+        var workbook = new Workbook("SparklineCloneCrossSheetDataRange");
+        var dataSheet = workbook.AddSheet("Data");
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 1), new NumberValue(10));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 2), new NumberValue(20));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 3), new NumberValue(15));
+        var crossSheetDataRange = new GridRange(new CellAddress(dataSheet.Id, 1, 1), new CellAddress(dataSheet.Id, 1, 3));
+
+        var dashboardSheet = workbook.AddSheet("Dashboard");
+        var location = new CellAddress(dashboardSheet.Id, 1, 4);
+        dashboardSheet.Sparklines.Add(new SparklineModel
+        {
+            DataRange = crossSheetDataRange,
+            Location = location,
+            Kind = SparklineKind.Line
+        });
+        var ctx = new TestCommandContext(workbook);
+
+        new DuplicateSheetCommand(dashboardSheet.Id).Apply(ctx).Success.Should().BeTrue();
+
+        var copiedSheet = workbook.Sheets[2];
+        copiedSheet.Name.Should().Be("Dashboard (2)");
+        var copiedSparkline = copiedSheet.Sparklines.Should().ContainSingle().Subject;
+        copiedSparkline.DataRange.Start.Sheet.Should().Be(dataSheet.Id,
+            "a cross-sheet DataRange must keep pointing at the original source-data sheet, matching Excel's " +
+            "Duplicate Sheet behavior, not get rewritten onto the duplicated sheet's own unrelated cells");
+        copiedSparkline.DataRange.Start.Row.Should().Be(crossSheetDataRange.Start.Row);
+        copiedSparkline.DataRange.Start.Col.Should().Be(crossSheetDataRange.Start.Col);
+        copiedSparkline.DataRange.End.Row.Should().Be(crossSheetDataRange.End.Row);
+        copiedSparkline.DataRange.End.Col.Should().Be(crossSheetDataRange.End.Col);
+
+        // The Location, in contrast, MUST follow the duplicate -- it identifies which cell on the
+        // duplicated sheet hosts the sparkline, so it always remaps regardless of DataRange sheet.
+        copiedSparkline.Location.Sheet.Should().Be(copiedSheet.Id);
+        copiedSparkline.Location.Row.Should().Be(location.Row);
+        copiedSparkline.Location.Col.Should().Be(location.Col);
+    }
+
+    // Sibling no-regression case: a same-sheet DateAxisRange living on a DIFFERENT sheet than the
+    // sparkline's own DataRange host must independently be left alone too, mirroring the DataRange
+    // guard -- a date axis range is exactly as capable of being cross-sheet as the DataRange is.
+    [Fact]
+    public void DuplicateSheet_SparklineWithCrossSheetDateAxisRange_LeavesDateAxisRangeOnOriginalSheet()
+    {
+        var workbook = new Workbook("SparklineCloneCrossSheetDateAxisRange");
+        var dataSheet = workbook.AddSheet("Data");
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 1), new NumberValue(10));
+        dataSheet.SetCell(new CellAddress(dataSheet.Id, 1, 2), new NumberValue(20));
+        var crossSheetDataRange = new GridRange(new CellAddress(dataSheet.Id, 1, 1), new CellAddress(dataSheet.Id, 1, 2));
+        var crossSheetDateAxisRange = new GridRange(new CellAddress(dataSheet.Id, 2, 1), new CellAddress(dataSheet.Id, 2, 2));
+
+        var dashboardSheet = workbook.AddSheet("Dashboard");
+        var location = new CellAddress(dashboardSheet.Id, 1, 4);
+        dashboardSheet.Sparklines.Add(new SparklineModel
+        {
+            DataRange = crossSheetDataRange,
+            Location = location,
+            Kind = SparklineKind.Line,
+            DateAxisRange = crossSheetDateAxisRange
+        });
+        var ctx = new TestCommandContext(workbook);
+
+        new DuplicateSheetCommand(dashboardSheet.Id).Apply(ctx).Success.Should().BeTrue();
+
+        var copiedSheet = workbook.Sheets[2];
+        var copiedSparkline = copiedSheet.Sparklines.Should().ContainSingle().Subject;
+        copiedSparkline.DateAxisRange.Should().NotBeNull();
+        copiedSparkline.DateAxisRange!.Value.Start.Sheet.Should().Be(dataSheet.Id,
+            "a cross-sheet DateAxisRange must also keep pointing at the original source sheet, not get " +
+            "rewritten onto the duplicated sheet");
+    }
 }

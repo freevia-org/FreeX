@@ -3,7 +3,14 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Moves one or more worksheets before a target workbook position.</summary>
-public sealed class MoveSheetsCommand : IWorkbookCommand
+// R107: reordering sheets can change which sheets fall inside a 3-D span reference (e.g.
+// =SUM(Sheet1:Sheet3!A1)) purely by the position change, not by editing any cell of its own, so
+// Apply reports no AffectedCells. The forward-path caller (MainWindow.SheetTabs.cs) already
+// compensates with an explicit RecalculateWorkbook() call, but CommandBus.Undo/Redo call
+// straight into the command bus and never reach that wrapper -- implementing this marker (like
+// the singular MoveSheetCommand already does) is what makes Undo/Redo of a sheet-tab
+// drag-reorder or "Move or Copy Sheet" force a full recalc too.
+public sealed class MoveSheetsCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
 {
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly int _insertBeforeIndex;
