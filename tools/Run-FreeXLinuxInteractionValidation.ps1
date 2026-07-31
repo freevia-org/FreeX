@@ -57,6 +57,8 @@ $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-nati
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
 $pivotDetailsFixturePath = Join-Path $repoRoot "tests/FreeX.App.Avalonia.Tests/Fixtures/FreeX_wave50_pivot_fields.xlsx"
 $runnerSchemaVersion = 2
+$authoritativeRibbonBindingRowCount = 631
+$authoritativeCollapsedRibbonGroupRowCount = 74
 $resumeRequested = -not [string]::IsNullOrWhiteSpace($ResumeReportDirectory)
 $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
 $reportDirectory = if ([string]::IsNullOrWhiteSpace($ResumeReportDirectory)) {
@@ -861,8 +863,8 @@ function Assert-ManifestResultShape {
             }
         }
         "ribbon-bindings" {
-            if (@($results | Where-Object category -eq "ribbon-command").Count -ne 616 -or
-                @($results | Where-Object category -eq "ribbon-collapsed-group").Count -ne 73) {
+            if (@($results | Where-Object category -eq "ribbon-command").Count -ne $authoritativeRibbonBindingRowCount -or
+                @($results | Where-Object category -eq "ribbon-collapsed-group").Count -ne $authoritativeCollapsedRibbonGroupRowCount) {
                 throw "Ribbon binding section result counts are not authoritative."
             }
         }

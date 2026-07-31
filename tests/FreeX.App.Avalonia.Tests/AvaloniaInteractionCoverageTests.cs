@@ -70,6 +70,10 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Equal(322, rows.Count(row => row.Kind == nameof(RibbonMenuItem)));
         Assert.Equal(588, rows.Select(row => row.CommandId).Distinct().Count());
         Assert.Equal(74, definition.Tabs.Sum(tab => tab.Groups.Count));
+
+        var runner = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        Assert.Contains("$authoritativeRibbonBindingRowCount = 631", runner, StringComparison.Ordinal);
+        Assert.Contains("$authoritativeCollapsedRibbonGroupRowCount = 74", runner, StringComparison.Ordinal);
     }
 
     [Fact]
