@@ -3268,8 +3268,8 @@ public sealed class DocumentView : Control
     /// matches what is on screen; it paginates the single continuous column by the page height from
     /// <see cref="TextDocument.Page"/>.
     /// <para>
-    /// NOTE: This is a first, faithful-enough text export. Tables/images/decorations and true
-    /// print-pipeline pagination (headers/footers/footnotes) are not yet modeled here — see M4 notes.
+    /// NOTE: This is a text-region export. Tables/images/decorations remain outside this draw-op
+    /// adapter, but the already-paginated headers, footers, footnotes, and endnotes are included.
     /// </para>
     /// </summary>
     public Free.Shared.Pdf.PdfContentDocument BuildPdfContent()
@@ -3360,6 +3360,56 @@ public sealed class DocumentView : Control
         }
 
         Flush();
+
+        // The live Avalonia layout has already resolved page ownership, field text, wrapping, and
+        // note bands. Carry those same text regions into the PDF model so export does not silently
+        // lose document chrome that Print Preview visibly shows.
+        void EnsurePage(int pageIndex)
+        {
+            while (pagesOps.Count <= pageIndex)
+                pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
+        }
+
+        void AddTextRegion(string text, RunFormatting fmt, double xDip, double yDip)
+        {
+            if (string.IsNullOrEmpty(text))
+                return;
+
+            var pageIndex = PageIndexFromPageSpaceY(yDip);
+            if (pageIndex < 0)
+                return;
+
+            EnsurePage(pageIndex);
+            var fontSizePt = fmt.FontSizePt ?? DefaultFontSizePt;
+            var xPt = (xDip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+            var yWithinPagePx = yDip - _surfacePlan.PageTopDip(pageIndex);
+            var yPt = pageHeightPt - (yWithinPagePx / PxPerPoint + fontSizePt);
+            var face = fmt.Bold ? Free.Shared.Pdf.PdfFontFace.Bold : Free.Shared.Pdf.PdfFontFace.Regular;
+            pagesOps[pageIndex].Add(new Free.Shared.Pdf.PdfText(
+                Math.Max(0, xPt), yPt, fontSizePt, face, ParseColor(fmt.ColorHex), text));
+        }
+
+        foreach (var item in _headerFooterItems)
+            AddTextRegion(item.Text, item.Fmt, item.X, item.Y);
+
+        foreach (var item in _noteItems)
+            AddTextRegion(item.Text, item.Fmt, item.X, item.Y);
+
+        foreach (var (x1Dip, x2Dip, yDip) in _noteSeparators)
+        {
+            var pageIndex = PageIndexFromPageSpaceY(yDip);
+            if (pageIndex < 0)
+                continue;
+
+            EnsurePage(pageIndex);
+            var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
+            var yPt = pageHeightPt - ((yDip - pageTopDip) / PxPerPoint);
+            var x1Pt = (x1Dip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+            var x2Pt = (x2Dip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+            pagesOps[pageIndex].Add(new Free.Shared.Pdf.PdfLine(
+                Math.Max(0, x1Pt), yPt, Math.Max(0, x2Pt), yPt,
+                new Free.Shared.Pdf.PdfColor(0x70, 0x70, 0x70), 0.5));
+        }
 
         if (pagesOps.Count == 0)
             pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
