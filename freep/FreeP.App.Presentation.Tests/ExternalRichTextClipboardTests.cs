@@ -41,6 +41,29 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_ResolvesSolidColorBrushResources()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+              <FlowDocument.Resources>
+                <ResourceDictionary>
+                  <SolidColorBrush x:Key="AccentBrush" Color="#FF2F5597" />
+                </ResourceDictionary>
+              </FlowDocument.Resources>
+              <Paragraph Foreground="{StaticResource AccentBrush}">Resource colored</Paragraph>
+            </FlowDocument>
+            """;
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Single().Runs.Single().Color!.Resolved
+            .Should().Be(SrgbColor.FromRgb(0x2F5597));
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_PreservesAllowedHyperlinks_AndBlocksUnsafeSchemes()
     {
         const string xaml = """

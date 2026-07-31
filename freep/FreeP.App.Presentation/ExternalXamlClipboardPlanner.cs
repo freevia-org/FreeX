@@ -65,6 +65,7 @@ public static class ExternalXamlClipboardPlanner
         try
         {
             var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+            var colorResources = ReadColorResources(document);
             var images = document
                 .Descendants()
                 .Where(element => element.Name.LocalName.Equals("Image", StringComparison.OrdinalIgnoreCase))
@@ -107,9 +108,9 @@ public static class ExternalXamlClipboardPlanner
             foreach (var element in blockElements)
             {
                 if (element.Name.LocalName == "Table")
-                    ReadTable(element, body, tableCellStyles, ref outputCharacters);
+                    ReadTable(element, body, tableCellStyles, colorResources, ref outputCharacters);
                 else
-                    ReadParagraph(element, body, ref outputCharacters);
+                    ReadParagraph(element, body, colorResources, ref outputCharacters);
 
                 if (outputCharacters > MaxOutputCharacters)
                     return null;
@@ -138,13 +139,14 @@ public static class ExternalXamlClipboardPlanner
     private static void ReadParagraph(
         XElement element,
         TextBody body,
+        IReadOnlyDictionary<string, string> colorResources,
         ref int outputCharacters)
     {
         var paragraph = new Paragraph();
-        var style = ReadStyle(element, default);
+        var style = ReadStyle(element, default, colorResources);
         ApplyParagraphProperties(element, paragraph);
         ApplyListProperties(element, paragraph);
-        ReadInlineNodes(element, paragraph, style, ref outputCharacters);
+        ReadInlineNodes(element, paragraph, style, colorResources, ref outputCharacters);
         body.Paragraphs.Add(paragraph);
     }
 
@@ -228,6 +230,7 @@ public static class ExternalXamlClipboardPlanner
         XElement table,
         TextBody body,
         List<InCanvasRichClipboardTableCellStyle> tableCellStyles,
+        IReadOnlyDictionary<string, string> colorResources,
         ref int outputCharacters)
     {
         var rows = table
@@ -272,7 +275,8 @@ public static class ExternalXamlClipboardPlanner
                     ReadInlineNodes(
                         cellParagraph,
                         paragraph,
-                        ReadStyle(cellParagraph, default),
+                        ReadStyle(cellParagraph, default, colorResources),
+                        colorResources,
                         ref outputCharacters);
                 }
             }
@@ -319,9 +323,10 @@ public static class ExternalXamlClipboardPlanner
         XElement element,
         Paragraph paragraph,
         XamlTextStyle inherited,
+        IReadOnlyDictionary<string, string> colorResources,
         ref int outputCharacters)
     {
-        var style = ReadStyle(element, inherited);
+        var style = ReadStyle(element, inherited, colorResources);
         foreach (var node in element.Nodes())
         {
             if (node is XText text)
@@ -343,7 +348,7 @@ public static class ExternalXamlClipboardPlanner
                     // outer document walk; never duplicate their text in the parent.
                     break;
                 default:
-                    ReadInlineElement(child, paragraph, style, ref outputCharacters);
+                    ReadInlineElement(child, paragraph, style, colorResources, ref outputCharacters);
                     break;
             }
         }
@@ -353,9 +358,10 @@ public static class ExternalXamlClipboardPlanner
         XElement element,
         Paragraph paragraph,
         XamlTextStyle inherited,
+        IReadOnlyDictionary<string, string> colorResources,
         ref int outputCharacters)
     {
-        var style = ReadStyle(element, inherited);
+        var style = ReadStyle(element, inherited, colorResources);
         if (element.Name.LocalName == "Run"
             && element.Attribute("Text") is { } textAttribute)
         {
@@ -373,7 +379,7 @@ public static class ExternalXamlClipboardPlanner
             if (node is XText text)
                 AddText(text.Value, paragraph, style, ref outputCharacters);
             else if (node is XElement child && child.Name.LocalName != "Paragraph")
-                ReadInlineElement(child, paragraph, style, ref outputCharacters);
+                ReadInlineElement(child, paragraph, style, colorResources, ref outputCharacters);
         }
     }
 
@@ -415,7 +421,10 @@ public static class ExternalXamlClipboardPlanner
         });
     }
 
-    private static XamlTextStyle ReadStyle(XElement element, XamlTextStyle inherited)
+    private static XamlTextStyle ReadStyle(
+        XElement element,
+        XamlTextStyle inherited,
+        IReadOnlyDictionary<string, string> colorResources)
     {
         var style = inherited;
         var family = AttributeValue(element, "FontFamily");
@@ -459,7 +468,7 @@ public static class ExternalXamlClipboardPlanner
         if (localName.Equals("Underline", StringComparison.OrdinalIgnoreCase))
             style = style with { Underline = true };
 
-        var foreground = AttributeValue(element, "Foreground");
+        var foreground = ResolveColorResource(AttributeValue(element, "Foreground"), colorResources);
         if (TryParseColor(foreground, out var color))
             style = style with { Color = color };
 
@@ -480,6 +489,55 @@ public static class ExternalXamlClipboardPlanner
         }
 
         return style;
+    }
+
+    private static IReadOnlyDictionary<string, string> ReadColorResources(XDocument document)
+    {
+        var resources = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var brush in document.Descendants()
+                     .Where(element => element.Name.LocalName.Equals(
+                         "SolidColorBrush",
+                         StringComparison.OrdinalIgnoreCase)))
+        {
+            var key = AttributeValue(brush, "Key");
+            var color = AttributeValue(brush, "Color");
+            if (!string.IsNullOrWhiteSpace(key)
+                && TryParseColor(color, out _))
+            {
+                resources[key] = color!;
+            }
+        }
+
+        return resources;
+    }
+
+    private static string? ResolveColorResource(
+        string? value,
+        IReadOnlyDictionary<string, string> colorResources)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return value;
+
+        var reference = value.Trim();
+        if (reference.Length < 3
+            || reference[0] != '{'
+            || reference[^1] != '}')
+        {
+            return value;
+        }
+
+        var parts = reference[1..^1]
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2
+            || (!parts[0].Equals("StaticResource", StringComparison.OrdinalIgnoreCase)
+                && !parts[0].Equals("DynamicResource", StringComparison.OrdinalIgnoreCase)))
+        {
+            return value;
+        }
+
+        return colorResources.TryGetValue(parts[1], out var color)
+            ? color
+            : value;
     }
 
     private static void ApplyParagraphProperties(XElement element, Paragraph paragraph)
