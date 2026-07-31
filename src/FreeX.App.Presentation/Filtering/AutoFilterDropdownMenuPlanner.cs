@@ -144,7 +144,13 @@ public static class AutoFilterDropdownMenuPlanner
         // sheet.ActiveValueFilterColumns / sheet.ColumnFilterOwnedRows for the per-column state.
         if (sheet.ActiveValueFilterColumns.TryGetValue(filterColumn, out var allowedValues))
         {
-            var allowedSet = new HashSet<string>(allowedValues, StringComparer.Ordinal);
+            // R108-app-presentation-autofilter-checklist-case-1: match FilterAllowedValueMatcher's
+            // case-insensitive semantics (FilterCommand.cs) and AutoFilterChecklistPlanner's own
+            // distinct-value dedup comparer -- both are OrdinalIgnoreCase. A case-sensitive
+            // comparison here would falsely uncheck a case-variant entry (e.g. checklist shows
+            // "apple" today because that row's casing was scanned first, but the persisted filter
+            // recorded "Apple") even though the live filter still allows it.
+            var allowedSet = new HashSet<string>(allowedValues, StringComparer.OrdinalIgnoreCase);
             return items
                 .Select(item => new AutoFilterMenuEntry(item with { IsChecked = allowedSet.Contains(item.Value) }))
                 .ToList();
@@ -169,7 +175,12 @@ public static class AutoFilterDropdownMenuPlanner
         uint filterColumn,
         HashSet<uint> ownedHiddenRows)
     {
-        var values = new HashSet<string>(StringComparer.Ordinal);
+        // R108-app-presentation-autofilter-checklist-case-1: sibling of the ActiveValueFilterColumns
+        // branch above -- values collected here are matched against checklist item Value text
+        // (AutoFilterChecklistPlanner's OrdinalIgnoreCase dedup key), so this set must use the same
+        // comparer or a case-variant row that happens to be hidden can leave a differently-cased
+        // checklist entry incorrectly checked/unchecked.
+        var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // R104-app-presentation-autofilter-totalsrow-1: exclude a shown structured-table Totals
         // Row from this scan -- it is never a filterable data row (see GetFilterableLastRow).
         var lastRow = AutoFilterRangeResolver.GetFilterableLastRow(sheet, plan.Range);

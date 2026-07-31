@@ -91,12 +91,32 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     // one's pivot/slicer binding. Workbook.NextStructuredTableIdWatermark tracks the high-water mark
     // across the whole session (never decremented, including on Undo) so it stays correct even after
     // the table that used to hold the max id is gone.
+    // R108: Workbook.NextStructuredTableIdWatermark is a plain in-memory int (see its doc comment) --
+    // it is never written to .fxl JSON or .xlsx, so it silently resets to 0 across every save/reload,
+    // regardless of format. The durable references the R107 watermark exists to protect DO survive
+    // that round-trip, though: SlicerModel.SourceTableId is written/read via the real
+    // x15:tableSlicerCache/@tableId attribute (and the .fxl native JSON slicer DTO), and
+    // PivotCacheModel.SourceTableId round-trips through the native JSON pivot-cache DTO. So a table
+    // id freed and pinned into one of those bindings (CommandGuards.PinOrphanedPivotCacheSourceTableIds)
+    // would, after a reload with the watermark back at 0, be handed straight back out to a brand-new
+    // table the instant no live table still holds it -- silently re-binding the dangling
+    // slicer/pivot-cache to unrelated data. Folding every live slicer/pivot-cache SourceTableId into
+    // the floor here re-derives the correct watermark from what the file actually persisted,
+    // independent of the in-memory-only counter, so the protection survives the round-trip too.
     private static int NextTableId(Workbook workbook)
     {
         var maxId = workbook.NextStructuredTableIdWatermark;
         foreach (var otherSheet in workbook.Sheets)
         foreach (var table in otherSheet.StructuredTables)
             maxId = Math.Max(maxId, table.Id);
+
+        foreach (var slicer in workbook.Slicers)
+            if (slicer.SourceTableId is { } slicerTableId)
+                maxId = Math.Max(maxId, slicerTableId);
+
+        foreach (var cache in workbook.PivotCaches)
+            if (cache.SourceTableId is { } cacheTableId)
+                maxId = Math.Max(maxId, cacheTableId);
 
         var next = maxId + 1;
         workbook.NextStructuredTableIdWatermark = next;

@@ -266,6 +266,110 @@ public sealed class AutoFilterDropdownMenuPlannerTests
     }
 
     [Fact]
+    public void R108_ChecklistItem_ReflectsActiveValueFilter_CaseInsensitively()
+    {
+        // R108: the checklist's own distinct-value dedup (AutoFilterChecklistPlanner.CreateItems)
+        // is case-insensitive, and the live filter match (FilterCommand's
+        // FilterAllowedValueMatcher) is also case-insensitive -- so when the ONLY row supplying a
+        // value shows it as "apple" but the persisted ActiveValueFilterColumns criterion recorded
+        // "Apple" (e.g. because a differently-cased row supplied the casing when the filter was
+        // originally applied, and that row was since edited/deleted/reordered), the checklist must
+        // still show that entry as checked: the live filter still allows it.
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("apple"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+        sheet.SetCell(new CellAddress(SheetId, 4, 1), new TextValue("Cherry"));
+        sheet.ActiveValueFilterColumns[1] = ["Apple", "Cherry"];
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 4, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(sheet, plan, Text, "(Blanks)");
+
+        menu.Entries
+            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
+            .ToDictionary(entry => entry.Value, entry => entry.IsChecked)
+            .Should()
+            .BeEquivalentTo(new Dictionary<string, bool?>
+            {
+                ["apple"] = true,
+                ["Banana"] = false,
+                ["Cherry"] = true
+            });
+    }
+
+    [Fact]
+    public void R108_ChecklistItem_ReflectsColumnFilterOwnedRows_CaseInsensitively()
+    {
+        // R108 sibling: CollectValuesNotOwnedHidden (the ColumnFilterOwnedRows branch, e.g. for a
+        // Top-10/condition/color filter) must also compare case-insensitively. Row 2 ("APPLE") is
+        // the owned-hidden row supplying the checklist item's displayed casing (dedup runs across
+        // ALL rows, hidden or not, and keeps the first-seen casing), but row 3 ("apple", a
+        // differently-cased spelling of the same value) is still visible -- so that value group is
+        // NOT actually filtered out and the checklist entry must stay checked.
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("APPLE"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("apple"));
+        sheet.SetCell(new CellAddress(SheetId, 4, 1), new TextValue("Grape"));
+        sheet.ColumnFilterOwnedRows[1] = [2];
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 4, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(sheet, plan, Text, "(Blanks)");
+
+        menu.Entries
+            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
+            .ToDictionary(entry => entry.Value, entry => entry.IsChecked)
+            .Should()
+            .BeEquivalentTo(new Dictionary<string, bool?>
+            {
+                ["APPLE"] = true,
+                ["Grape"] = true
+            });
+    }
+
+    [Fact]
+    public void R108_ChecklistItem_ColumnFilterOwnedRows_StillUnchecksTrulyHiddenValue()
+    {
+        // No-regression sibling: when the owned-hidden row's value has NO surviving visible
+        // spelling anywhere in the column (case-insensitively or otherwise), the checklist entry
+        // must still show unchecked -- the case-insensitive comparer must not turn every hidden
+        // value into a false-checked entry.
+        var sheet = new Sheet(SheetId, "Sheet1");
+        sheet.SetCell(new CellAddress(SheetId, 1, 1), new TextValue("Fruit"));
+        sheet.SetCell(new CellAddress(SheetId, 2, 1), new TextValue("Grape"));
+        sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
+        sheet.ColumnFilterOwnedRows[1] = [2];
+
+        var plan = new AutoFilterDropdownPlan(
+            new GridRange(
+                new CellAddress(SheetId, 1, 1),
+                new CellAddress(SheetId, 3, 1)),
+            FilterColumnOffset: 0);
+
+        var menu = AutoFilterDropdownMenuPlanner.CreateMenuPlan(sheet, plan, Text, "(Blanks)");
+
+        menu.Entries
+            .Where(entry => entry.Kind == AutoFilterMenuEntryKind.ChecklistItem)
+            .ToDictionary(entry => entry.Value, entry => entry.IsChecked)
+            .Should()
+            .BeEquivalentTo(new Dictionary<string, bool?>
+            {
+                ["Grape"] = false,
+                ["Banana"] = true
+            });
+    }
+
+    [Fact]
     public void HasActiveFilter_DetectsFilteredDataRowsInsideRange()
     {
         var sheet = CreateSheetWithList();

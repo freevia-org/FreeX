@@ -368,36 +368,26 @@ public static class SheetPdfPageSetupResolver
         return (pageW, pageH, mL, mR, mT, mB, headerBand, footerBand);
     }
 
-    private static double AverageRowHeightPx(Sheet sheet, uint startRow, uint endRow)
-    {
-        var fallback = sheet.DefaultRowHeight > 0 ? sheet.DefaultRowHeight : NominalRowHeightPx;
-        if (endRow < startRow) return fallback;
+    /// <summary>
+    /// R108-services-pdf-pagination-hidden-average-exclusion: delegates to the shared
+    /// <see cref="PagePaginationPlanner.AverageRowHeightPixels"/> (rather than re-summing locally) so
+    /// the PDF export path excludes hidden rows from the average the same way the WPF/Avalonia
+    /// print-preview path has since R107 -- a hidden row takes no print space, so folding its real
+    /// (possibly very tall/short) recorded height into the average desyncs the "base" per-page count
+    /// this feeds (<see cref="ResolveCapacityDetail"/>'s <c>baseRowsPerPage</c>) from the hidden-aware
+    /// "target" count <see cref="PageGeometryRules.CountBodyItems"/> resolves fit-to-N-pages against.
+    /// </summary>
+    private static double AverageRowHeightPx(Sheet sheet, uint startRow, uint endRow) =>
+        PagePaginationPlanner.AverageRowHeightPixels(
+            startRow, endRow, sheet.RowHeights, sheet.DefaultRowHeight, sheet.IsRowEffectivelyHidden);
 
-        var total = 0.0;
-        var count = endRow - startRow + 1;
-        for (var row = startRow; row <= endRow; row++)
-            total += sheet.RowHeights.TryGetValue(row, out var h) && h > 0 ? h : fallback;
-
-        return total / count;
-    }
-
-    private static double AverageColumnWidthPx(Sheet sheet, uint startCol, uint endCol)
-    {
-        var fallbackChars = sheet.DefaultColumnWidth > 0 ? sheet.DefaultColumnWidth : 8.43;
-        var fallbackPx = Math.Max(MinimumColumnWidthPx, ColumnWidthPixelMapper.ColumnWidthToPixels(fallbackChars));
-        if (endCol < startCol) return fallbackPx;
-
-        var total = 0.0;
-        var count = endCol - startCol + 1;
-        for (var col = startCol; col <= endCol; col++)
-        {
-            var chars = sheet.ColumnWidths.TryGetValue(col, out var w) && w > 0 ? w : fallbackChars;
-            var px = ColumnWidthPixelMapper.ColumnWidthToPixels(chars);
-            total += Math.Max(MinimumColumnWidthPx, px);
-        }
-
-        return total / count;
-    }
+    /// <summary>
+    /// R108-services-pdf-pagination-hidden-average-exclusion: column counterpart of
+    /// <see cref="AverageRowHeightPx"/> -- see that method's remarks.
+    /// </summary>
+    private static double AverageColumnWidthPx(Sheet sheet, uint startCol, uint endCol) =>
+        PagePaginationPlanner.AverageColumnWidthPixels(
+            startCol, endCol, sheet.ColumnWidths, sheet.DefaultColumnWidth, sheet.IsColEffectivelyHidden);
 
     /// <summary>Resolves a single row's real height in pixels, the same way <see cref="AverageRowHeightPx"/> does per row.</summary>
     private static double ResolveRowHeightPixels(Sheet sheet, uint row)

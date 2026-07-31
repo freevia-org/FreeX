@@ -673,11 +673,21 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // ConvertStructuredTableToRangeCommand's R106 _orphanedPivotCaches list. The pinned id is
     // always a fresh assignment from null, so restoring on undo is just nulling it back out.
     private List<PivotCacheModel>? _pivotCacheTableIdDeleteSnapshot;
-    private List<(SlicerModel Slicer, string OldValue)>? _slicerNameDeleteSnapshot;
-    // P84: mirrors _slicerNameDeleteSnapshot above for TimelineModel.SourceSheetName — a timeline
-    // anchored on the deleted sheet must have its dangling sheet-name ref cleared too, or it can
-    // silently reattach to an unrelated sheet later re-created/renamed with the same name.
-    private List<(TimelineModel Timeline, string OldValue)>? _timelineNameDeleteSnapshot;
+    // R108: a slicer/timeline's DrawingML anchor physically lives inside its SourceSheetName
+    // sheet's drawing part -- exactly like real Excel, deleting that sheet must delete the widget
+    // itself, not merely null the back-reference. Nulling alone left the SlicerModel/TimelineModel
+    // instance behind in ctx.Workbook.Slicers/Timelines, homeless but alive, and every downstream
+    // consumer (SlicerTimelinePanePlanner's IsConnectedToPivotOnSheet fallback, XlsxSlicerTimeline
+    // Writer.ResolveWorksheetPath's sheet1 fallback) would then silently reattach it to an
+    // unrelated surviving sheet on the very next render/save. Removed instances (and their
+    // original list index, so Revert can splice them back in place rather than merely appending)
+    // are captured here so Undo restores both the SourceSheetName and the list membership.
+    private List<(SlicerModel Slicer, string OldValue, int Index)>? _slicerNameDeleteSnapshot;
+    // P84/R108: mirrors _slicerNameDeleteSnapshot above for TimelineModel.SourceSheetName — a
+    // timeline anchored on the deleted sheet must be removed from ctx.Workbook.Timelines outright
+    // (not merely have its dangling sheet-name ref cleared), or it can silently reattach to an
+    // unrelated sheet later re-created/renamed with the same name.
+    private List<(TimelineModel Timeline, string OldValue, int Index)>? _timelineNameDeleteSnapshot;
     private List<(PictureModel Picture, string OldValue)>? _pictureNameDeleteSnapshot;
     // R100: mirrors _pivotCacheNameDeleteSnapshot above for ChartModel.PivotSourceSheetName — a
     // pivot chart's recorded "where does my PivotTable actually live" sheet name must be cleared
@@ -926,14 +936,22 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             _pivotCacheTableIdDeleteSnapshot.AddRange(
                 CommandGuards.PinOrphanedPivotCacheSourceTableIds(ctx.Workbook, removedTable));
 
+        // R108: a slicer anchored on the deleted sheet must be removed from
+        // ctx.Workbook.Slicers outright, not merely have SourceSheetName nulled -- see the
+        // field doc comment above for why leaving the instance behind resurrects it elsewhere on
+        // the next render/save. Walk by index (descending on removal) so the list can be mutated
+        // safely while iterating, and capture each removed slicer's original index so Revert can
+        // splice it back into the same slot instead of merely appending it to the end.
         _slicerNameDeleteSnapshot = [];
-        foreach (var slicer in ctx.Workbook.Slicers)
+        for (var i = ctx.Workbook.Slicers.Count - 1; i >= 0; i--)
         {
+            var slicer = ctx.Workbook.Slicers[i];
             if (slicer.SourceSheetName is not null &&
                 string.Equals(slicer.SourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
             {
-                _slicerNameDeleteSnapshot.Add((slicer, slicer.SourceSheetName));
+                _slicerNameDeleteSnapshot.Add((slicer, slicer.SourceSheetName, i));
                 slicer.SourceSheetName = null;
+                ctx.Workbook.Slicers.RemoveAt(i);
             }
         }
 
@@ -951,14 +969,19 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             }
         }
 
+        // R108: mirrors the slicer removal block above -- a timeline anchored on the deleted
+        // sheet must be removed from ctx.Workbook.Timelines outright, walked descending by index
+        // for the same safe-mutate-while-iterating + original-slot-restore reasons.
         _timelineNameDeleteSnapshot = [];
-        foreach (var timeline in ctx.Workbook.Timelines)
+        for (var i = ctx.Workbook.Timelines.Count - 1; i >= 0; i--)
         {
+            var timeline = ctx.Workbook.Timelines[i];
             if (timeline.SourceSheetName is not null &&
                 string.Equals(timeline.SourceSheetName, deletedSheetName, StringComparison.OrdinalIgnoreCase))
             {
-                _timelineNameDeleteSnapshot.Add((timeline, timeline.SourceSheetName));
+                _timelineNameDeleteSnapshot.Add((timeline, timeline.SourceSheetName, i));
                 timeline.SourceSheetName = null;
+                ctx.Workbook.Timelines.RemoveAt(i);
             }
         }
 
@@ -1204,17 +1227,30 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_pivotCacheTableIdDeleteSnapshot is not null)
                 CommandGuards.UnpinOrphanedPivotCacheSourceTableIds(_pivotCacheTableIdDeleteSnapshot);
 
+            // R108 restore: re-insert each removed slicer at its original list index (not just
+            // append) and restore its SourceSheetName. The Apply-side pass appended in descending
+            // index order, so walking this snapshot list in reverse re-inserts in ascending index
+            // order, reproducing the original Slicers list layout.
             if (_slicerNameDeleteSnapshot is not null)
-                foreach (var (slicer, oldValue) in _slicerNameDeleteSnapshot)
+                for (var k = _slicerNameDeleteSnapshot.Count - 1; k >= 0; k--)
+                {
+                    var (slicer, oldValue, index) = _slicerNameDeleteSnapshot[k];
                     slicer.SourceSheetName = oldValue;
+                    ctx.Workbook.Slicers.Insert(Math.Min(index, ctx.Workbook.Slicers.Count), slicer);
+                }
 
             if (_pictureNameDeleteSnapshot is not null)
                 foreach (var (pic, oldValue) in _pictureNameDeleteSnapshot)
                     pic.LinkedSourceSheetName = oldValue;
 
+            // R108 restore: mirrors the slicer restore immediately above.
             if (_timelineNameDeleteSnapshot is not null)
-                foreach (var (timeline, oldValue) in _timelineNameDeleteSnapshot)
+                for (var k = _timelineNameDeleteSnapshot.Count - 1; k >= 0; k--)
+                {
+                    var (timeline, oldValue, index) = _timelineNameDeleteSnapshot[k];
                     timeline.SourceSheetName = oldValue;
+                    ctx.Workbook.Timelines.Insert(Math.Min(index, ctx.Workbook.Timelines.Count), timeline);
+                }
 
             if (_chartPivotSourceNameDeleteSnapshot is not null)
                 foreach (var (chart, oldValue) in _chartPivotSourceNameDeleteSnapshot)

@@ -261,11 +261,38 @@ internal static partial class XlsxChartXmlWriter
             yield break;
         }
 
-        var seriesIndex = 0;
+        // R108-io-chart-series-embedded-fastpath: when EVERY series' val/cat formula is a named
+        // range (e.g. an OFFSET-based dynamic range) or points at a sheet other than the chart's
+        // own host sheet, none of them can ever get a SeriesColumnMappings entry (that requires a
+        // parseable single-column LOCAL reference), so SeriesColumnMappings stays empty and the
+        // legacy positional scan below is driven by chart.DataRange — which the reader can only
+        // populate from whichever formula (if any) happened to parse (often just the <c:tx> title
+        // cell), producing a degenerate/backwards strip span that silently yields zero series. Every
+        // series in that shape was captured verbatim on load instead (formula + cache) — use that
+        // directly rather than trusting the broken strip scan. A row-major chart is excluded because
+        // its (legitimate) multi-column value ranges parse fine and never engage the verbatim bypass,
+        // so the ordinary legacy scan below is the correct path for it.
+        if (chart.SeriesColumnMappings.Count == 0
+            && !chart.SeriesInRows
+            && chart.VerbatimSeriesFormulas is { Count: > 0 } allVerbatim)
+        {
+            foreach (var seriesIndex in allVerbatim
+                .Where(formulas => formulas.ValFormula is not null)
+                .Select(formulas => formulas.SeriesIndex)
+                .Distinct()
+                .OrderBy(index => index))
+            {
+                yield return (layout.FirstValueStrip, seriesIndex);
+            }
+
+            yield break;
+        }
+
+        var legacySeriesIndex = 0;
         for (var strip = layout.FirstValueStrip; strip <= layout.LastStrip; strip++)
         {
-            yield return (strip, seriesIndex);
-            seriesIndex++;
+            yield return (strip, legacySeriesIndex);
+            legacySeriesIndex++;
         }
     }
 

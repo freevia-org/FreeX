@@ -58,6 +58,66 @@ internal static class XlsxExternalLinkAuthoringWriter
         @"'\[([^\[\]']+)\]((?:[^']|'')*)'!",
         RegexOptions.Compiled);
 
+    // R108-io-external-link-string-literal-false-positive-1: QuotedExternalReferencePattern is a raw-text
+    // regex with no notion of Excel's actual token grammar -- it cannot tell a genuine bracketed external
+    // reference (='[Budget.xlsx]Data'!A1) apart from the SAME bracket/quote/bang shape sitting inertly
+    // inside a double-quoted STRING LITERAL (="'[Budget.xlsx]Data'!A1", which just evaluates to that
+    // literal text with no external link involved at all -- e.g. a user documenting formula syntax, or a
+    // CONCATENATE result). Both scan sites below must exclude any regex match that starts inside an
+    // unescaped-double-quote-delimited run, or they will (1) synthesize a bogus externalLink part/
+    // <externalReference> entry for a book the user never referenced, and (2) rewrite the matched text
+    // INSIDE the string literal from the quoted-filename form to the numeric-ordinal form, mutating the
+    // literal's actual value out from under the user on the very next save.
+    private static List<(int Start, int End)> FindDoubleQuotedStringLiteralSpans(string text)
+    {
+        var spans = new List<(int Start, int End)>();
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (text[i] != '"')
+            {
+                i++;
+                continue;
+            }
+
+            var start = i;
+            i++;
+            while (i < text.Length)
+            {
+                if (text[i] == '"')
+                {
+                    if (i + 1 < text.Length && text[i + 1] == '"')
+                    {
+                        // "" escape -- a literal quote character embedded in the string; the
+                        // literal is still open.
+                        i += 2;
+                        continue;
+                    }
+
+                    i++; // consume the closing quote.
+                    break;
+                }
+
+                i++;
+            }
+
+            spans.Add((start, i));
+        }
+
+        return spans;
+    }
+
+    private static bool IsIndexInsideAnySpan(List<(int Start, int End)> spans, int index)
+    {
+        foreach (var (start, end) in spans)
+        {
+            if (index >= start && index < end)
+                return true;
+        }
+
+        return false;
+    }
+
     /// <summary>Fresh-workbook (no source package) entry point -- opens its own archive.</summary>
     public static void Save(Stream packageStream, Workbook workbook)
     {
@@ -258,8 +318,12 @@ internal static class XlsxExternalLinkAuthoringWriter
                 if (string.IsNullOrEmpty(text) || !QuotedExternalReferencePattern.IsMatch(text))
                     continue;
 
+                var stringLiteralSpans = FindDoubleQuotedStringLiteralSpans(text);
                 var rewritten = QuotedExternalReferencePattern.Replace(text, match =>
                 {
+                    if (IsIndexInsideAnySpan(stringLiteralSpans, match.Index))
+                        return match.Value; // sits inside a string literal -- not a real reference, leave verbatim.
+
                     var book = match.Groups[1].Value;
                     if (book.Length == 0 || book.All(char.IsAsciiDigit))
                         return match.Value; // already the numeric-ordinal form -- leave untouched.
@@ -386,8 +450,15 @@ internal static class XlsxExternalLinkAuthoringWriter
                 if (string.IsNullOrEmpty(formulaText))
                     continue;
 
+                var stringLiteralSpans = FindDoubleQuotedStringLiteralSpans(formulaText);
                 foreach (Match match in QuotedExternalReferencePattern.Matches(formulaText))
                 {
+                    // The match sits inside a double-quoted STRING LITERAL (e.g. ="'[Budget.xlsx]Data'!A1")
+                    // rather than being an actual reference token -- Excel evaluates that formula to the
+                    // literal text with no external link involved. Don't synthesize backing for it.
+                    if (IsIndexInsideAnySpan(stringLiteralSpans, match.Index))
+                        continue;
+
                     var book = match.Groups[1].Value;
                     var sheetName = match.Groups[2].Value.Replace("''", "'");
                     if (book.Length == 0 || sheetName.Length == 0)
