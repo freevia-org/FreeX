@@ -112,9 +112,9 @@ public static class ExternalXamlClipboardPlanner
             foreach (var element in blockElements)
             {
                 if (element.Name.LocalName == "Table")
-                    ReadTable(element, body, tableCellStyles, resources, ref outputCharacters);
+                    ReadTable(element, body, tableCellStyles, resources, resolveImage, ref outputCharacters);
                 else
-                    ReadParagraph(element, body, resources, ref outputCharacters);
+                    ReadParagraph(element, body, resources, resolveImage, ref outputCharacters);
 
                 if (outputCharacters > MaxOutputCharacters)
                     return null;
@@ -144,6 +144,7 @@ public static class ExternalXamlClipboardPlanner
         XElement element,
         TextBody body,
         XamlResourceCatalog resources,
+        Func<string, (byte[]? Bytes, string? ContentType)>? resolveImage,
         ref int outputCharacters)
     {
         var paragraph = new Paragraph();
@@ -152,7 +153,7 @@ public static class ExternalXamlClipboardPlanner
         ApplyParagraphProperties(element, paragraph, style);
         paragraph.RightToLeft = style.RightToLeft;
         ApplyListProperties(element, paragraph);
-        ReadInlineNodes(element, paragraph, inherited, resources, ref outputCharacters);
+        ReadInlineNodes(element, paragraph, inherited, resources, resolveImage, ref outputCharacters);
         body.Paragraphs.Add(paragraph);
     }
 
@@ -237,6 +238,7 @@ public static class ExternalXamlClipboardPlanner
         TextBody body,
         List<InCanvasRichClipboardTableCellStyle> tableCellStyles,
         XamlResourceCatalog resources,
+        Func<string, (byte[]? Bytes, string? ContentType)>? resolveImage,
         ref int outputCharacters)
     {
         var rows = table
@@ -284,6 +286,7 @@ public static class ExternalXamlClipboardPlanner
                         paragraph,
                         inherited,
                         resources,
+                        resolveImage,
                         ref outputCharacters);
                 }
             }
@@ -331,6 +334,7 @@ public static class ExternalXamlClipboardPlanner
         Paragraph paragraph,
         XamlTextStyle inherited,
         XamlResourceCatalog resources,
+        Func<string, (byte[]? Bytes, string? ContentType)>? resolveImage,
         ref int outputCharacters)
     {
         var style = ReadStyle(element, inherited, resources);
@@ -360,7 +364,7 @@ public static class ExternalXamlClipboardPlanner
                     // outer document walk; never duplicate their text in the parent.
                     break;
                 default:
-                    ReadInlineElement(child, paragraph, style, resources, ref outputCharacters);
+                    ReadInlineElement(child, paragraph, style, resources, resolveImage, ref outputCharacters);
                     break;
             }
         }
@@ -371,9 +375,39 @@ public static class ExternalXamlClipboardPlanner
         Paragraph paragraph,
         XamlTextStyle inherited,
         XamlResourceCatalog resources,
+        Func<string, (byte[]? Bytes, string? ContentType)>? resolveImage,
         ref int outputCharacters)
     {
         var style = ReadStyle(element, inherited, resources);
+        if (element.Name.LocalName.Equals("Image", StringComparison.OrdinalIgnoreCase))
+        {
+            var source = AttributeValue(element, "Source");
+            var resolved = !string.IsNullOrWhiteSpace(source)
+                ? resolveImage?.Invoke(source!) ?? (null, null)
+                : (null, null);
+            if (resolved.Bytes is { Length: > 0 })
+            {
+                paragraph.Runs.Add(new Run
+                {
+                    Text = "\uFFFC",
+                    InlineImage = new ImagePart
+                    {
+                        Bytes = resolved.Bytes,
+                        ContentType = resolved.ContentType ?? "application/octet-stream",
+                    },
+                    InlineImageWidthEmu = ReadImageExtentEmu(element, "Width"),
+                    InlineImageHeightEmu = ReadImageExtentEmu(element, "Height"),
+                    FontFamily = style.FontFamily,
+                    FontSizePt = style.FontSizePt,
+                    Bold = style.Bold == true,
+                    Italic = style.Italic == true,
+                    Underline = style.Underline == true,
+                    Color = style.Color,
+                });
+                outputCharacters++;
+            }
+            return;
+        }
         if (element.Name.LocalName == "Run"
             && element.Attribute("Text") is { } textAttribute)
         {
@@ -401,7 +435,7 @@ public static class ExternalXamlClipboardPlanner
                     ref outputCharacters,
                     preserveWhitespace: ShouldPreserveWhitespace(element));
             else if (node is XElement child && child.Name.LocalName != "Paragraph")
-                ReadInlineElement(child, paragraph, style, resources, ref outputCharacters);
+                ReadInlineElement(child, paragraph, style, resources, resolveImage, ref outputCharacters);
         }
     }
 

@@ -89,6 +89,8 @@ public sealed class TabsDialogWpfAuthorityParityTests
                 dialog.Arrange(new Rect(0, 0, 340, 600));
                 dialog.UpdateLayout();
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+                dialog.PositionBoxForTest.Height.Should().Be(26);
+                dialog.DefaultTabStopBoxForTest.Height.Should().Be(26);
                 dialog.PositionBoxForTest.IsFocused.Should().BeTrue();
                 dialog.PositionBoxForTest.SelectionStart.Should().Be(0);
                 dialog.PositionBoxForTest.SelectionEnd.Should().Be(dialog.PositionBoxForTest.Text?.Length ?? 0);

@@ -255,6 +255,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.HorizontalBulletList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.Cycle2 => ("urn:microsoft.com/office/officeart/2005/8/layout/cycle2", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.ContinuousCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.GearCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/gearCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.TextCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/textCycle", SmartArtFamily.Cycle),

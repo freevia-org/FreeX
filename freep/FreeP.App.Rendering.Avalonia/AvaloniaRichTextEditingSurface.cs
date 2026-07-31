@@ -263,7 +263,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         using var selectedLayout = CreateLayout(
             item.Paragraph,
             Math.Max(1, Bounds.Width - item.Origin.X - ContentPadding.Right),
-            SelectionForeground);
+            SelectionForeground,
+            item.InlineImages);
         foreach (var rect in selectedLayout.HitTestTextRange(
                      start - item.Paragraph.GlobalStart,
                      end - start))
@@ -315,7 +316,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             double maxWidth = Math.Max(
                 1,
                 width - originX - ContentPadding.Right);
-            var layout = CreateLayout(paragraph, maxWidth);
+            var inlineImages = CreateInlineImages(paragraph);
+            var layout = CreateLayout(paragraph, maxWidth, inlineImages: inlineImages);
             var origin = new Point(originX, y);
             var bulletOrigin = new Point(
                 ContentPadding.Left + paragraph.IndentDip - paragraph.HangingDip,
@@ -327,6 +329,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 CreateBulletLayout(paragraph),
                 bulletOrigin,
                 CreateBulletImage(paragraph),
+                inlineImages,
                 paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight));
             y += layout.Height + paragraph.SpaceAfterDip;
         }
@@ -341,7 +344,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     private TextLayout CreateLayout(
         InCanvasRichTextVisualParagraph paragraph,
         double maxWidth,
-        IBrush? foregroundOverride = null)
+        IBrush? foregroundOverride = null,
+        IReadOnlyList<InlineImageLayout>? inlineImages = null)
     {
         var seed = paragraph.Runs.FirstOrDefault();
         var defaultTypeface = CreateTypeface(seed);
@@ -356,6 +360,42 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 run.Start,
                 run.Length,
                 CreateRunProperties(run, foregroundOverride)));
+        }
+
+        if (inlineImages is { Count: > 0 })
+        {
+            var sourceRuns = paragraph.Runs
+                .Where(run => run.Length > 0)
+                .Select(run => new InlineTextSourceRun(
+                    run.Start,
+                    run.Length,
+                    CreateRunProperties(run, foregroundOverride),
+                    inlineImages.FirstOrDefault(image => image.Start == run.Start)))
+                .ToArray();
+            var source = new InlineImageTextSource(
+                paragraph.Text,
+                sourceRuns);
+            var paragraphProperties = new GenericTextParagraphProperties(
+                paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
+                ToAvaloniaAlignment(paragraph.Alignment),
+                firstLineInParagraph: true,
+                alwaysCollapsible: false,
+                new GenericTextRunProperties(
+                    defaultTypeface,
+                    defaultFontSize,
+                    null,
+                    foregroundOverride ?? DefaultForeground),
+                _plan.Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
+                lineHeight: 0,
+                indent: 0,
+                letterSpacing: 0);
+            return new TextLayout(
+                source,
+                paragraphProperties,
+                TextTrimming.None,
+                maxWidth,
+                double.PositiveInfinity,
+                maxLines: 0);
         }
 
         return new TextLayout(
@@ -437,12 +477,17 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         if (run?.Strikethrough == true)
             decorations.Add(new TextDecoration { Location = TextDecorationLocation.Strikethrough });
 
-        IBrush foreground = foregroundOverride ?? (run?.Color is { } color
+        IBrush foreground = foregroundOverride ?? (run?.InlineImage is not null
+            ? Brushes.Transparent
+            : run?.Color is { } color
             ? new SolidColorBrush(Color.FromRgb(color.Resolved.R, color.Resolved.G, color.Resolved.B))
             : DefaultForeground);
+        double fontSize = run?.InlineImage is not null
+            ? InlineImageHeightDip(run)
+            : ToDip(run?.FontSizePt ?? _fallbackFontSizePt);
         return new GenericTextRunProperties(
             CreateTypeface(run),
-            ToDip(run?.FontSizePt ?? _fallbackFontSizePt),
+            fontSize,
             decorations.Count > 0 ? decorations : null,
             foreground,
             baselineAlignment: run?.BaselineOffset switch
@@ -462,6 +507,45 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             run?.Italic == true ? FontStyle.Italic : FontStyle.Normal,
             run?.Bold == true ? FontWeight.Bold : FontWeight.Normal);
     }
+
+    private IReadOnlyList<InlineImageLayout> CreateInlineImages(
+        InCanvasRichTextVisualParagraph paragraph)
+    {
+        var result = new List<InlineImageLayout>();
+        foreach (var run in paragraph.Runs.Where(run => run.InlineImage is { Bytes.Length: > 0 }))
+        {
+            try
+            {
+                using var stream = new MemoryStream(run.InlineImage!.Bytes, writable: false);
+                var bitmap = new Bitmap(stream);
+                result.Add(new InlineImageLayout(
+                    run.Start,
+                    bitmap,
+                    InlineImageWidthDip(run),
+                    InlineImageHeightDip(run)));
+            }
+            catch
+            {
+                // Malformed clipboard media remains a one-character text run.
+            }
+        }
+
+        return result;
+    }
+
+    private static double InlineImageWidthDip(InCanvasRichTextVisualRun run)
+    {
+        if (run.InlineImageWidthEmu is > 0)
+            return Math.Max(1, run.InlineImageWidthEmu.Value / 9525.0);
+        if (run.InlineImageHeightEmu is > 0)
+            return Math.Max(1, run.InlineImageHeightEmu.Value / 9525.0);
+        return InlineImageHeightDip(run);
+    }
+
+    private static double InlineImageHeightDip(InCanvasRichTextVisualRun run) =>
+        run.InlineImageHeightEmu is > 0
+            ? Math.Max(1, run.InlineImageHeightEmu.Value / 9525.0)
+            : Math.Max(1, run.FontSizePt is > 0 ? run.FontSizePt.Value * PtToDip : 16);
 
     private IReadOnlyList<Rect> BuildSelectionRects(bool includeHorizontalScroll = true)
     {
@@ -613,9 +697,94 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             item.Layout.Dispose();
             item.BulletLayout?.Dispose();
             item.BulletImage?.Dispose();
+            foreach (var image in item.InlineImages)
+                image.Bitmap.Dispose();
         }
         _layouts.Clear();
     }
+
+    private sealed class InlineImageTextSource : ITextSource
+    {
+        private readonly string _text;
+        private readonly IReadOnlyList<InlineTextSourceRun> _runs;
+
+        internal InlineImageTextSource(
+            string text,
+            IReadOnlyList<InlineTextSourceRun> runs)
+        {
+            _text = text;
+            _runs = runs;
+        }
+
+        public TextRun? GetTextRun(int textSourceIndex)
+        {
+            if (textSourceIndex < 0 || textSourceIndex >= _text.Length)
+                return null;
+
+            var run = _runs.FirstOrDefault(candidate =>
+                textSourceIndex >= candidate.Start
+                && textSourceIndex < candidate.Start + candidate.Length);
+            if (run is null)
+                return new TextCharacters(_text.AsMemory(textSourceIndex),
+                    new GenericTextRunProperties(
+                        new Typeface(new FontFamily(InCanvasRichTextEditorDefaults.FallbackFontFamily)),
+                        12,
+                        null,
+                        Brushes.Black));
+
+            int offset = textSourceIndex - run.Start;
+            if (run.InlineImage is { } image && offset == 0)
+            {
+                return new InlineImageTextRun(
+                    image.Bitmap,
+                    new Size(image.WidthDip, image.HeightDip),
+                    run.Properties);
+            }
+
+            int length = Math.Min(run.Length - offset, _text.Length - textSourceIndex);
+            return new TextCharacters(
+                _text.AsMemory(textSourceIndex, length),
+                run.Properties);
+        }
+    }
+
+    private sealed class InlineImageTextRun : DrawableTextRun
+    {
+        private readonly Bitmap _bitmap;
+        private readonly Size _size;
+        private readonly TextRunProperties _properties;
+
+        internal InlineImageTextRun(
+            Bitmap bitmap,
+            Size size,
+            TextRunProperties properties)
+        {
+            _bitmap = bitmap;
+            _size = size;
+            _properties = properties;
+        }
+
+        public override int Length => 1;
+
+        public override TextRunProperties Properties => _properties;
+
+        public override Size Size => _size;
+
+        public override double Baseline => _size.Height;
+
+        public override void Draw(DrawingContext drawingContext, Point origin)
+        {
+            drawingContext.DrawImage(
+                _bitmap,
+                new Rect(origin.X, origin.Y, _size.Width, _size.Height));
+        }
+    }
+
+    private sealed record InlineTextSourceRun(
+        int Start,
+        int Length,
+        TextRunProperties Properties,
+        InlineImageLayout? InlineImage);
 
     private sealed record ParagraphLayout(
         InCanvasRichTextVisualParagraph Paragraph,
@@ -624,8 +793,15 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         TextLayout? BulletLayout,
         Point BulletOrigin,
         Bitmap? BulletImage,
+        IReadOnlyList<InlineImageLayout> InlineImages,
         FlowDirection FlowDirection)
     {
         internal double Bottom => Origin.Y + Layout.Height + Paragraph.SpaceAfterDip;
     }
+
+    private sealed record InlineImageLayout(
+        int Start,
+        Bitmap Bitmap,
+        double WidthDip,
+        double HeightDip);
 }

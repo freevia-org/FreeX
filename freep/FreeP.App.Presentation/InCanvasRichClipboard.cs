@@ -447,6 +447,13 @@ public static class InCanvasRichClipboardPlanner
     private static ClipboardRunDto ToDto(Run run) => new ClipboardRunDto
     {
         Text = run.Text,
+        InlineImage = run.InlineImage is null ? null : new ClipboardImageDto
+        {
+            ContentType = run.InlineImage.ContentType,
+            Bytes = run.InlineImage.Bytes.ToArray(),
+            WidthEmu = run.InlineImageWidthEmu,
+            HeightEmu = run.InlineImageHeightEmu,
+        },
         FontFamily = run.FontFamily,
         FontSizePt = run.FontSizePt,
         BaselineOffset = run.BaselineOffset,
@@ -597,6 +604,15 @@ public static class InCanvasRichClipboardPlanner
         : new Run
         {
             Text = dto.Text ?? string.Empty,
+            InlineImage = dto.InlineImage is { Bytes.Length: > 0 } image
+                ? new ImagePart
+                {
+                    ContentType = image.ContentType ?? "image/png",
+                    Bytes = image.Bytes!,
+                }
+                : null,
+            InlineImageWidthEmu = dto.InlineImage?.WidthEmu,
+            InlineImageHeightEmu = dto.InlineImage?.HeightEmu,
             FontFamily = dto.FontFamily,
             FontSizePt = dto.FontSizePt,
             BaselineOffset = dto.BaselineOffset,
@@ -903,6 +919,7 @@ public static class InCanvasRichClipboardPlanner
     private sealed class ClipboardRunDto
     {
         public string? Text { get; set; }
+        public ClipboardImageDto? InlineImage { get; set; }
         public string? FontFamily { get; set; }
         public double? FontSizePt { get; set; }
         public int? BaselineOffset { get; set; }

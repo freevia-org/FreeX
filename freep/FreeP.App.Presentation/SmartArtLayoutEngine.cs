@@ -159,6 +159,9 @@ public static class SmartArtLayoutEngine
         if (IsTitledMatrixLayout(data.LayoutUniqueId))
             return LayoutTitledMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsCycle2Layout(data.LayoutUniqueId))
+            return LayoutCycle2(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan, theme);
+
         if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy3Layout(data.LayoutUniqueId))
             return LayoutHierarchy3(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -2449,6 +2452,87 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// PowerPoint's cycle2 layout places two to seven equal ellipse nodes around an
+    /// elliptical ring and inserts tangent right-arrow shapes between consecutive
+    /// nodes. The native layout definition caps the child count at seven; larger or
+    /// malformed diagrams return null and remain on the cached drawing path.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutCycle2(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan,
+        PresentationTheme theme)
+    {
+        if (nodes.Count is < 2 or > 7)
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long innerW = Math.Max(fcx - 2 * padX, 1L);
+        long innerH = Math.Max(fcy - 2 * padY, 1L);
+        double centerX = fx + padX + innerW / 2.0;
+        double centerY = fy + padY + innerH / 2.0;
+        double radiusX = innerW * 0.27;
+        double radiusY = innerH * 0.34;
+        long diameter = Math.Max(
+            Math.Min((long)(innerW * 0.18), (long)(innerH * 0.28)),
+            1L);
+        double angleStep = 360.0 / nodes.Count;
+        var centers = new (double X, double Y)[nodes.Count];
+        var shapes = new List<SlideShape>(nodes.Count * 2);
+        var arrowStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Cycle) with
+        {
+            Fill = new ThemeAwareColor(SmartArtStylePlanner.ResolveNeutralConnector(theme))
+        };
+        uint id = 860;
+
+        // Arrows are emitted first so their heads remain behind the ellipse nodes.
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            double angle = (-90 + i * angleStep) * Math.PI / 180.0;
+            centers[i] = (centerX + radiusX * Math.Cos(angle), centerY + radiusY * Math.Sin(angle));
+        }
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var from = centers[i];
+            var to = centers[(i + 1) % nodes.Count];
+            double midX = (from.X + to.X) / 2.0;
+            double midY = (from.Y + to.Y) / 2.0;
+            double midAngle = (-90 + (i + 0.5) * angleStep) + 90.0;
+            var arrow = MakeBox(
+                id++, string.Empty, arrowStyle,
+                (long)(midX - diameter * 0.135),
+                (long)(midY - diameter * 0.17),
+                Math.Max((long)(diameter * 0.27), 1L),
+                Math.Max((long)(diameter * 0.34), 1L),
+                NodeFontSizePt,
+                DrawingShapeKind.RightArrow);
+            arrow.Name = $"SmartArt_Cycle2_Arrow_{i}";
+            arrow.TextBody = null;
+            arrow.Outline = ShapeOutline.None.Instance;
+            arrow.RotationDeg = midAngle;
+            shapes.Add(arrow);
+        }
+
+        for (int i = 0; i < nodes.Count; i++)
+        {
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Cycle);
+            var center = centers[i];
+            shapes.Add(MakeBox(
+                id++, nodes[i].Text, nodeStyle,
+                (long)(center.X - diameter / 2.0),
+                (long)(center.Y - diameter / 2.0),
+                diameter,
+                diameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
     // ── Hierarchy layout ───────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -3410,5 +3494,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "interlockingrings", StringComparison.Ordinal);
+    }
+
+    private static bool IsCycle2Layout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "cycle2", StringComparison.Ordinal);
     }
 }

@@ -12,6 +12,34 @@ namespace FreeP.App.Host.Tests;
 public sealed class WpfRichTextClipboardAdapterTests
 {
     [StaFact]
+    public void TryPasteDataObject_PreservesInlineXamlImageInsideTextRunSequence()
+    {
+        var png = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+        var xaml = $"<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Run Text=\"Before\"/><Image Source=\"data:image/png;base64,{Convert.ToBase64String(png)}\" Width=\"24\" Height=\"12\"/><Run Text=\"After\"/></Paragraph></FlowDocument>";
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(
+            DataFormats.XamlPackage,
+            new MemoryStream(CreateXamlPackage(xaml)),
+            autoConvert: false);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        updated.Should().NotBeNull();
+        updated!.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Before", "\uFFFC", "After");
+        var inline = updated.Paragraphs.Single().Runs[1];
+        inline.InlineImage.Should().NotBeNull();
+        inline.InlineImage!.Bytes.Should().NotBeEmpty();
+        inline.InlineImageWidthEmu.Should().Be(228_600);
+        inline.InlineImageHeightEmu.Should().Be(114_300);
+    }
+
+    [StaFact]
     public void TryPasteDataObject_UsesSharedXamlPackageBeforeRtfAndPlainText()
     {
         var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;

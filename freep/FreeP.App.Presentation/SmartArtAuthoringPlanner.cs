@@ -87,6 +87,7 @@ public enum SmartArtLayoutPreset
     HorizontalBulletList,
     HorizontalBlockList,
     BasicCycle,
+    Cycle2,
     ContinuousCycle,
     GearCycle,
     TextCycle,
@@ -541,6 +542,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.Cycle2 =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/cycle2", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.ContinuousCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.GearCycle =>
