@@ -594,6 +594,12 @@ internal static class FreePRibbonText
     public static RibbonText AnimationExitWheelCommand { get; } = new("Ribbon_Command_AnimationExitWheel_Label", "Ribbon_Command_AnimationExitWheel_KeyTip");
     public static RibbonText AnimationExitRandomBarsCommand { get; } = new("Ribbon_Command_AnimationExitRandomBars_Label", "Ribbon_Command_AnimationExitRandomBars_KeyTip");
     public static RibbonText AnimationNoneCommand { get; } = new("Ribbon_Command_AnimationNone_Label", "Ribbon_Command_AnimationNone_KeyTip");
+    public static RibbonText AnimationMotionPathGroup { get; } = new("Ribbon_Group_AnimationMotionPath_Label", "Ribbon_Group_AnimationMotionPath_KeyTip");
+    public static RibbonText AnimationMotionRightCommand { get; } = new("Ribbon_Command_AnimationMotionRight_Label", "Ribbon_Command_AnimationMotionRight_KeyTip");
+    public static RibbonText AnimationMotionLeftCommand { get; } = new("Ribbon_Command_AnimationMotionLeft_Label", "Ribbon_Command_AnimationMotionLeft_KeyTip");
+    public static RibbonText AnimationMotionUpCommand { get; } = new("Ribbon_Command_AnimationMotionUp_Label", "Ribbon_Command_AnimationMotionUp_KeyTip");
+    public static RibbonText AnimationMotionDownCommand { get; } = new("Ribbon_Command_AnimationMotionDown_Label", "Ribbon_Command_AnimationMotionDown_KeyTip");
+    public static RibbonText AnimationMotionArcRightCommand { get; } = new("Ribbon_Command_AnimationMotionArcRight_Label", "Ribbon_Command_AnimationMotionArcRight_KeyTip");
     public static RibbonText AnimationTimingGroup { get; } = new("Ribbon_Group_AnimationTiming_Label", "Ribbon_Group_AnimationTiming_KeyTip");
     public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label", "Ribbon_Command_AnimationTrigger_KeyTip");
     public static RibbonText AnimationDurationCommand { get; } = new("Ribbon_Command_AnimationDuration_Label", "Ribbon_Command_AnimationDuration_KeyTip");

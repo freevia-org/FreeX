@@ -410,6 +410,24 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
+    public void Cmd_MotionRight_AddsMotionPathAnimation()
+    {
+        var (ed, pres) = MakeSession();
+        ed.Select(pres.Slides[0].Shapes[0].Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.anim.motion.right");
+
+        var animation = Assert.Single(ed.CurrentSlideAnimations);
+        Assert.Equal(AnimationKind.Motion, animation.Kind);
+        Assert.NotNull(animation.Motion);
+        Assert.Equal(MotionPathSegmentKind.Move, animation.Motion!.Segments[0].Kind);
+        Assert.Equal(MotionPathSegmentKind.Line, animation.Motion.Segments[1].Kind);
+        Assert.Equal(0.5, animation.Motion.Segments[1].X);
+        Assert.Equal(0, animation.Motion.Segments[1].Y);
+    }
+
+    [Fact]
     public void Cmd_EmphasisPulse_SetsKindEmphasis()
     {
         var (ed, pres) = MakeSession();
