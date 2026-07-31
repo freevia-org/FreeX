@@ -566,6 +566,28 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_OpenEmbeddedObject_PrefersActiveInlineObject()
+    {
+        var (ed, _) = MakeSession();
+        bool inlineOpened = false;
+        bool slideOpened = false;
+        var registry = FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            ed,
+            tryOpenInlineEmbeddedObject: () =>
+            {
+                inlineOpened = true;
+                return true;
+            },
+            onOpenEmbeddedObject: _ => slideOpened = true);
+
+        Exec(registry, OleActivationPlanner.OpenEmbeddedObjectCommandId);
+
+        Assert.True(inlineOpened);
+        Assert.False(slideOpened);
+    }
+
+    [Fact]
     public void Cmd_InsertEmbeddedObject_RoutesToHostPickerCallback()
     {
         var (ed, _) = MakeSession();

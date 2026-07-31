@@ -6,6 +6,44 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class OleActivationServiceTests
 {
     [Fact]
+    public void OpenEmbeddedCommand_PrefersActiveInlineObject()
+    {
+        bool inlineOpened = false;
+        bool slideOpened = false;
+
+        OleActivationPlanner.TryOpenInlineFirst(
+            () =>
+            {
+                inlineOpened = true;
+                return true;
+            },
+            () =>
+            {
+                slideOpened = true;
+                return true;
+            }).Should().BeTrue();
+
+        inlineOpened.Should().BeTrue();
+        slideOpened.Should().BeFalse();
+    }
+
+    [Fact]
+    public void OpenEmbeddedCommand_FallsBackToSlideObject()
+    {
+        bool slideOpened = false;
+
+        OleActivationPlanner.TryOpenInlineFirst(
+            () => false,
+            () =>
+            {
+                slideOpened = true;
+                return true;
+            }).Should().BeTrue();
+
+        slideOpened.Should().BeTrue();
+    }
+
+    [Fact]
     public void TryActivate_EmptyPayload_ReturnsFalse()
     {
         OleActivationService.TryActivate(new OleObjectInfo()).Should().BeFalse();

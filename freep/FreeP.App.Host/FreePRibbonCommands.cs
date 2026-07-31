@@ -126,6 +126,7 @@ internal static class FreePRibbonCommands
         Action?             onEditRotationOptions = null,
         Action?             onInsertEmbeddedObject = null,
         Action<OleObjectInfo>? onOpenEmbeddedObject = null,
+        Func<bool>?          tryOpenInlineEmbeddedObject = null,
         Action?             onTransitionSound = null)
     {
         var registry = new RibbonCommandRegistry();
@@ -794,13 +795,19 @@ internal static class FreePRibbonCommands
         registry.Register(OleActivationPlanner.OpenEmbeddedObjectCommandId,
             new ActionRibbonCommand(() =>
             {
-                if (editor.SelectedOleObject is not { } ole)
-                    return;
+                OleActivationPlanner.TryOpenInlineFirst(
+                    tryOpenInlineEmbeddedObject,
+                    () =>
+                    {
+                        if (editor.SelectedOleObject is not { } ole)
+                            return false;
 
-                if (onOpenEmbeddedObject is { } open)
-                    open(ole);
-                else
-                    OleActivationService.TryActivate(ole);
+                        if (onOpenEmbeddedObject is { } open)
+                            open(ole);
+                        else
+                            OleActivationService.TryActivate(ole);
+                        return true;
+                    });
             }));
 
         registry.Register("freep.arrange.edit-points",

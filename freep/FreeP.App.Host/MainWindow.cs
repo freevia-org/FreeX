@@ -472,6 +472,7 @@ public sealed partial class MainWindow : Window
             onEditChartProtectionOptions: () => OpenChartProtectionOptionsDialog(),
             onEditRotationOptions: () => OpenRotationOptionsDialog(),
             onInsertEmbeddedObject: () => InsertEmbeddedObjectFromFile(),
+            tryOpenInlineEmbeddedObject: () => SlideCanvas.TextEditor?.TryActivateInlineOleObject() == true,
             getSlideCanvas:     () => SlideCanvas,
             onEditPoints:       () => SlideCanvas.SetEditPointsMode(!SlideCanvas.EditPointsEnabled),
             // Wave 10B: open custom slide-size dialog from Design tab ribbon button.

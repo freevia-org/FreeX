@@ -110,6 +110,24 @@ public sealed class EditingSession
             : null;
 
     /// <summary>
+    /// Activates an inline embedded object from the live shape model. Resolving the payload here
+    /// keeps external edits attached to the model even when a host text overlay commits as it
+    /// loses focus to the external OLE application.
+    /// </summary>
+    public bool TryActivateInlineOleObject(uint shapeId, int logicalPosition)
+    {
+        var shape = CurrentSlide is { } slide
+            ? FindShape(slide.Shapes, shapeId)
+            : null;
+        if (shape?.TextBody is null)
+            return false;
+
+        var buffer = new InCanvasRichTextEditBuffer(shape.TextBody);
+        return buffer.TryGetInlineOleObjectAt(logicalPosition, out var inlineObject)
+            && OleActivationService.TryActivate(inlineObject);
+    }
+
+    /// <summary>
     /// Prepares and commits one SmartArt edit through the shared undo bus. The callback receives
     /// an isolated payload, so callers can run planner mutations and regenerate its package/cache
     /// state without exposing a partially edited model to the canvas.

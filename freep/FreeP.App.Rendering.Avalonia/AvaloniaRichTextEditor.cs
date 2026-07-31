@@ -272,6 +272,15 @@ internal sealed class AvaloniaRichTextEditor : Grid
         return _buffer.GetSelectedRunHyperlink(Selection);
     }
 
+    internal bool TryActivateInlineOleObject(Func<int, bool> tryActivateAt)
+    {
+        ArgumentNullException.ThrowIfNull(tryActivateAt);
+        SynchronizeText();
+        int position = Math.Min(SelectionStart, SelectionEnd);
+        return tryActivateAt(position)
+            || (position > 0 && tryActivateAt(position - 1));
+    }
+
     internal bool ApplyHyperlink(Hyperlink? hyperlink) =>
         ApplyMutation(() => _buffer.ApplyHyperlink(hyperlink, Selection));
 

@@ -87,6 +87,23 @@ public sealed class InCanvasTextEditor : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Activates the inline embedded object at the current caret/selection position. The
+    /// existing external activation session writes edited bytes back into the live text model.
+    /// </summary>
+    public bool TryActivateInlineOleObject()
+    {
+        if (!_active || _richBox is null)
+            return false;
+
+        int position = LogicalOffsetAt(
+            _richBox.Document,
+            _richBox.Selection.IsEmpty ? _richBox.CaretPosition : _richBox.Selection.Start);
+        return _editor.TryActivateInlineOleObject(_editingShapeId, position)
+            || (position > 0
+                && _editor.TryActivateInlineOleObject(_editingShapeId, position - 1));
+    }
+
     /// <summary>Activates the rich-text editor for the given shape.</summary>
     public void Activate(uint shapeId)
     {
