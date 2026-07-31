@@ -138,7 +138,6 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     internal static PaginatedEditorPanel Build(DocumentView sourceEditor)
     {
         var model = sourceEditor.Model;
-        var page = model.Page;
 
         // ── Step 1: render the model into a scratch editor to obtain Tag-bearing WPF blocks ──────
         var scratch = new DocumentView();
@@ -222,7 +221,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         // Use the final section's page settings for the endnotes page.
         if (requiresDedicatedEndnotePage)
         {
-            var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
+            var endnotePage = new PageBox(pageCount + 1, pageToSection[^1].PageSettings,
+                Array.Empty<System.Windows.Documents.Block>(),
                 sourceModel: model,
                 endnoteIds: endnoteIds);
             boxes.Add(endnotePage);
@@ -553,7 +553,6 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         // ── Re-shard ──────────────────────────────────────────────────────────────────────────────
         var model = _sourceEditor.Model;
-        var page = model.Page;
 
         var scratch = new DocumentView();
         scratch.LoadModel(model);
@@ -642,7 +641,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         if (requiresDedicatedEndnotePageRep)
         {
-            var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
+            var endnotePage = new PageBox(pageCount + 1, pageToSectionRep[^1].PageSettings,
+                Array.Empty<System.Windows.Documents.Block>(),
                 sourceModel: model,
                 endnoteIds: endnoteIdsRep);
             _pageBoxes.Add(endnotePage);
@@ -715,7 +715,6 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
         _pageBoxes.Clear();
 
         var model = _sourceEditor.Model;
-        var page = model.Page;
 
         var scratch = new DocumentView();
         scratch.LoadModel(model);
@@ -781,7 +780,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         if (requiresDedicatedEndnotePageReb)
         {
-            var endnotePage = new PageBox(pageCount + 1, page, Array.Empty<System.Windows.Documents.Block>(),
+            var endnotePage = new PageBox(pageCount + 1, pageToSectionReb[^1].PageSettings,
+                Array.Empty<System.Windows.Documents.Block>(),
                 sourceModel: model,
                 endnoteIds: endnoteIdsReb);
             _pageBoxes.Add(endnotePage);

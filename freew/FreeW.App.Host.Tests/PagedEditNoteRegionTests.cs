@@ -368,6 +368,43 @@ public sealed class PagedEditNoteRegionTests
         panel.PageBoxes.Last().EndnoteIds.Should().Equal(1, 2);
     }
 
+    [StaFact]
+    public void DedicatedEndnotePage_UsesFinalSectionGeometryAcrossRebuilds()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Portrait section")
+        {
+            SectionBreak = new Section(new PageSettings
+            {
+                WidthPt = 612,
+                HeightPt = 792,
+                Landscape = false,
+                MarginLeftPt = 72,
+                MarginRightPt = 72,
+                MarginTopPt = 72,
+                MarginBottomPt = 72
+            }, SectionBreakKind.NextPage)
+        });
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+        doc.Page.Landscape = true;
+        doc.Page.MarginLeftPt = 36;
+        doc.Page.MarginRightPt = 48;
+        doc.Page.MarginTopPt = 54;
+        doc.Page.MarginBottomPt = 60;
+        doc.Blocks.Add(new Paragraph("Final landscape section"));
+        doc.Endnotes[1] = new Endnote(1, "Endnote body");
+
+        var (panel, _) = BuildPanel(doc);
+
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+        panel.Repaginate();
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+        panel.Rebuild();
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────────────
     // helpers
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -434,5 +471,17 @@ public sealed class PagedEditNoteRegionTests
         }
 
         throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+
+    private static void AssertFinalSectionGeometry(PageBox box, PageSettings expected)
+    {
+        box.IsEndnoteSyntheticPage.Should().BeTrue();
+        box.PageGeometry.WidthPt.Should().Be(expected.WidthPt);
+        box.PageGeometry.HeightPt.Should().Be(expected.HeightPt);
+        box.PageGeometry.Landscape.Should().Be(expected.Landscape);
+        box.PageGeometry.MarginLeftPt.Should().Be(expected.MarginLeftPt);
+        box.PageGeometry.MarginRightPt.Should().Be(expected.MarginRightPt);
+        box.PageGeometry.MarginTopPt.Should().Be(expected.MarginTopPt);
+        box.PageGeometry.MarginBottomPt.Should().Be(expected.MarginBottomPt);
     }
 }
