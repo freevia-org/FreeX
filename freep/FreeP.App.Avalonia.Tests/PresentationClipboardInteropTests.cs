@@ -627,12 +627,16 @@ public sealed class PresentationClipboardInteropTests
                           <SolidColorBrush x:Key="Accent" Color="#FF2F5597" />
                           <FontFamily x:Key="BodyFont">Aptos</FontFamily>
                           <sys:Double x:Key="BodySize">18</sys:Double>
+                          <Style x:Key="ListText">
+                            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                            <Setter Property="FontFamily" Value="{DynamicResource BodyFont}" />
+                            <Setter Property="FontSize" Value="{StaticResource BodySize}" />
+                            <Setter Property="FontWeight" Value="Bold" />
+                          </Style>
                         </ResourceDictionary>
                       </FlowDocument.Resources>
                       <List MarkerStyle="UpperLatin" StartIndex="4">
-                        <ListItem><Paragraph Foreground="{StaticResource Accent}"
-                                                 FontFamily="{StaticResource BodyFont}"
-                                                 FontSize="{DynamicResource BodySize}">Four</Paragraph></ListItem>
+                        <ListItem><Paragraph Style="{StaticResource ListText}">Four</Paragraph></ListItem>
                         <ListItem><Paragraph>Five</Paragraph></ListItem>
                       </List>
                     </FlowDocument>
@@ -650,6 +654,7 @@ public sealed class PresentationClipboardInteropTests
         body.Paragraphs[0].Runs.Single().Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5597));
         body.Paragraphs[0].Runs.Single().FontFamily.Should().Be("Aptos");
         body.Paragraphs[0].Runs.Single().FontSizePt.Should().Be(13.5);
+        body.Paragraphs[0].Runs.Single().Bold.Should().BeTrue();
         body.Paragraphs[1].AutoNumStartAtSpecified.Should().BeFalse();
     }
 
