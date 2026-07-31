@@ -1306,9 +1306,8 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.toc-refresh", tocRefresh);
         r.Register("freew.update-toc", tocRefresh);
 
-        // Captions — auto-numbered Figure / Table caption paragraph after the caret block.
-        // The top-level opener is a no-op; each label is its own command.
-        var caption = new ActionRibbonCommand(() => { /* dropdown opener */ });
+        // Captions — the primary action opens the label/text dialog; menu labels remain direct.
+        var caption = new ActionRibbonCommand(callbacks.OpenCaptionDialog ?? (() => { }));
         r.Register("freew.caption", caption);
         r.Register("freew.insert-caption", caption);
         r.Register("freew.insert-caption.figure", new ActionRibbonCommand(() => editor.InsertCaption(CaptionLabel.Figure)));

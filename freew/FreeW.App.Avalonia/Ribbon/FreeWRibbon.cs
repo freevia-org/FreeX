@@ -262,6 +262,8 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenManageStylesDialog = null,
     /// <summary>References &gt; Cross-reference. Optional; registry no-ops when null.</summary>
     Action? OpenCrossReferenceDialog = null,
+    /// <summary>References &gt; Insert Caption. Optional owner-modal insertion route.</summary>
+    Action? OpenCaptionDialog = null,
     /// <summary>References &gt; Insert Citation. Optional; registry no-ops when null.</summary>
     Action? OpenCitationDialog = null,
     /// <summary>References &gt; Manage Sources. Optional; registry no-ops when null.</summary>

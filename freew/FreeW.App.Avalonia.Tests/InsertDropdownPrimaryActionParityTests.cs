@@ -64,7 +64,41 @@ public sealed class InsertDropdownPrimaryActionParityTests
         equations[0]!.LinearText.Should().Contain("E = m");
     }
 
-    private static RibbonHostCallbacks NoopCallbacks() =>
+    [Fact]
+    public void Caption_dropdown_primary_action_invokes_dialog_backed_insert()
+    {
+        var document = TextDocument.CreateEmpty();
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var registry = FreeWRibbon.BuildRegistry(
+            view,
+            NoopCallbacks(() => view.InsertCaption(CaptionLabel.Figure, "Primary caption")));
+
+        registry.TryGet(new RibbonCommandId("freew.caption"), out var command)
+            .Should().BeTrue("the shared WPF command id must be registered");
+        command!.Execute(RibbonCommandContext.Empty);
+
+        view.Document.Blocks.OfType<Paragraph>()
+            .Should().ContainSingle(paragraph => paragraph.StyleId == Captions.StyleId)
+            .Which.PlainText.Should().Be("Figure 1: Primary caption");
+    }
+
+    [Fact]
+    public void Caption_dropdown_primary_action_without_shell_callback_does_not_mutate()
+    {
+        var document = TextDocument.CreateEmpty();
+        var before = document.Blocks.ToArray();
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        registry.TryGet(new RibbonCommandId("freew.caption"), out var command).Should().BeTrue();
+        command!.Execute(RibbonCommandContext.Empty);
+
+        view.Document.Blocks.Should().Equal(before);
+    }
+
+    private static RibbonHostCallbacks NoopCallbacks(Action? openCaptionDialog = null) =>
         new(
             Open: () => { },
             Save: () => { },
@@ -88,5 +122,6 @@ public sealed class InsertDropdownPrimaryActionParityTests
             ApplyPaperSize: _ => { },
             InsertPicture: () => { },
             OpenWordCountDialog: () => { },
-            ApplyZoom: (_, _) => { });
+            ApplyZoom: (_, _) => { },
+            OpenCaptionDialog: openCaptionDialog);
 }

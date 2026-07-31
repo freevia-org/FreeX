@@ -909,6 +909,15 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenCaptionDialogAsync()
+    {
+        var defaultLabel = _editor.IsCaretInTable() ? CaptionLabel.Table : CaptionLabel.Figure;
+        var result = await CaptionDialog.ShowAsync(this, defaultLabel);
+        if (result is not null)
+            _editor.InsertCaption(result.Label, result.Text);
+        _editor.Focus();
+    }
+
     private async Task OpenCitationDialogAsync()
     {
         var source = await PickCitationSourceAsync();
@@ -1685,6 +1694,7 @@ public sealed partial class MainWindow : Window
             OpenTablePropertiesDialog: context => _ = OpenTablePropertiesDialogAsync(context),
             OpenTableFormulaDialog: state => _ = OpenTableFormulaDialogAsync(state),
             OpenWordCountDialog: () => _ = OpenWordCountDialogAsync(),
+            OpenCaptionDialog: () => _ = OpenCaptionDialogAsync(),
             OpenCrossReferenceDialog: () => _ = OpenCrossReferenceDialogAsync(),
             OpenCitationDialog: () => _ = OpenCitationDialogAsync(),
             OpenManageSourcesDialog: () => _ = OpenManageSourcesDialogAsync(),
