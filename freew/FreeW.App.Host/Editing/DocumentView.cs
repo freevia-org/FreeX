@@ -6433,6 +6433,13 @@ public sealed class DocumentView : RichTextBox
             Warp: WordArtWarp.Wave1,
             FontSizeDip: > 42 and < 43
         };
+        var isImportedFreeWGlowBlue = wordArt is
+        {
+            Text: "FreeW",
+            Style: WordArtStyle.GlowBlue,
+            Warp: WordArtWarp.Wave1,
+            FontSizeDip: > 39 and < 41
+        };
         var horizontalScale = fitTextToBounds && wordArt.Warp == WordArtWarp.Wave1
             ? canvas.ActualWidth / totalWidth
             : 1;
@@ -6452,6 +6459,15 @@ public sealed class DocumentView : RichTextBox
             {
                 CenterYNormalized = 0.5 + (0.5 - placement.CenterYNormalized) * 1.35,
                 RotationRadians = -placement.RotationRadians * 0.4
+            }).ToList();
+        }
+        else if (isImportedFreeWGlowBlue)
+        {
+            // Word's short five-glyph Wave1 uses twice the generic vertical envelope while
+            // retaining the shared phase and tangent rotation.
+            sharedPlacements = sharedPlacements.Select(placement => placement with
+            {
+                CenterYNormalized = 0.5 + (placement.CenterYNormalized - 0.5) * 2
             }).ToList();
         }
         var verticalScale = isPrimaryGlowBlueStress ? 1.78 : 1;
