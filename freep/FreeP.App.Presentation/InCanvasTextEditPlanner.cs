@@ -510,6 +510,9 @@ public sealed class InCanvasTextEditPlanner
                 var ra = pa.Runs[ri];
                 var rb = pb.Runs[ri];
                 if (ra.Text != rb.Text
+                    || !ImagePartsEqual(ra.InlineImage, rb.InlineImage)
+                    || ra.InlineImageWidthEmu != rb.InlineImageWidthEmu
+                    || ra.InlineImageHeightEmu != rb.InlineImageHeightEmu
                     || ra.Bold != rb.Bold
                     || ra.Italic != rb.Italic
                     || ra.Underline != rb.Underline
@@ -738,6 +741,15 @@ internal static class TextBodyRunMutationPlanner
     private static Run CloneRunWithText(Run source, string text) => new()
     {
         Text = text,
+        InlineImage = source.InlineImage is { } image && text == source.Text
+            ? new ImagePart { Bytes = image.Bytes.ToArray(), ContentType = image.ContentType }
+            : null,
+        InlineImageWidthEmu = source.InlineImage is not null && text == source.Text
+            ? source.InlineImageWidthEmu
+            : null,
+        InlineImageHeightEmu = source.InlineImage is not null && text == source.Text
+            ? source.InlineImageHeightEmu
+            : null,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,
@@ -762,7 +774,10 @@ internal static class TextBodyRunMutationPlanner
     };
 
     private static bool RunFormatEquals(Run a, Run b) =>
-        a.FontFamily == b.FontFamily
+        ImagePartsEqual(a.InlineImage, b.InlineImage)
+        && a.InlineImageWidthEmu == b.InlineImageWidthEmu
+        && a.InlineImageHeightEmu == b.InlineImageHeightEmu
+        && a.FontFamily == b.FontFamily
         && a.FontSizePt == b.FontSizePt
         && a.BaselineOffset == b.BaselineOffset
         && a.Bold == b.Bold
@@ -783,6 +798,14 @@ internal static class TextBodyRunMutationPlanner
         && a.TextGlow == b.TextGlow
         && a.TextSoftEdge == b.TextSoftEdge
         && a.Math == b.Math;
+
+    private static bool ImagePartsEqual(ImagePart? a, ImagePart? b)
+    {
+        if (a is null || b is null)
+            return a is null && b is null;
+
+        return a.ContentType == b.ContentType && a.Bytes.AsSpan().SequenceEqual(b.Bytes);
+    }
 
     private static void MergeAdjacentRunsWithSameFormat(TextBody body)
     {
@@ -1082,6 +1105,9 @@ internal static class TextBodyModelCloner
     internal static Run CloneRun(Run source) => new()
     {
         Text = source.Text,
+        InlineImage = CloneImagePart(source.InlineImage),
+        InlineImageWidthEmu = source.InlineImageWidthEmu,
+        InlineImageHeightEmu = source.InlineImageHeightEmu,
         FontFamily = source.FontFamily,
         FontSizePt = source.FontSizePt,
         BaselineOffset = source.BaselineOffset,

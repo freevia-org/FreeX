@@ -20,6 +20,91 @@ public sealed class AvaloniaRichTextEditorTests
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(SlideHeadlessApp).Assembly);
 
     [Fact]
+    public async Task InlineImageRun_IsRetainedBySharedVisualPlan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Before" },
+                    new Run
+                    {
+                        Text = "\uFFFC",
+                        InlineImage = new ImagePart
+                        {
+                            Bytes = [0x01, 0x02],
+                            ContentType = "image/png",
+                        },
+                        InlineImageWidthEmu = 228_600,
+                        InlineImageHeightEmu = 114_300,
+                    },
+                    new Run { Text = "After" },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC);
+            var run = editor.RichTextView.VisualPlan.Paragraphs.Single().Runs[1];
+            run.Text.Should().Be("\uFFFC");
+            run.InlineImage!.Bytes.Should().Equal(0x01, 0x02);
+            run.InlineImageWidthEmu.Should().Be(228_600);
+            run.InlineImageHeightEmu.Should().Be(114_300);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task InlineImageRun_ReservesAuthoredWidthForFollowingText()
+    {
+        await Session.Dispatch(async () =>
+        {
+            byte[] png = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAANSURBVBhXY/jPwPAfAAUAAf+mXJtdAAAAAElFTkSuQmCC");
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Before" },
+                    new Run
+                    {
+                        Text = "\uFFFC",
+                        InlineImage = new ImagePart { Bytes = png, ContentType = "image/png" },
+                        InlineImageWidthEmu = 228_600,
+                        InlineImageHeightEmu = 114_300,
+                    },
+                    new Run { Text = "After" },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC)
+            {
+                Width = 320,
+                Height = 90,
+            };
+            var window = Show(editor);
+            try
+            {
+                editor.SelectionStart = 7;
+                editor.SelectionEnd = 7;
+                double imageFollowingX = editor.RichTextView.CaretRect.X;
+
+                editor.Text = "BeforeAfter";
+                editor.SelectionStart = 6;
+                editor.SelectionEnd = 6;
+                double plainFollowingX = editor.RichTextView.CaretRect.X;
+
+                (imageFollowingX - plainFollowingX).Should().BeGreaterThan(20);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Editor_UsesSharedBodyWrapPolicyForInputAndRichLayout()
     {
         await Session.Dispatch(() =>

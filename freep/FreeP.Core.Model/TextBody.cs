@@ -252,6 +252,19 @@ public sealed class Run
 {
     public string Text { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Inline picture carried by a rich-text editing run. The run's text is the single
+    /// object-replacement character (U+FFFC), so caret and selection offsets remain stable
+    /// across WPF and Avalonia editors. Null means this is an ordinary text run.
+    /// </summary>
+    public ImagePart? InlineImage { get; set; }
+
+    /// <summary>Authored inline-picture width in EMUs, when the source supplied one.</summary>
+    public long? InlineImageWidthEmu { get; set; }
+
+    /// <summary>Authored inline-picture height in EMUs, when the source supplied one.</summary>
+    public long? InlineImageHeightEmu { get; set; }
+
     /// <summary>Font family name, or null to inherit from paragraph/layout/master.</summary>
     public string? FontFamily { get; set; }
 

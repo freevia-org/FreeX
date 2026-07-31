@@ -401,6 +401,34 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void XamlPackageFlowDocument_PreservesInlineImageRunOrderAndExtent()
+    {
+        const string xaml = """
+            <FlowDocument xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+              <Paragraph><Run Text="Before"/><Image Source="Images/inline.png" Width="24" Height="12"/><Run Text="After"/></Paragraph>
+            </FlowDocument>
+            """;
+        var bytes = new byte[] { 0x01, 0x02, 0x03 };
+
+        var payload = ExternalXamlClipboardPlanner.TryParseXamlPackage(
+            CreateXamlPackage(xaml, ("Images/inline.png", bytes)));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Before\uFFFCAfter");
+        payload.Body.Paragraphs.Single().Runs.Select(run => run.Text)
+            .Should().Equal("Before", "\uFFFC", "After");
+        var inline = payload.Body.Paragraphs.Single().Runs[1];
+        inline.InlineImage!.Bytes.Should().Equal(bytes);
+        inline.InlineImageWidthEmu.Should().Be(228_600);
+        inline.InlineImageHeightEmu.Should().Be(114_300);
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened!.Body.Paragraphs.Single().Runs[1].InlineImage!.Bytes.Should().Equal(bytes);
+        reopened.Body.Paragraphs.Single().Runs[1].InlineImageWidthEmu.Should().Be(228_600);
+    }
+
+    [Fact]
     public void XamlPackageFlowDocument_RejectsOversizedTableRows()
     {
         var cells = string.Concat(Enumerable.Repeat(
@@ -495,7 +523,10 @@ public sealed class ExternalRichTextClipboardTests
         payload!.HasImage.Should().BeTrue();
         payload.ImageContentType.Should().Be("image/png");
         payload.ImageBytes.Should().Equal(png);
-        payload.PlainText.Should().Be("Before  After");
+        payload.PlainText.Should().Be("Before \uFFFC After");
+        payload.Body.Paragraphs.Single().Runs
+            .Any(run => run.InlineImage is { } image && image.Bytes.SequenceEqual(png))
+            .Should().BeTrue();
     }
 
     [Fact]
@@ -553,7 +584,7 @@ public sealed class ExternalRichTextClipboardTests
         payload.GetImagePayloads()[0].ContentType.Should().Be("image/png");
         payload.GetImagePayloads()[1].Bytes.Should().Equal(second);
         payload.GetImagePayloads()[1].ContentType.Should().Be("image/jpeg");
-        payload.PlainText.Should().Be("Before  middle  After");
+        payload.PlainText.Should().Be("Before \uFFFC middle \uFFFC After");
 
         var reopened = InCanvasRichClipboardPlanner.Deserialize(
             InCanvasRichClipboardPlanner.Serialize(payload));

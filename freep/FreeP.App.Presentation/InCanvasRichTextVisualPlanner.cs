@@ -14,7 +14,10 @@ public sealed record InCanvasRichTextVisualRun(
     bool Strikethrough,
     bool? RightToLeft,
     int? BaselineOffset,
-    ThemeAwareColor? Color);
+    ThemeAwareColor? Color,
+    ImagePart? InlineImage = null,
+    long? InlineImageWidthEmu = null,
+    long? InlineImageHeightEmu = null);
 
 public sealed record InCanvasRichTextVisualParagraph(
     int ParagraphIndex,
@@ -86,7 +89,10 @@ public static class InCanvasRichTextVisualPlanner
                     run.Strikethrough,
                     run.RightToLeft,
                     run.BaselineOffset,
-                    run.Color));
+                    run.Color,
+                    run.InlineImage,
+                    run.InlineImageWidthEmu,
+                    run.InlineImageHeightEmu));
                 runStart += run.Text.Length;
             }
 
