@@ -192,6 +192,27 @@ public sealed class WpfRichTextClipboardAdapterTests
     }
 
     [StaFact]
+    public void TryPasteDataObject_PreservesXamlBaselineAlignment()
+    {
+        const string xaml =
+            "<FlowDocument xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\"><Paragraph><Run Text=\"base\"/><Run BaselineAlignment=\"Superscript\" Text=\"up\"/><Run BaselineAlignment=\"Subscript\" Text=\"down\"/></Paragraph></FlowDocument>";
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(
+            DataFormats.XamlPackage,
+            new MemoryStream(CreateXamlPackage(xaml)),
+            autoConvert: false);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        updated!.Paragraphs.Single().Runs.Select(run => run.BaselineOffset)
+            .Should().Equal(null, 10_000, -10_000);
+    }
+
+    [StaFact]
     public void BuildDataObject_PublishesFreePAndNativeRichFormats()
     {
         var source = Body();
