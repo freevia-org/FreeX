@@ -909,6 +909,16 @@ public sealed partial class MainWindow : Window
         _editor.Focus();
     }
 
+    private async Task OpenChartEditDataDialogAsync()
+    {
+        if (_editor.SelectedFloatingChart() is not { } chart)
+            return;
+        var replacement = await InsertChartDialog.ShowAsync(this, chart);
+        if (replacement is not null)
+            _editor.ReplaceSelectedChartData(replacement);
+        _editor.Focus();
+    }
+
     private async Task OpenCaptionDialogAsync()
     {
         var defaultLabel = _editor.IsCaretInTable() ? CaptionLabel.Table : CaptionLabel.Figure;
@@ -1675,6 +1685,7 @@ public sealed partial class MainWindow : Window
             OpenImageAdjustDialog: () => _ = OpenImageAdjustDialogAsync(),
             OpenImagePositionDialog: () => _ = OpenImagePositionDialogAsync(),
             OpenInsertChartDialog: () => _ = OpenInsertChartDialogAsync(),
+            OpenChartEditDataDialog: () => _ = OpenChartEditDataDialogAsync(),
             OpenChartTitleDialog: () => _ = OpenChartTitleDialogAsync(),
             OpenChartAxisTitlesDialog: () => _ = OpenChartAxisTitlesDialogAsync(),
             OpenChartSizeDialog: () => _ = OpenChartSizeDialogAsync(),
