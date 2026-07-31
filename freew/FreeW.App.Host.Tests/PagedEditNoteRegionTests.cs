@@ -1,6 +1,8 @@
+using System.IO;
 using System.Linq;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.Core.IO;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -12,9 +14,7 @@ namespace FreeW.App.Host.Tests;
 /// <list type="bullet">
 ///   <item>A document with footnotes produces a page box whose <see cref="PageBox.FootnoteIds"/>
 ///     contains the referenced footnote IDs in order of appearance.</item>
-///   <item>A document with endnotes produces a synthetic endnotes page box at the end of the panel
-///     whose <see cref="PageBox.EndnoteIds"/> contains all endnote IDs in key order.</item>
-///   <item>The synthetic endnotes page box is flagged as <see cref="PageBox.IsEndnoteSyntheticPage"/>.</item>
+///   <item>Fitting endnotes attach to the final body page; measured overflow appends a dedicated page.</item>
 ///   <item>Footnote IDs in the page box match the inline reference superscripts (same numeric IDs).</item>
 ///   <item>Endnote IDs in the synthetic page match the inline reference superscripts.</item>
 ///   <item>A document with both footnotes and endnotes produces the correct regions on the correct boxes.</item>
@@ -130,7 +130,7 @@ public sealed class PagedEditNoteRegionTests
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
-    // 2. Endnotes synthetic page
+    // 2. Endnote physical-page ownership
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
     [StaFact]
@@ -151,46 +151,45 @@ public sealed class PagedEditNoteRegionTests
     }
 
     /// <summary>
-    /// A document with endnotes must have a synthetic endnotes page box appended after all body
-    /// page boxes.  The synthetic box is flagged as <see cref="PageBox.IsEndnoteSyntheticPage"/>.
+    /// Fitting endnotes remain on the final body page, matching Word's document-end placement.
     /// </summary>
     [StaFact]
-    public void EndnotesSyntheticPage_IsAppended_WhenDocumentHasEndnotes()
+    public void FittingEndnotes_AttachToFinalBodyPage()
     {
         var doc = BuildDocWithEndnotes(2);
         var (panel, _) = BuildPanel(doc);
 
-        var syntheticBox = panel.PageBoxes.FirstOrDefault(b => b.IsEndnoteSyntheticPage);
-        syntheticBox.Should().NotBeNull(
-            "a synthetic endnotes page box must be appended when the document has endnotes");
+        panel.PageBoxes.Should().HaveCount(1);
+        panel.PageBoxes[0].IsEndnoteSyntheticPage.Should().BeFalse();
+        panel.PageBoxes[0].EndnoteIds.Should().Equal(1, 2);
     }
 
     /// <summary>
-    /// The synthetic endnotes page box must be the LAST page box in the panel.
+    /// The body page carrying fitting endnotes remains the last page in the panel.
     /// </summary>
     [StaFact]
-    public void EndnotesSyntheticPage_IsLast_InPageBoxList()
+    public void FittingEndnoteBodyPage_IsLast_InPageBoxList()
     {
         var doc = BuildDocWithEndnotes(2);
         var (panel, _) = BuildPanel(doc);
 
-        panel.PageBoxes.Last().IsEndnoteSyntheticPage
-            .Should().BeTrue("the synthetic endnotes page must be the last page box");
+        panel.PageBoxes.Last().EndnoteIds.Should().Equal(1, 2);
+        panel.PageBoxes.Last().IsEndnoteSyntheticPage.Should().BeFalse();
     }
 
     /// <summary>
-    /// The synthetic endnotes page box must contain all endnote IDs from the document.
+    /// The final body page must contain all fitting endnote IDs from the document.
     /// </summary>
     [StaFact]
-    public void EndnoteIds_AreAllPresent_OnSyntheticPage()
+    public void EndnoteIds_AreAllPresent_OnFinalBodyPage()
     {
         var doc = BuildDocWithEndnotes(2);
         var (panel, _) = BuildPanel(doc);
 
-        var syntheticBox = panel.PageBoxes.First(b => b.IsEndnoteSyntheticPage);
+        var finalBox = panel.PageBoxes.Last();
 
-        syntheticBox.EndnoteIds.Should().Contain(1, "endnote ID 1 must appear on the synthetic page");
-        syntheticBox.EndnoteIds.Should().Contain(2, "endnote ID 2 must appear on the synthetic page");
+        finalBox.EndnoteIds.Should().Contain(1, "endnote ID 1 must appear on the final body page");
+        finalBox.EndnoteIds.Should().Contain(2, "endnote ID 2 must appear on the final body page");
     }
 
     /// <summary>
@@ -214,9 +213,9 @@ public sealed class PagedEditNoteRegionTests
 
         var (panel, _) = BuildPanel(doc);
 
-        var syntheticBox = panel.PageBoxes.First(b => b.IsEndnoteSyntheticPage);
-        syntheticBox.EndnoteIds.Should().Contain(5, "endnote ID 5 must match the body run reference");
-        syntheticBox.EndnoteIds.Should().Contain(9, "endnote ID 9 must match the body run reference");
+        var endnoteBox = panel.PageBoxes.Single(b => b.EndnoteIds.Count > 0);
+        endnoteBox.EndnoteIds.Should().Contain(5, "endnote ID 5 must match the body run reference");
+        endnoteBox.EndnoteIds.Should().Contain(9, "endnote ID 9 must match the body run reference");
     }
 
     /// <summary>
@@ -242,8 +241,8 @@ public sealed class PagedEditNoteRegionTests
 
         var (panel, _) = BuildPanel(doc);
 
-        var syntheticBox = panel.PageBoxes.First(b => b.IsEndnoteSyntheticPage);
-        syntheticBox.EndnoteIds.Should().BeInAscendingOrder(
+        var endnoteBox = panel.PageBoxes.Single(b => b.EndnoteIds.Count > 0);
+        endnoteBox.EndnoteIds.Should().BeInAscendingOrder(
             "endnote IDs must be ordered by key so they match the sequential numbering");
     }
 
@@ -279,12 +278,10 @@ public sealed class PagedEditNoteRegionTests
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// A document with both footnotes and endnotes must produce footnote IDs on body page boxes
-    /// AND a synthetic endnotes page with the endnote IDs.  The synthetic page must have no
-    /// footnote IDs (footnotes never appear on the endnotes page).
+    /// A short document with both note kinds keeps both regions on its final body page.
     /// </summary>
     [StaFact]
-    public void MixedNotes_ProducesFootnotesOnBodyAndEndnotesOnSyntheticPage()
+    public void MixedNotes_ProducesFootnotesAndFittingEndnotesOnBodyPage()
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -306,11 +303,10 @@ public sealed class PagedEditNoteRegionTests
         bodyBoxes.SelectMany(b => b.FootnoteIds)
             .Should().Contain(1, "footnote ID 1 must appear on a body page box");
 
-        // Synthetic page must have endnote IDs and no footnote IDs.
-        var syntheticBox = panel.PageBoxes.First(b => b.IsEndnoteSyntheticPage);
-        syntheticBox.EndnoteIds.Should().Contain(1, "endnote ID 1 must appear on the synthetic page");
-        syntheticBox.FootnoteIds.Should().BeEmpty(
-            "the synthetic endnotes page must not carry footnote IDs");
+        var endnoteBox = panel.PageBoxes.Single(b => b.EndnoteIds.Count > 0);
+        endnoteBox.IsEndnoteSyntheticPage.Should().BeFalse();
+        endnoteBox.EndnoteIds.Should().Contain(1, "endnote ID 1 must appear on the body page");
+        endnoteBox.FootnoteIds.Should().Contain(1, "the fitting body page also owns its footnote");
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -318,21 +314,95 @@ public sealed class PagedEditNoteRegionTests
     // ─────────────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The synthetic endnotes page must not carry any header or footer sub-editors (it is a
-    /// bare content-only page with only the endnote region).
+    /// Measured overflow retains a dedicated final page with no header/footer sub-editors.
     /// </summary>
     [StaFact]
-    public void EndnotesSyntheticPage_HasNoHeaderFooterSubEditors()
+    public void OverflowEndnotes_UseDedicatedPageWithoutHeaderFooterSubEditors()
     {
-        var doc = BuildDocWithEndnotes(1);
+        var doc = DocxReader.Read(RepositoryFile(
+            "freew-fidelity-corpus", "files", "review", "endnotes.docx"));
         var (panel, _) = BuildPanel(doc);
 
         var syntheticBox = panel.PageBoxes.First(b => b.IsEndnoteSyntheticPage);
 
+        panel.PageBoxes.Should().HaveCount(3);
+        syntheticBox.EndnoteIds.Should().Equal(1, 2);
         syntheticBox.HeaderSubEditor.Should().BeNull(
             "synthetic endnotes page must have no header sub-editor");
         syntheticBox.FooterSubEditor.Should().BeNull(
             "synthetic endnotes page must have no footer sub-editor");
+    }
+
+    [StaFact]
+    public void FittingEndnoteOwnership_SurvivesRepaginateAndUndoRebuild()
+    {
+        var doc = BuildDocWithEndnotes(2);
+        var (panel, _) = BuildPanel(doc);
+
+        panel.Repaginate();
+        panel.PageBoxes.Should().HaveCount(1);
+        panel.PageBoxes[0].EndnoteIds.Should().Equal(1, 2);
+        panel.PageBoxes[0].IsEndnoteSyntheticPage.Should().BeFalse();
+
+        panel.Rebuild();
+        panel.PageBoxes.Should().HaveCount(1);
+        panel.PageBoxes[0].EndnoteIds.Should().Equal(1, 2);
+        panel.PageBoxes[0].IsEndnoteSyntheticPage.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void OverflowEndnoteOwnership_SurvivesRepaginateAndUndoRebuild()
+    {
+        var doc = DocxReader.Read(RepositoryFile(
+            "freew-fidelity-corpus", "files", "review", "endnotes.docx"));
+        var (panel, _) = BuildPanel(doc);
+
+        panel.Repaginate();
+        panel.PageBoxes.Should().HaveCount(3);
+        panel.PageBoxes.Last().IsEndnoteSyntheticPage.Should().BeTrue();
+        panel.PageBoxes.Last().EndnoteIds.Should().Equal(1, 2);
+
+        panel.Rebuild();
+        panel.PageBoxes.Should().HaveCount(3);
+        panel.PageBoxes.Last().IsEndnoteSyntheticPage.Should().BeTrue();
+        panel.PageBoxes.Last().EndnoteIds.Should().Equal(1, 2);
+    }
+
+    [StaFact]
+    public void DedicatedEndnotePage_UsesFinalSectionGeometryAcrossRebuilds()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Portrait section")
+        {
+            SectionBreak = new Section(new PageSettings
+            {
+                WidthPt = 612,
+                HeightPt = 792,
+                Landscape = false,
+                MarginLeftPt = 72,
+                MarginRightPt = 72,
+                MarginTopPt = 72,
+                MarginBottomPt = 72
+            }, SectionBreakKind.NextPage)
+        });
+        doc.Page.WidthPt = 792;
+        doc.Page.HeightPt = 612;
+        doc.Page.Landscape = true;
+        doc.Page.MarginLeftPt = 36;
+        doc.Page.MarginRightPt = 48;
+        doc.Page.MarginTopPt = 54;
+        doc.Page.MarginBottomPt = 60;
+        doc.Blocks.Add(new Paragraph("Final landscape section"));
+        doc.Endnotes[1] = new Endnote(1, "Endnote body");
+
+        var (panel, _) = BuildPanel(doc);
+
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+        panel.Repaginate();
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
+        panel.Rebuild();
+        AssertFinalSectionGeometry(panel.PageBoxes.Last(), doc.Page);
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -386,5 +456,32 @@ public sealed class PagedEditNoteRegionTests
         }
         doc.Blocks.Add(para);
         return doc;
+    }
+
+    private static string RepositoryFile(params string[] parts)
+    {
+        var directory = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(directory))
+        {
+            var candidate = Path.Combine(new[] { directory }.Concat(parts).ToArray());
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = Directory.GetParent(directory)?.FullName;
+        }
+
+        throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+
+    private static void AssertFinalSectionGeometry(PageBox box, PageSettings expected)
+    {
+        box.IsEndnoteSyntheticPage.Should().BeTrue();
+        box.PageGeometry.WidthPt.Should().Be(expected.WidthPt);
+        box.PageGeometry.HeightPt.Should().Be(expected.HeightPt);
+        box.PageGeometry.Landscape.Should().Be(expected.Landscape);
+        box.PageGeometry.MarginLeftPt.Should().Be(expected.MarginLeftPt);
+        box.PageGeometry.MarginRightPt.Should().Be(expected.MarginRightPt);
+        box.PageGeometry.MarginTopPt.Should().Be(expected.MarginTopPt);
+        box.PageGeometry.MarginBottomPt.Should().Be(expected.MarginBottomPt);
     }
 }
