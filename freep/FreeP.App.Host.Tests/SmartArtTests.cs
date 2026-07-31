@@ -2758,6 +2758,76 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void ReaderWriter_PreservesNineNodeBasicMatrixOrderAndLiveRendering()
+    {
+        var nodeTexts = Enumerable.Range(0, 9).Select(i => $"Node {i + 1}").ToArray();
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix",
+            nodes: nodeTexts.Select((text, index) => ($"id{index + 1}", text)).ToArray(),
+            parOfConnections: []);
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        smartArt.Data.Nodes.Select(node => node.Text).Should().Equal(nodeTexts);
+
+        var liveShapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Should().HaveCount(9);
+        liveShapes.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodeTexts);
+
+        smartArt.Data.Nodes[^1].Text = "Node 9 edited";
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        reopened.Data.Should().NotBeNull();
+        reopened.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        reopened.Data.Nodes.Select(node => node.Text).Should().Equal(
+            nodeTexts[..^1].Append("Node 9 edited"));
+    }
+
+    [Fact]
+    public void ReaderWriter_PreservesTitleOnlyTitledMatrixAsLiveEditableState()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+            nodes: [("id1", "Title only")],
+            parOfConnections: []);
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        var liveShapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        liveShapes.Should().ContainSingle();
+        liveShapes[0].Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text
+            .Should().Be("Title only");
+
+        smartArt.Data.Nodes[0].Text = "Edited title";
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var savedPath = WriteToPptx(presentation);
+        var reopened = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        reopened.Data.Should().NotBeNull();
+        reopened.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        reopened.Data.Nodes.Select(node => node.Text).Should().Equal("Edited title");
+    }
+
+    [Fact]
     public void Reader_ParsesTitledMatrixAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
