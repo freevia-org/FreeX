@@ -63,6 +63,13 @@ public sealed class TabsDialog : FreeWDialogWindow
         AddRow(grid, 3, "Leader:", _leader);
         AddRow(grid, 4, "Default tab stops (pt):", _defaultTab);
 
+        // Keep the Avalonia grid's fractional row rounding aligned with the WPF authority. The
+        // shared four-pixel row margins remain the default; these are only the targeted one-pixel
+        // compensations needed to prevent drift through the compact control stack.
+        _position.Margin = new Thickness(0, 4, 0, 3);
+        _alignment.Margin = new Thickness(0, 4, 0, 3);
+        _defaultTab.Margin = new Thickness(0, 4, 0, 5);
+
         var set = Button("Set", (_, _) => SetStop());
         var clear = Button("Clear", (_, _) =>
         {
@@ -87,13 +94,22 @@ public sealed class TabsDialog : FreeWDialogWindow
             Accept,
             () => Close(null),
             buttonWidth: 72,
-            rowMargin: new Thickness(0, 12, 0, 0));
+            rowMargin: new Thickness(0, 10, 0, 0));
         Grid.SetRow(buttons, 6);
         Grid.SetColumn(buttons, 1);
         grid.Children.Add(buttons);
         Content = grid;
 
-        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_position);
+        Opened += (_, _) =>
+        {
+            // Avalonia's TextBox template contributes seven extra pixels on this route after the
+            // shared chrome pass. WPF's authority TextBox is 26 px high; apply that host-template
+            // compensation after the shared pass so the grid rows and action rows line up as one unit.
+            var textBoxStyle = AvaloniaCompactDialogChrome.WindowsStyle with { TextBoxHeight = 26 };
+            AvaloniaCompactDialogChrome.ApplyTextBox(_position, textBoxStyle);
+            AvaloniaCompactDialogChrome.ApplyTextBox(_defaultTab, textBoxStyle);
+            AvaloniaCompactDialogChrome.FocusAndSelect(_position);
+        };
         KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
