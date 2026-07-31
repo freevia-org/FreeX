@@ -93,16 +93,25 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     // the table that used to hold the max id is gone.
     // R108: Workbook.NextStructuredTableIdWatermark is a plain in-memory int (see its doc comment) --
     // it is never written to .fxl JSON or .xlsx, so it silently resets to 0 across every save/reload,
-    // regardless of format. The durable references the R107 watermark exists to protect DO survive
-    // that round-trip, though: SlicerModel.SourceTableId is written/read via the real
-    // x15:tableSlicerCache/@tableId attribute (and the .fxl native JSON slicer DTO), and
-    // PivotCacheModel.SourceTableId round-trips through the native JSON pivot-cache DTO. So a table
-    // id freed and pinned into one of those bindings (CommandGuards.PinOrphanedPivotCacheSourceTableIds)
-    // would, after a reload with the watermark back at 0, be handed straight back out to a brand-new
-    // table the instant no live table still holds it -- silently re-binding the dangling
-    // slicer/pivot-cache to unrelated data. Folding every live slicer/pivot-cache SourceTableId into
-    // the floor here re-derives the correct watermark from what the file actually persisted,
-    // independent of the in-memory-only counter, so the protection survives the round-trip too.
+    // regardless of format. The durable reference the R107 watermark exists to protect for SLICERS
+    // does survive that round-trip: SlicerModel.SourceTableId is written/read via the real
+    // x15:tableSlicerCache/@tableId attribute (and the .fxl native JSON slicer DTO). So a table id
+    // freed and pinned into a slicer binding (CommandGuards.PinOrphanedPivotCacheSourceTableIds pins
+    // the pivot-cache sibling; a dangling table slicer just keeps pointing at the removed id by
+    // design) would, after a reload with the watermark back at 0, be handed straight back out to a
+    // brand-new table the instant no live table still holds it -- silently re-binding the dangling
+    // slicer to unrelated data. Folding every live slicer SourceTableId into the floor here
+    // re-derives the correct watermark from what the file actually persisted, independent of the
+    // in-memory-only counter, so the protection survives the round-trip too.
+    // R109: PivotCacheModel.SourceTableId is folded into the floor below for the same reason and as
+    // defense-in-depth for the in-memory (pre-save) case, and — after this round — it now also
+    // round-trips through the native .fxl pivot-cache DTO (it previously did not: r108's claim that it
+    // already did was checked against the DTO and found false; see Workbook.NextStructuredTableIdWatermark's
+    // doc comment for the full account). XLSX still has no schema-valid slot for this id (OOXML's
+    // pivotCacheDefinition worksheetSource only carries a name), so a pivot cache loaded from XLSX
+    // always comes back with SourceTableId null -- safe, not a gap, because PivotTableRefreshService
+    // only ever fills a null SourceTableId in from a table that is CURRENTLY live, never from a freed
+    // one, so nothing durable dangles on that path for this fold to need to protect.
     private static int NextTableId(Workbook workbook)
     {
         var maxId = workbook.NextStructuredTableIdWatermark;

@@ -1218,6 +1218,15 @@ public sealed partial class NativeJsonAdapter
         public string? SourceSheetName { get; set; }
         public string? SourceReference { get; set; }
         public string? SourceTableName { get; set; }
+        /// <summary>
+        /// R109: mirrors <see cref="Model.PivotCacheModel.SourceTableId"/> -- previously NOT present on
+        /// this DTO at all, so the id-based table binding r104 established (and r107/r108's structured-table
+        /// id watermark protects against reuse of) was silently discarded on every native .fxl save and
+        /// came back null after every native reload, regardless of what was pinned in memory at save time.
+        /// See PivotCacheModel.SourceTableId's own doc comment for why the id anchor matters more than the
+        /// name.
+        /// </summary>
+        public int? SourceTableId { get; set; }
         public int? ConnectionId { get; set; }
         public bool IsOlap { get; set; }
         public string PackagePart { get; set; } = "";

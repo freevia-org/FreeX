@@ -191,10 +191,26 @@ public sealed class Workbook
     /// WorkbookDto, and no equivalent slot in XLSX), so it always resets to 0 across a save/reload.
     /// That is fine on its own -- <c>CreateStructuredTableCommand.NextTableId</c> (the sole allocator
     /// of new table ids, in FreeX.Core.Commands) also floors its result against every live <see
-    /// cref="SlicerModel.SourceTableId"/> and <see cref="PivotCacheModel.SourceTableId"/>, both of
-    /// which DO round-trip through real XLSX/native-JSON, so a dangling reference pinned to a freed id
-    /// before save still blocks that id from being reissued after reload even though this counter
-    /// comes back at 0.
+    /// cref="SlicerModel.SourceTableId"/> and <see cref="PivotCacheModel.SourceTableId"/>, so a
+    /// dangling reference pinned to a freed id before save still blocks that id from being reissued
+    /// after reload even though this counter comes back at 0 -- PROVIDED the dangling reference itself
+    /// survived the round-trip.
+    ///
+    /// R109: <see cref="SlicerModel.SourceTableId"/> genuinely round-trips through both real XLSX (the
+    /// x15:tableSlicerCache/@tableId attribute) and native-JSON, so the slicer vector is covered as
+    /// r108 intended. <see cref="PivotCacheModel.SourceTableId"/> is different: r108's own comment here
+    /// claimed it round-tripped through the native-JSON pivot-cache DTO, but that DTO never actually had
+    /// a field for it -- the id was silently discarded on every native save (XLSX never carried it
+    /// either; OOXML's pivotCacheDefinition only has a name-based worksheetSource, no id slot). r109
+    /// added the missing field to the native-JSON DTO, so PivotCacheModel.SourceTableId now genuinely
+    /// round-trips through native .fxl too. XLSX still has no schema-valid home for it (a custom
+    /// extLst attribute was deliberately NOT invented here -- see the "never invent non-native OOXML"
+    /// policy); a pivot cache reloaded from XLSX always comes back with SourceTableId null, which is
+    /// safe rather than dangerous: PivotTableRefreshService.Refresh only ever sets SourceTableId to a
+    /// CURRENTLY-LIVE table's actual id (via a name-based lookup) when it is null, so a null
+    /// SourceTableId can never itself resolve back to a freed id -- there is nothing left for this
+    /// watermark/floor scheme to protect on the XLSX pivot-cache path, because nothing durable dangles
+    /// there in the first place.
     /// </summary>
     public int NextStructuredTableIdWatermark { get; set; }
 

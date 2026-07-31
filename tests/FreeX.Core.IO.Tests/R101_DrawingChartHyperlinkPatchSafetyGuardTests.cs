@@ -157,19 +157,30 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
     // narrow: a genuinely new, unrelated non-copy-forward Hyperlink assignment elsewhere that
     // happens to also use a short generic local name would NOT match either pattern below and would
     // still trip this guard as intended.
-    private static readonly Regex AllowedDrawingObjectHyperlinkRewriterRhs = new(
-        @"^rewrittenDrawingObjectHyperlink$",
-        RegexOptions.Compiled);
-
-    // The Undo/Revert side of the same pass: restores the object's OWN pre-rewrite Hyperlink value
-    // from a snapshot captured at Apply time (`_drawingShapeHyperlinkRenameSnapshot.Add((shape,
-    // shape.Hyperlink))` etc.) -- semantically a pure copy-forward/restore of data the object
-    // already carried, just routed through a captured tuple instead of a direct `x.Hyperlink`
-    // property-access expression (so it cannot match AllowedCopyForwardRhs above), and introduces no
-    // new data whatsoever.
-    private static readonly Regex AllowedDrawingObjectHyperlinkUndoRestoreRhs = new(
-        @"^savedDrawingObjectHyperlink$",
-        RegexOptions.Compiled);
+    //
+    // R109 (anchor redesign): r107 flagged, and r108 repeated without fixing, that keying an
+    // exemption on RHS text alone is fragile -- a generic-enough identifier reused in a DIFFERENT,
+    // unreviewed file would silently pass too, since the regex is matched against every file's RHS
+    // text with no notion of WHERE the reviewed site was. Compound identifiers like the ones below
+    // make an accidental collision unlikely, but "unlikely" is a probability argument standing in
+    // for what should be a structural guarantee: SheetCommands.cs was reviewed on this line-generating
+    // pattern, no other file was. So every entry below is now (fileName, rhsPattern) pair, and a
+    // match is only exempted when BOTH the file matches AND the RHS matches -- the same rhs text
+    // appearing in a new, unreviewed file trips the guard exactly like a genuinely new pattern would.
+    // (AllowedCopyForwardRhs above stays global/unanchored deliberately: it is not an audited
+    // one-off exemption but a STRUCTURAL safety proof -- "the RHS is some object's own existing
+    // Hyperlink property" is safe by construction everywhere, not because any particular file's use
+    // of it was reviewed.)
+    private static readonly (string FileName, Regex RhsPattern)[] AnchoredReviewedExemptions =
+    [
+        // R106-drawing-object-hyperlink-duplicate-rebase (see audit note above): DuplicateSheetDrawingCloner
+        // is the only file that legitimately computes a rebased same-sheet hyperlink target this way.
+        ("DuplicateSheetDrawingCloner.cs", AllowedRewriteSameSheetHyperlinkTargetRhs),
+        // R108-rename-delete-sheet-drawing-hyperlink-rewrite (see audit note above): both the rewrite
+        // and its Undo/Revert restore are SheetCommands.cs-only local-variable names.
+        ("SheetCommands.cs", new Regex(@"^rewrittenDrawingObjectHyperlink$", RegexOptions.Compiled)),
+        ("SheetCommands.cs", new Regex(@"^savedDrawingObjectHyperlink$", RegexOptions.Compiled)),
+    ];
 
     [Fact]
     public void NoCommandAssignsANewDrawingOrChartHyperlinkValue_WithoutUpdatingThePatchSafetyFingerprint()
@@ -212,14 +223,27 @@ public sealed class R101_DrawingChartHyperlinkPatchSafetyGuardTests
             // own line would otherwise bleed into the NEXT real code line's terminator and get
             // misreported as a violation (or, worse, swallow a real one). Line structure (and therefore
             // line-number bookkeeping below) is preserved by blanking rather than deleting text.
+            var fileName = Path.GetFileName(filePath);
             var text = StripCommentsPreservingLineNumbers(File.ReadAllText(filePath));
             foreach (Match match in HyperlinkAssignmentPattern.Matches(text))
             {
                 var rhs = match.Groups[1].Value.Trim();
-                if (AllowedCopyForwardRhs.IsMatch(rhs) ||
-                    AllowedRewriteSameSheetHyperlinkTargetRhs.IsMatch(rhs) ||
-                    AllowedDrawingObjectHyperlinkRewriterRhs.IsMatch(rhs) ||
-                    AllowedDrawingObjectHyperlinkUndoRestoreRhs.IsMatch(rhs))
+                if (AllowedCopyForwardRhs.IsMatch(rhs))
+                    continue;
+
+                // R109 (anchor redesign): an entry only exempts a match when its file name ALSO
+                // matches -- the same RHS text in a different, unreviewed file still trips the guard.
+                var anchoredMatch = false;
+                foreach (var (exemptFileName, rhsPattern) in AnchoredReviewedExemptions)
+                {
+                    if (!string.Equals(fileName, exemptFileName, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    if (!rhsPattern.IsMatch(rhs))
+                        continue;
+                    anchoredMatch = true;
+                    break;
+                }
+                if (anchoredMatch)
                     continue;
 
                 var lineNumber = text.AsSpan(0, match.Index).Count('\n') + 1;
