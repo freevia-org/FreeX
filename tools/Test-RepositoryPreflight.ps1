@@ -44,7 +44,11 @@ Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "solut
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "default test solution projects" -Parameters @{
     SolutionPath = "FreeX.DefaultTests.slnx"
     ProjectPathPrefixes = @("tests/")
-    ExcludedProjectPathPrefixes = @("tests/FreeX.App.Host.Tests/", "tests/FreeX.App.UI.Tests/")
+    ExcludedProjectPathPrefixes = @(
+        "tests/FreeX.App.Host.Tests/",
+        "tests/FreeX.App.UI.Tests/",
+        "tests/Free.Shared.Ribbon.Wpf.Tests/"
+    )
 }
 Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeW solution projects" -Parameters @{
     SolutionPath = "FreeW.slnx"
