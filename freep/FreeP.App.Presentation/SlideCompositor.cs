@@ -1354,8 +1354,8 @@ public static class SlideCompositor
 
         // No cached text — render a sensible fallback instead of the raw type token.
         // datetime / datetime1‥datetime13 → format current date in a readable form.
-        if (t.StartsWith("datetime", StringComparison.Ordinal) || t == "date" || t == "time")
-            return DateTime.Now.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture);
+        if (HeaderFooterDateTimeFormatter.IsDateTimeField(t))
+            return HeaderFooterDateTimeFormatter.Format(t, DateTime.Now);
 
         // footer / header / slidename with no cache → render empty (not the type token).
         return string.Empty;

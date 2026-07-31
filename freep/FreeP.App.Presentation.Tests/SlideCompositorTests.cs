@@ -1745,8 +1745,13 @@ public sealed class SlideCompositorTests
 
     // ─── II6: empty-cache field fallback ─────────────────────────────────────
 
-    [Fact]
-    public void ResolveField_DatetimeEmptyCache_RendersDateString_NotTypeToken()
+    [Theory]
+    [InlineData("datetime1")]
+    [InlineData("datetime2")]
+    [InlineData("datetime3")]
+    [InlineData("datetime4")]
+    public void ResolveField_DatetimeEmptyCache_RendersSelectedDateFormat_NotTypeToken(
+        string fieldType)
     {
         // A datetime field with no cached text must NOT render the literal token
         // "datetime1" — it should render something date-like.
@@ -1758,7 +1763,7 @@ public sealed class SlideCompositorTests
         para.Runs.Add(new Run
         {
             Text  = "",
-            Field = new FieldRun { FieldType = "datetime1", CachedText = "" }
+            Field = new FieldRun { FieldType = fieldType, CachedText = "" }
         });
         var body = new TextBody();
         body.Paragraphs.Add(para);
@@ -1775,10 +1780,23 @@ public sealed class SlideCompositorTests
         var runText = string.Concat(ops.OfType<DrawOp.Shape>().Single()
             .Text!.Paragraphs.SelectMany(par => par.Runs.Select(r => r.Text)));
 
-        runText.Should().NotBe("datetime1",
+        runText.Should().Be(HeaderFooterDateTimeFormatter.Format(fieldType, DateTime.Now),
+            "empty-cache datetime fields should use the selected automatic format");
+        runText.Should().NotBe(fieldType,
             "empty-cache datetime field must not render the raw field-type token");
         runText.Should().MatchRegex(@"\d",
             "empty-cache datetime field should contain at least one digit (a date)");
+    }
+
+    [Theory]
+    [InlineData("datetime1", "7/6/2026")]
+    [InlineData("datetime2", "Monday, July 6, 2026")]
+    [InlineData("datetime3", "6 July 2026")]
+    [InlineData("datetime4", "July 6, 2026")]
+    public void ResolveField_AutomaticDateFormatsUseFieldType(string fieldType, string expected)
+    {
+        HeaderFooterDateTimeFormatter.Format(fieldType, new DateTime(2026, 7, 6))
+            .Should().Be(expected);
     }
 
     [Fact]

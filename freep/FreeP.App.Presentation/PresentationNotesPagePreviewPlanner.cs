@@ -441,9 +441,8 @@ public static class PresentationNotesPagePreviewPlanner
         if (!string.IsNullOrEmpty(field.CachedText))
             return field.CachedText;
 
-        return fieldType.StartsWith("datetime", StringComparison.Ordinal) ||
-            fieldType is "date" or "time"
-            ? DateTime.Now.ToString("M/d/yyyy", CultureInfo.InvariantCulture)
+        return HeaderFooterDateTimeFormatter.IsDateTimeField(fieldType)
+            ? HeaderFooterDateTimeFormatter.Format(fieldType, DateTime.Now)
             : string.Empty;
     }
 
