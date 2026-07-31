@@ -399,6 +399,15 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Applies a Home Number Format combo selection.</summary>
     public Action<string?>? SetNumberFormat { get; init; }
 
+    /// <summary>Applies a Page Layout Scale Width combo selection.</summary>
+    public Action<string?>? SetPageLayoutScaleWidth { get; init; }
+
+    /// <summary>Applies a Page Layout Scale Height combo selection.</summary>
+    public Action<string?>? SetPageLayoutScaleHeight { get; init; }
+
+    /// <summary>Applies a Page Layout Scale Percent combo selection.</summary>
+    public Action<string?>? SetPageLayoutScalePercent { get; init; }
+
     /// <summary>
     /// Additional command-id → action bindings for parameterized menu items the named callbacks do not
     /// cover (e.g. the Number Format dropdown's General/Number/Currency/Date/Percent items, or the Fill
@@ -662,6 +671,15 @@ internal static class AvaloniaRibbonComposition
         if (callbacks.ExtraCommands is { } extra)
             foreach (var (id, action) in extra)
                 Bind(id, action);
+
+        // Page Layout scale controls carry a selected value. Register these after the generic action map
+        // so the value-aware route wins over the Page Setup dialog fallback for the same command ids.
+        if (callbacks.SetPageLayoutScaleWidth is { } setScaleWidth)
+            Register(registry, "pageLayout.width", new ValueRibbonCommand(setScaleWidth));
+        if (callbacks.SetPageLayoutScaleHeight is { } setScaleHeight)
+            Register(registry, "pageLayout.height", new ValueRibbonCommand(setScaleHeight));
+        if (callbacks.SetPageLayoutScalePercent is { } setScalePercent)
+            Register(registry, "pageLayout.scale", new ValueRibbonCommand(setScalePercent));
     }
 
     internal static string GetShapeCommandId(DrawingShapeKind kind) => $"insert.shape.{kind}";
