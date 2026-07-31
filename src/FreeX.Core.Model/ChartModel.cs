@@ -637,6 +637,21 @@ public sealed class ChartModel
     public List<ChartSeriesOrderOverride> SeriesOrderOverrides { get; set; } = [];
 
     /// <summary>
+    /// R103-io-chart-series-tx-1: a series' &lt;c:tx&gt;&lt;c:strRef&gt;&lt;c:f&gt; formula, captured
+    /// verbatim from the source XML whenever present. Excel's "Select Data &gt; Edit Series &gt;
+    /// Series name" lets the user point a series' name at ANY cell — not necessarily the header cell
+    /// directly above that series' data column — so it is a first-class, independently-addressable
+    /// formula that cannot be recomputed positionally from <see cref="DataRange"/>/
+    /// <see cref="FirstRowIsHeader"/> the way the writer's default header-cell guess is. When present
+    /// for a series, the writer emits this formula verbatim instead of recomputing the strip's own
+    /// header cell (and emits it even when <see cref="FirstRowIsHeader"/> is false, since the
+    /// series-name reference is independent of whether the data range's own header row is used for
+    /// categories). Empty/no entry for a series means the writer falls back to the positional guess,
+    /// matching the pre-existing behavior.
+    /// </summary>
+    public List<ChartSeriesNameOverride> SeriesNameOverrides { get; set; } = [];
+
+    /// <summary>
     /// R82-io-chart-series-5-2: verbatim &lt;c:cat&gt; XML captured for a series whose category
     /// container is a &lt;c:multiLvlStrRef&gt; (Excel's grouped/multi-level category axis, e.g. an
     /// outer "Region" level over an inner "City" level) — there is no positional-strip equivalent

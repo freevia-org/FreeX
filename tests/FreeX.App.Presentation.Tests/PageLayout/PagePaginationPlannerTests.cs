@@ -166,11 +166,17 @@ public sealed class PagePaginationPlannerTests
     [Fact]
     public void Paginate_RepeatRowsAreExcludedFromBodyAndShrinkRowCapacity()
     {
-        // Print range A1:C6 with row 1 as a repeated title and fit-to-2-tall.
-        // Body rows 2..6 (5 rows) split across 2 pages; the title row is reprinted but tracked
-        // separately, so it is excluded from each page's body segment.
+        // Print range A1:C46 with row 1 as a repeated title and fit-to-2-tall.
+        // A4/Narrow gives a 48-rows/page baseline; excluding the title row leaves 45 body rows
+        // (2..46), and fit-to-2-tall resolves to 23 body rows/page (+1 title = 24 rows/page target),
+        // a 48/24 = 200% enlargement -- safely inside Excel's [10%, 400%] scale range (R103-print-
+        // pagination-scale-bound-1), so this is a genuine, in-range regression guard for the title-
+        // exclusion/capacity-shrink behavior rather than accidentally depending on an out-of-range
+        // scale the bounded capacity resolution would now clip. Body rows split 23/22 across 2 pages;
+        // the title row is reprinted but tracked separately, so it is excluded from each page's body
+        // segment.
         var withTitles = PagePaginationPlanner.Paginate(
-            Range(1, 1, 6, 3),
+            Range(1, 1, 46, 3),
             new WorksheetScaleToFit(ScalePercent: null, FitToPagesWide: null, FitToPagesTall: 2),
             printTitleRows: new WorksheetRepeatRange(1, 1),
             printTitleColumns: null,
@@ -179,8 +185,8 @@ public sealed class PagePaginationPlannerTests
             WorksheetPageMargins.Narrow);
 
         withTitles.RowPageCount.Should().Be(2);
-        withTitles.RowSegments[0].Should().Be(new PageAxisSegment(2, 4));
-        withTitles.RowSegments[1].Should().Be(new PageAxisSegment(5, 6));
+        withTitles.RowSegments[0].Should().Be(new PageAxisSegment(2, 24));
+        withTitles.RowSegments[1].Should().Be(new PageAxisSegment(25, 46));
     }
 
     [Fact]

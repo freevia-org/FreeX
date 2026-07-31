@@ -259,7 +259,16 @@ public static class PagePaginationPlanner
 
         if (wideConstrained && !tallConstrained)
         {
-            columnsPerPage = ApplyScaleToFitCapacity(
+            // R103-print-pagination-scale-bound-1: resolve the constrained axis's own capacity
+            // first (possibly implying an unbounded shrink far outside Excel's 10%-400% scale
+            // range), but then re-derive BOTH axes -- including this constrained one -- through
+            // ApplyUniformScaleToFreeAxis, which clamps to [MinScalePercent, MaxScalePercent].
+            // Applying the raw, unclamped ApplyScaleToFitCapacity result directly to the
+            // constrained axis while the free axis gets the clamped percent would bake two
+            // different real scales into what is supposed to be one uniform scale -- exactly the
+            // divergence the "both axes constrained" branch below avoids by re-deriving both axes
+            // from the same uniformScale.
+            var unboundedColumnsPerPage = ApplyScaleToFitCapacity(
                 columnsPerPage,
                 printRange.Start.Col,
                 printRange.End.Col,
@@ -268,12 +277,14 @@ public static class PagePaginationPlanner
                 scalePercent: null,
                 scaleToFit.FitToPagesWide,
                 isColumnHidden);
-            var uniformScale = ComputeScaleFraction(baseColumnsPerPage, columnsPerPage);
+            var uniformScale = ComputeScaleFraction(baseColumnsPerPage, unboundedColumnsPerPage);
+            columnsPerPage = ApplyUniformScaleToFreeAxis(baseColumnsPerPage, uniformScale);
             rowsPerPage = ApplyUniformScaleToFreeAxis(rowsPerPage, uniformScale);
         }
         else if (tallConstrained && !wideConstrained)
         {
-            rowsPerPage = ApplyScaleToFitCapacity(
+            // R103-print-pagination-scale-bound-1: see the mirror-image comment above.
+            var unboundedRowsPerPage = ApplyScaleToFitCapacity(
                 rowsPerPage,
                 printRange.Start.Row,
                 printRange.End.Row,
@@ -282,7 +293,8 @@ public static class PagePaginationPlanner
                 scalePercent: null,
                 scaleToFit.FitToPagesTall,
                 isRowHidden);
-            var uniformScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPage);
+            var uniformScale = ComputeScaleFraction(baseRowsPerPage, unboundedRowsPerPage);
+            rowsPerPage = ApplyUniformScaleToFreeAxis(baseRowsPerPage, uniformScale);
             columnsPerPage = ApplyUniformScaleToFreeAxis(columnsPerPage, uniformScale);
         }
         else if (wideConstrained && tallConstrained)

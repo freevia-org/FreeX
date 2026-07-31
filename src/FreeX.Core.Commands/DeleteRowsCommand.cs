@@ -233,9 +233,21 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         // immediately after any row delete just like it does after an insert.
         _tableRebandSnapshot = RebandTablesAfterRowDelete(ctx.Workbook, sheet);
 
+        // R103-commands-dependency-deleted-band-1: mirror DeleteCellsCommand's Apply-side fix
+        // (InsertDeleteCellsCommand.cs, `_range.AllCells()`) for the band that this delete
+        // PERMANENTLY removes. deletedSnapshot holds every cell that lived inside [_startRow, endRow]
+        // (already ClearCell'd above) -- unlike shiftedSnapshot, none of these addresses are ever fed
+        // into RelocatedFormulaCellsPendingDependencyRefresh/VacatedAddressesForShiftedFormulaCells
+        // (both shifted-only) or _formulaSnapshot (populated by RewriteAllFormulas, which scans the
+        // sheet AFTER the deleted band was cleared, so it can never see a formula cell that lived
+        // there). Without this, a formula cell inside the deleted band that is never re-occupied by a
+        // relocated survivor (e.g. it was the last formula in its column) leaves its stale
+        // DependencyGraph precedent/dependent entries in place forever, since
+        // WorkbookCellEditService.UpdateFormulaDependencies only ever visits AffectedCells.
         _affectedCells = RowColumnShiftHelpers.BuildAffectedCellsForFormulaRewrite(
             RelocatedFormulaCellsPendingDependencyRefresh(_sheetId, shiftedSnapshot, _count, _formulaSnapshot)
-                .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot)),
+                .Concat(VacatedAddressesForShiftedFormulaCells(_sheetId, shiftedSnapshot))
+                .Concat(deletedSnapshot.Select(s => s.ToAddress(_sheetId))),
             _formulaSnapshot);
         return new CommandOutcome(true, AffectedCells: _affectedCells);
     }
