@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freex.local/schemas/freep-multiselect-x11-wave89-v1.json",
+  "title": "FreeP Wave 89 physical multi-selection transform validation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "baseline", "appSurface", "window", "calibration", "fixture", "packageStates", "screenshots", "summary", "results", "processExitCode", "contractValidation"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freep-linux-multiselect-x11-wave89-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeP" },
+    "baseline": { "const": false },
+    "appSurface": { "const": "in-canvas-multi-selection-resize-rotate" },
+    "window": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "pattern", "visible"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "title": { "type": "string", "minLength": 1 }, "pattern": { "const": "FreeP" }, "visible": { "const": true } }
+    },
+    "calibration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "slideDip", "slideScreen", "selection", "evidence"],
+      "properties": {
+        "status": { "const": "passed" },
+        "slideDip": { "type": "object", "additionalProperties": false, "required": ["width", "height"], "properties": { "width": { "const": 1280 }, "height": { "const": 720 } } },
+        "slideScreen": { "type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"], "properties": { "x": { "type": "integer", "minimum": 0 }, "y": { "type": "integer", "minimum": 0 }, "width": { "type": "integer", "minimum": 1 }, "height": { "type": "integer", "minimum": 1 } } },
+        "selection": { "const": "two-shape-pointer-selection" },
+        "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "fixture": { "type": "object", "additionalProperties": false, "required": ["file", "shapes"], "properties": { "file": { "const": "freep-multiselect-x11-wave89-fixture.pptx" }, "shapes": { "$ref": "#/$defs/shapes" } } },
+    "packageStates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["baseline", "afterResize", "afterRotate", "afterUndo", "afterEscape", "afterCaptureLoss"],
+      "properties": { "baseline": { "$ref": "#/$defs/packageState" }, "afterResize": { "$ref": "#/$defs/packageState" }, "afterRotate": { "$ref": "#/$defs/packageState" }, "afterUndo": { "$ref": "#/$defs/packageState" }, "afterEscape": { "$ref": "#/$defs/packageState" }, "afterCaptureLoss": { "$ref": "#/$defs/packageState" } }
+    },
+    "screenshots": { "type": "array", "minItems": 7, "items": { "type": "object", "additionalProperties": false, "required": ["name", "kind"], "properties": { "name": { "type": "string", "minLength": 1 }, "kind": { "const": "screenshot" } } } },
+    "summary": { "type": "object", "additionalProperties": false, "required": ["passed", "failed", "total"], "properties": { "passed": { "type": "integer", "minimum": 0 }, "failed": { "type": "integer", "minimum": 0 }, "total": { "const": 9 } } },
+    "results": {
+      "type": "array", "minItems": 9, "maxItems": 9,
+      "items": { "type": "object", "additionalProperties": false, "required": ["id", "category", "status", "evidenceLevel", "evidence", "note"], "properties": { "id": { "type": "string", "minLength": 1 }, "category": { "const": "physical-x11-multiselect" }, "status": { "enum": ["passed", "failed"] }, "evidenceLevel": { "const": "physical-x11-input" }, "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }, "note": { "type": "string" } } }
+    },
+    "processExitCode": { "type": "integer" },
+    "contractValidation": { "type": "object", "additionalProperties": false, "required": ["status", "validator", "contractReference"], "properties": { "status": { "enum": ["pending", "passed"] }, "validator": { "const": "tools/Run-FreePMultiSelectionX11Validation.ps1" }, "contractReference": { "const": "tools/LinuxInteractiveDocker/freep-multiselect-x11-wave89-validation.schema.json" } } }
+  },
+  "$defs": {
+    "bounds": { "type": "object", "additionalProperties": false, "required": ["x", "y", "cx", "cy"], "properties": { "x": { "type": "integer", "minimum": 0 }, "y": { "type": "integer", "minimum": 0 }, "cx": { "type": "integer", "minimum": 1 }, "cy": { "type": "integer", "minimum": 1 } } },
+    "shape": { "type": "object", "additionalProperties": false, "required": ["id", "name", "bounds", "rotation"], "properties": { "id": { "type": "integer", "enum": [2, 3] }, "name": { "type": "string", "enum": ["Wave89 Left", "Wave89 Right"] }, "bounds": { "$ref": "#/$defs/bounds" }, "rotation": { "type": "number" }, "text": { "type": "string" } } },
+    "shapes": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/shape" } },
+    "packageState": { "type": "object", "additionalProperties": false, "required": ["packageSha256", "shapes"], "properties": { "packageSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }, "shapes": { "$ref": "#/$defs/shapes" } } }
+  }
+}
