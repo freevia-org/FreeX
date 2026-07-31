@@ -91,19 +91,22 @@ internal static class ExternalSheetReferenceResolver
     /// segment -- the opaque <see cref="NamedRangeNode.Name"/> text
     /// <c>Parser.ParseExternalDefinedNameReference</c> builds for e.g. <c>[1]!TaxRate</c>) into an
     /// already-parseable rewritten formula text that reuses the existing quoted external-sheet
-    /// cell-reference machinery (<c>'[1]Sheet1'!$B$2</c>), so the caller
-    /// (<see cref="FormulaEvaluator"/>'s SheetEvalContext.TryGetNamedFormulaText) can hand the
-    /// result straight to the ordinary named-formula parse/eval path exactly like any other named
-    /// formula's RefersTo text -- which in turn resolves the rewritten cell reference through the
-    /// SAME cached-value lookup <see cref="TryResolve"/> already provides for the sheet-qualified
-    /// form, so a mixed formula like <c>=[1]!TaxRate+B2</c> recomputes its local half live instead
-    /// of failing to parse at all.
+    /// cell-reference machinery (<c>'[1]Sheet1'!$B$2</c>) when the cached RefersTo is itself
+    /// sheet-qualified, or (when it isn't -- a workbook-scoped constant or non-reference formula
+    /// such as <c>0.08</c>, which ECMA-376 18.14.4 CT_ExternalDefinedName permits) the cached
+    /// RefersTo text verbatim, so the caller (<see cref="FormulaEvaluator"/>'s
+    /// SheetEvalContext.TryGetNamedFormulaText) can hand the result straight to the ordinary
+    /// named-formula parse/eval path exactly like any other named formula's RefersTo text -- which
+    /// in turn resolves a rewritten cell reference through the SAME cached-value lookup
+    /// <see cref="TryResolve"/> already provides for the sheet-qualified form, or evaluates a
+    /// constant/formula RefersTo directly, so a mixed formula like <c>=[1]!TaxRate+B2</c>
+    /// recomputes its local half live instead of failing to parse at all, whether TaxRate is a
+    /// cell reference or a plain constant.
     /// Returns <see langword="false"/> when <paramref name="name"/> isn't this shape, the external
-    /// index is out of range, no defined name in that link matches (case-insensitively; a
+    /// index is out of range, or no defined name in that link matches (case-insensitively; a
     /// workbook-scoped candidate -- <see cref="ExternalDefinedNameModel.SheetId"/> null -- is
     /// preferred over a sheet-scoped one of the same name, matching Excel's own preference for the
-    /// workbook-global definition when a bare, unscoped reference could mean either), or its cached
-    /// RefersTo text doesn't have the expected "Sheet!Ref" shape.
+    /// workbook-global definition when a bare, unscoped reference could mean either).
     /// </summary>
     public static bool TryResolveExternalDefinedName(Workbook? workbook, string name, out string formulaText)
     {
@@ -130,10 +133,24 @@ internal static class ExternalSheetReferenceResolver
             match ??= candidate;
         }
 
-        if (match?.RefersTo is not { Length: > 0 } refersTo ||
-            !TrySplitSheetQualifiedRefersTo(refersTo, out var sheetPart, out var cellPart))
+        if (match?.RefersTo is not { Length: > 0 } refersTo)
         {
             return false;
+        }
+
+        if (!TrySplitSheetQualifiedRefersTo(refersTo, out var sheetPart, out var cellPart))
+        {
+            // The cached RefersTo isn't a "Sheet!Ref" shape at all -- e.g. a workbook-scoped
+            // constant (<definedName name="TaxRate" refersTo="0.08"/>) or a non-reference
+            // formula. ECMA-376 18.14.4 (CT_ExternalDefinedName) places no shape requirement on
+            // refersTo, and Excel itself evaluates a reference to such a name using whatever the
+            // cached text actually is, not just a cell reference. Hand the raw text straight to
+            // the caller so it flows through the same GetOrParseFormula/EvaluateNamedFormulaText
+            // path an ordinary local named formula's bare RefersTo already uses (see
+            // TryEvaluateNamedFormula in FormulaEvaluator.References.cs) instead of failing
+            // outright and leaving the reference to resolve to #NAME?.
+            formulaText = refersTo;
+            return true;
         }
 
         var quotedSheet = ("[" + externalIndex.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]" + sheetPart)

@@ -125,7 +125,6 @@ public sealed class WorkbookSession : IDisposable
                 StringComparison.OrdinalIgnoreCase);
     }
 
-    private const double MaximumRowHeight = 409.5;
     private const string MultiRangeClipboardErrorSuffix =
         " does not support multiple selected ranges yet.";
 
@@ -5451,7 +5450,7 @@ public sealed class WorkbookSession : IDisposable
     }
 
     private static double GetFittingRowHeight(double fontSize) =>
-        Math.Min(MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
+        Math.Min(AutoFitSizingService.MaximumRowHeight, FontSizePlanner.EstimateFittingRowHeight(fontSize));
 
     private static bool HasBorderPresetChanges(
         GridRange range,

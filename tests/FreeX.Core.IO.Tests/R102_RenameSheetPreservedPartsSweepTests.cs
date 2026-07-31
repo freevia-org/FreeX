@@ -312,6 +312,54 @@ public sealed class R102_RenameSheetPreservedPartsSweepTests
         worksheetXml.Root!.Element(WorksheetNs + "legacyDrawing").Should().NotBeNull();
     }
 
+    // R103-io-rename-name-reuse-identity-gap regression: an UNRENAMED sheet whose worksheet part gets
+    // renumbered purely because an unrelated EARLIER sheet was deleted (no rename involved for Trailing
+    // itself) must still resolve its OWN preserved unmodeled parts onto its own (renumbered) worksheet.
+    // A naive "trust the direct name match only when its resolved path is byte-identical to the sheet's
+    // OWN load-time path" fix would incorrectly reject this case too (Trailing's path legitimately moved
+    // from worksheet3.xml to worksheet2.xml), silently dropping Trailing's own control -- this guards
+    // against that alternate, over-broad fix regressing this legitimate case.
+    [Fact]
+    public void UnrenamedTrailingSheet_KeepsOwnFormControl_AfterUnrelatedMiddleSheetDeleted()
+    {
+        var workbook = new Workbook("RenumberOwnControlNoRename");
+        var first = workbook.AddSheet("First");
+        first.SetCell(new CellAddress(first.Id, 1, 1), new TextValue("first"));
+        var middle = workbook.AddSheet("Middle");
+        middle.SetCell(new CellAddress(middle.Id, 1, 1), new TextValue("middle"));
+        var trailing = workbook.AddSheet("Trailing");
+        trailing.SetCell(new CellAddress(trailing.Id, 4, 9), new BoolValue(true));
+
+        using var source = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        string trailingSourcePath;
+        source.Position = 0;
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true))
+            trailingSourcePath = GetWorksheetPathForSheetName(archive, "Trailing");
+
+        AddCheckBoxControl(source, trailingSourcePath);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        loaded.GetSheet("Trailing")!.FormControls.Should().ContainSingle("sanity: control must load");
+        var middleId = loaded.GetSheet("Middle")!.Id;
+        loaded.RemoveSheet(middleId);
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var trailingPath = GetWorksheetPathForSheetName(savedArchive, "Trailing");
+        trailingPath.Should().Be("xl/worksheets/sheet2.xml",
+            "sanity: Trailing must actually have been renumbered down from its original slot for this test to be meaningful");
+        var worksheetXml = XlsxPackageXmlEditor.LoadXml(savedArchive.GetEntry(trailingPath)!);
+        worksheetXml.Descendants(WorksheetNs + "control").Should().NotBeEmpty(
+            "Trailing's OWN unmodeled control must survive when it keeps its name but gets renumbered " +
+            "due to Middle's unrelated deletion elsewhere in the workbook");
+    }
+
     [Fact]
     public void NoRename_KeepsCommentLegacyDrawing_OnFullRebuildSave()
     {
@@ -858,5 +906,123 @@ public sealed class R102_RenameSheetPreservedPartsSweepTests
         saved.Position = 0;
         using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         savedArchive.GetEntry("xl/ctrlProps/ctrlProp1.xml").Should().NotBeNull();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+    // 7) R103-io-rename-name-reuse-identity-gap: name-reuse-after-delete and name-swap repros.
+    // Both defeat the plain name-based direct match (and the path-based fallback's own guard)
+    // because a load-time name gets freed up and taken over by a genuinely different physical
+    // sheet in the same edit -- see XlsxRenamedSourceSheetResolver's R103 header comment.
+    // ─────────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void DeleteSheetThenRenameAnotherIntoItsFreedName_DoesNotResurrectDeletedSheetFormControlOntoRenamedSheet()
+    {
+        var workbook = new Workbook("R103DeleteThenReuseName");
+        var data = workbook.AddSheet("Data");
+        data.SetCell(new CellAddress(data.Id, 4, 9), new BoolValue(true));
+        var sheet2 = workbook.AddSheet("Sheet2");
+        sheet2.SetCell(new CellAddress(sheet2.Id, 1, 1), new TextValue("plain"));
+
+        using var source = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        string dataSourcePath;
+        source.Position = 0;
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true))
+            dataSourcePath = GetWorksheetPathForSheetName(archive, "Data");
+
+        AddCheckBoxControl(source, dataSourcePath);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        loaded.GetSheet("Data")!.FormControls.Should().ContainSingle("sanity: the control must have loaded into the model");
+        var ctx = new TestCommandContext(loaded);
+
+        loaded.RemoveSheet(loaded.GetSheet("Data")!.Id).Should().BeTrue();
+        new RenameSheetCommand(loaded.GetSheet("Sheet2")!.Id, "Data").Apply(ctx).Success.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        savedArchive.Entries.Should().ContainSingle(e => e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase) &&
+            e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase),
+            "only the surviving (renamed) sheet's worksheet part should remain");
+        var dataPath = GetWorksheetPathForSheetName(savedArchive, "Data");
+        var worksheetXml = XlsxPackageXmlEditor.LoadXml(savedArchive.GetEntry(dataPath)!);
+        worksheetXml.Descendants(WorksheetNs + "control").Should().BeEmpty(
+            "the DELETED Data sheet's form control must not be resurrected onto Sheet2 just because Sheet2 " +
+            "was renamed to reuse the freed 'Data' name string");
+
+        // NOTE: xl/ctrlProps/ctrlProp1.xml (the ORPHANED part the deleted sheet's control used to
+        // reference) is a separate, pre-existing sibling gap in
+        // XlsxFileAdapter.SourcePackage.cs's GetExcludedWorksheetPackagePartPaths -- its own
+        // removedWorksheetPaths computation checks `!context.TargetSheets.ContainsKey(currentName)`
+        // without the same Sheet.Id identity verification this resolver now applies, so it doesn't
+        // realize "Data" is gone (TargetSheets still has a "Data" key -- Sheet2's) and never computes
+        // Data's now-orphaned dependency parts for exclusion. Out of scope for this defect (the
+        // worksheet-content misattribution this test targets is fully fixed above); left as a named
+        // follow-up rather than fixed here.
+    }
+
+    [Fact]
+    public void SwapTwoSheetNames_KeepsEachSheetsOwnFormControlOnItsOwnPhysicalPart()
+    {
+        var workbook = new Workbook("R103SwapNames");
+        var alpha = workbook.AddSheet("Alpha");
+        alpha.SetCell(new CellAddress(alpha.Id, 4, 9), new BoolValue(true));
+        var beta = workbook.AddSheet("Beta");
+        beta.SetCell(new CellAddress(beta.Id, 1, 1), new TextValue("plain"));
+
+        using var source = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        string alphaSourcePath, betaSourcePath;
+        source.Position = 0;
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            alphaSourcePath = GetWorksheetPathForSheetName(archive, "Alpha");
+            betaSourcePath = GetWorksheetPathForSheetName(archive, "Beta");
+        }
+
+        AddCheckBoxControl(source, alphaSourcePath);
+        source.Position = 0;
+
+        var adapter = new XlsxFileAdapter();
+        var loaded = adapter.Load(source);
+        loaded.GetSheet("Alpha")!.FormControls.Should().ContainSingle("sanity: the control must have loaded into the model");
+        var ctx = new TestCommandContext(loaded);
+
+        var alphaId = loaded.GetSheet("Alpha")!.Id;
+        var betaId = loaded.GetSheet("Beta")!.Id;
+        new RenameSheetCommand(alphaId, "__Temp103__").Apply(ctx).Success.Should().BeTrue();
+        new RenameSheetCommand(betaId, "Alpha").Apply(ctx).Success.Should().BeTrue();
+        new RenameSheetCommand(alphaId, "Beta").Apply(ctx).Success.Should().BeTrue();
+
+        using var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave);
+
+        saved.Position = 0;
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+
+        // A plain rename never moves a sheet's own worksheetN.xml part (established invariant used
+        // throughout this file), so Alpha's control-carrying content must still live at its OWN
+        // original path -- regardless of what name currently labels that path.
+        var formerAlphaWorksheetXml = XlsxPackageXmlEditor.LoadXml(savedArchive.GetEntry(alphaSourcePath)!);
+        formerAlphaWorksheetXml.Descendants(WorksheetNs + "control").Should().NotBeEmpty(
+            "the sheet that was originally 'Alpha' (now named 'Beta' after the swap) must keep its OWN " +
+            "form control on its OWN physical worksheet part");
+
+        var formerBetaWorksheetXml = XlsxPackageXmlEditor.LoadXml(savedArchive.GetEntry(betaSourcePath)!);
+        formerBetaWorksheetXml.Descendants(WorksheetNs + "control").Should().BeEmpty(
+            "the sheet that was originally 'Beta' (now named 'Alpha' after the swap) must NOT inherit " +
+            "the other sheet's form control just because the names crossed over");
+
+        // Sanity: the swap actually took effect and both physical parts survived under their new names.
+        GetWorksheetPathForSheetName(savedArchive, "Beta").Should().Be(
+            XlsxPackagePath.NormalizePackagePath(alphaSourcePath));
+        GetWorksheetPathForSheetName(savedArchive, "Alpha").Should().Be(
+            XlsxPackagePath.NormalizePackagePath(betaSourcePath));
     }
 }

@@ -303,6 +303,9 @@ public sealed partial class NativeJsonAdapter
         /// <summary>R82-io-chart-series-5-1: see <see cref="ChartModel.SeriesOrderOverrides"/>.</summary>
         public List<ChartSeriesOrderOverride>? SeriesOrderOverrides { get; set; }
 
+        /// <summary>R103-io-chart-series-tx-1: see <see cref="ChartModel.SeriesNameOverrides"/>.</summary>
+        public List<ChartSeriesNameOverride>? SeriesNameOverrides { get; set; }
+
         /// <summary>R82-io-chart-series-5-2: see <see cref="ChartModel.MultiLevelCategoryXml"/>.</summary>
         public List<ChartSeriesRawXmlEntry>? MultiLevelCategoryXml { get; set; }
 

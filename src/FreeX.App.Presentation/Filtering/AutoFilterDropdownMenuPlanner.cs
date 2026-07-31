@@ -1,4 +1,5 @@
 using FreeX.Core.Commands;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Filtering;
@@ -59,7 +60,7 @@ public static class AutoFilterDropdownMenuPlanner
         if (string.IsNullOrWhiteSpace(headerText))
             headerText = textProvider.Format("AutoFilter_ColumnHeader", CellAddress.NumberToColumnName(plan.Range.Start.Col + plan.FilterColumnOffset));
 
-        var filterKind = DetectFilterKind(sheet, plan);
+        var filterKind = DetectFilterKind(workbook, sheet, plan);
         var sortLabels = GetSortLabels(filterKind, textProvider);
         var filterEntry = AutoFilterMenuCatalog.CreateFilterFamilyEntry(filterKind, textProvider);
         var colorOptions = CollectColorOptions(workbook, sheet, plan, textProvider);
@@ -310,7 +311,7 @@ public static class AutoFilterDropdownMenuPlanner
         return false;
     }
 
-    private static AutoFilterMenuFilterKind DetectFilterKind(Sheet sheet, AutoFilterDropdownPlan plan)
+    private static AutoFilterMenuFilterKind DetectFilterKind(Workbook? workbook, Sheet sheet, AutoFilterDropdownPlan plan)
     {
         var filterColumn = plan.Range.Start.Col + plan.FilterColumnOffset;
         var hasTypedValues = false;
@@ -325,7 +326,18 @@ public static class AutoFilterDropdownMenuPlanner
 
             hasTypedValues = true;
             allNumbers &= value is NumberValue;
-            allDates &= value is DateTimeValue;
+
+            // R103-app-presentation-autofilter-1-1: Excel decides the Date-Filters family purely
+            // from the cell's number format, not from any separate "date value" runtime type (it
+            // has none -- a date is just a formatted double). FreeX's formula engine mirrors that
+            // at the storage layer for literal dates (DateTimeValue), but DATE()/EDATE()/EOMONTH()
+            // and any date arithmetic (`=OrderDate+30`, `=TODAY()-7`) always compute a plain
+            // NumberValue, so a "Due Date" column built from a formula must also check the cell's
+            // resolved number format, not just the ScalarValue's CLR type, or it wrongly gets
+            // Number Filters instead of Date Filters even though it visibly displays as dates.
+            var isDate = value is DateTimeValue ||
+                (workbook is not null && value is NumberValue && IsDateFormattedFilterCell(workbook, sheet, row, filterColumn));
+            allDates &= isDate;
         }
 
         if (hasTypedValues && allDates)
@@ -333,6 +345,17 @@ public static class AutoFilterDropdownMenuPlanner
         if (hasTypedValues && allNumbers)
             return AutoFilterMenuFilterKind.Number;
         return AutoFilterMenuFilterKind.Text;
+    }
+
+    private static bool IsDateFormattedFilterCell(Workbook workbook, Sheet sheet, uint row, uint col)
+    {
+        var cell = sheet.GetCell(row, col);
+        var styleId = cell is not null && cell.StyleId != StyleId.Default
+            ? cell.StyleId
+            : sheet.GetStyleOnly(row, col) ?? StyleId.Default;
+
+        var numberFormat = workbook.GetStyle(styleId).NumberFormat;
+        return !string.IsNullOrEmpty(numberFormat) && NumberFormatter.IsDateTimeNumberFormat(numberFormat);
     }
 
     private static string FormatHexColor(CellColor color) =>

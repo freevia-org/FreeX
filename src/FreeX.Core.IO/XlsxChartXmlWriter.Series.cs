@@ -158,27 +158,30 @@ internal static partial class XlsxChartXmlWriter
             var valueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, strip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
-            var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
+            // R103-io-chart-series-verbatim-cache: when the category formula itself was unparsable
+            // (named range/multi-area/external link), the numRef-vs-strRef choice must follow the
+            // SOURCE cache's own root element name, not the recomputed heuristic — the recomputed
+            // heuristic reflects live worksheet data that has no relation to the verbatim range, and
+            // choosing the wrong ref type here would nest a captured <c:numCache> inside a <c:strRef>
+            // (or vice versa), which is schema-invalid.
+            var verbatimCategoryCache = verbatim?.CatFormula is not null
+                ? TryParseChartXml(verbatim.CatCacheXml)
+                : null;
+            var effectiveCategoryIsNumeric = verbatim?.CatFormula is not null
+                ? verbatimCategoryCache?.Name.LocalName == "numCache"
+                : categoryIsNumeric;
             var valueCache = verbatim?.ValFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), GetStripNumberFormatCode(workbook, sheet, layout, strip), chartNs)
-                : null;
-            var categoryCache = verbatim?.CatFormula is null && categoryStripValues is not null
-                ? (effectiveCategoryIsNumeric
-                    ? BuildNumCacheXml(categoryStripValues, GetStripNumberFormatCode(workbook, sheet, layout, layout.CategoryStrip), chartNs)
-                    : BuildStrCacheXml(categoryStripValues, chartNs))
-                : null;
+                : TryParseChartXml(verbatim.ValCacheXml);
+            var categoryCache = verbatim?.CatFormula is not null
+                ? verbatimCategoryCache
+                : (categoryStripValues is not null
+                    ? (effectiveCategoryIsNumeric
+                        ? BuildNumCacheXml(categoryStripValues, GetStripNumberFormatCode(workbook, sheet, layout, layout.CategoryStrip), chartNs)
+                        : BuildStrCacheXml(categoryStripValues, chartNs))
+                    : null);
 
-            XElement? txElement = null;
-            if (verbatim?.TxFormula is { } txFormula)
-            {
-                txElement = new XElement(chartNs + "tx",
-                    new XElement(chartNs + "strRef",
-                        new XElement(chartNs + "f", txFormula)));
-            }
-            else
-            {
-                txElement = ToSeriesTitleXml(chart, sheet, layout, strip, chartNs);
-            }
+            var txElement = ResolveSeriesTitleXml(chart, sheet, layout, strip, seriesIndex, chartNs, verbatim?.TxFormula);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
@@ -300,6 +303,43 @@ internal static partial class XlsxChartXmlWriter
         chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
 
     /// <summary>
+    /// R103-io-chart-series-tx-1: returns the captured &lt;c:tx&gt; formula for this series (see
+    /// <see cref="ChartModel.SeriesNameOverrides"/>), independent of whether it happens to also be
+    /// unparsable (that case is already covered by <see cref="GetVerbatimFormulas"/>'s TxFormula).
+    /// </summary>
+    private static string? GetSeriesNameOverrideFormula(ChartModel chart, int seriesIndex) =>
+        chart.SeriesNameOverrides.LastOrDefault(o => o.SeriesIndex == seriesIndex)?.Formula;
+
+    /// <summary>
+    /// R103-io-chart-series-tx-1: single choke point for resolving a series' &lt;c:tx&gt; element —
+    /// preferring, in order, (1) an unparsable verbatim tx formula (named range/multi-area/external
+    /// link — <see cref="GetVerbatimFormulas"/>), (2) a captured tx formula that parsed fine but
+    /// points somewhere other than the strip's own header cell (Excel's "Select Data &gt; Edit
+    /// Series &gt; Series name" lets the user reference ANY cell — <see cref="GetSeriesNameOverrideFormula"/>),
+    /// and finally (3) the recomputed strip header-cell guess (<see cref="ToSeriesTitleXml"/>). Used
+    /// by every BuildXxxChartSeries family so a fix to the precedence only needs to happen once.
+    /// </summary>
+    private static XElement? ResolveSeriesTitleXml(
+        ChartModel chart,
+        Sheet sheet,
+        ChartSeriesStripLayout layout,
+        uint seriesStrip,
+        int seriesIndex,
+        XNamespace chartNs,
+        string? verbatimTxFormula)
+    {
+        var formula = verbatimTxFormula ?? GetSeriesNameOverrideFormula(chart, seriesIndex);
+        if (formula is not null)
+        {
+            return new XElement(chartNs + "tx",
+                new XElement(chartNs + "strRef",
+                    new XElement(chartNs + "f", formula)));
+        }
+
+        return ToSeriesTitleXml(chart, sheet, layout, seriesStrip, chartNs);
+    }
+
+    /// <summary>
     /// R82-io-chart-series-5-1: returns the explicit &lt;c:order&gt; captured for this series (see
     /// <see cref="ChartModel.SeriesOrderOverrides"/>), falling back to the recomputed positional
     /// <paramref name="seriesIndex"/> — Excel's ordinary case, where order == idx.
@@ -325,8 +365,11 @@ internal static partial class XlsxChartXmlWriter
     /// series formula with its cached values, so the chart still displays last-known data when the
     /// referenced range/sheet is unavailable — external link broken, manual calc not yet
     /// recalculated, or a non-recalculating OOXML consumer). Only meaningful for a strip whose range
-    /// is known positionally; verbatim (multi-area) formulas have no single strip and are left
-    /// without a cache, unchanged from prior behavior.
+    /// is known positionally; a verbatim (named-range/multi-area/external-link) formula has no
+    /// single strip to read live values from — that case instead re-emits the SOURCE file's own
+    /// captured cache verbatim (see R103-io-chart-series-verbatim-cache in
+    /// <see cref="ChartSeriesVerbatimFormulas"/>), falling back to no cache only when the source
+    /// itself had none.
     /// </summary>
     private static ScalarValue[] GetStripPointValues(Sheet sheet, ChartSeriesStripLayout layout, uint strip)
     {
@@ -472,14 +515,12 @@ internal static partial class XlsxChartXmlWriter
                 ?? FormatStripRange(layout, sheet.Name, strip);
             var xValueCache = verbatim?.CatFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, xValueStrip), chartNs)
-                : null;
+                : TryParseChartXml(verbatim.CatCacheXml);
             var yValueCache = verbatim?.ValFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, strip), GetStripNumberFormatCode(workbook, sheet, layout, strip), chartNs)
-                : null;
+                : TryParseChartXml(verbatim.ValCacheXml);
 
-            XElement? txElement = verbatim?.TxFormula is { } txFormula
-                ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
-                : ToSeriesTitleXml(chart, sheet, layout, strip, chartNs);
+            var txElement = ResolveSeriesTitleXml(chart, sheet, layout, strip, seriesIndex, chartNs, verbatim?.TxFormula);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
@@ -591,17 +632,15 @@ internal static partial class XlsxChartXmlWriter
                 ?? FormatStripRange(layout, sheet.Name, sizeStrip);
             var xValueCache = verbatim?.CatFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, xValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, xValueStrip), chartNs)
-                : null;
+                : TryParseChartXml(verbatim.CatCacheXml);
             var yValueCache = verbatim?.ValFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, yValueStrip), GetStripNumberFormatCode(workbook, sheet, layout, yValueStrip), chartNs)
-                : null;
+                : TryParseChartXml(verbatim.ValCacheXml);
             var sizeCache = verbatim?.BubbleSizeFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, sizeStrip), GetStripNumberFormatCode(workbook, sheet, layout, sizeStrip), chartNs)
-                : null;
+                : TryParseChartXml(verbatim.BubbleSizeCacheXml);
 
-            XElement? txElement = verbatim?.TxFormula is { } txFormula
-                ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
-                : ToSeriesTitleXml(chart, sheet, layout, yValueStrip, chartNs);
+            var txElement = ResolveSeriesTitleXml(chart, sheet, layout, yValueStrip, seriesIndex, chartNs, verbatim?.TxFormula);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
@@ -658,19 +697,27 @@ internal static partial class XlsxChartXmlWriter
             var valueRange = verbatim?.ValFormula
                 ?? FormatStripRange(layout, sheet.Name, valueStrip);
             var effectiveCategoryRange = verbatim?.CatFormula ?? categoryRange;
-            var effectiveCategoryIsNumeric = verbatim?.CatFormula is null && categoryIsNumeric;
+            // R103-io-chart-series-verbatim-cache: see the identical comment in BuildChartSeries —
+            // the ref-type choice for a verbatim category must follow the captured cache's own root
+            // element name, not the live-worksheet heuristic.
+            var verbatimCategoryCache = verbatim?.CatFormula is not null
+                ? TryParseChartXml(verbatim.CatCacheXml)
+                : null;
+            var effectiveCategoryIsNumeric = verbatim?.CatFormula is not null
+                ? verbatimCategoryCache?.Name.LocalName == "numCache"
+                : categoryIsNumeric;
             var valueCache = verbatim?.ValFormula is null
                 ? BuildNumCacheXml(GetStripPointValues(sheet, layout, valueStrip), GetStripNumberFormatCode(workbook, sheet, layout, valueStrip), chartNs)
-                : null;
-            var categoryCache = verbatim?.CatFormula is null && categoryStripValues is not null
-                ? (effectiveCategoryIsNumeric
-                    ? BuildNumCacheXml(categoryStripValues, GetStripNumberFormatCode(workbook, sheet, layout, layout.CategoryStrip), chartNs)
-                    : BuildStrCacheXml(categoryStripValues, chartNs))
-                : null;
+                : TryParseChartXml(verbatim.ValCacheXml);
+            var categoryCache = verbatim?.CatFormula is not null
+                ? verbatimCategoryCache
+                : (categoryStripValues is not null
+                    ? (effectiveCategoryIsNumeric
+                        ? BuildNumCacheXml(categoryStripValues, GetStripNumberFormatCode(workbook, sheet, layout, layout.CategoryStrip), chartNs)
+                        : BuildStrCacheXml(categoryStripValues, chartNs))
+                    : null);
 
-            XElement? txElement = verbatim?.TxFormula is { } txFormula
-                ? new XElement(chartNs + "tx", new XElement(chartNs + "strRef", new XElement(chartNs + "f", txFormula)))
-                : ToSeriesTitleXml(chart, sheet, layout, valueStrip, chartNs);
+            var txElement = ResolveSeriesTitleXml(chart, sheet, layout, valueStrip, seriesIndex, chartNs, verbatim?.TxFormula);
 
             yield return new XElement(chartNs + "ser",
                 new XElement(chartNs + "idx", new XAttribute("val", seriesIndex)),
