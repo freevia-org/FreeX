@@ -207,7 +207,12 @@ public sealed class RibbonGroupHost : ContentControl
         {
             contextMenu.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
             {
-                var screenAnchor = anchor.PointToScreen(new Point(0, 0));
+                // PointToScreen returns device coordinates; the popup callback sizes and system work
+                // area are WPF DIPs. Normalize the anchor before handing all geometry to the shared planner.
+                var screenAnchorPixels = anchor.PointToScreen(new Point(0, 0));
+                var transformFromDevice = PresentationSource.FromVisual(anchor)?.CompositionTarget?.TransformFromDevice
+                    ?? Matrix.Identity;
+                var screenAnchor = transformFromDevice.Transform(screenAnchorPixels);
                 var result = RibbonPopupPlacementPlanner.Plan(
                     new RibbonPopupRect(screenAnchor.X, screenAnchor.Y, targetSize.Width, targetSize.Height),
                     new RibbonPopupRect(0, 0, popupSize.Width, popupSize.Height),
