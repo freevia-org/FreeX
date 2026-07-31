@@ -78,7 +78,7 @@ public sealed class LineHeightMultipleTests
 
         var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
         var ratio = new System.Windows.Media.FontFamily("Calibri").LineSpacing;
-        var expected = ParagraphFormatting.Default.LineSpacing * ratio * 1.10 * 11 * PxPerPoint;
+        var expected = ParagraphFormatting.Default.LineSpacing * ratio * 11 * PxPerPoint;
         Assert.Equal(expected, wpf.LineHeight, 1);
     }
 
@@ -104,5 +104,52 @@ public sealed class LineHeightMultipleTests
         var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
         var ratio = new System.Windows.Media.FontFamily("Calibri").LineSpacing;
         Assert.Equal(ratio * 11 * PxPerPoint, wpf.LineHeight, 1);
+    }
+
+    [StaFact]
+    public void ImportedApplicationRunDefault_AppliesMeasuredLineHeight()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 12 };
+        doc.UseWordApplicationDefaultLineSpacing = true;
+        doc.UseWordApplicationDefaultRunFormatting = true;
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("body text"));
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        var ratio = new System.Windows.Media.FontFamily("Calibri").LineSpacing;
+        var expected = ParagraphFormatting.Default.LineSpacing * ratio * 1.01 * 12 * PxPerPoint;
+        Assert.Equal(expected, wpf.LineHeight, 1);
+    }
+
+    [StaTheory]
+    [InlineData("Heading1", 3.0)]
+    [InlineData("Title", 4.5)]
+    public void ImportedApplicationRunDefault_AddsStyleSpecificBodyClearance(
+        string styleId,
+        double expectedExtraPoints)
+    {
+        static double BottomMargin(string id, bool usesApplicationDefault)
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 12 };
+            doc.UseWordApplicationDefaultLineSpacing = true;
+            doc.UseWordApplicationDefaultRunFormatting = usesApplicationDefault;
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("heading") { StyleId = id });
+
+            var view = new DocumentView();
+            view.LoadModel(doc);
+            return view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First().Margin.Bottom;
+        }
+
+        var explicitDefaultMargin = BottomMargin(styleId, usesApplicationDefault: false);
+        var applicationDefaultMargin = BottomMargin(styleId, usesApplicationDefault: true);
+
+        Assert.Equal(expectedExtraPoints * PxPerPoint,
+            applicationDefaultMargin - explicitDefaultMargin, 1);
     }
 }

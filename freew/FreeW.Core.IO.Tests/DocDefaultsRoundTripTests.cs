@@ -72,6 +72,7 @@ public class DocDefaultsRoundTripTests
         // The reader must populate DefaultRun correctly.
         doc.DefaultRun.FontFamily.Should().Be("Calibri");
         doc.DefaultRun.FontSizePt.Should().Be(11);
+        doc.UseWordApplicationDefaultRunFormatting.Should().BeFalse();
 
         // WRITE and inspect styles.xml
         var stylesXml = WriteStylesXml(doc);
@@ -118,6 +119,16 @@ public class DocDefaultsRoundTripTests
 
         rPr.Element(W + "rFonts")!.Attribute(W + "ascii")!.Value.Should().Be("Aptos");
         rPr.Element(W + "sz")!.Attribute(W + "val")!.Value.Should().Be("24");
+    }
+
+    [Fact]
+    public void MissingRunDefaults_UsesWordApplicationTwelvePointFallback()
+    {
+        var doc = Read(rPrDefaultXml: null);
+
+        doc.DefaultRun.FontFamily.Should().Be("Calibri");
+        doc.DefaultRun.FontSizePt.Should().Be(12);
+        doc.UseWordApplicationDefaultRunFormatting.Should().BeTrue();
     }
 
     /// <summary>

@@ -76,10 +76,8 @@ public enum DocumentViewMode
 public sealed class DocumentView : RichTextBox
 {
     private const double PxPerPoint = 96.0 / 72.0;
-
-    // Word's implicit 1.15-line application default uses a taller Calibri line box than WPF's
-    // FontFamily.LineSpacing metric. Calibrated against a three-page Word COM continuation fixture.
-    private const double ImportedWordApplicationLineHeightScale = 1.10;
+    // WPF's Calibri line box remains about 1% short after restoring Word's 12-point application fallback.
+    private const double ImportedWordApplicationLineHeightScale = 1.01;
 
     // Matches the shared planner's default page-space gap around wrapped objects.
     private const double FloatingWrapGapDip = 9.0;
@@ -9470,6 +9468,20 @@ public sealed class DocumentView : RichTextBox
             if (!paraFmt.LineSpacingIsSet)
                 paraFmt = paraFmt with { LineSpacing = 1.0, LineRule = LineSpacingRule.Multiple, LineHeightPt = 0 };
         }
+        // Word's application-default heading/title line boxes leave slightly more clearance before the
+        // first body paragraph than WPF's Calibri metrics. Keep this host calibration on the exact imported
+        // no-rPrDefault route; explicit document defaults and other styles retain their authored spacing.
+        if (document.UseWordApplicationDefaultRunFormatting)
+        {
+            var applicationClearancePt = paragraph.StyleId?.ToUpperInvariant() switch
+            {
+                "HEADING1" => 3.0,
+                "TITLE" => 4.5,
+                _ => 0.0
+            };
+            if (applicationClearancePt > 0)
+                paraFmt = paraFmt with { SpaceAfterPt = paraFmt.SpaceAfterPt + applicationClearancePt };
+        }
         // Imported WordprocessingML uses Word's application default multiple when the package cascade
         // omits w:spacing/@w:line. Model-authored FreeW documents keep the host's natural single-line box.
         // Explicit paragraph/style rules and non-default model values remain authoritative.
@@ -9515,7 +9527,9 @@ public sealed class DocumentView : RichTextBox
             LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple && hasExplicitMultipleLineSpacing
                 ? (paraFmt.LineSpacing > 0
                     ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) *
-                      (usesWordApplicationDefaultLineSpacing ? ImportedWordApplicationLineHeightScale : 1.0) *
+                      (usesWordApplicationDefaultLineSpacing && document.UseWordApplicationDefaultRunFormatting
+                          ? ImportedWordApplicationLineHeightScale
+                          : 1.0) *
                       (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
                     : double.NaN)
                 : (paraFmt.LineHeightPt > 0 ? paraFmt.LineHeightPt * PxPerPoint : double.NaN),
