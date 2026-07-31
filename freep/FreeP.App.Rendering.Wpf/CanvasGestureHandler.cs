@@ -323,9 +323,15 @@ public sealed class CanvasGestureHandler
 
     private void OnMouseUp(object sender, MouseButtonEventArgs e)
     {
-        var pt = e.GetPosition(_canvas);
-        var xf = _canvas.CurrentTransform;
+        CompleteGesture(e.GetPosition(_canvas), _canvas.CurrentTransform);
+        _canvas.ReleaseMouseCapture();
+    }
 
+    private void OnLostMouseCapture(object sender, MouseEventArgs e) =>
+        CancelActiveGesture(releaseCapture: false);
+
+    private void CompleteGesture(Point pt, SlideTransform xf)
+    {
         switch (_gesture)
         {
             case GestureKind.Move:
@@ -345,25 +351,35 @@ public sealed class CanvasGestureHandler
                 break;
         }
 
-        _gesture = GestureKind.None;
-        _adorner.UpdatePreview(null);
-        _adorner.UpdateGeometryPreview(null, null);
-        _adorner.UpdateMarquee(null);
-        _adorner.UpdateSnapGuides(null, SlideTransform.Identity); // Wave 12B: clear guides
-        _canvas.ReleaseMouseCapture();
+        ClearGestureState();
     }
 
-    private void OnLostMouseCapture(object sender, MouseEventArgs e) =>
-        CancelActiveGesture();
-
-    private void CancelActiveGesture()
+    private void CancelActiveGesture(bool releaseCapture)
     {
-        if (_gesture == GestureKind.None)
-            return;
+        bool wasActive = _gesture != GestureKind.None;
+        ClearGestureState();
+        if (wasActive && releaseCapture)
+            _canvas.ReleaseMouseCapture();
+    }
 
+    private void ClearGestureState()
+    {
         _gesture = GestureKind.None;
+
         _moveStartShapes = null;
+        _dragStartScreen = default;
+        _resizeShapeId = 0;
+        _resizeOrigX = _resizeOrigY = _resizeOrigCx = _resizeOrigCy = 0;
+        _resizeOrigRotationDeg = 0;
+        _resizeHandle = CanvasGestureHandleKind.None;
+        _rotateShapeId = 0;
+        _rotateOrigDeg = 0;
+        _rotateCenterSlide = default;
+        _geometryShapeId = 0;
         _geometryHandleName = null;
+        _geometryBoundsDip = default;
+        _geometryDragStartScreen = default;
+        _marqueeStartSlide = default;
         _adorner.UpdatePreview(null);
         _adorner.UpdateGeometryPreview(null, null);
         _adorner.UpdateMarquee(null);
@@ -708,51 +724,81 @@ public sealed class CanvasGestureHandler
 
     private void OnKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && _editor.IsFormatPainterActive)
-        {
-            _editor.CancelFormatPainter();
+        if (HandleKeyDown(e.Key))
             e.Handled = true;
-            return;
+    }
+
+    private bool HandleKeyDown(Key key)
+    {
+        switch (CanvasGesturePlanner.ResolveEscapeAction(
+            _editor.IsFormatPainterActive,
+            _gesture != GestureKind.None))
+        {
+            case CanvasEscapeAction.CancelFormatPainter when key == Key.Escape:
+                _editor.CancelFormatPainter();
+                return true;
+            case CanvasEscapeAction.CancelGesture when key == Key.Escape:
+                CancelActiveGesture(releaseCapture: true);
+                return true;
         }
 
-        if (_editor.SelectedShapeIds.Count == 0) return;
+        if (_editor.SelectedShapeIds.Count == 0) return false;
 
-        if (TryHandleCustomGeometryKey(e.Key))
-        {
-            e.Handled = true;
-            return;
-        }
+        if (TryHandleCustomGeometryKey(key))
+            return true;
 
         bool shift = (Keyboard.Modifiers & ModifierKeys.Shift) != 0;
         long step  = shift ? LargeNudgeEmu : SmallNudgeEmu;
 
-        switch (e.Key)
+        switch (key)
         {
             case Key.Left:
                 _editor.MoveSelected(-step, 0);
-                e.Handled = true;
-                break;
+                return true;
             case Key.Right:
                 _editor.MoveSelected(step, 0);
-                e.Handled = true;
-                break;
+                return true;
             case Key.Up:
                 _editor.MoveSelected(0, -step);
-                e.Handled = true;
-                break;
+                return true;
             case Key.Down:
                 _editor.MoveSelected(0, step);
-                e.Handled = true;
-                break;
+                return true;
             case Key.Delete:
             case Key.Back:
                 _editor.DeleteSelected();
-                e.Handled = true;
-                break;
+                return true;
         }
+
+        return false;
     }
 
     internal bool IsGestureActiveForTests => _gesture != GestureKind.None;
+
+    internal bool HasPendingGestureStateForTests =>
+        _moveStartShapes is not null ||
+        _resizeShapeId != 0 ||
+        _rotateShapeId != 0 ||
+        _geometryShapeId != 0 ||
+        _geometryHandleName is not null;
+
+    internal bool HasTransientInteractionVisualsForTests =>
+        _adorner.HasTransientInteractionVisualsForTests;
+
+    internal bool HandleEscapeForTests() => HandleKeyDown(Key.Escape);
+
+    internal void SimulateStaleMouseUpForTests() =>
+        CompleteGesture(new Point(0, 0), SlideTransform.Identity);
+
+    internal void SeedTransientInteractionVisualsForTests()
+    {
+        _adorner.UpdatePreview(new Rect(1, 1, 10, 10));
+        _adorner.UpdateGeometryPreview("test", new Point(2, 2));
+        _adorner.UpdateMarquee(new Rect(3, 3, 8, 8));
+        _adorner.UpdateSnapGuides(
+            [new SnapGuideLine { IsHorizontal = true, Position = 4, Label = "test" }],
+            SlideTransform.Identity);
+    }
 
     internal void SeedResizeStateForTests(
         Point startScreen,

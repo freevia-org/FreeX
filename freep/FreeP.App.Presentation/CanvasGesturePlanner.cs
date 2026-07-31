@@ -18,6 +18,13 @@ public enum CanvasGestureHandleKind
     Rotate
 }
 
+public enum CanvasEscapeAction
+{
+    None,
+    CancelFormatPainter,
+    CancelGesture
+}
+
 public readonly record struct CanvasGesturePoint(double X, double Y);
 
 public readonly record struct CanvasDragReducerRequest(
@@ -104,6 +111,19 @@ public static class CanvasGesturePlanner
     public const long MinimumShapeSizeEmu = DrawingMlCoordinateUnits.EmuPerInch / 10;
     public const double DefaultDragStartThresholdPx = 3;
     public const double MeaningfulDragCommitThresholdPx = 1;
+
+    /// <summary>
+    /// Keeps Escape precedence identical in the WPF and Avalonia hosts. Format Painter is a
+    /// separate armed mode and therefore retains its existing first-priority cancellation.
+    /// </summary>
+    public static CanvasEscapeAction ResolveEscapeAction(
+        bool formatPainterActive,
+        bool gestureActive)
+        => formatPainterActive
+            ? CanvasEscapeAction.CancelFormatPainter
+            : gestureActive
+                ? CanvasEscapeAction.CancelGesture
+                : CanvasEscapeAction.None;
 
     public static CanvasDragReducerPlan ReduceDrag(CanvasDragReducerRequest request)
     {

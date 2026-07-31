@@ -168,6 +168,12 @@ public sealed class SelectionAdorner : Adorner
         InvalidateVisual();
     }
 
+    internal bool HasTransientInteractionVisualsForTests =>
+        _previewRect.HasValue ||
+        _marqueeRect.HasValue ||
+        _snapGuides is { Count: > 0 } ||
+        _geometryPreview.HasValue;
+
     // ── Rendering ─────────────────────────────────────────────────────────────────────────────
 
     protected override void OnRender(DrawingContext dc)

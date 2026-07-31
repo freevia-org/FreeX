@@ -3809,6 +3809,35 @@ public sealed class GestureHandlerAltSnapTests
     }
 
     [Fact]
+    public async Task GestureHandler_Escape_CancelsResizeAndIgnoresStalePointerUp()
+    {
+        await Run(() =>
+        {
+            var (handler, editor, shape) = MakeHandler();
+            handler.SeedResizeState(
+                new Point(100, 100),
+                shape,
+                CanvasGestureHandleKind.ResizeSE);
+            handler.SeedTransientInteractionVisualsForTests();
+            handler.IsGestureActiveForTests.Should().BeTrue();
+            handler.HasPendingGestureStateForTests.Should().BeTrue();
+            handler.HasTransientInteractionVisualsForTests.Should().BeTrue();
+
+            handler.HandleKeyDown(Key.Escape, KeyModifiers.None).Should().BeTrue();
+            handler.SimulateStalePointerUpForTests();
+
+            handler.IsGestureActiveForTests.Should().BeFalse();
+            handler.HasPendingGestureStateForTests.Should().BeFalse();
+            handler.HasTransientInteractionVisualsForTests.Should().BeFalse();
+            editor.CanUndo.Should().BeFalse("Escape must cancel before a later pointer-up can commit");
+            shape.OffsetXEmu.Should().Be(914400L);
+            shape.OffsetYEmu.Should().Be(457200L);
+            shape.ExtentCxEmu.Should().Be(1828800L);
+            shape.ExtentCyEmu.Should().Be(914400L);
+        });
+    }
+
+    [Fact]
     public async Task RebuiltEditor_DetachesStalePointerHandler_AndCapturesSelectedShape()
     {
         await Run(() =>

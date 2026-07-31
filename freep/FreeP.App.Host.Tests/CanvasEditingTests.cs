@@ -94,6 +94,53 @@ public sealed class CanvasEditingTests
 
         handler.IsGestureActiveForTests.Should().BeFalse();
     }
+
+    [StaFact]
+    public void GestureHandler_Escape_CancelsResizeAndIgnoresStaleMouseUp()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var shape = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 914400L,
+            OffsetYEmu = 457200L,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 914400L,
+            RotationDeg = 12,
+        };
+        slide.Shapes.Add(shape);
+
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        editor.Select(shape.Id);
+        var canvas = new SlideCanvas();
+        var handler = new CanvasGestureHandler(canvas, editor);
+
+        handler.SeedResizeStateForTests(
+            new Point(100, 100),
+            shape,
+            CanvasGestureHandleKind.ResizeSE);
+        handler.SeedTransientInteractionVisualsForTests();
+        handler.IsGestureActiveForTests.Should().BeTrue();
+        handler.HasPendingGestureStateForTests.Should().BeTrue();
+        handler.HasTransientInteractionVisualsForTests.Should().BeTrue();
+
+        handler.HandleEscapeForTests().Should().BeTrue();
+        handler.SimulateStaleMouseUpForTests();
+
+        handler.IsGestureActiveForTests.Should().BeFalse();
+        handler.HasPendingGestureStateForTests.Should().BeFalse();
+        handler.HasTransientInteractionVisualsForTests.Should().BeFalse();
+        editor.CanUndo.Should().BeFalse("Escape must cancel before a later mouse-up can commit");
+        shape.OffsetXEmu.Should().Be(914400L);
+        shape.OffsetYEmu.Should().Be(457200L);
+        shape.ExtentCxEmu.Should().Be(914400L);
+        shape.ExtentCyEmu.Should().Be(914400L);
+        shape.RotationDeg.Should().Be(12);
+    }
     // ── SlideTransform ────────────────────────────────────────────────────────────
 
     [Fact]

@@ -7,6 +7,20 @@ public sealed class CanvasGesturePlannerTests
 {
     private const double EmuPerDip = 9525.0;
 
+    [Theory]
+    [InlineData(false, false, CanvasEscapeAction.None)]
+    [InlineData(false, true, CanvasEscapeAction.CancelGesture)]
+    [InlineData(true, false, CanvasEscapeAction.CancelFormatPainter)]
+    [InlineData(true, true, CanvasEscapeAction.CancelFormatPainter)]
+    public void ResolveEscapeAction_PreservesFormatPainterPrecedence(
+        bool formatPainterActive,
+        bool gestureActive,
+        CanvasEscapeAction expected)
+    {
+        CanvasGesturePlanner.ResolveEscapeAction(formatPainterActive, gestureActive)
+            .Should().Be(expected);
+    }
+
     private static long ToEmu(double dip) => (long)Math.Round(dip * EmuPerDip);
 
     private static CanvasResizeRequest MakeResizeRequest(
