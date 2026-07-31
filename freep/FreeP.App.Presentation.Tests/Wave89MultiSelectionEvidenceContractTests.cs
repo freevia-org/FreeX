@@ -44,6 +44,18 @@ public sealed class Wave89MultiSelectionEvidenceContractTests
         probe.Should().Contain("\"rotation\":90.0");
     }
 
+    [Fact]
+    public void Wave89Runner_ForwardsPreparedStartArgumentsAndOptionalSwitches()
+    {
+        var runner = ReadWorkspaceFile("tools", "Run-FreePMultiSelectionX11Validation.ps1");
+
+        runner.Should().Contain("Invoke-External powershell.exe $startArgs");
+        runner.Should().Contain("if ($PublishDir) { $startArgs += @(\"-PublishDir\", $PublishDir) }");
+        runner.Should().Contain("if ($SkipPublish) { $startArgs += \"-SkipPublish\" }");
+        runner.Should().Contain("if ($SkipImageBuild) { $startArgs += \"-SkipImageBuild\" }");
+        runner.Should().Contain("if ($Replace) { $startArgs += \"-Replace\" }");
+    }
+
     private static string ReadWorkspaceFile(params string[] relativeParts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
