@@ -687,6 +687,25 @@ internal static class ShapeHelper
         return p.Slides[slideIndex].Shapes;
     }
 
+    internal static IEnumerable<SlideShape> All(Presentation p, int slideIndex)
+    {
+        if (slideIndex < 0 || slideIndex >= p.Slides.Count)
+            yield break;
+
+        foreach (var shape in All(p.Slides[slideIndex].Shapes))
+            yield return shape;
+    }
+
+    private static IEnumerable<SlideShape> All(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            yield return shape;
+            foreach (var child in All(shape.Children))
+                yield return child;
+        }
+    }
+
     internal static List<SlideShape>? FindContainingList(
         Presentation p,
         int slideIndex,
@@ -977,7 +996,7 @@ public sealed class MoveShapeCommand : IPresentationCommand
         foreach (var cmd in ConnectorRouter.BuildRerouteCommands(p, slideIndex, movedShapeId))
         {
             // Find the connector and capture old bounds + old route before applying.
-            var c = slide.Shapes.FirstOrDefault(sh => sh.Id == cmd.ConnectorId);
+            var c = ShapeHelper.Find(p, slideIndex, cmd.ConnectorId);
             if (c is null) continue;
             long ox = c.OffsetXEmu, oy = c.OffsetYEmu, ocx = c.ExtentCxEmu, ocy = c.ExtentCyEmu;
             var oroute = c.ElbowRoute;
@@ -995,7 +1014,7 @@ public sealed class MoveShapeCommand : IPresentationCommand
         var slide = p.Slides[slideIndex];
         foreach (var (id, ox, oy, ocx, ocy, oroute, _, _, _, _) in captures)
         {
-            var c = slide.Shapes.FirstOrDefault(s => s.Id == id);
+            var c = ShapeHelper.Find(p, slideIndex, id);
             if (c is null) continue;
             c.OffsetXEmu  = ox;
             c.OffsetYEmu  = oy;

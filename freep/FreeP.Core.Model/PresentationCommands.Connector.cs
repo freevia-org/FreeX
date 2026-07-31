@@ -81,7 +81,7 @@ public sealed class UpdateConnectorBoundsCommand : IPresentationCommand
     private SlideShape? FindConnector(Presentation p)
     {
         if (_slideIndex < 0 || _slideIndex >= p.Slides.Count) return null;
-        return p.Slides[_slideIndex].Shapes.FirstOrDefault(s => s.Id == _connectorId);
+        return ShapeHelper.Find(p, _slideIndex, _connectorId);
     }
 
     private static void ApplyBounds(SlideShape c, long x, long y, long cx, long cy,
@@ -305,7 +305,7 @@ internal static class ConnectorRouter
 
         var slide = p.Slides[slideIndex];
 
-        foreach (var shape in slide.Shapes)
+        foreach (var shape in ShapeHelper.All(p, slideIndex))
         {
             if (shape.Kind != SlideShapeKind.Connector) continue;
             if (shape.ConnectionStart is null && shape.ConnectionEnd is null) continue;
@@ -335,8 +335,8 @@ internal static class ConnectorRouter
                 && shape.ConnectionStart is not null
                 && shape.ConnectionEnd is not null)
             {
-                var startShape = slide.Shapes.FirstOrDefault(s => s.Id == shape.ConnectionStart.ShapeId);
-                var endShape   = slide.Shapes.FirstOrDefault(s => s.Id == shape.ConnectionEnd.ShapeId);
+                var startShape = ShapeHelper.Find(p, slideIndex, shape.ConnectionStart.ShapeId);
+                var endShape   = ShapeHelper.Find(p, slideIndex, shape.ConnectionEnd.ShapeId);
                 elbowRoute = ElbowRouter.Route(
                     (sx, sy), (ex, ey),
                     ElbowRouter.RectOf(startShape),
