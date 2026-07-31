@@ -2,6 +2,7 @@ using System.Runtime.ExceptionServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Wpf;
@@ -108,6 +109,55 @@ public sealed class RibbonWpfSplitButtonTests
             RibbonTooltip.GetKeyTip(button).Should().Be("CL");
             button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
             button.ContextMenu!.IsOpen.Should().BeTrue();
+        });
+    }
+
+    [Fact]
+    public void CollapsedGroupPopup_UsesPlacementAndEscapeDismissalContract()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("one", new RecordingCommand());
+            registry.Register("two", new RecordingCommand());
+            var root = RibbonWpfRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group => group
+                        .Button("disabled", "Disabled")
+                        .Button("one", "One")
+                        .Button("two", "Two")))
+                    .Build()
+                    .FindTab("home")!,
+                new Border(),
+                registry);
+            var group = Descendants(root).OfType<RibbonGroupHost>().Single();
+            var window = new Window { Content = root, Width = 420, Height = 130 };
+            window.Show();
+            try
+            {
+                Layout(root, 420, 130);
+                group.Collapsed = true;
+
+                var button = Assert.IsType<Button>(Assert.IsType<Grid>(group.Content).Children[0]);
+                var menu = Assert.IsType<ContextMenu>(button.ContextMenu);
+                var items = menu.Items.OfType<MenuItem>().ToArray();
+
+                menu.PlacementTarget.Should().BeSameAs(button);
+                menu.Placement.Should().Be(PlacementMode.Bottom);
+                menu.StaysOpen.Should().BeFalse();
+                items[0].IsEnabled.Should().BeFalse();
+
+                window.Activate();
+                button.Focus();
+                button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent, button));
+                menu.IsOpen.Should().BeTrue();
+                RaiseKey(menu, Key.Escape, PresentationSource.FromVisual(window));
+                menu.IsOpen.Should().BeFalse();
+            }
+            finally
+            {
+                window.Close();
+            }
         });
     }
 
@@ -262,6 +312,19 @@ public sealed class RibbonWpfSplitButtonTests
         root.Measure(new Size(width, height));
         root.Arrange(new Rect(0, 0, width, height));
         root.UpdateLayout();
+    }
+
+    private static void RaiseKey(UIElement target, Key key, PresentationSource? inputSource = null)
+    {
+        var args = new KeyEventArgs(
+            Keyboard.PrimaryDevice,
+            inputSource ?? PresentationSource.FromVisual(target)!,
+            Environment.TickCount,
+            key)
+        {
+            RoutedEvent = Keyboard.PreviewKeyDownEvent,
+        };
+        target.RaiseEvent(args);
     }
 
     private static Button FindButton(DependencyObject root, string commandName) =>

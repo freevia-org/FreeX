@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Free.Shared.Ribbon.Avalonia;
@@ -194,6 +196,54 @@ public sealed class AvaloniaRibbonSplitButtonTests
     }
 
     [Fact]
+    public async Task CollapsedGroupPopup_FocusesEnabledItemsTraversesAndRestoresAnchorOnEscape()
+    {
+        await Session.Dispatch(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("one", new RecordingCommand(() => { }));
+            registry.Register("two", new RecordingCommand(() => { }));
+            var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group => group
+                        .Button("disabled", "Disabled")
+                        .Button("one", "One")
+                        .Button("two", "Two")))
+                    .Build(),
+                registry);
+            var window = Show(ribbon, 90);
+            try
+            {
+                var collapsed = ribbon.GetLogicalDescendants().OfType<Button>()
+                    .First(button => button.Classes.Contains("freex-ribbon-collapsed-group") &&
+                                     Equals(button.Tag, "collapsed:group"));
+                var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
+                var items = flyout.Items.OfType<MenuItem>().ToArray();
+
+                Assert.Equal(PlacementMode.Bottom, flyout.Placement);
+                Assert.False(items[0].IsEnabled);
+
+                flyout.ShowAt(collapsed);
+                Assert.True(flyout.IsOpen);
+                Assert.True(items[1].IsFocused);
+
+                RaiseKey(items[1], Key.Down);
+                Assert.True(items[2].IsFocused);
+                RaiseKey(items[2], Key.Up);
+                Assert.True(items[1].IsFocused);
+
+                RaiseKey(items[1], Key.Escape);
+                Assert.False(flyout.IsOpen);
+                Assert.True(collapsed.IsFocused);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task CollapsedGroup_OmitsSeparatorsAndRowBreaksFromOverflowMenu()
     {
         await Session.Dispatch(() =>
@@ -255,6 +305,13 @@ public sealed class AvaloniaRibbonSplitButtonTests
         window.Arrange(new Rect(0, 0, width, 160));
         return window;
     }
+
+    private static void RaiseKey(Control target, Key key) =>
+        target.RaiseEvent(new KeyEventArgs
+        {
+            Key = key,
+            RoutedEvent = InputElement.KeyDownEvent,
+        });
 
     private sealed class RecordingCommand(Action action) : IRibbonCommand
     {

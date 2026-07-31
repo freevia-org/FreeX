@@ -3,7 +3,9 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Free.Shared.Ribbon;
 
 namespace Free.Shared.Ribbon.Wpf;
@@ -135,8 +137,7 @@ public sealed class RibbonGroupHost : ContentControl
         if (_collapsedMenuFactory is not null)
         {
             var contextMenu = _collapsedMenuFactory();
-            contextMenu.PlacementTarget = button;
-            contextMenu.Placement = PlacementMode.Bottom;
+            ConfigureCollapsedGroupMenu(contextMenu, button);
             button.ContextMenu = contextMenu;
             button.Click += (_, _) => contextMenu.IsOpen = true;
             return Wrap(button);
@@ -160,6 +161,80 @@ public sealed class RibbonGroupHost : ContentControl
         container.Children.Add(button);
         container.Children.Add(popup);
         return container;
+    }
+
+    private static void ConfigureCollapsedGroupMenu(ContextMenu contextMenu, Button anchor)
+    {
+        var contract = RibbonPopupInteractionContract.CollapsedGroup;
+        contextMenu.PlacementTarget = anchor;
+        contextMenu.Placement = contract.Placement switch
+        {
+            RibbonPopupPlacement.BelowAnchor => PlacementMode.Bottom,
+            _ => PlacementMode.Bottom,
+        };
+        contextMenu.StaysOpen = false;
+        contextMenu.Opened += (_, _) =>
+        {
+            if (!contract.FocusFirstEnabledItemOnOpen)
+                return;
+
+            var items = contextMenu.Items.OfType<MenuItem>().ToArray();
+            var states = items
+                .Select(item => new RibbonPopupFocusItem(item.Focusable, item.IsEnabled))
+                .ToArray();
+            var index = RibbonPopupInteractionPlanner.FindFirstFocusableItem(states);
+            if (index >= 0)
+            {
+                // ContextMenu opens in a separate Popup focus scope. Defer until that scope has been
+                // presented so the first menu item receives real keyboard focus, not just logical focus.
+                contextMenu.Dispatcher.BeginInvoke(
+                    DispatcherPriority.Input,
+                    new Action(() =>
+                    {
+                        if (contextMenu.IsOpen)
+                            Keyboard.Focus(items[index]);
+                    }));
+            }
+        };
+        contextMenu.Closed += (_, _) =>
+        {
+            if (contract.RestoreFocusToAnchorOnClose)
+                anchor.Focus();
+        };
+        contextMenu.AddHandler(
+            Keyboard.PreviewKeyDownEvent,
+            new KeyEventHandler((_, args) =>
+            {
+                if (args.Key == Key.Escape && contract.DismissOnEscape)
+                {
+                    contextMenu.IsOpen = false;
+                    args.Handled = true;
+                    return;
+                }
+
+                if (!contract.TraverseEnabledItems || args.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
+                    return;
+
+                var items = contextMenu.Items.OfType<MenuItem>().ToArray();
+                var currentIndex = Array.FindIndex(items, item => ReferenceEquals(Keyboard.FocusedElement, item));
+                if (currentIndex < 0)
+                    return;
+
+                var states = items
+                    .Select(item => new RibbonPopupFocusItem(item.Focusable, item.IsEnabled))
+                    .ToArray();
+                var targetIndex = args.Key switch
+                {
+                    Key.Home => RibbonPopupInteractionPlanner.FindFirstFocusableItem(states),
+                    Key.End => RibbonPopupInteractionPlanner.FindLastFocusableItem(states),
+                    Key.Up => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, -1),
+                    Key.Down => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, 1),
+                    _ => -1,
+                };
+                if (targetIndex >= 0 && items[targetIndex].Focus())
+                    args.Handled = true;
+            }),
+            handledEventsToo: true);
     }
 
     private static FrameworkElement Wrap(FrameworkElement element)

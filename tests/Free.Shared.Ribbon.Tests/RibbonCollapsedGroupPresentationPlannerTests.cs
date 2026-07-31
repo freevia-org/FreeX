@@ -93,6 +93,25 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
                 CommandName: null));
     }
 
+    [Fact]
+    public void PopupInteractionPlanner_SkipsDisabledAndNonFocusableItemsWithWraparound()
+    {
+        var items = new[]
+        {
+            new RibbonPopupFocusItem(IsFocusable: true, IsEnabled: false),
+            new RibbonPopupFocusItem(IsFocusable: false, IsEnabled: true),
+            new RibbonPopupFocusItem(IsFocusable: true, IsEnabled: true),
+            new RibbonPopupFocusItem(IsFocusable: true, IsEnabled: true),
+        };
+
+        RibbonPopupInteractionContract.CollapsedGroup.Placement.Should().Be(RibbonPopupPlacement.BelowAnchor);
+        RibbonPopupInteractionContract.CollapsedGroup.DismissOnEscape.Should().BeTrue();
+        RibbonPopupInteractionPlanner.FindFirstFocusableItem(items).Should().Be(2);
+        RibbonPopupInteractionPlanner.FindLastFocusableItem(items).Should().Be(3);
+        RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(items, 3, 1).Should().Be(2);
+        RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(items, 2, -1).Should().Be(3);
+    }
+
     private static RibbonGroup CreateGroup(string header, params RibbonControl[] controls) =>
         new(
             header.Replace(" ", "", StringComparison.Ordinal).ToLowerInvariant(),

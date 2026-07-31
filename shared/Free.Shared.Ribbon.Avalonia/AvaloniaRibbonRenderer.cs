@@ -2441,12 +2441,95 @@ public static class AvaloniaRibbonRenderer
                 HorizontalContentAlignment = HorizontalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 Content = stack,
-                Flyout = BuildCollapsedGroupFlyout(_group, _registry, _afterExecute),
                 Tag = $"collapsed:{_group.Id}",
             };
+            var flyout = BuildCollapsedGroupFlyout(_group, _registry, _afterExecute);
+            ConfigureCollapsedGroupFlyout(flyout, button);
+            button.Flyout = flyout;
             SetKeyTip(button, _collapsedKeyTip);
             button.Classes.Add("freex-ribbon-collapsed-group");
             return button;
+        }
+    }
+
+    private static void ConfigureCollapsedGroupFlyout(MenuFlyout flyout, Button anchor)
+    {
+        var contract = RibbonPopupInteractionContract.CollapsedGroup;
+        flyout.Placement = contract.Placement switch
+        {
+            RibbonPopupPlacement.BelowAnchor => PlacementMode.Bottom,
+            _ => PlacementMode.Bottom,
+        };
+        flyout.Opened += (_, _) =>
+        {
+            if (!contract.FocusFirstEnabledItemOnOpen)
+                return;
+
+            var items = flyout.Items.OfType<MenuItem>().ToArray();
+            var states = items
+                .Select(item => new RibbonPopupFocusItem(item.Focusable, item.IsEnabled))
+                .ToArray();
+            var index = RibbonPopupInteractionPlanner.FindFirstFocusableItem(states);
+            if (index >= 0)
+                items[index].Focus(NavigationMethod.Tab);
+        };
+        flyout.Closed += (_, _) =>
+        {
+            if (contract.RestoreFocusToAnchorOnClose)
+                anchor.Focus(NavigationMethod.Tab);
+        };
+
+        foreach (var item in flyout.Items.OfType<MenuItem>())
+        {
+            item.AddHandler(
+                InputElement.KeyDownEvent,
+                (_, args) => HandleCollapsedGroupFlyoutKey(flyout, contract, item, args),
+                RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
+                handledEventsToo: true);
+        }
+    }
+
+    private static void HandleCollapsedGroupFlyoutKey(
+        MenuFlyout flyout,
+        RibbonPopupInteractionContract contract,
+        MenuItem currentItem,
+        KeyEventArgs args)
+    {
+        if (args.Key == Key.Escape && contract.DismissOnEscape)
+        {
+            flyout.Hide();
+            args.Handled = true;
+            return;
+        }
+
+        // Nested submenu items remain under Avalonia's native directional navigation. Only the
+        // top-level collapsed-group scope participates in the shared wraparound policy.
+        if (!ReferenceEquals(args.Source, currentItem))
+            return;
+
+        if (!contract.TraverseEnabledItems || args.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
+            return;
+
+        var items = flyout.Items.OfType<MenuItem>().ToArray();
+        var currentIndex = Array.IndexOf(items, currentItem);
+        if (currentIndex < 0)
+            return;
+
+        var states = items
+            .Select(item => new RibbonPopupFocusItem(item.Focusable, item.IsEnabled))
+            .ToArray();
+        var targetIndex = args.Key switch
+        {
+            Key.Home => RibbonPopupInteractionPlanner.FindFirstFocusableItem(states),
+            Key.End => RibbonPopupInteractionPlanner.FindLastFocusableItem(states),
+            Key.Up => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, -1),
+            Key.Down => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, 1),
+            _ => -1,
+        };
+        if (targetIndex >= 0)
+        {
+            items[targetIndex].Focus(NavigationMethod.Directional);
+            args.Handled = true;
         }
     }
 
