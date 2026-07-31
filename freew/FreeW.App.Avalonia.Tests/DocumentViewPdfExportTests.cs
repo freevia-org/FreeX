@@ -6,6 +6,8 @@ using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia;
 using FreeW.Core.Model;
 using Free.Shared.Pdf;
+using Free.Shared.Pdf.Skia;
+using SkiaSharp;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -130,4 +132,89 @@ public sealed class DocumentViewPdfExportTests
                 }
             }
         }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesLaidOutInlineImageWithSharedCropOpacityRotationAndOrdering() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+
+            var table = Table.Create(1, 1);
+            table.Formatting = TableFormatting.Default with { Borders = true };
+            table.Rows[0].Cells[0] = new TableCell("Surface");
+            document.Blocks.Add(table);
+
+            var image = new InlineImage(SolidPng(SKColors.Red), 180, 72)
+            {
+                CropLeft = 0.10,
+                CropTop = 0.15,
+                CropRight = 0.20,
+                CropBottom = 0.05,
+                TransparencyPct = 25,
+                RotationAngle = 18,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Before"));
+            paragraph.Runs.Add(Run.FromImage(image));
+            paragraph.Runs.Add(new Run("After"));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var ops = pdf.Pages.SelectMany(page => page.Ops).ToList();
+            var imageOp = ops.OfType<PdfImage>().Single();
+            var imageIndex = ops.IndexOf(imageOp);
+
+            imageOp.ContentType.Should().Be("image/png");
+            imageOp.ImageBytes.Should().BeSameAs(image.Bytes);
+            imageOp.SourceCrop.Should().Be(new PdfImageSourceCrop(0.10, 0.15, 0.20, 0.05));
+            imageOp.Opacity.Should().BeApproximately(0.75, 0.001);
+            imageOp.RotationDegrees.Should().BeApproximately(18, 0.001);
+            imageOp.Width.Should().BeApproximately(view.InlineImageRects.Single().Width / (96.0 / 72.0), 0.001);
+            imageIndex.Should().BeGreaterThan(0, "table surfaces must remain before the inline image");
+            ops.Take(imageIndex).Any(op => op is PdfFillRect or PdfStrokeRect or PdfLine)
+                .Should().BeTrue("table surfaces must remain before the inline image");
+            ops.Skip(imageIndex + 1).Any(op => op is PdfText)
+                .Should().BeTrue("the image pass must precede body text");
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_RendersInlineImageThroughSharedSkiaBackend() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var image = new InlineImage(SolidPng(SKColors.Red), 144, 72);
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(image));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pagePng = SkiaPdfWriter.RenderPagesToPng(view.BuildPdfContent()).Single();
+            using var bitmap = SKBitmap.Decode(pagePng);
+            var redPixels = 0;
+            for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red > 200 && pixel.Green < 80 && pixel.Blue < 80)
+                    redPixels++;
+            }
+
+            redPixels.Should().BeGreaterThan(500, "the shared PDF renderer must paint the laid-out inline image");
+        }, CancellationToken.None);
+
+    private static byte[] SolidPng(SKColor color)
+    {
+        using var bitmap = new SKBitmap(16, 8, SKColorType.Bgra8888, SKAlphaType.Premul);
+        bitmap.Erase(color);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
 }

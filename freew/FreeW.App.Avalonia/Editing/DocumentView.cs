@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Free.Shared.Pdf;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using FreeW.App.Presentation.Dialogs;
@@ -127,7 +128,7 @@ public sealed class DocumentView : Control
     // Border: bool = table-level outer border; CellBorderPlan: per-edge override planned from the model.
     private readonly List<(Rect Rect, IBrush? Fill, bool Border, TableCellBorderVisualPlan? CellBorderPlan)> _rects = new();
     private readonly List<(Rect Rect, string? ShadingHex, ParagraphBorder? Border)> _paragraphDecorations = new();
-    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, int ReflectionPreset)> _images = new();
+    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, InlineImage Model, int ReflectionPreset)> _images = new();
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
     // AV-FLSEL: BlockIndex/RunIndex added so hit-test can locate the model object.
@@ -3268,9 +3269,9 @@ public sealed class DocumentView : Control
     /// matches what is on screen; it paginates the single continuous column by the page height from
     /// <see cref="TextDocument.Page"/>.
     /// <para>
-    /// The adapter emits the already-laid-out table cell surfaces before the cell/body glyphs,
-    /// together with the already-paginated headers, footers, footnotes, and endnotes. Images,
-    /// floating objects, and other decorations remain outside this bounded draw-op slice.
+    /// The adapter emits the already-laid-out table cell surfaces before inline images and body
+    /// glyphs, together with the already-paginated headers, footers, footnotes, and endnotes.
+    /// Floating objects and other decorations remain outside this bounded draw-op slice.
     /// </para>
     /// </summary>
     public Free.Shared.Pdf.PdfContentDocument BuildPdfContent()
@@ -3547,6 +3548,7 @@ public sealed class DocumentView : Control
             }
         }
 
+        var tableSurfaceCountsByPage = new List<int>();
         var tablePageCount = Math.Max(_pageCount, pagesOps.Count);
         for (var pageIndex = 0; pageIndex < tablePageCount; pageIndex++)
         {
@@ -3568,6 +3570,55 @@ public sealed class DocumentView : Control
                 // Cell surfaces are below all text, matching the on-screen renderer's pass order.
                 pagesOps[pageIndex].InsertRange(0, tableOpsByPage[pageIndex]);
             }
+
+            while (tableSurfaceCountsByPage.Count <= pageIndex)
+                tableSurfaceCountsByPage.Add(0);
+            tableSurfaceCountsByPage[pageIndex] = tableOpsByPage[pageIndex].Count;
+        }
+
+        // Inline images are already page-owned by LayoutImageParagraphPaged. Reuse those cached
+        // page-space items instead of remeasuring or creating a second paginator. They sit after
+        // table surfaces and before body text, matching Render's table -> image -> text passes.
+        var imageOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+        foreach (var imageItem in _images.OrderBy(item => item.Rect.Y).ThenBy(item => item.Rect.X))
+        {
+            var sourceRect = imageItem.Rect;
+            var pageIndex = PageIndexFromPageSpaceY(sourceRect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+
+            var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
+            var pageBottomDip = pageTopDip + _pageHeightPx;
+            var pageRightDip = _pageLeft + _pageWidth;
+            // Inline layout reserves a complete line box before placing an image. Keep the
+            // operation on that page only; a split would paint into the adjacent page because
+            // PdfImage has source-crop clipping but no arbitrary page-rectangle clip operation.
+            if (sourceRect.Left < _pageLeft - 0.01
+                || sourceRect.Right > pageRightDip + 0.01
+                || sourceRect.Top < pageTopDip - 0.01
+                || sourceRect.Bottom > pageBottomDip + 0.01)
+                continue;
+
+            if (BuildPdfImage(sourceRect, imageItem.Model, imageItem.Image, pageTopDip, pageHeightPt) is not { } imageOp)
+                continue;
+
+            while (imageOpsByPage.Count <= pageIndex)
+                imageOpsByPage.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
+            imageOpsByPage[pageIndex].Add(imageOp);
+        }
+
+        for (var pageIndex = 0; pageIndex < imageOpsByPage.Count; pageIndex++)
+        {
+            if (imageOpsByPage[pageIndex].Count == 0)
+                continue;
+
+            EnsurePage(pageIndex);
+            var insertionIndex = pageIndex < tableSurfaceCountsByPage.Count
+                ? tableSurfaceCountsByPage[pageIndex]
+                : 0;
+            pagesOps[pageIndex].InsertRange(
+                Math.Min(insertionIndex, pagesOps[pageIndex].Count),
+                imageOpsByPage[pageIndex]);
         }
 
         // The live Avalonia layout has already resolved page ownership, field text, wrapping, and
@@ -3629,6 +3680,72 @@ public sealed class DocumentView : Control
 
     private static string FormatKey(RunFormatting fmt) =>
         $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}";
+
+    private PdfImage? BuildPdfImage(
+        Rect sourceRect,
+        InlineImage image,
+        AvaloniaRenderedImage? rendered,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        if (rendered is null || image.Bytes.Length == 0)
+            return null;
+
+        var contentType = image.Format switch
+        {
+            ImageFormat.Png => "image/png",
+            ImageFormat.Jpeg => "image/jpeg",
+            _ => null,
+        };
+
+        byte[] imageBytes;
+        double opacity;
+        if (contentType is not null && !RequiresRasterImageBake(image))
+        {
+            // The shared operation can preserve PNG/JPEG bytes, source crop, source alpha, and
+            // the model transparency as a PDF graphics-state opacity without touching the live
+            // cache or changing the document's media part.
+            imageBytes = image.Bytes;
+            opacity = 1.0 - Math.Clamp(image.TransparencyPct / 100.0, 0.0, 1.0);
+        }
+        else
+        {
+            // Avalonia's cached bitmap is the truthful source for corrections, recolor, artistic
+            // effects, and formats the portable PDF vocabulary cannot embed directly. Encoding it
+            // as PNG retains the already-applied alpha and pixel effects; crop/rotation still use
+            // the shared PdfImage geometry below.
+            using var stream = new MemoryStream();
+            rendered.Bitmap.Save(stream);
+            imageBytes = stream.ToArray();
+            contentType = "image/png";
+            opacity = 1.0;
+        }
+
+        var yPt = pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint);
+        var xPt = (sourceRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+        return new PdfImage(
+            xPt,
+            yPt,
+            sourceRect.Width / PxPerPoint,
+            sourceRect.Height / PxPerPoint,
+            imageBytes,
+            contentType,
+            RotationDegrees: image.RotationAngle,
+            Opacity: opacity,
+            SourceCrop: new PdfImageSourceCrop(
+                image.CropLeft,
+                image.CropTop,
+                image.CropRight,
+                image.CropBottom));
+    }
+
+    private static bool RequiresRasterImageBake(InlineImage image) =>
+        image.BrightnessPct != 0
+        || image.ContrastPct != 0
+        || image.SaturationPct != 100
+        || image.HasRecolor
+        || image.HasArtisticEffect
+        || image.HasEffects;
 
     private static Free.Shared.Pdf.PdfColor ParseColor(string? hex)
     {
@@ -6324,7 +6441,7 @@ public sealed class DocumentView : Control
             var imgPageSpaceY = ContentYToPageSpaceY(imgContentY);
             // AV-COL-NONTXT AG2: shift X to the column band that this image's content-Y falls in.
             var x = ColumnLeftFor(imgContentY) + AlignmentOffset(alignment, textWidth, width);
-            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeRenderedImage(image), image.ReflectionPreset));
+            _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeRenderedImage(image), image, image.ReflectionPreset));
             _layoutContentY = imgContentY + height + ReflectionExtraHeight(image.ReflectionPreset, height) + gap;
         }
     }
@@ -7465,7 +7582,7 @@ public sealed class DocumentView : Control
             DrawFloatingObjectSnapshot(context, snapshot);
 
         // Inline images (non-floating).
-        foreach (var (rect, bitmap, reflectionPreset) in _images)
+        foreach (var (rect, bitmap, _, reflectionPreset) in _images)
             DrawFloatingImage(context, rect, bitmap, reflectionPreset);
 
         // FO4: inline charts, WordArt, SmartArt — rendered in the text flow using the same FO3 helpers.
