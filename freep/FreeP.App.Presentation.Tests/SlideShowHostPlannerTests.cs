@@ -602,6 +602,49 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void HitTestTriggerShape_ResolvesGroupedChildTrigger()
+    {
+        var child = new SlideShape
+        {
+            Id = 84,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = (long)(120 * SlideShowHostPlanner.EmusPerDip),
+            OffsetYEmu = (long)(80 * SlideShowHostPlanner.EmusPerDip),
+            ExtentCxEmu = (long)(160 * SlideShowHostPlanner.EmusPerDip),
+            ExtentCyEmu = (long)(90 * SlideShowHostPlanner.EmusPerDip)
+        };
+        var group = new SlideShape
+        {
+            Id = 83,
+            Kind = SlideShapeKind.Group,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = (long)(400 * SlideShowHostPlanner.EmusPerDip),
+            ExtentCyEmu = (long)(300 * SlideShowHostPlanner.EmusPerDip)
+        };
+        group.Children.Add(child);
+
+        var slide = new Slide();
+        slide.Shapes.Add(group);
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 100,
+            TriggerShapeId = child.Id,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick
+        });
+
+        var intent = SlideShowHostPlanner.PlanPointerClick(
+            slide,
+            new SlideShowPoint(160, 100));
+
+        intent.Kind.Should().Be(SlideShowPointerClickIntentKind.Trigger);
+        intent.TriggerShapeId.Should().Be(child.Id);
+    }
+
+    [Fact]
     public void HitTestHyperlink_ResolvesTheRunUnderThePointer()
     {
         var first = new Hyperlink { Url = "https://first.example.com" };
