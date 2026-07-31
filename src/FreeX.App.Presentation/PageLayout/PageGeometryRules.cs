@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.App.Presentation.PageLayout;
 
 /// <summary>
@@ -57,4 +59,77 @@ public static class PageGeometryRules
     /// <returns>The single uniform scale fraction to apply to both axes.</returns>
     public static double ResolveUniformScale(double widthScale, double heightScale) =>
         Math.Min(widthScale, heightScale);
+
+    /// <summary>
+    /// Returns whether <paramref name="value"/> (a row or column index) falls inside a print-title
+    /// repeat range, e.g. so a caller walking a print range can skip title rows/columns it will already
+    /// account for separately via <see cref="CountRepeatItems"/>.
+    /// </summary>
+    public static bool IsWithinRepeatRange(WorksheetRepeatRange? repeatRange, uint value) =>
+        repeatRange is { } range && value >= range.Start && value <= range.End;
+
+    /// <summary>
+    /// Counts the rows/columns in a repeat (print titles) range, clipped to <paramref name="maxItem"/>,
+    /// that will actually be reprinted on every page. When <paramref name="isHidden"/> is supplied,
+    /// hidden rows/columns within the repeat range are excluded -- they take no print space, so
+    /// including them would overstate the fit-to-N-pages target the same way it would understate the
+    /// free per-page budget (R102-presentation-pagination-fit-to-pages-hidden-exclusion). Extracted to
+    /// this shared home (R102) after the identical rule independently existed in
+    /// <c>PagePaginationPlanner</c> (desktop print path) and <c>SheetPdfPageSetupResolver</c> (PDF
+    /// export path) and had drifted on this exact hidden-item handling.
+    /// </summary>
+    public static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem, Func<uint, bool>? isHidden = null)
+    {
+        if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
+            return 0;
+
+        var end = Math.Min(range.End, maxItem);
+        if (isHidden is null)
+            return end - range.Start + 1;
+
+        uint count = 0;
+        for (var value = range.Start; value <= end; value++)
+        {
+            if (!isHidden(value))
+                count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Counts the rows/columns in [<paramref name="start"/>, <paramref name="end"/>] that are body
+    /// (non-title) items to be paginated by a fit-to-N-pages request. When <paramref name="isHidden"/>
+    /// is supplied, hidden rows/columns are excluded -- matching what the accumulation-break walk /
+    /// print layout planner actually place onto each printed page. See <see cref="CountRepeatItems"/>
+    /// for the sibling rule and its shared-home history (R102).
+    /// </summary>
+    public static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat, Func<uint, bool>? isHidden = null)
+    {
+        if (end < start) return 0;
+
+        if (isHidden is null)
+        {
+            var count = end - start + 1;
+            if (repeat is not { } range || range.End < start || range.Start > end)
+                return count;
+
+            var overlapStart = Math.Max(start, range.Start);
+            var overlapEnd = Math.Min(end, range.End);
+            return overlapEnd >= overlapStart
+                ? count - (overlapEnd - overlapStart + 1)
+                : count;
+        }
+
+        uint visibleCount = 0;
+        for (var value = start; value <= end; value++)
+        {
+            if (IsWithinRepeatRange(repeat, value) || isHidden(value))
+                continue;
+
+            visibleCount++;
+        }
+
+        return visibleCount;
+    }
 }

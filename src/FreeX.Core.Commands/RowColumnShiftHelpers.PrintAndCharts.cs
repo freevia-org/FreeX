@@ -393,6 +393,582 @@ internal static partial class RowColumnShiftHelpers
             }
     }
 
+    // ── Chart per-series formatting/override remap (R102: column insert/delete strictly inside a
+    // chart's plotted range must not mis-attribute per-series formatting to the wrong series) ────
+    // ChartModel.SeriesColumnMappings (shifted above) gives every series a COLUMN-INDEPENDENT
+    // identity (the chart-XML <c:idx>, ChartSeriesColumnMapping.SeriesXmlIndex) whenever it is
+    // populated -- SeriesFormats/PointFillColors/etc. already stay correctly attached in that case
+    // because their SeriesIndex keys never needed to change.
+    // But the common case (every freshly-created FreeX chart, and any Excel-authored chart with no
+    // column gaps) leaves SeriesColumnMappings EMPTY, and both the live renderer
+    // (ChartRenderer.SeriesFormatting.cs's GetSeriesIndex) and the XLSX writer
+    // (XlsxChartXmlWriter.Series.cs's GetChartSeriesStripSequence) then derive a series' index
+    // purely from its ORDINAL POSITION among the columns currently inside DataRange. Inserting or
+    // deleting a column strictly inside that plotted span therefore creates/removes a series slot
+    // in the middle and silently re-numbers every series after it -- exactly the class of bug
+    // RemoveChartSeriesCommand (see its own precise per-list SeriesIndex remap) was hardened
+    // against, but which a plain whole-column Insert/Delete never triggered.
+    // Scoped like RemoveChartSeriesCommand: row-major charts (SeriesInRows) have no column-derived
+    // series position to remap, and Bubble/Scatter's non-1-series-per-column layout is deliberately
+    // out of scope (same exclusion RemoveChartSeriesCommand applies).
+
+    /// <summary>Snapshot of a single chart's SeriesIndex-keyed formatting/override state for undo.</summary>
+    internal sealed class ChartSeriesFormattingSnapshot
+    {
+        public required List<ChartSeriesOrderOverride> SeriesOrderOverrides { get; init; }
+        public required List<ChartPointMarkerFormat> PointMarkerFormats { get; init; }
+        public required List<int> SecondaryAxisSeriesIndexes { get; init; }
+        public required List<int> ComboLineSeriesIndexes { get; init; }
+        public required List<int> ComboScatterSeriesIndexes { get; init; }
+        public required int TrendlineSeriesIndex { get; init; }
+        public required int ErrorBarSeriesIndex { get; init; }
+        public required bool ShowLinearTrendline { get; init; }
+        public required bool ShowErrorBars { get; init; }
+        public required List<ChartSeriesFormat> SeriesFormats { get; init; }
+        public required List<ChartPointFillFormat> PointFillColors { get; init; }
+        public required List<ChartSeriesDataLabelFormat> SeriesDataLabelFormats { get; init; }
+        public required List<ChartPointDataLabelFormat> PointDataLabelFormats { get; init; }
+        public required List<int> SeriesPlotOrder { get; init; }
+        public required List<ChartLegendEntryModel> LegendEntries { get; init; }
+        // R102: both the row-axis remap (ShiftChartSeriesFormattingRowsUp/Down) and the column-axis
+        // remap (ShiftChartSeriesFormattingColumnsUp/Down) touch these -- captured/restored here so
+        // BOTH axes' undo covers the full SeriesIndex-keyed set.
+        public required List<ChartSeriesRawXmlEntry> MultiLevelCategoryXml { get; init; }
+        public required List<ChartPointExplosion> ExplodedSlices { get; init; }
+        public required List<ChartRangeDataLabel> RangeDataLabels { get; init; }
+        public required List<ChartSeriesRangeDataLabels> SeriesRangeDataLabels { get; init; }
+        public required List<ChartSeriesRawXmlEntry> AdditionalSeriesErrorBarsXml { get; init; }
+        public required List<ChartSeriesRawXmlEntry> AdditionalSeriesTrendlinesXml { get; init; }
+    }
+
+    /// <summary>Workbook-wide snapshot of <see cref="ChartSeriesFormattingSnapshot"/>s, keyed by hosting sheet.</summary>
+    internal sealed class ChartSeriesFormattingWorkbookSnapshot
+    {
+        public required SheetId HostSheet { get; init; }
+        public required List<ChartSeriesFormattingSnapshot> Charts { get; init; }
+    }
+
+    internal static List<ChartSeriesFormattingWorkbookSnapshot> CaptureChartSeriesFormatting(Workbook workbook)
+    {
+        var result = new List<ChartSeriesFormattingWorkbookSnapshot>(workbook.Sheets.Count);
+        foreach (var s in workbook.Sheets)
+        {
+            if (s.Charts.Count == 0) continue;
+            result.Add(new ChartSeriesFormattingWorkbookSnapshot
+            {
+                HostSheet = s.Id,
+                Charts = s.Charts.Select(c => new ChartSeriesFormattingSnapshot
+                {
+                    SeriesOrderOverrides       = new List<ChartSeriesOrderOverride>(c.SeriesOrderOverrides),
+                    PointMarkerFormats         = new List<ChartPointMarkerFormat>(c.PointMarkerFormats),
+                    SecondaryAxisSeriesIndexes = new List<int>(c.SecondaryAxisSeriesIndexes),
+                    ComboLineSeriesIndexes     = new List<int>(c.ComboLineSeriesIndexes),
+                    ComboScatterSeriesIndexes  = new List<int>(c.ComboScatterSeriesIndexes),
+                    TrendlineSeriesIndex       = c.TrendlineSeriesIndex,
+                    ErrorBarSeriesIndex        = c.ErrorBarSeriesIndex,
+                    ShowLinearTrendline        = c.ShowLinearTrendline,
+                    ShowErrorBars              = c.ShowErrorBars,
+                    SeriesFormats              = new List<ChartSeriesFormat>(c.SeriesFormats),
+                    PointFillColors            = new List<ChartPointFillFormat>(c.PointFillColors),
+                    SeriesDataLabelFormats     = new List<ChartSeriesDataLabelFormat>(c.SeriesDataLabelFormats),
+                    PointDataLabelFormats      = new List<ChartPointDataLabelFormat>(c.PointDataLabelFormats),
+                    SeriesPlotOrder            = new List<int>(c.SeriesPlotOrder),
+                    LegendEntries              = new List<ChartLegendEntryModel>(c.LegendEntries),
+                    MultiLevelCategoryXml         = new List<ChartSeriesRawXmlEntry>(c.MultiLevelCategoryXml),
+                    ExplodedSlices                = new List<ChartPointExplosion>(c.ExplodedSlices),
+                    RangeDataLabels               = new List<ChartRangeDataLabel>(c.RangeDataLabels),
+                    SeriesRangeDataLabels         = new List<ChartSeriesRangeDataLabels>(c.SeriesRangeDataLabels),
+                    AdditionalSeriesErrorBarsXml  = new List<ChartSeriesRawXmlEntry>(c.AdditionalSeriesErrorBarsXml),
+                    AdditionalSeriesTrendlinesXml = new List<ChartSeriesRawXmlEntry>(c.AdditionalSeriesTrendlinesXml)
+                }).ToList()
+            });
+        }
+        return result;
+    }
+
+    internal static void RestoreChartSeriesFormatting(Workbook workbook, List<ChartSeriesFormattingWorkbookSnapshot>? snapshot)
+    {
+        if (snapshot is null) return;
+        foreach (var entry in snapshot)
+        {
+            var sheet = workbook.GetSheet(entry.HostSheet);
+            if (sheet is null) continue;
+            for (int i = 0; i < sheet.Charts.Count && i < entry.Charts.Count; i++)
+            {
+                var chart = sheet.Charts[i];
+                var snap = entry.Charts[i];
+                chart.SeriesOrderOverrides       = snap.SeriesOrderOverrides;
+                chart.PointMarkerFormats         = snap.PointMarkerFormats;
+                chart.SecondaryAxisSeriesIndexes = snap.SecondaryAxisSeriesIndexes;
+                chart.ComboLineSeriesIndexes     = snap.ComboLineSeriesIndexes;
+                chart.ComboScatterSeriesIndexes  = snap.ComboScatterSeriesIndexes;
+                chart.TrendlineSeriesIndex       = snap.TrendlineSeriesIndex;
+                chart.ErrorBarSeriesIndex        = snap.ErrorBarSeriesIndex;
+                chart.ShowLinearTrendline        = snap.ShowLinearTrendline;
+                chart.ShowErrorBars              = snap.ShowErrorBars;
+                chart.SeriesFormats              = snap.SeriesFormats;
+                chart.PointFillColors            = snap.PointFillColors;
+                chart.SeriesDataLabelFormats     = snap.SeriesDataLabelFormats;
+                chart.PointDataLabelFormats      = snap.PointDataLabelFormats;
+                chart.SeriesPlotOrder            = snap.SeriesPlotOrder;
+                chart.LegendEntries              = snap.LegendEntries;
+                chart.MultiLevelCategoryXml         = snap.MultiLevelCategoryXml;
+                chart.ExplodedSlices                = snap.ExplodedSlices;
+                chart.RangeDataLabels                = snap.RangeDataLabels;
+                chart.SeriesRangeDataLabels          = snap.SeriesRangeDataLabels;
+                chart.AdditionalSeriesErrorBarsXml   = snap.AdditionalSeriesErrorBarsXml;
+                chart.AdditionalSeriesTrendlinesXml  = snap.AdditionalSeriesTrendlinesXml;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Column insert: remaps every SeriesIndex-keyed collection on every chart hosted anywhere in
+    /// the workbook whose plotted DataRange lives on <paramref name="sheetId"/> and whose insertion
+    /// point at <paramref name="start"/> falls STRICTLY INSIDE the chart's plotted data-column span
+    /// (not merely before/after it) -- the case that creates a brand-new series slot in the middle
+    /// of the existing series instead of uniformly shifting the whole plotted block.
+    /// Must be called with each chart's DataRange still at its PRE-insert value (i.e. before
+    /// <see cref="ShiftChartColumnsUp"/> has run for this same edit).
+    /// </summary>
+    internal static void ShiftChartSeriesFormattingColumnsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+                RemapChartSeriesFormattingForColumnInsert(chart, sheetId, start, count);
+    }
+
+    private static void RemapChartSeriesFormattingForColumnInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
+    {
+        if (chart.DataRange.Start.Sheet != sheetId) return;
+        if (chart.SeriesColumnMappings.Count > 0) return; // authoritative mapping already keeps SeriesIndex column-independent
+        if (chart.SeriesInRows || chart.Type is ChartType.Bubble or ChartType.Scatter) return;
+
+        var startCol = chart.DataRange.Start.Col;
+        var endCol = chart.DataRange.End.Col;
+        var dataStartCol = chart.FirstColIsCategories && endCol > startCol ? startCol + 1 : startCol;
+        if (dataStartCol > endCol) return; // no plotted series at all
+
+        if (start <= startCol || start > endCol) return; // lands at/before the whole range or strictly after it -- not interior
+
+        var boundary = (int)(start - dataStartCol);
+        var delta = (int)count;
+
+        chart.SeriesOrderOverrides = chart.SeriesOrderOverrides
+            .Select(o => o.SeriesIndex >= boundary ? o with { SeriesIndex = o.SeriesIndex + delta } : o).ToList();
+        chart.PointMarkerFormats = chart.PointMarkerFormats
+            .Select(f => f.SeriesIndex >= boundary ? f with { SeriesIndex = f.SeriesIndex + delta } : f).ToList();
+        chart.SeriesFormats = chart.SeriesFormats
+            .Select(f => f.SeriesIndex >= boundary ? f with { SeriesIndex = f.SeriesIndex + delta } : f).ToList();
+        chart.PointFillColors = chart.PointFillColors
+            .Select(p => p.SeriesIndex >= boundary ? p with { SeriesIndex = p.SeriesIndex + delta } : p).ToList();
+        chart.SeriesDataLabelFormats = chart.SeriesDataLabelFormats
+            .Select(f => f.SeriesIndex >= boundary ? f with { SeriesIndex = f.SeriesIndex + delta } : f).ToList();
+        chart.PointDataLabelFormats = chart.PointDataLabelFormats
+            .Select(f => f.SeriesIndex >= boundary ? f with { SeriesIndex = f.SeriesIndex + delta } : f).ToList();
+        chart.SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes
+            .Select(i => i >= boundary ? i + delta : i).ToList();
+        chart.ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes
+            .Select(i => i >= boundary ? i + delta : i).ToList();
+        chart.ComboScatterSeriesIndexes = chart.ComboScatterSeriesIndexes
+            .Select(i => i >= boundary ? i + delta : i).ToList();
+        chart.MultiLevelCategoryXml = chart.MultiLevelCategoryXml
+            .Select(x => x.SeriesIndex >= boundary ? x with { SeriesIndex = x.SeriesIndex + delta } : x).ToList();
+        chart.ExplodedSlices = chart.ExplodedSlices
+            .Select(s => s.SeriesIndex >= boundary ? s with { SeriesIndex = s.SeriesIndex + delta } : s).ToList();
+        chart.RangeDataLabels = chart.RangeDataLabels
+            .Select(l => l.SeriesIndex >= boundary ? l with { SeriesIndex = l.SeriesIndex + delta } : l).ToList();
+        chart.SeriesRangeDataLabels = chart.SeriesRangeDataLabels
+            .Select(l => l.SeriesIndex >= boundary ? l with { SeriesIndex = l.SeriesIndex + delta } : l).ToList();
+        chart.AdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml
+            .Select(x => x.SeriesIndex >= boundary ? x with { SeriesIndex = x.SeriesIndex + delta } : x).ToList();
+        chart.AdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml
+            .Select(x => x.SeriesIndex >= boundary ? x with { SeriesIndex = x.SeriesIndex + delta } : x).ToList();
+
+        if (chart.TrendlineSeriesIndex >= boundary)
+            chart.TrendlineSeriesIndex += delta;
+        if (chart.ErrorBarSeriesIndex >= boundary)
+            chart.ErrorBarSeriesIndex += delta;
+
+        if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
+        {
+            for (var i = 0; i < vf.Count; i++)
+            {
+                var entry = vf[i];
+                if (entry.SeriesIndex >= boundary)
+                    vf[i] = entry with { SeriesIndex = entry.SeriesIndex + delta };
+            }
+        }
+
+        if (chart.SeriesPlotOrder.Count == 0)
+        {
+            // Legacy case: declaration order equals idx order, so a LegendEntry's Index IS the
+            // series idx directly (mirrors RemoveChartSeriesCommand.RemapPlotOrderAndLegendEntries).
+            chart.LegendEntries = chart.LegendEntries
+                .Select(e => e.Index >= boundary ? e with { Index = e.Index + delta } : e).ToList();
+        }
+        else
+        {
+            // SeriesPlotOrder is a list of series-index VALUES in declaration order; shift each
+            // value exactly like the scalar indexes above. LegendEntries.Index is a legend-POSITION
+            // (an index into this list), not a series index -- inserting a column only ADDS a new
+            // series slot (which starts with no legend entry of its own); it never changes any
+            // EXISTING series' already-declared position, so LegendEntries itself needs no remap.
+            chart.SeriesPlotOrder = chart.SeriesPlotOrder
+                .Select(i => i >= boundary ? i + delta : i).ToList();
+        }
+    }
+
+    /// <summary>Column delete counterpart of <see cref="ShiftChartSeriesFormattingColumnsUp"/>. Any
+    /// series whose plotted column falls entirely inside the deleted band has its formatting/
+    /// override entries DROPPED (the series itself no longer exists); every surviving series after
+    /// the deleted band has its SeriesIndex shifted down. Must be called with each chart's DataRange
+    /// still at its PRE-delete value (i.e. before <see cref="ShiftChartColumnsDown"/> has run).</summary>
+    internal static void ShiftChartSeriesFormattingColumnsDown(Workbook workbook, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+                RemapChartSeriesFormattingForColumnDelete(chart, sheetId, start, count);
+    }
+
+    private static void RemapChartSeriesFormattingForColumnDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
+    {
+        if (chart.DataRange.Start.Sheet != sheetId) return;
+        if (chart.SeriesColumnMappings.Count > 0) return;
+        if (chart.SeriesInRows || chart.Type is ChartType.Bubble or ChartType.Scatter) return;
+
+        var startCol = chart.DataRange.Start.Col;
+        var endCol = chart.DataRange.End.Col;
+        var dataStartCol = chart.FirstColIsCategories && endCol > startCol ? startCol + 1 : startCol;
+        if (dataStartCol > endCol) return;
+
+        var deleteStart = start;
+        var deleteEnd = start + count - 1;
+        var overlapStart = Math.Max(deleteStart, dataStartCol);
+        var overlapEnd = Math.Min(deleteEnd, endCol);
+        if (overlapStart > overlapEnd) return; // deletion never touches a plotted series column
+
+        var posLo = (int)(overlapStart - dataStartCol);
+        var posHi = (int)(overlapEnd - dataStartCol);
+        var removedCount = posHi - posLo + 1;
+
+        chart.SeriesOrderOverrides = RemapForColumnDelete(chart.SeriesOrderOverrides, o => o.SeriesIndex, (o, v) => o with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.PointMarkerFormats = RemapForColumnDelete(chart.PointMarkerFormats, f => f.SeriesIndex, (f, v) => f with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SeriesFormats = RemapForColumnDelete(chart.SeriesFormats, f => f.SeriesIndex, (f, v) => f with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.PointFillColors = RemapForColumnDelete(chart.PointFillColors, p => p.SeriesIndex, (p, v) => p with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SeriesDataLabelFormats = RemapForColumnDelete(chart.SeriesDataLabelFormats, f => f.SeriesIndex, (f, v) => f with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.PointDataLabelFormats = RemapForColumnDelete(chart.PointDataLabelFormats, f => f.SeriesIndex, (f, v) => f with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SecondaryAxisSeriesIndexes = RemapIndexListForColumnDelete(chart.SecondaryAxisSeriesIndexes, posLo, posHi, removedCount);
+        chart.ComboLineSeriesIndexes = RemapIndexListForColumnDelete(chart.ComboLineSeriesIndexes, posLo, posHi, removedCount);
+        chart.ComboScatterSeriesIndexes = RemapIndexListForColumnDelete(chart.ComboScatterSeriesIndexes, posLo, posHi, removedCount);
+        chart.MultiLevelCategoryXml = RemapForColumnDelete(chart.MultiLevelCategoryXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.ExplodedSlices = RemapForColumnDelete(chart.ExplodedSlices, s => s.SeriesIndex, (s, v) => s with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.RangeDataLabels = RemapForColumnDelete(chart.RangeDataLabels, l => l.SeriesIndex, (l, v) => l with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SeriesRangeDataLabels = RemapForColumnDelete(chart.SeriesRangeDataLabels, l => l.SeriesIndex, (l, v) => l with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.AdditionalSeriesErrorBarsXml = RemapForColumnDelete(chart.AdditionalSeriesErrorBarsXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.AdditionalSeriesTrendlinesXml = RemapForColumnDelete(chart.AdditionalSeriesTrendlinesXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
+
+        if (chart.TrendlineSeriesIndex >= posLo && chart.TrendlineSeriesIndex <= posHi)
+            chart.ShowLinearTrendline = false;
+        else if (chart.TrendlineSeriesIndex > posHi)
+            chart.TrendlineSeriesIndex -= removedCount;
+
+        if (chart.ErrorBarSeriesIndex >= posLo && chart.ErrorBarSeriesIndex <= posHi)
+            chart.ShowErrorBars = false;
+        else if (chart.ErrorBarSeriesIndex > posHi)
+            chart.ErrorBarSeriesIndex -= removedCount;
+
+        if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
+        {
+            chart.VerbatimSeriesFormulas = vf
+                .Where(v => v.SeriesIndex < posLo || v.SeriesIndex > posHi)
+                .Select(v => v.SeriesIndex > posHi ? v with { SeriesIndex = v.SeriesIndex - removedCount } : v)
+                .ToList();
+        }
+
+        if (chart.SeriesPlotOrder.Count == 0)
+        {
+            chart.LegendEntries = RemapForColumnDelete(chart.LegendEntries, e => e.Index, (e, v) => e with { Index = v }, posLo, posHi, removedCount);
+        }
+        else
+        {
+            // Removed series' declared positions must be dropped from SeriesPlotOrder too, and
+            // every legend-POSITION reference in LegendEntries needs to track wherever its
+            // series' declaration position ended up (or be dropped if that position itself was
+            // removed) -- mirrors RemoveChartSeriesCommand.RemapPlotOrderAndLegendEntries,
+            // generalized from "one removed series" to "a contiguous removed span".
+            var oldPlotOrder = chart.SeriesPlotOrder;
+            var removedPositions = new HashSet<int>();
+            var positionRemap = new Dictionary<int, int>(oldPlotOrder.Count);
+            var newPlotOrder = new List<int>(oldPlotOrder.Count);
+            for (var oldPos = 0; oldPos < oldPlotOrder.Count; oldPos++)
+            {
+                var seriesIdx = oldPlotOrder[oldPos];
+                if (seriesIdx >= posLo && seriesIdx <= posHi)
+                {
+                    removedPositions.Add(oldPos);
+                    continue;
+                }
+                var newSeriesIdx = seriesIdx > posHi ? seriesIdx - removedCount : seriesIdx;
+                positionRemap[oldPos] = newPlotOrder.Count;
+                newPlotOrder.Add(newSeriesIdx);
+            }
+            chart.SeriesPlotOrder = newPlotOrder;
+            chart.LegendEntries = chart.LegendEntries
+                .Where(e => !removedPositions.Contains(e.Index))
+                .Select(e => positionRemap.TryGetValue(e.Index, out var newPos) ? e with { Index = newPos } : e)
+                .ToList();
+        }
+    }
+
+    private static List<T> RemapForColumnDelete<T>(
+        List<T> items, Func<T, int> getIndex, Func<T, int, T> withIndex, int posLo, int posHi, int removedCount)
+    {
+        var result = new List<T>(items.Count);
+        foreach (var item in items)
+        {
+            var idx = getIndex(item);
+            if (idx >= posLo && idx <= posHi)
+                continue; // this series was removed
+            result.Add(idx > posHi ? withIndex(item, idx - removedCount) : item);
+        }
+        return result;
+    }
+
+    private static List<int> RemapIndexListForColumnDelete(List<int> indexes, int posLo, int posHi, int removedCount) =>
+        indexes
+            .Where(i => i < posLo || i > posHi)
+            .Select(i => i > posHi ? i - removedCount : i)
+            .ToList();
+
+    /// <summary>
+    /// Row insert: the ROW-axis twin of <see cref="ShiftChartSeriesFormattingColumnsUp"/>, for a
+    /// Excel "Switch Row/Column" chart (<see cref="ChartModel.SeriesInRows"/> == true), whose ROWS
+    /// -- not columns -- are the plotted series. Remaps every SeriesIndex-keyed collection on every
+    /// chart hosted anywhere in the workbook whose plotted DataRange lives on <paramref name="sheetId"/>
+    /// and whose insertion point at <paramref name="start"/> falls STRICTLY INSIDE the chart's
+    /// plotted data-row span. Must be called with each chart's DataRange still at its PRE-insert
+    /// value (i.e. before <see cref="ShiftChartRowsUp"/> has run for this same edit).
+    /// <para>
+    /// This enumerates the FULL set of SeriesIndex-keyed members on <see cref="ChartModel"/> --
+    /// including <see cref="ChartModel.MultiLevelCategoryXml"/>, <see cref="ChartModel.ExplodedSlices"/>,
+    /// <see cref="ChartModel.RangeDataLabels"/>, <see cref="ChartModel.SeriesRangeDataLabels"/>,
+    /// <see cref="ChartModel.AdditionalSeriesErrorBarsXml"/> and
+    /// <see cref="ChartModel.AdditionalSeriesTrendlinesXml"/>, which <see cref="RemoveChartSeriesCommand"/>
+    /// already treats as SeriesIndex-keyed (see its per-series remap). The sibling column-insert/
+    /// delete remap (<see cref="RemapChartSeriesFormattingForColumnInsert"/> /
+    /// <see cref="RemapChartSeriesFormattingForColumnDelete"/>) now covers this same full set too
+    /// (R102 follow-up) -- both axes are kept in lockstep against RemoveChartSeriesCommand's
+    /// authoritative enumeration rather than against each other. <see cref="ChartModel.SeriesColumnMappings"/> is
+    /// column-based and documented as ignored while <see cref="ChartModel.SeriesInRows"/> is set, so
+    /// it needs no guard or remap here. <see cref="ChartModel.EmbeddedSeriesData"/> is deliberately
+    /// left untouched (see the comment above <see cref="ShiftChartColumnsUp"/>'s verbatim-formula
+    /// section) -- it is opaque cached numCache/strCache data with no reference string, and every
+    /// other command in this codebase (including RemoveChartSeriesCommand) leaves it alone too.
+    /// <see cref="ChartModel.AdditionalPlotGroupDataLabels"/> is keyed by plot-GROUP index (a combo
+    /// chart's declared type sub-groups), not by series identity, so a series-count change does not
+    /// predictably move it either -- left untouched, matching the column-axis precedent.
+    /// </para>
+    /// </summary>
+    internal static void ShiftChartSeriesFormattingRowsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+                RemapChartSeriesFormattingForRowInsert(chart, sheetId, start, count);
+    }
+
+    private static void RemapChartSeriesFormattingForRowInsert(ChartModel chart, SheetId sheetId, uint start, uint count)
+    {
+        if (chart.DataRange.Start.Sheet != sheetId) return;
+        if (!chart.SeriesInRows) return; // rows are only the series axis for a Switch-Row/Column chart
+        if (chart.Type is ChartType.Bubble or ChartType.Scatter) return;
+
+        var startRow = chart.DataRange.Start.Row;
+        var endRow = chart.DataRange.End.Row;
+        // ChartModel.SeriesInRows's doc comment: with the flag set, series names come from the
+        // first COLUMN and category labels from the first ROW -- i.e. FirstColIsCategories (not
+        // FirstRowIsHeader) is the flag that ends up gating the first ROW once ChartRenderer.
+        // BuildPlotModel transposes the cell lookup (TransposeChartCellLookup keeps the DataRange
+        // corner anchored, so FirstColIsCategories's post-transpose column-skip lands on the
+        // original ROW axis). This mirrors the column function's dataStartCol computation exactly,
+        // just off the orthogonal axis and flag.
+        var dataStartRow = chart.FirstColIsCategories && endRow > startRow ? startRow + 1 : startRow;
+        if (dataStartRow > endRow) return; // no plotted series at all
+
+        if (start <= startRow || start > endRow) return; // lands at/before the whole range or strictly after it -- not interior
+
+        var boundary = (int)(start - dataStartRow);
+        var delta = (int)count;
+
+        chart.SeriesOrderOverrides = chart.SeriesOrderOverrides
+            .Select(o => o.SeriesIndex >= boundary ? o with { SeriesIndex = o.SeriesIndex + delta } : o).ToList();
+        chart.PointMarkerFormats = chart.PointMarkerFormats
+            .Select(f => f.SeriesIndex >= boundary ? f with { SeriesIndex = f.SeriesIndex + delta } : f).ToList();
+        chart.SeriesFormats = chart.SeriesFormats
+            .Select(f => f.SeriesIndex >= boundary ? f with { SeriesIndex = f.SeriesIndex + delta } : f).ToList();
+        chart.PointFillColors = chart.PointFillColors
+            .Select(p => p.SeriesIndex >= boundary ? p with { SeriesIndex = p.SeriesIndex + delta } : p).ToList();
+        chart.SeriesDataLabelFormats = chart.SeriesDataLabelFormats
+            .Select(f => f.SeriesIndex >= boundary ? f with { SeriesIndex = f.SeriesIndex + delta } : f).ToList();
+        chart.PointDataLabelFormats = chart.PointDataLabelFormats
+            .Select(f => f.SeriesIndex >= boundary ? f with { SeriesIndex = f.SeriesIndex + delta } : f).ToList();
+        chart.SecondaryAxisSeriesIndexes = chart.SecondaryAxisSeriesIndexes
+            .Select(i => i >= boundary ? i + delta : i).ToList();
+        chart.ComboLineSeriesIndexes = chart.ComboLineSeriesIndexes
+            .Select(i => i >= boundary ? i + delta : i).ToList();
+        chart.ComboScatterSeriesIndexes = chart.ComboScatterSeriesIndexes
+            .Select(i => i >= boundary ? i + delta : i).ToList();
+        chart.MultiLevelCategoryXml = chart.MultiLevelCategoryXml
+            .Select(x => x.SeriesIndex >= boundary ? x with { SeriesIndex = x.SeriesIndex + delta } : x).ToList();
+        chart.ExplodedSlices = chart.ExplodedSlices
+            .Select(s => s.SeriesIndex >= boundary ? s with { SeriesIndex = s.SeriesIndex + delta } : s).ToList();
+        chart.RangeDataLabels = chart.RangeDataLabels
+            .Select(l => l.SeriesIndex >= boundary ? l with { SeriesIndex = l.SeriesIndex + delta } : l).ToList();
+        chart.SeriesRangeDataLabels = chart.SeriesRangeDataLabels
+            .Select(l => l.SeriesIndex >= boundary ? l with { SeriesIndex = l.SeriesIndex + delta } : l).ToList();
+        chart.AdditionalSeriesErrorBarsXml = chart.AdditionalSeriesErrorBarsXml
+            .Select(x => x.SeriesIndex >= boundary ? x with { SeriesIndex = x.SeriesIndex + delta } : x).ToList();
+        chart.AdditionalSeriesTrendlinesXml = chart.AdditionalSeriesTrendlinesXml
+            .Select(x => x.SeriesIndex >= boundary ? x with { SeriesIndex = x.SeriesIndex + delta } : x).ToList();
+
+        if (chart.TrendlineSeriesIndex >= boundary)
+            chart.TrendlineSeriesIndex += delta;
+        if (chart.ErrorBarSeriesIndex >= boundary)
+            chart.ErrorBarSeriesIndex += delta;
+
+        if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
+        {
+            for (var i = 0; i < vf.Count; i++)
+            {
+                var entry = vf[i];
+                if (entry.SeriesIndex >= boundary)
+                    vf[i] = entry with { SeriesIndex = entry.SeriesIndex + delta };
+            }
+        }
+
+        if (chart.SeriesPlotOrder.Count == 0)
+        {
+            // Legacy case: declaration order equals idx order, so a LegendEntry's Index IS the
+            // series idx directly (mirrors RemoveChartSeriesCommand.RemapPlotOrderAndLegendEntries).
+            chart.LegendEntries = chart.LegendEntries
+                .Select(e => e.Index >= boundary ? e with { Index = e.Index + delta } : e).ToList();
+        }
+        else
+        {
+            // SeriesPlotOrder is a list of series-index VALUES in declaration order; shift each
+            // value exactly like the scalar indexes above. LegendEntries.Index is a legend-POSITION
+            // (an index into this list), not a series index -- inserting a row only ADDS a new
+            // series slot (which starts with no legend entry of its own); it never changes any
+            // EXISTING series' already-declared position, so LegendEntries itself needs no remap.
+            chart.SeriesPlotOrder = chart.SeriesPlotOrder
+                .Select(i => i >= boundary ? i + delta : i).ToList();
+        }
+    }
+
+    /// <summary>Row delete counterpart of <see cref="ShiftChartSeriesFormattingRowsUp"/>. Any series
+    /// whose plotted row falls entirely inside the deleted band has its formatting/override entries
+    /// DROPPED (the series itself no longer exists); every surviving series after the deleted band
+    /// has its SeriesIndex shifted down. Must be called with each chart's DataRange still at its
+    /// PRE-delete value (i.e. before <see cref="ShiftChartRowsDown"/> has run). See
+    /// <see cref="ShiftChartSeriesFormattingRowsUp"/> for the full enumerated set of SeriesIndex-keyed
+    /// collections this covers (including the ones the sibling column-delete remap does not yet).</summary>
+    internal static void ShiftChartSeriesFormattingRowsDown(Workbook workbook, SheetId sheetId, uint start, uint count)
+    {
+        foreach (var s in workbook.Sheets)
+            foreach (var chart in s.Charts)
+                RemapChartSeriesFormattingForRowDelete(chart, sheetId, start, count);
+    }
+
+    private static void RemapChartSeriesFormattingForRowDelete(ChartModel chart, SheetId sheetId, uint start, uint count)
+    {
+        if (chart.DataRange.Start.Sheet != sheetId) return;
+        if (!chart.SeriesInRows) return;
+        if (chart.Type is ChartType.Bubble or ChartType.Scatter) return;
+
+        var startRow = chart.DataRange.Start.Row;
+        var endRow = chart.DataRange.End.Row;
+        var dataStartRow = chart.FirstColIsCategories && endRow > startRow ? startRow + 1 : startRow;
+        if (dataStartRow > endRow) return;
+
+        var deleteStart = start;
+        var deleteEnd = start + count - 1;
+        var overlapStart = Math.Max(deleteStart, dataStartRow);
+        var overlapEnd = Math.Min(deleteEnd, endRow);
+        if (overlapStart > overlapEnd) return; // deletion never touches a plotted series row
+
+        var posLo = (int)(overlapStart - dataStartRow);
+        var posHi = (int)(overlapEnd - dataStartRow);
+        var removedCount = posHi - posLo + 1;
+
+        chart.SeriesOrderOverrides = RemapForColumnDelete(chart.SeriesOrderOverrides, o => o.SeriesIndex, (o, v) => o with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.PointMarkerFormats = RemapForColumnDelete(chart.PointMarkerFormats, f => f.SeriesIndex, (f, v) => f with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SeriesFormats = RemapForColumnDelete(chart.SeriesFormats, f => f.SeriesIndex, (f, v) => f with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.PointFillColors = RemapForColumnDelete(chart.PointFillColors, p => p.SeriesIndex, (p, v) => p with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SeriesDataLabelFormats = RemapForColumnDelete(chart.SeriesDataLabelFormats, f => f.SeriesIndex, (f, v) => f with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.PointDataLabelFormats = RemapForColumnDelete(chart.PointDataLabelFormats, f => f.SeriesIndex, (f, v) => f with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SecondaryAxisSeriesIndexes = RemapIndexListForColumnDelete(chart.SecondaryAxisSeriesIndexes, posLo, posHi, removedCount);
+        chart.ComboLineSeriesIndexes = RemapIndexListForColumnDelete(chart.ComboLineSeriesIndexes, posLo, posHi, removedCount);
+        chart.ComboScatterSeriesIndexes = RemapIndexListForColumnDelete(chart.ComboScatterSeriesIndexes, posLo, posHi, removedCount);
+        chart.MultiLevelCategoryXml = RemapForColumnDelete(chart.MultiLevelCategoryXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.ExplodedSlices = RemapForColumnDelete(chart.ExplodedSlices, s => s.SeriesIndex, (s, v) => s with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.RangeDataLabels = RemapForColumnDelete(chart.RangeDataLabels, l => l.SeriesIndex, (l, v) => l with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.SeriesRangeDataLabels = RemapForColumnDelete(chart.SeriesRangeDataLabels, l => l.SeriesIndex, (l, v) => l with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.AdditionalSeriesErrorBarsXml = RemapForColumnDelete(chart.AdditionalSeriesErrorBarsXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
+        chart.AdditionalSeriesTrendlinesXml = RemapForColumnDelete(chart.AdditionalSeriesTrendlinesXml, x => x.SeriesIndex, (x, v) => x with { SeriesIndex = v }, posLo, posHi, removedCount);
+
+        if (chart.TrendlineSeriesIndex >= posLo && chart.TrendlineSeriesIndex <= posHi)
+            chart.ShowLinearTrendline = false;
+        else if (chart.TrendlineSeriesIndex > posHi)
+            chart.TrendlineSeriesIndex -= removedCount;
+
+        if (chart.ErrorBarSeriesIndex >= posLo && chart.ErrorBarSeriesIndex <= posHi)
+            chart.ShowErrorBars = false;
+        else if (chart.ErrorBarSeriesIndex > posHi)
+            chart.ErrorBarSeriesIndex -= removedCount;
+
+        if (chart.VerbatimSeriesFormulas is { Count: > 0 } vf)
+        {
+            chart.VerbatimSeriesFormulas = vf
+                .Where(v => v.SeriesIndex < posLo || v.SeriesIndex > posHi)
+                .Select(v => v.SeriesIndex > posHi ? v with { SeriesIndex = v.SeriesIndex - removedCount } : v)
+                .ToList();
+        }
+
+        if (chart.SeriesPlotOrder.Count == 0)
+        {
+            chart.LegendEntries = RemapForColumnDelete(chart.LegendEntries, e => e.Index, (e, v) => e with { Index = v }, posLo, posHi, removedCount);
+        }
+        else
+        {
+            // Removed series' declared positions must be dropped from SeriesPlotOrder too, and
+            // every legend-POSITION reference in LegendEntries needs to track wherever its
+            // series' declaration position ended up (or be dropped if that position itself was
+            // removed) -- mirrors RemoveChartSeriesCommand.RemapPlotOrderAndLegendEntries,
+            // generalized from "one removed series" to "a contiguous removed span".
+            var oldPlotOrder = chart.SeriesPlotOrder;
+            var removedPositions = new HashSet<int>();
+            var positionRemap = new Dictionary<int, int>(oldPlotOrder.Count);
+            var newPlotOrder = new List<int>(oldPlotOrder.Count);
+            for (var oldPos = 0; oldPos < oldPlotOrder.Count; oldPos++)
+            {
+                var seriesIdx = oldPlotOrder[oldPos];
+                if (seriesIdx >= posLo && seriesIdx <= posHi)
+                {
+                    removedPositions.Add(oldPos);
+                    continue;
+                }
+                var newSeriesIdx = seriesIdx > posHi ? seriesIdx - removedCount : seriesIdx;
+                positionRemap[oldPos] = newPlotOrder.Count;
+                newPlotOrder.Add(newSeriesIdx);
+            }
+            chart.SeriesPlotOrder = newPlotOrder;
+            chart.LegendEntries = chart.LegendEntries
+                .Where(e => !removedPositions.Contains(e.Index))
+                .Select(e => positionRemap.TryGetValue(e.Index, out var newPos) ? e with { Index = newPos } : e)
+                .ToList();
+        }
+    }
+
     // ── Verbatim series formula / data-label formula shifting ─────────────────
     // VerbatimSeriesFormulas holds multi-area or non-rectangular series formula
     // strings that cannot be expressed as a single GridRange. They must also be

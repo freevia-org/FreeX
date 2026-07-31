@@ -214,7 +214,9 @@ public static class PagePaginationPlanner
         IReadOnlyDictionary<uint, double> columnWidths,
         double defaultColumnWidth,
         double headerMarginInches,
-        double footerMarginInches)
+        double footerMarginInches,
+        Func<uint, bool>? isRowHidden = null,
+        Func<uint, bool>? isColumnHidden = null)
     {
         var pageSize = WorksheetPageLayout.GetPageSizeInches(paperSize, orientation);
 
@@ -264,7 +266,8 @@ public static class PagePaginationPlanner
                 printTitleColumns,
                 CellAddress.MaxCol,
                 scalePercent: null,
-                scaleToFit.FitToPagesWide);
+                scaleToFit.FitToPagesWide,
+                isColumnHidden);
             var uniformScale = ComputeScaleFraction(baseColumnsPerPage, columnsPerPage);
             rowsPerPage = ApplyUniformScaleToFreeAxis(rowsPerPage, uniformScale);
         }
@@ -277,7 +280,8 @@ public static class PagePaginationPlanner
                 printTitleRows,
                 CellAddress.MaxRow,
                 scalePercent: null,
-                scaleToFit.FitToPagesTall);
+                scaleToFit.FitToPagesTall,
+                isRowHidden);
             var uniformScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPage);
             columnsPerPage = ApplyUniformScaleToFreeAxis(columnsPerPage, uniformScale);
         }
@@ -297,7 +301,8 @@ public static class PagePaginationPlanner
                 printTitleColumns,
                 CellAddress.MaxCol,
                 scalePercent: null,
-                scaleToFit.FitToPagesWide);
+                scaleToFit.FitToPagesWide,
+                isColumnHidden);
             var rowsPerPageIfTallOnly = ApplyScaleToFitCapacity(
                 baseRowsPerPage,
                 printRange.Start.Row,
@@ -305,7 +310,8 @@ public static class PagePaginationPlanner
                 printTitleRows,
                 CellAddress.MaxRow,
                 scalePercent: null,
-                scaleToFit.FitToPagesTall);
+                scaleToFit.FitToPagesTall,
+                isRowHidden);
 
             var widthScale = ComputeScaleFraction(baseColumnsPerPage, columnsPerPageIfWideOnly);
             var heightScale = ComputeScaleFraction(baseRowsPerPage, rowsPerPageIfTallOnly);
@@ -325,7 +331,8 @@ public static class PagePaginationPlanner
                 printTitleRows,
                 CellAddress.MaxRow,
                 scaleToFit.ScalePercent,
-                scaleToFit.FitToPagesTall);
+                scaleToFit.FitToPagesTall,
+                isRowHidden);
             columnsPerPage = ApplyScaleToFitCapacity(
                 columnsPerPage,
                 printRange.Start.Col,
@@ -333,7 +340,8 @@ public static class PagePaginationPlanner
                 printTitleColumns,
                 CellAddress.MaxCol,
                 scaleToFit.ScalePercent,
-                scaleToFit.FitToPagesWide);
+                scaleToFit.FitToPagesWide,
+                isColumnHidden);
         }
 
         return new PageCapacityDetail(
@@ -440,7 +448,9 @@ public static class PagePaginationPlanner
             columnWidths,
             defaultColumnWidth,
             headerMarginInches,
-            footerMarginInches);
+            footerMarginInches,
+            isRowHidden,
+            isColumnHidden);
         var capacity = detail.Capacity;
 
         // R18-print-pagination-exact-3: slice pages by the real ACCUMULATED row height / column
@@ -641,7 +651,8 @@ public static class PagePaginationPlanner
         WorksheetRepeatRange? repeat,
         uint maxItem,
         int? scalePercent,
-        int? fitToPages)
+        int? fitToPages,
+        Func<uint, bool>? isHidden = null)
     {
         if (scalePercent is { } percent and >= MinScalePercent and <= MaxScalePercent)
             return Math.Max(1, (uint)Math.Floor(baseItemsPerPage * (100d / percent)));
@@ -649,37 +660,102 @@ public static class PagePaginationPlanner
         if (fitToPages is not { } pageCount || pageCount < 1)
             return baseItemsPerPage;
 
-        var titleCount = CountRepeatItems(repeat, maxItem);
-        var bodyCount = CountBodyItems(start, end, repeat);
+        // R102-presentation-pagination-fit-to-pages-hidden-exclusion: the fit-to-N-pages target
+        // count must be resolved over VISIBLE rows/columns only, matching what
+        // ComputeAccumulationBreakPoints/PrintLayoutPlanner actually pack onto each page (both skip
+        // hidden rows/columns via this same isHidden predicate). Counting every row/column in
+        // [start,end] -- including hidden ones -- inflates bodyCount, which inflates the resolved
+        // bodyItemsPerPage/rowsPerPage target, which in turn produces a tiny uniformScale and a
+        // hugely inflated per-page body budget (BuildPlan's rowBodyBudget/columnBodyBudget). That
+        // inflated budget then lets the accumulation-break walk pack far more real (visible-only)
+        // content onto a single page than Excel would, collapsing the pagination onto too few
+        // pages. Real Excel excludes hidden rows/columns entirely from this resolution.
+        var titleCount = CountRepeatItems(repeat, maxItem, isHidden);
+        var bodyCount = CountBodyItems(start, end, repeat, isHidden);
         if (bodyCount == 0)
-            return Math.Max(1, titleCount);
+        {
+            // R102-presentation-pagination-titles-cover-axis: when the print title range on this
+            // axis fully covers the print range (no body items left to paginate), there is nothing
+            // for the fit-to-N-pages request to shrink on this axis, so leave the natural,
+            // avg-width/height-derived capacity untouched -- exactly SheetPdfPageSetupResolver's
+            // `if (bodyCols > 0)` no-op guard (SheetPdfPageSetupResolver.cs) for the identical case.
+            // Previously this returned Math.Max(1, titleCount), an arithmetic coincidence with no
+            // relation to baseItemsPerPage; the caller then diffed that titleCount against
+            // baseItemsPerPage via ComputeScaleFraction to derive a uniform scale and applied it to
+            // the OTHER, unrelated free axis (ApplyUniformScaleToFreeAxis), spuriously
+            // shrinking/growing that axis's page capacity for no real fit-to-page reason.
+            // Returning baseItemsPerPage unchanged here makes that derived scale exactly 1.0, so the
+            // free axis is left alone too, matching the PDF-export tier's behavior.
+            return baseItemsPerPage;
+        }
 
         var bodyItemsPerPage = (uint)Math.Ceiling(bodyCount / (double)pageCount);
         return Math.Max(1, bodyItemsPerPage + titleCount);
     }
 
-    private static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem)
+    /// <summary>
+    /// Counts the rows/columns in the print-title repeat range (clipped to <paramref name="maxItem"/>)
+    /// that will actually be reprinted on every page. When <paramref name="isHidden"/> is supplied,
+    /// hidden rows/columns within the repeat range are excluded -- they take no print space, so
+    /// including them here would overstate the fit-to-N-pages target the same way it would understate
+    /// the free per-page budget (R102-presentation-pagination-fit-to-pages-hidden-exclusion).
+    /// </summary>
+    private static uint CountRepeatItems(WorksheetRepeatRange? repeat, uint maxItem, Func<uint, bool>? isHidden = null)
     {
         if (repeat is not { } range || range.Start == 0 || range.Start > maxItem || range.End < range.Start)
             return 0;
 
-        return Math.Min(range.End, maxItem) - range.Start + 1;
+        var end = Math.Min(range.End, maxItem);
+        if (isHidden is null)
+            return end - range.Start + 1;
+
+        uint count = 0;
+        for (var value = range.Start; value <= end; value++)
+        {
+            if (!isHidden(value))
+                count++;
+        }
+
+        return count;
     }
 
-    private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat)
+    /// <summary>
+    /// Counts the rows/columns in [<paramref name="start"/>, <paramref name="end"/>] that are body
+    /// (non-title) items to be paginated by the fit-to-N-pages request. When <paramref name="isHidden"/>
+    /// is supplied, hidden rows/columns are excluded -- matching what
+    /// <see cref="ComputeAccumulationBreakPoints"/>/<see cref="PrintLayoutPlanner"/> actually place onto
+    /// each printed page (R102-presentation-pagination-fit-to-pages-hidden-exclusion). Counting hidden
+    /// rows/columns here would resolve the fit-to-pages target against the raw range span rather than
+    /// the real printed content, over-inflating the per-page budget derived from it.
+    /// </summary>
+    private static uint CountBodyItems(uint start, uint end, WorksheetRepeatRange? repeat, Func<uint, bool>? isHidden = null)
     {
         if (end < start)
             return 0;
 
-        var count = end - start + 1;
-        if (repeat is not { } range || range.End < start || range.Start > end)
-            return count;
+        if (isHidden is null)
+        {
+            var count = end - start + 1;
+            if (repeat is not { } range || range.End < start || range.Start > end)
+                return count;
 
-        var overlapStart = Math.Max(start, range.Start);
-        var overlapEnd = Math.Min(end, range.End);
-        return overlapEnd >= overlapStart
-            ? count - (overlapEnd - overlapStart + 1)
-            : count;
+            var overlapStart = Math.Max(start, range.Start);
+            var overlapEnd = Math.Min(end, range.End);
+            return overlapEnd >= overlapStart
+                ? count - (overlapEnd - overlapStart + 1)
+                : count;
+        }
+
+        uint visibleCount = 0;
+        for (var value = start; value <= end; value++)
+        {
+            if (IsWithinRepeatRange(repeat, value) || isHidden(value))
+                continue;
+
+            visibleCount++;
+        }
+
+        return visibleCount;
     }
 
     /// <summary>

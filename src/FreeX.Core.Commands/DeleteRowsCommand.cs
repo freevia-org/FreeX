@@ -42,6 +42,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
     private List<uint>? _rowPageBreakSnapshot;
     private List<RowColumnShiftHelpers.ChartDataRangeWorkbookSnapshot>? _chartSnapshot;
     private List<RowColumnShiftHelpers.ChartVerbatimWorkbookSnapshot>? _chartVerbatimSnapshot;
+    // R102: see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown -- every SeriesIndex-keyed
+    // per-series/per-point collection on a Switch-Row/Column chart whose plotted series span this
+    // delete overlaps must be captured here (undo) since the remap mutates them in place / drops rows.
+    private List<RowColumnShiftHelpers.ChartSeriesFormattingWorkbookSnapshot>? _chartSeriesFormattingSnapshot;
     // R86-commands-insert-move-refadjust-5-1: see RowColumnShiftHelpers.ShiftChartPositionRowsDown —
     // tracked separately from _chartSnapshot above, which only tracks DataRange.
     private List<RowColumnShiftHelpers.ChartPositionSnapshot>? _chartPositionSnapshot;
@@ -160,6 +164,11 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.ShiftSortedSetDown(sheet.RowPageBreaks, _startRow, _count);
         _chartSnapshot = RowColumnShiftHelpers.CaptureChartDataRanges(ctx.Workbook);
         _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
+        // R102: must run BEFORE ShiftChartRowsDown below -- it needs each chart's PRE-delete
+        // DataRange to tell whether the deleted band overlaps a Switch-Row/Column chart's plotted
+        // series span (see RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown).
+        _chartSeriesFormattingSnapshot = RowColumnShiftHelpers.CaptureChartSeriesFormatting(ctx.Workbook);
+        RowColumnShiftHelpers.ShiftChartSeriesFormattingRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         RowColumnShiftHelpers.ShiftChartRowsDown(ctx.Workbook, _sheetId, _startRow, _count);
         RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count));
         RowColumnShiftHelpers.ShiftAddressBearingRowsDown(ctx.Workbook, sheet, _addressStateSnapshot, _startRow, _count);
@@ -404,6 +413,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         RowColumnShiftHelpers.RestoreSortedSet(sheet.RowPageBreaks, _rowPageBreakSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
+        RowColumnShiftHelpers.RestoreChartSeriesFormatting(ctx.Workbook, _chartSeriesFormattingSnapshot);
         RowColumnShiftHelpers.RestoreChartPositions(_chartPositionSnapshot);
         RowColumnShiftHelpers.RestoreAddressBearingState(ctx.Workbook, sheet, _addressStateSnapshot);
 

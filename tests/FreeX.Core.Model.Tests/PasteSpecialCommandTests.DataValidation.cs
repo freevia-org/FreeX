@@ -267,4 +267,78 @@ public sealed partial class PasteSpecialCommandTests
             && rule.Formula1 == "=Lookup!C3:C5");
     }
 
+    // R102-commands-data-validation-transpose-5-5: a Custom-type validation rule's relative
+    // Formula1 references must be AXIS-SWAPPED when pasted via Paste Special > Validation with
+    // Transpose, exactly like an ordinary transposed cell formula (PasteCommandFactory) and the
+    // sibling ConditionalFormat.FormulaText fix (PasteConditionalFormatsCommand.CloneRuleForDestination).
+    // Before the fix, DataValidationCopySupport unconditionally built a PasteOffsetOp from the
+    // already-axis-swapped rowDelta/colDelta and applied it as a UNIFORM translation, which is the
+    // wrong transform once the block's shape has been transposed.
+    [Fact]
+    public void R102_PasteDataValidationCommand_TransposesRelativeCustomFormulaAxisSwap()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1); // A1
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(source, source),
+            Type = DvType.Custom,
+            Formula1 = "=B1+$C1+B$1+$C$1>0"
+        });
+
+        var outcome = new PasteDataValidationCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new CellAddress(sheet.Id, 3, 3), // C3
+            transpose: true).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+
+        var pasted = sheet.DataValidations.Should()
+            .ContainSingle(rule => rule.AppliesTo.Start.Row == 3 && rule.AppliesTo.Start.Col == 3)
+            .Which;
+        // B1 (rel,rel): its ROW offset from the source anchor (0) becomes the new COLUMN offset
+        // from the dest anchor -> col C (3+0); its COLUMN offset from the source anchor (+1)
+        // becomes the new ROW offset from the dest anchor -> row 4 (3+1). => C4.
+        // $C1 (abs col, rel row): column untouched; row swaps using the column's own offset
+        // (+2 from anchor col 1) -> row 5. => $C5.
+        // B$1 (rel col, abs row): column swaps using the row's own literal value (offset 0 from
+        // anchor row 1) -> col C; row untouched. => C$1.
+        // $C$1 (abs,abs): unchanged.
+        pasted.Formula1.Should().Be("=C4+$C5+C$1+$C$1>0");
+    }
+
+    // Sibling no-regression coverage: the refactor that threaded a RewriteOperation (instead of
+    // raw rowDelta/colDelta ints) through DataValidationCopySupport.CloneValidation must leave the
+    // ordinary non-transpose uniform-translation path byte-for-byte unchanged.
+    [Fact]
+    public void R102_PasteDataValidationCommand_NonTransposePasteStillUsesUniformOffset()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var source = new CellAddress(sheet.Id, 1, 1); // A1
+        sheet.DataValidations.Add(new DataValidation
+        {
+            AppliesTo = new GridRange(source, source),
+            Type = DvType.Custom,
+            Formula1 = "=B1+$C1+B$1+$C$1>0"
+        });
+
+        var outcome = new PasteDataValidationCommand(
+            sheet.Id,
+            new GridRange(source, source),
+            new CellAddress(sheet.Id, 3, 3), // C3
+            transpose: false).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+
+        var pasted = sheet.DataValidations.Should()
+            .ContainSingle(rule => rule.AppliesTo.Start.Row == 3 && rule.AppliesTo.Start.Col == 3)
+            .Which;
+        pasted.Formula1.Should().Be("=D3+$C3+D$1+$C$1>0");
+    }
+
 }

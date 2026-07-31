@@ -170,7 +170,7 @@ public sealed partial class Sheet
             copy.CustomProperties.Add(property);
 
         foreach (var pt in PivotTables)
-            copy.PivotTables.Add(ClonePivotTable(pt, newId));
+            copy.PivotTables.Add(ClonePivotTable(pt, Id, newId));
 
         foreach (var table in StructuredTables)
             copy.StructuredTables.Add(CloneStructuredTable(table, newId));
@@ -221,13 +221,23 @@ public sealed partial class Sheet
         }
     }
 
-    private static PivotTableModel ClonePivotTable(PivotTableModel pt, SheetId newId)
+    private static PivotTableModel ClonePivotTable(PivotTableModel pt, SheetId sourceSheetId, SheetId newId)
     {
         var clonedPt = new PivotTableModel
         {
             Name        = pt.Name,
             CacheId     = pt.CacheId,
-            SourceRange = RemapRange(pt.SourceRange, newId),
+            // Only remap SourceRange onto the copy when it actually points at the sheet being
+            // duplicated -- a cross-sheet SourceRange (e.g. a pivot table on its own sheet reading
+            // data from a Data sheet, Excel's normal "PivotTable on new sheet, data on the original
+            // sheet" pattern) must keep pointing at the original source sheet, matching Excel's
+            // Duplicate Sheet behavior (only same-sheet references travel with the copy) and
+            // mirroring DuplicateSheetDrawingCloner.CloneChart's identical DataRange handling.
+            SourceRange = pt.SourceRange.Start.Sheet == sourceSheetId
+                ? RemapRange(pt.SourceRange, newId)
+                : pt.SourceRange,
+            // TargetRange/LastRenderedRange describe where the pivot itself is RENDERED, which
+            // always lives on this sheet -- so these always travel with the copy.
             TargetRange = RemapRange(pt.TargetRange, newId),
             LastRenderedRange = pt.LastRenderedRange is { } lastRenderedRange ? RemapRange(lastRenderedRange, newId) : null,
             PackagePart = pt.PackagePart,

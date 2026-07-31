@@ -38,8 +38,14 @@ internal static class XlsxWorksheetFormControlPreserver
         var anyChange = false;
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
-            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name -- resolve
+            // both the target worksheet path AND the sheet's CURRENT name via the shared
+            // rename-tolerant fallback so a renamed sheet's form controls survive.
+            if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
+                    context, sheetName, sourceWorksheetPath, out var currentSheetName, out var targetWorksheetPath))
+            {
                 continue;
+            }
 
             var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
             var sourceRoot = sourceWorksheetXml?.Root;
@@ -63,7 +69,7 @@ internal static class XlsxWorksheetFormControlPreserver
             // interaction since load) back into the source archive's ctrlProp parts BEFORE cloning
             // the controls block or copying ctrlProps forward, so the round-tripped file reflects the
             // control's current state rather than silently reverting to its file-load state.
-            var sheet = workbook?.GetSheet(sheetName);
+            var sheet = workbook?.GetSheet(currentSheetName);
             if (sheet is not null)
             {
                 WriteControlStateToCtrlProps(sourceArchive, targetArchive, context, sourceWorksheetPath, sheet);

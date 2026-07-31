@@ -43,7 +43,16 @@ public static partial class BuiltInFunctions
         var table = args[1] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        var rangeLookupArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        // A truly-omitted range_lookup (no 4th argument at all, e.g. VLOOKUP(A1,B:D,2)) defaults
+        // to Excel's friendly TRUE (approximate match). An argument slot that is merely PRESENT
+        // but blank -- a trailing comma (VLOOKUP(A1,B:D,2,)) or a genuinely blank-cell reference
+        // -- is NOT the same as omitted: Excel coerces it to the logical natural-zero, FALSE
+        // (exact match), which is the well-documented "leave range_lookup blank for exact match"
+        // idiom. Substituting a real BoolValue(true) here (rather than BlankValue.Instance) for
+        // the genuinely-absent case is what lets VlookupScalar tell the two apart below, since by
+        // the time the argument reaches VlookupScalar a plain BlankValue can only mean
+        // "present but blank" (mirrors IndexScalar's identical omitted-vs-blank column_num split).
+        var rangeLookupArg = args.Count > 3 ? args[3] : new BoolValue(true);
         return MapScalarArgsGrowBroadcast([args[0], args[2], rangeLookupArg],
             values => VlookupScalar(values[0], table, values[1], values[2]));
     }
@@ -56,8 +65,12 @@ public static partial class BuiltInFunctions
         double rawCol = ToNumber(columnIndexValue);
         if (!double.IsFinite(rawCol) || rawCol > int.MaxValue) return ErrorValue.Value;
         int colIndex = (int)rawCol;
-        bool rangeLookup; // default TRUE
-        if (rangeLookupValue is BlankValue) rangeLookup = true;
+        bool rangeLookup;
+        // By the time we get here, BlankValue can only mean the argument slot was PRESENT but
+        // blank (trailing comma, or a genuinely blank-cell reference) -- Vlookup() above already
+        // substitutes a real BoolValue(true) for the genuinely-omitted case -- so this coerces to
+        // FALSE (exact match), not the friendly TRUE default (see Vlookup()'s comment).
+        if (rangeLookupValue is BlankValue) rangeLookup = false;
         else
         {
             var coercedRangeLookup = TryCoerceRangeLookupBool(rangeLookupValue);
@@ -112,7 +125,10 @@ public static partial class BuiltInFunctions
         var table = args[1] is RangeValue tableRange
             ? tableRange
             : new RangeValue(new ScalarValue[1, 1] { { args[1] } });
-        var rangeLookupArg = args.Count > 3 ? args[3] : BlankValue.Instance;
+        // See Vlookup()'s comment: a truly-omitted range_lookup defaults to TRUE (approximate),
+        // but a present-but-blank slot (trailing comma / blank-cell reference) must coerce to
+        // FALSE instead, so substitute a real BoolValue(true) only for the genuinely-absent case.
+        var rangeLookupArg = args.Count > 3 ? args[3] : new BoolValue(true);
         return MapScalarArgsGrowBroadcast([args[0], args[2], rangeLookupArg],
             values => HlookupScalar(values[0], table, values[1], values[2]));
     }
@@ -125,8 +141,10 @@ public static partial class BuiltInFunctions
         double rawRow = ToNumber(rowIndexValue);
         if (!double.IsFinite(rawRow) || rawRow > int.MaxValue) return ErrorValue.Value;
         int rowIndex = (int)rawRow;
-        bool rangeLookup; // default TRUE
-        if (rangeLookupValue is BlankValue) rangeLookup = true;
+        bool rangeLookup;
+        // See VlookupScalar's comment: BlankValue here can only mean present-but-blank, so it
+        // coerces to FALSE, not the friendly TRUE default.
+        if (rangeLookupValue is BlankValue) rangeLookup = false;
         else
         {
             var coercedRangeLookup = TryCoerceRangeLookupBool(rangeLookupValue);

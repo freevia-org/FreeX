@@ -102,8 +102,14 @@ internal static class XlsxWorksheetDrawingReferencePreserver
 
         foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
         {
-            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // R102-io-rename-worksheet-exclusion-sweep-1: sheetName is the LOAD-TIME name; resolve
+            // via the shared fallback so a renamed sheet (same physical worksheet part, new name)
+            // isn't treated as deleted.
+            if (!XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
+                    context, sheetName, sourceWorksheetPath, out var targetWorksheetPath))
+            {
                 continue;
+            }
 
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
             var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
@@ -163,8 +169,15 @@ internal static class XlsxWorksheetDrawingReferencePreserver
         {
             if (drawingPaths.TargetDrawingPaths.ContainsKey(sheetName))
                 continue;
-            if (!context.TargetSheets.TryGetValue(sheetName, out var targetWorksheetPath))
+            // sheetName here is the LOAD-TIME name key drawingPaths was built with (see
+            // XlsxWorksheetDrawingPartMerger.MergeAndGetDrawingPaths); resolve via the same
+            // rename-tolerant fallback rather than a raw name lookup.
+            if (!context.SourceSheets.TryGetValue(sheetName, out var sourceWorksheetPathForFallback) ||
+                !XlsxRenamedSourceSheetResolver.TryResolveTargetWorksheetPath(
+                    context, sheetName, sourceWorksheetPathForFallback, out var targetWorksheetPath))
+            {
                 continue;
+            }
 
             var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
             if (targetWorksheetEntry is null)

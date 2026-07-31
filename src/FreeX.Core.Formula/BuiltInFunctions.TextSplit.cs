@@ -304,12 +304,16 @@ public static partial class BuiltInFunctions
     {
         value = defaultValue;
         error = ErrorValue.Value;
-        // Only a genuinely-omitted argument slot (args.Count <= index, or the
-        // OmittedOptionalOrdinalArgumentValue sentinel FormulaEvaluator.Functions.cs substitutes for
-        // TEXTBEFORE/TEXTAFTER's instance_num) falls back to defaultValue. An explicit argument that
-        // merely evaluates to BlankValue (e.g. a reference to an empty cell) is NOT the same as
-        // omitted -- Excel coerces it to numeric 0 like any other blank-cell numeric coercion -- so it
-        // must fall through to the normal ToNumber conversion below instead of short-circuiting here.
+        // R102: this is only ever called for TEXTBEFORE/TEXTAFTER's instance_num (index 2), which
+        // FormulaEvaluator.Functions.cs's argument-expansion loop DELIBERATELY keeps substituting the
+        // OmittedOptionalOrdinalArgumentValue sentinel for (see that file's long comment) -- unlike
+        // its FIND/SEARCH/LEFT/RIGHT/SUBSTITUTE siblings, instance_num is a MIDDLE optional argument
+        // (match_mode/match_end/if_not_found follow it), so a blank instance_num used purely to skip
+        // past it and reach one of those later arguments must still default to 1, not error. A
+        // genuinely-omitted argument slot (args.Count <= index) or that sentinel both fall back to
+        // defaultValue; an argument that evaluates to blank via an actual reference to an empty cell
+        // (not a bare comma) is NOT covered by the sentinel and instead falls through to the normal
+        // ToNumber conversion below, coercing to 0 like any other blank-cell numeric coercion.
         if (args.Count <= index || args[index] is OmittedOptionalOrdinalArgumentValue) return true;
         if (!TryGetScalarControlArgument(args[index], out var scalar, out error)) return false;
 

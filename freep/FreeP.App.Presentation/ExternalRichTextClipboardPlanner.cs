@@ -43,6 +43,7 @@ public static class ExternalRichTextClipboardPlanner
             ListTable,
             ListOverrideTable,
             ListLevelText,
+            ListLevelNumbers,
             FieldInstruction,
             Object,
             ObjectClass,
@@ -600,6 +601,12 @@ public static class ExternalRichTextClipboardPlanner
                     // The first hex byte is the RTF level-text length marker.
                     _state.ListLevelTextPrefixBytesRemaining = 1;
                     break;
+                case "levelnumbers":
+                    _state.Destination = Destination.ListLevelNumbers;
+                    _state.SkipOutput = true;
+                    // The first hex byte is the number of level-number bytes.
+                    _state.ListLevelTextPrefixBytesRemaining = 1;
+                    break;
                 case "field":
                     _state.Field = new FieldContext();
                     break;
@@ -966,7 +973,14 @@ public static class ExternalRichTextClipboardPlanner
                 }
 
                 if (value is not (byte)';' and not (byte)'\r' and not (byte)'\n')
-                    CaptureListLevelTextChar(DecodeByte(value));
+                    CaptureListLevelTextByte(value);
+                return;
+            }
+
+            if (_state.Destination == Destination.ListLevelNumbers)
+            {
+                if (_state.ListLevelTextPrefixBytesRemaining > 0)
+                    _state.ListLevelTextPrefixBytesRemaining--;
                 return;
             }
 
@@ -1475,9 +1489,13 @@ public static class ExternalRichTextClipboardPlanner
             }
 
             paragraph.BulletKind = BulletKind.Auto;
+            string levelTextTemplate = formattingOverride?.LevelTextTemplate ?? level.LevelTextTemplate;
             paragraph.AutoNumType = MapAutoNumType(
                 numberFormat,
-                formattingOverride?.LevelTextTemplate ?? level.LevelTextTemplate);
+                levelTextTemplate);
+            paragraph.AutoNumTextTemplate = ContainsLevelSubstitution(levelTextTemplate)
+                ? levelTextTemplate
+                : null;
             paragraph.AutoNumStartAt = listOverride.StartAtByLevel.TryGetValue(_state.ListLevel, out var overrideStartAt)
                 ? overrideStartAt
                 : formattingOverride is { StartAtSpecified: true }
@@ -1488,6 +1506,40 @@ public static class ExternalRichTextClipboardPlanner
             paragraph.AutoNumStartAtSpecified |= firstOccurrence;
         }
 
+        private void CaptureListLevelTextByte(byte value)
+        {
+            var level = _state.Destination == Destination.ListOverrideTable
+                ? _currentListOverrideLevelDefinition
+                : _currentListLevel;
+            if (level is null)
+                return;
+
+            // RTF level-text stores level substitutions as zero-based control bytes
+            // (0x00 = current level 0, 0x01 = level 1, ...). Keep them as the
+            // renderer-neutral %1..%9 form instead of silently dropping them.
+            if (value <= 8)
+            {
+                string token = $"%{value + 1}";
+                if (level.LevelTextTemplate.Length + token.Length <= 64)
+                    level.LevelTextTemplate += token;
+                return;
+            }
+
+            string candidate = DecodeByte(value);
+            if (candidate.Length == 0 || char.IsControl(candidate[0]) || candidate[0] == ';')
+                return;
+
+            if (level.NumberFormat == 23)
+            {
+                if (level.BulletChar is null)
+                    level.BulletChar = candidate;
+                return;
+            }
+
+            if (level.LevelTextTemplate.Length + candidate.Length <= 64)
+                level.LevelTextTemplate += candidate;
+        }
+
         private void CaptureListLevelTextChar(string text)
         {
             var level = _state.Destination == Destination.ListOverrideTable
@@ -1496,19 +1548,29 @@ public static class ExternalRichTextClipboardPlanner
             if (level is null || string.IsNullOrEmpty(text))
                 return;
 
-            char candidate = text[0];
-            if (char.IsControl(candidate) || candidate == ';')
-                return;
-
             if (level.NumberFormat == 23)
             {
                 if (level.BulletChar is null)
-                    level.BulletChar = candidate.ToString();
+                    level.BulletChar = text;
                 return;
             }
 
-            if (level.LevelTextTemplate.Length < 16)
-                level.LevelTextTemplate += candidate;
+            if (level.LevelTextTemplate.Length + text.Length <= 64)
+                level.LevelTextTemplate += text;
+        }
+
+        private static bool ContainsLevelSubstitution(string? template)
+        {
+            if (string.IsNullOrEmpty(template))
+                return false;
+
+            for (int index = 0; index + 1 < template.Length; index++)
+            {
+                if (template[index] == '%' && template[index + 1] is >= '1' and <= '9')
+                    return true;
+            }
+
+            return false;
         }
 
         private void AppendFieldInstruction(string text)

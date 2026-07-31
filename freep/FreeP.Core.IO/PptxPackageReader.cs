@@ -27,6 +27,8 @@ public static class PptxPackageReader
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Adec = "http://schemas.microsoft.com/office/drawing/2017/decorative";
     private static readonly XNamespace FreePRecording = "https://freex.local/freep/recording/2026";
+    private static readonly XNamespace FreePText = "https://freex.local/freep/text/2026";
+    private const string AutoNumTemplateExtUri = "{2E2E4D2B-4E4E-4A9E-9B3A-7C2BAA5D1B7C}";
     private const string RecordingMediaArtifactsPath = "ppt/media/recordingArtifacts.xml";
 
     // ── Relationship type constants ───────────────────────────────────────────────
@@ -4214,6 +4216,13 @@ public static class PptxPackageReader
                     para.AutoNumStartAt = startAt;
                     para.AutoNumStartAtSpecified = true;
                 }
+
+                var templateExtension = pPr.Element(A + "extLst")?
+                    .Elements(A + "ext")
+                    .FirstOrDefault(extension =>
+                        string.Equals(extension.Attribute("uri")?.Value, AutoNumTemplateExtUri, StringComparison.Ordinal));
+                para.AutoNumTextTemplate = templateExtension?
+                    .Attribute(FreePText + "autoNumTemplate")?.Value;
             }
             else if (pPr.Element(A + "buBlip") is { } buBlip)
             {

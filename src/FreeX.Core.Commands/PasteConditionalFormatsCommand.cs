@@ -87,6 +87,17 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         // which rewrites Formula1/Formula2 the same way for the identical destination-anchor scenario.
         var rowDelta = (int)start.Row - (int)clipped.Start.Row;
         var colDelta = (int)start.Col - (int)clipped.Start.Col;
+        // Transpose swaps each relative reference's own (row,col) offset from the rule's own
+        // AppliesTo anchor onto the pasted rule's new anchor -- it is NOT the uniform per-cell
+        // translation PasteOffsetOp applies. Mirrors PasteCommandFactory.cs's pastedPasteOp
+        // selection for ordinary cell-formula transpose pastes (R56-commands-paste-special-5-1),
+        // using the rule's own clipped source anchor / mapped destination anchor as the
+        // transpose's source/dest anchors so a rule that only partially overlaps the copied
+        // range still transposes relative to its own AppliesTo.Start rather than the whole
+        // copied block's corner.
+        RewriteOperation pasteOp = _transpose
+            ? new PasteTransposeOp(clipped.Start.Row, clipped.Start.Col, start.Row, start.Col)
+            : new PasteOffsetOp(rowDelta, colDelta);
         var clone = new ConditionalFormat
         {
             AppliesTo = new GridRange(start, end),
@@ -104,20 +115,20 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             MaxColorSource = source.MaxColorSource,
             UseThreeColorScale = source.UseThreeColorScale,
             MinThresholdType = source.MinThresholdType,
-            MinThresholdValue = RewriteThresholdValue(source.MinThresholdType, source.MinThresholdValue, hostSheetName, rowDelta, colDelta),
+            MinThresholdValue = RewriteThresholdValue(source.MinThresholdType, source.MinThresholdValue, hostSheetName, pasteOp),
             MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
             MidThresholdType = source.MidThresholdType,
-            MidThresholdValue = RewriteThresholdValue(source.MidThresholdType, source.MidThresholdValue, hostSheetName, rowDelta, colDelta),
+            MidThresholdValue = RewriteThresholdValue(source.MidThresholdType, source.MidThresholdValue, hostSheetName, pasteOp),
             MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
             MaxThresholdType = source.MaxThresholdType,
-            MaxThresholdValue = RewriteThresholdValue(source.MaxThresholdType, source.MaxThresholdValue, hostSheetName, rowDelta, colDelta),
+            MaxThresholdValue = RewriteThresholdValue(source.MaxThresholdType, source.MaxThresholdValue, hostSheetName, pasteOp),
             MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
             DataBarColor = source.DataBarColor,
             DataBarColorSource = source.DataBarColorSource,
             DataBarMinThresholdType = source.DataBarMinThresholdType,
-            DataBarMinThresholdValue = RewriteThresholdValue(source.DataBarMinThresholdType, source.DataBarMinThresholdValue, hostSheetName, rowDelta, colDelta),
+            DataBarMinThresholdValue = RewriteThresholdValue(source.DataBarMinThresholdType, source.DataBarMinThresholdValue, hostSheetName, pasteOp),
             DataBarMaxThresholdType = source.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = RewriteThresholdValue(source.DataBarMaxThresholdType, source.DataBarMaxThresholdValue, hostSheetName, rowDelta, colDelta),
+            DataBarMaxThresholdValue = RewriteThresholdValue(source.DataBarMaxThresholdType, source.DataBarMaxThresholdValue, hostSheetName, pasteOp),
             DataBarShowValue = source.DataBarShowValue,
             DataBarMinLength = source.DataBarMinLength,
             DataBarMaxLength = source.DataBarMaxLength,
@@ -131,7 +142,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             AboveAverage = source.AboveAverage,
             EqualAverage = source.EqualAverage,
             StdDevCount = source.StdDevCount,
-            FormulaText = RewriteFormulaText(source.FormulaText, hostSheetName, rowDelta, colDelta),
+            FormulaText = RewriteFormulaText(source.FormulaText, hostSheetName, pasteOp),
             IconSetStyle = source.IconSetStyle,
             IconSetShowValue = source.IconSetShowValue,
             IconSetReverse = source.IconSetReverse,
@@ -154,7 +165,7 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
         foreach (var threshold in source.IconSetThresholds)
         {
             clone.IconSetThresholds.Add(threshold.Type == CfThresholdType.Formula
-                ? threshold with { Value = RewriteThresholdValue(threshold.Type, threshold.Value, hostSheetName, rowDelta, colDelta) }
+                ? threshold with { Value = RewriteThresholdValue(threshold.Type, threshold.Value, hostSheetName, pasteOp) }
                 : threshold);
         }
         clone.IconOverrides.AddRange(source.IconOverrides);
@@ -164,26 +175,33 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
     // Mirrors DataValidationCopySupport.RewriteValidationFormula, minus the leading-'=' handling:
     // unlike DataValidation.Formula1/Formula2, ConditionalFormat.FormulaText is documented as stored
     // "without leading =", so the raw text is handed straight to FormulaRewriter.
-    private static string? RewriteFormulaText(string? formulaText, string hostSheetName, int rowDelta, int colDelta)
+    //
+    // pasteOp is a PasteTransposeOp (axis-swapping) when the paste is a transpose paste and a
+    // PasteOffsetOp (uniform per-cell translation) otherwise -- see the pasteOp selection comment
+    // in CloneRuleForDestination, which mirrors PasteCommandFactory.cs's pastedPasteOp switch for
+    // ordinary cell-formula transpose pastes (R56-commands-paste-special-5-1).
+    private static string? RewriteFormulaText(string? formulaText, string hostSheetName, RewriteOperation pasteOp)
     {
-        if (string.IsNullOrWhiteSpace(formulaText) || (rowDelta == 0 && colDelta == 0))
+        if (string.IsNullOrWhiteSpace(formulaText))
+            return formulaText;
+        if (pasteOp is PasteOffsetOp { RowDelta: 0, ColDelta: 0 })
             return formulaText;
 
-        var rewritten = FormulaRewriter.Rewrite(formulaText, new PasteOffsetOp(rowDelta, colDelta), hostSheetName);
+        var rewritten = FormulaRewriter.Rewrite(formulaText, pasteOp, hostSheetName);
         return rewritten ?? formulaText;
     }
 
     // Mirrors RowColumnShiftHelpers.Rules.cs's RewriteThreshold: a colorScale/dataBar cfvo threshold
     // whose ThresholdType is CfThresholdType.Formula holds a relative cell reference (e.g. "B1") that
-    // must be shifted by the same paste offset as the rule's own FormulaText. Non-Formula thresholds
-    // (Number/Percent/Percentile/Min/Max) hold literal values and must never be run through the
-    // formula rewriter.
-    private static string? RewriteThresholdValue(CfThresholdType type, string? value, string hostSheetName, int rowDelta, int colDelta)
+    // must be shifted/transposed by the same paste operation as the rule's own FormulaText. Non-Formula
+    // thresholds (Number/Percent/Percentile/Min/Max) hold literal values and must never be run through
+    // the formula rewriter.
+    private static string? RewriteThresholdValue(CfThresholdType type, string? value, string hostSheetName, RewriteOperation pasteOp)
     {
         if (type != CfThresholdType.Formula)
             return value;
 
-        return RewriteFormulaText(value, hostSheetName, rowDelta, colDelta);
+        return RewriteFormulaText(value, hostSheetName, pasteOp);
     }
 
     private CellAddress MapDestination(CellAddress source)

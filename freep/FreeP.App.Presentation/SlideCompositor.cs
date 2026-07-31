@@ -1775,13 +1775,16 @@ public static class SlideCompositor
 
                 case BulletKind.Auto:
                 {
-                    bulletText = PresentationListMarkerPlanner.FormatAutoNumber(
+                    int value = autoNumState.Next(
+                        para.Level,
                         effectiveAutoNumType,
-                        autoNumState.Next(
-                            para.Level,
-                            effectiveAutoNumType,
-                            para.AutoNumStartAt,
-                            para.AutoNumStartAtSpecified));
+                        para.AutoNumStartAt,
+                        para.AutoNumStartAtSpecified);
+                    bulletText = autoNumState.FormatTemplate(
+                        para.Level,
+                        effectiveAutoNumType,
+                        value,
+                        para.AutoNumTextTemplate);
                     break;
                 }
 

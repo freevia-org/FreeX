@@ -90,13 +90,18 @@ public sealed class FilterCommand : IWorkbookCommand
 
         ApplyToStructuredTableIfMatched(sheet);
 
+        WorksheetAutoFilterColumnModel? newAutoFilterColumn = null;
+        if (_allowedValues.Count > 0)
+        {
+            var (nonBlankValues, includeBlank) = SplitBlankSentinel(_allowedValues);
+            newAutoFilterColumn = new WorksheetAutoFilterColumnModel((int)_filterColOffset, nonBlankValues, includeBlank);
+        }
+
         _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
             sheet,
             _range,
             (int)_filterColOffset,
-            _allowedValues.Count == 0
-                ? null
-                : new WorksheetAutoFilterColumnModel((int)_filterColOffset, _allowedValues));
+            newAutoFilterColumn);
 
         // R91-meta-3: a filter can hide/show rows without moving any data, so a banded structured
         // table's stripes must re-flow around the newly-hidden rows exactly like they already do
@@ -131,12 +136,37 @@ public sealed class FilterCommand : IWorkbookCommand
                 .Where(fc => fc.ColumnId != (int)_filterColOffset)
                 .ToList();
             if (_allowedValues.Count > 0)
-                filterColumns.Add(new StructuredTableFilterColumnModel((int)_filterColOffset, _allowedValues));
+            {
+                var (nonBlankValues, includeBlank) = SplitBlankSentinel(_allowedValues);
+                filterColumns.Add(new StructuredTableFilterColumnModel((int)_filterColOffset, nonBlankValues, includeBlank));
+            }
             filterColumns.Sort(static (a, b) => a.ColumnId.CompareTo(b.ColumnId));
 
             sheet.StructuredTables[i] = StructuredTableDesignCommandHelpers.CopyTable(table, filterColumns: filterColumns);
             return;
         }
+    }
+
+    /// <summary>
+    /// R102-commands-filter-blank-sentinel-1: the checklist dropdown represents a selected
+    /// '(Blanks)' entry as a literal "" sentinel inside <see cref="_allowedValues"/> (mirroring
+    /// <see cref="FilterValueFormatter.ToText"/>'s <c>BlankValue =&gt; ""</c>), because a plain
+    /// flat allowed-values list has no separate "include blank" slot of its own. But
+    /// ECMA-376's CT_Filters schema (and every producer including Excel itself) represents
+    /// "include blank cells in this AutoFilter selection" exclusively via the parent
+    /// <c>&lt;filters blank="1"/&gt;</c> attribute -- never via an empty-string
+    /// <c>&lt;filter val=""/&gt;</c> entry, which XlsxWorksheetAutoFilterXmlMapper/
+    /// XlsxStructuredTableWriter would otherwise emit verbatim since they serialize every
+    /// entry in Values unconditionally. Split the "" sentinel out here, at the one choke point
+    /// both the worksheet-AutoFilter and structured-table model-construction call sites in this
+    /// class go through, so neither can forget to convert it into IncludeBlank=true.
+    /// </summary>
+    private static (IReadOnlyList<string> Values, bool IncludeBlank) SplitBlankSentinel(IReadOnlyList<string> allowedValues)
+    {
+        if (!allowedValues.Contains(""))
+            return (allowedValues, false);
+
+        return ([.. allowedValues.Where(value => value.Length != 0)], true);
     }
 
     private static void RecomputeHiddenRows(Sheet sheet, GridRange range)

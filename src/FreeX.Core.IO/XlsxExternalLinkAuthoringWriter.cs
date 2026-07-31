@@ -114,6 +114,23 @@ internal static class XlsxExternalLinkAuthoringWriter
             root.Add(externalReferencesElement);
         }
 
+        // R102-io-external-link-authoring-mint-collision-1: XlsxExternalLinkReferencePreserver can
+        // have just written an <externalReference> whose r:id is a PLACEHOLDER -- deliberately left
+        // unbacked by any Relationship element in workbookRelsXml, to mirror a dangling reference the
+        // source package itself carried (see that class's own doc comment). EnsureRelationshipForPackagePart's
+        // id-minting only scans workbookRelsXml's own Relationship elements, so without this it would
+        // deterministically re-mint that SAME "next" id here -- minting a REAL Relationship for it and
+        // leaving two sibling <externalReference> elements sharing one r:id, which the end-of-save
+        // schema normalizer's dedup-by-r:id then silently collapses into a single ordinal slot.
+        // Reserve every r:id already used by an existing <externalReference> element (backed or not)
+        // so a freshly minted id here can never collide with one.
+        var reservedExternalReferenceRelIds = externalReferencesElement
+            .Elements(WorkbookNs + "externalReference")
+            .Select(element => element.Attribute(RelNs + "id")?.Value?.Trim())
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Select(id => id!)
+            .ToList();
+
         var nextPartNumber = GetNextExternalLinkPartNumber(archive);
         foreach (var reference in newReferences)
         {
@@ -125,7 +142,9 @@ internal static class XlsxExternalLinkAuthoringWriter
                 PackageRelNs,
                 "xl/workbook.xml",
                 partPath,
-                ExternalLinkRelationshipType);
+                ExternalLinkRelationshipType,
+                reservedExternalReferenceRelIds);
+            reservedExternalReferenceRelIds.Add(relId);
             externalReferencesElement.Add(new XElement(
                 WorkbookNs + "externalReference",
                 new XAttribute(RelNs + "id", relId)));
