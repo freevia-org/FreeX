@@ -87,6 +87,17 @@ public sealed record StructuredTableFilterColumnModel
     public IReadOnlyDictionary<string, string>? NativeAttributes { get; init; }
     public string? NativeFilterXml => NativeFilterXmls.Count == 0 ? null : NativeFilterXmls[0];
 
+    // R107-commands-autofilter-table-color-sync-1: mirrors WorksheetAutoFilterColumnModel.ColorFilter
+    // -- a table has no dxfId to give a fresh Filter-by-Cell/Font-Colour criterion until
+    // XlsxAutoFilterColorFilterDxfWriter allocates one at save time (see its StructuredTable overload),
+    // so this stays a first-class (not NativeFilterXmls-passthrough) field the writer resolves then,
+    // unlike Top10/custom-criterion which need no dxf and can be built as raw XML eagerly (see
+    // TopBottomFilterCommand.BuildTop10Xml). Deliberately write-only: the reader never populates this
+    // from a loaded file (an existing/round-tripped table colorFilter -- with its dxfId already
+    // resolved -- keeps flowing through the generic NativeFilterXmls passthrough exactly as it always
+    // has), so there is no risk of the writer ever emitting the same colorFilter twice.
+    public WorksheetAutoFilterColorFilterModel? ColorFilter { get; init; }
+
     public StructuredTableFilterColumnModel(
         int ColumnId,
         IReadOnlyList<string> Values,

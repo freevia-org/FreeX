@@ -80,14 +80,27 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
     // the new table is being created on would reuse id=1/"Table1" from a table already on another
     // sheet, producing a duplicate id+name that Excel reports as corrupt content and that makes
     // Table1[...] references ambiguous. Scan every sheet's StructuredTables instead.
+    //
+    // R107-round2: the id itself must never be handed out twice in this session, even after its
+    // table is removed. Deriving the next id purely from "the max id among currently-LIVE tables"
+    // (the previous scheme) reuses a freed id the moment the highest-numbered table is deleted and a
+    // new table is then created -- the freed id no longer appears among any live table to raise that
+    // max, so the same id comes back out. That collides with a stale PivotCacheModel.SourceTableId /
+    // SlicerModel.SourceTableId that was deliberately pinned to the removed table's (now-orphaned) id
+    // by CommandGuards.PinOrphanedPivotCacheSourceTableIds — the new table silently inherits the old
+    // one's pivot/slicer binding. Workbook.NextStructuredTableIdWatermark tracks the high-water mark
+    // across the whole session (never decremented, including on Undo) so it stays correct even after
+    // the table that used to hold the max id is gone.
     private static int NextTableId(Workbook workbook)
     {
-        var maxId = 0;
+        var maxId = workbook.NextStructuredTableIdWatermark;
         foreach (var otherSheet in workbook.Sheets)
         foreach (var table in otherSheet.StructuredTables)
             maxId = Math.Max(maxId, table.Id);
 
-        return maxId + 1;
+        var next = maxId + 1;
+        workbook.NextStructuredTableIdWatermark = next;
+        return next;
     }
 
     private static string NextTableName(Workbook workbook)

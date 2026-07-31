@@ -79,8 +79,43 @@ public sealed class AddSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcComm
     }
 }
 
+/// <summary>
+/// R107-drawing-object-hyperlink-sheet-identity: shared helper for RenameSheetCommand/
+/// RemoveSheetCommand -- rewrites a drawing object's internal ('Place in This Document')
+/// hyperlink target (<see cref="DrawingObjectHyperlink.Target"/>) the same way FormulaRewriter
+/// already rewrites a FormControlModel.LinkedCell/ListFillRange bare-ref "formula" for both sheet-
+/// identity operations (a <c>RenameSheetOp</c> retargets onto the new name; a <c>DeleteSheetOp</c>
+/// converts to #REF!). Mirrors DuplicateSheetDrawingCloner.RewriteSameSheetHyperlinkTarget's R106
+/// fix for the Duplicate Sheet path, which already established that this field needs the same
+/// treatment as the cell-hyperlink fields (Sheet.Hyperlinks / Sheet.HyperlinkMetadata.Bookmark)
+/// rewritten by the O25/P113/R95 blocks below -- but neither Rename nor Delete Sheet touched it
+/// until now. An external ("Existing File or Web Page") hyperlink -- TargetMode == "External" --
+/// is left completely untouched: only an internal target (TargetMode null) can possibly be a
+/// sheet-qualified reference at all.
+/// </summary>
+file static class DrawingObjectHyperlinkRewriter
+{
+    public static DrawingObjectHyperlink? Rewrite(DrawingObjectHyperlink? hyperlink, RewriteOperation op, string hostSheetName)
+    {
+        if (hyperlink is null || hyperlink.TargetMode is not null)
+            return hyperlink;
+
+        var rewritten = FormulaRewriter.Rewrite(hyperlink.Target, op, hostSheetName);
+        return rewritten is null || rewritten == hyperlink.Target ? hyperlink : hyperlink with { Target = rewritten };
+    }
+}
+
 /// <summary>Command to rename a sheet.</summary>
-public sealed class RenameSheetCommand : IWorkbookCommand
+// R107: renaming a sheet can change which sheets fall inside a 3-D span reference (e.g.
+// =SUM(Sheet1:Sheet3!A1)) purely by the name change, not by editing any cell of its own, so
+// Apply reports no AffectedCells. On the forward path this gap is covered by an explicit
+// RecalculateWorkbook() call in WorkbookSession.RenameActiveSheet, but CommandBus.Undo/Redo
+// call straight into the command bus and never reach that wrapper -- implementing this marker
+// (like AddSheetCommand/RemoveSheetCommand/MoveSheetCommand/DuplicateSheetCommand already do)
+// is what makes Undo/Redo of a rename force a full recalc too. See IWholeWorkbookRecalcCommand's
+// own doc comment, which already named "Rename Sheet" as one of the five operations needing
+// this marker before it was actually added here.
+public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
 {
     private readonly SheetId _sheetId;
     private readonly string _newName;
@@ -128,6 +163,14 @@ public sealed class RenameSheetCommand : IWorkbookCommand
     // stale (HyperlinkNavigationPlanner/CreateXlsxHyperlink both fall back to that raw target
     // whenever Bookmark is empty).
     private List<(SheetId Sheet, CellAddress Address, string OldTarget)>? _hyperlinkTargetRenameSnapshot;
+    // R107-drawing-object-hyperlink-sheet-identity: DrawingShapeModel/TextBoxModel/PictureModel/
+    // ChartModel.Hyperlink carries the same kind of 'Place in This Document' sheet-qualified
+    // reference as the O25/P113 cell-hyperlink fields above (verbatim, per DrawingObjectHyperlink's
+    // own doc comment) but was never rewritten on rename -- see DrawingObjectHyperlinkRewriter.
+    private List<(DrawingShapeModel Shape, DrawingObjectHyperlink? OldValue)>? _drawingShapeHyperlinkRenameSnapshot;
+    private List<(TextBoxModel TextBox, DrawingObjectHyperlink? OldValue)>? _textBoxHyperlinkRenameSnapshot;
+    private List<(PictureModel Picture, DrawingObjectHyperlink? OldValue)>? _pictureHyperlinkRenameSnapshot;
+    private List<(ChartModel Chart, DrawingObjectHyperlink? OldValue)>? _chartHyperlinkRenameSnapshot;
 
     public string Label => $"Rename Sheet to '{_newName}'";
 
@@ -388,6 +431,62 @@ public sealed class RenameSheetCommand : IWorkbookCommand
             }
         }
 
+        // R107-drawing-object-hyperlink-sheet-identity: rewrite drawing-object 'Place in This
+        // Document' hyperlinks across ALL sheets the same way the O25/P113 cell-hyperlink pass
+        // above does -- a shape/text box/picture/chart's Hyperlink.Target can reference the
+        // renamed sheet too (e.g. "Sheet2!A1"), and DuplicateSheetDrawingCloner already proves the
+        // codebase treats this as the same class of reference for the Duplicate Sheet path.
+        _drawingShapeHyperlinkRenameSnapshot = [];
+        _textBoxHyperlinkRenameSnapshot = [];
+        _pictureHyperlinkRenameSnapshot = [];
+        _chartHyperlinkRenameSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var shape in s.DrawingShapes)
+            {
+                // R108-drawing-object-hyperlink-patch-safety-guard-allowlist: named distinctively
+                // (not a bare "rewritten") so the R101 patch-safety guard's RHS allowlist regex
+                // can target this exact call shape narrowly -- see
+                // AllowedDrawingObjectHyperlinkRewriterRhs in R101_DrawingChartHyperlinkPatchSafetyGuardTests.
+                var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(shape.Hyperlink, renameOp, s.Name);
+                if (rewrittenDrawingObjectHyperlink != shape.Hyperlink)
+                {
+                    _drawingShapeHyperlinkRenameSnapshot.Add((shape, shape.Hyperlink));
+                    shape.Hyperlink = rewrittenDrawingObjectHyperlink;
+                }
+            }
+
+            foreach (var textBox in s.TextBoxes)
+            {
+                var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(textBox.Hyperlink, renameOp, s.Name);
+                if (rewrittenDrawingObjectHyperlink != textBox.Hyperlink)
+                {
+                    _textBoxHyperlinkRenameSnapshot.Add((textBox, textBox.Hyperlink));
+                    textBox.Hyperlink = rewrittenDrawingObjectHyperlink;
+                }
+            }
+
+            foreach (var pic in s.Pictures)
+            {
+                var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(pic.Hyperlink, renameOp, s.Name);
+                if (rewrittenDrawingObjectHyperlink != pic.Hyperlink)
+                {
+                    _pictureHyperlinkRenameSnapshot.Add((pic, pic.Hyperlink));
+                    pic.Hyperlink = rewrittenDrawingObjectHyperlink;
+                }
+            }
+
+            foreach (var chart in s.Charts)
+            {
+                var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(chart.Hyperlink, renameOp, s.Name);
+                if (rewrittenDrawingObjectHyperlink != chart.Hyperlink)
+                {
+                    _chartHyperlinkRenameSnapshot.Add((chart, chart.Hyperlink));
+                    chart.Hyperlink = rewrittenDrawingObjectHyperlink;
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -493,6 +592,27 @@ public sealed class RenameSheetCommand : IWorkbookCommand
                         sh.Hyperlinks[addr] = oldTarget;
                 }
             }
+
+            // R107 restore: drawing-object hyperlinks rewritten by the Apply-side pass above.
+            // R108-drawing-object-hyperlink-patch-safety-guard-allowlist: the deconstructed
+            // tuple-element name is spelled out (not a bare "oldValue") so the R101 guard's RHS
+            // allowlist regex can target this exact restore shape narrowly -- see
+            // AllowedDrawingObjectHyperlinkUndoRestoreRhs in R101_DrawingChartHyperlinkPatchSafetyGuardTests.
+            if (_drawingShapeHyperlinkRenameSnapshot is not null)
+                foreach (var (shape, savedDrawingObjectHyperlink) in _drawingShapeHyperlinkRenameSnapshot)
+                    shape.Hyperlink = savedDrawingObjectHyperlink;
+
+            if (_textBoxHyperlinkRenameSnapshot is not null)
+                foreach (var (textBox, savedDrawingObjectHyperlink) in _textBoxHyperlinkRenameSnapshot)
+                    textBox.Hyperlink = savedDrawingObjectHyperlink;
+
+            if (_pictureHyperlinkRenameSnapshot is not null)
+                foreach (var (pic, savedDrawingObjectHyperlink) in _pictureHyperlinkRenameSnapshot)
+                    pic.Hyperlink = savedDrawingObjectHyperlink;
+
+            if (_chartHyperlinkRenameSnapshot is not null)
+                foreach (var (chart, savedDrawingObjectHyperlink) in _chartHyperlinkRenameSnapshot)
+                    chart.Hyperlink = savedDrawingObjectHyperlink;
         }
     }
 }
@@ -548,6 +668,11 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // R96: WorksheetRange/Table pivot caches whose records we captured into RawRecordsXml because
     // their source sheet is about to disappear -- see TryCapturePivotCacheRecordsXml for why.
     private List<(PivotCacheModel Cache, string? OldValue)>? _pivotCacheRawRecordsDeleteSnapshot;
+    // R107: table-backed pivot caches whose SourceTableId we pinned because their source table
+    // lived on the deleted sheet and had never been refreshed (SourceTableId still null) — mirrors
+    // ConvertStructuredTableToRangeCommand's R106 _orphanedPivotCaches list. The pinned id is
+    // always a fresh assignment from null, so restoring on undo is just nulling it back out.
+    private List<PivotCacheModel>? _pivotCacheTableIdDeleteSnapshot;
     private List<(SlicerModel Slicer, string OldValue)>? _slicerNameDeleteSnapshot;
     // P84: mirrors _slicerNameDeleteSnapshot above for TimelineModel.SourceSheetName — a timeline
     // anchored on the deleted sheet must have its dangling sheet-name ref cleared too, or it can
@@ -573,6 +698,14 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // clears above guard against for PivotCache/Slicer/Picture/Timeline).
     private List<(SheetId Sheet, CellAddress Address, string OldBookmark)>? _hyperlinkBookmarkDeleteSnapshot;
     private List<(SheetId Sheet, CellAddress Address, string OldTarget)>? _hyperlinkTargetDeleteSnapshot;
+    // R107-drawing-object-hyperlink-sheet-identity: mirrors RenameSheetCommand's equivalent
+    // snapshot -- DrawingShapeModel/TextBoxModel/PictureModel/ChartModel.Hyperlink carries the
+    // same kind of 'Place in This Document' sheet-qualified reference as the R95 cell-hyperlink
+    // fields above but was never rewritten to #REF! on delete -- see DrawingObjectHyperlinkRewriter.
+    private List<(DrawingShapeModel Shape, DrawingObjectHyperlink? OldValue)>? _drawingShapeHyperlinkDeleteSnapshot;
+    private List<(TextBoxModel TextBox, DrawingObjectHyperlink? OldValue)>? _textBoxHyperlinkDeleteSnapshot;
+    private List<(PictureModel Picture, DrawingObjectHyperlink? OldValue)>? _pictureHyperlinkDeleteSnapshot;
+    private List<(ChartModel Chart, DrawingObjectHyperlink? OldValue)>? _chartHyperlinkDeleteSnapshot;
 
     public string Label => "Delete Sheet";
 
@@ -782,6 +915,17 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             }
         }
 
+        // R107 (consolidated R107-round2 into CommandGuards.PinOrphanedPivotCacheSourceTableIds, the
+        // shared "table name about to be freed" guard used by every command that removes a table --
+        // see its doc comment for the full hazard/rationale). Deleting the sheet frees every table
+        // that lived on it at once, so pin once per surviving-in-memory table (the `sheet` object --
+        // and its StructuredTables -- is still intact even though it has been unlinked from
+        // ctx.Workbook.Sheets, exactly like the RawRecordsXml capture above relies on).
+        _pivotCacheTableIdDeleteSnapshot = [];
+        foreach (var removedTable in sheet.StructuredTables)
+            _pivotCacheTableIdDeleteSnapshot.AddRange(
+                CommandGuards.PinOrphanedPivotCacheSourceTableIds(ctx.Workbook, removedTable));
+
         _slicerNameDeleteSnapshot = [];
         foreach (var slicer in ctx.Workbook.Slicers)
         {
@@ -919,6 +1063,60 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             }
         }
 
+        // R107-drawing-object-hyperlink-sheet-identity: rewrite drawing-object 'Place in This
+        // Document' hyperlinks across ALL surviving sheets that reference the deleted sheet,
+        // producing #REF! -- mirrors the R95 cell-hyperlink pass above and RenameSheetCommand's
+        // equivalent pass, using deleteOp so FormulaRewriter converts the sheet-qualified ref to
+        // #REF! instead of a new name.
+        _drawingShapeHyperlinkDeleteSnapshot = [];
+        _textBoxHyperlinkDeleteSnapshot = [];
+        _pictureHyperlinkDeleteSnapshot = [];
+        _chartHyperlinkDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            foreach (var shape in s.DrawingShapes)
+            {
+                // R108-drawing-object-hyperlink-patch-safety-guard-allowlist: see the matching
+                // comment on RenameSheetCommand's equivalent pass above.
+                var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(shape.Hyperlink, deleteOp, s.Name);
+                if (rewrittenDrawingObjectHyperlink != shape.Hyperlink)
+                {
+                    _drawingShapeHyperlinkDeleteSnapshot.Add((shape, shape.Hyperlink));
+                    shape.Hyperlink = rewrittenDrawingObjectHyperlink;
+                }
+            }
+
+            foreach (var textBox in s.TextBoxes)
+            {
+                var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(textBox.Hyperlink, deleteOp, s.Name);
+                if (rewrittenDrawingObjectHyperlink != textBox.Hyperlink)
+                {
+                    _textBoxHyperlinkDeleteSnapshot.Add((textBox, textBox.Hyperlink));
+                    textBox.Hyperlink = rewrittenDrawingObjectHyperlink;
+                }
+            }
+
+            foreach (var pic in s.Pictures)
+            {
+                var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(pic.Hyperlink, deleteOp, s.Name);
+                if (rewrittenDrawingObjectHyperlink != pic.Hyperlink)
+                {
+                    _pictureHyperlinkDeleteSnapshot.Add((pic, pic.Hyperlink));
+                    pic.Hyperlink = rewrittenDrawingObjectHyperlink;
+                }
+            }
+
+            foreach (var chart in s.Charts)
+            {
+                var rewrittenDrawingObjectHyperlink = DrawingObjectHyperlinkRewriter.Rewrite(chart.Hyperlink, deleteOp, s.Name);
+                if (rewrittenDrawingObjectHyperlink != chart.Hyperlink)
+                {
+                    _chartHyperlinkDeleteSnapshot.Add((chart, chart.Hyperlink));
+                    chart.Hyperlink = rewrittenDrawingObjectHyperlink;
+                }
+            }
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -1000,6 +1198,12 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
                 foreach (var (cache, oldValue) in _pivotCacheRawRecordsDeleteSnapshot)
                     cache.RawRecordsXml = oldValue;
 
+            // R107 restore: undo the SourceTableId pin from the Apply-side pass above so a
+            // redo/undo cycle doesn't leave a cache carrying an id it never had before the delete
+            // (matches the SourceSheetName/RawRecordsXml restores immediately above it).
+            if (_pivotCacheTableIdDeleteSnapshot is not null)
+                CommandGuards.UnpinOrphanedPivotCacheSourceTableIds(_pivotCacheTableIdDeleteSnapshot);
+
             if (_slicerNameDeleteSnapshot is not null)
                 foreach (var (slicer, oldValue) in _slicerNameDeleteSnapshot)
                     slicer.SourceSheetName = oldValue;
@@ -1038,6 +1242,24 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
                         sh.Hyperlinks[addr] = oldTarget;
                 }
             }
+
+            // R107 restore: drawing-object hyperlinks rewritten to #REF! by the Apply-side pass
+            // above (mirrors RenameSheetCommand's equivalent restore).
+            if (_drawingShapeHyperlinkDeleteSnapshot is not null)
+                foreach (var (shape, savedDrawingObjectHyperlink) in _drawingShapeHyperlinkDeleteSnapshot)
+                    shape.Hyperlink = savedDrawingObjectHyperlink;
+
+            if (_textBoxHyperlinkDeleteSnapshot is not null)
+                foreach (var (textBox, savedDrawingObjectHyperlink) in _textBoxHyperlinkDeleteSnapshot)
+                    textBox.Hyperlink = savedDrawingObjectHyperlink;
+
+            if (_pictureHyperlinkDeleteSnapshot is not null)
+                foreach (var (pic, savedDrawingObjectHyperlink) in _pictureHyperlinkDeleteSnapshot)
+                    pic.Hyperlink = savedDrawingObjectHyperlink;
+
+            if (_chartHyperlinkDeleteSnapshot is not null)
+                foreach (var (chart, savedDrawingObjectHyperlink) in _chartHyperlinkDeleteSnapshot)
+                    chart.Hyperlink = savedDrawingObjectHyperlink;
         }
     }
 

@@ -54,6 +54,10 @@ public sealed partial class AutoFilterDialog
     public static IReadOnlyList<AutoFilterCriteriaOption> GetCriteriaOptions(AutoFilterMenuFilterKind filterKind) =>
         AutoFilterCriteriaLabels.GetCriteriaOptions(filterKind);
 
+    public static IReadOnlyList<AutoFilterCriteriaOption> GetSecondRowCriteriaOptions(
+        IReadOnlyList<AutoFilterCriteriaOption> criteriaOptions) =>
+        AutoFilterDialogCriteriaPlanner.GetSecondRowCriteriaOptions(criteriaOptions);
+
     public static string BuildCriteriaText(AutoFilterCriteriaOption option, string? value) =>
         AutoFilterDialogCriteriaPlanner.BuildCriteriaText(option, value);
 

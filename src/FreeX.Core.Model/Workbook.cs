@@ -171,6 +171,24 @@ public sealed class Workbook
     /// <summary>Custom structured-table style metadata loaded from XLSX stylesheet tableStyle definitions.</summary>
     public List<StructuredTableStyleModel> StructuredTableStyles { get; } = [];
 
+    /// <summary>
+    /// R107-round2: the highest <see cref="StructuredTableModel.Id"/> ever handed out to a NEW table
+    /// created in this workbook during THIS session (not persisted -- reset to 0 on load, matching
+    /// StructuredTableModel.Id's own load-time-only persistence). Exists purely so a freshly-allocated
+    /// table id is never reused after its table is removed: allocating a new id from "the current max
+    /// id among LIVE tables" (the pre-existing scheme) silently reuses a freed id the instant the
+    /// highest-numbered table is deleted and a new one is created, because the freed id no longer
+    /// appears among any live table to raise that max. A stale, orphaned <see
+    /// cref="PivotCacheModel.SourceTableId"/> or <see cref="SlicerModel.SourceTableId"/> that was
+    /// deliberately pinned to the removed table's id (see
+    /// CommandGuards.PinOrphanedPivotCacheSourceTableIds) would then collide with the new table and
+    /// silently resolve to it, defeating the very id-based identity these fields exist to guarantee.
+    /// Tracked here (never decremented, including on Undo of a table creation) instead of derived from
+    /// live tables so an id, once handed out, is never handed out again for the lifetime of the
+    /// in-memory workbook.
+    /// </summary>
+    public int NextStructuredTableIdWatermark { get; set; }
+
     /// <summary>Workbook number-format catalog entries keyed by XLSX numFmtId.</summary>
     public Dictionary<int, string> NumberFormatCatalog { get; } = [];
 

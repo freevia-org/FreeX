@@ -7406,13 +7406,9 @@ public sealed partial class XlsxFileAdapter
         {
             var sheet = new Sheet(patch.SheetId, patch.WorksheetPath);
             patch.Current.ApplyTo(sheet);
-            // XlsxWorksheetViewBaseline doesn't track the scroll position (topLeftCell), so the
-            // synthetic Sheet built above never carries it. Seed it from the worksheet's own
-            // existing sheetView before rewriting, so patching an unrelated view attribute
-            // (e.g. zoom) doesn't silently strip the user's real scroll position.
-            var (existingTopRow, existingLeftCol) = ReadExistingTopLeftCell(worksheetXml);
-            sheet.ViewTopRow = existingTopRow;
-            sheet.ViewLeftCol = existingLeftCol;
+            // XlsxWorksheetViewBaseline now tracks ViewTopRow/ViewLeftCol (the scroll position),
+            // so patch.Current.ApplyTo above already seeded the synthetic Sheet with the live
+            // model's current scroll position -- write that, not whatever was previously on disk.
 
             // XlsxWorksheetViewWriter.UpdateSheetView only knows how to emit a <pane> element for
             // the split-pane case (state="split"); it has no support for writing a frozen-pane
@@ -7445,18 +7441,6 @@ public sealed partial class XlsxFileAdapter
             }
 
             return XlsxWorksheetViewWriter.UpdateSheetView(worksheetXml, sheet);
-        }
-
-        private static (uint? Row, uint? Col) ReadExistingTopLeftCell(XDocument worksheetXml)
-        {
-            var sheetView = FindPrimarySheetView(worksheetXml);
-            var topLeftCell = sheetView?.Attribute("topLeftCell")?.Value;
-            if (string.IsNullOrWhiteSpace(topLeftCell))
-                return (null, null);
-
-            return CellAddress.TryParse(topLeftCell.Split(':')[0], SheetId.New(), out var address)
-                ? (address.Row, address.Col)
-                : (null, null);
         }
 
         private static (uint FrozenRows, uint FrozenCols, uint? SplitRow, uint? SplitColumn) ReadExistingPaneState(
@@ -9802,7 +9786,9 @@ public sealed partial class XlsxFileAdapter
         uint? SplitRow,
         uint? SplitColumn,
         uint? ActiveRow,
-        uint? ActiveCol)
+        uint? ActiveCol,
+        uint? ViewTopRow,
+        uint? ViewLeftCol)
     {
         public static XlsxWorksheetViewBaseline Capture(Sheet sheet) =>
             new(
@@ -9819,7 +9805,9 @@ public sealed partial class XlsxFileAdapter
                 sheet.SplitRow,
                 sheet.SplitColumn,
                 sheet.ActiveRow,
-                sheet.ActiveCol);
+                sheet.ActiveCol,
+                sheet.ViewTopRow,
+                sheet.ViewLeftCol);
 
         public int CountDifferences(XlsxWorksheetViewBaseline other)
         {
@@ -9852,6 +9840,10 @@ public sealed partial class XlsxFileAdapter
                 count++;
             if (ActiveCol != other.ActiveCol)
                 count++;
+            if (ViewTopRow != other.ViewTopRow)
+                count++;
+            if (ViewLeftCol != other.ViewLeftCol)
+                count++;
 
             return count;
         }
@@ -9872,6 +9864,8 @@ public sealed partial class XlsxFileAdapter
             sheet.SplitColumn = SplitColumn;
             sheet.ActiveRow = ActiveRow;
             sheet.ActiveCol = ActiveCol;
+            sheet.ViewTopRow = ViewTopRow;
+            sheet.ViewLeftCol = ViewLeftCol;
         }
     }
 

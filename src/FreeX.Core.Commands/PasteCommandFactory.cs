@@ -161,7 +161,18 @@ public static class PasteCommandFactory
         var shouldTileDestinationRange = targetRows > pasteRows || targetCols > pasteCols;
         if (shouldTileDestinationRange)
         {
-            var tiledPasteCommand = CreateTiledInternalPasteCommand(
+            // "All merging conditional formats" tiles its copied values/formats exactly like every
+            // other Paste Special content kind (R25-clipboard-paste-remaining-2); the conditional-format
+            // rule itself is still merged once, anchored at the destination's start, matching the
+            // non-tiled branch immediately below.
+            //
+            // R107-paste-conditional-formats-1: CreateTiledInternalPasteCommand's own carriesFormatting
+            // gate now carries the CF rule along for every content kind that carries full formatting --
+            // including AllMergingConditionalFormats, since ContentKindCarriesRichTextRuns already
+            // returns true for it and options.ContentKind is passed through unchanged below. This method
+            // must therefore NOT also add its own PasteConditionalFormatsCommand for that content kind
+            // (it did prior to R107) -- doing both would paste the rule twice.
+            return CreateTiledInternalPasteCommand(
                 workbook,
                 targetSheetId,
                 targetSheet,
@@ -174,25 +185,17 @@ public static class PasteCommandFactory
                 targetCols,
                 mode,
                 options);
-
-            // "All merging conditional formats" tiles its copied values/formats exactly like every
-            // other Paste Special content kind (R25-clipboard-paste-remaining-2); the conditional-format
-            // rule itself is still merged once, anchored at the destination's start, matching the
-            // non-tiled branch immediately below.
-            if (options.ContentKind != PasteSpecialContentKind.AllMergingConditionalFormats)
-                return tiledPasteCommand;
-
-            return new CompositeWorkbookCommand(
-                "Paste Special",
-                [
-                    tiledPasteCommand,
-                    new PasteConditionalFormatsCommand(targetSheetId, sourceRange, destination, options.Transpose)
-                ]);
         }
 
         if (options.ContentKind == PasteSpecialContentKind.AllMergingConditionalFormats)
         {
-            var pasteCommand = CreateInternalPasteCommand(
+            // R107-paste-conditional-formats-1: delegating to ContentKind=Default now automatically
+            // carries the source's conditional-format rules along (see the carriesFormatting /
+            // specialCarriesFormatting gates below, which return true for Default). This recursive call
+            // used to be wrapped in an extra explicit PasteConditionalFormatsCommand here; keeping that
+            // wrapper after R107 would double-add the pasted rule, since the recursive call itself now
+            // also adds one.
+            return CreateInternalPasteCommand(
                 workbook,
                 targetSheetId,
                 sourceRange,
@@ -200,13 +203,6 @@ public static class PasteCommandFactory
                 destination,
                 mode,
                 options with { ContentKind = PasteSpecialContentKind.Default });
-
-            return new CompositeWorkbookCommand(
-                "Paste Special",
-                [
-                    pasteCommand,
-                    new PasteConditionalFormatsCommand(targetSheetId, sourceRange, destination, options.Transpose)
-                ]);
         }
 
         if (options.Transpose ||
@@ -382,6 +378,29 @@ public static class PasteCommandFactory
                     destination,
                     new CellAddress(targetSheetId, destination.Row + pasteRows - 1, destination.Col + pasteCols - 1));
 
+                // R107-paste-conditional-formats-1: a Paste Special content kind that already carries
+                // full formatting (Default/AllUsingSourceTheme/AllExceptBorders/ValuesAndSourceFormatting)
+                // must carry the source's conditional-format rules along exactly like it already carries
+                // merged regions/comments/pictures/shapes/textboxes/charts just below -- matching real
+                // Excel, which brings a cell's CF rule along on any ordinary formatting-carrying paste,
+                // not only the dedicated "All merging conditional formats" content kind (which reaches
+                // this method's ContentKind==AllMergingConditionalFormats branch above and returns before
+                // ever reaching here, so this cannot double-add).
+                if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.AllRanges.Any(range => range.Overlaps(sourceRange))))
+                    specialExtraCommands.Add(new PasteConditionalFormatsCommand(targetSheetId, sourceRange, destination, options.Transpose));
+
+                // R107-paste-data-validation-1: a formatting-carrying Paste Special content kind
+                // must also carry the source's data-validation rule(s) along, exactly like it
+                // already carries conditional-format rules just above -- matching real Excel, which
+                // brings a cell's validation rule (e.g. a dropdown list) along on any ordinary
+                // formatting-carrying paste, not only the dedicated "Paste Special > Validation"
+                // action (PasteSpecialAction.Validation, which never reaches this factory at all --
+                // it is wired directly to PasteDataValidationCommand from
+                // WorkbookSession.PasteDataValidationFromClipboardAtActiveCell -- so this cannot
+                // double-add).
+                if (SourceHasOverlappingDataValidation(sourceSheet, sourceRange))
+                    specialExtraCommands.Add(new PasteDataValidationCommand(targetSheetId, sourceRange, destination, options.Transpose));
+
                 if (ShouldCarryComments(sourceSheet, sourceRange, targetSheet, specialFootprint))
                 {
                     specialExtraCommands.AddRange(BuildCommentCarryCommands(
@@ -508,6 +527,23 @@ public static class PasteCommandFactory
         // inside the copied range must travel with the paste exactly like a Picture does.
         if (carriesFormatting)
         {
+            // R107-paste-conditional-formats-1: a plain Ctrl+V (mode All, no Paste Special options)
+            // must bring along the source's conditional-format rules exactly as it brings along the
+            // merged regions/comments/pictures/shapes/textboxes/charts around it -- see the identical
+            // comment on the specialCarriesFormatting branch above for why this can never double-add
+            // with the dedicated AllMergingConditionalFormats branch.
+            if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.AllRanges.Any(range => range.Overlaps(sourceRange))))
+                extraCommands.Add(new PasteConditionalFormatsCommand(targetSheetId, sourceRange, destination, transpose: false));
+
+            // R107-paste-data-validation-1: a plain Ctrl+V (mode All, no Paste Special options)
+            // must bring along the source's data-validation rule(s) exactly as it brings along the
+            // conditional-format rules/merged regions/comments/pictures/shapes/textboxes/charts
+            // around it -- see the identical comment on the specialCarriesFormatting branch above
+            // for why this can never double-add with the dedicated Paste Special > Validation
+            // action.
+            if (SourceHasOverlappingDataValidation(sourceSheet, sourceRange))
+                extraCommands.Add(new PasteDataValidationCommand(targetSheetId, sourceRange, destination, transpose: false));
+
             var picturesToCarry = FindPicturesAnchoredIn(sourceSheet, sourceRange);
             if (picturesToCarry.Count > 0)
                 extraCommands.Add(new PastePicturesCommand(targetSheetId, sourceRange, destination, picturesToCarry, transpose: false));
@@ -535,6 +571,14 @@ public static class PasteCommandFactory
 
     private static bool IsBlank(Cell cell) =>
         cell.FormulaText is null && cell.Value is BlankValue;
+
+    // R107-paste-data-validation-1: a data-validation rule can be anchored purely by an
+    // AdditionalRanges entry (AppliesTo elsewhere, or vice versa) -- mirrors
+    // PasteDataValidationCommand.EnumerateRuleRanges/ClearOverlappingValidationRanges checking both,
+    // and ConditionalFormat.AllRanges's identical treatment just above.
+    private static bool SourceHasOverlappingDataValidation(Sheet? sourceSheet, GridRange sourceRange) =>
+        sourceSheet is not null && sourceSheet.DataValidations.Any(rule =>
+            rule.AppliesTo.Overlaps(sourceRange) || rule.AdditionalRanges.Any(range => range.Overlaps(sourceRange)));
 
     /// <summary>
     /// Whether a Paste Special content kind copies full cell formatting (and therefore should
@@ -814,6 +858,24 @@ public static class PasteCommandFactory
             var tiledFootprint = new GridRange(
                 destination,
                 new CellAddress(targetSheetId, destination.Row + targetRows - 1, destination.Col + targetCols - 1));
+
+            // R107-paste-conditional-formats-1: tiled counterpart of the non-tiled CF carry above --
+            // a plain/formatting-carrying paste onto a multi-cell (tiled) destination must also bring
+            // the source's conditional-format rules along. Anchored once at the untiled sourceRange/
+            // destination pair (not tiledFootprint), mirroring how the ContentKind==AllMergingConditionalFormats
+            // branch in CreateInternalPasteCommand deliberately pastes the CF rule once rather than
+            // once per tile (see that branch's comment).
+            if (sourceSheet is not null && sourceSheet.ConditionalFormats.Any(rule => rule.AllRanges.Any(range => range.Overlaps(sourceRange))))
+                tiledExtraCommands.Add(new PasteConditionalFormatsCommand(targetSheetId, sourceRange, destination, options.Transpose));
+
+            // R107-paste-data-validation-1: tiled counterpart of the non-tiled data-validation carry
+            // above -- a plain/formatting-carrying paste onto a multi-cell (tiled) destination must
+            // also bring the source's validation rule(s) along. Anchored once at the untiled
+            // sourceRange/destination pair (not tiledFootprint), mirroring how the conditional-format
+            // carry just above pastes its rule once rather than once per tile.
+            if (SourceHasOverlappingDataValidation(sourceSheet, sourceRange))
+                tiledExtraCommands.Add(new PasteDataValidationCommand(targetSheetId, sourceRange, destination, options.Transpose));
+
             if (ShouldCarryComments(sourceSheet, sourceRange, targetSheet, tiledFootprint))
             {
                 tiledExtraCommands.AddRange(BuildTiledCommentCarryCommands(

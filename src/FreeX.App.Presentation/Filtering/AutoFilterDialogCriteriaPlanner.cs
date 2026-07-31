@@ -215,6 +215,37 @@ public static class AutoFilterDialogCriteriaPlanner
     public static bool IsTopBottomOption(AutoFilterCriteriaOption option) =>
         AutoFilterMenuCatalog.IsTopBottomCriteriaPrefix(option.CriteriaPrefix);
 
+    public static bool IsAverageOption(AutoFilterCriteriaOption option) =>
+        string.Equals(option.CriteriaPrefix, "above average", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(option.CriteriaPrefix, "below average", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Excel's Custom AutoFilter dialog never offers Between, Top 10 (count or percent), or Above/Below
+    /// Average as a per-row operator combinable with a second And/Or criterion -- those are always
+    /// separate, single-shot filter actions with their own dedicated inputs (min/max boxes, an item
+    /// count, or no input at all). The dialog's row-2 operator dropdown otherwise reuses row 1's full
+    /// per-family criteria list, but row 2 has only a single plain value textbox: offering Between/Top-N
+    /// there lets a user "choose" a second criterion the UI can never actually collect (no min/max or
+    /// count controls exist for row 2), so it silently drops out of the composed criteria text, and
+    /// offering Above/Below Average there builds a composite "and:.../or:..." string that the downstream
+    /// FilterCriterionInputParser rejects outright. Excluding them keeps row 2 to operators it can
+    /// genuinely combine with row 1.
+    /// </summary>
+    public static IReadOnlyList<AutoFilterCriteriaOption> GetSecondRowCriteriaOptions(
+        IReadOnlyList<AutoFilterCriteriaOption> criteriaOptions)
+    {
+        var filtered = new List<AutoFilterCriteriaOption>(criteriaOptions.Count);
+        foreach (var option in criteriaOptions)
+        {
+            if (IsBetweenOption(option) || IsTopBottomOption(option) || IsAverageOption(option))
+                continue;
+
+            filtered.Add(option);
+        }
+
+        return filtered;
+    }
+
     private static string BuildMonthCriteria(DateTime firstDayOfMonth)
     {
         var lastDayOfMonth = firstDayOfMonth.AddMonths(1).AddDays(-1);
