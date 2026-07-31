@@ -62,11 +62,17 @@ public static class ExternalRichTextClipboardPlanner
         {
             public int NumberFormat { get; set; }
             public int StartAt { get; set; } = 1;
+            public bool NumberFormatSpecified { get; set; }
+            public bool StartAtSpecified { get; set; }
+            public int? LeftIndentTwips { get; set; }
+            public int? FirstLineIndentTwips { get; set; }
         }
 
         private sealed class ListOverrideDefinition
         {
             public int ListId { get; set; }
+            public Dictionary<int, int> StartAtByLevel { get; } = new();
+            public Dictionary<int, ListLevelDefinition> FormattingByLevel { get; } = new();
         }
 
         private sealed class FieldContext
@@ -191,6 +197,8 @@ public static class ExternalRichTextClipboardPlanner
             public bool ItalicSet;
             public bool Underline;
             public bool Strikethrough;
+            public int? BaselineOffset;
+            public RunTextCaps Caps;
             public bool? RunRightToLeft;
             public int ColorIndex;
             public int UnicodeSkip = 1;
@@ -224,6 +232,8 @@ public static class ExternalRichTextClipboardPlanner
             bool Italic,
             bool Underline,
             bool Strikethrough,
+            int? BaselineOffset,
+            RunTextCaps Caps,
             bool? RunRightToLeft,
             SrgbColor? Color,
             bool BoldSet,
@@ -261,6 +271,9 @@ public static class ExternalRichTextClipboardPlanner
         private int _currentListLevelIndex = -1;
         private ListOverrideDefinition? _currentListOverride;
         private int _currentListOverrideId;
+        private int _currentListOverrideLevel = -1;
+        private bool _currentListOverrideStartsAt;
+        private ListLevelDefinition? _currentListOverrideLevelDefinition;
         private LegacyListDefinition? _legacyList;
         private readonly HashSet<(int ListId, int Level)> _seenListLevels = new();
         private readonly List<byte> _pictureBytes = new();
@@ -476,6 +489,17 @@ public static class ExternalRichTextClipboardPlanner
                     {
                         _currentListOverride = new ListOverrideDefinition();
                         _currentListOverrideId = 0;
+                        _currentListOverrideLevel = -1;
+                        _currentListOverrideStartsAt = false;
+                        _currentListOverrideLevelDefinition = null;
+                    }
+                    break;
+                case "lfolevel":
+                    if (_state.Destination == Destination.ListOverrideTable && _currentListOverride is not null)
+                    {
+                        _currentListOverrideLevel = Math.Clamp(_currentListOverrideLevel + 1, 0, 8);
+                        _currentListOverrideStartsAt = false;
+                        _currentListOverrideLevelDefinition = null;
                     }
                     break;
                 case "listlevel":
@@ -484,6 +508,14 @@ public static class ExternalRichTextClipboardPlanner
                         _currentListLevelIndex = Math.Clamp(_currentListLevelIndex + 1, 0, 8);
                         _currentListLevel = new ListLevelDefinition();
                         _currentList.Levels[_currentListLevelIndex] = _currentListLevel;
+                    }
+                    else if (_state.Destination == Destination.ListOverrideTable
+                             && _currentListOverride is not null
+                             && _currentListOverrideLevel >= 0)
+                    {
+                        _currentListOverrideLevelDefinition = new ListLevelDefinition();
+                        _currentListOverride.FormattingByLevel[_currentListOverrideLevel] =
+                            _currentListOverrideLevelDefinition;
                     }
                     break;
                 case "listid":
@@ -519,11 +551,41 @@ public static class ExternalRichTextClipboardPlanner
                     break;
                 case "levelnfc":
                     if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                    {
                         _currentListLevel.NumberFormat = Math.Clamp(value, 0, 255);
+                        _currentListLevel.NumberFormatSpecified = true;
+                    }
+                    else if (_state.Destination == Destination.ListOverrideTable
+                             && _currentListOverrideLevelDefinition is not null)
+                    {
+                        _currentListOverrideLevelDefinition.NumberFormat = Math.Clamp(value, 0, 255);
+                        _currentListOverrideLevelDefinition.NumberFormatSpecified = true;
+                    }
                     break;
                 case "levelstartat":
                     if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                    {
                         _currentListLevel.StartAt = Math.Clamp(value, 1, 1_000_000);
+                        _currentListLevel.StartAtSpecified = true;
+                    }
+                    else if (_state.Destination == Destination.ListOverrideTable
+                             && _currentListOverride is not null
+                             && _currentListOverrideLevel >= 0)
+                    {
+                        var startAt = Math.Clamp(value, 1, 1_000_000);
+                        if (_currentListOverrideStartsAt)
+                            _currentListOverride.StartAtByLevel[_currentListOverrideLevel] = startAt;
+                        if (_currentListOverrideLevelDefinition is not null)
+                        {
+                            _currentListOverrideLevelDefinition.StartAt = startAt;
+                            _currentListOverrideLevelDefinition.StartAtSpecified = true;
+                        }
+                    }
+                    break;
+                case "listoverridestart":
+                case "listoverridestartat":
+                    if (_state.Destination == Destination.ListOverrideTable && _currentListOverride is not null)
+                        _currentListOverrideStartsAt = value != 0;
                     break;
                 case "leveltext":
                     _state.Destination = Destination.ListLevelText;
@@ -636,6 +698,19 @@ public static class ExternalRichTextClipboardPlanner
                 case "strike":
                 case "striked": _state.Strikethrough = value != 0; break;
                 case "strike0": _state.Strikethrough = false; break;
+                case "super": _state.BaselineOffset = RtfBaselineOffset(parameter ?? 6); break;
+                case "sub": _state.BaselineOffset = -RtfBaselineOffset(parameter ?? 6); break;
+                case "up":
+                    if (parameter is { } up)
+                        _state.BaselineOffset = RtfBaselineOffset(up);
+                    break;
+                case "dn":
+                    if (parameter is { } down)
+                        _state.BaselineOffset = -RtfBaselineOffset(down);
+                    break;
+                case "nosupersub": _state.BaselineOffset = null; break;
+                case "caps": _state.Caps = value != 0 ? RunTextCaps.All : RunTextCaps.None; break;
+                case "scaps": _state.Caps = value != 0 ? RunTextCaps.Small : RunTextCaps.None; break;
                 case "rtlch": _state.RunRightToLeft = true; break;
                 case "ltrch": _state.RunRightToLeft = false; break;
                 case "cf": _state.ColorIndex = Math.Max(0, value); break;
@@ -680,8 +755,24 @@ public static class ExternalRichTextClipboardPlanner
                 case "qj": _state.ParagraphAlignment = TextAlign.Justify; break;
                 case "rtlpar": _state.ParagraphRightToLeft = true; break;
                 case "ltrpar": _state.ParagraphRightToLeft = false; break;
-                case "li": _state.LeftIndentTwips = parameter is { } left ? Math.Clamp(left, -100_000, 100_000) : 0; break;
-                case "fi": _state.FirstLineIndentTwips = parameter is { } first ? Math.Clamp(first, -100_000, 100_000) : 0; break;
+                case "li":
+                    var leftIndent = parameter is { } left ? Math.Clamp(left, -100_000, 100_000) : 0;
+                    if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                        _currentListLevel.LeftIndentTwips = leftIndent;
+                    else if (_state.Destination == Destination.ListOverrideTable && _currentListOverrideLevelDefinition is not null)
+                        _currentListOverrideLevelDefinition.LeftIndentTwips = leftIndent;
+                    else
+                        _state.LeftIndentTwips = leftIndent;
+                    break;
+                case "fi":
+                    var firstIndent = parameter is { } first ? Math.Clamp(first, -100_000, 100_000) : 0;
+                    if (_state.Destination == Destination.ListTable && _currentListLevel is not null)
+                        _currentListLevel.FirstLineIndentTwips = firstIndent;
+                    else if (_state.Destination == Destination.ListOverrideTable && _currentListOverrideLevelDefinition is not null)
+                        _currentListOverrideLevelDefinition.FirstLineIndentTwips = firstIndent;
+                    else
+                        _state.FirstLineIndentTwips = firstIndent;
+                    break;
                 case "sb": _state.SpaceBeforeTwips = parameter is { } before ? Math.Clamp(before, -100_000, 100_000) : 0; break;
                 case "sa": _state.SpaceAfterTwips = parameter is { } after ? Math.Clamp(after, -100_000, 100_000) : 0; break;
                 case "pn":
@@ -1137,6 +1228,8 @@ public static class ExternalRichTextClipboardPlanner
                 state.Italic,
                 state.Underline,
                 state.Strikethrough,
+                state.BaselineOffset,
+                state.Caps,
                 state.RunRightToLeft,
                 color,
                 state.BoldSet,
@@ -1152,6 +1245,17 @@ public static class ExternalRichTextClipboardPlanner
 
         private static double ToCellInsetPoints(int twips) =>
             Math.Clamp(twips / 20.0, 0.0, 72.0);
+
+        // RTF up/dn values are half-points; the shared run model stores the
+        // equivalent DrawingML-style thousandths of a percent of the font size.
+        private int RtfBaselineOffset(int halfPoints)
+        {
+            double fontSizePt = _state.FontSizePt ?? 12.0;
+            return (int)Math.Clamp(
+                Math.Round(halfPoints * 50_000.0 / fontSizePt),
+                1,
+                100_000);
+        }
 
         private void FlushActiveRun()
         {
@@ -1174,6 +1278,8 @@ public static class ExternalRichTextClipboardPlanner
                 ItalicSet = _activeStyle.ItalicSet,
                 Underline = _activeStyle.Underline,
                 Strikethrough = _activeStyle.Strikethrough,
+                BaselineOffset = _activeStyle.BaselineOffset,
+                Caps = _activeStyle.Caps,
                 RightToLeft = _activeStyle.RunRightToLeft,
                 Color = _activeStyle.Color is { } color ? new ThemeAwareColor(color) : null,
                 Hyperlink = _activeStyle.Hyperlink,
@@ -1202,6 +1308,8 @@ public static class ExternalRichTextClipboardPlanner
             && left.Italic == right.Italic
             && left.Underline == right.Underline
             && left.Strikethrough == right.Strikethrough
+            && left.BaselineOffset == right.BaselineOffset
+            && left.Caps == right.Caps
             && left.RunRightToLeft == right.RunRightToLeft
             && Nullable.Equals(left.Color, right.Color)
             && left.BoldSet == right.BoldSet
@@ -1219,6 +1327,8 @@ public static class ExternalRichTextClipboardPlanner
             _state.ItalicSet = true;
             _state.Underline = false;
             _state.Strikethrough = false;
+            _state.BaselineOffset = null;
+            _state.Caps = RunTextCaps.None;
             _state.RunRightToLeft = null;
             _state.ColorIndex = 0;
         }
@@ -1270,7 +1380,22 @@ public static class ExternalRichTextClipboardPlanner
                 return;
             }
 
-            if (level.NumberFormat == 23)
+            var formattingOverride = listOverride.FormattingByLevel.TryGetValue(
+                _state.ListLevel,
+                out var overrideLevel)
+                ? overrideLevel
+                : null;
+            int numberFormat = formattingOverride is { NumberFormatSpecified: true }
+                ? formattingOverride.NumberFormat
+                : level.NumberFormat;
+            if ((formattingOverride?.LeftIndentTwips ?? level.LeftIndentTwips) is { } overrideLeftIndent
+                && _state.LeftIndentTwips is null)
+                paragraph.MarginLeftEmu = ToEmu(overrideLeftIndent);
+            if ((formattingOverride?.FirstLineIndentTwips ?? level.FirstLineIndentTwips) is { } overrideFirstIndent
+                && _state.FirstLineIndentTwips is null)
+                paragraph.IndentEmu = ToEmu(overrideFirstIndent);
+
+            if (numberFormat == 23)
             {
                 paragraph.BulletKind = BulletKind.Char;
                 paragraph.BulletChar = "\u2022";
@@ -1279,8 +1404,12 @@ public static class ExternalRichTextClipboardPlanner
             }
 
             paragraph.BulletKind = BulletKind.Auto;
-            paragraph.AutoNumType = MapAutoNumType(level.NumberFormat);
-            paragraph.AutoNumStartAt = level.StartAt;
+            paragraph.AutoNumType = MapAutoNumType(numberFormat);
+            paragraph.AutoNumStartAt = listOverride.StartAtByLevel.TryGetValue(_state.ListLevel, out var overrideStartAt)
+                ? overrideStartAt
+                : formattingOverride is { StartAtSpecified: true }
+                    ? formattingOverride.StartAt
+                    : level.StartAt;
             bool firstOccurrence = !paragraph.AutoNumStartAtSpecified
                 && _seenListLevels.Add((overrideId, _state.ListLevel));
             paragraph.AutoNumStartAtSpecified |= firstOccurrence;

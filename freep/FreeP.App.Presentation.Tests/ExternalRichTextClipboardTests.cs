@@ -145,6 +145,43 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfSuperscriptAndSubscript_PreserveBaselineControls()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}\f0\fs24 H\super i\sub j\nosupersub k\up12 u\dn6 d}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("H", "i", "j", "k", "u", "d");
+        runs[0].BaselineOffset.Should().BeNull();
+        runs[1].BaselineOffset.Should().Be(25_000);
+        runs[2].BaselineOffset.Should().Be(-25_000);
+        runs[3].BaselineOffset.Should().BeNull();
+        runs[4].BaselineOffset.Should().Be(50_000);
+        runs[5].BaselineOffset.Should().Be(-25_000);
+    }
+
+    [Fact]
+    public void RtfCapsControls_PreserveRunCapitalizationSemantics()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}\f0\fs24 a\caps b\caps0 c\scaps d\scaps0 e}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var runs = payload!.Body.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("a", "b", "c", "d", "e");
+        runs[0].Caps.Should().Be(RunTextCaps.None);
+        runs[1].Caps.Should().Be(RunTextCaps.All);
+        runs[2].Caps.Should().Be(RunTextCaps.None);
+        runs[3].Caps.Should().Be(RunTextCaps.Small);
+        runs[4].Caps.Should().Be(RunTextCaps.None);
+    }
+
+    [Fact]
     public void RtfPict_PreservesPngPayloadAlongsideText()
     {
         var png = Convert.FromBase64String(
@@ -320,6 +357,62 @@ public sealed class ExternalRichTextClipboardTests
         continuation.AutoNumStartAt.Should().Be(3);
         continuation.AutoNumStartAtSpecified.Should().BeFalse();
         continuation.Align.Should().Be(TextAlign.Right);
+    }
+
+    [Fact]
+    public void WordListOverride_StartAtRestart_IsAppliedOnlyToItsFirstParagraph()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid1
+{\listlevel\levelnfc0\levelstartat1\leveltext\'02\'00.;\levelnumbers\'01;}
+}}
+{\listoverridetable
+{\listoverride\listid1\listoverridecount1
+{\lfolevel\listoverridestart\levelstartat7}\ls1}}
+\pard\ls1\ilvl0 Restarted\par
+\pard\ls1\ilvl0 Continues}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.Body.Paragraphs.Should().HaveCount(2);
+        var first = payload.Body.Paragraphs[0];
+        first.BulletKind.Should().Be(BulletKind.Auto);
+        first.AutoNumType.Should().Be(AutoNumType.ArabicPeriod);
+        first.AutoNumStartAt.Should().Be(7);
+        first.AutoNumStartAtSpecified.Should().BeTrue();
+
+        var continuation = payload.Body.Paragraphs[1];
+        continuation.AutoNumStartAt.Should().Be(7);
+        continuation.AutoNumStartAtSpecified.Should().BeFalse();
+    }
+
+    [Fact]
+    public void WordListOverride_FormattingLevel_PreservesBulletAndIndentGeometry()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid1
+{\listlevel\levelnfc0\levelstartat1\leveltext\'02\'00.;\levelnumbers\'01;}
+}}
+{\listoverridetable
+{\listoverride\listid1\listoverridecount1
+{\lfolevel\listoverrideformat1
+{\listlevel\levelnfc23\levelstartat1\li1440\fi-360\leveltext\'01\u8226?;\levelnumbers;}}
+\ls1}}
+\pard\ls1\ilvl0 Overridden}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var paragraph = payload!.Body.Paragraphs.Single();
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("\u2022");
+        paragraph.MarginLeftEmu.Should().Be(914400);
+        paragraph.IndentEmu.Should().Be(-228600);
     }
 
     [Fact]

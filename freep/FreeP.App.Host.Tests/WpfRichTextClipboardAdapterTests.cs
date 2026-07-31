@@ -115,6 +115,31 @@ public sealed class WpfRichTextClipboardAdapterTests
     }
 
     [StaFact]
+    public void TryPasteDataObject_PreservesRtfBaselineOffsets()
+    {
+        const string rtf =
+            @"{\rtf1\ansi\deff0{\fonttbl{\f0 Calibri;}}\f0\fs24 H\super i\sub j\nosupersub k}";
+        var target = InCanvasRichClipboardPayload.FromPlainText("replace me").Body;
+        var targetBox = new RichTextBox(TextBodyFlowDocumentConverter.ToFlowDocument(target, 12));
+        targetBox.SelectAll();
+        var data = new DataObject();
+        data.SetData(
+            DataFormats.Rtf,
+            new MemoryStream(Encoding.ASCII.GetBytes(rtf)),
+            autoConvert: false);
+
+        WpfRichTextClipboardAdapter.TryPasteDataObject(targetBox, target, data, out var updated)
+            .Should().BeTrue();
+
+        var runs = updated!.Paragraphs.Single().Runs;
+        runs.Select(run => run.Text).Should().Equal("H", "i", "j", "k");
+        runs[0].BaselineOffset.Should().BeNull();
+        runs[1].BaselineOffset.Should().Be(25_000);
+        runs[2].BaselineOffset.Should().Be(-25_000);
+        runs[3].BaselineOffset.Should().BeNull();
+    }
+
+    [StaFact]
     public void BuildDataObject_PublishesFreePAndNativeRichFormats()
     {
         var source = Body();
