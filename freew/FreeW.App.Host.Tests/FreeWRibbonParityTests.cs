@@ -2758,6 +2758,10 @@ public sealed class FreeWRibbonParityTests
         cmd!.Execute(RibbonCommandContext.Empty);
         paneVisible.Should().BeTrue("Execute must invoke the toggle callback");
         stateful.GetState().IsChecked.Should().BeTrue("IsChecked reflects the toggle state");
+
+        cmd.Execute(RibbonCommandContext.Empty);
+        paneVisible.Should().BeFalse("the same command must toggle the pane closed");
+        stateful.GetState().IsChecked.Should().BeFalse("IsChecked must follow the live hidden state");
     }
 
     /// <summary>

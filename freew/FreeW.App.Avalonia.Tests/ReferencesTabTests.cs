@@ -853,6 +853,30 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void ShowNotes_with_pane_callbacks_exposes_live_checked_state()
+    {
+        var paneVisible = false;
+        var callbacks = NoopCallbacks() with
+        {
+            ToggleNotesPane = () => paneVisible = !paneVisible,
+            IsNotesPaneVisible = () => paneVisible,
+        };
+        var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), callbacks);
+
+        registry.TryGet(new RibbonCommandId("freew.show-notes"), out var command).Should().BeTrue();
+        var stateful = command.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        stateful.GetState().IsChecked.Should().BeFalse();
+
+        command!.Execute(RibbonCommandContext.Empty);
+        paneVisible.Should().BeTrue();
+        stateful.GetState().IsChecked.Should().BeTrue();
+
+        command.Execute(RibbonCommandContext.Empty);
+        paneVisible.Should().BeFalse();
+        stateful.GetState().IsChecked.Should().BeFalse();
+    }
+
+    [Fact]
     public void References_tab_definition_exposes_groups()
     {
         var definition = FreeWRibbon.BuildDefinition();

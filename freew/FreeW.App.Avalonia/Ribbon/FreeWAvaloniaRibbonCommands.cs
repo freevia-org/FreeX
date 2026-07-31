@@ -1330,7 +1330,10 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.previous-footnote", new ActionRibbonCommand(() => editor.MoveToPreviousFootnote()));
         r.Register("freew.next-endnote", new ActionRibbonCommand(() => editor.MoveToNextEndnote()));
         r.Register("freew.previous-endnote", new ActionRibbonCommand(() => editor.MoveToPreviousEndnote()));
-        r.Register("freew.show-notes", new ActionRibbonCommand(callbacks.ToggleNotesPane ?? (() => { })));
+        r.Register("freew.show-notes",
+            callbacks.ToggleNotesPane is { } toggle && callbacks.IsNotesPaneVisible is { } isVisible
+                ? new FreeWStatefulToggleCommand(toggle, isVisible)
+                : new ActionRibbonCommand(callbacks.ToggleNotesPane ?? (() => { })));
         r.Register("freew.footnote-endnote-options", new ActionRibbonCommand(
             callbacks.OpenFootnoteEndnoteOptionsDialog ?? (() => { })));
 

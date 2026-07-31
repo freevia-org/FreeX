@@ -1145,7 +1145,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.previous-endnote", new NavigateNoteCommand(editor, footnote: false, previous: true));
         if (onToggleNotesPane is not null && isNotesPaneVisible is not null)
         {
-            var notesPaneCmd = new ToggleNotesPaneCommand(editor, onToggleNotesPane, isNotesPaneVisible);
+            var notesPaneCmd = new FreeWStatefulToggleCommand(
+                onToggleNotesPane,
+                isNotesPaneVisible,
+                editor.CommitToModel);
             registry.Register("freew.show-notes", notesPaneCmd);
             stateful.Add(("freew.show-notes", notesPaneCmd));
         }
@@ -4322,23 +4325,6 @@ internal static class FreeWRibbonCommands
 
             dialog.ShowDialog();
         }
-    }
-
-    // References > Footnotes > Show Notes (backed toggle variant): shows or hides the docked Notes pane.
-    // Replaces the read-only NotesListDialog when the host passes toggle callbacks through Build().
-    private sealed class ToggleNotesPaneCommand(
-        DocumentView editor,
-        Action onToggle,
-        Func<bool> isVisible) : IRibbonStatefulCommand
-    {
-        public void Execute(RibbonCommandContext context)
-        {
-            editor.CommitToModel();
-            onToggle();
-        }
-
-        public RibbonCommandState GetState() =>
-            new(IsEnabled: true, IsChecked: isVisible());
     }
 
     // Insert > References > Footnote/Endnote Options: open the Footnote and Endnote numbering options
