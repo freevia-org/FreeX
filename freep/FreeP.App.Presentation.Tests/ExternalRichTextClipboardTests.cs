@@ -380,6 +380,27 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void WordListTable_UsesCustomLevelTextGlyphForBulletLevels()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+{\listtable
+{\list\listid7
+{\listlevel\levelnfc23\levelstartat1\leveltext\'01\u9654?;\levelnumbers;}
+}}
+{\listoverridetable{\listoverride\listid7\ls7}}
+\pard\ls7\ilvl0 Custom bullet}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        payload!.PlainText.Should().Be("Custom bullet");
+        var paragraph = payload.Body.Paragraphs.Single();
+        paragraph.BulletKind.Should().Be(BulletKind.Char);
+        paragraph.BulletChar.Should().Be("▶");
+    }
+
+    [Fact]
     public void WordListOverride_StartAtRestart_IsAppliedOnlyToItsFirstParagraph()
     {
         const string rtf =

@@ -66,6 +66,7 @@ public static class ExternalRichTextClipboardPlanner
             public bool StartAtSpecified { get; set; }
             public int? LeftIndentTwips { get; set; }
             public int? FirstLineIndentTwips { get; set; }
+            public string? BulletChar { get; set; }
         }
 
         private sealed class ListOverrideDefinition
@@ -221,6 +222,7 @@ public static class ExternalRichTextClipboardPlanner
             public Hyperlink? Hyperlink;
             public bool InTable;
             public int TableNesting;
+            public int ListLevelTextPrefixBytesRemaining;
 
             public State Clone() => (State)MemberwiseClone();
         }
@@ -590,6 +592,8 @@ public static class ExternalRichTextClipboardPlanner
                 case "leveltext":
                     _state.Destination = Destination.ListLevelText;
                     _state.SkipOutput = true;
+                    // The first hex byte is the RTF level-text length marker.
+                    _state.ListLevelTextPrefixBytesRemaining = 1;
                     break;
                 case "field":
                     _state.Field = new FieldContext();
@@ -721,7 +725,11 @@ public static class ExternalRichTextClipboardPlanner
                     if (parameter is { } unicode)
                     {
                         short signed = unchecked((short)unicode);
-                        AppendText(((char)signed).ToString());
+                        string text = ((char)signed).ToString();
+                        if (_state.Destination == Destination.ListLevelText)
+                            CaptureListLevelTextChar(text);
+                        else
+                            AppendText(text);
                         _state.UnicodeFallbackRemaining = _state.UnicodeSkip;
                     }
                     break;
@@ -921,6 +929,19 @@ public static class ExternalRichTextClipboardPlanner
             {
                 if (value == (byte)';')
                     AddColorTableEntry();
+                return;
+            }
+
+            if (_state.Destination == Destination.ListLevelText)
+            {
+                if (_state.ListLevelTextPrefixBytesRemaining > 0)
+                {
+                    _state.ListLevelTextPrefixBytesRemaining--;
+                    return;
+                }
+
+                if (value is not (byte)';' and not (byte)'\r' and not (byte)'\n')
+                    CaptureListLevelTextChar(DecodeByte(value));
                 return;
             }
 
@@ -1405,7 +1426,7 @@ public static class ExternalRichTextClipboardPlanner
             if (numberFormat == 23)
             {
                 paragraph.BulletKind = BulletKind.Char;
-                paragraph.BulletChar = "\u2022";
+                paragraph.BulletChar = (formattingOverride?.BulletChar ?? level.BulletChar) ?? "\u2022";
                 paragraph.AutoNumStartAtSpecified = false;
                 return;
             }
@@ -1420,6 +1441,22 @@ public static class ExternalRichTextClipboardPlanner
             bool firstOccurrence = !paragraph.AutoNumStartAtSpecified
                 && _seenListLevels.Add((overrideId, _state.ListLevel));
             paragraph.AutoNumStartAtSpecified |= firstOccurrence;
+        }
+
+        private void CaptureListLevelTextChar(string text)
+        {
+            var level = _state.Destination == Destination.ListOverrideTable
+                ? _currentListOverrideLevelDefinition
+                : _currentListLevel;
+            if (level is null
+                || level.NumberFormat != 23
+                || level.BulletChar is not null
+                || string.IsNullOrEmpty(text))
+                return;
+
+            char candidate = text[0];
+            if (!char.IsControl(candidate) && candidate != ';')
+                level.BulletChar = candidate.ToString();
         }
 
         private void AppendFieldInstruction(string text)
