@@ -3271,7 +3271,8 @@ public sealed class DocumentView : Control
     /// <para>
     /// The adapter emits the already-laid-out table cell surfaces before inline images and body
     /// glyphs, together with the already-paginated headers, footers, footnotes, and endnotes.
-    /// Floating objects and other decorations remain outside this bounded draw-op slice.
+    /// Floating images use the same snapshot geometry and behind/in-front passes as the live
+    /// Avalonia compositor; other floating object kinds remain outside this bounded draw-op slice.
     /// </para>
     /// </summary>
     public Free.Shared.Pdf.PdfContentDocument BuildPdfContent()
@@ -3621,6 +3622,72 @@ public sealed class DocumentView : Control
                 imageOpsByPage[pageIndex]);
         }
 
+        // Floating images use the same snapshot/page-space geometry and behind/in-front draw
+        // buckets as the live Avalonia renderer. Keep them as separate passes so a behind-text
+        // image lands below body glyphs while an in-front image remains above them. PDF pages clip
+        // any authored edge that falls outside the media box, matching the compositor's page clip.
+        var floatingBehindImageOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+        var floatingInFrontImageOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+
+        void AddFloatingImageOps(
+            bool behindText,
+            List<List<Free.Shared.Pdf.PdfDrawOp>> target)
+        {
+            foreach (var snapshot in DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(
+                         _floatingSnapshots,
+                         behindText))
+            {
+                if (snapshot.Kind != DocumentFloatingObjectKind.Image
+                    || snapshot.BlockIndex < 0
+                    || snapshot.BlockIndex >= _doc.Blocks.Count
+                    || _doc.Blocks[snapshot.BlockIndex] is not Paragraph paragraph
+                    || snapshot.RunIndex < 0
+                    || snapshot.RunIndex >= paragraph.Runs.Count
+                    || paragraph.Runs[snapshot.RunIndex].Image is not { IsFloating: true } image)
+                    continue;
+
+                var pageIndex = PageIndexFromPageSpaceY(snapshot.Rect.TopDip + 0.01);
+                if (pageIndex < 0)
+                    continue;
+
+                var rendered = _floatingImages
+                    .Where(item => item.BlockIndex == snapshot.BlockIndex
+                        && item.RunIndex == snapshot.RunIndex)
+                    .Select(item => item.Image)
+                    .FirstOrDefault()
+                    ?? DecodeRenderedImage(image);
+                var sourceRect = new Rect(
+                    snapshot.Rect.XDip,
+                    snapshot.Rect.YDip,
+                    snapshot.Rect.WidthDip,
+                    snapshot.Rect.HeightDip);
+                var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
+                if (BuildPdfImage(sourceRect, image, rendered, pageTopDip, pageHeightPt) is not { } imageOp)
+                    continue;
+
+                while (target.Count <= pageIndex)
+                    target.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
+                target[pageIndex].Add(imageOp);
+            }
+        }
+
+        AddFloatingImageOps(behindText: true, target: floatingBehindImageOpsByPage);
+        AddFloatingImageOps(behindText: false, target: floatingInFrontImageOpsByPage);
+
+        for (var pageIndex = 0; pageIndex < floatingBehindImageOpsByPage.Count; pageIndex++)
+        {
+            if (floatingBehindImageOpsByPage[pageIndex].Count == 0)
+                continue;
+
+            EnsurePage(pageIndex);
+            var insertionIndex = pageIndex < tableSurfaceCountsByPage.Count
+                ? tableSurfaceCountsByPage[pageIndex]
+                : 0;
+            pagesOps[pageIndex].InsertRange(
+                Math.Min(insertionIndex, pagesOps[pageIndex].Count),
+                floatingBehindImageOpsByPage[pageIndex]);
+        }
+
         // The live Avalonia layout has already resolved page ownership, field text, wrapping, and
         // note bands. Carry those same text regions into the PDF model so export does not silently
         // lose document chrome that Print Preview visibly shows.
@@ -3641,6 +3708,17 @@ public sealed class DocumentView : Control
             var face = fmt.Bold ? Free.Shared.Pdf.PdfFontFace.Bold : Free.Shared.Pdf.PdfFontFace.Regular;
             pagesOps[pageIndex].Add(new Free.Shared.Pdf.PdfText(
                 Math.Max(0, xPt), yPt, fontSizePt, face, ParseColor(fmt.ColorHex), text));
+        }
+
+        // In-front floating images are appended after body text, matching Render's second floating
+        // pass. Keep them ahead of header/footer and note regions, as in the live compositor.
+        for (var pageIndex = 0; pageIndex < floatingInFrontImageOpsByPage.Count; pageIndex++)
+        {
+            if (floatingInFrontImageOpsByPage[pageIndex].Count == 0)
+                continue;
+
+            EnsurePage(pageIndex);
+            pagesOps[pageIndex].AddRange(floatingInFrontImageOpsByPage[pageIndex]);
         }
 
         foreach (var item in _headerFooterItems)

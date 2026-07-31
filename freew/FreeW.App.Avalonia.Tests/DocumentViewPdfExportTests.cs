@@ -209,6 +209,121 @@ public sealed class DocumentViewPdfExportTests
             redPixels.Should().BeGreaterThan(500, "the shared PDF renderer must paint the laid-out inline image");
         }, CancellationToken.None);
 
+    [Fact]
+    public Task BuildPdfContent_IncludesFloatingImagesWithSharedPageGeometryAndLayerOrder() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 240;
+            document.Page.HeightPt = 180;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+
+            var behind = new InlineImage(SolidPng(SKColors.Red), 36, 24)
+            {
+                Wrapping = ImageWrapping.Behind,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 24,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 36,
+                CropLeft = 0.10,
+                CropTop = 0.05,
+                CropRight = 0.15,
+                CropBottom = 0.20,
+                TransparencyPct = 25,
+                RotationAngle = 12,
+                ZOrderIndex = 1,
+            };
+            var front = new InlineImage(SolidPng(SKColors.Blue), 30, 20)
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 96,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 72,
+                ZOrderIndex = 2,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Anchor text"));
+            paragraph.Runs.Add(Run.FromImage(behind));
+            paragraph.Runs.Add(Run.FromImage(front));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(800, 1200));
+
+            var ops = view.BuildPdfContent().Pages.Single().Ops.ToList();
+            var images = ops.OfType<PdfImage>().ToList();
+            images.Should().HaveCount(2);
+            var textIndex = ops.FindIndex(op => op is PdfText text && text.Text.Contains("Anchor", StringComparison.Ordinal));
+            var behindOp = images.Single(op => op.ImageBytes.SequenceEqual(behind.Bytes));
+            var frontOp = images.Single(op => op.ImageBytes.SequenceEqual(front.Bytes));
+
+            ops.IndexOf(behindOp).Should().BeLessThan(textIndex, "behind-text images must precede body glyphs");
+            ops.IndexOf(frontOp).Should().BeGreaterThan(textIndex, "in-front images must follow body glyphs");
+            behindOp.X.Should().BeApproximately(24, 0.001);
+            behindOp.Y.Should().BeApproximately(120, 0.001);
+            behindOp.Width.Should().BeApproximately(36, 0.001);
+            behindOp.Height.Should().BeApproximately(24, 0.001);
+            behindOp.SourceCrop.Should().Be(new PdfImageSourceCrop(0.10, 0.05, 0.15, 0.20));
+            behindOp.Opacity.Should().BeApproximately(0.75, 0.001);
+            behindOp.RotationDegrees.Should().BeApproximately(12, 0.001);
+            frontOp.X.Should().BeApproximately(96, 0.001);
+            frontOp.Y.Should().BeApproximately(88, 0.001);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_RendersFloatingImagesAtTheirPageSpacePixels() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 200;
+            document.Page.HeightPt = 160;
+            document.Page.MarginLeftPt = 12;
+            document.Page.MarginRightPt = 12;
+            document.Page.MarginTopPt = 12;
+            document.Page.MarginBottomPt = 12;
+
+            var image = new InlineImage(SolidPng(SKColors.Yellow), 40, 30)
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 20,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 30,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(image));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(800, 1000));
+
+            var png = SkiaPdfWriter.RenderPagesToPng(view.BuildPdfContent(), dpi: 96).Single();
+            using var bitmap = SKBitmap.Decode(png);
+            var scale = 96.0 / 72.0;
+            var greenPixels = new List<(int X, int Y)>();
+            for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red > 180 && pixel.Green > 180 && pixel.Blue < 180)
+                    greenPixels.Add((x, y));
+            }
+
+            greenPixels.Should().NotBeEmpty("the floating image must be present in the rendered PDF page");
+            var centerX = greenPixels.Average(pixel => pixel.X);
+            var centerY = greenPixels.Average(pixel => pixel.Y);
+            centerX.Should().BeApproximately((20 + 40 / 2.0) * scale, 2.0);
+            centerY.Should().BeApproximately((30 + 30 / 2.0) * scale, 2.0);
+        }, CancellationToken.None);
+
     private static byte[] SolidPng(SKColor color)
     {
         using var bitmap = new SKBitmap(16, 8, SKColorType.Bgra8888, SKAlphaType.Premul);
