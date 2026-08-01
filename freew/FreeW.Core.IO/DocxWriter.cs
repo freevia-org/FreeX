@@ -1481,6 +1481,7 @@ public static class DocxWriter
         private int _revisionId;
         private int _shapeDrawingId;
         private int _contentControlId;
+        private readonly Dictionary<string, Stack<int>> _openBookmarkIds = new(StringComparer.Ordinal);
 
         private readonly HashSet<int> _reservedRevisionIds;
 
@@ -1491,6 +1492,30 @@ public static class DocxWriter
         }
 
         public int NextBookmarkId() => ++_bookmarkId;
+        public int BeginBookmark(string pairKey)
+        {
+            var id = NextBookmarkId();
+            if (!_openBookmarkIds.TryGetValue(pairKey, out var ids))
+            {
+                ids = new Stack<int>();
+                _openBookmarkIds[pairKey] = ids;
+            }
+            ids.Push(id);
+            return id;
+        }
+
+        public bool TryEndBookmark(string pairKey, out int id)
+        {
+            if (_openBookmarkIds.TryGetValue(pairKey, out var ids) && ids.Count > 0)
+            {
+                id = ids.Pop();
+                if (ids.Count == 0)
+                    _openBookmarkIds.Remove(pairKey);
+                return true;
+            }
+            id = 0;
+            return false;
+        }
         public int NextRevisionId()
         {
             do
@@ -2249,6 +2274,7 @@ public static class DocxWriter
             StyleId = paragraph.StyleId,
         };
         copy.BookmarkNames.AddRange(paragraph.BookmarkNames);
+        copy.BookmarkBoundaries.AddRange(paragraph.BookmarkBoundaries);
         foreach (var run in paragraph.Runs)
         {
             if (run.Image is not null || run.Chart is not null || run.EmbeddedObject is not null
@@ -2648,22 +2674,33 @@ public static class DocxWriter
         if (pPr is not null)
             p.Add(pPr);
 
-        // A bookmarked paragraph is bracketed by w:bookmarkStart/w:bookmarkEnd pairs (siblings of the
-        // runs) sharing one w:id per pair; the start also carries the bookmark's w:name. A paragraph
-        // may carry multiple named bookmarks (e.g. a heading that is both a TOC target and a user
-        // bookmark); each gets its own distinct id so bookmarkStart and bookmarkEnd can be paired
-        // correctly. Ids are allocated from the per-write counter so they are globally unique across
-        // the document. All bookmark starts are emitted before the runs; all ends after.
-        var bookmarkIds = new System.Collections.Generic.List<int>(paragraph.BookmarkNames.Count);
+        // Imported boundaries retain their exact run-relative positions below. Names with no imported
+        // boundary are FreeW-authored bookmarks and keep the historical whole-paragraph behavior.
+        var publicBookmarkNames = paragraph.BookmarkNames
+            .Where(name => !string.IsNullOrEmpty(name))
+            .ToHashSet(StringComparer.Ordinal);
+        var boundaryBookmarkNames = paragraph.BookmarkBoundaries
+            .Where(boundary => boundary.Kind == BookmarkBoundaryKind.Start
+                && boundary.Name is { Length: > 0 } name
+                && (name == "_GoBack" || publicBookmarkNames.Contains(name)))
+            .Select(boundary => boundary.Name!)
+            .ToHashSet(StringComparer.Ordinal);
+        var wholeParagraphBookmarkIds = new List<int>();
         foreach (var bookmarkName in paragraph.BookmarkNames)
         {
-            if (string.IsNullOrEmpty(bookmarkName)) continue;
+            if (string.IsNullOrEmpty(bookmarkName) || boundaryBookmarkNames.Contains(bookmarkName))
+                continue;
             var bId = drawings.Ids.NextBookmarkId();
-            bookmarkIds.Add(bId);
+            wholeParagraphBookmarkIds.Add(bId);
             p.Add(new XElement(W + "bookmarkStart",
                 new XAttribute(W + "id", bId),
                 new XAttribute(W + "name", bookmarkName)));
         }
+
+        var bookmarkBoundariesByRunIndex = paragraph.BookmarkBoundaries
+            .Select(boundary => boundary with { RunIndex = Math.Clamp(boundary.RunIndex, 0, paragraph.Runs.Count) })
+            .GroupBy(boundary => boundary.RunIndex)
+            .ToDictionary(group => group.Key, group => group.ToList());
 
         // Wrap maximal spans of consecutive runs sharing the same hyperlink target in a single
         // w:hyperlink. External links reference the URL's relationship id (r:id); internal links
@@ -2700,6 +2737,58 @@ public static class DocxWriter
             }
         }
 
+        bool IsActiveBookmarkBoundary(BookmarkBoundary boundary) =>
+            boundary.Kind == BookmarkBoundaryKind.End
+            || boundary.Name is { Length: > 0 } name
+                && (name == "_GoBack" || publicBookmarkNames.Contains(name));
+
+        bool HasParagraphBookmarkBoundaryAt(int runIndex) =>
+            bookmarkBoundariesByRunIndex.TryGetValue(runIndex, out var boundaries)
+            && boundaries.Any(boundary => boundary.OwnerControl is null && IsActiveBookmarkBoundary(boundary));
+
+        void EmitBookmarkBoundariesAt(int runIndex, XElement target, ContentControl? ownerControl)
+        {
+            if (!bookmarkBoundariesByRunIndex.TryGetValue(runIndex, out var boundaries))
+                return;
+
+            foreach (var boundary in boundaries)
+            {
+                if (!ReferenceEquals(boundary.OwnerControl, ownerControl))
+                    continue;
+
+                if (boundary.Kind == BookmarkBoundaryKind.Start)
+                {
+                    if (boundary.Name is not { Length: > 0 } name
+                        || (name != "_GoBack" && !publicBookmarkNames.Contains(name)))
+                    {
+                        continue;
+                    }
+
+                    if (ReferenceEquals(target, p))
+                        FlushRevision();
+                    var start = new XElement(W + "bookmarkStart",
+                        new XAttribute(W + "id", drawings.Ids.BeginBookmark(boundary.PairKey)),
+                        new XAttribute(W + "name", name));
+                    if (boundary.ColumnFirst is { } columnFirst)
+                        start.Add(new XAttribute(W + "colFirst", columnFirst));
+                    if (boundary.ColumnLast is { } columnLast)
+                        start.Add(new XAttribute(W + "colLast", columnLast));
+                    if (boundary.DisplacedByCustomXml is { Length: > 0 } displaced)
+                        start.Add(new XAttribute(W + "displacedByCustomXml", displaced));
+                    target.Add(start);
+                }
+                else if (drawings.Ids.TryEndBookmark(boundary.PairKey, out var id))
+                {
+                    if (ReferenceEquals(target, p))
+                        FlushRevision();
+                    var end = new XElement(W + "bookmarkEnd", new XAttribute(W + "id", id));
+                    if (boundary.DisplacedByCustomXml is { Length: > 0 } displaced)
+                        end.Add(new XAttribute(W + "displacedByCustomXml", displaced));
+                    target.Add(end);
+                }
+            }
+        }
+
         // Route one run-level element (a w:r or w:hyperlink) through the active revision wrapper,
         // (re)opening or closing it to match the run's revision mark before adding the element.
         void Content(Run run, XElement element)
@@ -2721,6 +2810,8 @@ public static class DocxWriter
 
         while (i < runs.Count)
         {
+            EmitBookmarkBoundariesAt(i, p, ownerControl: null);
+
             // Update the open comment range to match this run before emitting it. The textless
             // reference run does not open/extend a range; it only emits the reference marker below.
             var coveringId = runs[i].IsCommentReference ? null : runs[i].CommentId;
@@ -2769,7 +2860,11 @@ public static class DocxWriter
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
                     && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId
                     && SameRevision(head, runs[i]))
+                {
+                    EmitBookmarkBoundariesAt(i, content, control);
                     content.Add(BuildRun(runs[i++], drawings, hyperlinks, preservedNumbering, restartOverrides));
+                }
+                EmitBookmarkBoundariesAt(i, content, control);
                 var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
                 Content(head, sdt);
                 continue;
@@ -2834,7 +2929,9 @@ public static class DocxWriter
                 if (tooltip is { Length: > 0 })
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
-                while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
+                var firstHyperlinkRun = i;
+                while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i])
+                    && (i == firstHyperlinkRun || !HasParagraphBookmarkBoundaryAt(i)))
                     hyperlink.Add(BuildRun(runs[i++], drawings, hyperlinks, preservedNumbering, restartOverrides));
                 Content(head, hyperlink);
             }
@@ -2844,7 +2941,9 @@ public static class DocxWriter
                 if (tooltip is { Length: > 0 })
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
-                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
+                var firstHyperlinkRun = i;
+                while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i])
+                    && (i == firstHyperlinkRun || !HasParagraphBookmarkBoundaryAt(i)))
                     hyperlink.Add(BuildRun(runs[i++], drawings, hyperlinks, preservedNumbering, restartOverrides));
                 Content(head, hyperlink);
             }
@@ -2855,12 +2954,14 @@ public static class DocxWriter
             }
         }
 
+        EmitBookmarkBoundariesAt(runs.Count, p, ownerControl: null);
+
         // Close any still-open revision wrapper, then any still-open comment range, at paragraph end.
         FlushRevision();
         if (openCommentId is { } trailing)
             p.Add(new XElement(W + "commentRangeEnd", new XAttribute(W + "id", trailing)));
 
-        foreach (var bId in bookmarkIds)
+        foreach (var bId in wholeParagraphBookmarkIds)
             p.Add(new XElement(W + "bookmarkEnd", new XAttribute(W + "id", bId)));
 
         return p;

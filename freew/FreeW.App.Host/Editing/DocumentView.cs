@@ -7813,6 +7813,8 @@ public sealed class DocumentView : RichTextBox
     /// </para>
     private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, bool SuppressLineNumbers = false, bool SuppressLineNumbersIsSet = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false);
 
+    private sealed record RenderedBookmarkBoundary(BookmarkBoundary Boundary);
+
     private sealed record RenderedTabStopSpan(
         ParagraphTabStopPlacementPlan Plan,
         RunFormatting Formatting,
@@ -8046,7 +8048,35 @@ public sealed class DocumentView : RichTextBox
             modelParagraph.BookmarkNames.AddRange(bookmarkNames);
         foreach (var inline in wpfParagraph.Inlines)
             ReadInline(modelParagraph, inline, hyperlinkUrl: null, hyperlinkAnchor: null);
+        RebindBookmarkBoundaryControls(modelParagraph);
         return modelParagraph;
+    }
+
+    private static void RebindBookmarkBoundaryControls(ModelParagraph paragraph)
+    {
+        for (var index = 0; index < paragraph.BookmarkBoundaries.Count; index++)
+        {
+            var boundary = paragraph.BookmarkBoundaries[index];
+            if (boundary.OwnerControl is null)
+                continue;
+
+            ModelContentControl? owner = null;
+            var next = boundary.RunIndex < paragraph.Runs.Count
+                ? paragraph.Runs[boundary.RunIndex].Control
+                : null;
+            var previous = boundary.RunIndex > 0
+                ? paragraph.Runs[boundary.RunIndex - 1].Control
+                : null;
+
+            if (ReferenceEquals(next, boundary.OwnerControl) || Equals(next, boundary.OwnerControl))
+                owner = next;
+            else if (ReferenceEquals(previous, boundary.OwnerControl) || Equals(previous, boundary.OwnerControl))
+                owner = previous;
+            else
+                owner = boundary.Kind == BookmarkBoundaryKind.Start ? next : previous;
+
+            paragraph.BookmarkBoundaries[index] = boundary with { OwnerControl = owner };
+        }
     }
 
     // Flatten a WPF List into model paragraphs, stamping each with the list's kind and the nesting
@@ -8113,6 +8143,12 @@ public sealed class DocumentView : RichTextBox
                 var tooltip = info?.Tooltip ?? hyperlinkTooltip;
                 foreach (var child in link.Inlines)
                     ReadInline(modelParagraph, child, url, anchor, tooltip);
+                break;
+            case InlineUIContainer { Child: FrameworkElement { Tag: RenderedBookmarkBoundary marker } }:
+                modelParagraph.BookmarkBoundaries.Add(marker.Boundary with
+                {
+                    RunIndex = modelParagraph.Runs.Count
+                });
                 break;
             case InlineUIContainer { Child: FrameworkElement { Tag: RenderedTabStopSpan marker } }:
                 modelParagraph.Runs.Add(new ModelRun("\t", marker.Formatting)
@@ -9628,10 +9664,14 @@ public sealed class DocumentView : RichTextBox
         {
             // Emit any pre-cap runs (e.g. image/marker runs before the large letter) inline.
             for (var i = 0; i < dropCapPlan.RunIndex; i++)
+            {
+                AppendBookmarkBoundaryMarkers(wpf, paragraph, i);
                 wpf.Inlines.Add(BuildRun(
                     runs[i], paragraph, document, sourceBlockIndex, i,
                     suppressedFloatingWrapRuns?.Contains(runs[i]) == true));
+            }
 
+            AppendBookmarkBoundaryMarkers(wpf, paragraph, dropCapPlan.RunIndex);
             var capInline = BuildRun(
                 runs[dropCapPlan.RunIndex], paragraph, document, sourceBlockIndex, dropCapPlan.RunIndex,
                 suppressedFloatingWrapRuns?.Contains(runs[dropCapPlan.RunIndex]) == true);
@@ -9648,9 +9688,13 @@ public sealed class DocumentView : RichTextBox
 
             // Emit the remaining runs after the cap.
             for (var i = dropCapPlan.RunIndex + 1; i < runs.Count; i++)
+            {
+                AppendBookmarkBoundaryMarkers(wpf, paragraph, i);
                 wpf.Inlines.Add(BuildRun(
                     runs[i], paragraph, document, sourceBlockIndex, i,
                     suppressedFloatingWrapRuns?.Contains(runs[i]) == true));
+            }
+            AppendBookmarkBoundaryMarkers(wpf, paragraph, runs.Count);
         }
         else
         {
@@ -9692,6 +9736,7 @@ public sealed class DocumentView : RichTextBox
         var penPositionDip = (paraFmt.IndentLeftPt + paraFmt.FirstLineIndentPt) * PxPerPoint;
         for (var runIndex = 0; runIndex < runs.Count; runIndex++)
         {
+            AppendBookmarkBoundaryMarkers(wpf, paragraph, runIndex);
             var run = runs[runIndex];
             if (!IsPlainTextRun(run) || !run.Text.Contains('\t', StringComparison.Ordinal))
             {
@@ -9744,6 +9789,29 @@ public sealed class DocumentView : RichTextBox
                     suppressedFloatingWrapRuns?.Contains(run) == true));
                 penPositionDip += MeasureRunText(remainder, remainderRun, paragraph, document);
             }
+        }
+        AppendBookmarkBoundaryMarkers(wpf, paragraph, runs.Count);
+    }
+
+    private static void AppendBookmarkBoundaryMarkers(
+        WpfParagraph paragraph,
+        ModelParagraph modelParagraph,
+        int runIndex)
+    {
+        foreach (var boundary in modelParagraph.BookmarkBoundaries.Where(item => item.RunIndex == runIndex))
+        {
+            var marker = new Border
+            {
+                Width = 0,
+                Height = 0,
+                Focusable = false,
+                IsHitTestVisible = false,
+                Tag = new RenderedBookmarkBoundary(boundary)
+            };
+            paragraph.Inlines.Add(new InlineUIContainer(marker)
+            {
+                BaselineAlignment = BaselineAlignment.Baseline
+            });
         }
     }
 

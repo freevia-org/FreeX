@@ -390,6 +390,7 @@ public static class DocumentCompare
             DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
+        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
         // An empty paragraph (no runs) still needs to register as inserted/deleted; the paragraph stays
         // empty in the result but is otherwise carried so block ordering is preserved.
         foreach (var run in source.Runs)
@@ -739,6 +740,7 @@ public static class DocumentCompare
             DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
+        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run));
         return clone;

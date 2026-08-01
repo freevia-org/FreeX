@@ -123,6 +123,7 @@ public static class DocumentMerge
             ParagraphFormatRevision = source.ParagraphFormatRevision,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
+        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run));
         return clone;
@@ -700,6 +701,18 @@ public static class DocumentMerge
             return;
 
         foreach (var paragraph in paragraphs)
+        {
+            for (var index = 0; index < paragraph.BookmarkBoundaries.Count; index++)
+            {
+                var boundary = paragraph.BookmarkBoundaries[index];
+                if (boundary.Kind == BookmarkBoundaryKind.Start
+                    && boundary.Name is { } boundaryName
+                    && names.TryGetValue(boundaryName, out var mappedBoundaryName))
+                {
+                    paragraph.BookmarkBoundaries[index] = boundary with { Name = mappedBoundaryName };
+                }
+            }
+
             foreach (var run in paragraph.Runs)
             {
                 if (run.HyperlinkAnchor is { } anchor && names.TryGetValue(anchor, out var mappedAnchor))
@@ -708,6 +721,7 @@ public static class DocumentMerge
                     && names.TryGetValue(crossReference.Target, out var mappedTarget))
                     run.CrossReference = crossReference with { Target = mappedTarget };
             }
+        }
     }
 
     private static string AllocateBookmarkName(string sourceName, HashSet<string> usedNames)

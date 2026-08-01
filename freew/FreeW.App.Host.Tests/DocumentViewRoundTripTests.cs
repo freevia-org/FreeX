@@ -32,6 +32,37 @@ public sealed class DocumentViewRoundTripTests
         ((Paragraph)document.Blocks[blockIndex]).Runs[0];
 
     [StaFact]
+    public void BookmarkBoundaries_MoveWithInlineEditsBeforeCommit()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var first = new Paragraph();
+        first.Runs.Add(new Run("A"));
+        first.Runs.Add(new Run("B"));
+        first.BookmarkNames.Add("Across");
+        first.BookmarkBoundaries.Add(new BookmarkBoundary("7", BookmarkBoundaryKind.Start, 1, "Across"));
+        var second = new Paragraph();
+        second.Runs.Add(new Run("C"));
+        second.Runs.Add(new Run("D"));
+        second.BookmarkBoundaries.Add(new BookmarkBoundary("7", BookmarkBoundaryKind.End, 1));
+        document.Blocks.Add(first);
+        document.Blocks.Add(second);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var renderedFirst = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        renderedFirst.Inlines.InsertBefore(renderedFirst.Inlines.FirstInline, new System.Windows.Documents.Run("X"));
+        view.CommitToModel();
+        var recovered = view.Model;
+        var paragraphs = recovered.Paragraphs.ToList();
+
+        paragraphs[0].BookmarkBoundaries.Should().Equal(
+            new BookmarkBoundary("7", BookmarkBoundaryKind.Start, 2, "Across"));
+        paragraphs[1].BookmarkBoundaries.Should().Equal(
+            new BookmarkBoundary("7", BookmarkBoundaryKind.End, 1));
+    }
+
+    [StaFact]
     public void ContextualSpacing_SuppressesSharedMarginForAdjacentSameStyleParagraphs()
     {
         var document = TextDocument.CreateEmpty();
