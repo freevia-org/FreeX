@@ -1914,14 +1914,24 @@ internal static class FreeWAvaloniaRibbonCommands
                 return;
 
             if (TryParseSize(context.SelectedValue, out var widthPt, out var heightPt))
-                editor.SetFloatingSize(widthPt, heightPt);
+                ApplySize(widthPt, heightPt);
             else if (string.IsNullOrWhiteSpace(context.SelectedValue))
                 openDialog?.Invoke();
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
 
-        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind
+        private void ApplySize(double widthPt, double heightPt)
+        {
+            if (requiredKind == "Shape")
+                editor.SetSelectedShapeSize(widthPt, heightPt);
+            else
+                editor.SetFloatingSize(widthPt, heightPt);
+        }
+
+        private bool IsEnabled() => (requiredKind == "Shape"
+                ? editor.SelectedFloatingShape() is not null
+                : editor.SelectedFloatingInfo?.Kind == requiredKind)
             && editor.GetSelectedFloatingSize() is not null;
 
         private static bool TryParseSize(string? value, out double widthPt, out double heightPt)
@@ -1948,12 +1958,19 @@ internal static class FreeWAvaloniaRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             if (IsEnabled())
-                editor.SetFloatingSize(preset.WidthPt, preset.HeightPt);
+            {
+                if (requiredKind == "Shape")
+                    editor.SetSelectedShapeSize(preset.WidthPt, preset.HeightPt);
+                else
+                    editor.SetFloatingSize(preset.WidthPt, preset.HeightPt);
+            }
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
 
-        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind
+        private bool IsEnabled() => (requiredKind == "Shape"
+                ? editor.SelectedFloatingShape() is not null
+                : editor.SelectedFloatingInfo?.Kind == requiredKind)
             && editor.GetSelectedFloatingSize() is not null;
     }
 

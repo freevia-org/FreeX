@@ -953,11 +953,16 @@ public sealed class DocumentViewFloatingShapeTests
             var leafRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0, 1])!.Value;
             view.SelectFloatingGroupChildForTest(leafRect.Center).Should().BeTrue();
 
+            var selectedSize = view.GetSelectedFloatingSize();
+            view.SetSelectedShapeSize(80, 50);
             view.SetSelectedShapeKind(ShapeKind.RoundedRectangle);
             view.SetSelectedFloatingAltText(" Nested leaf ");
             view.SetSelectedShapeFill("#ABCDEF");
             view.SetSelectedShapeOutline("#123456", 2, "dash");
-            var applied = leaf.Kind == ShapeKind.RoundedRectangle
+            var applied = selectedSize == (42d, 24d)
+                && leaf.WidthPt == 80
+                && leaf.HeightPt == 50
+                && leaf.Kind == ShapeKind.RoundedRectangle
                 && leaf.AltText == "Nested leaf"
                 && leaf.FillColorHex == "#ABCDEF"
                 && leaf.OutlineColorHex == "#123456"
@@ -972,8 +977,10 @@ public sealed class DocumentViewFloatingShapeTests
             view.Undo();
             var altTextUndone = leaf.AltText is null;
             view.Undo();
-            verified = applied && outlineUndone && fillUndone && altTextUndone
-                && leaf.Kind == ShapeKind.Ellipse;
+            var kindUndone = leaf.Kind == ShapeKind.Ellipse;
+            view.Undo();
+            verified = applied && outlineUndone && fillUndone && altTextUndone && kindUndone
+                && leaf.WidthPt == 42 && leaf.HeightPt == 24;
         });
         if (!ran) return;
         verified.Should().BeTrue();

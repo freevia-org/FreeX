@@ -2506,6 +2506,13 @@ public sealed class DocumentView : RichTextBox
     {
         if (widthPt <= 0 || heightPt <= 0) return;
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetDrawingGroupChildSizeCommand(
+                nested.BlockIndex, nested.RunIndex, nested.ChildPath, widthPt, heightPt));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
         _commands.Execute(new SetShapeSizeCommand(blockIndex, runIndex, widthPt, heightPt));

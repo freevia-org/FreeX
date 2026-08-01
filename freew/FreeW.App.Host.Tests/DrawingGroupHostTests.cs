@@ -399,11 +399,13 @@ public sealed class DrawingGroupHostTests
         view.SelectFloatingObject(outer);
         view.SelectFloatingGroupChild(outer, [0, 1]);
 
+        view.SetSelectedShapeSize(80, 50);
         view.SetSelectedShapeKind(ShapeKind.RoundedRectangle);
         view.SetSelectedShapeAltText(" Nested leaf ");
         view.SetSelectedShapeFill("#ABCDEF");
         view.SetSelectedShapeOutline("#123456", 2, "dash");
 
+        (leaf.WidthPt, leaf.HeightPt).Should().Be((80, 50));
         leaf.Kind.Should().Be(ShapeKind.RoundedRectangle);
         leaf.AltText.Should().Be("Nested leaf");
         leaf.FillColorHex.Should().Be("#ABCDEF");
@@ -420,6 +422,8 @@ public sealed class DrawingGroupHostTests
         leaf.AltText.Should().BeNull();
         view.Undo();
         leaf.Kind.Should().Be(ShapeKind.Ellipse);
+        view.Undo();
+        (leaf.WidthPt, leaf.HeightPt).Should().Be((44, 28));
     }
 
     [StaFact]

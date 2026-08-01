@@ -635,6 +635,7 @@ public sealed class DrawingGroupRoundTripTests
         var context = new CommandContext(document);
         var path = new[] { 0, 1 };
 
+        new SetDrawingGroupChildSizeCommand(0, 0, path, 96, 58).Apply(context);
         new SetShapeKindCommand(0, 0, ShapeKind.RoundedRectangle, path).Apply(context);
         new SetShapeAltTextCommand(0, 0, "Nested leaf", path).Apply(context);
         new SetShapeFillCommand(0, 0, "#ABCDEF", path).Apply(context);
@@ -648,6 +649,8 @@ public sealed class DrawingGroupRoundTripTests
         var readSibling = readInner.Children[0].Should().BeOfType<Shape>().Subject;
         var readLeaf = readInner.Children[1].Should().BeOfType<Shape>().Subject;
 
+        readLeaf.WidthPt.Should().BeApproximately(96, 0.01);
+        readLeaf.HeightPt.Should().BeApproximately(58, 0.01);
         readLeaf.Kind.Should().Be(ShapeKind.RoundedRectangle);
         readLeaf.AltText.Should().Be("Nested leaf");
         readLeaf.FillColorHex.Should().Be("#ABCDEF");

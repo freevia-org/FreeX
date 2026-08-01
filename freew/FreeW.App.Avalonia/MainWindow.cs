@@ -938,7 +938,7 @@ public sealed partial class MainWindow : Window
             return;
         var result = await ImageSizeDialog.ShowAsync(this, shape.WidthPt, shape.HeightPt, "Shape Size");
         if (result is not null)
-            _editor.SetFloatingSize(result.Width, result.Height);
+            _editor.SetSelectedShapeSize(result.Width, result.Height);
         _editor.Focus();
     }
 

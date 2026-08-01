@@ -13344,6 +13344,23 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
+    /// <summary>Set the selected direct or nested shape size through one undoable command.</summary>
+    public void SetSelectedShapeSize(double widthPt, double heightPt)
+    {
+        if (widthPt <= 0 || heightPt <= 0)
+            return;
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetDrawingGroupChildSizeCommand(
+                nested.BlockIndex, nested.RunIndex, nested.ChildPath, widthPt, heightPt));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
+        if (SelectedFloatingShapeLocation() is not null)
+            SetFloatingSize(widthPt, heightPt);
+    }
+
     /// <summary>
     /// Set the selected picture size through the same image-specific model command used by WPF.
     /// </summary>
@@ -13372,6 +13389,8 @@ public sealed class DocumentView : Control
     /// </summary>
     public (double WidthPt, double HeightPt)? GetSelectedFloatingSize()
     {
+        if (_selectedFloatingGroupChild is not null && SelectedFloatingShape() is { } nestedShape)
+            return (nestedShape.WidthPt, nestedShape.HeightPt);
         if (_selectedFloating is not { } sel) return null;
         if (_doc.Blocks[sel.BlockIndex] is not Paragraph para) return null;
         if (sel.RunIndex < 0 || sel.RunIndex >= para.Runs.Count) return null;
