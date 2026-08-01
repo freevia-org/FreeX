@@ -1,6 +1,9 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Linq;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 
 namespace FreeW.Core.IO.Tests;
 
@@ -59,10 +62,13 @@ public sealed class RepeatingSectionContentControlRoundTripTests
         var saved = Write(imported);
         var xml = ReadDocumentXml(saved);
         AssertCanonicalPackageXml(xml);
+        AssertOffice2013Valid(saved);
 
         var reopened = DocxReader.Read(new MemoryStream(saved));
         AssertModel(reopened);
-        AssertCanonicalPackageXml(ReadDocumentXml(Write(reopened)));
+        var secondSave = Write(reopened);
+        AssertCanonicalPackageXml(ReadDocumentXml(secondSave));
+        AssertOffice2013Valid(secondSave);
     }
 
     [Fact]
@@ -185,6 +191,14 @@ public sealed class RepeatingSectionContentControlRoundTripTests
         using var zip = new ZipArchive(new MemoryStream(package), ZipArchiveMode.Read);
         using var stream = zip.GetEntry("word/document.xml")!.Open();
         return XDocument.Load(stream);
+    }
+
+    private static void AssertOffice2013Valid(byte[] package)
+    {
+        using var stream = new MemoryStream(package);
+        using var document = WordprocessingDocument.Open(stream, false);
+        new OpenXmlValidator(FileFormatVersions.Office2013).Validate(document)
+            .Should().BeEmpty();
     }
 
     private static void Add(ZipArchive zip, string path, string text)
