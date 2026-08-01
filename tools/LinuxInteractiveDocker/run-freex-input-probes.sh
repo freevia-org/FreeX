@@ -2879,6 +2879,111 @@ probe_outline_nested_columns_physical() {
     dismiss_active_popups
 }
 
+probe_outline_nested_save_reopen_physical() {
+    local artifacts="outline-nested-save-reopen-before.png;outline-nested-save-reopen-after.png;outline-nested-save-reopen-postcondition.txt"
+    local save_clean=false package_passed=false dialog_open=false dialog_closed=false values_restored=false
+    local package_signature="" reopened_values=""
+    local before_windows=0 after_windows=0
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "outline-nested-save-reopen-postcondition.txt" \
+            "requires-xlsx=true\ndocument-path=$document_path\n"
+        record "outline-nested-save-reopen-physical" "failed" \
+            "outline-nested-save-reopen-postcondition.txt" \
+            "The physical nested-outline save/reopen lane requires an XLSX document path so outline XML can be retained." \
+            "$artifacts"
+        return
+    fi
+
+    capture "outline-nested-save-reopen-before.png"
+    send_key ctrl+s
+    wait_for_document_clean && save_clean=true
+
+    # Inspect the saved package before reopening it. This proves the saved artifact retained the
+    # nested row/column outline levels independently of the later visual and clipboard checks.
+    package_signature="$(python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+try:
+    with zipfile.ZipFile(sys.argv[1]) as package:
+        worksheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+        rows = {
+            node.attrib.get("r", ""): node.attrib.get("outlineLevel", "0")
+            for node in worksheet.findall(".//" + main + "row")
+            if node.attrib.get("r") in {"10", "11", "12", "13", "14"}
+        }
+        columns = {}
+        for node in worksheet.findall(".//" + main + "col"):
+            minimum = int(node.attrib.get("min", "0"))
+            maximum = int(node.attrib.get("max", "0"))
+            for column in range(max(8, minimum), min(12, maximum) + 1):
+                columns[str(column)] = node.attrib.get("outlineLevel", "0")
+        expected_rows = {"10": "1", "11": "2", "12": "2", "13": "1", "14": "1"}
+        expected_columns = {"8": "1", "9": "2", "10": "2", "11": "2", "12": "1"}
+        if rows != expected_rows or columns != expected_columns:
+            raise ValueError("nested outline levels did not persist")
+        print(f"rows={rows}|columns={columns}|auto-filter={worksheet.find(main + 'autoFilter') is not None}")
+except (OSError, KeyError, ET.ParseError, ValueError, StopIteration):
+    raise SystemExit(1)
+PY
+)" || package_signature=""
+    if [[ "$package_signature" == *"rows="* && "$package_signature" == *"columns="* ]]; then
+        package_passed=true
+    fi
+
+    # Reopen through the production GTK picker, then read the seeded row values from the live
+    # reopened sheet through the same clipboard-backed formula path used by the nested probe.
+    before_windows="$(visible_window_count)"
+    send_key ctrl+F12
+    for _ in $(seq 1 12); do
+        after_windows="$(visible_window_count)"
+        if (( after_windows > before_windows )); then
+            dialog_open=true
+            break
+        fi
+        sleep 0.2
+    done
+    if $dialog_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 16); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows <= before_windows )); then
+                dialog_closed=true
+                break
+            fi
+            sleep 0.25
+        done
+    fi
+    if $dialog_closed; then
+        capture "outline-nested-save-reopen-after.png"
+        reopened_values="$(copy_cell_formula 1 9 B10 || true),$(copy_cell_formula 1 10 B11 || true),$(copy_cell_formula 1 11 B12 || true),$(copy_cell_formula 1 12 B13 || true),$(copy_cell_formula 1 13 B14 || true)"
+        if [[ "$reopened_values" == "NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14" ]]; then
+            values_restored=true
+        fi
+    fi
+
+    write_artifact "outline-nested-save-reopen-postcondition.txt" \
+        "document-path=$document_path\nsave-clean=$save_clean\npackage-signature=$package_signature\npackage-passed=$package_passed\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-values=$reopened_values\nvalues-restored=$values_restored\n"
+    if $save_clean && $package_passed && $dialog_closed && $values_restored; then
+        record "outline-nested-save-reopen-physical" "passed" \
+            "outline-nested-save-reopen-before.png; outline-nested-save-reopen-after.png; package=$package_signature; reopened-values=$reopened_values" \
+            "Physical nested row/column outline gestures were saved to XLSX, the package retained both outline levels, and the production Open route reopened the document with all seeded row values intact." \
+            "$artifacts"
+    else
+        record "outline-nested-save-reopen-physical" "failed" \
+            "$artifacts" \
+            "Nested outline save/reopen was not fully proven: save-clean=$save_clean, package-passed=$package_passed, dialog-closed=$dialog_closed, values-restored=$values_restored, package='$package_signature', values='$reopened_values'." \
+            "$artifacts"
+    fi
+}
+
 probe_formula_bar_point_mode_multi_area_edit() {
     local committed_formula="" committed_display="" normalized_formula=""
     local formula_passed=false result_passed=false selection_passed=false
@@ -3960,6 +4065,22 @@ if [[ "$probe_selector" == "outline-nested-group" ]]; then
     probe_outline_nested_columns_physical
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused nested Group/Outline probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "outline-nested-save-reopen" ]]; then
+    # Focused Wave99 lane for persistence of the nested outline state produced by the Wave98
+    # physical row/column gestures. This selector requires an XLSX document path.
+    probe_outline_nested_rows_physical
+    probe_outline_nested_columns_physical
+    probe_outline_nested_save_reopen_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the nested outline save/reopen probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then

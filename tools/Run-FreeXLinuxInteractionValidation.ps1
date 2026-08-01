@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group", "outline-nested-group")]
+    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group", "outline-nested-group", "outline-nested-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -1094,6 +1094,10 @@ try {
             throw "formula-3d-native-xlsx requires an .xlsx PhysicalDocumentPath."
         }
     }
+    if ($PhysicalProbeSelector -eq "outline-nested-save-reopen" -and
+        ([IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx")) {
+        throw "outline-nested-save-reopen requires an .xlsx PhysicalDocumentPath."
+    }
     if ($PhysicalProbeSelector -eq "pivot-table-details-double-click") {
         if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
             $PhysicalDocumentPath = $pivotDetailsFixturePath
@@ -1229,6 +1233,12 @@ try {
         @("outline-group-physical", "outline-columns-group-physical")
     } elseif ($PhysicalProbeSelector -eq "outline-nested-group") {
         @("outline-nested-rows-group-physical", "outline-nested-columns-group-physical")
+    } elseif ($PhysicalProbeSelector -eq "outline-nested-save-reopen") {
+        @(
+            "outline-nested-rows-group-physical",
+            "outline-nested-columns-group-physical",
+            "outline-nested-save-reopen-physical"
+        )
     } else {
         @(
         "inline-edit-f2-escape",
@@ -1337,6 +1347,12 @@ try {
         @("outline-group-physical", "outline-columns-group-physical")
     } elseif ($PhysicalProbeSelector -eq "outline-nested-group") {
         @("outline-nested-rows-group-physical", "outline-nested-columns-group-physical")
+    } elseif ($PhysicalProbeSelector -eq "outline-nested-save-reopen") {
+        @(
+            "outline-nested-rows-group-physical",
+            "outline-nested-columns-group-physical",
+            "outline-nested-save-reopen-physical"
+        )
     } else {
         @(
         "worksheet-context-copy-physical",

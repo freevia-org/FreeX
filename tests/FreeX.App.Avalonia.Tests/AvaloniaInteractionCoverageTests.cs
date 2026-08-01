@@ -244,6 +244,12 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("outline_toggle_visible", probe, StringComparison.Ordinal);
         Assert.Contains("inner-collapse-structural", probe, StringComparison.Ordinal);
         Assert.Contains("outer-expand-structural", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_outline_nested_save_reopen_physical", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-nested-save-reopen-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("package_signature", probe, StringComparison.Ordinal);
+        Assert.Contains("reopened-values", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-nested-save-reopen", runner, StringComparison.Ordinal);
+        Assert.Contains("requires an .xlsx PhysicalDocumentPath", runner, StringComparison.Ordinal);
         Assert.Contains("NestedRowOuterSummary", probe, StringComparison.Ordinal);
         Assert.Contains("NestedColumnOuterSummary", probe, StringComparison.Ordinal);
         Assert.DoesNotContain("inner-collapse-screen-changed", probe, StringComparison.Ordinal);
