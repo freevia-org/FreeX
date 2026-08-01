@@ -3448,11 +3448,10 @@ public static class DocxReader
             paragraph.Runs.Add(breakRun);
         }
 
-        // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
-        var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
-            + string.Concat(r.Elements(W + "delText").Select(t => t.Value));
-        if (r.Elements(W + "tab").Any())
-            text += "\t";
+        // Preserve the authored child order: Word stores a manual break opportunity as w:softHyphen
+        // between adjacent w:t/w:delText fragments. Reconstruct it as U+00AD in the model so later text
+        // edits can keep the break at its exact character position. Tabs are likewise read in place.
+        var text = ReadRunTextContent(r);
         if (text.Length == 0)
             return;
         var rPr = r.Element(W + "rPr");
@@ -3460,6 +3459,21 @@ public static class DocxReader
         ApplyRevision(textRun);
         ApplyFormatRevision(textRun, rPr);
         paragraph.Runs.Add(textRun);
+    }
+
+    private static string ReadRunTextContent(XElement run)
+    {
+        var text = new StringBuilder();
+        foreach (var child in run.Elements())
+        {
+            if (child.Name == W + "t" || child.Name == W + "delText")
+                text.Append(child.Value);
+            else if (child.Name == W + "softHyphen")
+                text.Append(Hyphenator.SoftHyphen);
+            else if (child.Name == W + "tab")
+                text.Append('\t');
+        }
+        return text.ToString();
     }
 
     private static void ResolveAlternateContent(XElement run)

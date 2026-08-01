@@ -3564,9 +3564,38 @@ public static class DocxWriter
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
             // all other runs use the ordinary w:t element.
             var textElement = run.Revision == RevisionKind.Deleted ? "delText" : "t";
-            r.Add(new XElement(W + textElement, new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(run.Text)));
+            r.Add(BuildRunTextContent(run.Text, textElement));
         }
         return r;
+    }
+
+    private static IEnumerable<XElement> BuildRunTextContent(string text, string textElement)
+    {
+        if (text.Length == 0)
+        {
+            yield return new XElement(
+                W + textElement,
+                new XAttribute(XNamespace.Xml + "space", "preserve"),
+                string.Empty);
+            yield break;
+        }
+
+        var start = 0;
+        for (var index = 0; index <= text.Length; index++)
+        {
+            if (index < text.Length && text[index] != Hyphenator.SoftHyphen)
+                continue;
+
+            if (index > start)
+                yield return new XElement(
+                    W + textElement,
+                    new XAttribute(XNamespace.Xml + "space", "preserve"),
+                    SanitizeXmlText(text[start..index]));
+
+            if (index < text.Length)
+                yield return new XElement(W + "softHyphen");
+            start = index + 1;
+        }
     }
 
     /// <summary>
