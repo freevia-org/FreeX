@@ -911,6 +911,25 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SetShapeTextColumnSpacingCommand_ApplyUndoAndRedo()
+    {
+        var (p, bus) = Make();
+        var shape = MakeShape();
+        shape.TextBody = new TextBody { ColumnCount = 3, ColumnSpacingEmu = 50_800 };
+        p.Slides[0].Shapes.Add(shape);
+
+        bus.Execute(new SetShapeTextColumnSpacingCommand(0, shape.Id, 152_400));
+        shape.TextBody!.ColumnSpacingEmu.Should().Be(152_400);
+
+        bus.Undo();
+        shape.TextBody.ColumnSpacingEmu.Should().Be(50_800);
+
+        bus.Redo();
+        shape.TextBody.ColumnSpacingEmu.Should().Be(152_400);
+        shape.TextBody.ColumnCount.Should().Be(3);
+    }
+
+    [Fact]
     public void SetTableCellTextVerticalTypeCommand_ApplyUndoAndRedo_PreservesOrientation()
     {
         var (p, bus) = Make();

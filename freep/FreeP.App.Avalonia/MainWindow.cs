@@ -2475,6 +2475,15 @@ public sealed partial class MainWindow : Window
 
             Editor.SetTextColumnCountOnSelection(count);
         }));
+        r.Register("freep.text-column-spacing", new ContextRibbonCommand(ctx =>
+        {
+            if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                value is not string selection ||
+                !TextColumnSpacingOptionParser.TryParse(selection, out var spacingEmu))
+                return;
+
+            Editor.SetTextColumnSpacingOnSelection(spacingEmu);
+        }));
         r.Register("freep.table-cell-fill", new ContextRibbonCommand(ctx =>
         {
             if (!TryGetRibbonFontColor(ctx, out var color))

@@ -73,6 +73,7 @@ public sealed class FreePKeyTipInventoryTests
             ["freep.font-color"] = "FC",
             ["freep.text-autofit"] = "TA",
             ["freep.text-columns"] = "TC",
+            ["freep.text-column-spacing"] = "CS",
             ["freep.transition.duration"] = "DUR",
             ["freep.transition.advance-after"] = "AFT",
             ["freep.anim.trigger"] = "STA",

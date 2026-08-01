@@ -1409,6 +1409,27 @@ public sealed class EditingSession
         return commands.Length;
     }
 
+    /// <summary>Sets text-column spacing on all selected text shapes as one undo step.</summary>
+    public int SetTextColumnSpacingOnSelection(long spacingEmu)
+    {
+        if (CurrentSlide is null || spacingEmu < 0)
+            return 0;
+
+        var commands = _selectedShapeIds
+            .Where(id => FindShape(CurrentSlide.Shapes, id)?.TextBody is not null)
+            .Select(id => (IPresentationCommand)new SetShapeTextColumnSpacingCommand(
+                _currentSlideIndex,
+                id,
+                spacingEmu))
+            .ToArray();
+
+        if (commands.Length == 0)
+            return 0;
+
+        Bus.Execute(new BatchCommand("Set Text Column Spacing", commands));
+        return commands.Length;
+    }
+
     // ── Notes operations ─────────────────────────────────────────────────────────
 
     /// <summary>

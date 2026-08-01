@@ -20,6 +20,9 @@ public static class FreePRibbonDefinitionData
     public static readonly string[] TextColumnCountOptions =
         ["1", "2", "3", "4", "5", "6"];
 
+    public static readonly string[] TextColumnSpacingOptions =
+        ["0 pt", "4 pt", "8 pt", "12 pt", "16 pt", "24 pt", "36 pt"];
+
     public static readonly string[] TableCellFillColors = FontColors;
 
     public static readonly string[] TableCellAnchorOptions =

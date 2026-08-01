@@ -991,6 +991,22 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_TextColumnSpacing_WithSelectedValue_RoutesToShapeAndUndo()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.text-column-spacing", RibbonCommandContext.ForSelectedValue("12 pt"));
+
+        Assert.Equal(152_400, shape.TextBody!.ColumnSpacingEmu);
+        ed.Undo();
+        Assert.Equal(0, shape.TextBody.ColumnSpacingEmu);
+    }
+
+    [Fact]
     public void Cmd_TextDirection_WithActiveTableCell_RoutesToCell()
     {
         var (ed, pres) = MakeSession();
