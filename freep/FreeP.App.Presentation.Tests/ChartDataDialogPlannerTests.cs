@@ -286,6 +286,19 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void SetChartType_BubbleSeedsMissingSizesWhenSomeSizesAlreadyExist()
+    {
+        var planner = ChartDataDialogPlanner.FromChart(MakeCoordinateChart(ChartType.Scatter));
+        planner.SetValue(0, 0, 8.0, ChartDataDialogValueKind.BubbleSize);
+
+        planner.SetChartType(ChartType.Bubble);
+
+        var commit = planner.BuildCommitPlan();
+        commit.BubbleSizes[0].Should().Equal(8.0, 1.0, 1.0);
+        commit.BubbleSizes[1].Should().Equal(1.0, 1.0, 1.0);
+    }
+
+    [Fact]
     public void BuildSurfacePlan_ExposesSharedDialogLabelsAndCommandId()
     {
         var plan = ChartDataDialogPlanner.BuildSurfacePlan();
