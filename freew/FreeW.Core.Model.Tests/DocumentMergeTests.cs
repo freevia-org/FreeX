@@ -257,7 +257,8 @@ public class DocumentMergeTests
         };
         source.Styles["TableSource"] = new DocumentStyle
         {
-            Id = "TableSource", Name = "Source table", Type = StyleType.Table, TableBorders = true
+            Id = "TableSource", Name = "Source table", Type = StyleType.Table, TableBorders = true,
+            PreservedTableStyleXml = "<w:style xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" w:type=\"table\" w:styleId=\"TableSource\"><w:name w:val=\"Source table\"/><w:tblStylePr w:type=\"firstRow\"/></w:style>"
         };
         source.Blocks.Add(new Paragraph("Source paragraph") { StyleId = "SourceStyle" });
         var sourceTable = Table.Create(1, 1);
@@ -303,6 +304,8 @@ public class DocumentMergeTests
         target.Styles["SourceStyle_FreeW1"].NextStyleId.Should().Be("Follow_FreeW1");
         target.Styles["Base_FreeW1"].Run.ColorHex.Should().Be("#AA0000");
         target.Styles["TableSource_FreeW1"].TableBorders.Should().BeTrue();
+        target.Styles["TableSource_FreeW1"].PreservedTableStyleXml
+            .Should().Contain("w:styleId=\"TableSource_FreeW1\"").And.Contain("w:type=\"firstRow\"");
         target.Styles["SourceStyle"].Name.Should().Be("Target paragraph");
         source.Styles["SourceStyle"].BasedOnStyleId.Should().Be("Base");
     }

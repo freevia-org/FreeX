@@ -41,6 +41,13 @@ public sealed class DocumentStyle
     public bool TableBorders { get; init; }
 
     /// <summary>
+    /// Exact imported <c>w:style w:type="table"</c> payload. FreeW does not yet model every conditional
+    /// table-style band, so retaining the source element prevents first-row, banding, and edge formatting
+    /// from disappearing during an unrelated document edit. Null for FreeW-authored styles.
+    /// </summary>
+    public string? PreservedTableStyleXml { get; init; }
+
+    /// <summary>
     /// The original <c>w:pPr/w:numPr</c> (numId + ilvl) this style's definition carried on read that FreeW
     /// does not model as one of its own lists. Captured so the writer can re-emit the style's numbering
     /// pointing at the preserved <see cref="PreservedParts.OriginalNumbering"/> definition (after the same

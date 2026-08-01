@@ -3539,12 +3539,11 @@ public static class DocxReader
             && preservedDrawingTarget.Styles.TryGetValue(tblStyleId, out var tblStyleDef)
             && tblStyleDef.TableBorders;
 
-        // Capture the catalog table-style id so the model can drive rendering + re-emit it on write.
-        // Only catalog ids (from DocumentTableStyle.FindById) are stored; unknown ids (from foreign Word
-        // docs using styles FreeW doesn't model) are left as null so the table falls back to its flags.
+        // Keep the authored table-style id even when it is not in FreeW's built-in gallery. The imported
+        // style definition is retained in DocumentStyle, allowing the writer to restore custom Word styles
+        // and their conditional bands instead of silently detaching the table on save.
         var catalogStyle = tblStyleId is not null ? DocumentTableStyle.FindById(tblStyleId) : null;
-        if (catalogStyle is not null)
-            table.TableStyleId = catalogStyle.WordStyleId;
+        table.TableStyleId = tblStyleId;
         table.Borders = ReadTableBorders(borders);
 
         // A catalog-styled table inherits borders from the catalog definition unless explicit tblBorders
@@ -6781,17 +6780,18 @@ public static class DocxReader
                 continue;
             var rPr = s.Element(W + "rPr");
             var pPr = s.Element(W + "pPr");
+            var styleType = s.Attribute(W + "type")?.Value switch
+            {
+                "character" => StyleType.Character,
+                "table" => StyleType.Table,
+                "numbering" => StyleType.Numbering,
+                _ => StyleType.Paragraph
+            };
             document.Styles[id] = new DocumentStyle
             {
                 Id = id,
                 Name = s.Element(W + "name")?.Attribute(W + "val")?.Value ?? id,
-                Type = s.Attribute(W + "type")?.Value switch
-                {
-                    "character" => StyleType.Character,
-                    "table" => StyleType.Table,
-                    "numbering" => StyleType.Numbering,
-                    _ => StyleType.Paragraph
-                },
+                Type = styleType,
                 BasedOnStyleId = s.Element(W + "basedOn")?.Attribute(W + "val")?.Value,
                 // The "Style for following paragraph" (w:next): the style applied to the paragraph created
                 // when Enter is pressed at the end of one carrying this style (e.g. Heading1 -> Normal).
@@ -6803,6 +6803,9 @@ public static class DocxReader
                 // capture whether they are visible so a table referencing this style draws them even without
                 // its own tblBorders.
                 TableBorders = ReadBorders(s.Element(W + "tblPr")?.Element(W + "tblBorders")),
+                PreservedTableStyleXml = styleType == StyleType.Table
+                    ? s.ToString(SaveOptions.DisableFormatting)
+                    : null,
                 // A style definition can carry numbering via w:pPr/w:numPr (numId + ilvl). FreeW does not model
                 // numbering on a style, so capture the original numPr so the writer can re-emit it against the
                 // preserved numbering.xml (under the same disjoint-id remap as paragraph-level preserved
