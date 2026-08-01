@@ -1,10 +1,12 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Localization;
@@ -215,6 +217,7 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
             ControlHeight = 20,
+            TextBoxHeight = 20,
             ButtonHeight = 21,
             ButtonPadding = new Thickness(10, 1),
         };
@@ -243,6 +246,7 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
 
     public BordersAndShadingDialog(ParagraphFormatting paragraph, PageBorder? pageBorder)
     {
+        AutomationProperties.SetAutomationId(this, "BordersAndShadingDialog");
         Title = "Borders and Shading";
         Width = 420;
         SizeToContent = SizeToContent.Height;
@@ -273,29 +277,95 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
             : PaletteIndex(paragraph.ShadingColorHex) + 1;
         _shadingPattern.SelectedIndex = BordersAndShadingDialogPlanner.IndexOfPattern(paragraph.ShadingPattern);
 
+        SetAutomationId(_paragraphSetting, "BordersAndShadingParagraphSetting");
+        SetAutomationId(_paragraphStyle, "BordersAndShadingParagraphStyle");
+        SetAutomationId(_paragraphColor, "BordersAndShadingParagraphColor");
+        SetAutomationId(_paragraphWidth, "BordersAndShadingParagraphWidth");
+        SetAutomationId(_top, "BordersAndShadingTopEdge");
+        SetAutomationId(_left, "BordersAndShadingLeftEdge");
+        SetAutomationId(_bottom, "BordersAndShadingBottomEdge");
+        SetAutomationId(_right, "BordersAndShadingRightEdge");
+        SetAutomationId(_pageSetting, "BordersAndShadingPageSetting");
+        SetAutomationId(_pageStyle, "BordersAndShadingPageStyle");
+        SetAutomationId(_pageColor, "BordersAndShadingPageColor");
+        SetAutomationId(_pageWidth, "BordersAndShadingPageWidth");
+        SetAutomationId(_pageArt, "BordersAndShadingPageArt");
+        SetAutomationId(_shadingColor, "BordersAndShadingShadingColor");
+        SetAutomationId(_shadingPattern, "BordersAndShadingShadingPattern");
+        SetAutomationId(_status, "BordersAndShadingValidationMessage");
+
         _tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
-        _tabs.Items.Add(new TabItem { Header = "Borders", Content = BuildBordersTab() });
-        _tabs.Items.Add(new TabItem { Header = "Page Border", Content = BuildPageBorderTab() });
-        _tabs.Items.Add(new TabItem { Header = "Shading", Content = BuildShadingTab() });
+        SetAutomationId(_tabs, "BordersAndShadingTabs");
+        _tabs.Items.Add(Tab("Borders", "BordersAndShadingBordersTab", BuildBordersTab()));
+        _tabs.Items.Add(Tab("Page Border", "BordersAndShadingPageBorderTab", BuildPageBorderTab()));
+        _tabs.Items.Add(Tab("Shading", "BordersAndShadingShadingTab", BuildShadingTab()));
+        _tabs.SelectionChanged += (_, _) =>
+        {
+            var target = _tabs.SelectedIndex switch
+            {
+                1 => (Control)_pageSetting,
+                2 => _shadingColor,
+                _ => _paragraphWidth,
+            };
+            Dispatcher.UIThread.Post(() => target.Focus(), DispatcherPriority.Input);
+        };
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabs, DialogChromeStyle);
 
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(14, 8, 14, 0));
         var ok = Button(LocalizedUiText.Ok, (_, _) => Accept(), isDefault: true);
         var cancel = Button(LocalizedUiText.Cancel, (_, _) => Close(null), isCancel: true);
+        SetAutomationId(ok, "BordersAndShadingOkButton");
+        SetAutomationId(cancel, "BordersAndShadingCancelButton");
         var actions = AvaloniaCompactDialogChrome.CreateActionRow(
             [ok, cancel],
             new Thickness(14, 12, 14, 12),
             DialogChromeStyle);
         var root = new DockPanel();
         DockPanel.SetDock(actions, Dock.Bottom);
+        DockPanel.SetDock(_status, Dock.Bottom);
         root.Children.Add(actions);
+        root.Children.Add(_status);
         root.Children.Add(_tabs);
         Content = root;
 
-        Opened += (_, _) => _paragraphWidth.Focus();
+        Opened += (_, _) =>
+        {
+            // Apply the route-specific metrics after the base dialog applies its default descendant chrome.
+            foreach (var combo in new[]
+            {
+                _paragraphSetting, _paragraphStyle, _paragraphColor,
+                _pageSetting, _pageStyle, _pageColor, _pageArt,
+                _shadingColor, _shadingPattern,
+            })
+            {
+                AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
+            }
+
+            AvaloniaCompactDialogChrome.ApplyTextBox(_paragraphWidth, DialogChromeStyle);
+            AvaloniaCompactDialogChrome.ApplyTextBox(_pageWidth, DialogChromeStyle);
+            foreach (var check in new[] { _top, _left, _bottom, _right })
+                AvaloniaCompactDialogChrome.ApplyCompactCheckBox(check, DialogChromeStyle);
+
+            foreach (var button in new[] { ok, cancel })
+                AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: button.IsDefault);
+
+            AvaloniaCompactDialogChrome.FocusAndSelect(_paragraphWidth);
+        };
+        KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape)
+                return;
+
+            Close(null);
+            e.Handled = true;
+        };
     }
 
     internal TabControl TabsForTest => _tabs;
+    internal TextBox ParagraphWidthForTest => _paragraphWidth;
+    internal ComboBox PageSettingForTest => _pageSetting;
+    internal ComboBox ShadingColorForTest => _shadingColor;
+    internal TextBlock StatusForTest => _status;
 
     private Control BuildBordersTab()
     {
@@ -417,14 +487,19 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
     {
         var items = new List<Control>();
         if (includeNone)
-            items.Add(new TextBlock { Text = "No Colour", VerticalAlignment = VerticalAlignment.Center });
-        items.AddRange(BordersAndShadingDialogPlanner.Palette.Select(ColorItem));
+        {
+            var none = new TextBlock { Text = "No Colour", VerticalAlignment = VerticalAlignment.Center };
+            SetAutomationId(none, "BordersAndShadingNoShadingColor");
+            items.Add(none);
+        }
+        items.AddRange(BordersAndShadingDialogPlanner.Palette.Select((hex, index) =>
+            ColorItem(hex, $"BordersAndShadingColorSwatch{index}")));
         var combo = new ComboBox { ItemsSource = items, SelectedIndex = 0, MinWidth = 160 };
         AvaloniaCompactDialogChrome.ApplyComboBox(combo, DialogChromeStyle);
         return combo;
     }
 
-    private static Control ColorItem(string hex)
+    private static Control ColorItem(string hex, string automationId)
     {
         var swatch = new Border
         {
@@ -436,20 +511,43 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
             Margin = new Thickness(0, 0, 6, 0),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        return new StackPanel
+        var item = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             Children = { swatch, new TextBlock { Text = hex, VerticalAlignment = VerticalAlignment.Center } },
         };
+        SetAutomationId(item, automationId);
+        AutomationProperties.SetName(item, hex);
+        return item;
     }
 
-    private static TextBox NumberBox() => new() { Width = 160 };
-
-    private static CheckBox Check(string text) => new()
+    private static TextBox NumberBox()
     {
-        Content = text,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
+        var box = new TextBox { Width = 160 };
+        AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);
+        return box;
+    }
+
+    private static CheckBox Check(string text)
+    {
+        var box = new CheckBox
+        {
+            Content = text,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
+        return box;
+    }
+
+    private static TabItem Tab(string header, string automationId, Control content)
+    {
+        var tab = new TabItem { Header = header, Content = content };
+        SetAutomationId(tab, automationId);
+        return tab;
+    }
+
+    private static void SetAutomationId(StyledElement control, string automationId) =>
+        AutomationProperties.SetAutomationId(control, automationId);
 
     private static Grid TwoColumnGrid(int rows)
     {
@@ -492,6 +590,7 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
     {
         var button = new Button { Content = text, IsDefault = isDefault, IsCancel = isCancel };
         AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 72, isDefault: isDefault);
+        AutomationProperties.SetName(button, Free.Shared.Shell.ShellStrings.Current.CreateAutomationName(text));
         button.Click += click;
         return button;
     }

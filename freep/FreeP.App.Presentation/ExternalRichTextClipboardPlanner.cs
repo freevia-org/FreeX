@@ -1064,10 +1064,21 @@ public static class ExternalRichTextClipboardPlanner
                 case "clvmgf": _pendingCellStyle.VerticalMergeStart = true; break;
                 case "clvmrg": _pendingCellStyle.VerticalMergeContinuation = true; break;
                 case "trleft":
+                    if (CurrentTableCapture() is { } indentCapture && parameter is { } indentTwips)
+                        indentCapture.Table.RichTextLeftIndentPt = indentTwips / 20.0;
+                    break;
                 case "trgaph":
-                case "trqc":
+                    if (CurrentTableCapture() is { } spacingCapture && parameter is { } gapTwips)
+                        spacingCapture.Table.RichTextCellSpacingPt = Math.Max(0, gapTwips / 10.0);
+                    break;
                 case "trql":
+                    SetCurrentTableRowAlignment(TableRowHorizontalAlignment.Left);
+                    break;
+                case "trqc":
+                    SetCurrentTableRowAlignment(TableRowHorizontalAlignment.Center);
+                    break;
                 case "trqr":
+                    SetCurrentTableRowAlignment(TableRowHorizontalAlignment.Right);
                     break;
                 case "trpaddl":
                     if (CurrentTableCapture() is { } leftCapture && parameter is { } leftPadding)
@@ -1544,6 +1555,12 @@ public static class ExternalRichTextClipboardPlanner
 
         private TableCaptureContext? CurrentTableCapture() =>
             _tableCaptures.Count == 0 ? null : _tableCaptures[^1];
+
+        private void SetCurrentTableRowAlignment(TableRowHorizontalAlignment alignment)
+        {
+            if (CurrentTableCapture() is { CurrentRow: { } row })
+                row.HorizontalAlignment = alignment;
+        }
 
         private void BeginCapturedTableRow()
         {

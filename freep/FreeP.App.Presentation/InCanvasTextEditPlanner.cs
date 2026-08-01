@@ -1054,7 +1054,9 @@ internal static class TextBodyModelCloner
 
         var left = a.Table;
         var right = b.Table;
-        if (!left.ColumnWidthsEmu.SequenceEqual(right.ColumnWidthsEmu)
+        if (left.RichTextLeftIndentPt != right.RichTextLeftIndentPt
+            || left.RichTextCellSpacingPt != right.RichTextCellSpacingPt
+            || !left.ColumnWidthsEmu.SequenceEqual(right.ColumnWidthsEmu)
             || left.Rows.Count != right.Rows.Count)
             return false;
 
@@ -1064,6 +1066,7 @@ internal static class TextBodyModelCloner
             var rightRow = right.Rows[rowIndex];
             if (leftRow.HeightEmu != rightRow.HeightEmu
                 || leftRow.HeightRule != rightRow.HeightRule
+                || leftRow.HorizontalAlignment != rightRow.HorizontalAlignment
                 || leftRow.Cells.Count != rightRow.Cells.Count)
                 return false;
 

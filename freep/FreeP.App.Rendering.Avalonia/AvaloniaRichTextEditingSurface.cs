@@ -319,7 +319,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 width - originX - ContentPadding.Right);
             var inlineImages = CreateInlineImages(paragraph);
             var inlineOleObjects = CreateInlineOleObjects(paragraph);
-            var inlineTables = CreateInlineTables(paragraph);
+            var inlineTables = CreateInlineTables(paragraph, maxWidth);
             var layout = CreateLayout(
                 paragraph,
                 maxWidth,
@@ -569,22 +569,27 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     }
 
     private static IReadOnlyList<InlineTableLayout> CreateInlineTables(
-        InCanvasRichTextVisualParagraph paragraph)
+        InCanvasRichTextVisualParagraph paragraph,
+        double availableWidthDip)
     {
         var result = new List<InlineTableLayout>();
         foreach (var run in paragraph.Runs.Where(run => run.InlineTable is not null))
         {
             var table = run.InlineTable!.Table;
+            double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
+            double indent = table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip;
             double width = table.ColumnWidthsEmu.Count == 0
                 ? 72
-                : table.ColumnWidthsEmu.Sum(widthEmu => Math.Max(24, widthEmu / 9525.0));
+                : table.ColumnWidthsEmu.Sum(widthEmu => Math.Max(24, widthEmu / 9525.0))
+                    + Math.Max(0, table.ColumnWidthsEmu.Count - 1) * spacing;
             double height = table.Rows.Sum(row =>
                 row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24);
             result.Add(new InlineTableLayout(
                 run.Start,
                 run.InlineTable,
-                Math.Max(24, width),
-                Math.Max(20, height)));
+                Math.Max(24, width + Math.Max(0, indent)),
+                Math.Max(20, height),
+                Math.Max(width + Math.Max(0, indent), availableWidthDip)));
         }
         return result;
     }
@@ -928,11 +933,19 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     : 24)
                 .ToArray();
 
+            double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
+            double xIndent = table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip;
             double y = origin.Y;
             for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
             {
-                double x = origin.X;
                 var row = table.Rows.ElementAtOrDefault(rowIndex);
+                double rowWidth = row is null
+                    ? widths.Sum()
+                    : widths.Take(Math.Min(widths.Length, row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)))).Sum();
+                double x = origin.X + AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(
+                    row?.HorizontalAlignment,
+                    _table.AvailableWidthDip,
+                    rowWidth) + xIndent;
                 for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
                 {
                     double width = widths[columnIndex];
@@ -950,6 +963,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                         var text = InCanvasTextEditPlanner.ExtractPlainText(body);
                         if (text.Length > 0)
                         {
+                            var textArea = AvaloniaInlineTableLayoutPlanner.GetTextArea(cell, rect);
                             var layout = new TextLayout(
                                 text,
                                 new Typeface(new FontFamily(InCanvasRichTextEditorDefaults.FallbackFontFamily)),
@@ -960,17 +974,21 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                                 TextTrimming.None,
                                 null,
                                 FlowDirection.LeftToRight,
-                                Math.Max(1, width - 4),
-                                Math.Max(1, heights[rowIndex] - 4),
+                                textArea.Width,
+                                textArea.Height,
                                 lineHeight: double.NaN,
                                 letterSpacing: 0,
                                 maxLines: 0,
                                 fontFeatures: null,
                                 textStyleOverrides: null);
-                            layout.Draw(drawingContext, new Point(x + 2, y + 2));
+                            var textOrigin = AvaloniaInlineTableLayoutPlanner.GetTextOrigin(
+                                cell,
+                                textArea,
+                                layout.Height);
+                            layout.Draw(drawingContext, textOrigin);
                         }
                     }
-                    x += width;
+                    x += width + spacing;
                 }
                 y += heights[rowIndex];
             }
@@ -1014,5 +1032,6 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         int Start,
         InlineTableInfo Info,
         double WidthDip,
-        double HeightDip);
+        double HeightDip,
+        double AvailableWidthDip);
 }

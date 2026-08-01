@@ -219,6 +219,40 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void WpfInlineTableEditor_ConsumesRowHorizontalAlignment()
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.AddRange([457200, 457200]);
+        table.Rows.Add(new ModelTableRow
+        {
+            HorizontalAlignment = TableRowHorizontalAlignment.Center,
+            Cells = { new ModelTableCell { TextBody = new TextBody
+            {
+                Paragraphs = { new ModelParagraph { Runs = { new ModelRun { Text = "Centered" } } } },
+            } } },
+        });
+
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new ModelParagraph
+                {
+                    Runs = { new ModelRun { Text = "\uFFFC", InlineTable = new InlineTableInfo { Table = table } } },
+                },
+            },
+        };
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body);
+        var grid = document.Blocks.OfType<WpfParagraph>().Single()
+            .Inlines.OfType<InlineUIContainer>().Single().Child.Should().BeOfType<Grid>().Subject;
+
+        grid.HorizontalAlignment.Should().Be(HorizontalAlignment.Center);
+        grid.Children.OfType<TextBox>().Single().RenderTransform
+            .Should().BeOfType<TranslateTransform>().Which.X.Should().Be(24);
+    }
+
+    [StaFact]
     public void WpfSplitFirstParagraph_UsesTextLineageForFollowingMetadata()
     {
         var original = DistinctParagraphBody();

@@ -306,7 +306,8 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             list.Should().NotBeNull();
             list!.Items.Should().ContainSingle();
-            list.Items[0].Should().BeOfType<string>().Which.Should().Contain("Original root");
+            FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListText_B2")!.Text
+                .Should().Be("FreeX: Original root");
 
             ((Task)InvokePrivate(window, "ShowEditThreadedCommentDialogAsync")!).GetAwaiter().GetResult();
             var renderedGrid = window.RebuildSheetGridForTest();
@@ -319,7 +320,8 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             save!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
             list.Items.Should().ContainSingle();
-            list.Items[0].Should().BeOfType<string>().Which.Should().Contain("Updated root");
+            FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListText_B2")!.Text
+                .Should().Be("FreeX: Updated root");
 
             listWindow!.Close();
             window.Close();
@@ -347,13 +349,88 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             list.Should().NotBeNull();
             list!.Items.Should().ContainSingle();
-            list.Items[0].Should().BeOfType<string>().Which.Should().Contain("Threaded comment");
-            list.Items[0].Should().BeOfType<string>().Which.Should().NotContain("Legacy note");
+            FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListText_B2")!.Text
+                .Should().Be("FreeX: Threaded comment");
+            FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListText_B2")!.Text
+                .Should().NotContain("Legacy note");
 
             InvokePrivate(window, "ToggleAllNotesVisibility");
             sheet.ShownComments.Should().Contain(noteAddress);
             InvokePrivate(window, "ToggleAllNotesVisibility");
             sheet.ShownComments.Should().NotContain(noteAddress);
+
+            listWindow!.Close();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ReviewCommentList_UsesWpfTwoColumnPresentationAndThreadFormatting()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewCommentColumnsFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var address = new CellAddress(sheet.Id, 3, 4);
+            sheet.ThreadedComments[address] = new ThreadedComment("Root", "Reviewer") with
+            {
+                Replies = [new CommentReply("Reply", "Responder")],
+                IsResolved = true,
+            };
+            window.Session.UpdateViewportSize(880, 1440);
+            window.Show();
+
+            ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
+            var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
+            var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
+            list.Should().NotBeNull();
+            AutomationProperties.GetHelpText(list!).Should().Be(UiText.Get("ReviewCommentList_ListHelpText"));
+            FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListCellHeader")!.Text
+                .Should().Be(UiText.Get("ReviewCommentList_CellColumnHeader"));
+            FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListTextHeader")!.Text
+                .Should().Be(UiText.Get("ReviewCommentList_TextColumnHeader"));
+            FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListCell_D3")!.Text.Should().Be("D3");
+            FindByAutomationId<TextBlock>(listWindow, "ReviewCommentListText_D3")!.Text
+                .Should().Be("Reviewer: Root | Responder: Reply | Resolved");
+
+            listWindow!.Close();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ReviewCommentList_OpenStateAndEnterNavigationMatchWpfBehavior()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewCommentInteractionFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var firstAddress = new CellAddress(sheet.Id, 1, 1);
+            var secondAddress = new CellAddress(sheet.Id, 2, 3);
+            sheet.ThreadedComments[firstAddress] = new ThreadedComment("First");
+            sheet.ThreadedComments[secondAddress] = new ThreadedComment("Second");
+            window.Session.UpdateViewportSize(880, 1440);
+            window.Show();
+
+            ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
+            var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
+            var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
+            var openButton = FindByAutomationId<Button>(listWindow, "ReviewCommentListOpenButton");
+            list.Should().NotBeNull();
+            openButton.Should().NotBeNull();
+
+            list!.SelectedIndex = -1;
+            openButton!.IsEnabled.Should().BeFalse();
+            list.SelectedIndex = 1;
+            openButton.IsEnabled.Should().BeTrue();
+            list.RaiseEvent(new KeyEventArgs
+            {
+                RoutedEvent = InputElement.KeyDownEvent,
+                Key = Key.Enter,
+            });
+            window.Session.ActiveCell.Should().Be(secondAddress);
 
             listWindow!.Close();
             window.Close();

@@ -28,9 +28,8 @@ public sealed class ChartQuickLayoutNativePackageTests
         axes.Descendants(C + "valAx").Should().ContainSingle().Which
             .Element(C + "majorGridlines").Should().NotBeNull();
 
-        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
-        chartXml.Descendants(freew + "quickLayout").Should().ContainSingle()
-            .Which.Attribute("id")!.Value.Should().Be("1");
+        chartXml.Descendants(C + "ext").Should().ContainSingle()
+            .Which.Attribute("uri")!.Value.Should().Be("urn:freew:chart-design:2026#quickLayout=1");
     }
 
     private static XDocument WriteChartXml(Chart chart)

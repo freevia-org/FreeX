@@ -1,17 +1,20 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 
 using Free.Shared.Shell.Avalonia;
+using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -23,6 +26,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private const double ReviewCommentListCellColumnWidth = 80;
+
     private Window? _commentListWindow;
     private Action<IReadOnlyList<SheetCommentEntry>>? _refreshCommentListWindow;
 
@@ -214,6 +219,13 @@ public sealed partial class MainWindow
         var listBox = new ListBox { MinHeight = 240, MinWidth = 420 };
         ApplySheetOptionListBoxStyle(listBox);
         AutomationProperties.SetAutomationId(listBox, "ReviewCommentList");
+        AutomationProperties.SetName(listBox, UiText.Get("MainWindowMessage_CommentsTitle"));
+        AutomationProperties.SetHelpText(listBox, UiText.Get("ReviewCommentList_ListHelpText"));
+        listBox.ItemTemplate = new FuncDataTemplate<SheetCommentEntry>(
+            (entry, _) => BuildCommentListRow(entry),
+            supportsRecycling: true);
+        var visibleComments = new ObservableCollection<SheetCommentEntry>();
+        listBox.ItemsSource = visibleComments;
 
         var emptyText = new TextBlock
         {
@@ -255,7 +267,10 @@ public sealed partial class MainWindow
                 ? currentComments[listBox.SelectedIndex].Address
                 : (CellAddress?)null;
             currentComments = refreshedComments;
-            listBox.ItemsSource = currentComments.Select(FormatCommentRow).ToList();
+            visibleComments.Clear();
+            foreach (var comment in currentComments)
+                visibleComments.Add(comment);
+            listBox.UpdateLayout();
             listBox.SelectedIndex = selectedAddress is { } address
                 ? currentComments.ToList().FindIndex(comment => comment.Address.Equals(address))
                 : -1;
@@ -293,10 +308,13 @@ public sealed partial class MainWindow
         DockPanel.SetDock(bottomRow, Dock.Bottom);
         DockPanel.SetDock(emptyText, Dock.Top);
 
+        var header = BuildCommentListHeader();
+        DockPanel.SetDock(header, Dock.Top);
+
         dialog.Content = new DockPanel
         {
             Margin = new Thickness(16),
-            Children = { bottomRow, emptyText, listBox },
+            Children = { bottomRow, emptyText, header, listBox },
         };
 
         RefreshList(comments);
@@ -321,21 +339,86 @@ public sealed partial class MainWindow
         var entries = new List<SheetCommentEntry>();
 
         foreach (var (address, comment) in sheet.ThreadedComments)
-            entries.Add(new SheetCommentEntry(address, comment.Author, comment.Text));
+        {
+            entries.Add(new SheetCommentEntry(
+                address,
+                address.ToA1(),
+                CommentNavigationPlanner.FormatThreadedComment(comment)));
+        }
 
         entries.Sort(static (x, y) => x.Address.CompareTo(y.Address));
         return entries;
     }
 
-    private static string FormatCommentRow(SheetCommentEntry entry)
+    private static Grid BuildCommentListHeader()
     {
-        var cellRef = FormatCellReference(entry.Address);
-        var author = string.IsNullOrWhiteSpace(entry.Author) ? "" : $" — {entry.Author}";
-        var body = (entry.Text ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
-        return $"{cellRef}{author}: {body}";
+        var header = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions($"{ReviewCommentListCellColumnWidth},*"),
+            MinHeight = 24,
+            Background = Brush(242, 242, 242),
+        };
+        AddCommentListHeaderCell(
+            header,
+            UiText.Get("ReviewCommentList_CellColumnHeader"),
+            "ReviewCommentListCellHeader",
+            0);
+        AddCommentListHeaderCell(
+            header,
+            UiText.Get("ReviewCommentList_TextColumnHeader"),
+            "ReviewCommentListTextHeader",
+            1);
+        return header;
     }
 
-    private readonly record struct SheetCommentEntry(CellAddress Address, string? Author, string? Text);
+    private static void AddCommentListHeaderCell(Grid header, string text, string automationId, int column)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+            FontWeight = FontWeight.SemiBold,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(6, 0),
+        };
+        AutomationProperties.SetAutomationId(label, automationId);
+        AutomationProperties.SetName(label, text);
+        Grid.SetColumn(label, column);
+        header.Children.Add(label);
+    }
+
+    private static Grid BuildCommentListRow(SheetCommentEntry entry)
+    {
+        var row = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions($"{ReviewCommentListCellColumnWidth},*"),
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
+            MinHeight = 24,
+        };
+        AddCommentListRowCell(row, entry.Cell, $"ReviewCommentListCell_{entry.Address.ToA1()}", 0);
+        AddCommentListRowCell(row, entry.Text, $"ReviewCommentListText_{entry.Address.ToA1()}", 1);
+        return row;
+    }
+
+    private static void AddCommentListRowCell(Grid row, string text, string automationId, int column)
+    {
+        var label = new TextBlock
+        {
+            Text = text,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(6, 0),
+        };
+        AutomationProperties.SetAutomationId(label, automationId);
+        Grid.SetColumn(label, column);
+        row.Children.Add(label);
+    }
+
+    private readonly record struct SheetCommentEntry(CellAddress Address, string Cell, string Text);
 
     // ── Visual chrome helpers (SheetOptions / Show Comments dialog) ──────────
 

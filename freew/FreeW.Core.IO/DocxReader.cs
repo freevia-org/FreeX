@@ -19,6 +19,8 @@ namespace FreeW.Core.IO;
 public static class DocxReader
 {
     private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+    private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
+    private const string LegacyFreeWChartDesignExtensionUri = "{FW-ChartDesign-2026}";
 
     private sealed class DuplicateDrawingIdentityMarker
     {
@@ -4842,20 +4844,57 @@ public static class DocxReader
             ScatterConnectsPoints: kind == ChartKind.Scatter
                 && string.Equals(typeElement.Element(C + "scatterStyle")?.Attribute("val")?.Value, "lineMarker", StringComparison.OrdinalIgnoreCase));
 
-        // freew:ext — FreeW extension: color scheme id and quick layout id (written as c:extLst / c:ext).
+        // Current packages store the gallery ids in the extension URI, which is valid chart XML.
+        // Keep reading the old private child payload so existing FreeW files retain their settings.
         XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
         var freewExt = chartSpace.Descendants(C + "ext")
-            .FirstOrDefault(e => e.Attribute("uri")?.Value == "{FW-ChartDesign-2026}");
+            .FirstOrDefault(e =>
+            {
+                var uri = e.Attribute("uri")?.Value;
+                return uri == LegacyFreeWChartDesignExtensionUri
+                    || uri?.StartsWith(FreeWChartDesignExtensionUri, StringComparison.Ordinal) == true;
+            });
         if (freewExt is not null)
         {
-            var colorSchemeId = freewExt.Element(freew + "colorScheme")?.Attribute("id")?.Value;
-            if (!string.IsNullOrEmpty(colorSchemeId))
-                chart.ColorSchemeId = colorSchemeId;
-            if (int.TryParse(freewExt.Element(freew + "quickLayout")?.Attribute("id")?.Value, out var qlId) && qlId > 0)
-                chart.QuickLayoutId = qlId;
+            var uri = freewExt.Attribute("uri")?.Value;
+            if (uri?.StartsWith(FreeWChartDesignExtensionUri, StringComparison.Ordinal) == true)
+            {
+                ApplyFreeWChartDesignExtensionUri(uri, chart);
+            }
+            else
+            {
+                var colorSchemeId = freewExt.Element(freew + "colorScheme")?.Attribute("id")?.Value;
+                if (!string.IsNullOrEmpty(colorSchemeId))
+                    chart.ColorSchemeId = colorSchemeId;
+                if (int.TryParse(freewExt.Element(freew + "quickLayout")?.Attribute("id")?.Value, out var qlId) && qlId > 0)
+                    chart.QuickLayoutId = qlId;
+            }
         }
 
         return chart;
+    }
+
+    private static void ApplyFreeWChartDesignExtensionUri(string uri, Chart chart)
+    {
+        var fragmentIndex = uri.IndexOf('#');
+        if (fragmentIndex < 0 || fragmentIndex == uri.Length - 1)
+            return;
+
+        foreach (var token in uri[(fragmentIndex + 1)..].Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separator = token.IndexOf('=');
+            if (separator <= 0 || separator == token.Length - 1)
+                continue;
+
+            var key = token[..separator];
+            var value = Uri.UnescapeDataString(token[(separator + 1)..]);
+            if (key.Equals("colorScheme", StringComparison.OrdinalIgnoreCase))
+                chart.ColorSchemeId = value;
+            else if (key.Equals("quickLayout", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(value, out var quickLayoutId)
+                && quickLayoutId > 0)
+                chart.QuickLayoutId = quickLayoutId;
+        }
     }
 
     /// <summary>

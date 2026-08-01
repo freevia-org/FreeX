@@ -36,6 +36,7 @@ public static class DocxWriter
     private const string FontTableRelationshipId = "rIdFontTable";
     private const string BibliographyRelationshipId = "rIdBibliography";
     private const string ThemeRelationshipId = "rIdTheme1";
+    private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
     // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2; multilevel (legal
@@ -6717,18 +6718,14 @@ public static class DocxWriter
             ? new XElement(C + "style", new XAttribute("val", chart.StyleId))
             : null;
 
-        // freew:ext — FreeW-private extension persisting ColorSchemeId and QuickLayoutId losslessly.
-        // Written as a c:extLst / c:ext child with a private URI so Word ignores it gracefully.
-        XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
+        // c:ext accepts a private URI, but not arbitrary child XML according to the Office chart
+        // schema. Keep the FreeW gallery state in that URI so Word can open the chart without repair.
         XElement? extLst = null;
         if (!string.IsNullOrEmpty(chart.ColorSchemeId) || chart.QuickLayoutId > 0)
         {
-            var ext = new XElement(C + "ext", new XAttribute("uri", "{FW-ChartDesign-2026}"));
-            if (!string.IsNullOrEmpty(chart.ColorSchemeId))
-                ext.Add(new XElement(freew + "colorScheme", new XAttribute("id", chart.ColorSchemeId!)));
-            if (chart.QuickLayoutId > 0)
-                ext.Add(new XElement(freew + "quickLayout", new XAttribute("id", chart.QuickLayoutId)));
-            extLst = new XElement(C + "extLst", ext);
+            extLst = new XElement(C + "extLst",
+                new XElement(C + "ext",
+                    new XAttribute("uri", BuildFreeWChartDesignExtensionUri(chart))));
         }
 
         return new XDocument(
@@ -6744,6 +6741,18 @@ public static class DocxWriter
                     new XAttribute(R + "id", part.ExternalDataRelId),
                     new XElement(C + "autoUpdate", new XAttribute("val", "0"))),
                 extLst));
+    }
+
+    private static string BuildFreeWChartDesignExtensionUri(Chart chart)
+    {
+        var values = new List<string>();
+        if (!string.IsNullOrEmpty(chart.ColorSchemeId))
+            values.Add("colorScheme=" + Uri.EscapeDataString(chart.ColorSchemeId));
+        if (chart.QuickLayoutId > 0)
+            values.Add("quickLayout=" + chart.QuickLayoutId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return values.Count == 0
+            ? FreeWChartDesignExtensionUri
+            : FreeWChartDesignExtensionUri + "#" + string.Join("&", values);
     }
 
     /// <summary>

@@ -45,6 +45,8 @@ internal static class PresentationModelCloneHelper
             Flags = CloneTableStyleFlags(source.Flags),
             TableStyleId = source.TableStyleId,
             StyleData = CloneTableStyleData(source.StyleData),
+            RichTextLeftIndentPt = source.RichTextLeftIndentPt,
+            RichTextCellSpacingPt = source.RichTextCellSpacingPt,
         };
 
         foreach (var width in source.ColumnWidthsEmu)
@@ -62,6 +64,7 @@ internal static class PresentationModelCloneHelper
         {
             HeightEmu = source.HeightEmu,
             HeightRule = source.HeightRule,
+            HorizontalAlignment = source.HorizontalAlignment,
         };
         foreach (var cell in source.Cells)
             copy.Cells.Add(CloneTableCell(cell));

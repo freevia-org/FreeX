@@ -20,6 +20,17 @@ public enum TableRowHeightRule
     Exact = 1,
 }
 
+/// <summary>
+/// Horizontal placement of an externally-authored table row. A null value keeps the
+/// existing left-aligned behavior.
+/// </summary>
+public enum TableRowHorizontalAlignment
+{
+    Left = 0,
+    Center = 1,
+    Right = 2,
+}
+
 /// <summary>One of the four editable sides of a table cell border.</summary>
 public enum TableCellBorderSide
 {
@@ -106,6 +117,9 @@ public sealed class TableRow
     /// its negative value maps to <see cref="TableRowHeightRule.Exact"/>.
     /// </summary>
     public TableRowHeightRule? HeightRule { get; set; }
+
+    /// <summary>Horizontal placement of this row. Null defaults to left.</summary>
+    public TableRowHorizontalAlignment? HorizontalAlignment { get; set; }
 
     /// <summary>Cells in this row, one per column (even merged cells occupy a slot).</summary>
     public List<TableCell> Cells { get; } = new();
@@ -197,6 +211,12 @@ public sealed class TableShape
 {
     /// <summary>Column widths in EMU, one per column.</summary>
     public List<long> ColumnWidthsEmu { get; } = new();
+
+    /// <summary>Left table indent in points from an external rich-text source.</summary>
+    public double? RichTextLeftIndentPt { get; set; }
+
+    /// <summary>Gap between adjacent cells in points from an external rich-text source.</summary>
+    public double? RichTextCellSpacingPt { get; set; }
 
     /// <summary>Rows in the table (each row contains one cell per column).</summary>
     public List<TableRow> Rows { get; } = new();

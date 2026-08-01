@@ -35,6 +35,7 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
     private BordersAndShadingDialog(Window? owner, ParagraphFormatting paragraph, PageBorder? pageBorder)
     {
         Owner = owner;
+        System.Windows.Automation.AutomationProperties.SetAutomationId(this, "BordersAndShadingDialog");
         Title = "Borders and Shading";
         Width = 420;
         SizeToContent = SizeToContent.Height;
@@ -66,12 +67,38 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
             selectNone: string.IsNullOrEmpty(paragraph.ShadingColorHex));
         _shadingPattern = Combo(BordersAndShadingDialogPlanner.PatternNames, BordersAndShadingDialogPlanner.IndexOfPattern(paragraph.ShadingPattern));
 
+        SetAutomationId(_setting, "BordersAndShadingParagraphSetting");
+        SetAutomationId(_lineStyle, "BordersAndShadingParagraphStyle");
+        SetAutomationId(_color, "BordersAndShadingParagraphColor");
+        SetAutomationId(_width, "BordersAndShadingParagraphWidth");
+        SetAutomationId(_top, "BordersAndShadingTopEdge");
+        SetAutomationId(_left, "BordersAndShadingLeftEdge");
+        SetAutomationId(_bottom, "BordersAndShadingBottomEdge");
+        SetAutomationId(_right, "BordersAndShadingRightEdge");
+        SetAutomationId(_pageSetting, "BordersAndShadingPageSetting");
+        SetAutomationId(_pageLineStyle, "BordersAndShadingPageStyle");
+        SetAutomationId(_pageColor, "BordersAndShadingPageColor");
+        SetAutomationId(_pageWidth, "BordersAndShadingPageWidth");
+        SetAutomationId(_pageArtStyle, "BordersAndShadingPageArt");
+        SetAutomationId(_shadingColor, "BordersAndShadingShadingColor");
+        SetAutomationId(_shadingPattern, "BordersAndShadingShadingPattern");
+
         var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
-        tabs.Items.Add(new TabItem { Header = "Borders", Content = BuildBordersTab() });
-        tabs.Items.Add(new TabItem { Header = "Page Border", Content = BuildPageBorderTab() });
-        tabs.Items.Add(new TabItem { Header = "Shading", Content = BuildShadingTab() });
+        var bordersTab = new TabItem { Header = "Borders", Content = BuildBordersTab() };
+        var pageBorderTab = new TabItem { Header = "Page Border", Content = BuildPageBorderTab() };
+        var shadingTab = new TabItem { Header = "Shading", Content = BuildShadingTab() };
+        SetAutomationId(bordersTab, "BordersAndShadingBordersTab");
+        SetAutomationId(pageBorderTab, "BordersAndShadingPageBorderTab");
+        SetAutomationId(shadingTab, "BordersAndShadingShadingTab");
+        tabs.Items.Add(bordersTab);
+        tabs.Items.Add(pageBorderTab);
+        tabs.Items.Add(shadingTab);
 
         var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(14, 12, 14, 12));
+        var ok = (Button)buttons.Children[0];
+        var cancel = (Button)buttons.Children[1];
+        SetAutomationId(ok, "BordersAndShadingOkButton");
+        SetAutomationId(cancel, "BordersAndShadingCancelButton");
 
         var root = new DockPanel();
         DockPanel.SetDock(buttons, Dock.Bottom);
@@ -175,6 +202,9 @@ internal sealed class BordersAndShadingDialog : Free.Shared.Ribbon.Wpf.DialogWin
         panel.Children.Add(new TextBlock { Text = hex, VerticalAlignment = VerticalAlignment.Center });
         return new ComboBoxItem { Content = panel, Tag = hex };
     }
+
+    private static void SetAutomationId(DependencyObject control, string automationId) =>
+        System.Windows.Automation.AutomationProperties.SetAutomationId(control, automationId);
 
     private static string? SelectedColor(ComboBox combo) =>
         combo.SelectedItem is ComboBoxItem { Tag: string hex } ? hex : null;
