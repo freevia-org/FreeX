@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.VisualTree;
@@ -68,6 +69,8 @@ public sealed class LegalNoticesDialogVisualParityTests
                 text.FontSize.Should().Be(12.1);
                 text.LineHeight.Should().Be(LegalNoticesDialogMetrics.TextLineHeight);
                 text.FontFamily.Should().Be(new FontFamily("Consolas"));
+                text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
+                text.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
                 ((ISolidColorBrush)text.Foreground!).Color.Should().Be(Colors.Black);
                 text.GetValue(ScrollViewer.AllowAutoHideProperty).Should().BeFalse();
                 AutomationProperties.GetAutomationId(text).Should().StartWith("LegalNotices");
@@ -101,8 +104,13 @@ public sealed class LegalNoticesDialogVisualParityTests
                 var first = textBoxes[0];
                 var scroll = first.GetVisualDescendants().OfType<ScrollViewer>().Single();
                 scroll.Extent.Height.Should().BeGreaterThan(scroll.Viewport.Height);
+                scroll.GetVisualDescendants().OfType<ScrollBar>()
+                    .Single(bar => bar.Orientation == Orientation.Vertical)
+                    .Bounds.Width.Should().Be(18);
                 scroll.GetValue(ScrollViewer.AllowAutoHideProperty).Should().BeFalse();
                 first.Focus().Should().BeTrue();
+                first.BorderBrush.Should().BeAssignableTo<ISolidColorBrush>();
+                ((ISolidColorBrush)first.BorderBrush!).Color.Should().Be(Color.FromRgb(86, 157, 229));
                 first.RaiseEvent(new KeyEventArgs
                 {
                     RoutedEvent = InputElement.KeyDownEvent,

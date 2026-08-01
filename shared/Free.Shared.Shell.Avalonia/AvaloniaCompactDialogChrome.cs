@@ -52,6 +52,7 @@ public static class AvaloniaCompactDialogChrome
     public const string DialogWindowClass = "free-compact-dialog-window";
     public const string ClassicTabClass = "free-classic-dialog-tabs";
     public const string CompactComboBoxClass = "free-compact-dialog-combo";
+    private const string ReadOnlyDocumentClass = "free-read-only-document";
 
     public static FontFamily WindowsUiFontFamily { get; } = new(
         "Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, " +
@@ -75,6 +76,7 @@ public static class AvaloniaCompactDialogChrome
     private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
     private static readonly IBrush DialogInactiveTabBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 160));
     private static readonly IBrush DialogInactiveTabBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(243, 243, 243));
+    private static readonly IBrush ReadOnlyDocumentFocusedBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(86, 157, 229));
 
     /// <summary>
     /// Gives a code-built Avalonia dialog the same inherited surface and compact control metrics as the
@@ -266,6 +268,44 @@ public static class AvaloniaCompactDialogChrome
             sharedPadding,
             sharedPadding,
             sharedPadding);
+        // WPF's multiline read-only document host keeps its content pinned to the
+        // top edge. The shared compact chrome defaults single-line inputs to center
+        // alignment, so restore the document template's vertical behavior here.
+        textBox.VerticalContentAlignment = VerticalAlignment.Top;
+        textBox.HorizontalContentAlignment = HorizontalAlignment.Left;
+        if (textBox.Classes.Contains(ReadOnlyDocumentClass))
+        {
+            textBox.SetValue(ScrollViewer.AllowAutoHideProperty, false);
+            return;
+        }
+
+        textBox.Classes.Add(ReadOnlyDocumentClass);
+        // WPF reserves an 18-pixel vertical scrollbar lane inside a read-only
+        // document box. Fluent's compact scrollbar is narrower, which widens the
+        // text viewport and changes wrapping across long notices.
+        textBox.Styles.Add(new Style(selector => selector
+            .OfType<ScrollBar>()
+            .Class(":vertical"))
+        {
+            Setters =
+            {
+                new Setter(Layoutable.WidthProperty, 18d),
+                new Setter(Layoutable.MinWidthProperty, 18d),
+                new Setter(Layoutable.MaxWidthProperty, 18d),
+            },
+        });
+        textBox.Styles.Add(new Style(selector => selector
+            .OfType<TextBox>()
+            .Class(":focus"))
+        {
+            Setters =
+            {
+                new Setter(TextBox.BorderBrushProperty, ReadOnlyDocumentFocusedBorderBrush),
+                new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
+            },
+        });
+        textBox.GotFocus += (_, _) => textBox.BorderBrush = ReadOnlyDocumentFocusedBorderBrush;
+        textBox.LostFocus += (_, _) => textBox.BorderBrush = InputBorderBrush;
         textBox.SetValue(ScrollViewer.AllowAutoHideProperty, false);
     }
 
