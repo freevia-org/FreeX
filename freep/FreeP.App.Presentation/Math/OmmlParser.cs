@@ -106,7 +106,14 @@ public static class OmmlParser
             content,
             ParseMathParagraphJustification(paragraphProperties),
             ParseMathParagraphBinaryBreak(paragraphProperties, mathProperties),
-            ParseMathParagraphBinarySubtraction(paragraphProperties, mathProperties));
+            ParseMathParagraphBinarySubtraction(paragraphProperties, mathProperties),
+            ParseMathFontFamily(mathProperties));
+    }
+
+    private static string? ParseMathFontFamily(XElement? mathProperties)
+    {
+        var value = ReadVal(mathProperties?.Element(M + "mathFont"))?.Trim();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 
     private static MathNode.MathParagraphJustification ParseMathParagraphJustification(XElement? paragraphProperties)

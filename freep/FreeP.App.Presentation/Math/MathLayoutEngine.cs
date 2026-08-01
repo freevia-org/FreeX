@@ -206,16 +206,19 @@ public static class MathLayoutEngine
         double fontSizePt,
         double? paragraphWidthDip)
     {
+        var effectiveFontFamily = string.IsNullOrWhiteSpace(paragraph.MathFontFamily)
+            ? fontFamily
+            : paragraph.MathFontFamily!;
         var content = paragraphWidthDip is > 0
             ? WrapBinaryOperators(
                 paragraph.Content,
                 paragraphWidthDip.Value,
                 paragraph.BinaryBreak,
                 paragraph.BinarySubtraction,
-                fontFamily,
+                effectiveFontFamily,
                 fontSizePt)
             : paragraph.Content;
-        var contentBox = LayoutNode(content, fontFamily, fontSizePt);
+        var contentBox = LayoutNode(content, effectiveFontFamily, fontSizePt);
         var width = paragraphWidthDip.HasValue && paragraphWidthDip.Value > contentBox.Metrics.Width
             ? paragraphWidthDip.Value
             : contentBox.Metrics.Width;

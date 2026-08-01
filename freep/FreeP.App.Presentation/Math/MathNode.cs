@@ -642,16 +642,21 @@ public abstract class MathNode
         public MathParagraphBinaryBreak BinaryBreak { get; }
         public MathParagraphBinarySubtraction BinarySubtraction { get; }
 
+        /// <summary>Optional equation-wide font from <c>m:mathPr/m:mathFont</c>.</summary>
+        public string? MathFontFamily { get; }
+
         public MathParagraph(
             MathNode content,
             MathParagraphJustification justification,
             MathParagraphBinaryBreak binaryBreak = MathParagraphBinaryBreak.Before,
-            MathParagraphBinarySubtraction binarySubtraction = MathParagraphBinarySubtraction.MinusMinus)
+            MathParagraphBinarySubtraction binarySubtraction = MathParagraphBinarySubtraction.MinusMinus,
+            string? mathFontFamily = null)
         {
             Content = content;
             Justification = justification;
             BinaryBreak = binaryBreak;
             BinarySubtraction = binarySubtraction;
+            MathFontFamily = mathFontFamily;
         }
     }
 

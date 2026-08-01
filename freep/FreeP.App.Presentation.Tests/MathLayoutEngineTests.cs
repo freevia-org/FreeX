@@ -2190,6 +2190,28 @@ public sealed class MathLayoutEngineTests
             "bounded centerGroup support uses the same centered renderer-neutral coordinates as centered equation paragraphs");
     }
 
+    [Fact]
+    public void OmmlParagraphMathFont_UsesEquationWideFontInSharedGlyphPlan()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:mathFont m:val=\"Arial\"/></m:mathPr>" +
+            "<m:oMath><m:f><m:num><m:r><m:t>x</m:t></m:r></m:num>" +
+            "<m:den><m:r><m:t>y</m:t></m:r></m:den></m:f></m:oMath>");
+
+        var glyphs = MathBoxRenderPlanner.Plan(
+                MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt),
+                10,
+                20,
+                SrgbColor.Black,
+                "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Should().NotBeEmpty();
+        glyphs.Should().OnlyContain(glyph => glyph.FontFamily == "Arial",
+            "m:mathPr/m:mathFont must be resolved before the shared layout creates glyph boxes");
+    }
+
     [Theory]
     [InlineData("before")]
     [InlineData("after")]
