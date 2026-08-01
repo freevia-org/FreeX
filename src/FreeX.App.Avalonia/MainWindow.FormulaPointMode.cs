@@ -82,6 +82,20 @@ public sealed partial class MainWindow
         return true;
     }
 
+    public bool CycleOwnedFormulaPointModeReference()
+    {
+        if (!HasActiveFormulaPointMode)
+            return false;
+
+        var editor = GetFormulaRangeEntryEditor();
+        if (editor is null)
+            return false;
+
+        var args = new KeyEventArgs { Key = Key.F4, KeyModifiers = KeyModifiers.None };
+        TryHandleFormulaEditorModeOrReferenceCycle(editor, args);
+        return args.Handled;
+    }
+
     private bool TryRouteFormulaPointModeSelection(
         GridRange range,
         bool append = false,
@@ -104,7 +118,9 @@ public sealed partial class MainWindow
         if (HasActiveFormulaPointMode)
             return false;
 
-        return key == Key.Escape
+        return key == Key.F4
+            ? FormulaPointModeWorkbookResolver.TryRouteReferenceCycle(WindowRegistry.FormulaPointModeWindows, this)
+            : key == Key.Escape
             ? FormulaPointModeWorkbookResolver.TryRouteCancel(WindowRegistry.FormulaPointModeWindows, this)
             : key == Key.Enter
                 ? FormulaPointModeWorkbookResolver.TryRouteCommit(WindowRegistry.FormulaPointModeWindows, this)

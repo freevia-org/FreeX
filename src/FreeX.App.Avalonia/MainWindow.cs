@@ -18818,7 +18818,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.KeyModifiers == KeyModifiers.None &&
-            (e.Key == Key.Enter || e.Key == Key.Escape) &&
+            (e.Key == Key.Enter || e.Key == Key.Escape || e.Key == Key.F4) &&
             TryRouteFormulaPointModeKey(e.Key))
         {
             e.Handled = true;

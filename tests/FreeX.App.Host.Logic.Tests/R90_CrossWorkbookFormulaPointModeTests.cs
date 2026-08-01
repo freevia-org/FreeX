@@ -41,6 +41,17 @@ public sealed class R90_CrossWorkbookFormulaPointModeTests
     }
 
     [Fact]
+    public void Resolver_DoesNotConsumeF4WhenNoOtherPointModeOwnerExists()
+    {
+        var source = new FakeFormulaPointWindow("Source.xlsx", active: false);
+
+        FormulaPointModeWorkbookResolver.TryRouteReferenceCycle([source], source)
+            .Should()
+            .BeFalse();
+        source.CycleCount.Should().Be(0);
+    }
+
+    [Fact]
     public void Planner_PreservesExternalWorkbookQualifierForReplacementAndAppend()
     {
         var sourceSheet = SheetId.New();
@@ -93,6 +104,7 @@ public sealed class R90_CrossWorkbookFormulaPointModeTests
         public GridRange? LastSourceSelection { get; private set; }
         public int CommitCount { get; private set; }
         public int CancelCount { get; private set; }
+        public int CycleCount { get; private set; }
 
         public bool AcceptFormulaPointModeSelection(
             FormulaPointModeSelection selection,
@@ -106,5 +118,6 @@ public sealed class R90_CrossWorkbookFormulaPointModeTests
         public void ShowFormulaPointModeSourceSelection(GridRange range) => LastSourceSelection = range;
         public bool CommitOwnedFormulaPointModeEdit() { CommitCount++; return true; }
         public bool CancelOwnedFormulaPointModeEdit() { CancelCount++; return true; }
+        public bool CycleOwnedFormulaPointModeReference() { CycleCount++; return true; }
     }
 }

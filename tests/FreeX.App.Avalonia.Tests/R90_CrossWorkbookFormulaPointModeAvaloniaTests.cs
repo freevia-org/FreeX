@@ -38,7 +38,7 @@ public sealed class R90_CrossWorkbookFormulaPointModeAvaloniaTests
                 owner.FormulaBoxTextForTest.Should().Be(
                     "=SUM('[Source.xlsx]Input Data'!B2,'[Source.xlsx]Input Data'!C4");
 
-                owner.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.F4 });
+                source.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.F4 });
                 owner.FormulaBoxTextForTest.Should().Contain("'[Source.xlsx]Input Data'!$C$4");
                 owner.FormulaBoxTextForTest += ")";
                 source.RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });

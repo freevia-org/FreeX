@@ -1109,7 +1109,7 @@ public partial class MainWindow
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.KeyboardDevice.Modifiers == ModifierKeys.None &&
-            (e.Key == Key.Enter || e.Key == Key.Escape) &&
+            (e.Key == Key.Enter || e.Key == Key.Escape || e.Key == Key.F4) &&
             TryRouteFormulaPointModeKey(e.Key))
         {
             e.Handled = true;

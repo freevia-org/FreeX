@@ -34,6 +34,8 @@ public interface IFormulaPointModeWorkbookWindow
     bool CommitOwnedFormulaPointModeEdit();
 
     bool CancelOwnedFormulaPointModeEdit();
+
+    bool CycleOwnedFormulaPointModeReference();
 }
 
 /// <summary>
@@ -84,4 +86,9 @@ public static class FormulaPointModeWorkbookResolver
         IEnumerable<IFormulaPointModeWorkbookWindow> windows,
         IFormulaPointModeWorkbookWindow sourceWindow) =>
         ResolveOwner(windows, sourceWindow)?.CancelOwnedFormulaPointModeEdit() == true;
+
+    public static bool TryRouteReferenceCycle(
+        IEnumerable<IFormulaPointModeWorkbookWindow> windows,
+        IFormulaPointModeWorkbookWindow sourceWindow) =>
+        ResolveOwner(windows, sourceWindow)?.CycleOwnedFormulaPointModeReference() == true;
 }
