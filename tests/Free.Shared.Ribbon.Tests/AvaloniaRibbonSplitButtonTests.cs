@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Free.Shared.Ribbon.Avalonia;
 
@@ -335,6 +336,64 @@ public sealed class AvaloniaRibbonSplitButtonTests
 
                 Assert.False(parent.IsSubMenuOpen);
                 Assert.True(parent.IsSelected);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task DropdownPopup_NestedMenuUsesSharedChromeAndRightLeftNavigation()
+    {
+        await Session.Dispatch(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("child", new RecordingCommand(() => { }));
+            var content = AvaloniaRibbonRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                        group.Dropdown("more", "More", new RibbonMenu(new[]
+                        {
+                            new RibbonMenuItem("More", Children: new[]
+                            {
+                                new RibbonMenuItem("Child", "child")
+                            }),
+                        }))))
+                    .Build()
+                    .FindTab("home")!,
+                registry);
+            var window = Show(content);
+            try
+            {
+                var dropdown = content.GetLogicalDescendants().OfType<Button>()
+                    .Single(button => Equals(button.Tag, "more"));
+                var flyout = Assert.IsType<MenuFlyout>(dropdown.Flyout);
+                var parent = Assert.Single(flyout.Items.OfType<MenuItem>());
+                var child = Assert.Single(parent.Items.OfType<MenuItem>());
+
+                Assert.Equal(PlacementMode.Bottom, flyout.Placement);
+                Assert.Equal(RibbonVisualMetrics.PopupChrome.ItemMinHeight, parent.MinHeight);
+                Assert.Equal(RibbonVisualMetrics.PopupChrome.Submenu.ItemMinHeight, child.MinHeight);
+                Assert.Contains("freex-ribbon-popup-chrome", flyout.FlyoutPresenterClasses);
+
+                flyout.ShowAt(dropdown);
+                parent.Focus();
+                RaiseKey(parent, Key.Right);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                Assert.True(parent.IsSubMenuOpen);
+                Assert.True(child.IsFocused);
+
+                RaiseKey(child, Key.Left);
+                Assert.False(parent.IsSubMenuOpen);
+                Assert.True(parent.IsFocused || parent.IsSelected);
+
+                parent.IsSubMenuOpen = true;
+                child.Focus(NavigationMethod.Directional);
+                RaiseKey(child, Key.Escape);
+                Assert.False(parent.IsSubMenuOpen);
+                Assert.True(parent.IsFocused || parent.IsSelected);
             }
             finally
             {

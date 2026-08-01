@@ -19,6 +19,17 @@ public enum RibbonPopupDismissal
     ClosePopup,
 }
 
+public enum RibbonPopupNavigationKey
+{
+    Right,
+}
+
+public enum RibbonPopupNavigation
+{
+    None,
+    OpenSubmenu,
+}
+
 /// <summary>Neutral submenu behavior shared by the WPF and Avalonia menu controls.</summary>
 public sealed record RibbonPopupSubmenuContract(
     bool FocusFirstEnabledItemOnOpen,
@@ -29,6 +40,8 @@ public sealed record RibbonPopupSubmenuContract(
     bool RepositionAtScreenEdge,
     double AnchorGap)
 {
+    public bool OpenOnRight { get; init; } = true;
+
     public static RibbonPopupSubmenuContract Default { get; } = new(
         FocusFirstEnabledItemOnOpen: true,
         TraverseEnabledItems: true,
@@ -187,6 +200,17 @@ public readonly record struct RibbonPopupFocusItem(bool IsFocusable, bool IsEnab
 
 public static class RibbonPopupInteractionPlanner
 {
+    public static RibbonPopupNavigation PlanNavigation(
+        RibbonPopupNavigationKey key,
+        bool hasChildren,
+        RibbonPopupInteractionContract? contract = null)
+    {
+        contract ??= RibbonPopupInteractionContract.CollapsedGroup;
+        return key == RibbonPopupNavigationKey.Right && hasChildren && contract.Submenu.OpenOnRight
+            ? RibbonPopupNavigation.OpenSubmenu
+            : RibbonPopupNavigation.None;
+    }
+
     public static RibbonPopupDismissal PlanDismissal(
         RibbonPopupDismissKey key,
         bool isNestedSubmenu,

@@ -251,6 +251,64 @@ public sealed class RibbonWpfSplitButtonTests
     }
 
     [Fact]
+    public void DropdownPopup_NestedMenuUsesSharedChromeAndRightLeftNavigation()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("child", new RecordingCommand());
+            var root = RibbonWpfRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                        group.Dropdown("more", "More", new RibbonMenu(new[]
+                        {
+                            new RibbonMenuItem("More", Children: new[]
+                            {
+                                new RibbonMenuItem("Child", "child")
+                            }),
+                        }))))
+                    .Build()
+                    .FindTab("home")!,
+                new Border(),
+                registry);
+            var window = new Window { Content = root, Width = 420, Height = 130 };
+            window.Show();
+            try
+            {
+                Layout(root, 420, 130);
+                var dropdown = FindButton(root, "more");
+                var menu = Assert.IsType<ContextMenu>(dropdown.ContextMenu);
+                var parent = Assert.Single(menu.Items.OfType<MenuItem>());
+                var child = Assert.Single(parent.Items.OfType<MenuItem>());
+
+                menu.Placement.Should().Be(PlacementMode.Custom);
+                menu.MinWidth.Should().Be(RibbonVisualMetrics.PopupChrome.MinWidth);
+                parent.MinHeight.Should().Be(RibbonVisualMetrics.PopupChrome.ItemMinHeight);
+                child.MinHeight.Should().Be(RibbonVisualMetrics.PopupChrome.Submenu.ItemMinHeight);
+
+                menu.IsOpen = true;
+                parent.Focus();
+                RaiseKey(parent, Key.Right, PresentationSource.FromVisual(window));
+                parent.IsSubmenuOpen.Should().BeTrue();
+                child.Focus();
+                RaiseKey(child, Key.Left, PresentationSource.FromVisual(window));
+                parent.IsSubmenuOpen.Should().BeFalse();
+                parent.IsKeyboardFocusWithin.Should().BeTrue();
+                parent.IsSubmenuOpen = true;
+                child.Focus();
+                RaiseKey(child, Key.Escape, PresentationSource.FromVisual(window));
+                parent.IsSubmenuOpen.Should().BeFalse();
+                parent.IsKeyboardFocusWithin.Should().BeTrue();
+                menu.IsOpen = false;
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
     public void DropdownMenu_PreservesDisabledParentsAndCheckedItems()
     {
         StaTestRunner.Run(() =>

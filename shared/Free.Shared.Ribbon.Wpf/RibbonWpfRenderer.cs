@@ -744,7 +744,8 @@ public static class RibbonWpfRenderer
         RibbonWpfRendererOptions options,
         bool attachMenu = true,
         bool includeKeyTip = true,
-        string? commandNameOverride = null)
+        string? commandNameOverride = null,
+        FrameworkElement? resourceHost = null)
     {
         var commandName = commandNameOverride ?? control.CommandId.Value;
         if (!string.IsNullOrEmpty(commandName))
@@ -783,8 +784,7 @@ public static class RibbonWpfRenderer
         if (hasMenuItems)
         {
             var contextMenu = BuildContextMenu(menu!, registry);
-            contextMenu.PlacementTarget = buttonBase;
-            contextMenu.Placement = PlacementMode.Bottom;
+            RibbonWpfPopupAdapter.Configure(contextMenu, buttonBase, resourceHost ?? element);
             buttonBase.ContextMenu = contextMenu;
             buttonBase.Click += (_, _) => contextMenu.IsOpen = true;
         }

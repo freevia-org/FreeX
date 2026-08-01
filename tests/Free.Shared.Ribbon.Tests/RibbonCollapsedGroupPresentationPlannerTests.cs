@@ -120,6 +120,17 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
         contract.DismissOnLeft.Should().BeTrue();
         contract.Submenu.DismissOnEscape.Should().BeTrue();
         contract.Submenu.DismissOnLeft.Should().BeTrue();
+        contract.Submenu.OpenOnRight.Should().BeTrue();
+        RibbonPopupInteractionPlanner.PlanNavigation(
+                RibbonPopupNavigationKey.Right,
+                hasChildren: true,
+                contract)
+            .Should().Be(RibbonPopupNavigation.OpenSubmenu);
+        RibbonPopupInteractionPlanner.PlanNavigation(
+                RibbonPopupNavigationKey.Right,
+                hasChildren: false,
+                contract)
+            .Should().Be(RibbonPopupNavigation.None);
         RibbonPopupInteractionPlanner.PlanDismissal(
                 RibbonPopupDismissKey.Escape,
                 isNestedSubmenu: true,

@@ -13,6 +13,7 @@ using Avalonia.Media.Immutable;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Avalonia.Controls.Primitives.PopupPositioning;
+using Avalonia.Threading;
 using Free.Shared.Ribbon;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
@@ -1651,8 +1652,10 @@ public static class AvaloniaRibbonRenderer
             Padding = new Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
-            Flyout = control.Menu.BuildFlyout(registry, afterExecute),
         };
+        var dropdownFlyout = control.Menu.BuildFlyout(registry, afterExecute);
+        ConfigureMenuFlyout(dropdownFlyout, dropdown, palette, RibbonPopupInteractionContract.CollapsedGroup);
+        dropdown.Flyout = dropdownFlyout;
         SetKeyTip(dropdown, control.KeyTip);
 
         ApplyStateAndEnablement(primary, control.CommandId, registry, palette);
@@ -2025,7 +2028,9 @@ public static class AvaloniaRibbonRenderer
     {
         if (attachMenu && BuildMenu(control) is { } menu && element is Button menuButton)
         {
-            menuButton.Flyout = menu.BuildFlyout(registry, afterExecute);
+            var flyout = menu.BuildFlyout(registry, afterExecute);
+            ConfigureMenuFlyout(flyout, menuButton, palette, RibbonPopupInteractionContract.CollapsedGroup);
+            menuButton.Flyout = flyout;
         }
         else if (element is Button button)
         {
@@ -2479,8 +2484,14 @@ public static class AvaloniaRibbonRenderer
         MenuFlyout flyout,
         Button anchor,
         AvaloniaRibbonPalette palette)
+        => ConfigureMenuFlyout(flyout, anchor, palette, RibbonPopupInteractionContract.CollapsedGroup);
+
+    private static void ConfigureMenuFlyout(
+        MenuFlyout flyout,
+        Control anchor,
+        AvaloniaRibbonPalette palette,
+        RibbonPopupInteractionContract contract)
     {
-        var contract = RibbonPopupInteractionContract.CollapsedGroup;
         var chrome = RibbonVisualMetrics.PopupChrome;
         flyout.Placement = contract.Placement switch
         {
@@ -2599,8 +2610,19 @@ public static class AvaloniaRibbonRenderer
         IReadOnlyList<MenuItem> siblings,
         KeyEventArgs args)
     {
-        if (args.Handled)
+        if (args.Handled || !ReferenceEquals(args.Source, currentItem))
             return;
+
+        var children = currentItem.Items.OfType<MenuItem>().ToArray();
+        if (args.Key == Key.Right &&
+            RibbonPopupInteractionPlanner.PlanNavigation(
+                RibbonPopupNavigationKey.Right, children.Length > 0, contract) == RibbonPopupNavigation.OpenSubmenu)
+        {
+            currentItem.IsSubMenuOpen = true;
+            FocusFirstEnabledChild(currentItem, children, contract);
+            args.Handled = true;
+            return;
+        }
 
         var dismissal = args.Key switch
         {
@@ -2663,6 +2685,30 @@ public static class AvaloniaRibbonRenderer
             siblings[targetIndex].Focus(NavigationMethod.Directional);
             args.Handled = true;
         }
+    }
+
+    private static void FocusFirstEnabledChild(
+        MenuItem parent,
+        IReadOnlyList<MenuItem> children,
+        RibbonPopupInteractionContract contract)
+    {
+        if (!contract.Submenu.FocusFirstEnabledItemOnOpen)
+            return;
+
+        var states = children
+            .Select(child => new RibbonPopupFocusItem(child.Focusable, child.IsEnabled))
+            .ToArray();
+        var index = RibbonPopupInteractionPlanner.FindFirstFocusableItem(states);
+        if (index < 0)
+            return;
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (parent.IsSubMenuOpen)
+                    TopLevel.GetTopLevel(parent)?.FocusManager?.Focus(children[index], NavigationMethod.Directional);
+            },
+            DispatcherPriority.Input);
     }
 
     private sealed class AvaloniaRibbonAdaptivePanel : Panel
