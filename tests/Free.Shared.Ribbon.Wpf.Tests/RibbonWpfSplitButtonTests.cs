@@ -238,7 +238,7 @@ public sealed class RibbonWpfSplitButtonTests
                 menu.IsOpen = true;
                 parent.IsSubmenuOpen = true;
                 parent.ApplyTemplate();
-                var submenuPopup = Assert.IsType<Popup>(parent.Template!.FindName("PART_Popup", parent));
+                var submenuPopup = FindPopup(parent);
                 submenuPopup.Placement.Should().Be(PlacementMode.Custom);
                 submenuPopup.CustomPopupPlacementCallback.Should().NotBeNull();
                 child.Focus();
@@ -295,7 +295,7 @@ public sealed class RibbonWpfSplitButtonTests
                 RaiseKey(parent, Key.Right, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeTrue();
                 parent.ApplyTemplate();
-                var submenuPopup = Assert.IsType<Popup>(parent.Template!.FindName("PART_Popup", parent));
+                var submenuPopup = FindPopup(parent);
                 submenuPopup.Placement.Should().Be(PlacementMode.Custom);
                 submenuPopup.CustomPopupPlacementCallback.Should().NotBeNull();
                 child.Focus();
@@ -308,6 +308,51 @@ public sealed class RibbonWpfSplitButtonTests
                 parent.IsSubmenuOpen.Should().BeFalse();
                 parent.IsKeyboardFocusWithin.Should().BeTrue();
                 menu.IsOpen = false;
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
+    }
+
+    [Fact]
+    public void SubmenuTemplateWithoutPartPopup_StillUsesSharedPlacementCallback()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("child", new RecordingCommand());
+            var root = RibbonWpfRenderer.BuildTabContent(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                        group.Dropdown("more", "More", new RibbonMenu(new[]
+                        {
+                            new RibbonMenuItem("More", Children: new[]
+                            {
+                                new RibbonMenuItem("Child", "child")
+                            }),
+                        }))))
+                    .Build()
+                    .FindTab("home")!,
+                new Border(),
+                registry);
+            var window = new Window { Content = root, Width = 420, Height = 130 };
+            window.Show();
+            try
+            {
+                Layout(root, 420, 130);
+                var dropdown = FindButton(root, "more");
+                var menu = Assert.IsType<ContextMenu>(dropdown.ContextMenu);
+                var parent = Assert.Single(menu.Items.OfType<MenuItem>());
+                parent.Template = CreateTemplateWithRenamedPopup();
+                parent.ApplyTemplate();
+                parent.RaiseEvent(new RoutedEventArgs(MenuItem.SubmenuOpenedEvent, parent));
+
+                var submenuPopup = FindPopup(parent);
+                submenuPopup.PlacementTarget.Should().BeSameAs(parent);
+                submenuPopup.Placement.Should().Be(PlacementMode.Custom);
+                submenuPopup.CustomPopupPlacementCallback.Should().NotBeNull();
             }
             finally
             {
@@ -458,6 +503,22 @@ public sealed class RibbonWpfSplitButtonTests
     private static Button FindButton(DependencyObject root, string commandName) =>
         Descendants(root).OfType<Button>()
             .Single(button => string.Equals(RibbonMetadata.GetCommandName(button), commandName, StringComparison.Ordinal));
+
+    private static Popup FindPopup(DependencyObject root) =>
+        Descendants(root).OfType<Popup>().Single();
+
+    private static ControlTemplate CreateTemplateWithRenamedPopup()
+    {
+        var template = new ControlTemplate(typeof(MenuItem));
+        var root = new FrameworkElementFactory(typeof(Grid));
+        var popup = new FrameworkElementFactory(typeof(Popup))
+        {
+            Name = "ThemeSubmenuFlyout",
+        };
+        root.AppendChild(popup);
+        template.VisualTree = root;
+        return template;
+    }
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
     {

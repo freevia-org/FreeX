@@ -143,7 +143,15 @@ internal static class RibbonWpfPopupAdapter
             item.ApplyTemplate();
             ConfigureSubmenuPopup(item, contract);
             item.Loaded += (_, _) => ConfigureSubmenuPopup(item, contract);
-            item.SubmenuOpened += (_, _) => ConfigureSubmenuPopup(item, contract);
+            item.SubmenuOpened += (_, _) =>
+            {
+                ConfigureSubmenuPopup(item, contract);
+                // Some themes create or connect the popup as part of opening the submenu. Give
+                // that template one layout pass before falling back to its native placement.
+                item.Dispatcher.BeginInvoke(
+                    DispatcherPriority.Loaded,
+                    new Action(() => ConfigureSubmenuPopup(item, contract)));
+            };
         }
 
         item.AddHandler(
@@ -216,13 +224,9 @@ internal static class RibbonWpfPopupAdapter
         MenuItem item,
         RibbonPopupInteractionContract contract)
     {
-        if (item.Template?.FindName("PART_Popup", item) is not Popup popup)
-        {
-            // WPF has no public MenuItem submenu placement property. The inbox templates expose
-            // the native popup as PART_Popup; a third-party theme that removes that part cannot
-            // receive the shared edge-placement callback and remains toolkit-managed.
+        item.ApplyTemplate();
+        if (FindTemplatePopup(item) is not Popup popup)
             return;
-        }
 
         popup.PlacementTarget = item;
         popup.Placement = contract.Submenu.RepositionAtScreenEdge
@@ -249,6 +253,31 @@ internal static class RibbonWpfPopupAdapter
                     PopupPrimaryAxis.None),
             ];
         };
+    }
+
+    private static Popup? FindTemplatePopup(MenuItem item)
+    {
+        var visited = new HashSet<DependencyObject>();
+        return FindTemplatePopup(item, visited);
+    }
+
+    private static Popup? FindTemplatePopup(
+        DependencyObject current,
+        ISet<DependencyObject> visited)
+    {
+        if (!visited.Add(current))
+            return null;
+        if (current is Popup popup)
+            return popup;
+
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(current); index++)
+        {
+            var result = FindTemplatePopup(VisualTreeHelper.GetChild(current, index), visited);
+            if (result is not null)
+                return result;
+        }
+
+        return null;
     }
 
     private static void FocusFirstEnabledChild(
