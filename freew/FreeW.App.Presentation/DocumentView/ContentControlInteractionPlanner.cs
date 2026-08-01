@@ -67,6 +67,7 @@ public static class ContentControlInteractionPlanner
         Run run,
         RestrictEditingEnforcementPolicy protectionPolicy) =>
         run.Control is not null
+        && run.Control.LockMode is not (ContentControlLockMode.ContentLocked or ContentControlLockMode.ControlAndContentLocked)
         && protectionPolicy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed;
 
     public static string Tooltip(ContentControl control)
@@ -202,6 +203,7 @@ public static class ContentControlInteractionPlanner
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
         IsPageBreak = source.IsPageBreak,
+        IsColumnBreak = source.IsColumnBreak,
         Revision = source.Revision,
         Control = control,
         RevisionAuthor = source.RevisionAuthor,

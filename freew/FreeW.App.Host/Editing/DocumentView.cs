@@ -8159,6 +8159,9 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: PageBreakMarker }:
                 modelParagraph.Runs.Add(ModelRun.PageBreak());
                 break;
+            case WpfRun { Tag: ColumnBreakMarker }:
+                modelParagraph.Runs.Add(ModelRun.ColumnBreak());
+                break;
             case Floater floater when HasFloatingWrapReservationMarker(floater):
                 ReadFloatingWrapReservationFloater(modelParagraph, floater, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
@@ -9502,6 +9505,7 @@ public sealed class DocumentView : RichTextBox
             // editor's continuous RichTextBox ignores BreakPageBefore, so this only affects the paginated
             // output — which previously honoured neither, leaving FreeW badly under-paginated vs Word.
             BreakPageBefore = paraFmt.PageBreakBefore || paragraph.Runs.Any(r => r.IsPageBreak),
+            BreakColumnBefore = paragraph.Runs.Any(r => r.IsColumnBreak),
             TextAlignment = ToWpfAlignment(paraFmt.Alignment),
             // WPF's Block.Margin (unlike FrameworkElement.Margin) rejects negative components with an
             // ArgumentException, so clamp at >= 0. Real docs do carry negative indents/spacing (e.g. a
@@ -9761,7 +9765,8 @@ public sealed class DocumentView : RichTextBox
         && run.Citation is null
         && run.FieldKind == RunFieldKind.None
         && !run.IsCommentReference
-        && !run.IsPageBreak;
+        && !run.IsPageBreak
+        && !run.IsColumnBreak;
 
     private static ModelRun CloneTextRun(ModelRun source, string text) => new(text, source.Formatting)
     {
@@ -10079,6 +10084,9 @@ public sealed class DocumentView : RichTextBox
         // survives an edit/commit cycle (mirroring the footnote/endnote markers).
         if (run.IsPageBreak)
             return new WpfRun(string.Empty) { Tag = new PageBreakMarker() };
+
+        if (run.IsColumnBreak)
+            return new WpfRun(string.Empty) { Tag = new ColumnBreakMarker() };
 
         var fmt = Resolve(run, paragraph, document);
         // Automatic hyphenation: when the document has it on and this paragraph is not suppressed, insert
@@ -11170,6 +11178,9 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Carried on a manual page-break WPF run's Tag so CommitToModel can round-trip it.</summary>
     private sealed record PageBreakMarker;
+
+    /// <summary>Carried on a manual column-break WPF run's Tag so CommitToModel can round-trip it.</summary>
+    private sealed record ColumnBreakMarker;
 
     /// <summary>
     /// Carried on a zero-width WPF run's Tag for a floating image so <see cref="ReadInline"/> can

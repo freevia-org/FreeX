@@ -281,6 +281,11 @@ public static class RtfWriter
                 sb.Append(@"\page ");
                 continue;
             }
+            if (run.IsColumnBreak)
+            {
+                sb.Append(@"\column ");
+                continue;
+            }
             if (run.Text.Length == 0)
                 continue;
 

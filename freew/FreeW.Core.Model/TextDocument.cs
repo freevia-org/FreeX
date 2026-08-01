@@ -168,6 +168,14 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     public byte[] PngBytes => Bytes;
 
     /// <summary>
+    /// Exact external target of a linked DrawingML picture (<c>a:blip/@r:link</c>), or null for an
+    /// ordinary embedded picture. Word may author a link by itself or alongside an embedded preview;
+    /// <see cref="Bytes"/> carries that preview when present. The DOCX reader/writer preserves the target
+    /// verbatim and never resolves or fetches it.
+    /// </summary>
+    public string? LinkedImageTarget { get; set; }
+
+    /// <summary>
     /// Creates an independent image model carrying the same source bytes and every placement, crop,
     /// adjustment, effect, and accessibility property. The media bytes are immutable document content and may
     /// be shared; the mutable image object itself is not shared, so commands such as resize or crop on an
@@ -887,6 +895,12 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public bool IsPageBreak { get; set; }
 
     /// <summary>
+    /// When true, this run is a manual column break (<c>w:br w:type="column"</c>). It carries no text
+    /// and advances following content to the next text column, or to the next page in a one-column section.
+    /// </summary>
+    public bool IsColumnBreak { get; set; }
+
+    /// <summary>
     /// Tracked-change (revision) mark on this run. <see cref="RevisionKind.None"/> is an ordinary run;
     /// <see cref="RevisionKind.Inserted"/> is a tracked insertion (serialises wrapped in w:ins, rendered
     /// underlined in the revision colour); <see cref="RevisionKind.Deleted"/> is a tracked deletion (the
@@ -940,6 +954,9 @@ public sealed class Run(string text, RunFormatting? formatting = null)
 
     /// <summary>Creates a manual page-break run (<c>w:br w:type="page"</c>).</summary>
     public static Run PageBreak() => new(string.Empty) { IsPageBreak = true };
+
+    /// <summary>Creates a manual column-break run (<c>w:br w:type="column"</c>).</summary>
+    public static Run ColumnBreak() => new(string.Empty) { IsColumnBreak = true };
 
     /// <summary>Creates a page-number field run (renders as the current page number).</summary>
     public static Run PageNumberField(RunFormatting? formatting = null) =>
@@ -1159,6 +1176,16 @@ public enum ContentControlKind
     ComboBox
 }
 
+/// <summary>Word content-control locking from w:sdtPr/w:lock.</summary>
+public enum ContentControlLockMode
+{
+    NotSpecified,
+    Unlocked,
+    ContentLocked,
+    ControlLocked,
+    ControlAndContentLocked
+}
+
 /// <summary>
 /// A single choice (w:listItem) of a drop-down list or combo box content control: the visible
 /// <see cref="DisplayText"/> (w:displayText) and the stored <see cref="Value"/> (w:value). Modelled as
@@ -1185,7 +1212,8 @@ public sealed record ContentControl(
     string? Alias = null,
     bool Checked = false,
     string? DateFormat = null,
-    IReadOnlyList<ContentControlListItem>? ListItems = null)
+    IReadOnlyList<ContentControlListItem>? ListItems = null,
+    ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";
@@ -1837,7 +1865,8 @@ public sealed record BlockContentControl(
     string? Alias = null,
     string? DocPartGallery = null,
     string? DocPartCategory = null,
-    bool DocPartUnique = false)
+    bool DocPartUnique = false,
+    ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified)
 {
     public const string BibliographyTag = "Bibliography";
     public const string BibliographyAlias = "Bibliography";

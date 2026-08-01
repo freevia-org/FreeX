@@ -47,6 +47,17 @@ public class DocumentOpsTests
     }
 
     [Fact]
+    public void CreateColumnBreak_CreatesDistinctBreakRun()
+    {
+        var paragraph = DocumentOps.CreateColumnBreak();
+
+        paragraph.Formatting.PageBreakBefore.Should().BeFalse();
+        paragraph.Runs.Should().ContainSingle(run => run.IsColumnBreak);
+        paragraph.Runs.Should().NotContain(run => run.IsPageBreak);
+        paragraph.PlainText.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildBlankPage_CreatesTwoPageBreakParagraphs()
     {
         var blocks = DocumentOps.BuildBlankPage().OfType<Paragraph>().ToList();

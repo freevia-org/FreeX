@@ -122,6 +122,8 @@ public sealed class AddCommentCommand(
         HyperlinkTooltip = source.HyperlinkTooltip,
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
+        IsPageBreak = source.IsPageBreak,
+        IsColumnBreak = source.IsColumnBreak,
     };
 
     private static Run CloneRunMarks(Run source) => CloneRunMarks(source, source.Text);
@@ -231,6 +233,8 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
         HyperlinkTooltip = source.HyperlinkTooltip,
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
+        IsPageBreak = source.IsPageBreak,
+        IsColumnBreak = source.IsColumnBreak,
     };
 
     public static IEnumerable<Paragraph> ParagraphsInBlock(Block block)

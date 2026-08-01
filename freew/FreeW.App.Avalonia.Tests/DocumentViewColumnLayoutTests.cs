@@ -276,6 +276,57 @@ public sealed class DocumentViewColumnLayoutTests
     }
 
     [Fact]
+    public async Task Manual_column_break_advances_following_content_to_second_column()
+    {
+        (double Left, double Width) secondBand = default;
+        double targetX = double.NaN;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.ColumnCount = 2;
+            doc.Page.ColumnSpacingPt = 36;
+            doc.Blocks.Add(new Paragraph("first column"));
+            doc.Blocks.Add(DocumentOps.CreateColumnBreak());
+            doc.Blocks.Add(new Paragraph("second column"));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            secondBand = view.LayoutColumnBand(1);
+            targetX = view.GetPlacedForBlock(2).First().X;
+        });
+
+        if (!ran) return;
+
+        targetX.Should().BeInRange(secondBand.Left - 2, secondBand.Left + secondBand.Width + 2);
+    }
+
+    [Fact]
+    public async Task Manual_column_break_in_one_column_advances_to_next_page()
+    {
+        var pageCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Page.ColumnCount = 1;
+            doc.Blocks.Add(new Paragraph("first page"));
+            doc.Blocks.Add(DocumentOps.CreateColumnBreak());
+            doc.Blocks.Add(new Paragraph("second page"));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            pageCount = view.PageCount;
+        });
+
+        if (!ran) return;
+
+        pageCount.Should().BeGreaterThanOrEqualTo(2);
+    }
+
+    [Fact]
     public async Task Default_widow_control_keeps_an_ordinary_wrapped_paragraph_on_one_page()
     {
         double[] explicitOffY = [];

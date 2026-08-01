@@ -6115,6 +6115,9 @@ public sealed class DocumentView : Control
             var block = _doc.Blocks[blockIndex];
             if (block is Paragraph paragraph)
             {
+                if (paragraph.Runs.Any(run => run.IsColumnBreak))
+                    AdvanceToNextColumnSlot();
+
                 // Route to the image-paragraph path only when the paragraph contains inline images.
                 // Paragraphs whose images are ALL floating (anchored) are laid out as normal text
                 // paragraphs so that the anchor content-Y is tracked; their images are collected
@@ -7379,6 +7382,15 @@ public sealed class DocumentView : Control
             _layoutContentY += (_layoutTextAreaHeight - posInPage);
         }
         return _layoutContentY;
+    }
+
+    private void AdvanceToNextColumnSlot()
+    {
+        if (!_surfacePlan.IsPrintLayout || _layoutTextAreaHeight <= 0)
+            return;
+
+        var slot = Math.Max(0, (int)Math.Floor(_layoutContentY / _layoutTextAreaHeight));
+        _layoutContentY = (slot + 1) * _layoutTextAreaHeight;
     }
 
     /// <summary>
@@ -15372,6 +15384,7 @@ public sealed class DocumentView : Control
         && run.CommentId is null
         && !run.IsCommentReference
         && !run.IsPageBreak
+        && !run.IsColumnBreak
         && run.Revision == RevisionKind.None
         && run.Control is null
         && run.FormatRevision is null;
@@ -15426,6 +15439,7 @@ public sealed class DocumentView : Control
         && left.CommentId is null && right.CommentId is null
         && !left.IsCommentReference && !right.IsCommentReference
         && !left.IsPageBreak && !right.IsPageBreak
+        && !left.IsColumnBreak && !right.IsColumnBreak
         && left.Revision == RevisionKind.None && right.Revision == RevisionKind.None
         && left.Control is null && right.Control is null
         && left.MoveRevisionId is null && right.MoveRevisionId is null

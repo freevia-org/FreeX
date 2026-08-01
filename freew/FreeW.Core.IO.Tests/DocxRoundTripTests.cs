@@ -3007,6 +3007,47 @@ public class DocxRoundTripTests
     }
 
     [Theory]
+    [InlineData("unlocked", ContentControlLockMode.Unlocked)]
+    [InlineData("contentLocked", ContentControlLockMode.ContentLocked)]
+    [InlineData("sdtLocked", ContentControlLockMode.ControlLocked)]
+    [InlineData("sdtContentLocked", ContentControlLockMode.ControlAndContentLocked)]
+    public void InlineContentControlLock_ReadsWritesAndSurvivesReopen(
+        string token,
+        ContentControlLockMode expected)
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var source = ReadHandAuthoredDocx(
+            $$"""
+            <w:p>
+              <w:sdt>
+                <w:sdtPr><w:lock w:val="{{token}}"/><w:text/></w:sdtPr>
+                <w:sdtContent><w:r><w:t>locked text</w:t></w:r></w:sdtContent>
+              </w:sdt>
+            </w:p>
+            """);
+
+        source.Paragraphs.Single().Runs.Single().Control!.LockMode.Should().Be(expected);
+        var xml = WriteDocumentXml(source);
+        xml.Descendants(w + "sdtPr").Single().Element(w + "lock")!
+            .Attribute(w + "val")!.Value.Should().Be(token);
+        RoundTrip(source).Paragraphs.Single().Runs.Single().Control!.LockMode.Should().Be(expected);
+    }
+
+    [Fact]
+    public void InlineContentControlWithoutLock_OmitsLockToken()
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.PlainTextControl("editable"));
+        doc.Blocks.Add(paragraph);
+
+        WriteDocumentXml(doc).Descendants(w + "lock").Should().BeEmpty();
+        RoundTrip(doc).Paragraphs.Single().Runs.Single().Control!.LockMode
+            .Should().Be(ContentControlLockMode.NotSpecified);
+    }
+
+    [Theory]
     [InlineData(RevisionKind.Inserted)]
     [InlineData(RevisionKind.Deleted)]
     public void RevisedContentControl_RoundTrips_ControlAndRevision(RevisionKind revisionKind)
@@ -3052,6 +3093,24 @@ public class DocxRoundTripTests
         paragraphControl.Should().NotBeNull();
         paragraphControl!.Kind.Should().Be(BlockContentControlKind.RichText);
         paragraphControl.Tag.Should().Be("BlockControl");
+    }
+
+    [Fact]
+    public void BlockLevelContentControlLock_RoundTrips()
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var control = new BlockContentControl(
+            BlockContentControlKind.RichText,
+            Tag: "LockedBlock",
+            LockMode: ContentControlLockMode.ControlAndContentLocked);
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("locked block") { BlockContentControl = control });
+
+        var xml = WriteDocumentXml(doc);
+        xml.Descendants(w + "sdtPr").Single().Element(w + "lock")!
+            .Attribute(w + "val")!.Value.Should().Be("sdtContentLocked");
+        RoundTrip(doc).Blocks.Single().BlockContentControl!.LockMode
+            .Should().Be(ContentControlLockMode.ControlAndContentLocked);
     }
 
     [Fact]

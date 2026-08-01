@@ -1348,10 +1348,10 @@ public static class DocxReader
         return OpcRelationships.LoadTargetMap(
             archive,
             relsPath,
-            relationship => OpcPathHelper.ResolveRelativeZipPath(dir, relationship.Target),
-            relationship =>
-                !relationship.IsExternal &&
-                relationship.Type.EndsWith("/image", StringComparison.Ordinal));
+            relationship => relationship.IsExternal
+                ? relationship.Target
+                : OpcPathHelper.ResolveRelativeZipPath(dir, relationship.Target),
+            relationship => relationship.Type.EndsWith("/image", StringComparison.Ordinal));
     }
 
     private static Dictionary<string, string> ReadPartRelationships(ZipArchive archive, string partPath)
@@ -1360,8 +1360,12 @@ public static class DocxReader
         return OpcRelationships.LoadTargetMap(
             archive,
             OpcPathHelper.GetRelationshipPartPath(partPath),
-            relationship => OpcPathHelper.ResolveRelativeZipPath(directory, relationship.Target),
-            relationship => !relationship.IsExternal);
+            relationship => relationship.IsExternal
+                ? relationship.Target
+                : OpcPathHelper.ResolveRelativeZipPath(directory, relationship.Target),
+            relationship =>
+                !relationship.IsExternal ||
+                relationship.Type.EndsWith("/image", StringComparison.Ordinal));
     }
 
     private static Dictionary<string, string> ReadPartHyperlinkRelationships(ZipArchive archive, string partPath) =>
@@ -3022,6 +3026,7 @@ public static class DocxReader
         var gallery = docPart?.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value;
         var category = docPart?.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
         var hasDocPartUnique = docPart?.Element(W + "docPartUnique") is not null;
+        var lockMode = ReadContentControlLock(sdtPr);
 
         var kind = gallery is not null
             && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
@@ -3038,7 +3043,8 @@ public static class DocxReader
             string.IsNullOrEmpty(alias) ? null : alias,
             string.IsNullOrEmpty(gallery) ? null : gallery,
             string.IsNullOrEmpty(category) ? null : category,
-            hasDocPartUnique);
+            hasDocPartUnique,
+            lockMode);
     }
 
     private static ContentControl ReadContentControl(XElement? sdtPr)
@@ -3047,6 +3053,7 @@ public static class DocxReader
         var alias = sdtPr?.Element(W + "alias")?.Attribute(W + "val")?.Value;
         var normTag = string.IsNullOrEmpty(tag) ? null : tag;
         var normAlias = string.IsNullOrEmpty(alias) ? null : alias;
+        var lockMode = ReadContentControlLock(sdtPr);
 
         var checkbox = sdtPr?.Element(W14 + "checkbox") ?? sdtPr?.Element(W + "checkbox");
         if (checkbox is not null)
@@ -3055,7 +3062,7 @@ public static class DocxReader
                 ?.Attribute(W14 + "val")?.Value
                 ?? (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))?.Attribute(W + "val")?.Value;
             var isChecked = val is "1" or "true" or "on";
-            return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked);
+            return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked, LockMode: lockMode);
         }
 
         var date = sdtPr?.Element(W + "date");
@@ -3063,24 +3070,35 @@ public static class DocxReader
         {
             var format = date.Element(W + "dateFormat")?.Attribute(W + "val")?.Value;
             return new ContentControl(ContentControlKind.DatePicker, normTag, normAlias,
-                DateFormat: string.IsNullOrEmpty(format) ? ContentControl.DefaultDateFormat : format);
+                DateFormat: string.IsNullOrEmpty(format) ? ContentControl.DefaultDateFormat : format,
+                LockMode: lockMode);
         }
 
         var dropDown = sdtPr?.Element(W + "dropDownList");
         if (dropDown is not null)
             return new ContentControl(ContentControlKind.DropDownList, normTag, normAlias,
-                ListItems: ReadListItems(dropDown));
+                ListItems: ReadListItems(dropDown), LockMode: lockMode);
 
         var combo = sdtPr?.Element(W + "comboBox");
         if (combo is not null)
             return new ContentControl(ContentControlKind.ComboBox, normTag, normAlias,
-                ListItems: ReadListItems(combo));
+                ListItems: ReadListItems(combo), LockMode: lockMode);
 
         if (sdtPr?.Element(W + "richText") is not null)
-            return new ContentControl(ContentControlKind.RichText, normTag, normAlias);
+            return new ContentControl(ContentControlKind.RichText, normTag, normAlias, LockMode: lockMode);
 
-        return new ContentControl(ContentControlKind.PlainText, normTag, normAlias);
+        return new ContentControl(ContentControlKind.PlainText, normTag, normAlias, LockMode: lockMode);
     }
+
+    private static ContentControlLockMode ReadContentControlLock(XElement? sdtPr) =>
+        sdtPr?.Element(W + "lock")?.Attribute(W + "val")?.Value switch
+        {
+            "unlocked" => ContentControlLockMode.Unlocked,
+            "contentLocked" => ContentControlLockMode.ContentLocked,
+            "sdtLocked" => ContentControlLockMode.ControlLocked,
+            "sdtContentLocked" => ContentControlLockMode.ControlAndContentLocked,
+            _ => ContentControlLockMode.NotSpecified,
+        };
 
     /// <summary>
     /// Reads the w:listItem choices (w:displayText / w:value) of a w:dropDownList / w:comboBox element
@@ -3347,6 +3365,16 @@ public static class DocxReader
         if (r.Elements(W + "br").Any(b => b.Attribute(W + "type")?.Value == "page"))
         {
             var breakRun = Run.PageBreak();
+            breakRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
+            ApplyRevision(breakRun);
+            paragraph.Runs.Add(breakRun);
+        }
+
+        // A manual column break is distinct from a page break: in a multi-column section it advances to
+        // the next column, while in a one-column section the next column begins on the following page.
+        if (r.Elements(W + "br").Any(b => b.Attribute(W + "type")?.Value == "column"))
+        {
+            var breakRun = Run.ColumnBreak();
             breakRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
             ApplyRevision(breakRun);
             paragraph.Runs.Add(breakRun);
@@ -3698,7 +3726,8 @@ public static class DocxReader
     /// the inline form (wp:inline, read back as <see cref="ImageWrapping.Inline"/>) and the floating form
     /// (wp:anchor), recovering the wrapping mode, the position offsets, and the horizontal/vertical anchors.
     /// Returns null when the drawing is not a picture (e.g. a shape or chart) so those paths keep working —
-    /// a picture is identified by an a:blip whose r:embed resolves to a media part.
+    /// a picture is identified by an a:blip whose r:embed resolves to a media part and/or whose r:link
+    /// resolves to an external image relationship.
     /// </summary>
     private static InlineImage? ReadImage(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> imageRelationships)
     {
@@ -3710,12 +3739,22 @@ public static class DocxReader
             return ReadVmlImage(run, archive, imageRelationships);
 
         var blip = container.Descendants(A + "blip").FirstOrDefault();
-        var relationshipId = blip?.Attribute(R + "embed")?.Value;
-        if (relationshipId is null || !imageRelationships.TryGetValue(relationshipId, out var target))
-            return null;
+        var embeddedRelationshipId = blip?.Attribute(R + "embed")?.Value;
+        var linkedRelationshipId = blip?.Attribute(R + "link")?.Value;
 
-        var bytes = LoadMedia(archive, target);
-        if (bytes is null)
+        string? embeddedTarget = null;
+        byte[]? bytes = null;
+        if (embeddedRelationshipId is not null
+            && imageRelationships.TryGetValue(embeddedRelationshipId, out embeddedTarget))
+        {
+            bytes = LoadMedia(archive, embeddedTarget);
+        }
+
+        string? linkedTarget = null;
+        if (linkedRelationshipId is not null)
+            imageRelationships.TryGetValue(linkedRelationshipId, out linkedTarget);
+
+        if (bytes is null && string.IsNullOrWhiteSpace(linkedTarget))
             return null;
 
         var extent = container.Element(Wp + "extent");
@@ -3725,13 +3764,15 @@ public static class DocxReader
         // Recover the image's original format so non-PNG pictures round-trip verbatim. Prefer the media
         // part's extension (the relationship target carries the real extension), falling back to the bytes'
         // magic number when the extension is unknown/absent.
-        var format = ResolveImageFormat(target, bytes);
+        var formatTarget = embeddedTarget ?? linkedTarget ?? string.Empty;
+        var format = ResolveImageFormat(formatTarget, bytes ?? []);
 
         // Restore accessibility alt text from wp:docPr/@descr; absent attribute leaves AltText null.
         var descr = container.Element(Wp + "docPr")?.Attribute("descr")?.Value;
-        var image = new InlineImage(bytes, widthPt, heightPt, format)
+        var image = new InlineImage(bytes ?? [], widthPt, heightPt, format)
         {
             AltText = string.IsNullOrEmpty(descr) ? null : descr,
+            LinkedImageTarget = linkedTarget,
         };
 
         // A wp:anchor is a floating image: recover wrapping mode, offsets and anchors. A wp:inline reads
@@ -5514,12 +5555,15 @@ public static class DocxReader
         OpcRelationships.LoadTargetMap(
             archive,
             "word/_rels/document.xml.rels",
-            relationship => "word/" + relationship.Target.TrimStart('/'));
+            relationship => relationship.IsExternal
+                ? relationship.Target
+                : "word/" + relationship.Target.TrimStart('/'));
 
     /// <summary>
     /// Maps relationship id → archive entry path for a satellite part's own <c>_rels</c> (e.g.
     /// <c>word/_rels/comments.xml.rels</c>), resolving each Target relative to <paramref name="baseFolder"/>
-    /// (the folder the relationships are relative to, e.g. <c>word/</c>). External targets are skipped. Returns
+    /// (the folder the relationships are relative to, e.g. <c>word/</c>). External image targets are retained
+    /// verbatim for DrawingML <c>r:link</c>. Returns
     /// an empty map when the rels part is absent — so a comments part with no image relationships behaves exactly
     /// as before. Mirrors <see cref="ReadImageRelationships"/> for non-document parts.
     /// </summary>
@@ -5527,10 +5571,12 @@ public static class DocxReader
         OpcRelationships.LoadTargetMap(
             archive,
             relsPath,
-            relationship => OpcPathHelper.ResolveAbsolutePartName(
-                "/" + baseFolder.Trim('/'),
-                relationship.Target)?.TrimStart('/'),
-            relationship => !relationship.IsExternal);
+            relationship => relationship.IsExternal
+                ? relationship.Target
+                : OpcPathHelper.ResolveAbsolutePartName(
+                    "/" + baseFolder.Trim('/'),
+                    relationship.Target)?.TrimStart('/'),
+            relationship => relationship.Type.EndsWith("/image", StringComparison.Ordinal));
 
     /// <summary>Maps relationship id -> external hyperlink target (URL) from document.xml.rels.</summary>
     private static Dictionary<string, string> ReadHyperlinkRelationships(ZipArchive archive) =>

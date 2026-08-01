@@ -57,6 +57,20 @@ public class RtfRoundTripTests
     }
 
     [Fact]
+    public void ColumnBreak_RoundTripsAsColumnControl()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(DocumentOps.CreateColumnBreak());
+
+        var bytes = Save(document);
+        Encoding.ASCII.GetString(bytes).Should().Contain(@"\column ");
+        var paragraph = Load(bytes).Blocks.OfType<Paragraph>().Single();
+        paragraph.Runs.Should().ContainSingle(run => run.IsColumnBreak);
+        paragraph.Runs.Should().NotContain(run => run.IsPageBreak);
+    }
+
+    [Fact]
     public void Adapter_ExposesRtfOpenSaveFormat()
     {
         IDocumentFileAdapter adapter = new RtfFileAdapter();

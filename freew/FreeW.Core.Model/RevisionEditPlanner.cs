@@ -244,6 +244,7 @@ public static class RevisionEditPlanner
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
         IsPageBreak = source.IsPageBreak,
+        IsColumnBreak = source.IsColumnBreak,
         Revision = source.Revision,
         Control = source.Control,
         RevisionAuthor = source.RevisionAuthor,

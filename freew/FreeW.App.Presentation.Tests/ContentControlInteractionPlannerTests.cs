@@ -119,6 +119,25 @@ public sealed class ContentControlInteractionPlannerTests
             .Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(ContentControlLockMode.NotSpecified, true)]
+    [InlineData(ContentControlLockMode.Unlocked, true)]
+    [InlineData(ContentControlLockMode.ControlLocked, true)]
+    [InlineData(ContentControlLockMode.ContentLocked, false)]
+    [InlineData(ContentControlLockMode.ControlAndContentLocked, false)]
+    public void CanEditExistingContentControl_HonorsContentLock(
+        ContentControlLockMode lockMode,
+        bool expected)
+    {
+        var run = Run.CheckBoxControl(@checked: false);
+        run.Control = run.Control! with { LockMode = lockMode };
+
+        ContentControlInteractionPlanner.CanEditExistingContentControl(
+                run,
+                Policy(ProtectionMode.None, isMarkedAsFinal: false))
+            .Should().Be(expected);
+    }
+
     private static RestrictEditingEnforcementPolicy Policy(ProtectionMode mode, bool isMarkedAsFinal) =>
         RestrictEditingEnforcementPolicy.From(new ProtectionSettings(mode), isMarkedAsFinal);
 }
