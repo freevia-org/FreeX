@@ -76,6 +76,8 @@ public enum DocumentViewMode
 public sealed class DocumentView : RichTextBox
 {
     private const double PxPerPoint = 96.0 / 72.0;
+    // TableCell and BlockUIContainer already contribute this much horizontal content inset.
+    private const double WpfTableCellContentInsetDip = 6.0;
     // WPF's Calibri line box remains about 1% short after restoring Word's 12-point application fallback.
     private const double ImportedWordApplicationLineHeightScale = 1.01;
 
@@ -9423,7 +9425,9 @@ public sealed class DocumentView : RichTextBox
         var stack = new System.Windows.Controls.StackPanel
         {
             RenderTransform = contentMargins is { } margins
-                ? new TranslateTransform(0, margins.TopPt * PxPerPoint)
+                ? new TranslateTransform(
+                    Math.Max(0, margins.LeftPt * PxPerPoint - WpfTableCellContentInsetDip),
+                    margins.TopPt * PxPerPoint)
                 : Transform.Identity,
             VerticalAlignment = verticalAlignment switch
             {
