@@ -1625,7 +1625,7 @@ public static class SlideCompositor
                 FreeP.App.Compositor.MathLayout.MathBox.Container? mathLayout = null;
                 if (run.Math is not null)
                 {
-                    var mathNode = FreeP.App.Compositor.MathLayout.OmmlParser.Parse(run.Math.RawXml, resolvedText);
+                    var mathNode = FreeP.App.Compositor.MathLayout.OmmlParser.ParsePowerPoint(run.Math.RawXml, resolvedText);
                     mathLayout = FreeP.App.Compositor.MathLayout.MathLayoutEngine.Layout(mathNode, fontFamily, fontSizePt);
                 }
 

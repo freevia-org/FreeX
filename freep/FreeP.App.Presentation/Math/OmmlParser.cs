@@ -20,6 +20,17 @@ public static class OmmlParser
     private static readonly XNamespace A14 = "http://schemas.microsoft.com/office/drawing/2010/main";
     private static readonly XNamespace MC  = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
+    /// <summary>
+    /// PowerPoint's default equation font when an equation does not author an
+    /// explicit <c>m:mathFont</c>. Generic parser callers can still choose
+    /// different document defaults through <see cref="Parse"/>.
+    /// </summary>
+    public static MathNode.MathProperties PowerPointDocumentDefaults { get; } =
+        new(MathFontFamily: "Cambria Math");
+
+    public static MathNode ParsePowerPoint(string rawXml, string fallbackText) =>
+        Parse(rawXml, fallbackText, PowerPointDocumentDefaults);
+
     // ── Public entry point ────────────────────────────────────────────────
 
     /// <summary>
@@ -44,7 +55,8 @@ public static class OmmlParser
                 return new MathNode.Unknown(fallbackText);
 
             var inheritedProperties = (documentDefaults ?? new MathNode.MathProperties())
-                .Overlay(ParseInheritedMathProperties(mathRoot));
+                .Overlay(ParseInheritedMathProperties(mathRoot))
+                .Overlay(ParseMathProperties(mathRoot.Element(M + "mathPr")));
 
             return mathRoot.Name == M + "oMathPara"
                 ? ParseMathParagraph(mathRoot, inheritedProperties)
