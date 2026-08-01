@@ -40,6 +40,7 @@ public sealed class SmartArtStylePlan
             new ThemeAwareColor(text),
             _profile switch
             {
+                SmartArtStyleProfile.SimpleFill => 1.0,
                 SmartArtStyleProfile.Subtle => 0.85,
                 SmartArtStyleProfile.Intense => 1.4,
                 _ => 1.1
@@ -64,6 +65,7 @@ public sealed class SmartArtStylePlan
     private SrgbColor ApplyStyleFill(SrgbColor color) =>
         _profile switch
         {
+            SmartArtStyleProfile.SimpleFill => color,
             SmartArtStyleProfile.Subtle => ThemeColorTransform.ApplyTint(color, 0.32),
             SmartArtStyleProfile.Intense => ThemeColorTransform.ApplyShade(color, 0.72),
             _ => ThemeColorTransform.ApplyTint(color, 0.88)
@@ -172,16 +174,28 @@ public static class SmartArtStylePlanner
             ? string.Empty
             : JoinHints(quickStyle.UniqueId, quickStyle.Title, quickStyle.Category, quickStyle.StyleLabels);
 
-        if (hint.Contains("white", StringComparison.OrdinalIgnoreCase)
-            && hint.Contains("outline", StringComparison.OrdinalIgnoreCase))
+        if (hint.Contains("simple2", StringComparison.OrdinalIgnoreCase)
+            || (hint.Contains("white", StringComparison.OrdinalIgnoreCase)
+                && hint.Contains("outline", StringComparison.OrdinalIgnoreCase)))
             return SmartArtStyleProfile.WhiteOutline;
 
-        if (hint.Contains("subtle", StringComparison.OrdinalIgnoreCase)
-            || hint.Contains("simple", StringComparison.OrdinalIgnoreCase))
+        if (hint.Contains("simple1", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("simple fill", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.SimpleFill;
+
+        if (hint.Contains("simple5", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("intense", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.Intense;
+
+        if (hint.Contains("simple4", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("moderate", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.Moderate;
+
+        if (hint.Contains("simple3", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("subtle", StringComparison.OrdinalIgnoreCase))
             return SmartArtStyleProfile.Subtle;
 
-        if (hint.Contains("intense", StringComparison.OrdinalIgnoreCase)
-            || hint.Contains("3d", StringComparison.OrdinalIgnoreCase)
+        if (hint.Contains("3d", StringComparison.OrdinalIgnoreCase)
             || hint.Contains("polish", StringComparison.OrdinalIgnoreCase))
             return SmartArtStyleProfile.Intense;
 
@@ -197,6 +211,7 @@ public static class SmartArtStylePlanner
 
 internal enum SmartArtStyleProfile
 {
+    SimpleFill,
     Subtle,
     WhiteOutline,
     Moderate,
