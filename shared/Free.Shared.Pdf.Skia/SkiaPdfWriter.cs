@@ -353,7 +353,7 @@ public static class SkiaPdfWriter
                 // PDF text origin is the baseline (y-up). Skia DrawText baseline is y-down.
                 var baseline = (float)PdfRenderGeometry.ToCanvasY(pageHeight, text.Y);
                 textPaint.Color = ToSkColor(colorOverride ?? text.Color);
-                var typeface = typefaces.For(text.Face);
+                var typeface = typefaces.For(text.FontFamily, text.Face);
                 textRenderer.DrawText(canvas, text.Text, (float)text.X, baseline, typeface, (float)text.FontSize, textPaint);
                 break;
             }
@@ -1044,66 +1044,52 @@ public static class SkiaPdfWriter
 
     private sealed class PdfTypefaceSet : IDisposable
     {
-        private readonly IReadOnlyList<SKTypeface> _owned;
+        private readonly Dictionary<(string Family, PdfFontFace Face), SKTypeface> _cache = new();
 
-        private PdfTypefaceSet(
-            SKTypeface regular,
-            SKTypeface bold,
-            SKTypeface italic,
-            SKTypeface boldItalic,
-            IReadOnlyList<SKTypeface> owned)
+        private PdfTypefaceSet()
         {
-            Regular = regular;
-            Bold = bold;
-            Italic = italic;
-            BoldItalic = boldItalic;
-            _owned = owned;
         }
 
-        private SKTypeface Regular { get; }
-        private SKTypeface Bold { get; }
-        private SKTypeface Italic { get; }
-        private SKTypeface BoldItalic { get; }
+        public static PdfTypefaceSet Create() => new();
 
-        public static PdfTypefaceSet Create()
+        public SKTypeface For(string? fontFamily, PdfFontFace face)
         {
-            var owned = new List<SKTypeface>(4);
+            var family = string.IsNullOrWhiteSpace(fontFamily) ? string.Empty : fontFamily.Trim();
+            var key = (family, face);
+            if (_cache.TryGetValue(key, out var cached))
+                return cached;
 
-            SKTypeface Resolve(SKFontStyleWeight weight, SKFontStyleSlant slant, SKTypeface fallback)
+            var (weight, slant) = face switch
             {
-                var typeface = SKTypeface.FromFamilyName(
+                PdfFontFace.Bold => (SKFontStyleWeight.Bold, SKFontStyleSlant.Upright),
+                PdfFontFace.Italic => (SKFontStyleWeight.Normal, SKFontStyleSlant.Italic),
+                PdfFontFace.BoldItalic => (SKFontStyleWeight.Bold, SKFontStyleSlant.Italic),
+                _ => (SKFontStyleWeight.Normal, SKFontStyleSlant.Upright),
+            };
+            var typeface = SKTypeface.FromFamilyName(
+                    family.Length == 0 ? null : family,
+                    weight,
+                    SKFontStyleWidth.Normal,
+                    slant)
+                ?? SKTypeface.FromFamilyName(
                     null,
                     weight,
                     SKFontStyleWidth.Normal,
-                    slant);
-                if (typeface is null)
-                    return fallback;
-                owned.Add(typeface);
-                return typeface;
-            }
-
-            var regular = Resolve(
-                SKFontStyleWeight.Normal,
-                SKFontStyleSlant.Upright,
-                SKTypeface.Default);
-            var bold = Resolve(SKFontStyleWeight.Bold, SKFontStyleSlant.Upright, regular);
-            var italic = Resolve(SKFontStyleWeight.Normal, SKFontStyleSlant.Italic, regular);
-            var boldItalic = Resolve(SKFontStyleWeight.Bold, SKFontStyleSlant.Italic, bold);
-            return new PdfTypefaceSet(regular, bold, italic, boldItalic, owned);
+                    slant)
+                ?? SKTypeface.Default;
+            _cache[key] = typeface;
+            return typeface;
         }
-
-        public SKTypeface For(PdfFontFace face) => face switch
-        {
-            PdfFontFace.Bold => Bold,
-            PdfFontFace.Italic => Italic,
-            PdfFontFace.BoldItalic => BoldItalic,
-            _ => Regular,
-        };
 
         public void Dispose()
         {
-            foreach (var typeface in _owned)
+            foreach (var typeface in _cache.Values.Distinct())
+            {
+                if (ReferenceEquals(typeface, SKTypeface.Default))
+                    continue;
                 typeface.Dispose();
+            }
+            _cache.Clear();
         }
     }
 

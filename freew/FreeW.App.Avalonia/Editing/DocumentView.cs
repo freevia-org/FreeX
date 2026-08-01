@@ -3366,7 +3366,13 @@ public sealed class DocumentView : Control
             }
 
             pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfText(
-                Math.Max(0, xPt), yPt, fontSizePt, face, color, runText.ToString()));
+                Math.Max(0, xPt),
+                yPt,
+                fontSizePt,
+                face,
+                color,
+                runText.ToString(),
+                runFmt.FontFamily));
 
             if (decorationPlan.HasBorder && decorationPlan.Border is { } border)
             {
@@ -4486,7 +4492,7 @@ public sealed class DocumentView : Control
             ? string.Empty
             : $"{border.ColorHex}|{border.WidthPt}|{border.BottomOnly}|{border.LineStyle}|" +
               $"{border.Top}|{border.Left}|{border.Bottom}|{border.Right}";
-        return $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.VerticalAlign}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
+        return $"{fmt.FontFamily}|{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.VerticalAlign}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
                $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|" +
                $"{fmt.Strikethrough}|{borderKey}";
     }
@@ -5042,7 +5048,8 @@ public sealed class DocumentView : Control
                 sourceRect,
                 pageTopDip,
                 pageHeightPt,
-                nodeRect);
+                nodeRect,
+                node.FontFamilyName);
         }
 
         void AddConnector(int nodeIndex, double x1Dip, double y1Dip, double x2Dip, double y2Dip, bool arrow)
@@ -5206,7 +5213,8 @@ public sealed class DocumentView : Control
         Rect sourceRect,
         double pageTopDip,
         double pageHeightPt,
-        PdfRectValue? clip)
+        PdfRectValue? clip,
+        string? fontFamily = null)
     {
         if (string.IsNullOrEmpty(text))
             return;
@@ -5220,7 +5228,8 @@ public sealed class DocumentView : Control
             Math.Max(1, fontSizePt),
             bold ? PdfFontFace.Bold : PdfFontFace.Regular,
             ParseColor(colorHex),
-            text);
+            text,
+            fontFamily);
         if (clip is { } bounds)
             ops.Add(new PdfClipGroup(bounds.X, bounds.Y, bounds.Width, bounds.Height, [textOp]));
         else
@@ -5286,6 +5295,7 @@ public sealed class DocumentView : Control
                     placement.CenterYNormalized * sourceRect.Height,
                     placement.RotationRadians * 180 / Math.PI,
                     face,
+                    wordArt.FontFamily,
                     textColor,
                     sourceRect,
                     pageTopDip,
@@ -5307,6 +5317,7 @@ public sealed class DocumentView : Control
                     sourceRect.Height / 2,
                     0,
                     face,
+                    wordArt.FontFamily,
                     textColor,
                     sourceRect,
                     pageTopDip,
@@ -5431,6 +5442,7 @@ public sealed class DocumentView : Control
         double centerYDip,
         double rotationDegrees,
         PdfFontFace face,
+        string? fontFamily,
         PdfColor fillColor,
         Rect sourceRect,
         double pageTopDip,
@@ -5451,7 +5463,8 @@ public sealed class DocumentView : Control
                 fontSizePt,
                 face,
                 ParseColor(outline.ColorHex),
-                text));
+                text,
+                fontFamily));
         }
         textOps.Add(new PdfText(
             centerXPt - glyphWidthPt / 2,
@@ -5459,7 +5472,8 @@ public sealed class DocumentView : Control
             fontSizePt,
             face,
             fillColor,
-            text));
+            text,
+            fontFamily));
 
         if (Math.Abs(rotationDegrees) > 0.001)
             ops.Add(new PdfRotationGroup(centerXPt, centerYPt, rotationDegrees, textOps));
@@ -5663,7 +5677,8 @@ public sealed class DocumentView : Control
                 fontSizePt,
                 face,
                 ParseColor(currentFormatting.ColorHex),
-                currentText.ToString()));
+                currentText.ToString(),
+                currentFormatting.FontFamily));
             currentText.Clear();
             currentFormatting = null;
         }

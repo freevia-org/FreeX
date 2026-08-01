@@ -438,6 +438,27 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void RenderPagesToPng_UsesAuthoredFontFamilies()
+    {
+        var pages = new[]
+        {
+            new PdfContentPage(
+                220,
+                70,
+                [new PdfText(12, 28, 30, PdfFontFace.Regular, PdfColor.Black, "Family sample", "Arial")]),
+            new PdfContentPage(
+                220,
+                70,
+                [new PdfText(12, 28, 30, PdfFontFace.Regular, PdfColor.Black, "Family sample", "Courier New")]),
+        };
+
+        var pngs = SkiaPdfWriter.RenderPagesToPng(new PdfContentDocument(pages));
+
+        pngs.Should().HaveCount(2);
+        pngs[1].Should().NotEqual(pngs[0], "authored font families must reach Skia's embedded-font path");
+    }
+
+    [Fact]
     public void Write_AcceptsLinearGradientShapeAndPathOps()
     {
         var gradient = new PdfLinearGradient(

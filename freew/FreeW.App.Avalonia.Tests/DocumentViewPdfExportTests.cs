@@ -88,6 +88,32 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_PreservesResolvedRunFontFamilies() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Serif", RunFormatting.Default with
+            {
+                FontFamily = "Times New Roman",
+            }));
+            paragraph.Runs.Add(new Run("Mono", RunFormatting.Default with
+            {
+                FontFamily = "Courier New",
+            }));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var text = view.BuildPdfContent().Pages[0].Ops.OfType<PdfText>().ToArray();
+
+            text.Should().Contain(item => item.Text == "Serif" && item.FontFamily == "Times New Roman");
+            text.Should().Contain(item => item.Text == "Mono" && item.FontFamily == "Courier New");
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_ExportsUnderlineStrikeAndHyperlinkVisualStyle() =>
         Session.Dispatch(() =>
         {

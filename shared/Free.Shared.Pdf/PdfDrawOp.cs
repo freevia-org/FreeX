@@ -194,7 +194,8 @@ public sealed record PdfText(
     double FontSize,
     PdfFontFace Face,
     PdfColor Color,
-    string Text) : PdfDrawOp;
+    string Text,
+    string? FontFamily = null) : PdfDrawOp;
 
 /// <summary>
 /// Strokes a straight line between two points in PDF user space (origin bottom-left, y-up).
