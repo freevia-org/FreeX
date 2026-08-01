@@ -250,6 +250,12 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("reopened-values", probe, StringComparison.Ordinal);
         Assert.Contains("outline-nested-save-reopen", runner, StringComparison.Ordinal);
         Assert.Contains("requires an .xlsx PhysicalDocumentPath", runner, StringComparison.Ordinal);
+        Assert.Contains("probe_outline_nested_filter_save_reopen_physical", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-nested-filter-save-reopen-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-nested-filter-save-reopen", runner, StringComparison.Ordinal);
+        Assert.Contains("New-FreeXWave100NestedOutlineFilterFixture.ps1", runner, StringComparison.Ordinal);
+        Assert.Contains("filter-flyout-passed", probe, StringComparison.Ordinal);
+        Assert.Contains("filtered-hidden=3,6", probe, StringComparison.Ordinal);
         Assert.Contains("NestedRowOuterSummary", probe, StringComparison.Ordinal);
         Assert.Contains("NestedColumnOuterSummary", probe, StringComparison.Ordinal);
         Assert.DoesNotContain("inner-collapse-screen-changed", probe, StringComparison.Ordinal);

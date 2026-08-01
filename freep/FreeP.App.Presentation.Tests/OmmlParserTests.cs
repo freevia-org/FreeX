@@ -40,6 +40,13 @@ public sealed class OmmlParserTests
         var defaultRoot = Assert.IsType<MathNode.MathRoot>(defaultNode);
         Assert.Equal("Cambria Math", defaultRoot.Properties.MathFontFamily);
 
+        var documentNode = OmmlParser.ParsePowerPoint(
+            $"<m:oMath xmlns:m=\"{M}\"><m:r><m:t>x</m:t></m:r></m:oMath>",
+            "FALLBACK",
+            new MathNode.MathProperties(MathFontFamily: "Arial"));
+        var documentRoot = Assert.IsType<MathNode.MathRoot>(documentNode);
+        Assert.Equal("Arial", documentRoot.Properties.MathFontFamily);
+
         var authoredNode = OmmlParser.ParsePowerPoint(
             $"<m:oMath xmlns:m=\"{M}\"><m:mathPr><m:mathFont m:val=\"STIX Two Math\"/></m:mathPr>" +
             "<m:r><m:t>x</m:t></m:r></m:oMath>",

@@ -31,6 +31,12 @@ public static class OmmlParser
     public static MathNode ParsePowerPoint(string rawXml, string fallbackText) =>
         Parse(rawXml, fallbackText, PowerPointDocumentDefaults);
 
+    public static MathNode ParsePowerPoint(
+        string rawXml,
+        string fallbackText,
+        MathNode.MathProperties? authoredDefaults) =>
+        Parse(rawXml, fallbackText, PowerPointDocumentDefaults.Overlay(authoredDefaults));
+
     // ── Public entry point ────────────────────────────────────────────────
 
     /// <summary>
