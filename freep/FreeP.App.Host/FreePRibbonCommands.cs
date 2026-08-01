@@ -268,6 +268,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ArrowRibbon)));
         registry.Register(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.CircleProcess)));
+        registry.Register(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.CircleArrowProcess)));
         registry.Register(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.FunnelProcess)));
         registry.Register(SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
@@ -286,6 +288,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.HorizontalBulletList)));
         registry.Register(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.HorizontalBlockList)));
+        registry.Register(SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.TrapezoidList)));
         registry.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicCycle)));
         registry.Register(SmartArtAuthoringPlanner.Cycle2LayoutCommandId,
@@ -334,6 +338,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.OpposingIdeas)));
         registry.Register(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.ConvergingRadial)));
+        registry.Register(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.DivergingRadial)));
         registry.Register(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicVenn)));
         registry.Register(SmartArtAuthoringPlanner.RadialVennLayoutCommandId,

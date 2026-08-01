@@ -1074,11 +1074,13 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.AlternatingProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ArrowRibbon, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleProcess, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.CircleArrowProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.FunnelProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalArrowList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.TrapezoidList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.ContinuousCycle, SmartArtFamily.Cycle)]
@@ -1102,6 +1104,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.BasicRelationship, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.OpposingIdeas, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.ConvergingRadial, SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.DivergingRadial, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, SmartArtFamily.Relationship)]
@@ -2664,6 +2667,25 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "radialVenn now has bounded shared radial overlapping-ellipse geometry");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Customer", "Product", "Market", "Proof");
+    }
+
+    [Fact]
+    public void Reader_ParsesDivergingRadialAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial",
+            nodes: [("id1", "Central"), ("id2", "North"), ("id3", "East"), ("id4", "South")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
+            "divergingRadial is a relationship-family layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "divergingRadial must use the editable shared relationship planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Central", "North", "East", "South");
     }
 
     [Fact]

@@ -126,6 +126,9 @@ public static class SmartArtLayoutEngine
         if (IsCircleProcessLayout(data.LayoutUniqueId))
             return LayoutCircleProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsCircleArrowProcessLayout(data.LayoutUniqueId))
+            return LayoutCircleArrowProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsFunnelProcessLayout(data.LayoutUniqueId))
             return LayoutFunnelProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -195,6 +198,8 @@ public static class SmartArtLayoutEngine
                     ? LayoutOpposingIdeas(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsConvergingRadialLayout(data.LayoutUniqueId)
                     ? LayoutConvergingRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                : IsDivergingRadialLayout(data.LayoutUniqueId)
+                    ? LayoutDivergingRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : IsRadialVennLayout(data.LayoutUniqueId)
                     ? LayoutRadialVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                     : IsTargetListLayout(data.LayoutUniqueId)
@@ -979,6 +984,18 @@ public static class SmartArtLayoutEngine
 
         return shapes;
     }
+
+    /// <summary>
+    /// Circle Arrow Process keeps its native layout identity for authoring,
+    /// save/reopen, and cache regeneration. The current line-shape model cannot
+    /// express PowerPoint's curved arrowheads, so it reuses live circular stage
+    /// geometry until that connector primitive exists.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutCircleArrowProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan) =>
+        LayoutCircleProcess(nodes, fx, fy, fcx, fcy, stylePlan);
 
     /// <summary>
     /// Funnel process geometry: ordered stages stack vertically and narrow toward
@@ -1982,6 +1999,86 @@ public static class SmartArtLayoutEngine
                 idCounter++, nodes[i].Text, nodeStyle,
                 x, y, arrowW, arrowH,
                 NodeFontSizePt, shapeKind));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Diverging Radial geometry: the first logical node is the central idea and
+    /// the remaining nodes radiate outward as equal circles. This keeps the
+    /// native relationship layout live and editable in both hosts instead of
+    /// falling back to the cached SmartArt drawing.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutDivergingRadial(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count < 2)
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long innerCx = Math.Max(fcx - 2 * padX, 1L);
+        long innerCy = Math.Max(fcy - 2 * padY, 1L);
+        double centerX = fx + padX + innerCx / 2.0;
+        double centerY = fy + padY + innerCy / 2.0;
+
+        long centerDiameter = Math.Max((long)(Math.Min(innerCx, innerCy) * 0.27), 1L);
+        uint idCounter = 548;
+        var shapes = new List<SlideShape>(1 + (nodes.Count - 1) * 2);
+        var centerStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.Relationship);
+        shapes.Add(MakeBox(
+            idCounter++, nodes[0].Text, centerStyle,
+            (long)(centerX - centerDiameter / 2.0),
+            (long)(centerY - centerDiameter / 2.0),
+            centerDiameter,
+            centerDiameter,
+            NodeFontSizeLargePt,
+            DrawingShapeKind.Ellipse));
+
+        int outerCount = nodes.Count - 1;
+        double angleStep = 360.0 / outerCount;
+        double radiusX = innerCx / 2.0 * 0.70;
+        double radiusY = innerCy / 2.0 * 0.70;
+        double halfChord = Math.Sin(Math.PI / outerCount);
+        double outerDiameterFrac = outerCount == 1
+            ? 0.20
+            : Math.Min(0.20, halfChord * 0.62);
+        long outerDiameter = Math.Max(
+            (long)(Math.Min(innerCx, innerCy) * outerDiameterFrac),
+            1L);
+        var outerCenters = new (double x, double y)[outerCount];
+
+        for (int i = 0; i < outerCount; i++)
+        {
+            double angle = (-90 + i * angleStep) * Math.PI / 180.0;
+            outerCenters[i] = (
+                centerX + radiusX * Math.Cos(angle),
+                centerY + radiusY * Math.Sin(angle));
+            shapes.Add(MakeConnector(
+                idCounter++,
+                (long)centerX,
+                (long)centerY,
+                (long)outerCenters[i].x,
+                (long)outerCenters[i].y,
+                stylePlan.Connector));
+        }
+
+        for (int i = 0; i < outerCount; i++)
+        {
+            var node = nodes[i + 1];
+            var nodeStyle = stylePlan.GetNodeStyle(i + 1, node.Level, SmartArtFamily.Relationship);
+            shapes.Add(MakeBox(
+                idCounter++, node.Text,
+                nodeStyle,
+                (long)(outerCenters[i].x - outerDiameter / 2.0),
+                (long)(outerCenters[i].y - outerDiameter / 2.0),
+                outerDiameter,
+                outerDiameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
         }
 
         return shapes;
@@ -3358,6 +3455,15 @@ public static class SmartArtLayoutEngine
         return string.Equals(id.Split('/').Last(), "circleprocess", StringComparison.Ordinal);
     }
 
+    private static bool IsCircleArrowProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "circlearrowprocess", StringComparison.Ordinal);
+    }
+
     private static bool IsFunnelProcessLayout(string uniqueId)
     {
         if (string.IsNullOrWhiteSpace(uniqueId))
@@ -3515,6 +3621,14 @@ public static class SmartArtLayoutEngine
             return false;
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "convergingradial", StringComparison.Ordinal);
+    }
+
+    private static bool IsDivergingRadialLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "divergingradial", StringComparison.Ordinal);
     }
 
     private static bool IsRadialVennLayout(string uniqueId)

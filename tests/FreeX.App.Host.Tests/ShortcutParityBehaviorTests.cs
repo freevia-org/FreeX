@@ -577,7 +577,15 @@ public sealed class ShortcutParityBehaviorTests
         commandsSource.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.OpenHyperlink");
         commandsSource.Should().Contain("TryOpenSelectedHyperlink()");
         insertSource.Should().Contain("private bool TryOpenSelectedHyperlink()");
-        insertSource.Should().Contain("TryOpenHyperlink(selectedRange.Start)");
+        // R112-model-active-cell-vs-selection-1-1 sibling fix: Excel opens the ACTIVE cell's
+        // hyperlink, not the selection's normalized top-left Start corner (the two differ whenever
+        // the selection was made upward/leftward, e.g. dragging D4 -> A1 pins the active cell at
+        // D4 while Start normalizes to A1). The WPF host must read SheetGrid.ActiveCell -- which
+        // MainWindow mirrors from _selectionAnchor -- falling back to Start only when it is unset,
+        // matching WorkbookSession.OpenSelectedHyperlink and the Avalonia shell's
+        // OpenSelectedHyperlinkAsync.
+        insertSource.Should().Contain("TryOpenHyperlink(SheetGrid.ActiveCell ?? selectedRange.Start)");
+        insertSource.Should().NotContain("TryOpenHyperlink(selectedRange.Start)");
     }
 
     [Fact]

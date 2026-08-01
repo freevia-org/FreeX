@@ -2776,7 +2776,7 @@ public static class PptxPackageReader
         if (uid.Contains("matrix"))
             return SmartArtFamily.Matrix;
 
-        if (uid.Contains("venn") || uid.Contains("relationship") || uid.Contains("target") || uid.Contains("opposingideas") || uid.Contains("convergingradial") || uid.Contains("interlockingrings"))
+        if (uid.Contains("venn") || uid.Contains("relationship") || uid.Contains("target") || uid.Contains("opposingideas") || uid.Contains("convergingradial") || uid.Contains("divergingradial") || uid.Contains("interlockingrings"))
             return SmartArtFamily.Relationship;
 
         if (uid.Contains("cycle") || uid.Contains("gear") || uid.Contains("radial"))
@@ -2811,12 +2811,12 @@ public static class PptxPackageReader
 
         return family switch
         {
-            SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "accentprocess" or "ascendingprocess" or "descendingprocess" or "basictimeline" or "phasedprocess" or "circleaccenttimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
-            SmartArtFamily.List => layoutId is "list1" or "list2" or "basicblocklist" or "verticalboxlist" or "verticalblocklist" or "verticalchevronlist" or "verticalarrowlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "invertedpyramid" or "horizontalbulletlist" or "horizontalblocklist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturestrips" or "continuouspicturelist" or "picturegrid",
+            SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "accentprocess" or "ascendingprocess" or "descendingprocess" or "basictimeline" or "phasedprocess" or "circleaccenttimeline" or "stepdownprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "circlearrowprocess" or "funnelprocess" or "verticalprocess",
+            SmartArtFamily.List => layoutId is "list1" or "list2" or "basicblocklist" or "verticalboxlist" or "verticalblocklist" or "verticalchevronlist" or "verticalarrowlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "invertedpyramid" or "horizontalbulletlist" or "horizontalblocklist" or "trapezoidlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturestrips" or "continuouspicturelist" or "picturegrid",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "cycle2" or "radial1" or "basiccycle" or "radialcycle" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart" or "nameandtitleorgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",
-            SmartArtFamily.Relationship => layoutId is "relationship1" or "opposingideas" or "convergingradial" or "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn" or "interlockingrings",
+            SmartArtFamily.Relationship => layoutId is "relationship1" or "opposingideas" or "convergingradial" or "divergingradial" or "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn" or "interlockingrings",
             _ => false
         };
     }

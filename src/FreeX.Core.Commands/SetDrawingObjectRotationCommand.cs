@@ -35,12 +35,16 @@ public sealed class SetDrawingObjectRotationCommand : IWorkbookCommand
             return new CommandOutcome(false, "Object rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         var target = FindRotatable(sheet, _kind, _objectId);
         if (target is null)
             return new CommandOutcome(false, "Drawing object was not found.");
+
+        // R113-model-drawing-object-lock-1-1: honour the object's own Locked flag, not just the
+        // sheet's "Edit objects" permission -- an author-unlocked picture/shape/text box stays
+        // rotatable on a protected sheet, matching the R111/R112 per-object guard overloads.
+        if (SelectionPaneObjectAccess.Find(sheet, _kind, _objectId) is { } objectRef &&
+            SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, objectRef) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousRotationDegrees = target.RotationDegrees;
         target.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);

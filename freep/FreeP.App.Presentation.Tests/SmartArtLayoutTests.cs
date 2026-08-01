@@ -161,6 +161,21 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void TrapezoidList_UsesLiveListGeometryAndPreservesNodeOrder()
+    {
+        var data = MakeData(SmartArtFamily.List, "One", "Two", "Three");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/trapezoidList";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        var boxes = shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Should().HaveCount(3);
+        boxes.Select(shape => shape.PlainText).Should().Equal("One", "Two", "Three");
+    }
+
+    [Fact]
     public void Process_BoxesAreLeftToRight_Increasing_X()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
@@ -1477,6 +1492,24 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void CircleArrowProcess_RegeneratesLiveCircularStagesUnderNativeLayoutIdentity()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Discover", "Plan", "Build", "Review");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleArrowProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("circleArrowProcess is a live authoring layout, not a cached-only fallback");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "the live process loop must remain connected after text edits and cache regeneration");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Discover", "Plan", "Build", "Review");
+    }
+
+    [Fact]
     public void FunnelProcess_ReturnsNarrowingStageSegmentsAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");
@@ -1921,6 +1954,30 @@ public sealed class SmartArtLayoutTests
         shapes[0].PlainText.Should().Be("Title only");
         shapes[0].ExtentCxEmu.Should().BeLessThanOrEqualTo(FrameCx);
         shapes[0].ExtentCyEmu.Should().BeLessThanOrEqualTo(FrameCy);
+    }
+
+    [Fact]
+    public void DivergingRadial_EmitsCentralNodeOuterNodesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Central", "North", "East", "South");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("divergingRadial should remain live for editable relationship nodes");
+        shapes!.Should().HaveCount(7, "one central node, three connectors, and three outer nodes");
+        shapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse).Should().Be(4);
+        shapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.Line).Should().Be(3);
+        shapes.Select(shape => shape.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Where(text => text is not null)
+            .Should().Equal("Central", "North", "East", "South");
+        foreach (var shape in shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse))
+        {
+            shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
     }
 
     [Fact]

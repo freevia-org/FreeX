@@ -426,6 +426,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtAlternatingProcessCommand { get; } = new("Ribbon_Command_SmartArtAlternatingProcess_Label", "Ribbon_Command_SmartArtAlternatingProcess_KeyTip");
     public static RibbonText SmartArtArrowRibbonCommand { get; } = new("Ribbon_Command_SmartArtArrowRibbon_Label", "Ribbon_Command_SmartArtArrowRibbon_KeyTip");
     public static RibbonText SmartArtCircleProcessCommand { get; } = new("Ribbon_Command_SmartArtCircleProcess_Label", "Ribbon_Command_SmartArtCircleProcess_KeyTip");
+    public static RibbonText SmartArtCircleArrowProcessCommand { get; } = new("Ribbon_Command_SmartArtCircleArrowProcess_Label", "Ribbon_Command_SmartArtCircleArrowProcess_KeyTip");
     public static RibbonText SmartArtFunnelProcessCommand { get; } = new("Ribbon_Command_SmartArtFunnelProcess_Label", "Ribbon_Command_SmartArtFunnelProcess_KeyTip");
     public static RibbonText SmartArtVerticalProcessCommand { get; } = new("Ribbon_Command_SmartArtVerticalProcess_Label", "Ribbon_Command_SmartArtVerticalProcess_KeyTip");
     public static RibbonText SmartArtVerticalBoxListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBoxList_Label", "Ribbon_Command_SmartArtVerticalBoxList_KeyTip");
@@ -435,6 +436,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtVerticalBulletListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBulletList_Label", "Ribbon_Command_SmartArtVerticalBulletList_KeyTip");
     public static RibbonText SmartArtHorizontalBulletListCommand { get; } = new("Ribbon_Command_SmartArtHorizontalBulletList_Label", "Ribbon_Command_SmartArtHorizontalBulletList_KeyTip");
     public static RibbonText SmartArtHorizontalBlockListCommand { get; } = new("Ribbon_Command_SmartArtHorizontalBlockList_Label", "Ribbon_Command_SmartArtHorizontalBlockList_KeyTip");
+    public static RibbonText SmartArtTrapezoidListCommand { get; } = new("Ribbon_Command_SmartArtTrapezoidList_Label", "Ribbon_Command_SmartArtTrapezoidList_KeyTip");
     public static RibbonText SmartArtBasicCycleCommand { get; } = new("Ribbon_Command_SmartArtBasicCycle_Label", "Ribbon_Command_SmartArtBasicCycle_KeyTip");
     public static RibbonText SmartArtCycle2Command { get; } = new("Ribbon_Command_SmartArtCycle2_Label", "Ribbon_Command_SmartArtCycle2_KeyTip");
     public static RibbonText SmartArtContinuousCycleCommand { get; } = new("Ribbon_Command_SmartArtContinuousCycle_Label", "Ribbon_Command_SmartArtContinuousCycle_KeyTip");
@@ -459,6 +461,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtBasicRelationshipCommand { get; } = new("Ribbon_Command_SmartArtBasicRelationship_Label", "Ribbon_Command_SmartArtBasicRelationship_KeyTip");
     public static RibbonText SmartArtOpposingIdeasCommand { get; } = new("Ribbon_Command_SmartArtOpposingIdeas_Label", "Ribbon_Command_SmartArtOpposingIdeas_KeyTip");
     public static RibbonText SmartArtConvergingRadialCommand { get; } = new("Ribbon_Command_SmartArtConvergingRadial_Label", "Ribbon_Command_SmartArtConvergingRadial_KeyTip");
+    public static RibbonText SmartArtDivergingRadialCommand { get; } = new("Ribbon_Command_SmartArtDivergingRadial_Label", "Ribbon_Command_SmartArtDivergingRadial_KeyTip");
     public static RibbonText SmartArtBasicVennCommand { get; } = new("Ribbon_Command_SmartArtBasicVenn_Label", "Ribbon_Command_SmartArtBasicVenn_KeyTip");
     public static RibbonText SmartArtRadialVennCommand { get; } = new("Ribbon_Command_SmartArtRadialVenn_Label", "Ribbon_Command_SmartArtRadialVenn_KeyTip");
     public static RibbonText SmartArtTargetListCommand { get; } = new("Ribbon_Command_SmartArtTargetList_Label", "Ribbon_Command_SmartArtTargetList_KeyTip");

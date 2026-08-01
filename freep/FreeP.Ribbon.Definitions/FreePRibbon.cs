@@ -850,6 +850,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
                 FreePRibbonText.SmartArtCircleProcessCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtCircleProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
+                FreePRibbonText.SmartArtCircleArrowProcessCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtCircleArrowProcessCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
                 FreePRibbonText.SmartArtFunnelProcessCommand.Label, RibbonCommandIconKind.Rectangle,
                 FreePRibbonText.SmartArtFunnelProcessCommand.KeyTip);
@@ -877,6 +880,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
                 FreePRibbonText.SmartArtHorizontalBlockListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtHorizontalBlockListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
+                FreePRibbonText.SmartArtTrapezoidListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtTrapezoidListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
                 FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
@@ -949,6 +955,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId,
                 FreePRibbonText.SmartArtConvergingRadialCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtConvergingRadialCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId,
+                FreePRibbonText.SmartArtDivergingRadialCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtDivergingRadialCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicVennLayoutCommandId,
                 FreePRibbonText.SmartArtBasicVennCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.SmartArtBasicVennCommand.KeyTip);
