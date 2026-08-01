@@ -3473,6 +3473,38 @@ public sealed class MainWindowHeadlessTests
         motion.Segments[1].Y.Should().Be(0);
     }
 
+    [Theory]
+    [InlineData("freep.anim.motion.circle", 5)]
+    [InlineData("freep.anim.motion.loop", 3)]
+    [InlineData("freep.anim.motion.s", 5)]
+    [InlineData("freep.anim.motion.figure-eight", 5)]
+    public async Task Ribbon_additional_motion_commands_create_cubic_paths(
+        string commandId,
+        int expectedSegmentCount)
+    {
+        MotionPath? motion = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(shape.Id);
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(commandId, out var command).Should().BeTrue();
+
+            command!.Execute(RibbonCommandContext.Empty);
+            motion = window.Editor.CurrentSlideAnimations.Single().Motion;
+        });
+
+        if (!ran) return;
+        motion.Should().NotBeNull();
+        motion!.Segments.Should().HaveCount(expectedSegmentCount);
+        motion.Segments[0].Kind.Should().Be(MotionPathSegmentKind.Move);
+        motion.Segments.Skip(1).Should().OnlyContain(segment => segment.Kind == MotionPathSegmentKind.Cubic);
+        motion.Segments[^1].X.Should().Be(0);
+        motion.Segments[^1].Y.Should().Be(0);
+    }
+
     [Fact]
     public async Task Animation_pane_renders_shared_timeline_rows_and_action_state()
     {

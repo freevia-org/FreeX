@@ -2518,6 +2518,30 @@
   <data name="Ribbon_Command_AnimationMotionArcDown_KeyTip" xml:space="preserve">
     <value>AD</value>
   </data>
+  <data name="Ribbon_Command_AnimationMotionCircle_Label" xml:space="preserve">
+    <value>Circle</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionCircle_KeyTip" xml:space="preserve">
+    <value>C</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionLoop_Label" xml:space="preserve">
+    <value>Loop</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionLoop_KeyTip" xml:space="preserve">
+    <value>LO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionS_Label" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionS_KeyTip" xml:space="preserve">
+    <value>SC</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionFigureEight_Label" xml:space="preserve">
+    <value>Figure Eight</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionFigureEight_KeyTip" xml:space="preserve">
+    <value>FE</value>
+  </data>
   <data name="Ribbon_Group_AnimationTiming_Label" xml:space="preserve">
     <value>Timing</value>
   </data>

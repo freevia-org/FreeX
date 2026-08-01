@@ -1144,6 +1144,10 @@ public static class FreePRibbon
             group.Medium("freep.anim.motion.arc-left", FreePRibbonText.AnimationMotionArcLeftCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionArcLeftCommand.KeyTip);
             group.Medium("freep.anim.motion.arc-up", FreePRibbonText.AnimationMotionArcUpCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionArcUpCommand.KeyTip);
             group.Medium("freep.anim.motion.arc-down", FreePRibbonText.AnimationMotionArcDownCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionArcDownCommand.KeyTip);
+            group.Medium("freep.anim.motion.circle", FreePRibbonText.AnimationMotionCircleCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionCircleCommand.KeyTip);
+            group.Medium("freep.anim.motion.loop", FreePRibbonText.AnimationMotionLoopCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionLoopCommand.KeyTip);
+            group.Medium("freep.anim.motion.s", FreePRibbonText.AnimationMotionSCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionSCommand.KeyTip);
+            group.Medium("freep.anim.motion.figure-eight", FreePRibbonText.AnimationMotionFigureEightCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionFigureEightCommand.KeyTip);
         });
         tab.Group("animation-timing", FreePRibbonText.AnimationTimingGroup.Label, FreePRibbonText.AnimationTimingGroup.KeyTip, 90, group =>
         {
