@@ -698,7 +698,8 @@ static void RenderDocumentComposite(
         DrawTrackedRevisionChangeBars(bmp, doc, thisMarginLeft, thisMarginRight);
 
         // ─ Layer 3: page border (draw into a separate DrawingVisual, composite onto bmp) ─────────
-        if (thisPageSettings.PageBorder is { } pb)
+        if (thisPageSettings.PageBorder is { } pb
+            && PageBorderVisibilityPlanner.ShouldRender(pb.Display, i))
         {
             var borderVisual = new DrawingVisual();
             using (var dc = borderVisual.RenderOpen())
@@ -1464,7 +1465,8 @@ static SKBitmap RenderSoftwarePageBitmap(
 
     DrawSoftwareWatermark(canvas, page, width, height);
 
-    if (page.PageBorder is { } border)
+    if (page.PageBorder is { } border
+        && PageBorderVisibilityPlanner.ShouldRender(border.Display, pageIndex))
     {
         using var borderPaint = new SKPaint
         {

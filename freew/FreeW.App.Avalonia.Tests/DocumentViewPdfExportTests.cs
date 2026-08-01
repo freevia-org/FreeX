@@ -663,6 +663,42 @@ public sealed class DocumentViewPdfExportTests
             borderPixels.Should().BeGreaterThan(100);
         }, CancellationToken.None);
 
+    [Theory]
+    [InlineData(PageBorderDisplay.FirstPage, true)]
+    [InlineData(PageBorderDisplay.NotFirstPage, false)]
+    public Task BuildPdfContent_RespectsPageBorderDisplay(
+        PageBorderDisplay display,
+        bool firstPageHasBorder) =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.PageBorder = new PageBorder("#24536B", 1.5)
+            {
+                SpacePt = 12,
+                Display = display,
+            };
+            for (var i = 0; i < 30; i++)
+                document.Blocks.Add(new Paragraph($"Bordered line {i + 1}"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            var borderPresence = pdf.Pages
+                .Select(page => page.Ops.OfType<PdfStrokeRect>()
+                    .Any(border => border.Color == new PdfColor(0x24, 0x53, 0x6B)))
+                .ToArray();
+
+            borderPresence[0].Should().Be(firstPageHasBorder);
+            borderPresence.Skip(1).Should().OnlyContain(present => present != firstPageHasBorder);
+        }, CancellationToken.None);
+
     [Fact]
     public Task BuildPdfContent_UsesTextOffsetAndDoublePageBorderGeometry() =>
         Session.Dispatch(() =>
