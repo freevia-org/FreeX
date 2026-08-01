@@ -750,6 +750,51 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfTableRowBorders_MapToOuterCellEdgesAndSurviveClipboardRoundTrip()
+    {
+        const string rtf =
+            @"{\rtf1\ansi{\colortbl;\red255\green0\blue0;}
+\trowd\trbrdrl\brdrs\brdrw20\brdrcf1
+\trbrdrr\brdrs\brdrw20\brdrcf1
+\trbrdrt\brdrs\brdrw20\brdrcf1
+\trbrdrb\brdrs\brdrw20\brdrcf1
+\cellx2000\cellx4000
+\intbl Outer\cell
+\trowd\itap2\nesttableprops\trbrdrt\brdrs\brdrw20\brdrcf1\cellx1000\cellx2000
+\intbl Inner left\nestcell
+\intbl Inner right\nestcell
+\nestrow
+\itap1\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var table = payload!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table;
+        var cells = table.Rows.Should().ContainSingle().Which.Cells;
+        cells.Should().HaveCount(2);
+
+        var left = cells[0].Borders!;
+        var right = cells[1].Borders!;
+        ((ShapeOutline.Visible)left.Left!).WidthPt.Should().Be(1);
+        left.Right.Should().BeNull();
+        ((ShapeOutline.Visible)right.Right!).WidthPt.Should().Be(1);
+        ((ShapeOutline.Visible)left.Top!).WidthPt.Should().Be(1);
+        ((ShapeOutline.Visible)right.Bottom!).WidthPt.Should().Be(1);
+        ((ShapeOutline.Visible)left.Left!).Color.Resolved.Should().Be(SrgbColor.FromRgb(0xFF0000));
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        var reopenedCells = reopened!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows.Single().Cells;
+        ((ShapeOutline.Visible)reopenedCells[0].Borders!.Left!).WidthPt.Should().Be(1);
+        ((ShapeOutline.Visible)reopenedCells[1].Borders!.Right!).Color.Resolved
+            .Should().Be(SrgbColor.FromRgb(0xFF0000));
+    }
+
+    [Fact]
     public void RtfSuperscriptAndSubscript_PreserveBaselineControls()
     {
         const string rtf =
