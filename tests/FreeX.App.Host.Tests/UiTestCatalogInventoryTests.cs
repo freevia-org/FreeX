@@ -790,8 +790,14 @@ public sealed partial class UiTestCatalogInventoryTests
     {
         var script = ReadScreenshotToolScript(scriptName);
 
+        // The foreground-ownership guard function itself lives only in the shared
+        // tools/ScreenshotCaptureSupport.ps1 (dot-sourced below) since "Centralize screenshot
+        // foreground helpers" (9540d1f960); Test-ToolScripts.ps1 forbids scenario scripts from
+        // redeclaring it. This test asserts the script wires into that shared guard rather than
+        // requiring a local `function Assert-ForegroundWindowOwnership` declaration.
         script.Should().Contain("GetForegroundWindow");
-        script.Should().Contain("function Assert-ForegroundWindowOwnership");
+        script.Should().Contain("ScreenshotCaptureSupport.ps1");
+        script.Should().Contain("Assert-ForegroundWindowOwnership");
         script.Should().Contain("GetWindowThreadProcessId($foreground");
         script.Should().Contain("GetWindowText($foreground");
     }

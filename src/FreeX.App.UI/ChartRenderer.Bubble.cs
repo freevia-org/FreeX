@@ -26,6 +26,17 @@ public static partial class ChartRenderer
         model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
         trendPoints = [];
 
+        // Bubble deliberately ignores FirstColIsCategories -- the first column of DataRange is
+        // ALWAYS the shared X column for a bubble chart (see
+        // BubbleRenderer_IgnoresCategoryFlagAndUsesFirstRangeColumnAsXValues) -- so this reads
+        // chart.DataRange.Start.Col directly rather than the dataStartCol parameter (which shifts
+        // when FirstColIsCategories is set). R113-render-chart-embedded-fallback-all-types:
+        // BuildEmbeddedCellLookup places its synthesized shared-X column at column 1, matching the
+        // 1x1 placeholder DataRange (Start.Col == 1) every embedded-fallback reader sets, so this
+        // still resolves correctly for a fallback-loaded chart -- except the rare case where a
+        // Bubble chart's series is an unresolvable named range AND references a cross-sheet range
+        // whose union DataRange happens to start at a column other than 1 (TryReadCrossSheetEmbeddedData);
+        // that combination is not reproduced exactly by this fallback.
         var xCol = chart.DataRange.Start.Col;
 
         // Matches the Avalonia ChartLayoutEngine.LayoutBubble reference: the bubble radius scale is
