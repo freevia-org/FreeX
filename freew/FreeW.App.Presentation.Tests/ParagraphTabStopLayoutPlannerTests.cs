@@ -98,6 +98,27 @@ public sealed class ParagraphTabStopLayoutPlannerTests
     }
 
     [Fact]
+    public void ResolveNextStop_ClearOperationRemovesSamePositionStop()
+    {
+        var plan = ParagraphTabStopLayoutPlanner.BuildPlacementPlan(
+            penPositionDip: 0,
+            followingSegmentWidthDip: 0,
+            tabStops:
+            [
+                new TabStop(72, TabStopAlignment.Right, TabLeader.Dots),
+                new TabStop(72, IsClear: true),
+                new TabStop(144, TabStopAlignment.Center),
+            ],
+            defaultTabStopPt: 36,
+            dipPerPoint: DipPerPoint);
+
+        plan.IsExplicit.Should().BeTrue();
+        plan.StopPositionDip.Should().BeApproximately(192, 0.01);
+        plan.Alignment.Should().Be(TabStopAlignment.Center);
+        plan.Leader.Should().Be(TabLeader.None);
+    }
+
+    [Fact]
     public void BuildPlacementPlan_ClampsBackwardAlignedSegmentsToForwardAdvance()
     {
         var plan = ParagraphTabStopLayoutPlanner.BuildPlacementPlan(

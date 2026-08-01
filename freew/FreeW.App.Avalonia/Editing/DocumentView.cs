@@ -6536,6 +6536,7 @@ public sealed class DocumentView : Control
 
             // Resolve explicit tab stops from the paragraph; sort by position.
             var explicitStops = pf.TabStops
+                .Where(stop => !stop.IsClear)
                 .OrderBy(t => t.PositionPt)
                 .Select(t => (PosPx: t.PositionPt * PxPerPoint, t.Alignment))
                 .ToList();
@@ -21574,6 +21575,7 @@ public sealed class DocumentView : Control
                 : styleParagraph.SuppressLineNumbers,
             SuppressLineNumbersIsSet = paragraph.Formatting.SuppressLineNumbersIsSet
                 || styleParagraph.SuppressLineNumbersIsSet,
+            TabStops = MergeTabStops(styleParagraph.TabStops, paragraph.Formatting.TabStops),
         };
     }
 
@@ -21635,7 +21637,24 @@ public sealed class DocumentView : Control
             ? over.SuppressLineNumbers
             : baseParagraph.SuppressLineNumbers,
         SuppressLineNumbersIsSet = baseParagraph.SuppressLineNumbersIsSet || over.SuppressLineNumbersIsSet,
+        TabStops = MergeTabStops(baseParagraph.TabStops, over.TabStops),
     };
+
+    private static IReadOnlyList<TabStop> MergeTabStops(
+        IReadOnlyList<TabStop> inherited,
+        IReadOnlyList<TabStop> operations)
+    {
+        var effective = inherited.Where(stop => !stop.IsClear).ToList();
+        foreach (var operation in operations)
+        {
+            effective.RemoveAll(stop => Math.Abs(stop.PositionPt - operation.PositionPt) <= 0.01);
+            if (!operation.IsClear)
+                effective.Add(operation);
+        }
+
+        effective.Sort((left, right) => left.PositionPt.CompareTo(right.PositionPt));
+        return effective;
+    }
 
     private static RunFormatting ActiveFormatting(Paragraph paragraph, int offset)
     {

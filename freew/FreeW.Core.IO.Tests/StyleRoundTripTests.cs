@@ -135,6 +135,37 @@ public class StyleRoundTripTests
     }
 
     [Fact]
+    public void StyleTabStopAndParagraphClear_RoundTripAsDistinctOperations()
+    {
+        var doc = TextDocument.CreateEmpty();
+        StyleManager.CreateStyle(
+            doc,
+            "Tabbed Body",
+            basedOnId: "Normal",
+            RunFormatting.Default,
+            ParagraphFormatting.Default with
+            {
+                TabStops = [new TabStop(72, TabStopAlignment.Right, TabLeader.Dots)],
+            });
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("clear the style tab")
+        {
+            StyleId = "TabbedBody",
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops = [new TabStop(72, IsClear: true)],
+            },
+        });
+
+        var result = RoundTrip(doc);
+
+        result.Styles["TabbedBody"].Paragraph.TabStops.Should().Equal(
+            new TabStop(72, TabStopAlignment.Right, TabLeader.Dots));
+        result.Paragraphs.Single().Formatting.TabStops.Should().Equal(
+            new TabStop(72, IsClear: true));
+    }
+
+    [Fact]
     public void StyleParagraphFormatting_AndNumbering_ShareSinglePPr()
     {
         var doc = TextDocument.CreateEmpty();
