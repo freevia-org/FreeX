@@ -38,6 +38,7 @@ public static class AvaloniaRibbonRenderer
     private const string KeyTipBadgeTag = "RibbonKeyTipBadge";
     private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
     private const string PopupChromeClass = "freex-ribbon-popup-chrome";
+    private const string SubmenuPlacementClass = "freex-ribbon-submenu-placement";
     private const double TabHeaderHeight = 28;
     // Selected-tab accent underline thickness — matches the WPF TabItem template's
     // BorderThickness="0,0,0,3" (MainWindowResources.xaml). Kept as a single shared token so the Linux
@@ -2514,6 +2515,7 @@ public static class AvaloniaRibbonRenderer
             {
                 application.Styles.Add(CreatePopupPresenterStyle(chrome, palette));
                 application.Styles.Add(CreatePopupPresenterBorderStyle(chrome, palette));
+                application.Styles.Add(CreateSubmenuPopupPlacementStyle(contract));
                 return new object();
             });
         }
@@ -2553,6 +2555,8 @@ public static class AvaloniaRibbonRenderer
         item.Padding = ToThickness(parent is null ? chrome.ItemPadding : chrome.Submenu.ItemPadding);
 
         var children = item.Items.OfType<MenuItem>().ToArray();
+        if (children.Length > 0)
+            item.Classes.Add(SubmenuPlacementClass);
         foreach (var child in children)
             ConfigureMenuItem(child, item, children, flyout, contract, chrome);
 
@@ -2595,6 +2599,21 @@ public static class AvaloniaRibbonRenderer
                 Blur = chrome.ShadowBlurRadius,
                 Color = Color.FromArgb((byte)(chrome.ShadowOpacity * 255), 0, 0, 0),
             })),
+        },
+    };
+
+    private static Style CreateSubmenuPopupPlacementStyle(
+        RibbonPopupInteractionContract contract) => new(x => x.OfType<MenuItem>().Class(SubmenuPlacementClass).Template().OfType<Popup>())
+    {
+        Setters =
+        {
+            new Setter(Popup.PlacementProperty, PlacementMode.Right),
+            new Setter(
+                Popup.PlacementConstraintAdjustmentProperty,
+                contract.Submenu.RepositionAtScreenEdge
+                    ? PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY
+                    : PopupPositionerConstraintAdjustment.None),
+            new Setter(Popup.HorizontalOffsetProperty, contract.Submenu.AnchorGap),
         },
     };
 

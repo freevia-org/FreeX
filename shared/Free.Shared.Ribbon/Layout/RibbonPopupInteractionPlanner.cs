@@ -6,6 +6,12 @@ public enum RibbonPopupPlacement
     AboveAnchor,
 }
 
+public enum RibbonPopupSubmenuPlacement
+{
+    RightOfAnchor,
+    LeftOfAnchor,
+}
+
 public enum RibbonPopupDismissKey
 {
     Escape,
@@ -41,6 +47,8 @@ public sealed record RibbonPopupSubmenuContract(
     double AnchorGap)
 {
     public bool OpenOnRight { get; init; } = true;
+
+    public RibbonPopupSubmenuPlacement Placement { get; init; } = RibbonPopupSubmenuPlacement.RightOfAnchor;
 
     public static RibbonPopupSubmenuContract Default { get; } = new(
         FocusFirstEnabledItemOnOpen: true,
@@ -82,6 +90,11 @@ public readonly record struct RibbonPopupRect(double X, double Y, double Width, 
 
 public readonly record struct RibbonPopupPlacementResult(
     RibbonPopupPlacement Placement,
+    double X,
+    double Y);
+
+public readonly record struct RibbonPopupSubmenuPlacementResult(
+    RibbonPopupSubmenuPlacement Placement,
     double X,
     double Y);
 
@@ -188,6 +201,52 @@ public static class RibbonPopupPlacementPlanner
         y = Clamp(y, workArea.Y, workArea.Y + workArea.Height - popup.Height);
         return new RibbonPopupPlacementResult(placement, x, y);
     }
+
+    public static RibbonPopupSubmenuPlacementResult PlanSubmenu(
+        RibbonPopupRect anchor,
+        RibbonPopupRect popup,
+        RibbonPopupRect workArea,
+        RibbonPopupSubmenuContract? contract = null)
+    {
+        contract ??= RibbonPopupSubmenuContract.Default;
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(popup.Width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(popup.Height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workArea.Width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workArea.Height);
+
+        var preferred = contract.Placement;
+        var alternate = preferred == RibbonPopupSubmenuPlacement.RightOfAnchor
+            ? RibbonPopupSubmenuPlacement.LeftOfAnchor
+            : RibbonPopupSubmenuPlacement.RightOfAnchor;
+        var preferredX = SubmenuX(preferred, anchor, popup, contract.AnchorGap);
+        var placement = preferred;
+        var x = preferredX;
+
+        if (contract.RepositionAtScreenEdge && !FitsHorizontally(x, popup, workArea))
+        {
+            placement = alternate;
+            x = SubmenuX(placement, anchor, popup, contract.AnchorGap);
+        }
+
+        x = Clamp(x, workArea.X, workArea.X + workArea.Width - popup.Width);
+        var y = Clamp(anchor.Y, workArea.Y, workArea.Y + workArea.Height - popup.Height);
+        return new RibbonPopupSubmenuPlacementResult(placement, x, y);
+    }
+
+    private static double SubmenuX(
+        RibbonPopupSubmenuPlacement placement,
+        RibbonPopupRect anchor,
+        RibbonPopupRect popup,
+        double anchorGap) =>
+        placement == RibbonPopupSubmenuPlacement.LeftOfAnchor
+            ? anchor.X - popup.Width - anchorGap
+            : anchor.X + anchor.Width + anchorGap;
+
+    private static bool FitsHorizontally(
+        double x,
+        RibbonPopupRect popup,
+        RibbonPopupRect workArea) =>
+        x >= workArea.X && x + popup.Width <= workArea.X + workArea.Width;
 
     private static double Clamp(double value, double minimum, double maximum) =>
         Math.Min(Math.Max(value, minimum), Math.Max(minimum, maximum));

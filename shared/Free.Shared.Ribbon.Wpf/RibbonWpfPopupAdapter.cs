@@ -138,6 +138,14 @@ internal static class RibbonWpfPopupAdapter
         foreach (var child in children)
             ConfigureMenuItem(child, item, children, contextMenu, contract, chrome);
 
+        if (children.Length > 0)
+        {
+            item.ApplyTemplate();
+            ConfigureSubmenuPopup(item, contract);
+            item.Loaded += (_, _) => ConfigureSubmenuPopup(item, contract);
+            item.SubmenuOpened += (_, _) => ConfigureSubmenuPopup(item, contract);
+        }
+
         item.AddHandler(
             Keyboard.PreviewKeyDownEvent,
             new KeyEventHandler((_, args) =>
@@ -202,6 +210,45 @@ internal static class RibbonWpfPopupAdapter
                     args.Handled = true;
             }),
             handledEventsToo: true);
+    }
+
+    private static void ConfigureSubmenuPopup(
+        MenuItem item,
+        RibbonPopupInteractionContract contract)
+    {
+        if (item.Template?.FindName("PART_Popup", item) is not Popup popup)
+        {
+            // WPF has no public MenuItem submenu placement property. The inbox templates expose
+            // the native popup as PART_Popup; a third-party theme that removes that part cannot
+            // receive the shared edge-placement callback and remains toolkit-managed.
+            return;
+        }
+
+        popup.PlacementTarget = item;
+        popup.Placement = contract.Submenu.RepositionAtScreenEdge
+            ? PlacementMode.Custom
+            : PlacementMode.Right;
+        if (!contract.Submenu.RepositionAtScreenEdge)
+            return;
+
+        popup.CustomPopupPlacementCallback = (popupSize, targetSize, _) =>
+        {
+            var screenAnchorPixels = item.PointToScreen(new Point(0, 0));
+            var transformFromDevice = PresentationSource.FromVisual(item)?.CompositionTarget?.TransformFromDevice
+                ?? Matrix.Identity;
+            var screenAnchor = transformFromDevice.Transform(screenAnchorPixels);
+            var result = RibbonPopupPlacementPlanner.PlanSubmenu(
+                new RibbonPopupRect(screenAnchor.X, screenAnchor.Y, targetSize.Width, targetSize.Height),
+                new RibbonPopupRect(0, 0, popupSize.Width, popupSize.Height),
+                ResolveWorkArea(screenAnchorPixels, item),
+                contract.Submenu);
+            return
+            [
+                new CustomPopupPlacement(
+                    new Point(result.X - screenAnchor.X, result.Y - screenAnchor.Y),
+                    PopupPrimaryAxis.None),
+            ];
+        };
     }
 
     private static void FocusFirstEnabledChild(

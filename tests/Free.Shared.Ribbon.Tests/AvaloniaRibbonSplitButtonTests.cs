@@ -331,6 +331,13 @@ public sealed class AvaloniaRibbonSplitButtonTests
 
                 flyout.ShowAt(collapsed);
                 parent.IsSubMenuOpen = true;
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                var submenuPopup = Assert.Single(parent.GetVisualDescendants().OfType<Popup>());
+                Assert.Equal(PlacementMode.Right, submenuPopup.Placement);
+                Assert.Equal(
+                    PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY,
+                    submenuPopup.PlacementConstraintAdjustment);
+                Assert.Equal(RibbonVisualMetrics.PopupChrome.Submenu.AnchorGap, submenuPopup.HorizontalOffset);
                 child.Focus(NavigationMethod.Directional);
                 RaiseKey(child, Key.Left);
 
@@ -384,6 +391,12 @@ public sealed class AvaloniaRibbonSplitButtonTests
                 Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
                 Assert.True(parent.IsSubMenuOpen);
                 Assert.True(child.IsFocused);
+                var submenuPopup = Assert.Single(parent.GetVisualDescendants().OfType<Popup>());
+                Assert.Equal(PlacementMode.Right, submenuPopup.Placement);
+                Assert.Equal(
+                    PopupPositionerConstraintAdjustment.FlipX | PopupPositionerConstraintAdjustment.SlideY,
+                    submenuPopup.PlacementConstraintAdjustment);
+                Assert.Equal(RibbonVisualMetrics.PopupChrome.Submenu.AnchorGap, submenuPopup.HorizontalOffset);
 
                 RaiseKey(child, Key.Left);
                 Assert.False(parent.IsSubMenuOpen);

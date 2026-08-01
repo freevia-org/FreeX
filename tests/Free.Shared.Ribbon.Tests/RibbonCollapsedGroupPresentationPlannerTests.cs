@@ -121,6 +121,7 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
         contract.Submenu.DismissOnEscape.Should().BeTrue();
         contract.Submenu.DismissOnLeft.Should().BeTrue();
         contract.Submenu.OpenOnRight.Should().BeTrue();
+        contract.Submenu.Placement.Should().Be(RibbonPopupSubmenuPlacement.RightOfAnchor);
         RibbonPopupInteractionPlanner.PlanNavigation(
                 RibbonPopupNavigationKey.Right,
                 hasChildren: true,
@@ -173,6 +174,19 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
         result.Placement.Should().Be(RibbonPopupPlacement.AboveAnchor);
         result.X.Should().Be(580);
         result.Y.Should().Be(449);
+    }
+
+    [Fact]
+    public void SubmenuPlacementPlanner_FlipsLeftWhenRightEdgeCannotFitAndClampsVertically()
+    {
+        var result = RibbonPopupPlacementPlanner.PlanSubmenu(
+            new RibbonPopupRect(780, -20, 20, 28),
+            new RibbonPopupRect(0, 0, 220, 120),
+            new RibbonPopupRect(0, 0, 800, 600));
+
+        result.Placement.Should().Be(RibbonPopupSubmenuPlacement.LeftOfAnchor);
+        result.X.Should().Be(558);
+        result.Y.Should().Be(0);
     }
 
     [Fact]

@@ -237,6 +237,10 @@ public sealed class RibbonWpfSplitButtonTests
 
                 menu.IsOpen = true;
                 parent.IsSubmenuOpen = true;
+                parent.ApplyTemplate();
+                var submenuPopup = Assert.IsType<Popup>(parent.Template!.FindName("PART_Popup", parent));
+                submenuPopup.Placement.Should().Be(PlacementMode.Custom);
+                submenuPopup.CustomPopupPlacementCallback.Should().NotBeNull();
                 child.Focus();
                 RaiseKey(child, Key.Left, PresentationSource.FromVisual(window));
 
@@ -290,6 +294,10 @@ public sealed class RibbonWpfSplitButtonTests
                 parent.Focus();
                 RaiseKey(parent, Key.Right, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeTrue();
+                parent.ApplyTemplate();
+                var submenuPopup = Assert.IsType<Popup>(parent.Template!.FindName("PART_Popup", parent));
+                submenuPopup.Placement.Should().Be(PlacementMode.Custom);
+                submenuPopup.CustomPopupPlacementCallback.Should().NotBeNull();
                 child.Focus();
                 RaiseKey(child, Key.Left, PresentationSource.FromVisual(window));
                 parent.IsSubmenuOpen.Should().BeFalse();
