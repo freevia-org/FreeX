@@ -182,6 +182,7 @@ records_path, screenshots_path, manifest_path, fixture, exit_code = sys.argv[1:]
 ids = [
     "visible-window-discovery",
     "smartart-outline-add-sibling",
+    "smartart-outline-apply-text",
     "smartart-outline-save",
     "smartart-outline-reopen",
 ]
@@ -226,13 +227,13 @@ manifest = {
         "fixture": fixture,
     },
     "coverage": {
-        "scope": "physical FreeP SmartArt text-pane outline add-sibling, save, and reopen",
+        "scope": "physical FreeP SmartArt text-pane text replacement, add-sibling, save, and reopen",
         "exhaustive": False,
     },
     "semanticReadback": {
         "tool": "xclip",
         "selection": "clipboard",
-        "transcripts": ["smartart-outline-reopen"],
+        "transcripts": ["smartart-outline-apply-text", "smartart-outline-reopen"],
         "packageParts": ["ppt/diagrams/data1.xml", "ppt/diagrams/drawing1.xml"],
     },
     "contractValidation": {
@@ -308,7 +309,8 @@ if [[ "$phase" == "first" ]]; then
         exit 1
     fi
 
-    add_sibling_x=$((X + WIDTH - 260))
+    pane_x=$((X + WIDTH - 320))
+    add_sibling_x=$((pane_x + 60))
     add_sibling_y=$((Y + 671))
     xdotool mousemove "$add_sibling_x" "$add_sibling_y" click 1
     sleep "$settle_seconds"
@@ -329,11 +331,45 @@ if [[ "$phase" == "first" ]]; then
         exit 1
     fi
 
-    send_key ctrl+s
-    if wait_for_state "Plan|Design|New node|Build|Test|Deploy" "saved"; then
-        record "smartart-outline-save" "passed" "Ctrl+S wrote the native SmartArt data part and cached drawing package with the exact added-node order." saved.json saved.pptx saved.sha256.txt
+    first_row_x=$((pane_x + 160))
+    first_row_y=$((Y + 212))
+    xdotool mousemove "$first_row_x" "$first_row_y" click 1
+    xdotool key ctrl+a
+    xdotool type --delay "$input_delay_ms" "Discover"
+    sleep "$settle_seconds"
+
+    # The command strip is a two-row WrapPanel at the bottom of the fixed-width
+    # pane: clear-picture, Apply, and Close occupy its second row.
+    apply_x=$((pane_x + 180))
+    apply_y=$((Y + HEIGHT - 28))
+    xdotool mousemove "$apply_x" "$apply_y" click 1
+    sleep "$settle_seconds"
+    xdotool mousemove "$first_row_x" "$first_row_y" click 1
+    xdotool key ctrl+a ctrl+c
+    apply_clipboard="$output/apply-text-row-clipboard.txt"
+    apply_clipboard_pass=false
+    if read_clipboard "$apply_clipboard" && assert_clipboard "$apply_clipboard" "Discover"; then
+        apply_clipboard_pass=true
+    fi
+    capture "smartart-apply-text.png" || true
+    {
+        printf 'apply-button-point=%s,%s\n' "$apply_x" "$apply_y"
+        printf 'apply-row-point=%s,%s\n' "$first_row_x" "$first_row_y"
+        printf 'apply-expected-text=Discover\n'
+        printf 'apply-clipboard=%s\n' "$apply_clipboard_pass"
+    } > "$output/smartart-apply-text-proof.txt"
+    if [[ "$apply_clipboard_pass" == true ]]; then
+        record "smartart-outline-apply-text" "passed" "A physical click on Apply committed the edited SmartArt outline text, which read back exactly through the visible pane." smartart-apply-text.png smartart-apply-text-proof.txt apply-text-row-clipboard.txt
     else
-        record "smartart-outline-save" "failed" "Ctrl+S did not produce a saved native SmartArt package with the exact added-node order." saved-inspection-error.txt
+        record "smartart-outline-apply-text" "failed" "The physical Apply action did not expose the edited SmartArt text through clipboard readback." smartart-apply-text.png smartart-apply-text-proof.txt apply-text-row-clipboard.txt
+        exit 1
+    fi
+
+    send_key ctrl+s
+    if wait_for_state "Discover|Design|New node|Build|Test|Deploy" "saved"; then
+        record "smartart-outline-save" "passed" "Ctrl+S wrote the native SmartArt data part and cached drawing package with the exact edited-node order." saved.json saved.pptx saved.sha256.txt
+    else
+        record "smartart-outline-save" "failed" "Ctrl+S did not produce a saved native SmartArt package with the exact edited-node order." saved-inspection-error.txt
         exit 1
     fi
 else
@@ -351,7 +387,7 @@ else
     fi
     capture "smartart-reopened.png" || true
     package_pass=false
-    if assert_state "$reopened_json" "Plan|Design|New node|Build|Test|Deploy"; then
+    if assert_state "$reopened_json" "Discover|Design|New node|Build|Test|Deploy"; then
         package_pass=true
     fi
     {
@@ -363,7 +399,7 @@ else
         printf 'reopen-row-clipboard=%s\n' "$reopen_clipboard_pass"
     } > "$output/smartart-reopen-proof.txt"
     if [[ "$owner_title" == *"$expected_document_name"* && "$owner_title" == *FreeP* && "$package_pass" == true && "$reopen_clipboard_pass" == true ]]; then
-        record "smartart-outline-reopen" "passed" "A fresh FreeP process reopened the saved PPTX; the native data-part order and the new row's exact text were read back through the physical pane." smartart-reopened.png reopened.json smartart-reopen-proof.txt reopen-row-clipboard.txt
+        record "smartart-outline-reopen" "passed" "A fresh FreeP process reopened the saved PPTX; the native data-part order and the edited/new row text were read back through the physical pane." smartart-reopened.png reopened.json smartart-reopen-proof.txt reopen-row-clipboard.txt
     else
         record "smartart-outline-reopen" "failed" "The fresh FreeP process did not prove exact native package and pane clipboard readback for the saved SmartArt row." smartart-reopened.png reopened.json smartart-reopen-proof.txt
         exit 1
