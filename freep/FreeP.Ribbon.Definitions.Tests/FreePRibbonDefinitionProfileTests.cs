@@ -1120,6 +1120,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.literal-run-style",
             "freep.omml.math-alphabet-style",
             "freep.omml.math-font",
+            "freep.omml.math-default-inheritance",
             "freep.omml.nary-limit-location",
             "freep.omml.nary-grow-hidden-limits",
             "freep.omml.limit-placement",

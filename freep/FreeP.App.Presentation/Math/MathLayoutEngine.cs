@@ -173,6 +173,12 @@ public static class MathLayoutEngine
     {
         return node switch
         {
+            MathNode.MathRoot root => LayoutNode(
+                root.Content,
+                string.IsNullOrWhiteSpace(root.Properties.MathFontFamily)
+                    ? fontFamily
+                    : root.Properties.MathFontFamily!,
+                fontSizePt),
             MathNode.Run     r  => LayoutRun(r, fontFamily, fontSizePt),
             MathNode.Frac    f  => LayoutFrac(f, fontFamily, fontSizePt),
             MathNode.Sup     s  => LayoutSup(s, fontFamily, fontSizePt),

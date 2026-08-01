@@ -23,6 +23,14 @@ public sealed class OmmlParserTests
         return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
     }
 
+    private static MathNode ParseGraphicData(string graphicDataInner)
+    {
+        var xml = $"<a:graphicData xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
+                  $"xmlns:a14=\"http://schemas.microsoft.com/office/drawing/2010/main\" " +
+                  $"xmlns:m=\"{M}\">{graphicDataInner}</a:graphicData>";
+        return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
+    }
+
     // ── HA1: m:nary limLoc default ────────────────────────────────────────
 
     [Fact]
@@ -1442,5 +1450,30 @@ public sealed class OmmlParserTests
 
         var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
         Assert.Null(paragraph.MathFontFamily);
+    }
+
+    [Fact]
+    public void OMathPara_InheritsGraphicMathPropertiesByProperty()
+    {
+        var node = ParseGraphicData(
+            "<m:mathPr><m:brkBin m:val=\"repeat\"/><m:mathFont m:val=\"Arial\"/></m:mathPr>" +
+            "<a14:m><m:mathPr><m:mathFont m:val=\"Calibri\"/></m:mathPr><m:oMathPara>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara></a14:m>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(MathNode.MathParagraphBinaryBreak.Repeat, paragraph.BinaryBreak);
+        Assert.Equal("Calibri", paragraph.MathFontFamily);
+    }
+
+    [Fact]
+    public void InlineOMath_InheritsGraphicMathFontIntoSharedRoot()
+    {
+        var node = ParseGraphicData(
+            "<m:mathPr><m:mathFont m:val=\"Arial\"/></m:mathPr>" +
+            "<a14:m><m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></a14:m>");
+
+        var root = Assert.IsType<MathNode.MathRoot>(node);
+        Assert.Equal("Arial", root.Properties.MathFontFamily);
+        Assert.IsType<MathNode.Run>(root.Content);
     }
 }

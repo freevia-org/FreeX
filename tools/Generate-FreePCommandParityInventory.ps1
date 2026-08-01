@@ -1216,7 +1216,27 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
             ],
-            RemainingWork: "Shared OMML parsing and layout now preserve non-empty m:mathPr/m:mathFont values and emit the selected family on renderer-neutral glyphs before WPF or Avalonia draw. PowerPoint-authoritative font fallback, exact Cambria Math metrics, and document-level math-property inheritance remain deferred."),
+            RemainingWork: "Shared OMML parsing and layout now preserve non-empty m:mathPr/m:mathFont values and emit the selected family on renderer-neutral glyphs before WPF or Avalonia draw. PowerPoint-authoritative font fallback and exact Cambria Math metrics remain deferred."),
+        new(
+            EvidenceId: "freep.omml.math-default-inheritance",
+            Area: "OMML document-level mathPr inheritance",
+            Status: "shared-parser-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared inherited MathNode.MathProperties and MathRoot/MathParagraph layout metadata with no renderer-local math-property policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-math-default-inheritance-20260801.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing now resolves caller/document defaults, the nearest math graphic m:mathPr, paragraph-local m:mathPr, and explicit m:oMathParaPr break properties by property-wise precedence; m:mathFont reaches inline and paragraph glyph plans consumed by WPF and Avalonia. PowerPoint-authoritative default propagation, font fallback, exact Cambria Math metrics, and broader settings-part package corpus baselines remain deferred."),
         new(
             EvidenceId: "freep.omml.nary-limit-location",
             Area: "OMML n-ary limit-location semantics",

@@ -2212,6 +2212,30 @@ public sealed class MathLayoutEngineTests
             "m:mathPr/m:mathFont must be resolved before the shared layout creates glyph boxes");
     }
 
+    [Fact]
+    public void OmmlDocumentMathProperties_InheritAndOverrideBeforeSharedLayout()
+    {
+        var xml = $"<a:graphicData xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
+                  $"xmlns:a14=\"http://schemas.microsoft.com/office/drawing/2010/main\" xmlns:m=\"{M}\">" +
+                  "<m:mathPr><m:mathFont m:val=\"Arial\"/></m:mathPr>" +
+                  "<a14:m><m:oMathPara><m:mathPr><m:brkBin m:val=\"repeat\"/></m:mathPr>" +
+                  "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara></a14:m></a:graphicData>";
+        var node = OmmlParser.Parse(xml, fallbackText: "FALLBACK");
+
+        var glyphs = MathBoxRenderPlanner.Plan(
+                MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt),
+                10,
+                20,
+                SrgbColor.Black,
+                "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Should().ContainSingle();
+        glyphs[0].FontFamily.Should().Be("Arial",
+            "document mathPr defaults must flow through the shared parser/model/layout path");
+    }
+
     [Theory]
     [InlineData("before")]
     [InlineData("after")]

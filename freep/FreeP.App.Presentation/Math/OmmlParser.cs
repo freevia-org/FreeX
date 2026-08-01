@@ -27,7 +27,10 @@ public static class OmmlParser
     /// <see cref="MathNode"/> tree.  Returns a <see cref="MathNode.Unknown"/> with the
     /// plain-text fallback if parsing fails.
     /// </summary>
-    public static MathNode Parse(string rawXml, string fallbackText)
+    public static MathNode Parse(
+        string rawXml,
+        string fallbackText,
+        MathNode.MathProperties? documentDefaults = null)
     {
         if (string.IsNullOrWhiteSpace(rawXml))
             return new MathNode.Unknown(fallbackText);
@@ -40,9 +43,12 @@ public static class OmmlParser
             if (mathRoot is null)
                 return new MathNode.Unknown(fallbackText);
 
+            var inheritedProperties = (documentDefaults ?? new MathNode.MathProperties())
+                .Overlay(ParseInheritedMathProperties(mathRoot));
+
             return mathRoot.Name == M + "oMathPara"
-                ? ParseMathParagraph(mathRoot)
-                : ParseRow(mathRoot);
+                ? ParseMathParagraph(mathRoot, inheritedProperties)
+                : WrapWithInheritedProperties(ParseRow(mathRoot), inheritedProperties);
         }
         catch
         {
@@ -84,7 +90,9 @@ public static class OmmlParser
             ?? root.Descendants(M + "oMath").FirstOrDefault();
     }
 
-    private static MathNode ParseMathParagraph(XElement paragraph)
+    private static MathNode ParseMathParagraph(
+        XElement paragraph,
+        MathNode.MathProperties inheritedProperties)
     {
         var oMathNodes = paragraph.Elements(M + "oMath")
             .Select(ParseRow)
@@ -94,6 +102,7 @@ public static class OmmlParser
         // ECMA-376 defines brkBin/brkBinSub under m:mathPr. Some authored
         // payloads place them beside jc in oMathParaPr, so accept both forms.
         var mathProperties = paragraph.Element(M + "mathPr");
+        var resolvedProperties = inheritedProperties.Overlay(ParseMathProperties(mathProperties));
 
         var content = oMathNodes.Length switch
         {
@@ -105,16 +114,70 @@ public static class OmmlParser
         return new MathNode.MathParagraph(
             content,
             ParseMathParagraphJustification(paragraphProperties),
-            ParseMathParagraphBinaryBreak(paragraphProperties, mathProperties),
-            ParseMathParagraphBinarySubtraction(paragraphProperties, mathProperties),
-            ParseMathFontFamily(mathProperties));
+            ParseMathParagraphBinaryBreak(paragraphProperties, resolvedProperties),
+            ParseMathParagraphBinarySubtraction(paragraphProperties, resolvedProperties),
+            resolvedProperties.MathFontFamily);
     }
 
-    private static string? ParseMathFontFamily(XElement? mathProperties)
+    private static MathNode.MathProperties ParseInheritedMathProperties(XElement mathRoot)
     {
-        var value = ReadVal(mathProperties?.Element(M + "mathFont"))?.Trim();
-        return string.IsNullOrWhiteSpace(value) ? null : value;
+        var inheritedProperties = new MathNode.MathProperties();
+        foreach (var ancestor in mathRoot.Ancestors().Reverse())
+        {
+            var properties = ancestor.Element(M + "mathPr");
+            if (properties is not null)
+                inheritedProperties = inheritedProperties.Overlay(ParseMathProperties(properties));
+        }
+
+        return inheritedProperties;
     }
+
+    private static MathNode.MathProperties ParseMathProperties(XElement? mathProperties)
+    {
+        if (mathProperties is null)
+            return new MathNode.MathProperties();
+
+        var mathFont = ReadVal(mathProperties.Element(M + "mathFont"))?.Trim();
+        return new MathNode.MathProperties(
+            ParseBinaryBreakOverride(mathProperties),
+            ParseBinarySubtractionOverride(mathProperties),
+            string.IsNullOrWhiteSpace(mathFont) ? null : mathFont);
+    }
+
+    private static MathNode.MathParagraphBinaryBreak? ParseBinaryBreakOverride(XElement mathProperties)
+    {
+        var element = mathProperties.Element(M + "brkBin");
+        if (element is null)
+            return null;
+
+        return ReadVal(element) switch
+        {
+            "after" => MathNode.MathParagraphBinaryBreak.After,
+            "repeat" => MathNode.MathParagraphBinaryBreak.Repeat,
+            _ => MathNode.MathParagraphBinaryBreak.Before
+        };
+    }
+
+    private static MathNode.MathParagraphBinarySubtraction? ParseBinarySubtractionOverride(XElement mathProperties)
+    {
+        var element = mathProperties.Element(M + "brkBinSub");
+        if (element is null)
+            return null;
+
+        return ReadVal(element) switch
+        {
+            "+-" or "plusMinus" => MathNode.MathParagraphBinarySubtraction.PlusMinus,
+            "-+" or "minusPlus" => MathNode.MathParagraphBinarySubtraction.MinusPlus,
+            _ => MathNode.MathParagraphBinarySubtraction.MinusMinus
+        };
+    }
+
+    private static MathNode WrapWithInheritedProperties(
+        MathNode content,
+        MathNode.MathProperties properties) =>
+        properties.HasValues
+            ? new MathNode.MathRoot(content, properties)
+            : content;
 
     private static MathNode.MathParagraphJustification ParseMathParagraphJustification(XElement? paragraphProperties)
     {
@@ -130,32 +193,38 @@ public static class OmmlParser
 
     private static MathNode.MathParagraphBinaryBreak ParseMathParagraphBinaryBreak(
         XElement? paragraphProperties,
-        XElement? mathProperties)
+        MathNode.MathProperties mathProperties)
     {
-        var val = ReadVal(
-            paragraphProperties?.Element(M + "brkBin")
-            ?? mathProperties?.Element(M + "brkBin"));
-        return val switch
+        var element = paragraphProperties?.Element(M + "brkBin");
+        if (element is not null)
         {
-            "after" => MathNode.MathParagraphBinaryBreak.After,
-            "repeat" => MathNode.MathParagraphBinaryBreak.Repeat,
-            _ => MathNode.MathParagraphBinaryBreak.Before
-        };
+            return ReadVal(element) switch
+            {
+                "after" => MathNode.MathParagraphBinaryBreak.After,
+                "repeat" => MathNode.MathParagraphBinaryBreak.Repeat,
+                _ => MathNode.MathParagraphBinaryBreak.Before
+            };
+        }
+
+        return mathProperties.BinaryBreak ?? MathNode.MathParagraphBinaryBreak.Before;
     }
 
     private static MathNode.MathParagraphBinarySubtraction ParseMathParagraphBinarySubtraction(
         XElement? paragraphProperties,
-        XElement? mathProperties)
+        MathNode.MathProperties mathProperties)
     {
-        var val = ReadVal(
-            paragraphProperties?.Element(M + "brkBinSub")
-            ?? mathProperties?.Element(M + "brkBinSub"));
-        return val switch
+        var element = paragraphProperties?.Element(M + "brkBinSub");
+        if (element is not null)
         {
-            "+-" or "plusMinus" => MathNode.MathParagraphBinarySubtraction.PlusMinus,
-            "-+" or "minusPlus" => MathNode.MathParagraphBinarySubtraction.MinusPlus,
-            _ => MathNode.MathParagraphBinarySubtraction.MinusMinus
-        };
+            return ReadVal(element) switch
+            {
+                "+-" or "plusMinus" => MathNode.MathParagraphBinarySubtraction.PlusMinus,
+                "-+" or "minusPlus" => MathNode.MathParagraphBinarySubtraction.MinusPlus,
+                _ => MathNode.MathParagraphBinarySubtraction.MinusMinus
+            };
+        }
+
+        return mathProperties.BinarySubtraction ?? MathNode.MathParagraphBinarySubtraction.MinusMinus;
     }
 
     // ── Row: parse a list of child elements into a Row or single node ─────
@@ -241,7 +310,7 @@ public static class OmmlParser
             "aln"      => null,
             "argPr"    => null,
             "brk"      => null,
-            "oMathPara"=> ParseMathParagraph(el),
+            "oMathPara"=> ParseMathParagraph(el, new MathNode.MathProperties()),
             _          => ParseUnknown(el)
         };
     }

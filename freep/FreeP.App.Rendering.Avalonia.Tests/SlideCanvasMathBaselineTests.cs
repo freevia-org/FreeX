@@ -1682,6 +1682,45 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_DocumentMathProperties_UsesInheritedFontPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var xml = $"<a:graphicData xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
+                          $"xmlns:a14=\"http://schemas.microsoft.com/office/drawing/2010/main\" xmlns:m=\"{M}\">" +
+                          "<m:mathPr><m:mathFont m:val=\"Arial\"/></m:mathPr>" +
+                          "<a14:m><m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></a14:m></a:graphicData>";
+                var mathBox = MathLayoutEngine.Layout(OmmlParser.Parse(xml, "FALLBACK"), "Cambria Math", 18.0);
+                var glyph = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Single();
+
+                glyph.FontFamily.Should().Be("Arial",
+                    "Avalonia must consume document-level m:mathPr through the shared layout plan");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "P = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(320, 120));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render document-level m:mathPr through the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_MatrixSpacingAndBaseJustification_UsesSharedCellPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

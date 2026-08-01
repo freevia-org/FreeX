@@ -13,6 +13,29 @@ public abstract class MathNode
 {
     private MathNode() { }
 
+    /// <summary>
+    /// Math properties inherited from the containing math graphic or document.
+    /// Nullable values distinguish omitted properties from explicit values so
+    /// inheritance can be resolved one property at a time.
+    /// </summary>
+    public sealed record MathProperties(
+        MathParagraphBinaryBreak? BinaryBreak = null,
+        MathParagraphBinarySubtraction? BinarySubtraction = null,
+        string? MathFontFamily = null)
+    {
+        public bool HasValues =>
+            BinaryBreak.HasValue ||
+            BinarySubtraction.HasValue ||
+            !string.IsNullOrWhiteSpace(MathFontFamily);
+
+        public MathProperties Overlay(MathProperties? overriding) => overriding is null
+            ? this
+            : new MathProperties(
+                overriding.BinaryBreak ?? BinaryBreak,
+                overriding.BinarySubtraction ?? BinarySubtraction,
+                overriding.MathFontFamily ?? MathFontFamily);
+    }
+
     /// <summary>Math alphabet requested by <c>m:rPr/m:scr</c>.</summary>
     public enum MathAlphabet
     {
@@ -657,6 +680,22 @@ public abstract class MathNode
             BinaryBreak = binaryBreak;
             BinarySubtraction = binarySubtraction;
             MathFontFamily = mathFontFamily;
+        }
+    }
+
+    /// <summary>
+    /// Root wrapper used when inline OMML inherits properties from its
+    /// containing graphic or document and has no paragraph node to carry them.
+    /// </summary>
+    public sealed class MathRoot : MathNode
+    {
+        public MathNode Content { get; }
+        public MathProperties Properties { get; }
+
+        public MathRoot(MathNode content, MathProperties properties)
+        {
+            Content = content;
+            Properties = properties;
         }
     }
 

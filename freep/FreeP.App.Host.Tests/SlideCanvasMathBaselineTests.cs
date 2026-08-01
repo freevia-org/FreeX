@@ -1457,6 +1457,40 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_DocumentMathProperties_UsesInheritedFontPlan_DoesNotThrow()
+    {
+        var xml = $"<a:graphicData xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" " +
+                  $"xmlns:a14=\"http://schemas.microsoft.com/office/drawing/2010/main\" xmlns:m=\"{M}\">" +
+                  "<m:mathPr><m:mathFont m:val=\"Arial\"/></m:mathPr>" +
+                  "<a14:m><m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></a14:m></a:graphicData>";
+        var mathBox = MathLayoutEngine.Layout(OmmlParser.Parse(xml, "FALLBACK"), "Cambria Math", 18.0);
+        var glyph = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        glyph.FontFamily.Should().Be("Arial",
+            "WPF must consume document-level m:mathPr through the shared layout plan");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "P = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_MatrixSpacingAndBaseJustification_UsesSharedCellPlan_DoesNotThrow()
     {
         var defaultBox = MathLayoutEngine.Layout(ParseOmml(MatrixOmml()), "Cambria Math", 18.0);
