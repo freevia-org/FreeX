@@ -223,6 +223,7 @@ public class BackstageViewTests
             search.MaxHeight.Should().Be(30);
             search.Margin.Should().Be(new Thickness(4, 0, 0, 12));
             search.Padding.Should().Be(new Thickness(8, 3));
+            tabs.Items.Cast<TabItem>().Should().OnlyContain(item => item.MinHeight == 22);
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
         }, CancellationToken.None);

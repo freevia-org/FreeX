@@ -258,7 +258,10 @@ internal sealed class BackstageView : Window
             new AvaloniaCompactDialogChromeStyle(BackstageFontFamily)
             {
                 ControlHeight = 24,
-                TabHeight = 24,
+                // WPF's default Backstage tab header is two DIPs shorter than the
+                // compact dialog tab default; keep the Open rows on the authority's
+                // vertical registration without changing the content pane height.
+                TabHeight = 22,
                 FontSize = 12,
             },
             contentPaneMargin: new Thickness(0));
