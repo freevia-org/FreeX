@@ -696,7 +696,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
 
         insertObjectsSource.Should().Contain("foreach (var group in DrawingInsertionPlanner.ShapeGroups)");
         insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(");
-        insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(");
+        insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildInlineEditTextBoxCommand(");
+        insertObjectsSource.Should().Contain("BeginTextBoxInlineEdit(command.TextBoxId);");
         insertObjectsSource.Should().Contain("DrawingObjectActionPlanner.InsertShapeSuccess(");
         insertObjectsSource.Should().Contain("DrawingObjectActionPlanner.InsertTextBoxSuccess(");
         mainSource.Should().Contain("InsertShape = InsertShapeAtActiveCell");

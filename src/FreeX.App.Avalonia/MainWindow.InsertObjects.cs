@@ -173,7 +173,7 @@ public sealed partial class MainWindow
             return;
 
         var anchor = _session.ActiveCell;
-        var command = DrawingInsertionPlanner.BuildTextBoxCommand(_session.ActiveSheet.Id, anchor);
+        var command = DrawingInsertionPlanner.BuildInlineEditTextBoxCommand(_session.ActiveSheet.Id, anchor);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -182,6 +182,7 @@ public sealed partial class MainWindow
         }
 
         ClearSelectedDrawingObject();
+        BeginTextBoxInlineEdit(command.TextBoxId);
         RefreshShell(FormatDrawingObjectResourceText(
             DrawingObjectActionPlanner.InsertTextBoxSuccess(FormatCellReference(anchor))));
     }

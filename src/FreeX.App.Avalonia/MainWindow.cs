@@ -4303,9 +4303,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // clears its focus (InputElement.OnDetachedFromVisualTreeCore), so checking focus AFTER the
         // rebuild would always see "nothing focused" and this would never re-focus the new cell.
         var gridHadFocus = IsGridFocused();
+        var textBoxEditorHadFocus = _textBoxInlineEditor?.IsFocused == true;
 
         _sheetGridHost.Content = BuildSheetGrid();
-        if (gridHadFocus)
+        if (textBoxEditorHadFocus && IsTextBoxInlineEditorActive)
+            FocusTextBoxInlineEditor();
+        else if (gridHadFocus)
             MoveFocusToActiveCellBorder();
         _sheetTabsHost.Content = BuildSheetTabs();
         UpdateSheetTabNavigationVisibility();
@@ -4383,9 +4386,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void RefreshShellForViewportPan(string status)
     {
         var gridHadFocus = IsGridFocused();
+        var textBoxEditorHadFocus = _textBoxInlineEditor?.IsFocused == true;
 
         _sheetGridHost.Content = BuildSheetGrid();
-        if (gridHadFocus)
+        if (textBoxEditorHadFocus && IsTextBoxInlineEditorActive)
+            FocusTextBoxInlineEditor();
+        else if (gridHadFocus)
             MoveFocusToActiveCellBorder();
 
         RefreshFormulaReferenceHighlights();
@@ -5440,12 +5446,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // separating line itself needs to be drawn here — mirrors WPF's RenderFreezeDivider.
         AddFreezePaneDividerOverlay(overlay, viewport, showHeadings, zoomFactor);
 
+        AddTextBoxInlineEditorOverlay(overlay, viewport, showHeadings, zoomFactor);
+
         if (viewport.DrawingObjects is not { Count: > 0 })
             return overlay;
 
         foreach (var renderPlan in DrawingObjectRenderPlanner.Plan(viewport))
         {
             var drawingObject = renderPlan.Bounds;
+            if (_textBoxInlineEditingId == drawingObject.Id &&
+                drawingObject.Kind == SelectionPaneObjectKind.TextBox)
+            {
+                continue;
+            }
             if (!TryGetDisplayedDrawingObjectBounds(
                     viewport,
                     drawingObject,
@@ -5575,7 +5588,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         // The dropdown arrow is only for List-DV and must be hidden while editing (the
         // in-line editor is open), matching Excel and WPF's RefreshValidationDropdown guard.
-        if (_session.FormulaEditAddress is not null)
+        if (_session.FormulaEditAddress is not null || IsTextBoxInlineEditorActive)
             return;
 
         if (!DataValidationDropdownPlanner.TryPlan(
@@ -5754,10 +5767,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 if (cropMode && adorner is not null && TryBeginPictureCropDrag(renderPlan, container, surface, adorner, args))
                     return;
 
-                if (!cropMode && adorner is not null && TryBeginDrawingObjectDrag(renderPlan, container, surface, adorner, args))
+                var isTextBoxDoubleClick =
+                    args.ClickCount >= 2 && drawingObject.Kind == SelectionPaneObjectKind.TextBox;
+                if (!cropMode && adorner is not null && !isTextBoxDoubleClick &&
+                    TryBeginDrawingObjectDrag(renderPlan, container, surface, adorner, args))
                     return;
 
                 SelectDrawingObject(drawingObject);
+                if (isTextBoxDoubleClick)
+                {
+                    BeginTextBoxInlineEdit(drawingObject.Id);
+                    args.Handled = true;
+                    return;
+                }
                 args.Handled = true;
             }
         };
@@ -5792,6 +5814,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void SelectDrawingObject(DrawingObjectBounds drawingObject)
     {
+        if (IsTextBoxInlineEditorVisible &&
+            (drawingObject.Kind != SelectionPaneObjectKind.TextBox ||
+             drawingObject.Id != _textBoxInlineEditingId) &&
+            !HideTextBoxInlineEditor(commit: true))
+        {
+            return;
+        }
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
@@ -5833,6 +5863,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ClearSelectedDrawingObject()
     {
+        if (IsTextBoxInlineEditorVisible && !HideTextBoxInlineEditor(commit: true))
+            return;
+
         _isPictureCropMode = false;
         _pictureCropDragSession = null;
         _selectedDrawingObjectKind = null;
@@ -27315,6 +27348,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private bool IsTextEditingEventSource(KeyEventArgs args) =>
         _formulaBox.IsFocused ||
         _inlineCellEditor?.IsFocused == true ||
+        _textBoxInlineEditor?.IsFocused == true ||
         args.Source is TextBox ||
         args.Source is TextPresenter;
 
