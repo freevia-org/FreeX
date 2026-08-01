@@ -121,6 +121,28 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void AddSlideCommand_PreservesSectionMembershipAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(2);
+        var lastSlideId = p.Slides[^1].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Closing" };
+        section.SlideIds.Add(lastSlideId);
+        p.Sections.Add(section);
+        var added = new Slide { Id = "new-slide" };
+
+        bus.Execute(new AddSlideCommand(added));
+
+        p.Slides[^1].Should().BeSameAs(added);
+        p.Sections[0].SlideIds.Should().Equal(lastSlideId, added.Id);
+
+        bus.Undo();
+        p.Sections[0].SlideIds.Should().Equal(lastSlideId);
+
+        bus.Redo();
+        p.Sections[0].SlideIds.Should().Equal(lastSlideId, added.Id);
+    }
+
+    [Fact]
     public void AddSlideCommand_Revert_RemovesSlide()
     {
         var (p, bus) = Make();
@@ -128,6 +150,31 @@ public sealed class PresentationCommandTests
         bus.Execute(new AddSlideCommand(s));
         bus.Undo();
         p.Slides.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void PasteSlideCommand_PreservesSectionMembershipAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(3);
+        var firstId = p.Slides[0].Id;
+        var secondId = p.Slides[1].Id;
+        var thirdId = p.Slides[2].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Middle" };
+        section.SlideIds.AddRange(new[] { firstId, secondId, thirdId });
+        p.Sections.Add(section);
+        var pasted = new Slide { Id = "pasted-slide" };
+
+        bus.Execute(new PasteSlideCommand(1, pasted));
+
+        p.Slides.Select(slide => slide.Id).Should().Equal(firstId, pasted.Id, secondId, thirdId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, pasted.Id, secondId, thirdId);
+
+        bus.Undo();
+        p.Slides.Select(slide => slide.Id).Should().Equal(firstId, secondId, thirdId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, secondId, thirdId);
+
+        bus.Redo();
+        p.Sections[0].SlideIds.Should().Equal(firstId, pasted.Id, secondId, thirdId);
     }
 
     [Fact]
