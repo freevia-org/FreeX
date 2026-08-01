@@ -153,6 +153,31 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void PasteSlideCommand_PreservesSectionMembershipAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(3);
+        var firstId = p.Slides[0].Id;
+        var secondId = p.Slides[1].Id;
+        var thirdId = p.Slides[2].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Middle" };
+        section.SlideIds.AddRange(new[] { firstId, secondId, thirdId });
+        p.Sections.Add(section);
+        var pasted = new Slide { Id = "pasted-slide" };
+
+        bus.Execute(new PasteSlideCommand(1, pasted));
+
+        p.Slides.Select(slide => slide.Id).Should().Equal(firstId, pasted.Id, secondId, thirdId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, pasted.Id, secondId, thirdId);
+
+        bus.Undo();
+        p.Slides.Select(slide => slide.Id).Should().Equal(firstId, secondId, thirdId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, secondId, thirdId);
+
+        bus.Redo();
+        p.Sections[0].SlideIds.Should().Equal(firstId, pasted.Id, secondId, thirdId);
+    }
+
+    [Fact]
     public void DeleteSlideCommand_Apply_RemovesSlide()
     {
         var (p, bus) = Make(2);
