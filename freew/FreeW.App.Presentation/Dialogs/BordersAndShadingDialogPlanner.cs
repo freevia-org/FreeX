@@ -44,26 +44,8 @@ public static class BordersAndShadingDialogPlanner
         [ShadingPattern.Clear, ShadingPattern.Solid, ShadingPattern.Pct10, ShadingPattern.Pct25, ShadingPattern.Pct50];
 
     public static readonly IReadOnlyList<PageBorderArtOption> ArtBorders =
-    [
-        new("(none)", 0),
-        new("Apple (1)", 1),
-        new("Stars (38)", 38),
-        new("Hearts (84)", 84),
-        new("Stars (stars) (35)", 35),
-        new("Flowers (66)", 66),
-        new("Tornados (89)", 89),
-        new("Holly (83)", 83),
-        new("Snowflakes (92)", 92),
-        new("Moons (57)", 57),
-        new("Stars Black (37)", 37),
-        new("Trees (95)", 95),
-        new("Clover (47)", 47),
-        new("Diagonal Stripes (160)", 160),
-        new("Double Wave (2)", 2),
-        new("Wave (3)", 3),
-        new("Dash Dot (4)", 4),
-        new("Dash Dot Stroked (5)", 5),
-    ];
+        [new("(none)", 0), .. PageBorderArtStyles.Curated.Select(style =>
+            new PageBorderArtOption($"{style.Label} ({style.ArtId})", style.ArtId))];
 
     public static readonly IReadOnlyList<string> Palette =
     [

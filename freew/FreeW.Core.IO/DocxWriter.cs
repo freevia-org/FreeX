@@ -7760,14 +7760,14 @@ public static class DocxWriter
 
         if (border.ArtId > 0)
         {
-            // Art border: @w:val must be a valid border-style token so conformant readers don't reject the
-            // element; "single" is the safest placeholder. The visual is entirely driven by @w:art.
+            var artToken = PageBorderArtStyles.TryGetById(border.ArtId, out var artStyle)
+                ? artStyle.Token
+                : "single";
             XElement ArtEdge(string name) => new(W + name,
-                new XAttribute(W + "val", "single"),
+                new XAttribute(W + "val", artToken),
                 new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
                 new XAttribute(W + "space", space),
-                new XAttribute(W + "color", border.ColorHex.TrimStart('#')),
-                new XAttribute(W + "art", border.ArtId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
             return new XElement(W + "pgBorders",
                 new XAttribute(W + "offsetFrom", offsetFrom),
                 ArtEdge("top"), ArtEdge("left"), ArtEdge("bottom"), ArtEdge("right"));
