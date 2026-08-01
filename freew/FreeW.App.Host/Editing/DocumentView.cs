@@ -5249,7 +5249,9 @@ public sealed class DocumentView : RichTextBox
     protected override void OnRender(DrawingContext drawingContext)
     {
         base.OnRender(drawingContext);
-        if (!PrintLayoutEnabled || _model.Page.PageBorder is not { LineStyle: BorderLineStyle.Wave } border)
+        if (!PrintLayoutEnabled
+            || _model.Page.PageBorder is not { LineStyle: BorderLineStyle.Wave } border
+            || !PageBorderVisibilityPlanner.ShouldRender(border.Display, 0))
             return;
 
         var inset = Math.Min(
@@ -5275,7 +5277,8 @@ public sealed class DocumentView : RichTextBox
 
     private void ApplyPageChrome()
     {
-        if (_model.Page.PageBorder is { } pb)
+        if (_model.Page.PageBorder is { } pb
+            && PageBorderVisibilityPlanner.ShouldRender(pb.Display, 0))
         {
             if (pb.LineStyle == BorderLineStyle.Wave)
             {

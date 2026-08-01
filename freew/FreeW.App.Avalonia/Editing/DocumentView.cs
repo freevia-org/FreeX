@@ -4223,13 +4223,16 @@ public sealed class DocumentView : Control
             pagesOps[pageIndex].InsertRange(0, decorationOps);
         }
 
-        if (_doc.Page.PageBorder is not null)
+        if (_doc.Page.PageBorder is { } pageBorder)
         {
             var borderedPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
             EnsurePage(borderedPageCount - 1);
             var borderOps = BuildPdfPageBorderOps(pageWidthPt, pageHeightPt);
             for (var pageIndex = 0; pageIndex < borderedPageCount; pageIndex++)
-                pagesOps[pageIndex].InsertRange(0, borderOps);
+            {
+                if (PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, pageIndex))
+                    pagesOps[pageIndex].InsertRange(0, borderOps);
+            }
         }
 
         var watermarkOps = BuildPdfWatermarkOps(pageWidthPt, pageHeightPt);
@@ -9762,9 +9765,10 @@ public sealed class DocumentView : Control
     // than the raw point value, catching any future re-introduction of a DIP/point mismatch.
     internal static double PageBorderInsetDip => PageBorderInsetPt * PxPerPoint;
 
-    private void DrawPageBorder(DrawingContext context, Rect pageRect)
+    private void DrawPageBorder(DrawingContext context, Rect pageRect, int pageIndex)
     {
-        if (_doc.Page.PageBorder is not { } pb)
+        if (_doc.Page.PageBorder is not { } pb
+            || !PageBorderVisibilityPlanner.ShouldRender(pb.Display, pageIndex))
             return;
 
         var color = TryParseAvaloniaColor(pb.ColorHex, out var c) ? c : Colors.Black;
@@ -9999,7 +10003,7 @@ public sealed class DocumentView : Control
                 // AV-DESIGN: layering matches Word — page color, then watermark, then the page border on
                 // top (a solid pgBorders line must not be occluded by the faint watermark behind it).
                 DrawWatermark(context, pageRect);
-                DrawPageBorder(context, pageRect);
+                DrawPageBorder(context, pageRect, pi);
             }
         }
         else
