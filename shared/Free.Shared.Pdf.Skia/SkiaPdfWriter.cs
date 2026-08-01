@@ -196,12 +196,21 @@ public static class SkiaPdfWriter
             case PdfFillRectPattern fill:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fill.Y, fill.Height);
-                fillPaint.Color = ToSkColor(colorOverride ?? fill.Pattern.Foreground);
-                DrawPattern(canvas, fillPaint, fill.Pattern, () => canvas.DrawRect(new SKRect(
+                var rect = new SKRect(
                     (float)fill.X,
                     top,
                     (float)(fill.X + fill.Width),
-                    top + (float)fill.Height), fillPaint));
+                    top + (float)fill.Height);
+                if (colorOverride is { } rectPatternColor)
+                {
+                    fillPaint.Color = ToSkColor(rectPatternColor);
+                    fillPaint.Shader = null;
+                    canvas.DrawRect(rect, fillPaint);
+                }
+                else
+                {
+                    DrawPattern(canvas, fillPaint, fill.Pattern, () => canvas.DrawRect(rect, fillPaint));
+                }
                 break;
             }
 
@@ -262,12 +271,21 @@ public static class SkiaPdfWriter
             case PdfFillEllipsePattern fillEllipse:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fillEllipse.Y, fillEllipse.Height);
-                fillPaint.Color = ToSkColor(colorOverride ?? fillEllipse.Pattern.Foreground);
-                DrawPattern(canvas, fillPaint, fillEllipse.Pattern, () => canvas.DrawOval(new SKRect(
+                var oval = new SKRect(
                     (float)fillEllipse.X,
                     top,
                     (float)(fillEllipse.X + fillEllipse.Width),
-                    top + (float)fillEllipse.Height), fillPaint));
+                    top + (float)fillEllipse.Height);
+                if (colorOverride is { } ellipsePatternColor)
+                {
+                    fillPaint.Color = ToSkColor(ellipsePatternColor);
+                    fillPaint.Shader = null;
+                    canvas.DrawOval(oval, fillPaint);
+                }
+                else
+                {
+                    DrawPattern(canvas, fillPaint, fillEllipse.Pattern, () => canvas.DrawOval(oval, fillPaint));
+                }
                 break;
             }
 
@@ -382,8 +400,16 @@ public static class SkiaPdfWriter
             case PdfPathPattern pdfPath:
             {
                 using var skPath = ToSkPath(pdfPath.Contours, pageHeight);
-                fillPaint.Color = ToSkColor(colorOverride ?? pdfPath.Pattern.Foreground);
-                DrawPattern(canvas, fillPaint, pdfPath.Pattern, () => canvas.DrawPath(skPath, fillPaint));
+                if (colorOverride is { } pathPatternColor)
+                {
+                    fillPaint.Color = ToSkColor(pathPatternColor);
+                    fillPaint.Shader = null;
+                    canvas.DrawPath(skPath, fillPaint);
+                }
+                else
+                {
+                    DrawPattern(canvas, fillPaint, pdfPath.Pattern, () => canvas.DrawPath(skPath, fillPaint));
+                }
                 if (pdfPath.StrokeColor is { } stroke)
                 {
                     strokePaint.Color = ToSkColor(colorOverride ?? stroke);
@@ -400,9 +426,18 @@ public static class SkiaPdfWriter
             case PdfPathLinearGradient pdfPath:
             {
                 using var skPath = ToSkPath(pdfPath.Contours, pageHeight);
-                if (pdfPath.FillFallbackColor is { } fillFallback)
+                if (colorOverride is { } pathGradientColor)
                 {
-                    if (colorOverride is null && pdfPath.FillGradient is { } fillGradient)
+                    if (pdfPath.FillGradient is not null || pdfPath.FillFallbackColor is not null)
+                    {
+                        fillPaint.Color = ToSkColor(pathGradientColor);
+                        fillPaint.Shader = null;
+                        canvas.DrawPath(skPath, fillPaint);
+                    }
+                }
+                else if (pdfPath.FillFallbackColor is { } fillFallback)
+                {
+                    if (pdfPath.FillGradient is { } fillGradient)
                         ApplyLinearGradient(fillPaint, fillGradient, pageHeight, fillFallback);
                     else
                         fillPaint.Color = ToSkColor(fillFallback);
@@ -410,9 +445,22 @@ public static class SkiaPdfWriter
                     fillPaint.Shader = null;
                 }
 
-                if (pdfPath.StrokeFallbackColor is { } strokeFallback)
+                if (colorOverride is { } pathGradientStrokeColor)
                 {
-                    if (colorOverride is null && pdfPath.StrokeGradient is { } strokeGradient)
+                    if (pdfPath.StrokeGradient is not null || pdfPath.StrokeFallbackColor is not null)
+                    {
+                        strokePaint.Color = ToSkColor(pathGradientStrokeColor);
+                        strokePaint.Shader = null;
+                        strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
+                        using var overrideGradientPathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
+                        strokePaint.PathEffect = overrideGradientPathStrokeDash;
+                        canvas.DrawPath(skPath, strokePaint);
+                        strokePaint.PathEffect = null;
+                    }
+                }
+                else if (pdfPath.StrokeFallbackColor is { } strokeFallback)
+                {
+                    if (pdfPath.StrokeGradient is { } strokeGradient)
                         ApplyLinearGradient(strokePaint, strokeGradient, pageHeight, strokeFallback);
                     else
                         strokePaint.Color = ToSkColor(strokeFallback);

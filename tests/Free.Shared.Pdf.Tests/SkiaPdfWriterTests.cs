@@ -145,6 +145,102 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void RenderPagesToPng_EffectOverridesReplacePatternAndGradientPaint()
+    {
+        var overrideColor = new PdfColor(0xFF, 0x00, 0x00);
+        var gradient = new PdfLinearGradient(
+            100, 20, 130, 40,
+            [
+                new PdfGradientStop(0, new PdfColor(0x00, 0xFF, 0x00)),
+                new PdfGradientStop(1, new PdfColor(0x00, 0x00, 0xFF)),
+            ]);
+        var contour = new PdfPathContour(
+            new PdfPathPoint(10, 10),
+            [
+                PdfPathSegment.LineTo(new PdfPathPoint(35, 10)),
+                PdfPathSegment.LineTo(new PdfPathPoint(35, 26)),
+                PdfPathSegment.LineTo(new PdfPathPoint(10, 26)),
+            ],
+            Closed: true);
+        var gradientFillContour = new PdfPathContour(
+            new PdfPathPoint(100, 25),
+            [
+                PdfPathSegment.LineTo(new PdfPathPoint(130, 25)),
+                PdfPathSegment.LineTo(new PdfPathPoint(130, 45)),
+                PdfPathSegment.LineTo(new PdfPathPoint(100, 45)),
+            ],
+            Closed: true);
+        var gradientStrokeContour = new PdfPathContour(
+            new PdfPathPoint(100, 50),
+            [
+                PdfPathSegment.LineTo(new PdfPathPoint(130, 50)),
+                PdfPathSegment.LineTo(new PdfPathPoint(130, 70)),
+                PdfPathSegment.LineTo(new PdfPathPoint(100, 70)),
+            ],
+            Closed: true);
+        var source = new PdfDrawOp[]
+        {
+            new PdfFillRectPattern(10, 30, 25, 16,
+                PdfPatternFill.FromPreset("cross", new PdfColor(0x00, 0xFF, 0x00), new PdfColor(0x00, 0x00, 0xFF))),
+        };
+        var ellipseSource = new PdfDrawOp[]
+        {
+            new PdfFillEllipsePattern(10, 55, 25, 16,
+                PdfPatternFill.FromPreset("dotGrid", new PdfColor(0x00, 0xFF, 0x00), new PdfColor(0x00, 0x00, 0xFF))),
+        };
+        var pathPatternSource = new PdfDrawOp[]
+        {
+            new PdfPathPattern([contour],
+                PdfPatternFill.FromPreset("diagStripe", new PdfColor(0x00, 0xFF, 0x00), new PdfColor(0x00, 0x00, 0xFF)),
+                null, 0),
+        };
+        var pathGradientFillSource = new PdfDrawOp[]
+        {
+            new PdfPathLinearGradient([gradientFillContour], gradient, null, null, null, 0),
+        };
+        var pathGradientStrokeSource = new PdfDrawOp[]
+        {
+            new PdfPathLinearGradient([gradientStrokeContour], null, null, gradient, null, 4),
+        };
+        var page = new PdfContentPage(200, 100, new PdfDrawOp[]
+        {
+            new PdfEffectGroup(PdfEffectKind.Shadow, 10, 30, 25, 16,
+                new PdfEffectParameters(overrideColor, 1, 0, 35), source),
+            new PdfEffectGroup(PdfEffectKind.Shadow, 10, 55, 25, 16,
+                new PdfEffectParameters(overrideColor, 1, 0, 35), ellipseSource),
+            new PdfEffectGroup(PdfEffectKind.Shadow, 10, 10, 25, 16,
+                new PdfEffectParameters(overrideColor, 1, 0, 35), pathPatternSource),
+            new PdfEffectGroup(PdfEffectKind.Shadow, 100, 25, 30, 20,
+                new PdfEffectParameters(overrideColor, 1, 0, 35), pathGradientFillSource),
+            new PdfEffectGroup(PdfEffectKind.Shadow, 100, 50, 30, 20,
+                new PdfEffectParameters(overrideColor, 1, 0, 35), pathGradientStrokeSource),
+        });
+
+        using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(
+            new PdfContentDocument([page])).Single());
+
+        static int CountRed(SKBitmap bitmap, int left, int top, int right, int bottom)
+        {
+            var count = 0;
+            for (var y = Math.Max(0, top); y < Math.Min(bitmap.Height, bottom); y++)
+            for (var x = Math.Max(0, left); x < Math.Min(bitmap.Width, right); x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red > 220 && pixel.Green < 40 && pixel.Blue < 40)
+                    count++;
+            }
+            return count;
+        }
+
+        // Bounds are converted from the PDF points used above to the 96-DPI raster.
+        CountRed(bitmap, 60, 72, 95, 98).Should().BeGreaterThan(20, "rectangle pattern effect should use the override color");
+        CountRed(bitmap, 60, 30, 95, 58).Should().BeGreaterThan(20, "ellipse pattern effect should use the override color");
+        CountRed(bitmap, 60, 98, 95, 125).Should().BeGreaterThan(20, "path pattern effect should use the override color");
+        CountRed(bitmap, 180, 78, 225, 115).Should().BeGreaterThan(20, "path gradient fill effect should use the override color");
+        CountRed(bitmap, 180, 45, 225, 80).Should().BeGreaterThan(10, "path gradient stroke effect should use the override color");
+    }
+
+    [Fact]
     public void Write_AcceptsClipGroupsAroundNestedTransforms()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]
