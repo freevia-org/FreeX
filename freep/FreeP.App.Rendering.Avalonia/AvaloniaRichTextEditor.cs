@@ -43,6 +43,8 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private readonly DispatcherTimer _pointerAutoScrollTimer;
     private Point _lastPointerPosition;
     private bool _pointerDragActive;
+    private AvaloniaRichTextEditor? _activeInlineTableCellEditor;
+    private AvaloniaRichTextEditingSurface.InlineTableCellHit? _activeInlineTableCellHit;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -134,6 +136,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     {
         get
         {
+            CommitInlineTableCellEdit(focusParent: false);
             SynchronizeText();
             return _buffer.Body;
         }
@@ -432,7 +435,14 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
         ResetVerticalNavigation();
         InputBox.Focus();
-        int logicalPosition = _richTextView.HitTestLogicalPosition(e.GetPosition(_richTextView));
+        var point = e.GetPosition(_richTextView);
+        if (e.ClickCount >= 2 && TryBeginInlineTableCellEdit(point))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        int logicalPosition = _richTextView.HitTestLogicalPosition(point);
         if (e.ClickCount >= 2 && TryActivateInlineOleAt(logicalPosition))
         {
             e.Handled = true;
@@ -468,6 +478,65 @@ internal sealed class AvaloniaRichTextEditor : Grid
         e.Pointer.Capture(InputBox);
         e.Handled = true;
         UpdateSurfaceSelection();
+    }
+
+    private bool TryBeginInlineTableCellEdit(Point point)
+    {
+        if (!_richTextView.TryHitTestInlineTableCell(point, out var hit)
+            || hit.Table.Table.Rows.ElementAtOrDefault(hit.RowIndex)?
+                .Cells.ElementAtOrDefault(hit.ColumnIndex)?.TextBody is not { } body)
+            return false;
+
+        CommitInlineTableCellEdit(focusParent: false);
+        var cellEditor = new AvaloniaRichTextEditor(
+            body,
+            backgroundAlpha: 0,
+            fallbackFontFamily: _fallbackFontFamily,
+            fallbackFontSizePt: _fallbackFontSizePt)
+        {
+            Width = Math.Max(1, hit.Bounds.Width),
+            Height = Math.Max(1, hit.Bounds.Height),
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+            Margin = new Thickness(
+                hit.Bounds.X - _richTextView.ScrollOffsetX,
+                hit.Bounds.Y - _richTextView.ScrollOffsetY,
+                0,
+                0),
+        };
+        cellEditor.SetValue(Panel.ZIndexProperty, 2);
+        cellEditor.InputBox.LostFocus += OnInlineTableCellEditorLostFocus;
+        _activeInlineTableCellEditor = cellEditor;
+        _activeInlineTableCellHit = hit;
+        Children.Add(cellEditor);
+        cellEditor.FocusEditor();
+        return true;
+    }
+
+    private void OnInlineTableCellEditorLostFocus(object? sender, RoutedEventArgs e)
+    {
+        CommitInlineTableCellEdit(focusParent: false);
+    }
+
+    private void CommitInlineTableCellEdit(bool focusParent)
+    {
+        var cellEditor = _activeInlineTableCellEditor;
+        var hit = _activeInlineTableCellHit;
+        if (cellEditor is null || hit is null)
+            return;
+
+        _activeInlineTableCellEditor = null;
+        _activeInlineTableCellHit = null;
+        cellEditor.InputBox.LostFocus -= OnInlineTableCellEditorLostFocus;
+        _buffer.UpdateInlineTableCellAt(
+            hit.Value.LogicalPosition,
+            hit.Value.RowIndex,
+            hit.Value.ColumnIndex,
+            cellEditor.EditedBody);
+        Children.Remove(cellEditor);
+        RenderBody();
+        if (focusParent)
+            FocusEditor();
     }
 
     private bool TryActivateInlineOleAt(int logicalPosition)
