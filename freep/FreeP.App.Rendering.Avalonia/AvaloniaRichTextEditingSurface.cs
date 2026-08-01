@@ -143,6 +143,52 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         return item.Paragraph.GlobalStart + localTextPosition;
     }
 
+    internal bool TryHitTestInlineTableCell(
+        Point point,
+        out InlineTableCellHit hit)
+    {
+        EnsureLayouts();
+        var documentPoint = new Point(
+            point.X + _scrollOffsetX,
+            point.Y + _scrollOffsetY);
+
+        foreach (var paragraph in _layouts)
+        {
+            foreach (var table in paragraph.InlineTables)
+            {
+                var inlineRect = paragraph.Layout.HitTestTextPosition(table.Start);
+                var tableOrigin = new Point(
+                    paragraph.Origin.X + inlineRect.X,
+                    paragraph.Origin.Y + inlineRect.Y);
+                if (!new Rect(tableOrigin, new Size(table.WidthDip, table.HeightDip))
+                        .Contains(documentPoint))
+                    continue;
+
+                if (InlineTableTextRun.TryGetCellAt(
+                        table,
+                        tableOrigin,
+                        documentPoint,
+                        out var rowIndex,
+                        out var columnIndex,
+                        out var cellBounds)
+                    && table.Info.Table.Rows.ElementAtOrDefault(rowIndex)?
+                        .Cells.ElementAtOrDefault(columnIndex) is { TextBody: not null })
+                {
+                    hit = new InlineTableCellHit(
+                        paragraph.Paragraph.GlobalStart + table.Start,
+                        table.Info,
+                        rowIndex,
+                        columnIndex,
+                        cellBounds);
+                    return true;
+                }
+            }
+        }
+
+        hit = default;
+        return false;
+    }
+
     internal void SetScrollOffset(double offsetY)
     {
         EnsureLayouts();
@@ -339,6 +385,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 CreateBulletImage(paragraph),
                 inlineImages,
                 inlineOleObjects,
+                inlineTables,
                 paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight));
             y += layout.Height + paragraph.SpaceAfterDip;
         }
@@ -975,6 +1022,62 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             }
         }
 
+        internal static bool TryGetCellAt(
+            InlineTableLayout tableLayout,
+            Point origin,
+            Point point,
+            out int rowIndex,
+            out int columnIndex,
+            out Rect cellBounds)
+        {
+            var table = tableLayout.Info.Table;
+            int rowCount = Math.Max(1, table.Rows.Count);
+            int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
+            double[] widths = Enumerable.Range(0, columnCount)
+                .Select(index => index < table.ColumnWidthsEmu.Count
+                    ? Math.Max(24, table.ColumnWidthsEmu[index] / 9525.0)
+                    : 72)
+                .ToArray();
+            double[] heights = Enumerable.Range(0, rowCount)
+                .Select(index => table.Rows[index].HeightEmu > 0
+                    ? Math.Max(20, table.Rows[index].HeightEmu / 9525.0)
+                    : 24)
+                .ToArray();
+            double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
+            double xIndent = table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip;
+            double y = origin.Y;
+
+            for (int row = 0; row < rowCount; row++)
+            {
+                var modelRow = table.Rows.ElementAtOrDefault(row);
+                double rowWidth = modelRow is null
+                    ? widths.Sum()
+                    : widths.Take(Math.Min(widths.Length, modelRow.Cells.Sum(cell => Math.Max(1, cell.GridSpan)))).Sum();
+                double x = origin.X + AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(
+                    modelRow?.HorizontalAlignment,
+                    tableLayout.AvailableWidthDip,
+                    rowWidth) + xIndent;
+                for (int column = 0; column < columnCount; column++)
+                {
+                    var candidate = new Rect(x, y, widths[column], heights[row]);
+                    if (candidate.Contains(point))
+                    {
+                        rowIndex = row;
+                        columnIndex = column;
+                        cellBounds = candidate;
+                        return true;
+                    }
+                    x += widths[column] + spacing;
+                }
+                y += heights[row];
+            }
+
+            rowIndex = -1;
+            columnIndex = -1;
+            cellBounds = default;
+            return false;
+        }
+
         private void DrawCellBody(
             DrawingContext drawingContext,
             TableCell cell,
@@ -1047,6 +1150,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         Bitmap? BulletImage,
         IReadOnlyList<InlineImageLayout> InlineImages,
         IReadOnlyList<InlineOleLayout> InlineOleObjects,
+        IReadOnlyList<InlineTableLayout> InlineTables,
         FlowDirection FlowDirection)
     {
         internal double Bottom => Origin.Y + Layout.Height + Paragraph.SpaceAfterDip;
@@ -1069,4 +1173,11 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         double WidthDip,
         double HeightDip,
         double AvailableWidthDip);
+
+    internal readonly record struct InlineTableCellHit(
+        int LogicalPosition,
+        InlineTableInfo Table,
+        int RowIndex,
+        int ColumnIndex,
+        Rect Bounds);
 }

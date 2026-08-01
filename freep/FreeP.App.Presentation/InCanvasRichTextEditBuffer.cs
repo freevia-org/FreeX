@@ -83,6 +83,57 @@ public sealed class InCanvasRichTextEditBuffer
         return true;
     }
 
+    /// <summary>
+    /// Commits a nested rich-text editor back to one inline table cell. The logical position
+    /// identifies the owning inline table marker in the current body, so nested editors can
+    /// commit their own body without replacing the parent table run.
+    /// </summary>
+    public bool UpdateInlineTableCellAt(
+        int logicalPosition,
+        int rowIndex,
+        int columnIndex,
+        TextBody editedBody)
+    {
+        ArgumentNullException.ThrowIfNull(editedBody);
+        if (!TryGetInlineTableAt(logicalPosition, out var table)
+            || table is null)
+            return false;
+
+        var row = table.Rows.ElementAtOrDefault(rowIndex);
+        var cell = row?.Cells.ElementAtOrDefault(columnIndex);
+        if (cell is null)
+            return false;
+
+        cell.TextBody = TextBodyModelCloner.CloneTextBody(editedBody);
+        return true;
+    }
+
+    private bool TryGetInlineTableAt(int logicalPosition, out TableShape? table)
+    {
+        int position = 0;
+        foreach (var paragraph in _body.Paragraphs)
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                int length = Math.Max(1, run.Text?.Length ?? 0);
+                if (run.InlineTable is { } inlineTable
+                    && logicalPosition >= position
+                    && logicalPosition < position + length)
+                {
+                    table = inlineTable.Table;
+                    return true;
+                }
+
+                position += run.Text?.Length ?? 0;
+            }
+
+            position++;
+        }
+
+        table = null;
+        return false;
+    }
+
     public InCanvasRichClipboardPayload CreateClipboardPayload(
         InCanvasEditorTextSelection selection) =>
         InCanvasRichClipboardPlanner.Capture(_body, selection, _typingRun);

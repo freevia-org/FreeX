@@ -74,6 +74,50 @@ public sealed class InCanvasRichTextEditBufferTests
         refreshed!.EmbeddedBytes.Should().Equal(7, 8);
     }
 
+    [Fact]
+    public void InlineTableCellEditUpdatesOnlyTheOwnedCellBody()
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(457200);
+        table.ColumnWidthsEmu.Add(457200);
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell { TextBody = BodyWithText("A") },
+                new TableCell { TextBody = BodyWithText("B") },
+            },
+        });
+        var body = new TextBody();
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run { Text = "\uFFFC", InlineTable = new InlineTableInfo { Table = table } },
+            },
+        });
+
+        var buffer = new InCanvasRichTextEditBuffer(body);
+        buffer.UpdateInlineTableCellAt(
+            logicalPosition: 0,
+            rowIndex: 0,
+            columnIndex: 1,
+            BodyWithText("Edited"))
+            .Should().BeTrue();
+
+        var updated = buffer.Body.Paragraphs[0].Runs[0].InlineTable!.Table;
+        InCanvasTextEditPlanner.ExtractPlainText(updated.Rows[0].Cells[0].TextBody).Should().Be("A");
+        InCanvasTextEditPlanner.ExtractPlainText(updated.Rows[0].Cells[1].TextBody).Should().Be("Edited");
+    }
+
+    private static TextBody BodyWithText(string text) => new()
+    {
+        Paragraphs =
+        {
+            new Paragraph { Runs = { new Run { Text = text } } },
+        },
+    };
+
     [Theory]
     [InlineData(0, 0, 0)]
     [InlineData(1, 0, 0)]
