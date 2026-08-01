@@ -689,6 +689,47 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfNestedTable_PreservesCellTextDirectionThroughClipboardRoundTrip()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+\trowd\itap1\cellx2000\cellx4000
+\intbl Outer\cell
+\trowd\itap2\nesttableprops\cltxtbrl\cellx1000\cltxbtlr\cellx2000
+\intbl Top to bottom\nestcell
+\intbl Bottom to top\nestcell
+\nestrow
+\itap1\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var table = payload!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table;
+        table.Rows.Should().ContainSingle();
+        var innerTable = table.Rows[0].Cells[1].TextBody!.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table;
+        innerTable.Rows[0].Cells.Select(cell => cell.TextBody!.VerticalType)
+            .Should().Equal(TextVerticalType.Vertical, TextVerticalType.Vertical270);
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        reopened.Should().NotBeNull();
+        var reopenedTable = reopened!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table;
+        var reopenedInnerTable = reopenedTable.Rows[0].Cells[1].TextBody!.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table;
+        reopenedInnerTable.Rows[0].Cells.Select(cell => cell.TextBody!.VerticalType)
+            .Should().Equal(TextVerticalType.Vertical, TextVerticalType.Vertical270);
+    }
+
+    [Fact]
     public void RtfTableRowAlignment_PreservesLeftControlAndDefaultsToLeftWhenOmitted()
     {
         const string rtf =

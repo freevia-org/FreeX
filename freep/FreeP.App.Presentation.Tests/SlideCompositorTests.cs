@@ -1587,6 +1587,43 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void ComposeTable_PreservesCellTextOrientationForHostRenderers()
+    {
+        const long columnWidth = 3_048_000L;
+        const long rowHeight = 1_828_800L;
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(columnWidth);
+        table.Rows.Add(new TableRow
+        {
+            HeightEmu = rowHeight,
+            Cells =
+            {
+                new TableCell
+                {
+                    TextBody = new TextBody
+                    {
+                        VerticalType = TextVerticalType.Vertical270,
+                        Paragraphs =
+                        {
+                            new Paragraph { Runs = { new Run { Text = "Vertical" } } },
+                        },
+                    },
+                },
+            },
+        });
+
+        var (presentation, slide, _) = MakeTableShape(table, 0, 0, columnWidth, rowHeight);
+        var cell = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Table>()
+            .Single()
+            .Cells
+            .Single();
+
+        cell.Text.Should().NotBeNull();
+        cell.Text!.VerticalType.Should().Be(TextVerticalType.Vertical270);
+    }
+
+    [Fact]
     public void ComposeTable_MergedCells_SkipsCoveredCells()
     {
         // Arrange: 3-col x 1-row; cell 0 has GridSpan=2, cell 1+2 are HMerge.

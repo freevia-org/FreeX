@@ -98,6 +98,8 @@ public static class ClipboardTablePlanner
             cell.Fill = new ShapeFill.Solid(SrgbColor.FromRgb(fillRgb));
         }
         cell.Anchor = style.Anchor;
+        if (style.TextVerticalType is { } textVerticalType && cell.TextBody is { } body)
+            body.VerticalType = textVerticalType;
         cell.InsetLeftPt = style.InsetLeftPt;
         cell.InsetRightPt = style.InsetRightPt;
         cell.InsetTopPt = style.InsetTopPt;

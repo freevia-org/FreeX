@@ -1093,6 +1093,12 @@ public sealed class SlideCanvas : Control
         DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds,
         TableCellAnchor anchor)
     {
+        if (text.VerticalType != TextVerticalType.Horizontal)
+        {
+            RenderText(dc, text, bounds);
+            return;
+        }
+
         var area = TextLayoutPlanner.GetTextArea(text, bounds);
         var formatted = new Dictionary<int, FormattedText>();
         var measures = new List<TextParagraphMeasure>();
