@@ -270,7 +270,7 @@ internal static class FreeWCommandInventory
             "Routes More Size Options to the existing owner-modal chart size behavior in WPF and the selected-chart dialog callback in Avalonia.",
             "FreeWRibbonParityTests.FinalCommandProfileAsymmetries_RouteToBackedWpfCommands",
             "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
-            "ChartSmartArtContextualTabTests.Chart_size_dialog_command_routes_selected_chart_to_owner_modal_callback"),
+            "ChartSmartArtContextualTabTests.Chart_size_primary_and_dialog_alias_route_selected_chart_to_owner_modal_callback"),
         ["freew.citation"] = ReferencesEvidence(
             "Inserts tagged Word-like CITATION complex-field runs and proves Update Fields renumbers source-order numeric citations in both shells.",
             "freew/FreeW.App.Host.Tests/CitationEditorTests.cs",

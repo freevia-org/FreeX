@@ -579,7 +579,7 @@ public sealed class FreeWRibbonDefinitionProfileTests
             "freew/FreeW.App.Host.Tests/FreeWRibbonParityTests.cs",
             "FreeWRibbonParityTests.FinalCommandProfileAsymmetries_RouteToBackedWpfCommands",
             "freew/FreeW.App.Avalonia.Tests/ChartSmartArtContextualTabTests.cs",
-            "ChartSmartArtContextualTabTests.Chart_size_dialog_command_routes_selected_chart_to_owner_modal_callback",
+            "ChartSmartArtContextualTabTests.Chart_size_primary_and_dialog_alias_route_selected_chart_to_owner_modal_callback",
             "freew.final-command-profile-routing.shared-behavior",
             "Final command profile routing");
         foreach (var commandId in new[] { "freew.merge-find-recipient", "freew.merge-check-errors" })
