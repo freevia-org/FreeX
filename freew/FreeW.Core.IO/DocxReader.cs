@@ -1769,6 +1769,8 @@ public static class DocxReader
         else if (element.Name == W + "sdt")
         {
             var blockControl = ReadBlockContentControl(element.Element(W + "sdtPr"));
+            if (inheritedBlockContentControl is not null)
+                blockControl = blockControl with { Parent = inheritedBlockContentControl };
             foreach (var child in element.Element(W + "sdtContent")?.Elements() ?? [])
             {
                 AddBodyBlock(
@@ -3137,14 +3139,19 @@ public static class DocxReader
         var lockMode = ReadContentControlLock(sdtPr);
         var wordMetadata = ReadContentControlWordMetadata(sdtPr);
 
-        var kind = gallery is not null
-            && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
-                ? BlockContentControlKind.Bibliography
-                : docPart is not null
-                    ? BlockContentControlKind.DocumentPart
-                    : sdtPr?.Element(W + "text") is not null
-                        ? BlockContentControlKind.PlainText
-                        : BlockContentControlKind.RichText;
+        var repeatingSection = sdtPr?.Element(W15 + "repeatingSection");
+        var kind = repeatingSection is not null
+            ? BlockContentControlKind.RepeatingSection
+            : sdtPr?.Element(W15 + "repeatingSectionItem") is not null
+                ? BlockContentControlKind.RepeatingSectionItem
+                : gallery is not null
+                    && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
+                        ? BlockContentControlKind.Bibliography
+                        : docPart is not null
+                            ? BlockContentControlKind.DocumentPart
+                            : sdtPr?.Element(W + "text") is not null
+                                ? BlockContentControlKind.PlainText
+                                : BlockContentControlKind.RichText;
 
         return new BlockContentControl(
             kind,
@@ -3154,7 +3161,11 @@ public static class DocxReader
             string.IsNullOrEmpty(category) ? null : category,
             hasDocPartUnique,
             lockMode,
-            wordMetadata);
+            wordMetadata,
+            RepeatingSectionTitle: repeatingSection?.Element(W15 + "sectionTitle")
+                ?.Attribute(W + "val")?.Value,
+            DoNotAllowInsertDeleteSection: ReadOnOffElement(
+                repeatingSection?.Element(W15 + "doNotAllowInsertDeleteSection")));
     }
 
     private static ContentControl ReadContentControl(XElement? sdtPr)
@@ -3239,6 +3250,16 @@ public static class DocxReader
             "sdtContentLocked" => ContentControlLockMode.ControlAndContentLocked,
             _ => ContentControlLockMode.NotSpecified,
         };
+
+    private static bool ReadOnOffElement(XElement? element)
+    {
+        if (element is null)
+            return false;
+
+        var value = element.Attribute(W + "val")?.Value
+            ?? element.Attribute(W15 + "val")?.Value;
+        return value is null or "1" or "true" or "on";
+    }
 
     /// <summary>
     /// Reads the w:listItem choices (w:displayText / w:value) of a w:dropDownList / w:comboBox element

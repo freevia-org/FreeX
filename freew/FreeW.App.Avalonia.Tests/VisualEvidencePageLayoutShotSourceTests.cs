@@ -277,8 +277,10 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildApplesFrame(");
+        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(");
         source.Should().Contain("TryDrawPageBorderArt(context, pb, artFrame, artInset)");
         source.Should().Contain("BuildPdfAppleBorderOps(appleMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");
+        source.Should().Contain("BuildPdfShadowedSquareBorderOps(squareMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");
     }
 
     [Fact]

@@ -32,6 +32,18 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void ShadowedSquares_UsesTheSameWordArtCadence()
+    {
+        PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(57, 3, 816, 1056, 32, out var motifs)
+            .Should().BeTrue();
+
+        motifs.Should().HaveCount(102);
+        motifs[0].Should().Be(new PageBorderShadowedSquareMotif(32, 32, 32));
+        motifs[22].Should().Be(new PageBorderShadowedSquareMotif(752, 32, 32));
+        motifs[45].Should().Be(new PageBorderShadowedSquareMotif(752, 992, 32));
+    }
+
+    [Fact]
     public void TinyFrame_IsRecognizedButProducesNoMotifs()
     {
         PageBorderArtVisualPlanner.TryBuildApplesFrame(1, 3, 40, 40, 20, out var motifs)
