@@ -523,11 +523,15 @@ public sealed class WorkbookSelectionStatsCalculatorTests
             ".Select(",
             "whole-column status calculations should avoid LINQ iterator chains in the hot path");
         calculatorSource.Should().Contain(
-            "sheet.CellCount < totalCells",
-            "status calculations should choose the cheaper scan direction for sparse whole-column and dense bounded selections");
+            "sheet.CellCount + sheet.SpillValueCount < totalCells",
+            "status calculations should choose the cheaper scan direction for sparse whole-column and dense bounded selections, " +
+            "and the estimate must include spill cells so a large spill doesn't make the sheet look sparser than it is");
         calculatorSource.Should().Contain(
+            "sheet.EnumerateValueBearingCells()",
+            "sparse status selections must union the primary cell dictionary with the dynamic-array spill overlay so spilled cells are counted");
+        calculatorSource.Should().NotContain(
             "sheet.GetOccupiedCellMap()",
-            "sparse status selections should enumerate occupied cell entries without constructing address objects");
+            "the sparse scan must not use the occupied-cell map alone, since that silently drops dynamic-array spill cells");
         calculatorSource.Should().Contain(
             "sheet.GetValue(row, col)",
             "small status selections should clip to the used range and scan by primitive coordinates");
@@ -540,6 +544,106 @@ public sealed class WorkbookSelectionStatsCalculatorTests
         calculatorSource.Should().NotContain(
             "sheet.EnumerateCells()",
             "status-bar hot paths should avoid address tuple allocation while scanning occupied cells");
+    }
+
+    // R111: WorkbookSelectionStatsCalculator's sparse scan (chosen whenever the sheet's populated
+    // cell count is small relative to the selection size) used to iterate sheet.GetOccupiedCellMap(),
+    // which only reflects the primary _cells dictionary. Dynamic-array formulas store every spilled
+    // cell -- everything but the array's anchor -- in a separate overlay (_spillValues), so a large
+    // spill inside an otherwise-sparse sheet had its overflow cells silently invisible to
+    // Sum/Average/Count/Min/Max. Real Excel includes every spilled cell exactly like a normal value.
+    [Fact]
+    public void R111_Calculate_SingleRange_SparsePathIncludesDynamicArraySpillCells()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+
+        // Anchor lives in the primary cell dictionary, matching how a real spilling formula cell
+        // is stored.
+        sheet.SetCell(anchor, Cell.FromValue(new NumberValue(1)));
+
+        // SetSpillRange skips slot [0,0] (the anchor) and writes every other cell only into the
+        // spill overlay -- rows 2 and 3 below get 2 and 3 respectively.
+        var spillCells = new ScalarValue[3, 1];
+        spillCells[0, 0] = new NumberValue(1); // ignored (anchor slot)
+        spillCells[1, 0] = new NumberValue(2);
+        spillCells[2, 0] = new NumberValue(3);
+        sheet.SetSpillRange(anchor, new RangeValue(spillCells));
+
+        // A wide selection (1000 rows) against only 3 value-bearing cells (1 in _cells, 2 in
+        // _spillValues) is exactly the "otherwise-sparse sheet" scenario from the finding: the
+        // sparse scan path must be chosen and must still see the spilled cells.
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1000, 1)));
+
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(3);
+        stats.Sum.Should().Be(6);
+        stats.Min.Should().Be(1);
+        stats.Max.Should().Be(3);
+    }
+
+    // Sibling of the test above covering the multi-range (Ctrl-click) selection overload, which
+    // has the identical sparse-scan-over-GetOccupiedCellMap bug at its own call site.
+    [Fact]
+    public void R111_Calculate_MultiRange_SparsePathIncludesDynamicArraySpillCells()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(anchor, Cell.FromValue(new NumberValue(10)));
+
+        var spillCells = new ScalarValue[3, 1];
+        spillCells[0, 0] = new NumberValue(10); // ignored (anchor slot)
+        spillCells[1, 0] = new NumberValue(20);
+        spillCells[2, 0] = new NumberValue(30);
+        sheet.SetSpillRange(anchor, new RangeValue(spillCells));
+
+        var ranges = new List<GridRange>
+        {
+            new(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1000, 1)),
+            new(new CellAddress(sheet.Id, 1, 20), new CellAddress(sheet.Id, 1000, 20)),
+        };
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(sheet, ranges);
+
+        stats.Count.Should().Be(3);
+        stats.NumericalCount.Should().Be(3);
+        stats.Sum.Should().Be(60);
+        stats.Min.Should().Be(10);
+        stats.Max.Should().Be(30);
+    }
+
+    // No-regression sibling: hidden-row filtering (a pre-existing, deliberately-tested sparse-path
+    // behavior) must keep working once the sparse scan is switched to enumerate spill-aware
+    // addresses instead of the raw occupied-cell map.
+    [Fact]
+    public void R111_Calculate_SparsePathStillExcludesFilterHiddenRowsWithSpillCellsPresent()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        sheet.SetCell(anchor, Cell.FromValue(new NumberValue(1)));
+
+        var spillCells = new ScalarValue[3, 1];
+        spillCells[0, 0] = new NumberValue(1); // ignored (anchor slot)
+        spillCells[1, 0] = new NumberValue(2); // row 2 -- will be filter-hidden
+        spillCells[2, 0] = new NumberValue(3); // row 3 -- stays visible
+        sheet.SetSpillRange(anchor, new RangeValue(spillCells));
+        sheet.FilterHiddenRows.Add(2);
+
+        var stats = WorkbookSelectionStatsCalculator.Calculate(
+            sheet,
+            new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 1000, 1)));
+
+        stats.Count.Should().Be(2);
+        stats.NumericalCount.Should().Be(2);
+        stats.Sum.Should().Be(4);
+        stats.Min.Should().Be(1);
+        stats.Max.Should().Be(3);
     }
 
     private static void AssertSelectionStats(

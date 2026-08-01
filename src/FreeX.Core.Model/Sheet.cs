@@ -1263,6 +1263,15 @@ public sealed partial class Sheet
     /// <summary>Total number of non-empty cells.</summary>
     public int CellCount => _cells.Count;
 
+    /// <summary>
+    /// Number of cells holding a dynamic-array spill value that lives only in the spill overlay
+    /// (i.e. not also tracked in <see cref="CellCount"/>). Callers that need an upper bound on the
+    /// number of value-bearing cells on the sheet -- e.g. to choose between a sparse scan over
+    /// <see cref="EnumerateValueBearingCells"/> and a dense range walk -- should add this to
+    /// <see cref="CellCount"/> so a large spill doesn't make the estimate look sparser than it is.
+    /// </summary>
+    public int SpillValueCount => _spillValues.Count;
+
     /// <summary>Number of cells that currently contain formulas.</summary>
     public int FormulaCellCount => _formulaCells.Count;
 

@@ -39,11 +39,13 @@ public sealed class SetChartBoundsCommand : IWorkbookCommand
             return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
+
+        // R111-model-drawing-object-lock-1-1: layer in the per-chart Locked override so an
+        // author-unlocked chart stays movable/resizable even while the sheet blocks "Edit objects".
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousBounds = (chart.Left, chart.Top, chart.Width, chart.Height);
         chart.Left = _left;

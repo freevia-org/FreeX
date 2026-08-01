@@ -40,11 +40,13 @@ public sealed class ResizePictureCommand : IWorkbookCommand
             return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
             return PictureCommandGuards.PictureNotFound();
+
+        // R111-model-drawing-object-lock-1-1: layer in the per-picture Locked override so an
+        // author-unlocked picture stays resizable even while the sheet blocks "Edit objects".
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousWidth = picture.Width;
         _previousHeight = picture.Height;
@@ -93,10 +95,13 @@ public sealed class RepositionPictureCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
         if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
             return PictureCommandGuards.PictureNotFound();
+
+        // R111-model-drawing-object-lock-1-1: layer in the per-picture Locked override so an
+        // author-unlocked picture stays movable even while the sheet blocks "Edit objects".
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
+            return protectedOutcome;
         _previousAnchor = picture.Anchor;
         picture.Anchor = _anchor;
         _applied = true;

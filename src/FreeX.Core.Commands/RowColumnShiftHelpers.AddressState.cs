@@ -21,6 +21,10 @@ internal static partial class RowColumnShiftHelpers
             CaptureAllowEditRangeUnlocked(sheet),
             sheet.PrintTitleRows,
             sheet.PrintTitleColumns,
+            sheet.FrozenRows,
+            sheet.FrozenCols,
+            sheet.SplitRow,
+            sheet.SplitColumn,
             ClonePageBreaksMetadata(sheet.RowPageBreaksMetadata),
             ClonePageBreaksMetadata(sheet.ColumnPageBreaksMetadata),
             CaptureList(workbook.WatchedCells),
@@ -311,6 +315,10 @@ internal static partial class RowColumnShiftHelpers
         RestoreAllowEditRangeUnlocked(sheet, snapshot.UnlockedAllowEditRanges);
         sheet.PrintTitleRows = snapshot.PrintTitleRows;
         sheet.PrintTitleColumns = snapshot.PrintTitleColumns;
+        sheet.FrozenRows = snapshot.FrozenRows;
+        sheet.FrozenCols = snapshot.FrozenCols;
+        sheet.SplitRow = snapshot.SplitRow;
+        sheet.SplitColumn = snapshot.SplitColumn;
         sheet.RowPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.RowPageBreaksMetadata);
         sheet.ColumnPageBreaksMetadata = ClonePageBreaksMetadata(snapshot.ColumnPageBreaksMetadata);
 
@@ -481,6 +489,7 @@ internal static partial class RowColumnShiftHelpers
         ShiftAllowEditRangePasswords(sheet, snapshot.AllowEditRangePasswords, shift);
         ShiftAllowEditRangeUnlocked(sheet, snapshot.UnlockedAllowEditRanges, shift);
         ShiftPrintTitles(sheet, snapshot, shift);
+        ShiftFreezeAndSplitPanes(sheet, snapshot, shift);
         ShiftPageBreakMetadata(sheet, snapshot, shift);
 
         ShiftWatchedCells(workbook, snapshot, shift);
@@ -555,6 +564,50 @@ internal static partial class RowColumnShiftHelpers
             sheet.PrintTitleRows = ShiftRepeatRange(snapshot.PrintTitleRows, shift);
         else
             sheet.PrintTitleColumns = ShiftRepeatRange(snapshot.PrintTitleColumns, shift);
+    }
+
+    // R111-commands-freeze-split-shift-2: Freeze Panes (Sheet.FrozenRows/FrozenCols) and Split Panes
+    // (Sheet.SplitRow/SplitColumn) are the structurally identical sibling of Print Titles above (both
+    // "pin a boundary at a row/column position") but were never re-anchored on insert/delete, so
+    // inserting a title row above a frozen header left the freeze band one row short of the header
+    // (or shrinking it deleted a row inside the band without shrinking the frozen count) — the split
+    // boundary must move in lockstep with the shift exactly like Print Titles' WorksheetRepeatRange.
+    // Reads from the live sheet fields (not the snapshot) because, unlike every other piece of state
+    // here, nothing else in this pipeline mutates FrozenRows/FrozenCols/SplitRow/SplitColumn before
+    // this call runs — the snapshot only exists so RestoreAddressBearingState can undo this shift.
+    private static void ShiftFreezeAndSplitPanes(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
+    {
+        if (shift.Axis == AddressShiftAxis.Rows)
+        {
+            sheet.FrozenRows = ShiftFrozenBandCount(snapshot.FrozenRows, shift);
+            if (snapshot.SplitRow is { } splitRow)
+                sheet.SplitRow = shift.ShiftIndex(splitRow);
+        }
+        else
+        {
+            sheet.FrozenCols = ShiftFrozenBandCount(snapshot.FrozenCols, shift);
+            if (snapshot.SplitColumn is { } splitColumn)
+                sheet.SplitColumn = shift.ShiftIndex(splitColumn);
+        }
+    }
+
+    // Frozen row/column bands are always anchored at index 1 (Excel only ever freezes "the top N
+    // rows" / "the left N columns"), so the band is modeled here as the synthetic repeat range
+    // [1, frozenCount] and pushed through the exact same ShiftRepeatRange math Print Titles uses.
+    // ShiftRepeatRange's returned Start is discarded — the band's start never moves, only its
+    // End (the frozen count) does — which is exactly right for both directions:
+    //  * Insert at/above the band (shift.Start <= frozenCount): End grows by shift.Count, so the
+    //    newly-inserted rows/columns join the frozen band and the pinned content stays pinned.
+    //  * Insert below the band: ShiftRepeatRange's value.End < shift.Start guard leaves it untouched.
+    //  * Delete entirely inside the band: End shrinks by shift.Count.
+    //  * Delete straddling or engulfing the band: End collapses to shift.Start - 1 (clamped to 0 by
+    //    the null fallback below), matching ShiftRepeatRange's own overlap branch.
+    private static uint ShiftFrozenBandCount(uint frozenCount, AddressShift shift)
+    {
+        if (frozenCount == 0)
+            return 0;
+
+        return ShiftRepeatRange(new WorksheetRepeatRange(1, frozenCount), shift)?.End ?? 0;
     }
 
     private static void ShiftPageBreakMetadata(Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
@@ -2183,6 +2236,10 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyList<GridRange> UnlockedAllowEditRanges,
     WorksheetRepeatRange? PrintTitleRows,
     WorksheetRepeatRange? PrintTitleColumns,
+    uint FrozenRows,
+    uint FrozenCols,
+    uint? SplitRow,
+    uint? SplitColumn,
     WorksheetPageBreaksMetadataModel? RowPageBreaksMetadata,
     WorksheetPageBreaksMetadataModel? ColumnPageBreaksMetadata,
     IReadOnlyList<CellAddress> WatchedCells,

@@ -383,12 +383,19 @@ internal static class XlsxStructuredTableWriter
         XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, filterColumn.NativeAttributes);
 
         var hasCustomFilters = filterColumn.CustomFilters.Count > 0;
-        if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank))
+        if (!hasCustomFilters && (filterColumn.Values.Count > 0 || filterColumn.IncludeBlank || filterColumn.DateGroups.Count > 0))
         {
             element.Add(new XElement(
                 workbookNs + "filters",
                 filterColumn.IncludeBlank ? new XAttribute("blank", "1") : null,
-                filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value)))));
+                filterColumn.Values.Select(value => new XElement(workbookNs + "filter", new XAttribute("val", value))),
+                // R111-io-structured-table-dategroup-roundtrip-1: re-emit dateGroupItem children so a
+                // table column carrying Excel's Year/Quarter/Month/Day date-checklist criterion
+                // (StructuredTableFilterColumnModel.DateGroups) round-trips back into the same
+                // <filters> element it was read from, mirroring
+                // XlsxWorksheetAutoFilterXmlMapper.ToFilterColumnXml's identical DateGroups emission
+                // for the sheet-level AutoFilter path.
+                filterColumn.DateGroups.Select(dateGroup => ToDateGroupItemXml(dateGroup, workbookNs))));
         }
 
         if (hasCustomFilters)
@@ -409,9 +416,14 @@ internal static class XlsxStructuredTableWriter
         // R107-commands-autofilter-table-color-sync-1: mirrors XlsxWorksheetAutoFilterXmlMapper's own
         // hasColorFilter branch -- a command-driven Filter-by-Cell/Font-Colour/No-Fill criterion on a
         // table column. Excluded from "colorFilter" below in the NativeFilterXmls passthrough loop the
-        // same way "filters"/"customFilters" already are, so a table reloaded with one of these (which
-        // still flows through the passthrough today, since the reader never populates ColorFilter --
-        // see its doc comment) is never at risk of being emitted twice.
+        // same way "filters"/"customFilters" already are.
+        // R111-io-structured-table-colorfilter-roundtrip-1: XlsxStructuredTableMetadataReader now
+        // populates ColorFilter from a loaded file's <colorFilter> element too (mirroring
+        // XlsxWorksheetAutoFilterXmlMapper.ReadColorFilter) and excludes "colorFilter" from
+        // NativeFilterXmls, so this branch -- not the passthrough loop below -- is what re-emits a
+        // round-tripped colorFilter. That keeps ColorFilter as the single source of truth: never
+        // dropped (this branch fires whenever it is set, loaded or fresh) and never duplicated (the
+        // passthrough loop below never sees a "colorFilter" element to re-add).
         if (!hasCustomFilters && filterColumn.ColorFilter is { } colorFilter)
             element.Add(ToColorFilterXml(colorFilter, workbookNs, allocatedColorFilterDxfId));
 
@@ -442,6 +454,32 @@ internal static class XlsxStructuredTableWriter
         XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, colorFilter.NativeAttributes);
 
         return element;
+    }
+
+    /// <summary>Mirrors XlsxWorksheetAutoFilterXmlMapper.ToDateGroupItemXml exactly (same model type, same attribute-omission rules) so a table's &lt;dateGroupItem&gt; is byte-shape-identical to what the worksheet-level AutoFilter path would emit for the same criterion.</summary>
+    private static XElement ToDateGroupItemXml(WorksheetAutoFilterDateGroupItemModel dateGroup, XNamespace workbookNs)
+    {
+        var element = new XElement(workbookNs + "dateGroupItem");
+        SetRawOrIntAttribute(element, "year", dateGroup.YearRaw, dateGroup.Year);
+        SetRawOrIntAttribute(element, "month", dateGroup.MonthRaw, dateGroup.Month);
+        SetRawOrIntAttribute(element, "day", dateGroup.DayRaw, dateGroup.Day);
+        SetRawOrIntAttribute(element, "hour", dateGroup.HourRaw, dateGroup.Hour);
+        SetRawOrIntAttribute(element, "minute", dateGroup.MinuteRaw, dateGroup.Minute);
+        SetRawOrIntAttribute(element, "second", dateGroup.SecondRaw, dateGroup.Second);
+        if (!string.IsNullOrWhiteSpace(dateGroup.DateTimeGrouping))
+            element.SetAttributeValue("dateTimeGrouping", dateGroup.DateTimeGrouping);
+
+        XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributesIfMissing(element, dateGroup.NativeAttributes);
+
+        return element;
+    }
+
+    private static void SetRawOrIntAttribute(XElement element, string name, string? rawValue, int? value)
+    {
+        if (rawValue is not null)
+            element.SetAttributeValue(name, rawValue);
+        else if (value is not null)
+            element.SetAttributeValue(name, value.Value.ToString(CultureInfo.InvariantCulture));
     }
 
     private static XElement ToCustomFilterXml(StructuredTableCustomFilterModel filter, XNamespace workbookNs)

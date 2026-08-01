@@ -191,6 +191,49 @@ public sealed class PagePrintTextPlannerTests
     }
 
     /// <summary>
+    /// R111 regression: Excel's &amp;-code font-size token accepts 1-3 digit sizes (up to 409pt).
+    /// &amp;100Report must be parsed as a 100pt size with no leftover digit leaking into the text,
+    /// not size 10 followed by literal "0Report".
+    /// </summary>
+    [Fact]
+    public void R111_TokenizeSectionText_ThreeDigitFontSizeCode_ConsumesAllDigits()
+    {
+        var runs = PagePrintTextPlanner.TokenizeSectionText(
+            "&100Report",
+            pageNumber: 1, totalPages: 1,
+            workbookName: "Book.xlsx",
+            workbookDirectory: "",
+            sheetName: "Sheet1",
+            now: new DateTime(2026, 1, 1));
+
+        runs.Should().ContainSingle("the whole string is one run after the size code is fully consumed");
+        var run = runs[0];
+        run.Text.Should().Be("Report", "the leftover '0' must not leak into the visible text");
+        run.FontSize.Should().Be(100);
+    }
+
+    /// <summary>
+    /// R111 no-regression sibling: the existing 2-digit font-size code (&amp;14) must still parse
+    /// correctly and must not itself start consuming a following digit that belongs to plain text.
+    /// </summary>
+    [Fact]
+    public void R111_TokenizeSectionText_TwoDigitFontSizeCode_FollowedByDigitText_StillParsesCorrectly()
+    {
+        var runs = PagePrintTextPlanner.TokenizeSectionText(
+            "&14 2027",
+            pageNumber: 1, totalPages: 1,
+            workbookName: "Book.xlsx",
+            workbookDirectory: "",
+            sheetName: "Sheet1",
+            now: new DateTime(2026, 1, 1));
+
+        runs.Should().ContainSingle();
+        var run = runs[0];
+        run.Text.Should().Be(" 2027", "text following the size code (separated by a space) is untouched");
+        run.FontSize.Should().Be(14);
+    }
+
+    /// <summary>
     /// &amp;Kff0000Red&amp;K000000Black → two runs with different colors.
     /// </summary>
     [Fact]
@@ -301,5 +344,115 @@ public sealed class PagePrintTextPlannerTests
             now);
 
         result.Should().Be($"Budget.xlsx - {now:d}");
+    }
+
+    // -----------------------------------------------------------------------
+    // R111-app-host-multiline-header-footer-1: multi-line section support
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// A section string with an embedded literal line break (Alt+Enter in Excel's Header/Footer
+    /// editor round-trips as a raw '\n' -- see XlsxWorksheetPageSetupMapper/XlsxFileAdapter) must
+    /// still tokenize as a SINGLE run whose text contains the '\n' verbatim: TokenizeSectionText
+    /// itself is not responsible for splitting lines, only for parsing '&amp;' format codes.
+    /// </summary>
+    [Fact]
+    public void R111_TokenizeSectionText_EmbeddedNewline_PreservedVerbatimInRunText()
+    {
+        var runs = PagePrintTextPlanner.TokenizeSectionText(
+            "Confidential\nDo Not Distribute",
+            pageNumber: 1, totalPages: 1,
+            workbookName: "Book.xlsx",
+            workbookDirectory: "",
+            sheetName: "Sheet1",
+            now: new DateTime(2026, 1, 1));
+
+        runs.Should().ContainSingle();
+        runs[0].Text.Should().Be("Confidential\nDo Not Distribute");
+    }
+
+    /// <summary>
+    /// R111 core fix: SplitRunsIntoLines must turn a single run whose text contains an embedded '\n'
+    /// into two separate lines, each carrying the original run's formatting, with neither line
+    /// silently dropped (the defect this fix addresses: WPF's FormattedText.MaxLineCount = 1 and the
+    /// portable PDF tier's single fixed baseline both used to show only the first line).
+    /// </summary>
+    [Fact]
+    public void R111_SplitRunsIntoLines_TwoLineSection_ProducesTwoNonEmptyLines()
+    {
+        var runs = PagePrintTextPlanner.TokenizeSectionText(
+            "Confidential\nDo Not Distribute",
+            pageNumber: 1, totalPages: 1,
+            workbookName: "Book.xlsx",
+            workbookDirectory: "",
+            sheetName: "Sheet1",
+            now: new DateTime(2026, 1, 1));
+
+        var lines = PagePrintTextPlanner.SplitRunsIntoLines(runs);
+
+        lines.Should().HaveCount(2, "the embedded '\\n' must produce two printed lines, not one");
+        lines[0].Should().ContainSingle(r => r.Text == "Confidential");
+        lines[1].Should().ContainSingle(r => r.Text == "Do Not Distribute");
+    }
+
+    /// <summary>
+    /// No-regression sibling: a plain single-line section (no embedded newline) must still split
+    /// into exactly one line, unaffected by the new multi-line logic.
+    /// </summary>
+    [Fact]
+    public void R111_SplitRunsIntoLines_SingleLineSection_ProducesOneLine()
+    {
+        var runs = PagePrintTextPlanner.TokenizeSectionText(
+            "Confidential",
+            pageNumber: 1, totalPages: 1,
+            workbookName: "Book.xlsx",
+            workbookDirectory: "",
+            sheetName: "Sheet1",
+            now: new DateTime(2026, 1, 1));
+
+        var lines = PagePrintTextPlanner.SplitRunsIntoLines(runs);
+
+        lines.Should().ContainSingle();
+        lines[0].Should().ContainSingle(r => r.Text == "Confidential");
+    }
+
+    /// <summary>
+    /// A run's bold/italic/font/color formatting must carry over unchanged to every line it produces
+    /// when split -- e.g. "&amp;B" toggled bold before the embedded newline must still apply to both
+    /// halves.
+    /// </summary>
+    [Fact]
+    public void R111_SplitRunsIntoLines_FormattingCarriesOverToEveryLine()
+    {
+        var runs = PagePrintTextPlanner.TokenizeSectionText(
+            "&BBold line one\nBold line two",
+            pageNumber: 1, totalPages: 1,
+            workbookName: "Book.xlsx",
+            workbookDirectory: "",
+            sheetName: "Sheet1",
+            now: new DateTime(2026, 1, 1));
+
+        var lines = PagePrintTextPlanner.SplitRunsIntoLines(runs);
+
+        lines.Should().HaveCount(2);
+        lines[0].Single().Bold.Should().BeTrue();
+        lines[1].Single().Bold.Should().BeTrue("bold was toggled on before the newline and never toggled off");
+    }
+
+    /// <summary>
+    /// CountSectionLines must count embedded line breaks directly on the raw section string (used to
+    /// size the header/footer band before any per-run tokenization), returning at least 1 for an
+    /// empty/plain section and growing by one per embedded '\n'.
+    /// </summary>
+    [Theory]
+    [InlineData(null, 1)]
+    [InlineData("", 1)]
+    [InlineData("Plain", 1)]
+    [InlineData("Line one\nLine two", 2)]
+    [InlineData("Line one\nLine two\nLine three", 3)]
+    [InlineData("Line one\r\nLine two", 2)]
+    public void R111_CountSectionLines_ReturnsExpectedLineCount(string? text, int expected)
+    {
+        PagePrintTextPlanner.CountSectionLines(text).Should().Be(expected);
     }
 }

@@ -53,7 +53,7 @@ internal static class DelimitedTextWorkbookWriter
     /// text when the file is later reopened by real Excel, which assumes ANSI for a BOM-less plain
     /// CSV/TXT file rather than sniffing UTF-8.
     /// </summary>
-    private static Encoding ResolveAnsiEncoding()
+    internal static Encoding ResolveAnsiEncoding()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         try
@@ -396,6 +396,10 @@ internal static class DelimitedTextWorkbookWriter
     private static bool HasSupportedDateTimeShape(string value)
     {
         var digitRun = 0;
+        var digitGroups = 0;
+        var inDigitGroup = false;
+        var hasSlashOrDashSeparator = false;
+
         foreach (var ch in value)
         {
             if (ch == ':' || char.IsLetter(ch))
@@ -406,14 +410,31 @@ internal static class DelimitedTextWorkbookWriter
                 digitRun++;
                 if (digitRun >= 4)
                     return true;
+
+                if (!inDigitGroup)
+                {
+                    digitGroups++;
+                    inDigitGroup = true;
+                }
             }
             else
             {
                 digitRun = 0;
+                inDigitGroup = false;
+                hasSlashOrDashSeparator |= ch is '/' or '-';
             }
         }
 
-        return false;
+        // A year-less two-digit-group "M/d" or "M-d" shape (e.g. "1/2", "3-4") is also date-like on
+        // the read side -- LooksLikeCurrentCultureDateCandidate in DelimitedTextWorkbookReader.cs
+        // treats it as a date candidate because Excel's General-format auto-recognition converts
+        // such a bare month/day token to a date, assuming the current year. A TextValue with this
+        // shape must get the same leading-apostrophe marker as any other date-like text (below) so
+        // reloading the saved file preserves it as text instead of silently turning it into a date.
+        // "." is deliberately excluded here, mirroring the reader: it doubles as the decimal
+        // separator in the common cultures (en-US, en-GB, fr-FR, ...), so a plain two-digit-group
+        // decimal like "3.14" must not be treated as date-shaped.
+        return digitGroups == 2 && hasSlashOrDashSeparator;
     }
 
     private static bool IsUnsignedCurrencyText(string value)

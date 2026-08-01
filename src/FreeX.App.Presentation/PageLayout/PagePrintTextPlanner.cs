@@ -22,7 +22,7 @@ public static class PagePrintTextPlanner
     ///   <item><c>&amp;E</c> – toggle double-underline</item>
     ///   <item><c>&amp;S</c> – toggle strikethrough</item>
     ///   <item><c>&amp;"fontname,style"</c> – set font family and optionally bold/italic from style word</item>
-    ///   <item><c>&amp;nn</c> – set font size (1–2 digit number; <c>&amp;0</c>–<c>&amp;99</c>)</item>
+    ///   <item><c>&amp;nnn</c> – set font size (1–3 digit number; Excel supports sizes up to 409)</item>
     ///   <item><c>&amp;KRRGGBB</c> – set RGB color (6 hex digits)</item>
     ///   <item><c>&amp;&amp;</c> – literal <c>&amp;</c></item>
     ///   <item><c>&amp;+</c> / <c>&amp;-</c> / <c>&amp;X</c> / <c>&amp;Y</c> – super/subscript (state tracked; no geometry change here)</item>
@@ -242,13 +242,13 @@ public static class PagePrintTextPlanner
                     i += 2; // super/subscript — state not tracked geometrically here
                     continue;
 
-                // Numeric font size: &nn (1-2 decimal digits)
+                // Numeric font size: &nnn (Excel allows 1-3 decimal digits, sizes up to 409)
                 default:
                     if (char.IsAsciiDigit(next))
                     {
-                        // Collect up to 2 digits
-                        var digitEnd = i + 2;
-                        if (digitEnd < span.Length && char.IsAsciiDigit(span[digitEnd]))
+                        // Collect the full contiguous run of digits after '&'.
+                        var digitEnd = i + 1;
+                        while (digitEnd < span.Length && char.IsAsciiDigit(span[digitEnd]))
                             digitEnd++;
 
                         var digitStr = span.Slice(i + 1, digitEnd - i - 1).ToString();
@@ -344,6 +344,96 @@ public static class PagePrintTextPlanner
 
     public static bool IsErrorDisplayText(string text) =>
         text is "#DIV/0!" or "#VALUE!" or "#REF!" or "#NAME?" or "#NULL!" or "#N/A" or "#NUM!";
+
+    // -----------------------------------------------------------------------
+    // Multi-line header/footer sections
+    // -----------------------------------------------------------------------
+
+    /// <summary>
+    /// Counts how many printed lines a raw header/footer section string produces once a literal line
+    /// break (Alt+Enter in Excel's Header/Footer editor, which round-trips as an embedded '\n' —
+    /// see XlsxWorksheetPageSetupMapper/XlsxFileAdapter) is taken into account. <see
+    /// cref="TokenizeSectionText"/> treats '\n' as an ordinary character and appends it into the
+    /// current run's text verbatim, so this counts newlines directly on the raw string rather than
+    /// re-tokenizing. Always returns at least 1 (an empty/whitespace-only section still occupies one
+    /// printed line, matching Excel and the fixed single-line band height this replaces).
+    /// </summary>
+    public static int CountSectionLines(string? text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 1;
+
+        var count = 1;
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (text[i] == '\r')
+            {
+                count++;
+                i += (i + 1 < text.Length && text[i + 1] == '\n') ? 2 : 1;
+            }
+            else if (text[i] == '\n')
+            {
+                count++;
+                i++;
+            }
+            else
+            {
+                i++;
+            }
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// Splits a tokenized run sequence into separate printed lines wherever a run's <see
+    /// cref="HeaderFooterFormattedRun.Text"/> contains an embedded line break. <see
+    /// cref="TokenizeSectionText"/> never splits on '\n' itself (it treats it as an ordinary
+    /// character), so a single run may span several printed lines; callers that draw one line at a
+    /// time (PrintRenderer.HeaderFooterDrawing in FreeX.App.Host, WorkbookPdfContentBuilder in
+    /// FreeX.App.Services) must call this before laying out baselines, or every line after the first
+    /// silently disappears (WPF's <c>FormattedText.MaxLineCount</c> and the portable PDF tier's single
+    /// fixed baseline both only ever show the first line — see the R111 multi-line header/footer fix).
+    /// A run's formatting (bold/italic/font/color/etc.) carries over unchanged to every line it
+    /// produces. "\r\n" and bare "\r" are normalized to "\n" first so every line-break convention
+    /// splits identically. Always returns at least one (possibly empty) line.
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<HeaderFooterFormattedRun>> SplitRunsIntoLines(
+        IReadOnlyList<HeaderFooterFormattedRun> runs)
+    {
+        var lines = new List<IReadOnlyList<HeaderFooterFormattedRun>>();
+        var currentLine = new List<HeaderFooterFormattedRun>();
+
+        foreach (var run in runs)
+        {
+            if (string.IsNullOrEmpty(run.Text))
+                continue;
+
+            if (run.Text.IndexOf('\n') < 0 && run.Text.IndexOf('\r') < 0)
+            {
+                currentLine.Add(run);
+                continue;
+            }
+
+            var normalized = run.Text.Replace("\r\n", "\n").Replace('\r', '\n');
+            var segments = normalized.Split('\n');
+            for (var i = 0; i < segments.Length; i++)
+            {
+                if (segments[i].Length > 0)
+                    currentLine.Add(run with { Text = segments[i] });
+
+                if (i < segments.Length - 1)
+                {
+                    lines.Add(currentLine);
+                    currentLine = new List<HeaderFooterFormattedRun>();
+                }
+            }
+        }
+
+        lines.Add(currentLine);
+        return lines;
+    }
 
     // -----------------------------------------------------------------------
     // Private helpers

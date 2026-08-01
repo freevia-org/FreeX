@@ -4,6 +4,21 @@ internal static partial class DelimitedTextWorkbookReader
 {
     private static readonly string[] DateTimeFormats =
     [
+        // R112 decision: a bare, year-less "M/d" or "M-d" token (e.g. "3/4", "1-2") is included
+        // here for parity with the current-culture path (TryParseCurrentCultureDateTime /
+        // LooksLikeCurrentCultureDateCandidate above), which already coerces this shape to a
+        // current-year date on any thread with a real current culture. An invariant-culture thread
+        // (CultureInfo.CurrentCulture.Name == "") skips that path entirely and falls through to
+        // this exact-format list, so without these two entries the exact same literal would import
+        // as text on an invariant-globalization deployment (e.g. a Docker container built with
+        // <InvariantGlobalization>true</InvariantGlobalization>) but as a date everywhere else --
+        // an environment-dependent inconsistency with no Excel-fidelity justification, since real
+        // Excel's own auto-recognition of this shape does not vary by OS globalization mode.
+        // DateTime.TryParseExact fills a format's omitted year with the current year by default
+        // (the same mechanism the current-culture path already relies on), so these two additions
+        // reuse that behavior rather than special-casing it.
+        "M/d",
+        "M-d",
         "yyyy-MM-dd",
         "yyyy-MM-dd H:mm",
         "yyyy-MM-dd H:mm:ss",

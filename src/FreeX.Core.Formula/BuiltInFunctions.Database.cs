@@ -109,29 +109,19 @@ public static partial class BuiltInFunctions
         if (cell?.FormulaText is not { Length: > 0 } formulaText) return false;
 
         uint targetRow = database.StartRow + (uint)dataRow;
-        try
-        {
-            var ast = FormulaEvaluator.ParseFormula(formulaText);
-            var anchor = new Model.CellAddress(sheet.Id, formulaRow, formulaCol);
-            var current = new Model.CellAddress(sheet.Id, targetRow, formulaCol);
-            var shifted = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, current);
-            var evaluator = new FormulaEvaluator();
-            var value = evaluator.Evaluate(shifted, sheet, ctx.CurrentWorkbook, currentCell: current);
-            matches = value switch
-            {
-                BoolValue b => b.Value,
-                NumberValue n => n.Value != 0,
-                _ => false
-            };
-            return true;
-        }
-        catch
-        {
-            // A computed criterion that errors is a real (non-matching) evaluation, not an
-            // "ignore this column" case -- matches AdvancedFilterPlanBuilder.ComputedCriteriaCheck.
-            matches = false;
-            return true;
-        }
+        // Excel's documented "computed criteria" convention anchors the shift on the database's
+        // own first data row (database.StartRow + 1), NOT on the criteria formula's own physical
+        // row: the authored formula is expected to reference that first data row directly (e.g.
+        // "=B6>200" when the list's first data row is row 6), and every other candidate row is
+        // evaluated by shifting relative references by (targetRow - firstDataRow) -- independent
+        // of where the criteria cell itself sits in its (usually disjoint) criteria region.
+        // Shared with AdvancedFilterPlanBuilder.ComputedCriteriaCheck via
+        // ComputedCriteriaEvaluator so the two can't drift apart again. A computed criterion
+        // that errors is a real (non-matching) evaluation, not an "ignore this column" case --
+        // ComputedCriteriaEvaluator.Evaluate already treats it that way.
+        uint firstDataRow = database.StartRow + 1;
+        matches = ComputedCriteriaEvaluator.Evaluate(sheet, formulaText, firstDataRow, formulaCol, targetRow, ctx.CurrentWorkbook);
+        return true;
     }
 
     /// <summary>Extract values from the field column for all matching rows.</summary>

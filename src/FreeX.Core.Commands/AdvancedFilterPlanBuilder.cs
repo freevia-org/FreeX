@@ -22,8 +22,17 @@ internal static class AdvancedFilterPlanBuilder
     public static (List<List<ICriteriaCheck>> Rows, string? Error) BuildCriteriaRows(
         Sheet sheet,
         GridRange criteriaRange,
-        Dictionary<string, uint> headers)
+        Dictionary<string, uint> headers,
+        GridRange listRange)
     {
+        // Excel's "computed criteria" convention anchors a criteria formula's relative-reference
+        // shift on the list range's own first data row (listRange.Start.Row + 1), NOT on the
+        // criteria formula's own physical row -- the authored formula is expected to reference
+        // that first data row directly, and every candidate list row is evaluated by shifting
+        // relative references from there, independent of where the criteria cell itself sits in
+        // its (usually disjoint) criteria region. Mirrors
+        // BuiltInFunctions.Database.TryEvaluateComputedCriterion's D-function fix.
+        var firstListDataRow = listRange.Start.Row + 1;
         var result = new List<List<ICriteriaCheck>>();
         if (criteriaRange.Start.Row >= criteriaRange.End.Row)
             return (result, null);
@@ -71,7 +80,7 @@ internal static class AdvancedFilterPlanBuilder
                     continue;
 
                 criteriaRow ??= new List<ICriteriaCheck>();
-                criteriaRow.Add(new ComputedCriteriaCheck(sheet, formulaText, row, criteriaCol));
+                criteriaRow.Add(new ComputedCriteriaCheck(sheet, formulaText, firstListDataRow, criteriaCol));
             }
 
             if (criteriaRow is not null)
@@ -158,39 +167,20 @@ internal static class AdvancedFilterPlanBuilder
     }
 
     /// <summary>
-    /// A computed/formula criterion (blank criteria header). The formula is authored as if it
-    /// were entered at its own criteria cell (<paramref name="FormulaRow"/>/<paramref name="FormulaCol"/>
-    /// on <paramref name="FormulaSheet"/>); matching a candidate list row re-evaluates it with its
-    /// relative references shifted down to that row, mirroring how conditional-format and
-    /// data-validation formulas already shift an authored formula to another cell
-    /// (<see cref="FormulaEvaluator.ShiftFormulaForCell"/>).
+    /// A computed/formula criterion (blank criteria header). Per Excel's computed-criteria
+    /// convention, the formula is evaluated as if it were anchored at the list range's own first
+    /// data row (<paramref name="AnchorRow"/>, same column as the authored criteria cell) --
+    /// NOT the criteria cell's own (usually disjoint) row -- and matching a candidate list row
+    /// re-evaluates it with relative references shifted from that anchor down to the candidate
+    /// row, mirroring how conditional-format and data-validation formulas already shift an
+    /// authored formula to another cell (<see cref="FormulaEvaluator.ShiftFormulaForCell"/>), and
+    /// matching <see cref="BuiltInFunctions"/>'s D-function computed-criteria evaluation.
     /// </summary>
-    internal sealed class ComputedCriteriaCheck(Sheet FormulaSheet, string FormulaText, uint FormulaRow, uint FormulaCol)
+    internal sealed class ComputedCriteriaCheck(Sheet FormulaSheet, string FormulaText, uint AnchorRow, uint FormulaCol)
         : ICriteriaCheck
     {
-        private static readonly FormulaEvaluator Evaluator = new();
-
-        public bool Matches(Sheet listSheet, uint row)
-        {
-            try
-            {
-                var ast = FormulaEvaluator.ParseFormula(FormulaText);
-                var anchor = new CellAddress(FormulaSheet.Id, FormulaRow, FormulaCol);
-                var current = new CellAddress(FormulaSheet.Id, row, FormulaCol);
-                var shifted = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, current);
-                var value = Evaluator.Evaluate(shifted, FormulaSheet, workbook: null, currentCell: current);
-                return value switch
-                {
-                    BoolValue b => b.Value,
-                    NumberValue n => n.Value != 0,
-                    _ => false
-                };
-            }
-            catch
-            {
-                return false;
-            }
-        }
+        public bool Matches(Sheet listSheet, uint row) =>
+            ComputedCriteriaEvaluator.Evaluate(FormulaSheet, FormulaText, AnchorRow, FormulaCol, row, workbook: null);
     }
 
     private static IFilterCriterion CreateCriterion(string criteriaText)

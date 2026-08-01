@@ -28,6 +28,24 @@ public sealed class TextBoxModel
     public bool FlipHorizontal { get; set; }
     public bool FlipVertical { get; set; }
     public bool IsVisible { get; set; } = true;
+
+    /// <summary>
+    /// R111-model-drawing-object-lock-1-1: whether this text box is locked against move/resize while
+    /// its sheet is protected with the "Edit objects" permission blocked -- mirrors
+    /// <see cref="DrawingShapeModel.Locked"/> (matching OOXML <c>&lt;a:spLocks noMove="1" noResize="1".../&gt;</c>).
+    /// Defaults to <see langword="true"/>, matching Excel's default of a locked text box. When an author
+    /// explicitly unlocks a text box (unchecks Format Shape &gt; Properties &gt; Locked) that one text
+    /// box stays movable/resizable even while the sheet protection has "Edit objects" turned off, while
+    /// other (default-locked) text boxes on the same protected sheet remain immovable.
+    /// </summary>
+    /// <remarks>
+    /// Reading/writing the OOXML per-text-box lock attribute (<c>a:spLocks</c>) on load/save is
+    /// deferred follow-up work, exactly like <see cref="DrawingShapeModel.Locked"/> -- this field is
+    /// currently in-memory/session-only and defaults to locked, matching Excel's authored default when
+    /// no lock override is present.
+    /// </remarks>
+    public bool Locked { get; set; } = true;
+
     public bool HasFill { get; set; } = true;
     public CellColor? FillColor { get; set; }
     public CellColor? OutlineColor { get; set; }

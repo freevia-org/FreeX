@@ -212,4 +212,48 @@ internal static partial class RowColumnShiftHelpers
 
         return sheet.GetStyleOnly(row, col);
     }
+
+    // R111-commands-insert-overflow-metadata-1: Insert Rows/Columns' past-the-boundary overflow
+    // guard (InsertRowsCommand.Apply / InsertColumnsCommand.Apply) used to derive its "is there
+    // anything down there to overflow" check purely from GetOccupiedCellMap/CellCount -- i.e. only
+    // rows/columns holding an actual Cell object. Row/column-level state that lives OUTSIDE the
+    // cell dictionary (a style-only formatting band from a whole-row/column header select with no
+    // cell value, a RowHeights/ColumnWidths override, a hidden-row/column flag, or an outline/group
+    // level) was invisible to it, so such metadata at the sheet's last row/column silently shifted
+    // past MaxRow/MaxCol with no error -- and was then dropped on save (Excel itself refuses the
+    // insert here: "cannot shift nonblank cells off the worksheet" treats a formatted-but-valueless
+    // row/column as non-blank too). These two helpers report the highest row/column that carries
+    // ANY of that state (content OR metadata) so the two Apply methods can widen their guard.
+    //
+    // Sheet.GetUsedRange() already folds style-only entries into the value/spill bounding box, so
+    // it alone covers cell values, spills, AND style-only bands; RowHeights/HiddenRows/
+    // RowOutlineLevels (or their column counterparts) are the remaining metadata that live wholly
+    // outside it and must be checked separately.
+    internal static uint HighestFormattedOrOccupiedRow(Sheet sheet)
+    {
+        var highest = sheet.GetUsedRange()?.End.Row ?? 0;
+
+        foreach (var row in sheet.RowHeights.Keys)
+            if (row > highest) highest = row;
+        foreach (var row in sheet.HiddenRows)
+            if (row > highest) highest = row;
+        foreach (var row in sheet.RowOutlineLevels.Keys)
+            if (row > highest) highest = row;
+
+        return highest;
+    }
+
+    internal static uint HighestFormattedOrOccupiedColumn(Sheet sheet)
+    {
+        var highest = sheet.GetUsedRange()?.End.Col ?? 0;
+
+        foreach (var col in sheet.ColumnWidths.Keys)
+            if (col > highest) highest = col;
+        foreach (var col in sheet.HiddenCols)
+            if (col > highest) highest = col;
+        foreach (var col in sheet.ColOutlineLevels.Keys)
+            if (col > highest) highest = col;
+
+        return highest;
+    }
 }

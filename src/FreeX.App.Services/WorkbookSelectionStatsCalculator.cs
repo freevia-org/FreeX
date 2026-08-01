@@ -31,15 +31,19 @@ public static class WorkbookSelectionStatsCalculator
         var scanRange = Intersect(range, usedRange);
         long totalCells = scanRange.CellCount;
 
-        if (sheet.CellCount < totalCells)
+        if (sheet.CellCount + sheet.SpillValueCount < totalCells)
         {
-            foreach (var entry in sheet.GetOccupiedCellMap())
+            // EnumerateValueBearingCells unions the primary cell dictionary with the dynamic-array
+            // spill overlay, so spilled cells (everything but a spill's anchor) are still visible
+            // to this sparse scan -- GetOccupiedCellMap() alone would silently drop them.
+            foreach (var address in sheet.EnumerateValueBearingCells())
             {
-                var (row, col) = entry.Key;
+                var row = address.Row;
+                var col = address.Col;
                 if (Contains(scanRange, row, col) &&
                     IsVisibleCell(sheet, row))
                 {
-                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
+                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
                 }
             }
         }
@@ -94,15 +98,18 @@ public static class WorkbookSelectionStatsCalculator
         double? min = null, max = null;
         string? aggregateError = null;
 
-        if (sheet.CellCount < totalCells)
+        if (sheet.CellCount + sheet.SpillValueCount < totalCells)
         {
-            foreach (var entry in sheet.GetOccupiedCellMap())
+            // See the single-range overload above: spilled cells only live in the spill overlay,
+            // so this must union it in rather than scanning GetOccupiedCellMap() alone.
+            foreach (var address in sheet.EnumerateValueBearingCells())
             {
-                var (row, col) = entry.Key;
+                var row = address.Row;
+                var col = address.Col;
                 if (ContainsAny(scanRanges, row, col) &&
                     IsVisibleCell(sheet, row))
                 {
-                    Accumulate(entry.Value.Value, ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
+                    Accumulate(sheet.GetValue(row, col), ref sum, ref count, ref numericalCount, ref min, ref max, ref aggregateError);
                 }
             }
         }

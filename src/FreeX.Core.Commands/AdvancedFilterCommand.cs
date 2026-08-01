@@ -62,7 +62,7 @@ public sealed class AdvancedFilterCommand : IWorkbookCommand
             return protectedOutcome;
 
         var headers = AdvancedFilterPlanBuilder.BuildHeaderMap(sheet, _listRange);
-        var criteria = AdvancedFilterPlanBuilder.BuildCriteriaRows(criteriaSheet, _criteriaRange, headers);
+        var criteria = AdvancedFilterPlanBuilder.BuildCriteriaRows(criteriaSheet, _criteriaRange, headers, _listRange);
         if (criteria.Error is not null)
             return new CommandOutcome(false, criteria.Error);
         if (criteria.Rows.Count == 0)

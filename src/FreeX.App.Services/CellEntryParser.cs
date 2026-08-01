@@ -1,6 +1,7 @@
 using System.Globalization;
 using FreeX.Core.Commands;
 using FreeX.Core.Formula;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -325,49 +326,27 @@ public static class CellEntryParser
         return dateTime.Date >= new DateTime(1900, 1, 1);
     }
 
+    // '/' and '-' are universally treated by Excel as date separators regardless of locale; '.'
+    // only counts when it is the current culture's own actual date separator (e.g. de-DE/it-IT),
+    // otherwise a plain decimal-looking string like "1.2.3" under en-US (whose date separator is
+    // '/') would be misread as a date instead of staying text. ':' is Excel's universal time
+    // separator regardless of locale (e.g. "15:30"), so a bare "H:MM"/"H:MM:SS" literal with no
+    // AM/PM letter must still be treated as a date/time candidate -- otherwise a 24-hour time-only
+    // entry never even reaches the DateTime.TryParse attempt below (colonAlwaysQualifies: true).
+    // See DateEntryShapeRecognizer for the shared, single-source implementation of the underlying
+    // digit-group/date-separator shape check (also used by DelimitedTextWorkbookReader's CSV
+    // import and TextToColumnsValueConverter's Text-to-Columns "General" column conversion) --
+    // including its year-less two-digit-group "M/d"/"M-d" rule (e.g. a bare "3/4" is a date to
+    // Excel, matching CSV import; a bare "1/2" with no leading whole part/space is likewise a
+    // date, not a fraction -- see TryParseMixedFraction's own comment for that distinction).
     private static bool LooksLikeDateCandidate(string text)
     {
-        // '/' and '-' are universally treated by Excel as date separators regardless of locale;
-        // '.' only counts when it is the current culture's own actual date separator (e.g.
-        // de-DE/it-IT), otherwise a plain decimal-looking string like "1.2.3" under en-US (whose
-        // date separator is '/') would be misread as a date instead of staying text.
         var cultureDateSeparator = CultureInfo.CurrentCulture.DateTimeFormat.DateSeparator;
+        var dotCountsAsDateSeparator = cultureDateSeparator.Length == 1 && cultureDateSeparator[0] == '.';
 
-        var digitGroups = 0;
-        var inDigitGroup = false;
-        var hasDateSeparator = false;
-        var hasTimeSeparator = false;
-        var hasLetter = false;
-
-        foreach (var c in text)
-        {
-            if (char.IsDigit(c))
-            {
-                if (!inDigitGroup)
-                {
-                    digitGroups++;
-                    inDigitGroup = true;
-                }
-
-                continue;
-            }
-
-            inDigitGroup = false;
-            hasDateSeparator |= c is '/' or '-' ||
-                (cultureDateSeparator.Length == 1 && c == cultureDateSeparator[0]);
-            // ':' is Excel's universal time separator regardless of locale (e.g. "15:30"), so a
-            // bare "H:MM"/"H:MM:SS" literal with no AM/PM letter must still be treated as a
-            // date/time candidate -- otherwise a 24-hour time-only entry never even reaches the
-            // DateTime.TryParse attempt below.
-            hasTimeSeparator |= c == ':';
-            hasLetter |= char.IsLetter(c);
-        }
-
-        if (digitGroups < 2)
-        {
-            return false;
-        }
-
-        return (hasDateSeparator && digitGroups >= 3) || hasLetter || hasTimeSeparator;
+        return DateEntryShapeRecognizer.LooksLikeDateCandidate(
+            text.AsSpan(),
+            dotCountsAsDateSeparator,
+            colonAlwaysQualifies: true);
     }
 }

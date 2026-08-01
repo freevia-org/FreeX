@@ -103,7 +103,12 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
                 HiddenRows = sheet.HiddenRows.Count > 0 ? sheet.HiddenRows.ToList() : [],
                 HiddenCols = sheet.HiddenCols.Count > 0 ? sheet.HiddenCols.ToList() : [],
                 FilterHiddenRows = sheet.FilterHiddenRows.Count > 0 ? sheet.FilterHiddenRows.ToList() : [],
-                AutoFilter = sheet.AutoFilter,
+                // R111-custom-view-autofilter-alias: sheet.AutoFilter is a live, mutable object
+                // that ordinary filter commands mutate in place (WorksheetAutoFilterColumnSync).
+                // Deep-clone it here (like the HiddenRows/HiddenCols/FilterHiddenRows lists above
+                // already are) so a later filter edit on the live sheet can never retroactively
+                // rewrite this saved/undo snapshot -- see CustomViewStatePlanner.CloneAutoFilterSnapshot.
+                AutoFilter = CustomViewStatePlanner.CloneAutoFilterSnapshot(sheet.AutoFilter),
             };
         }
 
@@ -156,7 +161,12 @@ public sealed class SaveCustomViewCommand : IWorkbookCommand
                 sheet.FilterHiddenRows.Add(row);
         }
         if (state.AutoFilter is not null)
-            sheet.AutoFilter = state.AutoFilter;
+            // R111-custom-view-autofilter-alias: clone rather than aliasing state.AutoFilter onto
+            // the live sheet -- state may be a persisted WorkbookCustomView's own stored snapshot
+            // (view.Sheets[i]), and assigning it by reference would let a subsequent ordinary
+            // filter edit on the sheet mutate the saved view in place. See
+            // CustomViewStatePlanner.CloneAutoFilterSnapshot.
+            sheet.AutoFilter = CustomViewStatePlanner.CloneAutoFilterSnapshot(state.AutoFilter);
 
         if (state.PrintAreas is { } printAreas)
             sheet.SetPrintAreas(printAreas);

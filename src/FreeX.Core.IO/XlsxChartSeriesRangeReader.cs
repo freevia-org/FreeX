@@ -602,7 +602,8 @@ internal static class XlsxChartSeriesRangeReader
 
         return cache.Elements()
             .FirstOrDefault(e => e.Name.LocalName == "pt")?
-            .Element(ChartNs + "v")?
+            .Elements()
+            .FirstOrDefault(e => e.Name.LocalName == "v")?
             .Value;
     }
 
@@ -621,7 +622,7 @@ internal static class XlsxChartSeriesRangeReader
 
         return cache.Elements()
             .Where(e => e.Name.LocalName == "pt")
-            .Select(pt => pt.Element(ChartNs + "v")?.Value ?? "")
+            .Select(pt => pt.Elements().FirstOrDefault(e => e.Name.LocalName == "v")?.Value ?? "")
             .ToList();
     }
 
@@ -649,7 +650,7 @@ internal static class XlsxChartSeriesRangeReader
             if (idx < 0 || idx >= values.Length)
                 continue;
 
-            var raw = pt.Element(ChartNs + "v")?.Value;
+            var raw = pt.Elements().FirstOrDefault(e => e.Name.LocalName == "v")?.Value;
             values[idx] = double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;
         }
 

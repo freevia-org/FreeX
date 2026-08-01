@@ -28,10 +28,11 @@ public static partial class PrintRenderer
         int pageNumber,
         int totalPages,
         bool draftQuality,
+        double fontScale,
         string workbookDirectory = "")
     {
-        var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures, draftQuality);
-        var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures, draftQuality);
+        var headerHeight = CalculateHeaderFooterLineHeight(header, headerPictures, draftQuality, fontScale);
+        var footerHeight = CalculateHeaderFooterLineHeight(footer, footerPictures, draftQuality, fontScale);
         var headerY = Math.Max(4, headerMargin - headerHeight);
         // R100-app-host-footer-margin-overlap-1: mirrors the header-side fix (R99, this file's
         // headerY above) and WorkbookPdfContentBuilder's footerY clamp
@@ -47,8 +48,8 @@ public static partial class PrintRenderer
         var footerY = Math.Max(Math.Max(4, pageH - footerMargin - footerHeight), gridBottomEdge);
         var leftInset = alignWithMargins ? marginLeft : 0.3 * 96.0;
         var rightInset = alignWithMargins ? marginRight : 0.3 * 96.0;
-        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, workbookDirectory);
-        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, workbookDirectory);
+        DrawHeaderFooterLine(dc, textOverlays, header, headerPictures, pageW, leftInset, rightInset, headerY, headerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, fontScale, workbookDirectory);
+        DrawHeaderFooterLine(dc, textOverlays, footer, footerPictures, pageW, leftInset, rightInset, footerY, footerHeight, pageNumber, totalPages, workbookName, sheetName, draftQuality, fontScale, workbookDirectory);
     }
 
     private static void DrawHeaderFooterLine(
@@ -66,6 +67,7 @@ public static partial class PrintRenderer
         string workbookName,
         string sheetName,
         bool draftQuality,
+        double fontScale,
         string workbookDirectory = "")
     {
         // Tokenize each section into formatted runs. workbookDirectory is the folder containing the
@@ -90,26 +92,72 @@ public static partial class PrintRenderer
         DrawHeaderFooterPicture(dc, centerPicture, centerRect, TextAlignment.Center);
         DrawHeaderFooterPicture(dc, rightPicture,  rightRect,  TextAlignment.Right);
 
-        DrawHeaderFooterFormattedRuns(dc, textOverlays, leftRuns,   CalculateHeaderFooterTextRect(leftRect,   leftPicture,   TextAlignment.Left),   TextAlignment.Left);
-        DrawHeaderFooterFormattedRuns(dc, textOverlays, centerRuns, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), TextAlignment.Center);
-        DrawHeaderFooterFormattedRuns(dc, textOverlays, rightRuns,  CalculateHeaderFooterTextRect(rightRect,  rightPicture,  TextAlignment.Right),  TextAlignment.Right);
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, leftRuns,   CalculateHeaderFooterTextRect(leftRect,   leftPicture,   TextAlignment.Left),   TextAlignment.Left,   fontScale);
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, centerRuns, CalculateHeaderFooterTextRect(centerRect, centerPicture, TextAlignment.Center), TextAlignment.Center, fontScale);
+        DrawHeaderFooterFormattedRuns(dc, textOverlays, rightRuns,  CalculateHeaderFooterTextRect(rightRect,  rightPicture,  TextAlignment.Right),  TextAlignment.Right,  fontScale);
     }
 
     /// <summary>
-    /// Draws a sequence of formatted runs within the given rect, advancing x as each run is drawn.
-    /// Each run may carry its own font family, size, weight, style, and color from the Excel format codes.
+    /// Draws a sequence of formatted runs within the given rect, splitting on any embedded line break
+    /// first (R111-app-host-multiline-header-footer-1: a section may contain a literal Alt+Enter line
+    /// break that <see cref="PagePrintTextPlanner.TokenizeSectionText"/> preserves verbatim inside a
+    /// run's text) and drawing each resulting line on its own row within the rect -- rect's height
+    /// already reflects every sibling section's line count too (<see
+    /// cref="CalculateHeaderFooterLineHeight"/>), not just this one section's, so a section with fewer
+    /// lines than its siblings simply leaves the remaining rows blank, keeping line N of every section
+    /// aligned to the same row (matching Excel). <paramref name="fontScale"/> is Sheet.
+    /// HeaderFooterScaleWithDocument's resolved multiplier (R111-app-host-headerfooter-scale-with-document-1)
+    /// -- the per-line row step must scale by the same factor as the text drawn within it so lines stay
+    /// non-overlapping at any scale.
     /// </summary>
     private static void DrawHeaderFooterFormattedRuns(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
         IReadOnlyList<HeaderFooterFormattedRun> runs,
         Rect rect,
-        TextAlignment alignment)
+        TextAlignment alignment,
+        double fontScale)
+    {
+        if (runs.Count == 0) return;
+
+        var scaledLineHeight = HeaderFooterSingleLineHeight * fontScale;
+        var lines = PagePrintTextPlanner.SplitRunsIntoLines(runs);
+        for (var lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+        {
+            var lineRuns = lines[lineIndex];
+            if (lineRuns.Count == 0) continue;
+
+            var lineRect = new Rect(
+                rect.Left,
+                rect.Top + (lineIndex * scaledLineHeight),
+                rect.Width,
+                scaledLineHeight);
+            DrawHeaderFooterFormattedRunsLine(dc, textOverlays, lineRuns, lineRect, alignment, fontScale);
+        }
+    }
+
+    /// <summary>
+    /// Draws one already-split line's worth of runs within the given rect, advancing x as each run is
+    /// drawn. Each run may carry its own font family, size, weight, style, and color from the Excel
+    /// format codes. This is the single-line body previously inlined directly into
+    /// <see cref="DrawHeaderFooterFormattedRuns"/> before the R111 multi-line split was added above.
+    /// <paramref name="fontScale"/> multiplies every run's declared/default font size
+    /// (R111-app-host-headerfooter-scale-with-document-1) -- 1.0 when Sheet.
+    /// HeaderFooterScaleWithDocument is false or the page's own print scale is 100%, matching the
+    /// caller-resolved multiplier from <see cref="DrawHeaderFooterFormattedRuns"/>.
+    /// </summary>
+    private static void DrawHeaderFooterFormattedRunsLine(
+        DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
+        IReadOnlyList<HeaderFooterFormattedRun> runs,
+        Rect rect,
+        TextAlignment alignment,
+        double fontScale)
     {
         if (runs.Count == 0) return;
 
         // Measure the total text width so we can compute the correct starting x for center/right.
-        var totalWidth = MeasureTotalRunsWidth(runs);
+        var totalWidth = MeasureTotalRunsWidth(runs, fontScale);
         var maxWidth = Math.Max(1, rect.Width - 4);
 
         // Clamp so we don't overflow the rect (match the single-run CharacterEllipsis behaviour
@@ -130,7 +178,7 @@ public static partial class PrintRenderer
             if (x >= rightBoundary) break; // no room left
 
             var typeface = ResolveRunTypeface(run);
-            var fontSize = run.FontSize ?? PrintFontSize;
+            var fontSize = (run.FontSize ?? PrintFontSize) * fontScale;
             var textColor = run.Color is { } c ? Color.FromRgb(c.R, c.G, c.B) : Colors.Black;
             var brush = new SolidColorBrush(textColor);
             var remainingWidth = Math.Max(1, rightBoundary - x);
@@ -168,14 +216,14 @@ public static partial class PrintRenderer
         }
     }
 
-    private static double MeasureTotalRunsWidth(IReadOnlyList<HeaderFooterFormattedRun> runs)
+    private static double MeasureTotalRunsWidth(IReadOnlyList<HeaderFooterFormattedRun> runs, double fontScale)
     {
         var total = 0.0;
         foreach (var run in runs)
         {
             if (string.IsNullOrEmpty(run.Text)) continue;
             var typeface = ResolveRunTypeface(run);
-            var fontSize = run.FontSize ?? PrintFontSize;
+            var fontSize = (run.FontSize ?? PrintFontSize) * fontScale;
             total += MeasurePrintedSingleLineText(run.Text, typeface, fontSize).WidthIncludingTrailingWhitespace;
         }
         return total;

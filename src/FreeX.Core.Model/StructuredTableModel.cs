@@ -92,11 +92,30 @@ public sealed record StructuredTableFilterColumnModel
     // XlsxAutoFilterColorFilterDxfWriter allocates one at save time (see its StructuredTable overload),
     // so this stays a first-class (not NativeFilterXmls-passthrough) field the writer resolves then,
     // unlike Top10/custom-criterion which need no dxf and can be built as raw XML eagerly (see
-    // TopBottomFilterCommand.BuildTop10Xml). Deliberately write-only: the reader never populates this
-    // from a loaded file (an existing/round-tripped table colorFilter -- with its dxfId already
-    // resolved -- keeps flowing through the generic NativeFilterXmls passthrough exactly as it always
-    // has), so there is no risk of the writer ever emitting the same colorFilter twice.
+    // TopBottomFilterCommand.BuildTop10Xml).
+    // R111-io-structured-table-colorfilter-roundtrip-1: XlsxStructuredTableMetadataReader now also
+    // populates this from a loaded file's <colorFilter> element (mirroring
+    // XlsxWorksheetAutoFilterXmlMapper.ReadColorFilter) and XlsxStructuredTableNativeMetadataReader
+    // .ReadFilterXmls excludes "colorFilter" from the NativeFilterXmls passthrough it used to fall
+    // back to -- a loaded colorFilter used to vanish on the very next save because the writer already
+    // excludes "colorFilter" from that same passthrough (see XlsxStructuredTableWriter.ToFilterColumnXml)
+    // while nothing set this typed field, so neither path ever emitted it. Now there is exactly one
+    // producer (this field) and exactly one consumer (the writer's ColorFilter branch), so a
+    // round-tripped colorFilter is never dropped nor emitted twice.
     public WorksheetAutoFilterColorFilterModel? ColorFilter { get; init; }
+
+    // R111-io-structured-table-dategroup-roundtrip-1: mirrors WorksheetAutoFilterColumnModel.DateGroups
+    // -- Excel's built-in Year/Quarter/Month/Day checklist filter on a date column writes a Table's
+    // <filters> element with ONLY <dateGroupItem> children (no plain <filter val=.../> children at
+    // all). Before this field existed, XlsxStructuredTableMetadataReader.ReadFilterColumns had nowhere
+    // to put those dateGroupItem children -- it only ever read <filter> into Values -- so a
+    // date-grouped filterColumn had Values.Count==0, and (since ReadFilterXmls already excludes
+    // "filters" from the NativeFilterXmls passthrough the same way it excludes "customFilters") no
+    // NativeFilterXmls fallback either. It failed every disjunct of the inclusion guard and the whole
+    // filterColumn -- and the user's date-filter criterion -- vanished on load, before a save could
+    // even run. This is the single typed home for those dateGroupItem children, exactly like
+    // WorksheetAutoFilterColumnModel.DateGroups holds them for the sheet-level AutoFilter path.
+    public IReadOnlyList<WorksheetAutoFilterDateGroupItemModel> DateGroups { get; init; } = [];
 
     public StructuredTableFilterColumnModel(
         int ColumnId,

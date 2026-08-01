@@ -136,9 +136,10 @@ public static partial class XlsxChartPartReader
                     element.Name.LocalName == "series" &&
                     !string.Equals(element.Attribute("layoutId")?.Value, "paretoLine", StringComparison.OrdinalIgnoreCase))
                 .ToArray();
-        var seriesElements = chartExSeries.Length > 0
+        var seriesElements = (chartExSeries.Length > 0
             ? chartExSeries
-            : plotChart.Descendants().Where(element => element.Name.LocalName == "ser");
+            : plotChart.Descendants().Where(element => element.Name.LocalName == "ser"))
+            .ToList();
         foreach (var series in seriesElements)
         {
             if (series.Name.LocalName == "series")
@@ -169,6 +170,46 @@ public static partial class XlsxChartPartReader
 
         if (ranges.Count == 0)
         {
+            // R111-io-chart-deferred-named-range-1: this reader (TryReadDeferredAdvancedChart) is
+            // the eighth reader for named-range chart series that r110's numCache/strCache fallback
+            // missed — it serves every chartEx-family chart (Waterfall, Histogram, Box & Whisker,
+            // Treemap, Sunburst, Funnel, Pareto, Surface/3D-Surface — see FindDeferredAdvancedChart)
+            // AND the ordinary bar3DChart (3D-Column/3D-Bar, via TryReadThreeDBarChart below, which
+            // always passes fallbackDataRange:null). When every series' val/cat (classic <ser>) or
+            // numDim/strDim (true chartEx <cx:series>) formula is a defined name that
+            // TryParseFormulaRange cannot resolve (e.g. the OFFSET-based "auto-expanding chart"
+            // pattern), ranges stays empty and this used to unconditionally drop the whole chart.
+            // Reuse the same embedded-cache reader the seven fixed families use for the classic
+            // <ser>-shaped members of this family, and a chartEx-native numDim/strDim <lvl>/<pt>
+            // cache reader (TryReadChartExEmbeddedSeriesData) for the true <cx:series>-shaped ones.
+            var embeddedData = chartExSeries.Length > 0
+                ? TryReadChartExEmbeddedSeriesData(chartXml, chartExSeries)
+                : XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(seriesElements, sheetId)
+                  ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(seriesElements, sheetId, sheetNameResolver);
+
+            if (embeddedData is not null)
+            {
+                // No series formula parsed to a real cell range (that is precisely why we are in
+                // this branch), so there is no live DataRange to union — use the same 1x1
+                // placeholder the seven fixed readers fall back to (e.g. Bar.cs) purely so
+                // DataRange.Start.Sheet carries the chart's own sheet for downstream sheet-ID
+                // matching; the actual series values come from EmbeddedSeriesData.
+                result.DataRange = new GridRange(
+                    new CellAddress(sheetId, 1, 1),
+                    new CellAddress(sheetId, 1, 1));
+                result.FirstRowIsHeader = hasTitleRange;
+                result.FirstColIsCategories = hasCategoryRange;
+                result.EmbeddedSeriesData = embeddedData;
+                // DetectDeferredSeriesInRows would also report false here: every formula it could
+                // parse already failed above (that's why ranges.Count == 0), so there is nothing
+                // left to detect a multi-column strip from.
+                result.SeriesInRows = false;
+                XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
+                XlsxChartSanitizer.SanitizeLoadedChart(result);
+                chart = result;
+                return true;
+            }
+
             if (fallbackDataRange is not { } fallbackRange || !HasExcelInternalChartExDataReference(chartXml))
             {
                 chart = new ChartModel();
@@ -314,6 +355,104 @@ public static partial class XlsxChartPartReader
                 .Where(element => element.Name.LocalName is "f" or "nf")
                 .Select(element => element.Value)
                 .Where(value => !string.IsNullOrWhiteSpace(value));
+    }
+
+    /// <summary>
+    /// R111-io-chart-deferred-named-range-1: chartEx analogue of
+    /// <see cref="XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData"/> for the true
+    /// &lt;cx:series&gt;-shaped members of the advanced-chart family (dataId/data/numDim/strDim,
+    /// not the classic &lt;ser&gt; shape). Reads each series' cached values straight from the
+    /// numDim/strDim &lt;cx:lvl&gt;/&lt;cx:pt&gt; cache elements — the chartEx equivalent of a
+    /// classic &lt;c:numCache&gt;/&lt;c:strCache&gt; — so a named-range series (whose &lt;cx:f&gt;
+    /// formula TryParseFormulaRange could not resolve, which is why the caller is in this branch
+    /// at all) can still be rendered. Returns null when no series has any cached numeric points
+    /// (e.g. the numDim only carries an &lt;cx:f&gt; formula with no cache at all).
+    /// </summary>
+    private static List<ChartEmbeddedSeriesData>? TryReadChartExEmbeddedSeriesData(
+        XDocument chartXml,
+        IReadOnlyList<XElement> chartExSeriesElements)
+    {
+        var result = new List<ChartEmbeddedSeriesData>(chartExSeriesElements.Count);
+        for (var i = 0; i < chartExSeriesElements.Count; i++)
+        {
+            var series = chartExSeriesElements[i];
+            var data = FindChartExData(chartXml, series);
+            var catDimension = FindChartExDimension(data, "strDim", "cat");
+            var valDimension = FindChartExDimension(data, "numDim", "val");
+            var seriesName = ReadChartExSeriesNameCache(series);
+            var categories = ReadChartExStringCacheValues(catDimension);
+            var values = ReadChartExNumericCacheValues(valDimension);
+            result.Add(new ChartEmbeddedSeriesData(i, seriesName, categories, values));
+        }
+
+        return result.Any(s => s.Values.Count > 0) ? result : null;
+    }
+
+    /// <summary>Finds a &lt;cx:numDim&gt;/&lt;cx:strDim&gt; child of a chartEx &lt;cx:data&gt; element by its @type attribute.</summary>
+    private static XElement? FindChartExDimension(XElement? data, string dimensionLocalName, string dimensionType) =>
+        data?.Elements().FirstOrDefault(element =>
+            element.Name.LocalName == dimensionLocalName &&
+            string.Equals(element.Attribute("type")?.Value, dimensionType, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Reads a chartEx series' own cached name from &lt;cx:tx&gt;/&lt;cx:txData&gt;/&lt;cx:v&gt;.</summary>
+    private static string? ReadChartExSeriesNameCache(XElement series) =>
+        FirstChildElementByLocalName(series, "tx")?
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "v")?
+            .Value;
+
+    /// <summary>Reads all cached string points from a &lt;cx:strDim&gt;'s &lt;cx:lvl&gt;/&lt;cx:pt&gt; cache.</summary>
+    private static IReadOnlyList<string> ReadChartExStringCacheValues(XElement? dimension)
+    {
+        if (dimension is null || FirstChildElementByLocalName(dimension, "lvl") is not { } lvl)
+            return [];
+
+        var values = new string?[ChartExCachePointCapacity(lvl)];
+        foreach (var pt in lvl.Elements().Where(element => element.Name.LocalName == "pt"))
+        {
+            if (!TryReadChartExPointIndex(pt, ref values, out var idx))
+                continue;
+            values[idx] = pt.Value ?? "";
+        }
+
+        return values.Select(v => v ?? "").ToList();
+    }
+
+    /// <summary>Reads all cached numeric points from a &lt;cx:numDim&gt;'s &lt;cx:lvl&gt;/&lt;cx:pt&gt; cache.</summary>
+    private static IReadOnlyList<double?> ReadChartExNumericCacheValues(XElement? dimension)
+    {
+        if (dimension is null || FirstChildElementByLocalName(dimension, "lvl") is not { } lvl)
+            return [];
+
+        var values = new double?[ChartExCachePointCapacity(lvl)];
+        foreach (var pt in lvl.Elements().Where(element => element.Name.LocalName == "pt"))
+        {
+            if (!TryReadChartExPointIndex(pt, ref values, out var idx))
+                continue;
+            values[idx] = double.TryParse(pt.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;
+        }
+
+        return values;
+    }
+
+    private static int ChartExCachePointCapacity(XElement lvl) =>
+        int.TryParse(lvl.Attribute("ptCount")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var count) && count > 0
+            ? count
+            : lvl.Elements()
+                .Where(element => element.Name.LocalName == "pt")
+                .Select(element => int.TryParse(element.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var idx) ? idx + 1 : 0)
+                .DefaultIfEmpty(0)
+                .Max();
+
+    private static bool TryReadChartExPointIndex<T>(XElement pt, ref T[] values, out int idx)
+    {
+        if (!int.TryParse(pt.Attribute("idx")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out idx) || idx < 0)
+            return false;
+
+        if (idx >= values.Length)
+            Array.Resize(ref values, idx + 1);
+
+        return true;
     }
 
     private static XElement? FindChartExData(XDocument chartXml, XElement series)

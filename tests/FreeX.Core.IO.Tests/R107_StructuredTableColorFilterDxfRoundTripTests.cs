@@ -104,9 +104,15 @@ public sealed class R107_StructuredTableColorFilterDxfRoundTripTests
 
         var reloadedTable = loaded.Sheets[0].StructuredTables.Single();
         reloadedTable.FilterColumns.Should().ContainSingle();
-        reloadedTable.FilterColumns[0].NativeFilterXmls.Should()
-            .ContainSingle(xml => xml.Contains("colorFilter") && xml.Contains($"dxfId=\"{dxfIndex}\""),
-                "the saved colorFilter (with its resolved dxfId) must round-trip through the generic NativeFilterXmls passthrough on reload");
+        // R111-io-structured-table-colorfilter-roundtrip-1: colorFilter is now parsed into the typed
+        // ColorFilter field (no longer NativeFilterXmls passthrough), so it survives a SECOND
+        // save+reload too -- see R111_StructuredTableColorFilter_SurvivesSecondSave below for the
+        // regression this field enables catching.
+        reloadedTable.FilterColumns[0].ColorFilter.Should().NotBeNull(
+            "the saved colorFilter (with its resolved dxfId) must round-trip through the typed ColorFilter field on reload");
+        reloadedTable.FilterColumns[0].ColorFilter!.DifferentialFormatId.Should().Be(dxfIndex);
+        reloadedTable.FilterColumns[0].NativeFilterXmls.Should().BeEmpty(
+            "colorFilter must no longer fall back to the generic NativeFilterXmls passthrough now that it has a typed field");
 
         command.Revert(ctx);
         sheet.StructuredTables[0].FilterColumns.Should().BeEmpty();
@@ -145,7 +151,11 @@ public sealed class R107_StructuredTableColorFilterDxfRoundTripTests
 
         var reloadedTable = loaded.Sheets[0].StructuredTables.Single();
         reloadedTable.FilterColumns.Should().ContainSingle();
-        reloadedTable.FilterColumns[0].NativeFilterXmls.Should().ContainSingle(xml => xml.Contains("colorFilter"));
+        reloadedTable.FilterColumns[0].ColorFilter.Should().NotBeNull(
+            "a font-colour filter must round-trip through the typed ColorFilter field on reload");
+        reloadedTable.FilterColumns[0].ColorFilter!.CellColor.Should().BeFalse("font-colour filters round-trip cellColor=\"0\" as CellColor=false");
+        reloadedTable.FilterColumns[0].NativeFilterXmls.Should().BeEmpty(
+            "colorFilter must no longer fall back to the generic NativeFilterXmls passthrough now that it has a typed field");
 
         command.Revert(ctx);
     }

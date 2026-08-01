@@ -422,18 +422,56 @@ public static class WorkbookPdfContentBuilder
         // header-footer-margin-overlap-1), whose Math.Max(marginTop, headerMargin)-derived body top
         // the header band is anchored against by construction, never drawing past it.
         var headerY = Math.Max(pageH - headerEdgePt - 8, contentTop);   // baseline approx 8pt below header edge, never past the grid's own top
-        var headerBandHeightPt = Math.Max(8.0, mT - headerEdgePt);
+        // R111-services-multiline-header-footer-1: a section may contain a literal Alt+Enter line
+        // break (preserved verbatim by TokenizeSectionText as an embedded '\n'). Grow the band height
+        // to fit the tallest section's line count -- mirroring PrintRenderer.HeaderFooterPictures.cs's
+        // CalculateHeaderFooterLineHeight fix for the WPF path -- and lay every extra line out at its
+        // own baseline instead of the previous single fixed baselineY, which silently overwrote/hid
+        // every line after the first (a single PdfText op per section, one fixed Y).
+        //
+        // headerY above is already clamped to never sit below contentTop (the grid's own top edge),
+        // so it is the SAFE anchor for whichever line sits closest to the grid. For a header that is
+        // the LAST line (reading top-to-bottom the last-typed line ends up nearest the grid below it);
+        // earlier lines extend upward (larger Y, away from the grid, toward the page's top edge) --
+        // never toward the already-validated-safe grid boundary.
+        //
+        // R112-services-headerfooter-scale-with-document-1: Sheet.HeaderFooterScaleWithDocument
+        // ("Scale with document") was round-tripped and user-editable but never consulted by this PDF
+        // export tier -- only the WPF native print/print-preview renderer honored it (R111-app-host-
+        // headerfooter-scale-with-document-1). Resolve the same multiplier here via the shared
+        // PageGeometryRules.ResolveHeaderFooterFontScale rule (using effectiveScaleRatio, this tier's
+        // own fully-resolved grid/content scale, as the WPF path's scaleRatio twin) and apply it to
+        // both the per-line row step/band height (mirroring CalculateHeaderFooterLineHeight's `height =
+        // HeaderFooterSingleLineHeight * fontScale * maxLines`) and each run's font size (mirroring
+        // DrawHeaderFooterFormattedRunsLine's `fontSize = (run.FontSize ?? PrintFontSize) * fontScale`)
+        // so Save-As-PDF on both Windows and Linux/macOS reflects the setting exactly like WPF print
+        // does, instead of always rendering header/footer text at its authored size regardless of the
+        // page's print scale.
+        var headerFooterFontScale = PageGeometryRules.ResolveHeaderFooterFontScale(
+            sheet.HeaderFooterScaleWithDocument, effectiveScaleRatio);
+        var headerFooterLineHeightPt = HeaderFooterLineHeightPt * headerFooterFontScale;
+
+        var headerMaxLines = ResolveMaxSectionLines(header);
+        var headerBandHeightPt = Math.Max(headerFooterLineHeightPt * headerMaxLines, mT - headerEdgePt);
         RenderHeaderFooterBand(ops, header, headerPictures, pageW, mL, mR, headerY, headerBandHeightPt, 8,
-            workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, HeaderTextColor);
+            headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, HeaderTextColor,
+            lineIndex => headerY + ((headerMaxLines - 1 - lineIndex) * headerFooterLineHeightPt));
 
         // Footer text: rendered just above the footer edge from the bottom. R99-services-header-band-2:
         // symmetric clamp -- never draw above (a larger y-up value than) contentBottom, the grid's own
         // bottom edge, once Footer margin exceeds Bottom margin and bodyBottomEdgePt has already
         // raised the grid's bottom edge to footerEdgePt.
         var footerY = Math.Min(footerEdgePt + 2, contentBottom);            // baseline approx 2pt above footer edge, never past the grid's own bottom
-        var footerBandHeightPt = Math.Max(8.0, mB - footerEdgePt);
+        // R111-services-multiline-header-footer-1 (footer half): footerY is already clamped to never
+        // sit above contentBottom (the grid's own bottom edge), so it is the safe anchor for whichever
+        // line sits closest to the grid -- for a footer that is the FIRST line (it reads immediately
+        // below the grid); later lines extend downward (smaller Y, away from the grid, toward the
+        // page's bottom edge).
+        var footerMaxLines = ResolveMaxSectionLines(footer);
+        var footerBandHeightPt = Math.Max(headerFooterLineHeightPt * footerMaxLines, mB - footerEdgePt);
         RenderHeaderFooterBand(ops, footer, footerPictures, pageW, mL, mR, footerY, footerBandHeightPt, 8,
-            workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor);
+            headerFooterFontScale, workbook.Name, workbookDirectory, sheet.Name, pageNumber, totalPages, FooterTextColor,
+            lineIndex => footerY - (lineIndex * headerFooterLineHeightPt));
 
         return new PdfContentPage(pageW, pageH, ops);
     }
@@ -1177,6 +1215,23 @@ public static class WorkbookPdfContentBuilder
             _ => PdfFontFace.Regular
         };
 
+    // R111-services-multiline-header-footer-1: per-line row height for a header/footer text band, in
+    // PDF points -- mirrors PrintRenderer.HeaderFooterPictures.cs's HeaderFooterSingleLineHeight (the
+    // WPF path's analogous constant) but scaled down for this tier's fixed 8pt header/footer font
+    // instead of WPF's ~11pt default cell font.
+    private const double HeaderFooterLineHeightPt = 10.0;
+
+    /// <summary>
+    /// The largest number of printed lines any of a header/footer's Left/Center/Right sections
+    /// produces (see <see cref="PagePrintTextPlanner.CountSectionLines"/>) -- the band must be tall
+    /// enough, and every section's lines aligned row-for-row, to fit whichever section has the most
+    /// embedded line breaks.
+    /// </summary>
+    private static int ResolveMaxSectionLines(WorksheetHeaderFooter section) =>
+        Math.Max(1, Math.Max(
+            PagePrintTextPlanner.CountSectionLines(section.Left),
+            Math.Max(PagePrintTextPlanner.CountSectionLines(section.Center), PagePrintTextPlanner.CountSectionLines(section.Right))));
+
     private static void RenderHeaderFooterBand(
         List<PdfDrawOp> ops,
         WorksheetHeaderFooter band,
@@ -1187,30 +1242,32 @@ public static class WorkbookPdfContentBuilder
         double baselineY,
         double bandHeightPt,
         double fontSize,
+        double headerFooterFontScale,
         string workbookName,
         string workbookDirectory,
         string sheetName,
         int pageNumber,
         int totalPages,
-        PdfColor color)
+        PdfColor color,
+        Func<int, double> lineBaselineY)
     {
         var now = DateTime.Now;
         var sectionWidth = Math.Max(1, (pageW - mL - mR) / 3.0);
 
         RenderHeaderFooterSection(
             ops, band.Left, pictures.Left, HeaderFooterSectionAlign.Left,
-            mL, mL + sectionWidth, baselineY, bandHeightPt, fontSize,
-            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color);
+            mL, mL + sectionWidth, baselineY, bandHeightPt, fontSize, headerFooterFontScale,
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY);
 
         RenderHeaderFooterSection(
             ops, band.Center, pictures.Center, HeaderFooterSectionAlign.Center,
-            mL + sectionWidth, mL + (2 * sectionWidth), baselineY, bandHeightPt, fontSize,
-            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color);
+            mL + sectionWidth, mL + (2 * sectionWidth), baselineY, bandHeightPt, fontSize, headerFooterFontScale,
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY);
 
         RenderHeaderFooterSection(
             ops, band.Right, pictures.Right, HeaderFooterSectionAlign.Right,
-            pageW - mR - sectionWidth, pageW - mR, baselineY, bandHeightPt, fontSize,
-            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color);
+            pageW - mR - sectionWidth, pageW - mR, baselineY, bandHeightPt, fontSize, headerFooterFontScale,
+            workbookName, workbookDirectory, sheetName, pageNumber, totalPages, now, color, lineBaselineY);
     }
 
     private enum HeaderFooterSectionAlign { Left, Center, Right }
@@ -1220,11 +1277,20 @@ public static class WorkbookPdfContentBuilder
     /// <summary>
     /// Renders one left/center/right header-or-footer section: tokenizes its Excel format-code
     /// string via the shared portable <see cref="PagePrintTextPlanner.TokenizeSectionText"/> (the
-    /// same tokenizer the WPF <c>PrintRenderer.HeaderFooterDrawing</c> path uses), draws each run
-    /// with its own bold/italic/size/color (plus underline/strikethrough rules), measures every run
-    /// with <see cref="PortablePdfTextMeasurer"/> so center/right text is actually centered/right-
-    /// aligned within its section instead of flush-left, and draws the section's <c>&amp;G</c>
-    /// header/footer picture (if configured) via a <see cref="PdfImage"/> op.
+    /// same tokenizer the WPF <c>PrintRenderer.HeaderFooterDrawing</c> path uses), splits the tokenized
+    /// runs on any embedded line break (<see cref="PagePrintTextPlanner.SplitRunsIntoLines"/> --
+    /// R111-services-multiline-header-footer-1) and draws each resulting line at its own
+    /// <paramref name="lineBaselineY"/>-resolved baseline, draws each run with its own bold/italic/
+    /// size/color (plus underline/strikethrough rules), measures every run with <see
+    /// cref="PortablePdfTextMeasurer"/> so center/right text is actually centered/right-aligned within
+    /// its section instead of flush-left, and draws the section's <c>&amp;G</c> header/footer picture
+    /// (if configured) via a <see cref="PdfImage"/> op.
+    /// <paramref name="headerFooterFontScale"/> is Sheet.HeaderFooterScaleWithDocument's resolved
+    /// multiplier (R112-services-headerfooter-scale-with-document-1, via
+    /// PageGeometryRules.ResolveHeaderFooterFontScale) -- 1.0 when the flag is off or the page's own
+    /// scale is 100%. It scales the header/footer picture's own vertical anchor together with the
+    /// text baseline it centers against, but never the picture's own width/height (matching the WPF
+    /// path, where "Scale with document" only ever affects header/footer TEXT).
     /// </summary>
     private static void RenderHeaderFooterSection(
         List<PdfDrawOp> ops,
@@ -1236,13 +1302,15 @@ public static class WorkbookPdfContentBuilder
         double baselineY,
         double bandHeightPt,
         double fontSize,
+        double headerFooterFontScale,
         string workbookName,
         string workbookDirectory,
         string sheetName,
         int pageNumber,
         int totalPages,
         DateTime now,
-        PdfColor color)
+        PdfColor color,
+        Func<int, double> lineBaselineY)
     {
         if (string.IsNullOrEmpty(raw))
             return;
@@ -1266,8 +1334,11 @@ public static class WorkbookPdfContentBuilder
                 HeaderFooterSectionAlign.Right => sectionRight - imageWidth,
                 _ => sectionLeft
             };
-            // Vertically center the picture on the same line the text baseline sits on.
-            var imageY = baselineY - (imageHeight / 2.0) + (fontSize / 2.0);
+            // Vertically center the picture on the same line the text baseline sits on. Uses the
+            // scaled font size (matching the text drawn at this baseline below) purely to anchor the
+            // picture's own position -- the picture's imageWidth/imageHeight above are never scaled by
+            // headerFooterFontScale, only their vertical placement follows the text baseline.
+            var imageY = baselineY - (imageHeight / 2.0) + ((fontSize * headerFooterFontScale) / 2.0);
             ops.Add(new PdfImage(imageX, imageY, imageWidth, imageHeight, picture.ImageBytes, picture.ContentType));
 
             const double gap = 4.0;
@@ -1284,13 +1355,55 @@ public static class WorkbookPdfContentBuilder
         if (runs.Count == 0)
             return;
 
+        // R111-services-multiline-header-footer-1: split on any embedded line break (a literal
+        // Alt+Enter the user typed into the Header/Footer editor, preserved verbatim by
+        // TokenizeSectionText) and draw each resulting line at its own lineBaselineY(i) -- previously
+        // every run was drawn at the single fixed baselineY regardless of embedded newlines, so a
+        // multi-line section's later lines were silently overdrawn on top of (or invisible behind)
+        // its first line instead of appearing on their own row.
+        var lines = PagePrintTextPlanner.SplitRunsIntoLines(runs);
+        for (var lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+        {
+            var lineRuns = lines[lineIndex];
+            if (lineRuns.Count == 0)
+                continue;
+
+            RenderHeaderFooterSectionLine(
+                ops, lineRuns, align, textLeft, textRight, lineBaselineY(lineIndex), fontSize, headerFooterFontScale, color);
+        }
+    }
+
+    /// <summary>
+    /// Renders one already-split line's worth of runs for a header/footer section: measures every run
+    /// with <see cref="PortablePdfTextMeasurer"/> so center/right text is actually centered/right-
+    /// aligned within its section, then draws each run's <see cref="PdfText"/> op (plus underline/
+    /// strikethrough rules) at the given baseline. This is the single-line body previously inlined
+    /// directly into <see cref="RenderHeaderFooterSection"/> before the R111 multi-line split was
+    /// added there.
+    /// <paramref name="headerFooterFontScale"/> multiplies every run's declared/default font size
+    /// (R112-services-headerfooter-scale-with-document-1) -- 1.0 when Sheet.
+    /// HeaderFooterScaleWithDocument is false or the page's own print scale is 100%, mirroring the
+    /// WPF path's <c>fontSize = (run.FontSize ?? PrintFontSize) * fontScale</c>
+    /// (PrintRenderer.HeaderFooterDrawing.DrawHeaderFooterFormattedRunsLine).
+    /// </summary>
+    private static void RenderHeaderFooterSectionLine(
+        List<PdfDrawOp> ops,
+        IReadOnlyList<HeaderFooterFormattedRun> runs,
+        HeaderFooterSectionAlign align,
+        double textLeft,
+        double textRight,
+        double baselineY,
+        double fontSize,
+        double headerFooterFontScale,
+        PdfColor color)
+    {
         var runWidths = new double[runs.Count];
         var totalWidth = 0.0;
         for (var i = 0; i < runs.Count; i++)
         {
             var run = runs[i];
             var width = PortablePdfTextMeasurer.Instance
-                .Measure(run.Text, run.FontName, run.FontSize ?? fontSize, run.Bold, run.Italic).Width;
+                .Measure(run.Text, run.FontName, (run.FontSize ?? fontSize) * headerFooterFontScale, run.Bold, run.Italic).Width;
             runWidths[i] = width;
             totalWidth += width;
         }
@@ -1309,7 +1422,7 @@ public static class WorkbookPdfContentBuilder
             if (run.Text.Length == 0)
                 continue;
 
-            var runFontSize = run.FontSize ?? fontSize;
+            var runFontSize = (run.FontSize ?? fontSize) * headerFooterFontScale;
             var runColor = run.Color is { } rgb ? new PdfColor(rgb.R, rgb.G, rgb.B) : color;
             var face = ToPdfFontFace(run.Bold, run.Italic);
             ops.Add(new PdfText(cursorX, baselineY, runFontSize, face, runColor, run.Text));
