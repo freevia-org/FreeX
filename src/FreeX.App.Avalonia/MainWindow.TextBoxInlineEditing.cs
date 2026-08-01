@@ -95,6 +95,11 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(_textBoxInlineEditor, "Text box inline editor");
         AutomationProperties.SetHelpText(_textBoxInlineEditor, "Edits the selected text box in place.");
         _textBoxInlineEditor.KeyDown += TextBoxInlineEditor_KeyDown;
+        _textBoxInlineEditor.TextChanged += (_, _) =>
+        {
+            if (_textBoxInlineEditingId is { } textBoxId && _textBoxInlineEditor.IsVisible)
+                RecordTextBoxInlinePhysicalEvidence("editing", textBoxId);
+        };
         _textBoxInlineEditor.LostFocus += TextBoxInlineEditor_LostFocus;
     }
 
@@ -182,6 +187,8 @@ public sealed partial class MainWindow
         _textBoxInlineEditor.CaretIndex = _textBoxInlineEditor.Text?.Length ?? 0;
         _textBoxInlineEditor.SelectionStart = _textBoxInlineEditor.CaretIndex;
         _textBoxInlineEditor.SelectionEnd = _textBoxInlineEditor.CaretIndex;
+        if (_textBoxInlineEditingId is { } activeTextBoxId)
+            RecordTextBoxInlinePhysicalEvidence("editing", activeTextBoxId);
     }
 
     private bool HideTextBoxInlineEditor(bool commit, bool refresh = true)
@@ -229,15 +236,21 @@ public sealed partial class MainWindow
 
         if (action == TextBoxInlineEditKeyAction.Cancel)
         {
+            var textBoxId = _textBoxInlineEditingId;
             _textBoxInlineEditor!.Text = _textBoxInlineOriginalText ?? string.Empty;
             HideTextBoxInlineEditor(commit: false);
+            if (textBoxId is { } canceledTextBoxId)
+                RecordTextBoxInlinePhysicalEvidence("canceled", canceledTextBoxId);
             _sheetGridHost.Focus();
             args.Handled = true;
             return;
         }
 
+        var committedTextBoxId = _textBoxInlineEditingId;
         if (HideTextBoxInlineEditor(commit: true))
         {
+            if (committedTextBoxId is { } textBoxId)
+                RecordTextBoxInlinePhysicalEvidence("committed", textBoxId);
             _sheetGridHost.Focus();
         }
 

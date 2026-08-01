@@ -8,6 +8,7 @@ RUN apt-get update -qq \
         dbus-x11 \
         libglib2.0-bin \
         python3-dbus \
+        python3-jsonschema \
         python3-gi \
         python3-pyatspi \
         espeak-ng \

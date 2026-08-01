@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "freex.linux.textbox-inline-edit.physical.v1",
+  "title": "FreeX Wave 93 drawing TextBox inline edit physical validation",
+  "type": "object",
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "window", "screenshots", "package", "runtime", "results", "summary"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freex-linux-textbox-inline-edit-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeX" },
+    "window": {
+      "type": "object",
+      "required": ["pattern", "visible", "id", "width", "height"],
+      "properties": {
+        "pattern": { "const": "FreeX" },
+        "visible": { "const": true },
+        "id": { "type": "string", "minLength": 1 },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "screenshots": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": ["name", "phase", "width", "height"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.png$" },
+          "phase": { "enum": ["before", "editing", "committed", "canceled"] },
+          "width": { "type": "integer", "minimum": 1 },
+          "height": { "type": "integer", "minimum": 1 }
+        },
+        "additionalProperties": false
+      }
+    },
+    "package": {
+      "type": "object",
+      "required": ["fixtureText", "committedText", "canceledText"],
+      "properties": {
+        "fixtureText": { "const": "Wave93 initial text" },
+        "committedText": { "const": "Wave93 committed\nsecond line" },
+        "canceledText": { "const": "Wave93 committed\nsecond line" }
+      },
+      "additionalProperties": false
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["schemaVersion", "suite", "events"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "suite": { "const": "freex-linux-textbox-inline-edit-physical" },
+        "events": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "type": "object",
+            "required": ["phase", "textBoxId", "editorVisible", "editorFocused", "nonZeroBounds", "editorWidth", "editorHeight", "editorAutomationId", "editorText", "modelText"],
+            "properties": {
+              "phase": { "type": "string" },
+              "textBoxId": { "type": "string", "minLength": 1 },
+              "editorVisible": { "type": "boolean" },
+              "editorFocused": { "type": "boolean" },
+              "nonZeroBounds": { "type": "boolean" },
+              "editorWidth": { "type": "number", "exclusiveMinimum": 0 },
+              "editorHeight": { "type": "number", "exclusiveMinimum": 0 },
+              "editorAutomationId": { "const": "TextBoxInlineEditor" },
+              "editorText": { "type": "string" },
+              "modelText": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "results": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "required": ["id", "status", "evidenceLevel", "evidence", "note"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "enum": ["passed", "failed"] },
+          "evidenceLevel": { "const": "physical-x11-input" },
+          "evidence": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "note": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["passed", "failed", "total"],
+      "properties": {
+        "passed": { "const": 6 },
+        "failed": { "const": 0 },
+        "total": { "const": 6 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
