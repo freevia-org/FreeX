@@ -24070,6 +24070,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
+        // Object cut/move is not implemented yet, but a stale object copy must never survive a
+        // later Ctrl+X and make the next ordinary paste duplicate the old object.
+        _internalObjectClipboard = null;
+
         if (!TryCommitPendingFormulaEdit())
             return;
 
@@ -24096,6 +24100,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private async Task CopySelectedRangeToClipboardAsync()
     {
         if (_isOpening || _isSaving)
+            return;
+
+        _internalObjectClipboard = null;
+        if (TryCopySelectedDrawingObject())
             return;
 
         if (!TryCommitPendingFormulaEdit())
@@ -24249,6 +24257,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     {
         if (_isOpening || _isSaving)
             return;
+
+        if (_internalObjectClipboard is { } objectClip)
+        {
+            PasteClipboardObject(objectClip);
+            return;
+        }
 
         if (!TryCommitPendingFormulaEdit())
             return;
@@ -27061,10 +27075,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // R75-render-selection-marquee-4-2: Escape cancels an active Copy/Cut marching-ants
             // marquee, mirroring the WPF host's ClearClipboardVisualState call on Escape
             // (MainWindow.Editing.cs).
-            if (e.Key == Key.Escape && _clipboardMarqueeRange is not null)
+            if (e.Key == Key.Escape &&
+                (_clipboardMarqueeRange is not null || _internalObjectClipboard is not null))
             {
                 e.Handled = true;
                 SetClipboardMarquee(null, isCut: false);
+                _internalObjectClipboard = null;
                 RefreshShell("Ready");
                 return;
             }
