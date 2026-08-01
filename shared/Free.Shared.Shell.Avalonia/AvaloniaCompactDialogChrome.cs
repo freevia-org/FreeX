@@ -266,6 +266,16 @@ public static class AvaloniaCompactDialogChrome
             sharedPadding,
             sharedPadding,
             sharedPadding);
+        textBox.SetValue(ScrollViewer.AllowAutoHideProperty, false);
+    }
+
+    /// <summary>Matches the WPF Legal Notices button's neutral default-state border.</summary>
+    public static void ApplyLegalNoticesDefaultButtonChrome(Button button)
+    {
+        ArgumentNullException.ThrowIfNull(button);
+
+        button.BorderBrush = ButtonBorderBrush;
+        button.BorderThickness = new Thickness(1);
     }
 
     /// <summary>

@@ -6,6 +6,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 
@@ -68,6 +69,7 @@ public sealed class LegalNoticesDialogVisualParityTests
                 text.LineHeight.Should().Be(LegalNoticesDialogMetrics.TextLineHeight);
                 text.FontFamily.Should().Be(new FontFamily("Consolas"));
                 ((ISolidColorBrush)text.Foreground!).Color.Should().Be(Colors.Black);
+                text.GetValue(ScrollViewer.AllowAutoHideProperty).Should().BeFalse();
                 AutomationProperties.GetAutomationId(text).Should().StartWith("LegalNotices");
             }
 
@@ -84,7 +86,7 @@ public sealed class LegalNoticesDialogVisualParityTests
         {
             var dialog = new LegalNoticesDialog(
             [
-                ("Project License", "license text"),
+                ("Project License", string.Join("\n", Enumerable.Repeat("a long legal notice line that should wrap and scroll", 80))),
                 ("Legal Notices", "legal text"),
                 ("Privacy Notice", "privacy text"),
             ]);
@@ -96,6 +98,9 @@ public sealed class LegalNoticesDialogVisualParityTests
                 dialog.Show();
                 dialog.UpdateLayout();
                 var first = textBoxes[0];
+                var scroll = first.GetVisualDescendants().OfType<ScrollViewer>().Single();
+                scroll.Extent.Height.Should().BeGreaterThan(scroll.Viewport.Height);
+                scroll.GetValue(ScrollViewer.AllowAutoHideProperty).Should().BeFalse();
                 first.Focus().Should().BeTrue();
                 first.RaiseEvent(new KeyEventArgs
                 {

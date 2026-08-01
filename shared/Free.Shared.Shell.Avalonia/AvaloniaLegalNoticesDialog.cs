@@ -20,6 +20,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 
     private readonly TabControl _tabControl = new();
     private readonly List<TextBox> _noticeTextBoxes = [];
+    private readonly Button _closeButton = new();
 
     public AvaloniaLegalNoticesDialog(
         string windowTitle,
@@ -51,6 +52,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
                 AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
                     textBox,
                     LegalNoticesDialogMetrics.TextPadding);
+            AvaloniaCompactDialogChrome.ApplyLegalNoticesDefaultButtonChrome(_closeButton);
             FocusInitialKeyboardTarget();
         };
     }
@@ -80,12 +82,10 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         DockPanel.SetDock(intro, Dock.Top);
         root.Children.Add(intro);
 
-        var close = new Button
-        {
-            Content = closeButtonContent,
-            IsDefault = true,
-            IsCancel = true,
-        };
+        var close = _closeButton;
+        close.Content = closeButtonContent;
+        close.IsDefault = true;
+        close.IsCancel = true;
         AvaloniaCompactDialogChrome.ApplyButton(
             close,
             new AvaloniaCompactDialogChromeStyle(FontFamily.Default),
