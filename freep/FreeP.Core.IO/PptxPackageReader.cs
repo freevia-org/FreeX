@@ -39,6 +39,7 @@ public static class PptxPackageReader
     private const string ThemeRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
     private const string ImageRelType       = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
     private const string CorePropsRelType     = OpcPackageProperties.CorePropertiesRelationshipType;
+    private const string SettingsRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings";
     private const string TableStylesRelType   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/tableStyles";
     private const string ChartRelType         = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
     private const string NotesSlideRelType    = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
@@ -161,6 +162,7 @@ public static class PptxPackageReader
 
         // Rels for presentation.xml
         var presRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(presPath));
+        presentation.DocumentMathProperties = ReadDocumentMathProperties(archive, presRels, presDir);
 
         // Table styles (keyed by style GUID)
         var tableStyles = new Dictionary<string, TableStyleData>(StringComparer.OrdinalIgnoreCase);
@@ -346,6 +348,31 @@ public static class PptxPackageReader
         }
 
         return presentation;
+    }
+
+    /// <summary>
+    /// Reads document-level OMML defaults only from a related settings part.
+    /// PresentationML normally has no settings relationship; in that normal
+    /// case returning null is intentional and preserves Office's authored
+    /// source boundary instead of inventing a Cambria Math default.
+    /// </summary>
+    private static OmmlMathProperties? ReadDocumentMathProperties(
+        ZipArchive archive,
+        IReadOnlyList<OpcRelationshipTarget> presentationRelationships,
+        string presentationDirectory)
+    {
+        var settingsTarget = presentationRelationships
+            .FirstOrDefault(relationship =>
+                string.Equals(relationship.Type, SettingsRelType, StringComparison.OrdinalIgnoreCase))
+            .Target;
+        if (string.IsNullOrWhiteSpace(settingsTarget))
+            return null;
+
+        var settingsPath = ResolveRelativeZipPath(presentationDirectory, settingsTarget);
+        var settingsXml = OpcXml.TryLoadXml(archive, settingsPath);
+        return settingsXml?.Root is { } root
+            ? ReadOmmlMathProperties(root.Element(M + "mathPr"))
+            : null;
     }
 
     private static void ReadRecordingMediaArtifacts(ZipArchive archive, Presentation presentation)
@@ -4461,8 +4488,48 @@ public static class PptxPackageReader
             {
                 RawXml              = rawXml,
                 IsAlternateContent  = isAlternateContent,
+                ContainingProperties = ReadContainingMathProperties(mathEl),
             }
         };
+    }
+
+    /// <summary>
+    /// Captures the valid PresentationML containing-part form:
+    /// <c>a:graphicData/m:mathPr</c>. The element is kept separate from
+    /// <see cref="MathRunInfo.RawXml"/> so round-trip output remains byte-faithful
+    /// and the parser can apply the required precedence below package defaults
+    /// but above the raw equation wrapper.
+    /// </summary>
+    private static OmmlMathProperties? ReadContainingMathProperties(XElement mathElement)
+    {
+        foreach (var ancestor in mathElement.Ancestors())
+        {
+            if (ancestor.Name != A + "graphicData")
+                continue;
+
+            return ReadOmmlMathProperties(ancestor.Element(M + "mathPr"));
+        }
+
+        return null;
+    }
+
+    private static OmmlMathProperties? ReadOmmlMathProperties(XElement? mathProperties)
+    {
+        if (mathProperties is null)
+            return null;
+
+        static string? ReadValue(XElement? element)
+        {
+            var value = element?.Attribute(M + "val")?.Value
+                ?? element?.Attribute("val")?.Value
+                ?? element?.Value;
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        return new OmmlMathProperties(
+            BinaryBreak: ReadValue(mathProperties.Element(M + "brkBin")),
+            BinarySubtraction: ReadValue(mathProperties.Element(M + "brkBinSub")),
+            MathFontFamily: ReadValue(mathProperties.Element(M + "mathFont")));
     }
 
     private static Run ReadFieldRun(XElement fldEl, PresentationColorScheme scheme)

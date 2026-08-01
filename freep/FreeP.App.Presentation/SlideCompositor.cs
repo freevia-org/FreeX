@@ -252,7 +252,7 @@ public static class SlideCompositor
                 ? ResolveShapeShadowAsTextShadow(shape.Effects)
                 : null;
 
-            text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign,
+            text = ResolveTextLayout(shape.TextBody, presentation, effectiveAnchor, effectiveDefaultAlign,
                 effectiveDefaultRightToLeft, shape.Placeholder,
                 theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, masterPh?.TextBody, resolvedMaster?.TextStyles,
                 inheritedTextShadow);
@@ -1436,6 +1436,7 @@ public static class SlideCompositor
 
     private static ResolvedTextLayout ResolveTextLayout(
         TextBody body,
+        PresentationModel presentation,
         VerticalAnchor effectiveAnchor,
         TextAlign? effectiveDefaultAlign,
         bool? effectiveDefaultRightToLeft,
@@ -1625,7 +1626,12 @@ public static class SlideCompositor
                 FreeP.App.Compositor.MathLayout.MathBox.Container? mathLayout = null;
                 if (run.Math is not null)
                 {
-                    var mathNode = FreeP.App.Compositor.MathLayout.OmmlParser.Parse(run.Math.RawXml, resolvedText);
+                    var containingProperties = presentation.DocumentMathProperties?.Overlay(run.Math.ContainingProperties)
+                        ?? run.Math.ContainingProperties;
+                    var mathNode = FreeP.App.Compositor.MathLayout.OmmlParser.Parse(
+                        run.Math.RawXml,
+                        resolvedText,
+                        ToParserMathProperties(containingProperties));
                     mathLayout = FreeP.App.Compositor.MathLayout.MathLayoutEngine.Layout(mathNode, fontFamily, fontSizePt);
                 }
 
@@ -1843,6 +1849,37 @@ public static class SlideCompositor
             ColumnCount = Math.Max(1, body.ColumnCount),
             ColumnSpacingDip = body.ColumnSpacingEmu > 0 ? body.ColumnSpacingEmu / EmuPerDip : 0.0,
         };
+    }
+
+    private static FreeP.App.Compositor.MathLayout.MathNode.MathProperties? ToParserMathProperties(
+        OmmlMathProperties? properties)
+    {
+        if (properties is null || !properties.HasValues)
+            return null;
+
+        var binaryBreak = properties.BinaryBreak switch
+        {
+            "after" => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinaryBreak.After,
+            "repeat" => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinaryBreak.Repeat,
+            "before" => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinaryBreak.Before,
+            _ when !string.IsNullOrWhiteSpace(properties.BinaryBreak)
+                => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinaryBreak.Before,
+            _ => (FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinaryBreak?)null,
+        };
+        var binarySubtraction = properties.BinarySubtraction switch
+        {
+            "+-" or "plusMinus" => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinarySubtraction.PlusMinus,
+            "-+" or "minusPlus" => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinarySubtraction.MinusPlus,
+            "--" or "minusMinus" => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinarySubtraction.MinusMinus,
+            _ when !string.IsNullOrWhiteSpace(properties.BinarySubtraction)
+                => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinarySubtraction.MinusMinus,
+            _ => (FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinarySubtraction?)null,
+        };
+
+        return new FreeP.App.Compositor.MathLayout.MathNode.MathProperties(
+            binaryBreak,
+            binarySubtraction,
+            string.IsNullOrWhiteSpace(properties.MathFontFamily) ? null : properties.MathFontFamily);
     }
 
     // ─── Wave 19A: auto-number formatter ────────────────────────────────────────────────────
