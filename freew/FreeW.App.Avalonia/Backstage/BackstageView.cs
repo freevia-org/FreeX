@@ -1,11 +1,13 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -215,16 +217,34 @@ internal sealed class BackstageView : Window
             VerticalContentAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(
+            searchBox,
+            new AvaloniaCompactDialogChromeStyle(BackstageFontFamily)
+            {
+                ControlHeight = 30,
+                TextBoxHeight = 30,
+                TextBoxPadding = new Thickness(8, 3),
+            });
         AutomationProperties.SetName(searchBox, surface.Search.AutomationName);
         AutomationProperties.SetAutomationId(searchBox, "OpenSearchBox");
         content.Children.Add(searchBox);
 
-        var documentsPanel = new StackPanel();
-        var foldersPanel = new StackPanel();
+        var documentsPanel = new StackPanel
+        {
+            Width = 638,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        var foldersPanel = new StackPanel
+        {
+            Width = 638,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
         var tabs = new TabControl
         {
             Width = 640,
             Margin = new Thickness(0, 0, 0, 14),
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            VerticalContentAlignment = VerticalAlignment.Top,
             Items =
             {
                 new TabItem { Header = surface.Tabs.DocumentsTabLabel, Content = documentsPanel },
@@ -239,6 +259,24 @@ internal sealed class BackstageView : Window
                 TabHeight = 24,
                 FontSize = 12,
             });
+        tabs.Styles.Add(new Style(selector =>
+            selector.OfType<ItemsPresenter>().Name("PART_ItemsPresenter"))
+        {
+            Setters =
+            {
+                new Setter(Layoutable.HorizontalAlignmentProperty, HorizontalAlignment.Left),
+                new Setter(Layoutable.VerticalAlignmentProperty, VerticalAlignment.Top),
+            },
+        });
+        tabs.Styles.Add(new Style(selector =>
+            selector.OfType<ContentPresenter>().Name("PART_SelectedContentHost"))
+        {
+            Setters =
+            {
+                new Setter(ContentPresenter.HorizontalContentAlignmentProperty, HorizontalAlignment.Left),
+                new Setter(ContentPresenter.VerticalContentAlignmentProperty, VerticalAlignment.Top),
+            },
+        });
         content.Children.Add(tabs);
 
         var placesPanel = new StackPanel();
@@ -911,9 +949,12 @@ internal sealed class BackstageView : Window
             Padding = new Thickness(0),
             FontFamily = BackstageFontFamily,
             FontSize = 12,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            VerticalContentAlignment = VerticalAlignment.Top,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        scroll.SetValue(ScrollViewer.AllowAutoHideProperty, false);
         TextOptions.SetTextRenderingMode(scroll, TextRenderingMode.Antialias);
         return scroll;
     }
@@ -965,6 +1006,14 @@ internal sealed class BackstageView : Window
             Padding = new Thickness(1, 0),
             Margin = new Thickness(0, 2, 0, 8),
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(
+            fileNameBox,
+            new AvaloniaCompactDialogChromeStyle(BackstageFontFamily)
+            {
+                ControlHeight = 18,
+                TextBoxHeight = 18,
+                TextBoxPadding = new Thickness(1, 0),
+            });
         AutomationProperties.SetAutomationId(fileNameBox, "SaveAsSuggestedFileName");
 
         var selectedIndex = plan.FileTypes
@@ -984,6 +1033,14 @@ internal sealed class BackstageView : Window
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Center,
         };
+        AvaloniaCompactDialogChrome.ApplyComboBox(
+            typeCombo,
+            new AvaloniaCompactDialogChromeStyle(BackstageFontFamily)
+            {
+                ControlHeight = 22,
+                ComboBoxHeight = 22,
+                ComboBoxPadding = new Thickness(4, 0),
+            });
         AutomationProperties.SetAutomationId(typeCombo, "SaveAsSelectedExtension");
         typeCombo.SelectionChanged += (_, _) =>
         {

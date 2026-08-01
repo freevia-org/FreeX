@@ -5,13 +5,16 @@ using System.Threading;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Free.Shared.Shell;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Presentation.Backstage;
 using FreeW.App.Presentation.Options;
@@ -193,7 +196,30 @@ public class BackstageViewTests
 
             items.Select(item => item.Header).Should().Equal("Documents", "Folders");
             items.Select(item => item.Content).Should().OnlyContain(content => content is StackPanel);
-            items.Select(item => (StackPanel)item.Content!).Should().OnlyContain(panel => panel.Spacing == 0);
+            items.Select(item => (StackPanel)item.Content!).Should().OnlyContain(panel =>
+                panel.Spacing == 0 && panel.Width == 638 && panel.HorizontalAlignment == HorizontalAlignment.Left);
+            tabs.HorizontalContentAlignment.Should().Be(HorizontalAlignment.Left);
+            tabs.VerticalContentAlignment.Should().Be(VerticalAlignment.Top);
+            tabs.Measure(new Size(640, 480));
+            tabs.Arrange(new Rect(0, 0, 640, 480));
+            var selectedContentHost = tabs.GetVisualDescendants()
+                .OfType<ContentPresenter>()
+                .Single(presenter => presenter.Name == "PART_SelectedContentHost");
+            selectedContentHost.HorizontalContentAlignment.Should().Be(HorizontalAlignment.Left);
+            selectedContentHost.VerticalContentAlignment.Should().Be(VerticalAlignment.Top);
+            var selectedContentChild = selectedContentHost.GetVisualChildren().Single();
+            selectedContentChild.Bounds.X.Should().Be(1);
+            selectedContentChild.GetVisualDescendants()
+                .OfType<TextBlock>()
+                .First()
+                .Bounds.X.Should().Be(0);
+            items[0].Bounds.X.Should().Be(0);
+            items[1].Bounds.X.Should().Be(items[0].Bounds.Right - 1);
+            var search = FindControl<TextBox>(view, "OpenSearchBox");
+            search.Height.Should().Be(30);
+            search.MinHeight.Should().Be(30);
+            search.MaxHeight.Should().Be(30);
+            search.Padding.Should().Be(new Thickness(8, 3));
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
         }, CancellationToken.None);
@@ -207,8 +233,18 @@ public class BackstageViewTests
             var view = new BackstageView(BuildTestCallbacks());
             view.TryActivateEntry("Save As").Should().BeTrue();
 
-            FindControl<TextBox>(view, "SaveAsSuggestedFileName").Height.Should().Be(18);
-            FindControl<ComboBox>(view, "SaveAsSelectedExtension").Height.Should().Be(22);
+            var fileName = FindControl<TextBox>(view, "SaveAsSuggestedFileName");
+            fileName.Height.Should().Be(18);
+            fileName.MinHeight.Should().Be(18);
+            fileName.MaxHeight.Should().Be(18);
+            fileName.Padding.Should().Be(new Thickness(1, 0));
+
+            var type = FindControl<ComboBox>(view, "SaveAsSelectedExtension");
+            type.Height.Should().Be(22);
+            type.MinHeight.Should().Be(22);
+            type.MaxHeight.Should().Be(22);
+            type.Padding.Should().Be(new Thickness(4, 0));
+            type.Classes.Should().Contain(AvaloniaCompactDialogChrome.CompactComboBoxClass);
 
             var actionButtons = view.GetLogicalDescendants()
                 .OfType<Button>()
@@ -251,6 +287,9 @@ public class BackstageViewTests
                 .Single(scroll => scroll.Content is StackPanel panel && panel.MaxWidth == 720);
 
             pane.Padding.Should().Be(new Thickness(0));
+            pane.GetValue(ScrollViewer.AllowAutoHideProperty).Should().BeFalse();
+            pane.HorizontalContentAlignment.Should().Be(HorizontalAlignment.Left);
+            pane.VerticalContentAlignment.Should().Be(VerticalAlignment.Top);
             pane.FontFamily.Name.Should().Be("Segoe UI");
             pane.FontSize.Should().Be(12);
             TextOptions.GetTextRenderingMode(pane).Should().Be(TextRenderingMode.Antialias);
