@@ -517,17 +517,27 @@ public static class PresentationExportPlanner
 
     public static PresentationVideoExportPlan BuildVideoExportPlan(
         PresentationVideoExportRequest? request,
-        int slideCount)
+        int slideCount,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null)
     {
-        return BuildVideoExportPlanCore(request, Math.Max(0, slideCount), slides: null);
+        return BuildVideoExportPlanCore(
+            request,
+            Math.Max(0, slideCount),
+            slides: null,
+            hostCapabilities);
     }
 
     public static PresentationVideoExportPlan BuildVideoExportPlan(
         PresentationVideoExportRequest? request,
-        Presentation presentation)
+        Presentation presentation,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
-        return BuildVideoExportPlanCore(request, presentation.Slides.Count, presentation.Slides);
+        return BuildVideoExportPlanCore(
+            request,
+            presentation.Slides.Count,
+            presentation.Slides,
+            hostCapabilities);
     }
 
     public static PresentationVideoStoryboardPlan BuildVideoStoryboardPlan(
@@ -558,7 +568,8 @@ public static class PresentationExportPlanner
     private static PresentationVideoExportPlan BuildVideoExportPlanCore(
         PresentationVideoExportRequest? request,
         int slideCount,
-        IReadOnlyList<Slide>? slides)
+        IReadOnlyList<Slide>? slides,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities)
     {
         request ??= new PresentationVideoExportRequest();
         var descriptor = BuildFormatDescriptors().Single(d => d.Format == PresentationExportFormat.Video);
@@ -567,9 +578,12 @@ public static class PresentationExportPlanner
         var quality = ResolveVideoQuality(request.Quality, qualityOptions);
         var secondsPerSlide = NormalizeSecondsPerSlide(request.SecondsPerSlide);
         var storyboard = BuildVideoStoryboardPlan(request, range, quality, secondsPerSlide, slides);
+        var isImplemented = hostCapabilities?.CanEncodeMp4 == true;
         var disabledReason = range.SlideNumbers.Count == 0
             ? "Video export requires at least one slide."
-            : VideoExportDeferredMessage;
+            : isImplemented
+                ? null
+                : hostCapabilities?.UnavailableReason ?? VideoExportDeferredMessage;
 
         return new PresentationVideoExportPlan(
             descriptor.Format,
@@ -585,8 +599,8 @@ public static class PresentationExportPlanner
             storyboard.TotalDuration,
             storyboard,
             qualityOptions,
-            descriptor.IsImplemented,
-            CanExecute: descriptor.IsImplemented && range.SlideNumbers.Count > 0,
+            isImplemented,
+            CanExecute: isImplemented && range.SlideNumbers.Count > 0,
             disabledReason);
     }
 

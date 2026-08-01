@@ -273,7 +273,7 @@ public sealed class FileLifecycleTests : IDisposable
         plan.IncludeNarration.Should().BeFalse();
         plan.EstimatedDuration.Should().Be(TimeSpan.FromSeconds(24));
         plan.CanExecute.Should().BeFalse();
-        plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+        plan.DisabledReason.Should().Be("Test encoder handoff deferred.");
     }
 
     [StaFact]
