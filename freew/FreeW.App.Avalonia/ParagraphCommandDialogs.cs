@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Localization;
@@ -298,6 +299,16 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         _tabs.Items.Add(Tab("Borders", "BordersAndShadingBordersTab", BuildBordersTab()));
         _tabs.Items.Add(Tab("Page Border", "BordersAndShadingPageBorderTab", BuildPageBorderTab()));
         _tabs.Items.Add(Tab("Shading", "BordersAndShadingShadingTab", BuildShadingTab()));
+        _tabs.SelectionChanged += (_, _) =>
+        {
+            var target = _tabs.SelectedIndex switch
+            {
+                1 => (Control)_pageSetting,
+                2 => _shadingColor,
+                _ => _paragraphWidth,
+            };
+            Dispatcher.UIThread.Post(() => target.Focus(), DispatcherPriority.Input);
+        };
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabs, DialogChromeStyle);
 
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(14, 8, 14, 0));
@@ -352,6 +363,8 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
 
     internal TabControl TabsForTest => _tabs;
     internal TextBox ParagraphWidthForTest => _paragraphWidth;
+    internal ComboBox PageSettingForTest => _pageSetting;
+    internal ComboBox ShadingColorForTest => _shadingColor;
     internal TextBlock StatusForTest => _status;
 
     private Control BuildBordersTab()

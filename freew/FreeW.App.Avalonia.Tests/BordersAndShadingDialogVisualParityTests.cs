@@ -82,6 +82,16 @@ public sealed class BordersAndShadingDialogVisualParityTests
                 dialog.ParagraphWidthForTest.SelectionStart.Should().Be(0);
                 dialog.ParagraphWidthForTest.SelectionEnd.Should().Be(dialog.ParagraphWidthForTest.Text?.Length ?? 0);
                 dialog.ParagraphWidthForTest.Height.Should().Be(20);
+
+                dialog.TabsForTest.SelectedIndex = 1;
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                dialog.PageSettingForTest.IsFocused.Should().BeTrue();
+
+                dialog.TabsForTest.SelectedIndex = 2;
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                dialog.ShadingColorForTest.IsFocused.Should().BeTrue();
             }
             finally
             {

@@ -118,10 +118,14 @@ public sealed class LinuxFamilyInteractionToolTests
         {
             probe.Should().Contain($"\"{id}\"");
         }
-        probe.Should().Contain("run_backstage_pane_lifecycle \"backstage-print\" 10 \"Print\"");
-        probe.Should().Contain("run_backstage_pane_lifecycle \"backstage-export\" 11 \"Export\"");
+        probe.Should().Contain("run_backstage_pane_lifecycle \"backstage-print\" 438 \"Print\"");
+        probe.Should().Contain("run_backstage_pane_lifecycle \"backstage-export\" 481 \"Export\"");
+        probe.Should().Contain("read_window_geometry()");
+        probe.Should().Contain("screen_changed \"$output/$backstage_open\" \"$output/$pane_open\"");
         probe.Should().Contain("send_active_key ctrl+Tab");
-        probe.Should().Contain("options-click=");
+        probe.Should().Contain("options-rail-click=");
+        probe.Should().Contain("options-action-click=");
+        probe.Should().Contain("backstage-removed-for-dialog=");
         probe.Should().Contain("window-count-restored=");
         probe.Should().Contain("\"editor-autocorrect-typing\"");
         probe.Should().Contain("send_active_text 'I teh '");

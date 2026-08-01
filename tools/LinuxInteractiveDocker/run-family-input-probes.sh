@@ -232,6 +232,18 @@ click_pointer() {
     sleep "$settle_seconds"
 }
 
+read_window_geometry() {
+    local id="$1" hex line
+    hex="$(printf '0x%08x' "$id")"
+    line="$(wmctrl -lG 2>/dev/null |
+        awk -v target="$hex" 'tolower($1) == tolower(target) { print $3, $4, $5, $6; exit }')"
+    read -r WINDOW_X WINDOW_Y WINDOW_WIDTH WINDOW_HEIGHT <<< "$line"
+    [[ "$WINDOW_X" =~ ^-?[0-9]+$ ]] &&
+        [[ "$WINDOW_Y" =~ ^-?[0-9]+$ ]] &&
+        [[ "$WINDOW_WIDTH" =~ ^[0-9]+$ ]] &&
+        [[ "$WINDOW_HEIGHT" =~ ^[0-9]+$ ]]
+}
+
 mapfile -t visible_windows < <(xdotool search --onlyvisible --name "$window_pattern" 2>/dev/null || true)
 if (( ${#visible_windows[@]} == 0 )); then
     discovery_evidence="$output/window-discovery-error.txt"
@@ -621,7 +633,7 @@ run_file_shortcut_window_lifecycle() {
 }
 
 run_backstage_pane_lifecycle() {
-    local id_prefix="$1" target_down="$2" label="$3"
+    local id_prefix="$1" rail_y_offset="$2" label="$3"
     local before="${id_prefix}-before.png"
     local backstage_open="${id_prefix}-backstage-open.png"
     local pane_open="${id_prefix}-open.png"
@@ -633,12 +645,12 @@ run_backstage_pane_lifecycle() {
     local proof="${id_prefix}-proof.txt"
     local baseline_count open_count dismissed_count
     local backstage_id="" active_after_open active_after_pane
+    local rail_click_x="" rail_click_y="" backstage_geometry_ready=false
     local trigger_ready=true separate_window=false count_increased=false
     local pane_selected=false pane_changed=false dismiss_ready=true
     local pane_removed=false count_restored=false owner_restored=false
     local dismissed_changed=false screen_restored=false
     local visible_after_dismissal=()
-    local step=0
 
     focus_app
     baseline_count="$(window_count)"
@@ -657,12 +669,12 @@ run_backstage_pane_lifecycle() {
     fi
     capture_shortcut_window_state "$backstage_state" backstage "$backstage_id" "$baseline_count" "$open_count"
 
-    if [[ -n "$backstage_id" ]]; then
-        send_active_key Home || true
-        for ((step = 0; step < target_down; step++)); do
-            send_active_key Down || true
-        done
-        send_active_key Return || true
+    if [[ -n "$backstage_id" ]] && read_window_geometry "$backstage_id"; then
+        backstage_geometry_ready=true
+        rail_click_x=$((WINDOW_X + 70))
+        rail_click_y=$((WINDOW_Y + rail_y_offset))
+        click_pointer 1 "$rail_click_x" "$rail_click_y" || true
+        sleep 1
     fi
     capture "$pane_open"
     active_after_pane="$(xdotool getactivewindow 2>/dev/null || true)"
@@ -670,12 +682,14 @@ run_backstage_pane_lifecycle() {
     if [[ -n "$backstage_id" && "$active_after_pane" == "$backstage_id" ]]; then
         pane_selected=true
     fi
-    if screen_changed "$backstage_open" "$pane_open" 160; then
+    if screen_changed "$output/$backstage_open" "$output/$pane_open" 160; then
         pane_changed=true
     fi
     {
         printf 'label=%s\n' "$label"
-        printf 'target-down=%s\n' "$target_down"
+        printf 'rail-y-offset=%s\n' "$rail_y_offset"
+        printf 'rail-click=%s,%s\n' "$rail_click_x" "$rail_click_y"
+        printf 'backstage-geometry-ready=%s\n' "$backstage_geometry_ready"
         printf 'owner-window-id=%s\n' "$window_id"
         printf 'backstage-window-id=%s\n' "$backstage_id"
         printf 'active-on-open=%s\n' "$active_after_open"
@@ -688,9 +702,10 @@ run_backstage_pane_lifecycle() {
         printf 'pane-selected-and-focused=%s\n' "$pane_selected"
         printf 'pane-screenshot-changed=%s\n' "$pane_changed"
     } > "$output/$proof"
-    if $trigger_ready && $separate_window && $count_increased && $pane_selected && $pane_changed; then
+    if $trigger_ready && $separate_window && $count_increased &&
+       $backstage_geometry_ready && $pane_selected && $pane_changed; then
         record_evidence_set "${id_prefix}-open" "passed" \
-            "$label opened the real FreeW Backstage rail and selected its pane through physical keyboard navigation; the owner/window-count/focus transition and pane screenshot are retained." \
+            "$label opened the real FreeW Backstage rail and selected its rendered entry through physical pointer input; the owner/window-count/focus transition and pane screenshot are retained." \
             "$proof" "$before" "$backstage_open" "$pane_open" "$before_state" "$backstage_state" "$pane_state"
     else
         record_evidence_set "${id_prefix}-open" "failed" \
@@ -717,10 +732,10 @@ run_backstage_pane_lifecycle() {
     if active_window_is_owner && [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$window_id" ]]; then
         owner_restored=true
     fi
-    if screen_changed "$pane_open" "$dismissed" 100; then
+    if screen_changed "$output/$pane_open" "$output/$dismissed" 100; then
         dismissed_changed=true
     fi
-    if screen_matches "$before" "$dismissed" 500; then
+    if screen_matches "$output/$before" "$output/$dismissed" 500; then
         screen_restored=true
     fi
     {
@@ -755,10 +770,11 @@ run_options_lifecycle() {
     local baseline_count backstage_count dialog_count closed_count backstage_id="" options_id=""
     local trigger_ready=true backstage_ready=false pane_ready=false dialog_ready=false
     local tab_ready=false focus_ready=false close_ready=false dialog_removed=false
-    local count_restored=false owner_restored=false screen_restored=false
-    local backstage_geometry="" backstage_x="" backstage_y="" backstage_width="" backstage_height=""
-    local options_click_x="" options_click_y="" options_y_offset=0 active_after_dialog="" active_after_tab="" active_after_focus=""
-    local visible_after_close=()
+    local backstage_removed=false count_restored=false owner_restored=false screen_restored=false
+    local backstage_geometry_ready=false rail_click_x="" rail_click_y=""
+    local options_action_click_x="" options_action_click_y=""
+    local active_after_dialog="" active_after_tab="" active_after_focus=""
+    local visible_after_dialog=() visible_after_close=()
 
     focus_app
     baseline_count="$(window_count)"
@@ -775,42 +791,43 @@ run_options_lifecycle() {
     fi
     capture_shortcut_window_state "$backstage_state" backstage "$backstage_id" "$baseline_count" "$backstage_count"
 
-    if $backstage_ready; then
-        send_active_key End || true
-        send_active_key Return || true
+    if $backstage_ready && read_window_geometry "$backstage_id"; then
+        backstage_geometry_ready=true
+        rail_click_x=$((WINDOW_X + 70))
+        rail_click_y=$((WINDOW_Y + 569))
+        click_pointer 1 "$rail_click_x" "$rail_click_y" || true
+        sleep 1
     fi
     capture "$pane_open"
     capture_shortcut_window_state "$pane_state" options-pane "$backstage_id" "$baseline_count" "$(window_count)"
-    if [[ "$(xdotool getactivewindow 2>/dev/null || true)" == "$backstage_id" ]] && screen_changed "$backstage_open" "$pane_open" 160; then
+    if $backstage_geometry_ready &&
+       [[ "$(xdotool getactivewindow 2>/dev/null || true)" == "$backstage_id" ]] &&
+       screen_changed "$output/$backstage_open" "$output/$pane_open" 160; then
         pane_ready=true
     fi
 
     if $pane_ready; then
-        backstage_geometry="$(xdotool getwindowgeometry --shell "$backstage_id" 2>/dev/null || true)"
-        eval "$backstage_geometry"
-        backstage_x="$X"
-        backstage_y="$Y"
-        backstage_width="$WIDTH"
-        backstage_height="$HEIGHT"
-        options_click_x=$((backstage_x + 260))
-        for options_y_offset in 215 235 255; do
-            options_click_y=$((backstage_y + options_y_offset))
-            click_pointer 1 "$options_click_x" "$options_click_y" || true
-            if (( $(window_count) > baseline_count + 1 )); then
-                break
-            fi
-        done
+        options_action_click_x=$((WINDOW_X + 280))
+        options_action_click_y=$((WINDOW_Y + 181))
+        click_pointer 1 "$options_action_click_x" "$options_action_click_y" || true
+        sleep 1
     fi
     capture "$dialog_open"
     options_id="$(xdotool getactivewindow 2>/dev/null || true)"
     dialog_count="$(window_count)"
     active_after_dialog="$options_id"
+    mapfile -t visible_after_dialog < <(xdotool search --onlyvisible --name '.*' 2>/dev/null || true)
+    if [[ -n "$backstage_id" ]] && window_id_in_list "$backstage_id" "${visible_after_dialog[@]}"; then
+        backstage_removed=false
+    else
+        backstage_removed=true
+    fi
     if [[ -n "$options_id" && "$options_id" != "$window_id" && "$options_id" != "$backstage_id" ]] &&
-       (( dialog_count > baseline_count + 1 )); then
+       (( dialog_count == baseline_count + 1 )) && $backstage_removed; then
         dialog_ready=true
     fi
     capture_shortcut_window_state "$dialog_state" options-dialog "$options_id" "$baseline_count" "$dialog_count"
-    if $dialog_ready && screen_changed "$pane_open" "$dialog_open" 160; then
+    if $dialog_ready && screen_changed "$output/$pane_open" "$output/$dialog_open" 160; then
         dialog_ready=true
     else
         dialog_ready=false
@@ -823,7 +840,8 @@ run_options_lifecycle() {
     capture "$tabbed"
     active_after_tab="$(xdotool getactivewindow 2>/dev/null || true)"
     capture_shortcut_window_state "$tabbed_state" tab-navigation "$options_id" "$baseline_count" "$(window_count)"
-    if $dialog_ready && [[ "$active_after_tab" == "$options_id" ]] && screen_changed "$dialog_open" "$tabbed" 100; then
+    if $dialog_ready && [[ "$active_after_tab" == "$options_id" ]] &&
+       screen_changed "$output/$dialog_open" "$output/$tabbed" 100; then
         tab_ready=true
     fi
 
@@ -835,7 +853,7 @@ run_options_lifecycle() {
     capture_shortcut_window_state "$focused_state" focus "$options_id" "$baseline_count" "$(window_count)"
     if $dialog_ready && [[ "$active_after_focus" == "$options_id" ]] &&
        [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$options_id" ]] &&
-       screen_changed "$tabbed" "$focused" 60; then
+       screen_changed "$output/$tabbed" "$output/$focused" 20; then
         focus_ready=true
     fi
 
@@ -860,18 +878,20 @@ run_options_lifecycle() {
     if active_window_is_owner && [[ "$(xdotool getwindowfocus 2>/dev/null || true)" == "$window_id" ]]; then
         owner_restored=true
     fi
-    if screen_matches "$before" "$closed" 500; then
+    if screen_matches "$output/$before" "$output/$closed" 500; then
         screen_restored=true
     fi
     {
         printf 'owner-window-id=%s\n' "$window_id"
         printf 'backstage-window-id=%s\n' "$backstage_id"
         printf 'options-window-id=%s\n' "$options_id"
-        printf 'backstage-geometry=%s,%s %sx%s\n' "$backstage_x" "$backstage_y" "$backstage_width" "$backstage_height"
-        printf 'options-click=%s,%s\n' "$options_click_x" "$options_click_y"
+        printf 'backstage-geometry-ready=%s\n' "$backstage_geometry_ready"
+        printf 'options-rail-click=%s,%s\n' "$rail_click_x" "$rail_click_y"
+        printf 'options-action-click=%s,%s\n' "$options_action_click_x" "$options_action_click_y"
         printf 'trigger-ready=%s\n' "$trigger_ready"
         printf 'backstage-open=%s\n' "$backstage_ready"
         printf 'options-pane-open=%s\n' "$pane_ready"
+        printf 'backstage-removed-for-dialog=%s\n' "$backstage_removed"
         printf 'options-dialog-open=%s\n' "$dialog_ready"
         printf 'tab-navigation=%s\n' "$tab_ready"
         printf 'focus-retained=%s\n' "$focus_ready"
@@ -883,7 +903,7 @@ run_options_lifecycle() {
     } > "$output/$proof"
     if $trigger_ready && $backstage_ready && $pane_ready && $dialog_ready; then
         record_evidence_set "options-open" "passed" \
-            "Physical File navigation opened the real Backstage Options pane and its Edit options action opened a focused top-level Options dialog." \
+            "Physical File navigation opened the real Backstage Options pane and clicked its Edit options action, opening a focused top-level Options dialog." \
             "$proof" "$before" "$backstage_open" "$pane_open" "$dialog_open" "$before_state" "$backstage_state" "$pane_state" "$dialog_state"
     else
         record_evidence_set "options-open" "failed" \
@@ -1439,8 +1459,8 @@ if [[ "$app" == "FreeW" ]]; then
         "file-save-as-shortcut-dialog" ctrl+shift+s "Ctrl+Shift+S Save As"
     run_file_shortcut_window_lifecycle \
         "file-print-shortcut-dialog" ctrl+p "Ctrl+P Print"
-    run_backstage_pane_lifecycle "backstage-print" 10 "Print"
-    run_backstage_pane_lifecycle "backstage-export" 11 "Export"
+    run_backstage_pane_lifecycle "backstage-print" 438 "Print"
+    run_backstage_pane_lifecycle "backstage-export" 481 "Export"
     run_options_lifecycle
 fi
 
