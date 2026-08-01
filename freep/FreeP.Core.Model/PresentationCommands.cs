@@ -268,6 +268,7 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
 {
     private readonly int _sourceIndex;
     private Slide? _duplicate;
+    private List<SectionSnapshot>? _beforeSections;
 
     public DuplicateSlideCommand(int sourceIndex) => _sourceIndex = sourceIndex;
 
@@ -277,15 +278,68 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
     {
         if (_sourceIndex < 0 || _sourceIndex >= p.Slides.Count)
             return;
-        _duplicate = SlideCloner.CloneSlide(p.Slides[_sourceIndex]);
+
+        var source = p.Slides[_sourceIndex];
+        if (_beforeSections is null)
+        {
+            _beforeSections = p.Sections
+                .Select(section => new SectionSnapshot(
+                    section.Id,
+                    section.Name,
+                    section.SlideIds.ToArray()))
+                .ToList();
+        }
+
+        _duplicate = SlideCloner.CloneSlide(source);
         p.Slides.Insert(_sourceIndex + 1, _duplicate);
+        AddDuplicateToSourceSection(p, source.Id, _duplicate.Id);
     }
 
     public void Revert(Presentation p)
     {
         if (_duplicate is not null)
             p.Slides.Remove(_duplicate);
+        RestoreSections(p, _beforeSections);
     }
+
+    private static void AddDuplicateToSourceSection(
+        Presentation p,
+        string sourceSlideId,
+        string duplicateSlideId)
+    {
+        foreach (var section in p.Sections)
+        {
+            var sourceIndex = section.SlideIds.FindIndex(id =>
+                string.Equals(id, sourceSlideId, StringComparison.Ordinal));
+            if (sourceIndex < 0)
+                continue;
+
+            section.SlideIds.Insert(sourceIndex + 1, duplicateSlideId);
+            return;
+        }
+    }
+
+    private static void RestoreSections(
+        Presentation p,
+        IReadOnlyList<SectionSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        p.Sections.Clear();
+        foreach (var snapshot in snapshots)
+        {
+            var section = new PresentationSection
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+            };
+            section.SlideIds.AddRange(snapshot.SlideIds);
+            p.Sections.Add(section);
+        }
+    }
+
+    private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 }
 
 /// <summary>
