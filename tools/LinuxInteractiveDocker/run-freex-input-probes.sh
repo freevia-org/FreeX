@@ -28,6 +28,10 @@ window_width=0
 window_height=0
 a1_x=0
 a1_y=0
+worksheet_base_a1_x=0
+worksheet_base_a1_y=0
+row_outline_depth=0
+column_outline_depth=0
 cell_width=0
 cell_height=0
 
@@ -124,6 +128,11 @@ xdotool_mousemove_sync() {
     # X11 can leave xdotool --sync waiting forever when a probe targets a clipped,
     # rearranged, or already-current coordinate. Keep every pointer transition
     # bounded and use the existing settle delay for deterministic click ordering.
+    local target_x="${1:-}" target_y="${2:-}"
+    if [[ ! "$target_x" =~ ^[0-9]+$ || ! "$target_y" =~ ^[0-9]+$ ]]; then
+        mousemove_timeout_count=$((mousemove_timeout_count + 1))
+        return 0
+    fi
     if timeout --foreground --kill-after=1s "${mousemove_timeout_seconds}s" xdotool mousemove "$@"; then
         return 0
     fi
@@ -1117,6 +1126,8 @@ calibrate_geometry() {
     fi
     a1_x="$observed_x"
     a1_y="$observed_y"
+    worksheet_base_a1_x="$a1_x"
+    worksheet_base_a1_y="$a1_y"
     local a1_width="$observed_width" a1_height="$observed_height"
 
     local moved=false
@@ -1175,6 +1186,34 @@ calibrate_geometry() {
 
     calibration_status="passed"
     calibration_reason="Derived from paced Ctrl+Home, A1-to-B1, and A1-to-A2 physical selection transitions."
+}
+
+outline_gutter_size() {
+    local depth="$1"
+    if (( depth <= 0 )); then
+        printf '0'
+    else
+        printf '%d' "$((12 + depth * 14))"
+    fi
+}
+
+set_expected_outline_origin() {
+    local expected_row_depth="$1" expected_column_depth="$2" evidence="${3:-}"
+    a1_x=$((worksheet_base_a1_x + $(outline_gutter_size "$expected_row_depth")))
+    a1_y=$((worksheet_base_a1_y + $(outline_gutter_size "$expected_column_depth")))
+    if [[ -n "$evidence" ]]; then
+        capture "$evidence"
+    fi
+}
+
+dismiss_active_popups() {
+    # A failed context-menu route can leave nested flyouts active. Dismiss the complete popup
+    # stack before another header drag so pointer coordinates cannot target menu content.
+    for _ in $(seq 1 4); do
+        xdotool key --clearmodifiers --delay "$input_delay_ms" Escape 2>/dev/null || true
+        sleep 0.08
+    done
+    focus_app
 }
 
 cell_x() { printf '%d' "$((a1_x + $1 * cell_width))"; }
@@ -2325,85 +2364,90 @@ probe_grid_drag_parity() {
     fi
 }
 
-outline_green_score() {
-    local screenshot="$1" top="$2" height="$3" width score
-    width=$((a1_x - window_x))
-    (( width < 18 )) && width=30
-    score="$(convert "$screenshot" \
-        -crop "${width}x${height}+${window_x}+${top}" \
+outline_toggle_visible() {
+    local screenshot="$1" center_x="$2" center_y="$3" left top metrics white_score border_score
+    left=$((center_x - 7))
+    top=$((center_y - 7))
+    (( left >= window_x && top >= window_y && left + 15 <= window_x + window_width && top + 15 <= window_y + window_height )) || return 1
+    metrics="$(convert "$screenshot" \
+        -crop "15x15+${left}+${top}" \
         -alpha off \
-        -fx '((g-r)>0.08 && (g-b)>0.08) ? 1 : 0' \
-        -format '%[fx:mean]' info: 2>/dev/null || true)"
-    awk -v score="$score" 'BEGIN { exit !(score > 0.005) }'
-}
-
-outline_column_green_score() {
-    local screenshot="$1" top="$2" height="$3" width score
-    width=$((cell_width * 5))
-    score="$(convert "$screenshot" \
-        -crop "${width}x${height}+${a1_x}+${top}" \
-        -alpha off \
-        -fx '((g-r)>0.08 && (g-b)>0.08) ? 1 : 0' \
-        -format '%[fx:mean]' info: 2>/dev/null || true)"
-    awk -v score="$score" 'BEGIN { exit !(score > 0.005) }'
+        -format '%[fx:mean((r>0.82)&&(g>0.82)&&(b>0.82))] %[fx:mean((abs(r-g)<0.08)&&(abs(g-b)<0.08)&&(r>0.25)&&(r<0.82))]' \
+        info: 2>/dev/null || true)"
+    read -r white_score border_score <<< "$metrics"
+    white_score="${white_score:-0}"
+    border_score="${border_score:-0}"
+    awk -v white="$white_score" -v border="$border_score" \
+        'BEGIN { exit !(white > 0.25 && border > 0.08) }'
 }
 
 probe_outline_group_physical() {
-    local row2_value="" row3_value="" row4_value=""
-    local grouped_score=false collapse_changed=false expand_changed=false expanded_score=false
+    local row2_value="" row3_value="" row4_value="" collapsed_slot="" expanded_slot=""
+    local controls_visible=false collapsed_structurally=false expanded_structurally=false
     local values_restored=false group_command=false
-    local toggle_x toggle_y collapsed_toggle_y
+    local base_row_header_width=0 row_header_x=0 toggle_x=0 toggle_y=0 collapsed_toggle_y=0 row_gutter_width=0 expected_row_depth=1
     local artifacts="outline-rows-selected.png;outline-grouped.png;outline-collapsed.png;outline-expanded.png;outline-group-postcondition.txt"
 
     # Seed three distinct values through the production inline editor. The values make the
     # model/UI restoration assertion independent of the default CSV contents.
     if ! set_cell_text_without_save 1 1 B2 OutlineRow2 ||
        ! set_cell_text_without_save 1 2 B3 OutlineRow3 ||
-       ! set_cell_text_without_save 1 3 B4 OutlineRow4; then
+       ! set_cell_text_without_save 1 3 B4 OutlineRow4 ||
+       ! set_cell_text_without_save 1 4 B5 OutlineRowSummary; then
         write_artifact "outline-group-postcondition.txt" "seeded=false\n"
         record "outline-group-physical" "failed" "outline-group-postcondition.txt" \
             "Could not seed the row-group fixture through real X11 inline editing." "$artifacts"
         return
     fi
 
-    # Select rows 2:4 using the real worksheet shortcut, then invoke the production Data ribbon
-    # keytip route Alt+A, G, G (Data > Group > Group). This exercises Avalonia's actual ribbon
-    # renderer and command registry instead of replaying a model command.
-    if select_cell 1 1 B2; then
-        send_key shift+space
-        send_key shift+Down
-        send_key shift+Down
-        capture "outline-rows-selected.png"
-        send_key alt+a
-        send_key g
-        send_key g
-        sleep "$settle_seconds"
-        capture "outline-grouped.png"
-        group_command=true
-    fi
+    dismiss_active_popups
+    # Drag the real row headers so the shared row-selection context menu owns exactly rows 2:4.
+    # The startup A1 origin locates the row-label area even after an outline gutter is present.
+    base_row_header_width=$((worksheet_base_a1_x - window_x))
+    row_header_x=$((a1_x - base_row_header_width / 2))
+    focus_app
+    xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 1)"
+    xdotool mousedown 1
+    sleep "$settle_seconds"
+    xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 3)"
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+    capture "outline-rows-selected.png"
+    focus_app
+    xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 1)" click 3
+    sleep "$settle_seconds"
+    send_active_key End Up Up Up Return
+    sleep "$settle_seconds"
+    capture "outline-grouped.png"
+    (( row_outline_depth > expected_row_depth )) && expected_row_depth="$row_outline_depth"
+    set_expected_outline_origin "$expected_row_depth" "$column_outline_depth" "outline-group-origin.png"
+    capture "outline-grouped.png"
 
-    # A level-1 row group with summary rows below places its real +/- control on row 5. The
-    # green gutter/bracket is rendered by WorksheetOutlineOverlay, while the click below targets
-    # the actual Avalonia Button rather than replaying a model command.
-    toggle_x=$((a1_x - 16))
+    # Level 1 consumes 26 DIPs. Require that gutter growth and the rendered button chrome before
+    # crediting Group or sending a click into the outline area.
+    row_gutter_width=$((a1_x - worksheet_base_a1_x))
+    toggle_x=$((window_x + 13))
     toggle_y="$(cell_center_y 4)"
-    if $group_command && outline_green_score "$output/outline-grouped.png" "$(cell_y 1)" "$((cell_height * 4))"; then
-        grouped_score=true
+    if (( row_gutter_width >= 24 )) && outline_toggle_visible "$output/outline-grouped.png" "$toggle_x" "$toggle_y"; then
+        group_command=true
+        controls_visible=true
+        row_outline_depth="$expected_row_depth"
         focus_app
         xdotool_mousemove_sync "$toggle_x" "$toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-collapsed.png"
-        screen_changed "$output/outline-grouped.png" "$output/outline-collapsed.png" 300 && collapse_changed=true
+        collapsed_slot="$(copy_cell_formula 1 1 outline-row-collapsed-visible-slot || true)"
+        [[ "$collapsed_slot" == "OutlineRowSummary" ]] && collapsed_structurally=true
 
-        # After collapse rows 2:4 disappear and the summary/toggle row 5 occupies row slot 2.
-        # Click that same visible +/- button again through its post-collapse position.
+        # Rows 2:4 are hidden only if summary row 5 occupies visible slot 2.
         collapsed_toggle_y="$(cell_center_y 1)"
         focus_app
         xdotool_mousemove_sync "$toggle_x" "$collapsed_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-expanded.png"
-        screen_changed "$output/outline-collapsed.png" "$output/outline-expanded.png" 300 && expand_changed=true
-        outline_green_score "$output/outline-expanded.png" "$(cell_y 1)" "$((cell_height * 4))" && expanded_score=true
+        expanded_slot="$(copy_cell_formula 1 1 outline-row-expanded-visible-slot || true)"
+        [[ "$expanded_slot" == "OutlineRow2" ]] && expanded_structurally=true
+        outline_toggle_visible "$output/outline-expanded.png" "$toggle_x" "$toggle_y" || controls_visible=false
     fi
 
     row2_value="$(copy_cell_formula 1 1 B2 || true)"
@@ -2414,37 +2458,42 @@ probe_outline_group_physical() {
     fi
 
     write_artifact "outline-group-postcondition.txt" \
-        "seeded=true\nselection-gesture=Shift+Space,Shift+Down,Shift+Down\ngroup-gesture=Alt+A,G,G\ngroup-command=$group_command\ngrouped-outline-green=$grouped_score\ncollapse-screen-changed=$collapse_changed\nexpand-screen-changed=$expand_changed\nexpanded-outline-green=$expanded_score\nrestored-values=$row2_value,$row3_value,$row4_value\nvalues-restored=$values_restored\n"
-    if $group_command && $grouped_score && $collapse_changed && $expand_changed && $expanded_score && $values_restored; then
+        "seeded=true\nselection-gesture=row-header-drag-2:4\ngroup-gesture=row-header-right-click,End,Up,Up,Up,Enter\nrow-gutter-width=$row_gutter_width\ngroup-command=$group_command\noutline-controls-visible=$controls_visible\ncollapsed-visible-slot=$collapsed_slot\ncollapse-structural=$collapsed_structurally\nexpanded-visible-slot=$expanded_slot\nexpand-structural=$expanded_structurally\nrestored-values=$row2_value,$row3_value,$row4_value\nvalues-restored=$values_restored\n"
+    if $group_command && $controls_visible && $collapsed_structurally && $expanded_structurally && $values_restored; then
         record "outline-group-physical" "passed" \
             "outline-rows-selected.png; outline-grouped.png; outline-collapsed.png; outline-expanded.png; rows=2:4; values=OutlineRow2,OutlineRow3,OutlineRow4" \
-            "Real X11 row selection and Data > Group input rendered the outline gutter; a physical +/- collapse hid the grouped rows, a second physical +/- expanded them, and all three model values read back exactly." "$artifacts"
+            "A real row-header drag and shared context-menu Group command rendered the outline gutter; visible-slot values proved physical collapse/expand, and all three detail values read back exactly." "$artifacts"
     else
         record "outline-group-physical" "failed" \
             "outline-rows-selected.png; outline-grouped.png; outline-collapsed.png; outline-expanded.png; outline-group-postcondition.txt" \
-            "The real-input Group/Outline workflow did not prove every required state: group-command=$group_command, grouped-outline-green=$grouped_score, collapse-screen-changed=$collapse_changed, expand-screen-changed=$expand_changed, expanded-outline-green=$expanded_score, values-restored=$values_restored." "$artifacts"
+            "The row Group/Outline workflow did not prove every structural state: group-command=$group_command, controls-visible=$controls_visible, collapse-structural=$collapsed_structurally, expand-structural=$expanded_structurally, values-restored=$values_restored." "$artifacts"
     fi
-    send_key Escape || true
+    if ! $group_command; then
+        set_expected_outline_origin "$row_outline_depth" "$column_outline_depth"
+    fi
+    dismiss_active_popups
 }
 
 probe_outline_column_group_physical() {
-    local column2_value="" column3_value="" column4_value=""
-    local grouped_score=false collapse_changed=false expand_changed=false expanded_score=false
+    local column2_value="" column3_value="" column4_value="" collapsed_slot="" expanded_slot=""
+    local controls_visible=false collapsed_structurally=false expanded_structurally=false
     local values_restored=false group_command=false
-    local column_header_y toggle_x toggle_y collapsed_toggle_x outline_top outline_height
+    local column_header_y=0 toggle_x=0 toggle_y=0 collapsed_toggle_x=0 outline_top=0 column_gutter_height=0 expected_column_depth=1
     local artifacts="outline-columns-selected.png;outline-columns-grouped.png;outline-columns-group-postcondition.txt"
 
     # Seed distinct values in the grouped columns through the production inline editor. Keeping
     # the values on one visible row makes the postcondition independent of the fixture document.
     if ! set_cell_text_without_save 1 1 B2 OutlineColumn2 ||
        ! set_cell_text_without_save 2 1 C2 OutlineColumn3 ||
-       ! set_cell_text_without_save 3 1 D2 OutlineColumn4; then
+       ! set_cell_text_without_save 3 1 D2 OutlineColumn4 ||
+       ! set_cell_text_without_save 4 1 E2 OutlineColumnSummary; then
         write_artifact "outline-columns-group-postcondition.txt" "seeded=false\n"
         record "outline-columns-group-physical" "failed" "outline-columns-group-postcondition.txt" \
             "Could not seed the column-group fixture through real X11 inline editing." "$artifacts"
         return
     fi
 
+    dismiss_active_popups
     # Select whole columns through the production header-drag route. Dragging from the center of
     # B's header to D's center avoids the resize grips and preserves whole-column selection scope.
     column_header_y="$((a1_y - cell_height / 2))"
@@ -2463,23 +2512,26 @@ probe_outline_column_group_physical() {
         send_active_key End Up Up Up Return
         sleep "$settle_seconds"
         capture "outline-columns-grouped.png"
-        group_command=true
+        (( column_outline_depth > expected_column_depth )) && expected_column_depth="$column_outline_depth"
+        set_expected_outline_origin "$row_outline_depth" "$expected_column_depth" "outline-columns-origin.png"
+        capture "outline-columns-grouped.png"
     fi
 
-    # Summary columns to the right place the +/- control over the next visible column (E), in
-    # the top outline gutter. The gutter begins at the calibrated column-header origin and its
-    # level-one center is 13 DIPs below that origin.
+    # Require the 26-DIP level-1 gutter and rendered E-summary toggle before interacting.
+    column_gutter_height=$((a1_y - worksheet_base_a1_y))
     toggle_x="$(cell_center_x 4)"
-    outline_top="$((a1_y - cell_height))"
-    outline_height=26
+    outline_top="$((worksheet_base_a1_y - cell_height))"
     toggle_y="$((outline_top + 13))"
-    if $group_command && outline_column_green_score "$output/outline-columns-grouped.png" "$outline_top" "$outline_height"; then
-        grouped_score=true
+    if (( column_gutter_height >= 24 )) && outline_toggle_visible "$output/outline-columns-grouped.png" "$toggle_x" "$toggle_y"; then
+        group_command=true
+        controls_visible=true
+        column_outline_depth="$expected_column_depth"
         focus_app
         xdotool_mousemove_sync "$toggle_x" "$toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-columns-collapsed.png"
-        screen_changed "$output/outline-columns-grouped.png" "$output/outline-columns-collapsed.png" 300 && collapse_changed=true
+        collapsed_slot="$(copy_cell_formula 1 1 outline-column-collapsed-visible-slot || true)"
+        [[ "$collapsed_slot" == "OutlineColumnSummary" ]] && collapsed_structurally=true
 
         # Once B:D are hidden, the summary column E moves into the first visible data slot.
         collapsed_toggle_x="$(cell_center_x 1)"
@@ -2488,8 +2540,9 @@ probe_outline_column_group_physical() {
         sleep "$settle_seconds"
         capture "outline-columns-expanded.png"
         artifacts="outline-columns-selected.png;outline-columns-grouped.png;outline-columns-collapsed.png;outline-columns-expanded.png;outline-columns-group-postcondition.txt"
-        screen_changed "$output/outline-columns-collapsed.png" "$output/outline-columns-expanded.png" 300 && expand_changed=true
-        outline_column_green_score "$output/outline-columns-expanded.png" "$outline_top" "$outline_height" && expanded_score=true
+        expanded_slot="$(copy_cell_formula 1 1 outline-column-expanded-visible-slot || true)"
+        [[ "$expanded_slot" == "OutlineColumn2" ]] && expanded_structurally=true
+        outline_toggle_visible "$output/outline-columns-expanded.png" "$toggle_x" "$toggle_y" || controls_visible=false
     fi
 
     column2_value="$(copy_cell_formula_by_keyboard 1 1 || true)"
@@ -2500,17 +2553,330 @@ probe_outline_column_group_physical() {
     fi
 
     write_artifact "outline-columns-group-postcondition.txt" \
-        "seeded=true\nselection-gesture=column-header-drag-B:D\ngroup-gesture=column-header-right-click,End,Up,Up,Up,Enter\ngroup-command=$group_command\ngrouped-outline-green=$grouped_score\ncollapse-screen-changed=$collapse_changed\nexpand-screen-changed=$expand_changed\nexpanded-outline-green=$expanded_score\nrestored-values=$column2_value,$column3_value,$column4_value\nvalues-restored=$values_restored\n"
-    if $group_command && $grouped_score && $collapse_changed && $expand_changed && $expanded_score && $values_restored; then
+        "seeded=true\nselection-gesture=column-header-drag-B:D\ngroup-gesture=column-header-right-click,End,Up,Up,Up,Enter\ncolumn-gutter-height=$column_gutter_height\ngroup-command=$group_command\noutline-controls-visible=$controls_visible\ncollapsed-visible-slot=$collapsed_slot\ncollapse-structural=$collapsed_structurally\nexpanded-visible-slot=$expanded_slot\nexpand-structural=$expanded_structurally\nrestored-values=$column2_value,$column3_value,$column4_value\nvalues-restored=$values_restored\n"
+    if $group_command && $controls_visible && $collapsed_structurally && $expanded_structurally && $values_restored; then
         record "outline-columns-group-physical" "passed" \
             "outline-columns-selected.png; outline-columns-grouped.png; outline-columns-collapsed.png; outline-columns-expanded.png; columns=B:D; values=OutlineColumn2,OutlineColumn3,OutlineColumn4" \
             "Real X11 column-header selection and the shared worksheet Group command rendered the column outline gutter; physical +/- collapse hid the grouped columns, a second physical +/- expanded them, and all three model values read back exactly." "$artifacts"
     else
         record "outline-columns-group-physical" "failed" \
             "outline-columns-selected.png; outline-columns-grouped.png; outline-columns-group-postcondition.txt" \
-            "The real-input column Group/Outline workflow did not prove every required state: group-command=$group_command, grouped-outline-green=$grouped_score, collapse-screen-changed=$collapse_changed, expand-screen-changed=$expand_changed, expanded-outline-green=$expanded_score, values-restored=$values_restored." "$artifacts"
+            "The column Group/Outline workflow did not prove every structural state: group-command=$group_command, controls-visible=$controls_visible, collapse-structural=$collapsed_structurally, expand-structural=$expanded_structurally, values-restored=$values_restored." "$artifacts"
     fi
-    send_key Escape || true
+    if ! $group_command; then
+        set_expected_outline_origin "$row_outline_depth" "$column_outline_depth"
+    fi
+    dismiss_active_popups
+}
+
+probe_outline_nested_rows_physical() {
+    local inner_collapsed=false inner_expanded=false outer_collapsed=false outer_expanded=false
+    local controls_visible=false expanded_controls_visible=false values_restored=false outer_command=false inner_command=false
+    local inner_toggle_x=0 outer_toggle_x=0 inner_toggle_y=0 inner_collapsed_y=0 outer_toggle_y=0 outer_collapsed_y=0
+    local base_row_header_width=0 row_header_x=0 row_gutter_width=0 outer_gutter_width=0
+    local expected_outer_depth=1 expected_inner_depth=2
+    local inner_collapsed_slot="" inner_expanded_slot="" outer_collapsed_slot="" outer_expanded_slot=""
+    local row2_value="" row3_value="" row4_value="" row5_value="" row6_value=""
+    local artifacts="outline-nested-rows-grouped.png;outline-nested-rows-inner-collapsed.png;outline-nested-rows-inner-expanded.png;outline-nested-rows-outer-collapsed.png;outline-nested-rows-outer-expanded.png;outline-nested-rows-postcondition.txt"
+
+    # Build a level-1 outer group first, then a level-2 subgroup inside it. The five values make
+    # every detail row independently observable after both collapse/expand cycles.
+    if ! set_cell_text_without_save 1 9 B10 NestedRow10 ||
+       ! set_cell_text_without_save 1 10 B11 NestedRow11 ||
+       ! set_cell_text_without_save 1 11 B12 NestedRow12 ||
+       ! set_cell_text_without_save 1 12 B13 NestedRow13 ||
+       ! set_cell_text_without_save 1 13 B14 NestedRow14 ||
+       ! set_cell_text_without_save 1 14 B15 NestedRowOuterSummary; then
+        write_artifact "outline-nested-rows-postcondition.txt" "seeded=false\n"
+        record "outline-nested-rows-group-physical" "failed" "outline-nested-rows-postcondition.txt" \
+            "Could not seed the nested row-group fixture through real X11 inline editing." "$artifacts"
+        return
+    fi
+
+    dismiss_active_popups
+    base_row_header_width=$((worksheet_base_a1_x - window_x))
+    row_header_x=$((a1_x - base_row_header_width / 2))
+    focus_app
+    xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 9)"
+    xdotool mousedown 1
+    sleep "$settle_seconds"
+    xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 13)"
+    xdotool mouseup 1
+    sleep "$settle_seconds"
+    focus_app
+    xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 9)" click 3
+    sleep "$settle_seconds"
+    send_active_key End Up Up Up Return
+    sleep "$settle_seconds"
+    (( row_outline_depth > expected_outer_depth )) && expected_outer_depth="$row_outline_depth"
+    set_expected_outline_origin "$expected_outer_depth" "$column_outline_depth" "outline-nested-rows-outer-origin.png"
+    outer_gutter_width=$((a1_x - worksheet_base_a1_x))
+    outer_toggle_x=$((window_x + 13))
+    outer_toggle_y="$(cell_center_y 14)"
+    if (( outer_gutter_width >= 24 )) && outline_toggle_visible "$output/outline-nested-rows-outer-origin.png" "$outer_toggle_x" "$outer_toggle_y"; then
+        outer_command=true
+        row_outline_depth="$expected_outer_depth"
+    else
+        set_expected_outline_origin "$row_outline_depth" "$column_outline_depth"
+    fi
+
+    # Recompute the row-label coordinate after the outer gutter appears, then create 11:12 through
+    # the same row-header context command. The inner command is credited only after level 2 grows.
+    if $outer_command; then
+        row_header_x=$((a1_x - base_row_header_width / 2))
+        focus_app
+        xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 10)"
+        xdotool mousedown 1
+        sleep "$settle_seconds"
+        xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 11)"
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        focus_app
+        xdotool_mousemove_sync "$row_header_x" "$(cell_center_y 10)" click 3
+        sleep "$settle_seconds"
+        send_active_key End Up Up Up Return
+        sleep "$settle_seconds"
+        (( row_outline_depth > expected_inner_depth )) && expected_inner_depth="$row_outline_depth"
+        set_expected_outline_origin "$expected_inner_depth" "$column_outline_depth" "outline-nested-rows-inner-origin.png"
+        row_gutter_width=$((a1_x - worksheet_base_a1_x))
+        inner_toggle_x=$((window_x + 27))
+        inner_toggle_y="$(cell_center_y 12)"
+        if (( row_gutter_width >= 38 )) && outline_toggle_visible "$output/outline-nested-rows-inner-origin.png" "$inner_toggle_x" "$inner_toggle_y"; then
+            inner_command=true
+            row_outline_depth="$expected_inner_depth"
+        else
+            set_expected_outline_origin "$row_outline_depth" "$column_outline_depth"
+            row_gutter_width=$((a1_x - worksheet_base_a1_x))
+        fi
+    fi
+
+    capture "outline-nested-rows-grouped.png"
+    inner_toggle_x=$((window_x + 27))
+    outer_toggle_x=$((window_x + 13))
+    inner_toggle_y="$(cell_center_y 12)"
+    outer_toggle_y="$(cell_center_y 14)"
+    if $outer_command && $inner_command &&
+       outline_toggle_visible "$output/outline-nested-rows-grouped.png" "$inner_toggle_x" "$inner_toggle_y" &&
+       outline_toggle_visible "$output/outline-nested-rows-grouped.png" "$outer_toggle_x" "$outer_toggle_y"; then
+        controls_visible=true
+
+        # Level 2: collapse rows 11:12. Summary row 13 then occupies visible row slot 11,
+        # whose zero-based calibrated offset is 10.
+        focus_app
+        xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-rows-inner-collapsed.png"
+        inner_collapsed_slot="$(copy_cell_formula 1 10 outline-nested-row-inner-collapsed-visible-slot || true)"
+        [[ "$inner_collapsed_slot" == "NestedRow13" ]] && inner_collapsed=true
+
+        inner_collapsed_y="$(cell_center_y 10)"
+        focus_app
+        xdotool_mousemove_sync "$inner_toggle_x" "$inner_collapsed_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-rows-inner-expanded.png"
+        inner_expanded_slot="$(copy_cell_formula 1 10 outline-nested-row-inner-expanded-visible-slot || true)"
+        [[ "$inner_expanded_slot" == "NestedRow11" ]] && inner_expanded=true
+
+        # Level 1: collapse rows 10:14. Summary row 15 then occupies visible row slot 10,
+        # whose zero-based calibrated offset is 9.
+        focus_app
+        xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-rows-outer-collapsed.png"
+        outer_collapsed_slot="$(copy_cell_formula 1 9 outline-nested-row-outer-collapsed-visible-slot || true)"
+        [[ "$outer_collapsed_slot" == "NestedRowOuterSummary" ]] && outer_collapsed=true
+
+        outer_collapsed_y="$(cell_center_y 9)"
+        focus_app
+        xdotool_mousemove_sync "$outer_toggle_x" "$outer_collapsed_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-rows-outer-expanded.png"
+        outer_expanded_slot="$(copy_cell_formula 1 9 outline-nested-row-outer-expanded-visible-slot || true)"
+        [[ "$outer_expanded_slot" == "NestedRow10" ]] && outer_expanded=true
+        if outline_toggle_visible "$output/outline-nested-rows-outer-expanded.png" "$inner_toggle_x" "$inner_toggle_y" &&
+           outline_toggle_visible "$output/outline-nested-rows-outer-expanded.png" "$outer_toggle_x" "$outer_toggle_y"; then
+            expanded_controls_visible=true
+        fi
+    fi
+
+    row2_value="$(copy_cell_formula 1 9 B10 || true)"
+    row3_value="$(copy_cell_formula 1 10 B11 || true)"
+    row4_value="$(copy_cell_formula 1 11 B12 || true)"
+    row5_value="$(copy_cell_formula 1 12 B13 || true)"
+    row6_value="$(copy_cell_formula 1 13 B14 || true)"
+    if [[ "$row2_value" == "NestedRow10" && "$row3_value" == "NestedRow11" &&
+          "$row4_value" == "NestedRow12" && "$row5_value" == "NestedRow13" &&
+          "$row6_value" == "NestedRow14" ]]; then
+        values_restored=true
+    fi
+
+    row_gutter_width=$((a1_x - worksheet_base_a1_x))
+    write_artifact "outline-nested-rows-postcondition.txt" \
+        "seeded=true\nouter-selection=row-header-drag-10:14\ninner-selection=row-header-drag-11:12\ngroup-gesture=row-header-right-click,End,Up,Up,Up,Enter\nouter-group-command=$outer_command\ninner-group-command=$inner_command\nrow-gutter-width=$row_gutter_width\noutline-controls-visible=$controls_visible\ninner-collapsed-visible-slot=$inner_collapsed_slot\ninner-collapse-structural=$inner_collapsed\ninner-expanded-visible-slot=$inner_expanded_slot\ninner-expand-structural=$inner_expanded\nouter-collapsed-visible-slot=$outer_collapsed_slot\nouter-collapse-structural=$outer_collapsed\nouter-expanded-visible-slot=$outer_expanded_slot\nouter-expand-structural=$outer_expanded\nexpanded-outline-controls-visible=$expanded_controls_visible\nrestored-values=$row2_value,$row3_value,$row4_value,$row5_value,$row6_value\nvalues-restored=$values_restored\n"
+    if $outer_command && $inner_command && $controls_visible && $inner_collapsed && $inner_expanded && $outer_collapsed && $outer_expanded && $expanded_controls_visible && $values_restored; then
+        record "outline-nested-rows-group-physical" "passed" \
+            "outline-nested-rows-grouped.png; outline-nested-rows-inner-collapsed.png; outline-nested-rows-inner-expanded.png; outline-nested-rows-outer-collapsed.png; outline-nested-rows-outer-expanded.png; rows=10:14/inner=11:12; values=NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14" \
+            "Real row-header drags and shared context-menu Group commands created two rendered levels; exact visible-slot values proved both collapse/expand cycles, and all five detail values read back exactly." "$artifacts"
+    else
+        record "outline-nested-rows-group-physical" "failed" \
+            "outline-nested-rows-grouped.png; outline-nested-rows-inner-collapsed.png; outline-nested-rows-inner-expanded.png; outline-nested-rows-outer-collapsed.png; outline-nested-rows-outer-expanded.png; outline-nested-rows-postcondition.txt" \
+            "Nested row Group/Outline did not prove every structural state: outer-command=$outer_command, inner-command=$inner_command, controls-visible=$controls_visible, inner-collapse=$inner_collapsed, inner-expand=$inner_expanded, outer-collapse=$outer_collapsed, outer-expand=$outer_expanded, expanded-controls-visible=$expanded_controls_visible, values-restored=$values_restored." "$artifacts"
+    fi
+    dismiss_active_popups
+}
+
+probe_outline_nested_columns_physical() {
+    local inner_collapsed=false inner_expanded=false outer_collapsed=false outer_expanded=false
+    local controls_visible=false expanded_controls_visible=false values_restored=false outer_command=false inner_command=false
+    local column_header_y=0 inner_toggle_x=0 outer_toggle_x=0 inner_toggle_y=0 outer_toggle_y=0 inner_collapsed_x=0 outer_collapsed_x=0
+    local outline_top=0 column_gutter_height=0 outer_gutter_height=0
+    local expected_outer_depth=1 expected_inner_depth=2
+    local inner_collapsed_slot="" inner_expanded_slot="" outer_collapsed_slot="" outer_expanded_slot=""
+    local column2_value="" column3_value="" column4_value="" column5_value="" column6_value=""
+    local artifacts="outline-nested-columns-grouped.png;outline-nested-columns-inner-collapsed.png;outline-nested-columns-inner-expanded.png;outline-nested-columns-outer-collapsed.png;outline-nested-columns-outer-expanded.png;outline-nested-columns-postcondition.txt"
+
+    if ! set_cell_text_without_save 7 1 H2 NestedColumnH ||
+       ! set_cell_text_without_save 8 1 I2 NestedColumnI ||
+       ! set_cell_text_without_save 9 1 J2 NestedColumnJ ||
+       ! set_cell_text_without_save 10 1 K2 NestedColumnK ||
+       ! set_cell_text_without_save 11 1 L2 NestedColumnL ||
+       ! set_cell_text_without_save 12 1 M2 NestedColumnOuterSummary; then
+        write_artifact "outline-nested-columns-postcondition.txt" "seeded=false\n"
+        record "outline-nested-columns-group-physical" "failed" "outline-nested-columns-postcondition.txt" \
+            "Could not seed the nested column-group fixture through real X11 inline editing." "$artifacts"
+        return
+    fi
+
+    dismiss_active_popups
+    column_header_y="$((a1_y - cell_height / 2))"
+    if select_cell 7 1 H2; then
+        focus_app
+        xdotool_mousemove_sync "$(cell_center_x 7)" "$column_header_y"
+        xdotool mousedown 1
+        sleep "$settle_seconds"
+        xdotool_mousemove_sync "$(cell_center_x 11)" "$column_header_y"
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        xdotool_mousemove_sync "$(cell_center_x 7)" "$column_header_y" click 3
+        sleep "$settle_seconds"
+        send_active_key End Up Up Up Return
+        sleep "$settle_seconds"
+        (( column_outline_depth > expected_outer_depth )) && expected_outer_depth="$column_outline_depth"
+        set_expected_outline_origin "$row_outline_depth" "$expected_outer_depth" "outline-nested-columns-outer-origin.png"
+        outer_gutter_height=$((a1_y - worksheet_base_a1_y))
+        outline_top=$((worksheet_base_a1_y - cell_height))
+        outer_toggle_x="$(cell_center_x 12)"
+        outer_toggle_y=$((outline_top + 13))
+        if (( outer_gutter_height >= 24 )) && outline_toggle_visible "$output/outline-nested-columns-outer-origin.png" "$outer_toggle_x" "$outer_toggle_y"; then
+            outer_command=true
+            column_outline_depth="$expected_outer_depth"
+        else
+            set_expected_outline_origin "$row_outline_depth" "$column_outline_depth"
+        fi
+
+        if $outer_command && select_cell 8 1 I2; then
+            column_header_y="$((a1_y - cell_height / 2))"
+            focus_app
+            xdotool_mousemove_sync "$(cell_center_x 8)" "$column_header_y"
+            xdotool mousedown 1
+            sleep "$settle_seconds"
+            xdotool_mousemove_sync "$(cell_center_x 10)" "$column_header_y"
+            xdotool mouseup 1
+            sleep "$settle_seconds"
+            xdotool_mousemove_sync "$(cell_center_x 8)" "$column_header_y" click 3
+            sleep "$settle_seconds"
+            send_active_key End Up Up Up Return
+            sleep "$settle_seconds"
+            (( column_outline_depth > expected_inner_depth )) && expected_inner_depth="$column_outline_depth"
+            set_expected_outline_origin "$row_outline_depth" "$expected_inner_depth" "outline-nested-columns-inner-origin.png"
+            column_gutter_height=$((a1_y - worksheet_base_a1_y))
+            outline_top=$((worksheet_base_a1_y - cell_height))
+            inner_toggle_x="$(cell_center_x 11)"
+            inner_toggle_y=$((outline_top + 27))
+            if (( column_gutter_height >= 38 )) && outline_toggle_visible "$output/outline-nested-columns-inner-origin.png" "$inner_toggle_x" "$inner_toggle_y"; then
+                inner_command=true
+                column_outline_depth="$expected_inner_depth"
+            else
+                set_expected_outline_origin "$row_outline_depth" "$column_outline_depth"
+                column_gutter_height=$((a1_y - worksheet_base_a1_y))
+            fi
+        fi
+    fi
+
+    capture "outline-nested-columns-grouped.png"
+    outline_top="$((worksheet_base_a1_y - cell_height))"
+    inner_toggle_y="$((outline_top + 27))"
+    outer_toggle_y="$((outline_top + 13))"
+    inner_toggle_x="$(cell_center_x 11)"
+    outer_toggle_x="$(cell_center_x 12)"
+    if $outer_command && $inner_command &&
+       outline_toggle_visible "$output/outline-nested-columns-grouped.png" "$inner_toggle_x" "$inner_toggle_y" &&
+       outline_toggle_visible "$output/outline-nested-columns-grouped.png" "$outer_toggle_x" "$outer_toggle_y"; then
+        controls_visible=true
+
+        # Inner I:K: the level-2 toggle is over its L summary column, which moves to the ninth
+        # visible column slot after I:K are hidden.
+        focus_app
+        xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-columns-inner-collapsed.png"
+        inner_collapsed_slot="$(copy_cell_formula 8 1 outline-nested-column-inner-collapsed-visible-slot || true)"
+        [[ "$inner_collapsed_slot" == "NestedColumnL" ]] && inner_collapsed=true
+
+        inner_collapsed_x="$(cell_center_x 8)"
+        focus_app
+        xdotool_mousemove_sync "$inner_collapsed_x" "$inner_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-columns-inner-expanded.png"
+        inner_expanded_slot="$(copy_cell_formula 8 1 outline-nested-column-inner-expanded-visible-slot || true)"
+        [[ "$inner_expanded_slot" == "NestedColumnI" ]] && inner_expanded=true
+
+        # Outer H:L: the level-1 toggle is over M, which moves to the eighth visible data slot after
+        # H:L are hidden.
+        focus_app
+        xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-columns-outer-collapsed.png"
+        outer_collapsed_slot="$(copy_cell_formula 7 1 outline-nested-column-outer-collapsed-visible-slot || true)"
+        [[ "$outer_collapsed_slot" == "NestedColumnOuterSummary" ]] && outer_collapsed=true
+
+        outer_collapsed_x="$(cell_center_x 7)"
+        focus_app
+        xdotool_mousemove_sync "$outer_collapsed_x" "$outer_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-columns-outer-expanded.png"
+        outer_expanded_slot="$(copy_cell_formula 7 1 outline-nested-column-outer-expanded-visible-slot || true)"
+        [[ "$outer_expanded_slot" == "NestedColumnH" ]] && outer_expanded=true
+        if outline_toggle_visible "$output/outline-nested-columns-outer-expanded.png" "$inner_toggle_x" "$inner_toggle_y" &&
+           outline_toggle_visible "$output/outline-nested-columns-outer-expanded.png" "$outer_toggle_x" "$outer_toggle_y"; then
+            expanded_controls_visible=true
+        fi
+    fi
+
+    column2_value="$(copy_cell_formula 7 1 H2 || true)"
+    column3_value="$(copy_cell_formula 8 1 I2 || true)"
+    column4_value="$(copy_cell_formula 9 1 J2 || true)"
+    column5_value="$(copy_cell_formula 10 1 K2 || true)"
+    column6_value="$(copy_cell_formula 11 1 L2 || true)"
+    if [[ "$column2_value" == "NestedColumnH" && "$column3_value" == "NestedColumnI" &&
+          "$column4_value" == "NestedColumnJ" && "$column5_value" == "NestedColumnK" &&
+          "$column6_value" == "NestedColumnL" ]]; then
+        values_restored=true
+    fi
+
+    column_gutter_height=$((a1_y - worksheet_base_a1_y))
+    write_artifact "outline-nested-columns-postcondition.txt" \
+        "seeded=true\nouter-selection=column-header-drag-H:L\ninner-selection=column-header-drag-I:K\ngroup-gesture=column-header-right-click,End,Up,Up,Up,Enter\nouter-group-command=$outer_command\ninner-group-command=$inner_command\ncolumn-gutter-height=$column_gutter_height\noutline-controls-visible=$controls_visible\ninner-collapsed-visible-slot=$inner_collapsed_slot\ninner-collapse-structural=$inner_collapsed\ninner-expanded-visible-slot=$inner_expanded_slot\ninner-expand-structural=$inner_expanded\nouter-collapsed-visible-slot=$outer_collapsed_slot\nouter-collapse-structural=$outer_collapsed\nouter-expanded-visible-slot=$outer_expanded_slot\nouter-expand-structural=$outer_expanded\nexpanded-outline-controls-visible=$expanded_controls_visible\nrestored-values=$column2_value,$column3_value,$column4_value,$column5_value,$column6_value\nvalues-restored=$values_restored\n"
+    if $outer_command && $inner_command && $controls_visible && $inner_collapsed && $inner_expanded && $outer_collapsed && $outer_expanded && $expanded_controls_visible && $values_restored; then
+        record "outline-nested-columns-group-physical" "passed" \
+            "outline-nested-columns-grouped.png; outline-nested-columns-inner-collapsed.png; outline-nested-columns-inner-expanded.png; outline-nested-columns-outer-collapsed.png; outline-nested-columns-outer-expanded.png; columns=H:L/inner=I:K; values=NestedColumnH,NestedColumnI,NestedColumnJ,NestedColumnK,NestedColumnL" \
+            "Real column-header drags and shared context-menu Group commands created two rendered levels; exact visible-slot values proved both collapse/expand cycles, and all five detail values read back exactly." "$artifacts"
+    else
+        record "outline-nested-columns-group-physical" "failed" \
+            "outline-nested-columns-grouped.png; outline-nested-columns-inner-collapsed.png; outline-nested-columns-inner-expanded.png; outline-nested-columns-outer-collapsed.png; outline-nested-columns-outer-expanded.png; outline-nested-columns-postcondition.txt" \
+            "Nested column Group/Outline did not prove every structural state: outer-command=$outer_command, inner-command=$inner_command, controls-visible=$controls_visible, inner-collapse=$inner_collapsed, inner-expand=$inner_expanded, outer-collapse=$outer_collapsed, outer-expand=$outer_expanded, expanded-controls-visible=$expanded_controls_visible, values-restored=$values_restored." "$artifacts"
+    fi
+    dismiss_active_popups
 }
 
 probe_formula_bar_point_mode_multi_area_edit() {
@@ -3587,6 +3953,21 @@ if [[ "$probe_selector" == "outline-group" ]]; then
     exit 0
 fi
 
+if [[ "$probe_selector" == "outline-nested-group" ]]; then
+    # Focused Wave98 lane for nested row and column outline levels. Each axis returns expanded
+    # before its exact-value postcondition is read back.
+    probe_outline_nested_rows_physical
+    probe_outline_nested_columns_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused nested Group/Outline probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
 if [[ "$probe_selector" != "all" ]]; then
     calibration_reason="Unknown FREEX_X11_PROBE_SELECTOR '$probe_selector'."
     record "x11-probe-selector" "failed" "x11-input-results.json" "$calibration_reason"
@@ -3891,6 +4272,8 @@ probe_sheet_tabs
 probe_window_management
 probe_outline_group_physical
 probe_outline_column_group_physical
+probe_outline_nested_rows_physical
+probe_outline_nested_columns_physical
 
 # Real shortcut-to-dialog path, followed by paced focus traversal and Escape cancellation.
 send_key ctrl+1

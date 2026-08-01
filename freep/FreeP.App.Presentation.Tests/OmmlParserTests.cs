@@ -1421,4 +1421,26 @@ public sealed class OmmlParserTests
         Assert.Equal(MathNode.MathParagraphBinaryBreak.Repeat, paragraph.BinaryBreak);
         Assert.Equal(MathNode.MathParagraphBinarySubtraction.MinusPlus, paragraph.BinarySubtraction);
     }
+
+    [Fact]
+    public void OMathPara_WithMathFont_PreservesEquationWideFontMetadata()
+    {
+        var node = ParseParagraph(
+            "<m:mathPr><m:mathFont m:val=\"Arial\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal("Arial", paragraph.MathFontFamily);
+    }
+
+    [Fact]
+    public void OMathPara_WithEmptyMathFont_UsesCallerFontFallback()
+    {
+        var node = ParseParagraph(
+            "<m:mathPr><m:mathFont m:val=\"  \"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Null(paragraph.MathFontFamily);
+    }
 }

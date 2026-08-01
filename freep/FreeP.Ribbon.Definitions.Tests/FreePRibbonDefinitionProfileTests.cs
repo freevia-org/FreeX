@@ -1119,6 +1119,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.matrix-column-count-alignment",
             "freep.omml.literal-run-style",
             "freep.omml.math-alphabet-style",
+            "freep.omml.math-font",
             "freep.omml.nary-limit-location",
             "freep.omml.nary-grow-hidden-limits",
             "freep.omml.limit-placement",

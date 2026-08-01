@@ -426,6 +426,35 @@ public static class AvaloniaCompactDialogChrome
         Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
     }
 
+    public static double CalculateReadOnlyDocumentInset(double viewportHeight, double documentHeight)
+    {
+        if (!double.IsFinite(viewportHeight) ||
+            !double.IsFinite(documentHeight) ||
+            viewportHeight <= 0 ||
+            documentHeight <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, Math.Floor((viewportHeight - documentHeight) / 2));
+    }
+
+    public static bool RequiresReadOnlyDocumentOverflowLineHeight(
+        double viewportHeight,
+        int lineCount,
+        double overflowLineHeight,
+        double verticalPadding)
+    {
+        return double.IsFinite(viewportHeight) &&
+               double.IsFinite(overflowLineHeight) &&
+               double.IsFinite(verticalPadding) &&
+               viewportHeight > 0 &&
+               lineCount > 0 &&
+               overflowLineHeight > 0 &&
+               verticalPadding >= 0 &&
+               (lineCount * overflowLineHeight) + verticalPadding > viewportHeight;
+    }
+
     public static void ApplyCheckBox(CheckBox checkBox, AvaloniaCompactDialogChromeStyle style)
     {
         ArgumentNullException.ThrowIfNull(checkBox);
@@ -853,6 +882,18 @@ public static class AvaloniaCompactDialogChrome
             presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedContentControl.Header)) { Source = tab });
             presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(HeaderedContentControl.HeaderTemplate)) { Source = tab });
             presenter.Bind(ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = tab });
+            presenter.Bind(ContentPresenter.ForegroundProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = tab });
+            presenter.Bind(ContentPresenter.FontFamilyProperty, new Binding(nameof(TemplatedControl.FontFamily)) { Source = tab });
+            presenter.Bind(ContentPresenter.FontSizeProperty, new Binding(nameof(TemplatedControl.FontSize)) { Source = tab });
+            presenter.Styles.Add(new Style(s => s.OfType<AccessText>())
+            {
+                Setters =
+                {
+                    new Setter(TextBlock.ForegroundProperty, new Binding(nameof(ContentPresenter.Foreground)) { Source = presenter }),
+                    new Setter(TextBlock.FontFamilyProperty, new Binding(nameof(ContentPresenter.FontFamily)) { Source = presenter }),
+                    new Setter(TextBlock.FontSizeProperty, new Binding(nameof(ContentPresenter.FontSize)) { Source = presenter }),
+                },
+            });
 
             var root = new Border { Name = "PART_LayoutRoot" };
             root.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tab });

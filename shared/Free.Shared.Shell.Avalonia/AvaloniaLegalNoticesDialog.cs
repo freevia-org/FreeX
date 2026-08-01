@@ -9,6 +9,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -19,6 +20,7 @@ namespace Free.Shared.Shell.Avalonia;
 public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 {
     private const double TextFontSizeCompensation = 12.1;
+    private const double ShortDocumentLineHeightCompensation = 14.6;
     private static readonly Regex NonAutomationIdCharacter =
         new("[^A-Za-z0-9]+", RegexOptions.Compiled);
 
@@ -53,7 +55,10 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         Opened += (_, _) =>
         {
             foreach (var textBox in _noticeTextBoxes)
+            {
                 ApplyReadOnlyDocumentLayout(textBox);
+                ScheduleShortDocumentInset(textBox, LegalNoticesDialogMetrics.TextPadding);
+            }
             AvaloniaCompactDialogChrome.ApplyLegalNoticesDefaultButtonChrome(_closeButton);
             FocusInitialKeyboardTarget();
         };
@@ -147,7 +152,6 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             TextWrapping = TextWrapping.Wrap,
             FontFamily = new FontFamily("Consolas"),
             FontSize = LegalNoticesDialogMetrics.TextFontSize,
-            LineHeight = LegalNoticesDialogMetrics.TextLineHeight,
             Padding = new Thickness(LegalNoticesDialogMetrics.TextPadding),
             MinHeight = LegalNoticesDialogMetrics.TextMinHeight,
             Foreground = Brushes.Black,
@@ -185,8 +189,60 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             textBox,
             LegalNoticesDialogMetrics.TextPadding);
         // Avalonia's Consolas metrics are fractionally narrower than WPF's at the shared
-        // 12px size. Keep the authority line height while matching its paragraph wraps.
+        // 12px size. Compensate the glyph width without imposing a line box absent in WPF.
         textBox.FontSize = TextFontSizeCompensation;
+    }
+
+    private static void ScheduleShortDocumentInset(TextBox textBox, double basePadding)
+    {
+        EventHandler? onLayoutUpdated = null;
+        onLayoutUpdated = (_, _) =>
+        {
+            var scrollViewer = textBox
+                .GetVisualDescendants()
+                .OfType<ScrollViewer>()
+                .SingleOrDefault();
+            var presenter = textBox
+                .GetVisualDescendants()
+                .OfType<TextPresenter>()
+                .SingleOrDefault();
+            if (scrollViewer is null ||
+                presenter is null ||
+                scrollViewer.Viewport.Height <= 0 ||
+                presenter.DesiredSize.Height <= 0)
+            {
+                return;
+            }
+
+            textBox.LayoutUpdated -= onLayoutUpdated;
+            if (AvaloniaCompactDialogChrome.RequiresReadOnlyDocumentOverflowLineHeight(
+                scrollViewer.Viewport.Height,
+                presenter.TextLayout.TextLines.Count,
+                LegalNoticesDialogMetrics.TextLineHeight,
+                basePadding * 2))
+            {
+                // Reserving WPF's overflow line box makes Auto expose its scrollbar lane.
+                // Short documents retain Avalonia's native line box and use the inset below.
+                textBox.LineHeight = LegalNoticesDialogMetrics.TextLineHeight;
+                return;
+            }
+
+            var inset = AvaloniaCompactDialogChrome.CalculateReadOnlyDocumentInset(
+                scrollViewer.Viewport.Height,
+                presenter.DesiredSize.Height);
+            // Preserve the native-layout inset while closing Avalonia's six-pixel
+            // cumulative baseline shortfall across the short WPF authority document.
+            textBox.LineHeight = ShortDocumentLineHeightCompensation;
+            if (inset > 0)
+            {
+                textBox.Padding = new Thickness(
+                    textBox.Padding.Left,
+                    basePadding + inset,
+                    textBox.Padding.Right,
+                    textBox.Padding.Bottom);
+            }
+        };
+        textBox.LayoutUpdated += onLayoutUpdated;
     }
 
     private static string CreateAutomationIdSegment(string text)

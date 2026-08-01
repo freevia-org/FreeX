@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group")]
+    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group", "outline-nested-group")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -94,6 +94,21 @@ function Get-SourceCommit {
         throw "Could not resolve the current source commit for interaction validation provenance."
     }
     $commit.Trim()
+}
+
+function Copy-LongPathSafeFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    $sourcePath = [IO.Path]::GetFullPath($Source)
+    $destinationPath = [IO.Path]::GetFullPath($Destination)
+    if ([string]::Equals($sourcePath, $destinationPath, [StringComparison]::OrdinalIgnoreCase)) {
+        return
+    }
+
+    [IO.File]::Copy("\\?\$sourcePath", "\\?\$destinationPath", $true)
 }
 
 function Get-DirectoryFingerprint {
@@ -1212,6 +1227,8 @@ try {
         )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
         @("outline-group-physical", "outline-columns-group-physical")
+    } elseif ($PhysicalProbeSelector -eq "outline-nested-group") {
+        @("outline-nested-rows-group-physical", "outline-nested-columns-group-physical")
     } else {
         @(
         "inline-edit-f2-escape",
@@ -1232,6 +1249,8 @@ try {
         "window-new-arrange-switch-physical",
         "outline-group-physical",
         "outline-columns-group-physical",
+        "outline-nested-rows-group-physical",
+        "outline-nested-columns-group-physical",
         "dialog-format-cells-keyboard",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
@@ -1316,6 +1335,8 @@ try {
         )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
         @("outline-group-physical", "outline-columns-group-physical")
+    } elseif ($PhysicalProbeSelector -eq "outline-nested-group") {
+        @("outline-nested-rows-group-physical", "outline-nested-columns-group-physical")
     } else {
         @(
         "worksheet-context-copy-physical",
@@ -1325,6 +1346,8 @@ try {
         "window-new-arrange-switch-physical",
         "outline-group-physical",
         "outline-columns-group-physical",
+        "outline-nested-rows-group-physical",
+        "outline-nested-columns-group-physical",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
         "backstage-print-ctrl-shift-f12-cancel",
@@ -1409,12 +1432,7 @@ try {
     New-Item -ItemType Directory -Path $x11ReportDirectory -Force | Out-Null
     foreach ($evidenceFile in Get-ChildItem -LiteralPath $x11EvidenceDirectory -File) {
         $evidenceDestination = Join-Path $x11ReportDirectory $evidenceFile.Name
-        if (-not [string]::Equals(
-            [IO.Path]::GetFullPath($evidenceFile.FullName),
-            [IO.Path]::GetFullPath($evidenceDestination),
-            [StringComparison]::OrdinalIgnoreCase)) {
-            Copy-Item -LiteralPath $evidenceFile.FullName -Destination $evidenceDestination -Force
-        }
+        Copy-LongPathSafeFile -Source $evidenceFile.FullName -Destination $evidenceDestination
     }
     if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
         $nativePairSource = Join-Path $x11EvidenceDirectory "name-box-dropdown-parity-native"
@@ -1425,10 +1443,7 @@ try {
         New-Item -ItemType Directory -Path $nativePairDestination -Force | Out-Null
         foreach ($nativePairFile in Get-ChildItem -LiteralPath $nativePairSource -File) {
             $nativePairFileDestination = Join-Path $nativePairDestination $nativePairFile.Name
-            [IO.File]::Copy(
-                "\\?\$([IO.Path]::GetFullPath($nativePairFile.FullName))",
-                "\\?\$([IO.Path]::GetFullPath($nativePairFileDestination))",
-                $true)
+            Copy-LongPathSafeFile -Source $nativePairFile.FullName -Destination $nativePairFileDestination
         }
     }
 

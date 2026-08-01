@@ -48,6 +48,33 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void PhysicalEvidencePackagingUsesLongPathSafeExactFileCopies()
+    {
+        var script = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        const string longestObservedEvidenceName =
+            "selection-outline-nested-column-inner-collapsed-visible-slot.png";
+
+        var helperStart = script.IndexOf("function Copy-LongPathSafeFile", StringComparison.Ordinal);
+        var helperEnd = script.IndexOf("function Get-DirectoryFingerprint", helperStart, StringComparison.Ordinal);
+        var packagingStart = script.IndexOf("$x11ReportDirectory =", StringComparison.Ordinal);
+        var packagingEnd = script.IndexOf("if ($PhysicalOnly)", packagingStart, StringComparison.Ordinal);
+
+        helperStart.Should().BeGreaterThanOrEqualTo(0);
+        helperEnd.Should().BeGreaterThan(helperStart);
+        script[helperStart..helperEnd].Should().Contain("[IO.File]::Copy(\"\\\\?\\$sourcePath\"");
+        packagingStart.Should().BeGreaterThanOrEqualTo(0);
+        packagingEnd.Should().BeGreaterThan(packagingStart);
+        script[packagingStart..packagingEnd]
+            .Should().Contain("Copy-LongPathSafeFile -Source $evidenceFile.FullName -Destination $evidenceDestination")
+            .And.NotContain("Copy-Item");
+
+        Path.Combine(new string('x', 240), longestObservedEvidenceName)
+            .Length.Should().BeGreaterThan(260,
+                "the observed nested-outline evidence name must exercise the Windows MAX_PATH regression");
+    }
+
+    [Fact]
     public void NameBoxObjectValidationUsesFixedIdentityContractsAndNeutralBaselines()
     {
         var script = File.ReadAllText(RepositoryFileLocator.Find(
@@ -160,7 +187,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
-    public void OutlineGroupPhysicalLaneRequiresRealSelectionRibbonAndGutterRestorationEvidence()
+    public void OutlineGroupPhysicalLaneRequiresHeaderContextMenuAndStructuralHidingEvidence()
     {
         var runner = File.ReadAllText(RepositoryFileLocator.Find(
             "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
@@ -170,9 +197,12 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         runner.Should().Contain("\"outline-group\"");
         runner.Should().Contain("outline-group-physical");
         probe.Should().Contain("probe_outline_group_physical()");
-        probe.Should().Contain("send_key shift+space");
-        probe.Should().Contain("send_key alt+a");
-        probe.Should().Contain("outline_green_score");
+        probe.Should().Contain("selection-gesture=row-header-drag-2:4");
+        probe.Should().Contain("group-gesture=row-header-right-click,End,Up,Up,Up,Enter");
+        probe.Should().Contain("outline_toggle_visible");
+        probe.Should().Contain("row-gutter-width=$row_gutter_width");
+        probe.Should().Contain("collapsed-visible-slot=$collapsed_slot");
+        probe.Should().Contain("collapse-structural=$collapsed_structurally");
         probe.Should().Contain("outline-collapsed.png");
         probe.Should().Contain("outline-expanded.png");
         probe.Should().Contain("values-restored=$values_restored");
@@ -180,5 +210,49 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("probe_window_management\nprobe_outline_group_physical");
         runner.Split("\"outline-group-physical\"").Should().HaveCountGreaterThanOrEqualTo(4,
             "the focused selector and default all lane must both require the physical outline result and artifacts");
+    }
+
+    [Fact]
+    public void NestedOutlinePhysicalLaneRequiresBothAxesAndIndependentLevelToggles()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        runner.Should().Contain("\"outline-nested-group\"");
+        runner.Should().Contain("outline-nested-rows-group-physical");
+        runner.Should().Contain("outline-nested-columns-group-physical");
+        probe.Should().Contain("probe_outline_nested_rows_physical()");
+        probe.Should().Contain("probe_outline_nested_columns_physical()");
+        probe.Should().Contain("inner-selection=row-header-drag-11:12");
+        probe.Should().Contain("outer-selection=row-header-drag-10:14");
+        probe.Should().Contain("inner-selection=column-header-drag-I:K");
+        probe.Should().Contain("set_expected_outline_origin \"$expected_inner_depth\" \"$column_outline_depth\" \"outline-nested-rows-inner-origin.png\"");
+        probe.Should().Contain("set_expected_outline_origin \"$row_outline_depth\" \"$expected_inner_depth\" \"outline-nested-columns-inner-origin.png\"");
+        probe.Should().Contain("dismiss_active_popups");
+        probe.Should().NotContain("refresh_grid_origin()");
+        probe.Should().Contain("[[ ! \"$target_x\" =~ ^[0-9]+$ || ! \"$target_y\" =~ ^[0-9]+$ ]]");
+        probe.Should().Contain("row-gutter-width=$row_gutter_width");
+        probe.Should().Contain("column-gutter-height=$column_gutter_height");
+        probe.Should().Contain("inner-collapsed-visible-slot=$inner_collapsed_slot");
+        probe.Should().Contain("outer-expanded-visible-slot=$outer_expanded_slot");
+        probe.Should().Contain("inner-collapse-structural=$inner_collapsed");
+        probe.Should().Contain("outer-expand-structural=$outer_expanded");
+        probe.Should().Contain("inner_collapsed_y=\"$(cell_center_y 10)\"");
+        probe.Should().Contain("outer_collapsed_y=\"$(cell_center_y 9)\"");
+        probe.Should().Contain("[[ \"$inner_collapsed_slot\" == \"NestedRow13\" ]]");
+        probe.Should().Contain("[[ \"$outer_collapsed_slot\" == \"NestedRowOuterSummary\" ]]");
+        probe.Should().Contain("[[ \"$inner_collapsed_slot\" == \"NestedColumnL\" ]]");
+        probe.Should().Contain("[[ \"$outer_collapsed_slot\" == \"NestedColumnOuterSummary\" ]]");
+        probe.Should().NotContain("outline-green=$grouped_score");
+        probe.Should().NotContain("inner-collapse-screen-changed=$inner_collapsed");
+        probe.Should().Contain("outline-nested-rows-inner-collapsed.png");
+        probe.Should().Contain("outline-nested-columns-outer-expanded.png");
+        probe.Should().Contain("NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14");
+        probe.Should().Contain("NestedColumnH,NestedColumnI,NestedColumnJ,NestedColumnK,NestedColumnL");
+        probe.Should().Contain("outline-nested-group\" ]]; then");
+        runner.Split("\"outline-nested-rows-group-physical\"").Should().HaveCountGreaterThanOrEqualTo(4,
+            "the focused selector and default all lane must both require nested row evidence");
     }
 }

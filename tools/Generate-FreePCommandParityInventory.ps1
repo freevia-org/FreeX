@@ -1198,6 +1198,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout now preserve m:rPr/m:scr alphabet metadata plus m:rPr/m:sty bold/italic requests, resolving supported styled alphabet combinations to renderer-neutral mathematical Unicode glyphs consumed by WPF and Avalonia. PowerPoint-authoritative math visual baselines, exact Cambria Math metrics, complete mathematical alphabet coverage, and broader OfficeMath typography remain deferred."),
         new(
+            EvidenceId: "freep.omml.math-font",
+            Area: "OMML equation-wide math font semantics",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.MathParagraph math-font metadata and MathBoxRenderPlanner glyph font families with no renderer-local font policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-math-font-20260801.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout now preserve non-empty m:mathPr/m:mathFont values and emit the selected family on renderer-neutral glyphs before WPF or Avalonia draw. PowerPoint-authoritative font fallback, exact Cambria Math metrics, and document-level math-property inheritance remain deferred."),
+        new(
             EvidenceId: "freep.omml.nary-limit-location",
             Area: "OMML n-ary limit-location semantics",
             Status: "shared-layout-evidence",
