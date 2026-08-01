@@ -1535,8 +1535,15 @@ public sealed class DocumentViewRoundTripTests
         var spacedCell = tables[1].RowGroups[0].Rows[1].Cells[0];
         spacedCell.Background.Should().BeNull(
             "paginated tables reserve the authored cell-spacing gutter outside the inner surface");
-        spacedCell.Blocks.OfType<BlockUIContainer>().Single().Child
-            .Should().BeOfType<System.Windows.Controls.Grid>().Which.Background.Should().NotBeNull();
+        var spacingDip = sourceTable.CellSpacingPt.Value * (96.0 / 72.0);
+        var spacedRow = tables[1].RowGroups[0].Rows[1];
+        var firstSurface = SpacedCellSurface(spacedRow.Cells[0]);
+        var internalSurface = SpacedCellSurface(spacedRow.Cells[1]);
+        var lastSurface = SpacedCellSurface(spacedRow.Cells[^1]);
+        firstSurface.Background.Should().NotBeNull();
+        firstSurface.Margin.Left.Should().BeApproximately(spacingDip / 2, 0.01);
+        internalSurface.Margin.Left.Should().BeApproximately(-spacingDip, 0.01);
+        lastSurface.Margin.Right.Should().BeApproximately(spacingDip, 0.01);
         RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");
         RenderedRowText(pageRows[0][2]).Should().Contain("Segment 2");
@@ -1559,6 +1566,11 @@ public sealed class DocumentViewRoundTripTests
             .Select(paragraph => new TextRange(paragraph.ContentStart, paragraph.ContentEnd).Text.Trim());
         return string.Join(" ", text);
     }
+
+    private static System.Windows.Controls.Border SpacedCellSurface(System.Windows.Documents.TableCell cell) =>
+        cell.Blocks.OfType<BlockUIContainer>().Single().Child
+            .Should().BeOfType<System.Windows.Controls.Grid>().Subject.Children
+            .OfType<System.Windows.Controls.Border>().Single();
 
     private static List<System.Windows.Documents.Table> RenderedTables(FlowDocument document)
     {
