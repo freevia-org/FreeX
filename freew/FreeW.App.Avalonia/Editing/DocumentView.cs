@@ -18,6 +18,7 @@ using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
+using SkiaSharp;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Avalonia.Editing;
@@ -3792,6 +3793,15 @@ public sealed class DocumentView : Control
                 pagesOps[pageIndex].InsertRange(0, borderOps);
         }
 
+        var watermarkOps = BuildPdfWatermarkOps(pageWidthPt, pageHeightPt);
+        if (watermarkOps.Count > 0)
+        {
+            var watermarkedPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
+            EnsurePage(watermarkedPageCount - 1);
+            for (var pageIndex = 0; pageIndex < watermarkedPageCount; pageIndex++)
+                pagesOps[pageIndex].InsertRange(0, watermarkOps);
+        }
+
         if (pagesOps.Count == 0)
             pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
 
@@ -3881,6 +3891,115 @@ public sealed class DocumentView : Control
         }
 
         return ops;
+    }
+
+    private IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> BuildPdfWatermarkOps(
+        double pageWidthPt,
+        double pageHeightPt)
+    {
+        if (_doc.Page.EffectiveWatermark is not { } watermark)
+            return [];
+
+        var pageWidthDip = pageWidthPt * PxPerPoint;
+        var pageHeightDip = pageHeightPt * PxPerPoint;
+        if (watermark.IsPicture)
+        {
+            using var bitmap = SKBitmap.Decode(watermark.ImageBytes!);
+            if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0)
+                return [];
+
+            var plan = WatermarkVisualPlanner.BuildPictureLayout(
+                watermark,
+                pageWidthDip,
+                pageHeightDip,
+                bitmap.Width,
+                bitmap.Height);
+            if (plan is null)
+                return [];
+
+            using var skiaImage = SKImage.FromBitmap(bitmap);
+            using var png = skiaImage.Encode(SKEncodedImageFormat.Png, 100);
+            var pdfImage = new Free.Shared.Pdf.PdfImage(
+                plan.XDip / PxPerPoint,
+                pageHeightPt - (plan.YDip + plan.HeightDip) / PxPerPoint,
+                plan.WidthDip / PxPerPoint,
+                plan.HeightDip / PxPerPoint,
+                png.ToArray(),
+                "image/png",
+                RotationDegrees: plan.RotationDegrees,
+                Opacity: plan.Opacity);
+            return
+            [
+                new Free.Shared.Pdf.PdfClipGroup(
+                    0,
+                    0,
+                    pageWidthPt,
+                    pageHeightPt,
+                    [pdfImage]),
+            ];
+        }
+
+        if (string.IsNullOrWhiteSpace(watermark.Text))
+            return [];
+
+        var textPlan = WatermarkVisualPlanner.BuildTextLayout(watermark, pageWidthDip, pageHeightDip);
+        if (textPlan is null)
+            return [];
+
+        var color = TryParseAvaloniaColor(watermark.FontColorHex, out var parsedColor)
+            ? parsedColor
+            : Color.FromRgb(0x80, 0x80, 0x80);
+        var brush = new SolidColorBrush(color);
+        var typeface = new Typeface(
+            watermark.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
+            FontStyle.Normal,
+            FontWeight.Normal);
+        var unitText = new FormattedText(
+            watermark.Text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            1,
+            brush);
+        var fontSizeDip = WatermarkVisualPlanner.ResolveTextPathFontSize(textPlan, unitText.Width);
+        var text = new FormattedText(
+            watermark.Text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSizeDip,
+            brush);
+        var leftDip = textPlan.CenterXDip - text.Width / 2;
+        var topDip = textPlan.CenterYDip - text.Height / 2;
+        Free.Shared.Pdf.PdfDrawOp textOp = new Free.Shared.Pdf.PdfText(
+            leftDip / PxPerPoint,
+            pageHeightPt - (topDip + fontSizeDip) / PxPerPoint,
+            fontSizeDip / PxPerPoint,
+            Free.Shared.Pdf.PdfFontFace.Regular,
+            new Free.Shared.Pdf.PdfColor(color.R, color.G, color.B),
+            watermark.Text);
+
+        var opacity = Math.Clamp(watermark.Opacity, 0, 1);
+        if (opacity < 1)
+            textOp = new Free.Shared.Pdf.PdfOpacityGroup(opacity, [textOp]);
+        if (Math.Abs(textPlan.RotationDegrees) > 0.01)
+        {
+            textOp = new Free.Shared.Pdf.PdfRotationGroup(
+                textPlan.CenterXDip / PxPerPoint,
+                pageHeightPt - textPlan.CenterYDip / PxPerPoint,
+                textPlan.RotationDegrees,
+                [textOp]);
+        }
+
+        return
+        [
+            new Free.Shared.Pdf.PdfClipGroup(
+                0,
+                0,
+                pageWidthPt,
+                pageHeightPt,
+                [textOp]),
+        ];
     }
 
     private static string FormatKey(RunFormatting fmt) =>

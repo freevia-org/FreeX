@@ -228,6 +228,120 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_IncludesTextWatermarkBehindPageBorderOnEveryPage() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.PageBorder = new PageBorder("#24536B", 1);
+            document.Page.WatermarkOptions = new WatermarkOptions("CONFIDENTIAL")
+            {
+                FontColorHex = "#7F8A99",
+                Layout = WatermarkLayout.Diagonal,
+                Opacity = 0.35,
+            };
+            for (var i = 0; i < 30; i++)
+                document.Blocks.Add(new Paragraph($"Watermarked line {i + 1}"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            foreach (var page in pdf.Pages)
+            {
+                var clip = page.Ops[0].Should().BeOfType<PdfClipGroup>().Subject;
+                clip.X.Should().Be(0);
+                clip.Y.Should().Be(0);
+                clip.Width.Should().Be(260);
+                clip.Height.Should().Be(180);
+                var rotation = clip.Ops.Single().Should().BeOfType<PdfRotationGroup>().Subject;
+                rotation.CenterX.Should().Be(130);
+                rotation.CenterY.Should().Be(90);
+                rotation.RotationDegrees.Should().Be(-45);
+                var opacity = rotation.Ops.Single().Should().BeOfType<PdfOpacityGroup>().Subject;
+                opacity.Opacity.Should().Be(0.35);
+                var text = opacity.Ops.Single().Should().BeOfType<PdfText>().Subject;
+                text.Text.Should().Be("CONFIDENTIAL");
+                text.Color.Should().Be(new PdfColor(0x7F, 0x8A, 0x99));
+                text.FontSize.Should().BeGreaterThan(0);
+                page.Ops[1].Should().BeOfType<PdfStrokeRect>();
+            }
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).First());
+            CountNonWhitePixels(bitmap).Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesPictureWatermarkGeometryRotationAndOpacity() =>
+        Session.Dispatch(() =>
+        {
+            var imageBytes = SolidPng(SKColors.Green);
+            using var sourceBitmap = SKBitmap.Decode(imageBytes);
+            sourceBitmap.Width.Should().Be(16);
+            sourceBitmap.Height.Should().Be(8);
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+            {
+                ImageBytes = imageBytes,
+                Layout = WatermarkLayout.Diagonal,
+                Opacity = 0.4,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var clip = pdf.Pages.Single().Ops[0]
+                .Should().BeOfType<PdfClipGroup>().Subject;
+            var image = clip.Ops.Single().Should().BeOfType<PdfImage>().Subject;
+
+            new[] { image.X, image.Y, image.Width, image.Height }
+                .Should().BeEquivalentTo([107.1, 296.55, 397.8, 198.9], options => options
+                    .Using<double>(context => context.Subject.Should().BeApproximately(context.Expectation, 0.01))
+                    .WhenTypeIs<double>());
+            image.RotationDegrees.Should().Be(-45);
+            image.Opacity.Should().Be(0.4);
+            image.ContentType.Should().Be("image/png");
+            image.ImageBytes.Should().NotBeEmpty();
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var rendered = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var greenPixels = 0;
+            for (var y = 0; y < rendered.Height; y++)
+            for (var x = 0; x < rendered.Width; x++)
+            {
+                var pixel = rendered.GetPixel(x, y);
+                if (pixel.Green > pixel.Red + 20 && pixel.Green > pixel.Blue + 20)
+                    greenPixels++;
+            }
+            greenPixels.Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_SuppressesImportedNativeVmlTextWatermark() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WatermarkOptions = new WatermarkOptions("STALE")
+            {
+                NativeVmlTextPathXml = "<v:textpath string=\"STALE\" />",
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfClipGroup>()
+                .Should().BeEmpty();
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesLaidOutInlineImageWithSharedCropOpacityRotationAndOrdering() =>
         Session.Dispatch(() =>
         {
@@ -929,5 +1043,19 @@ public sealed class DocumentViewPdfExportTests
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    private static int CountNonWhitePixels(SKBitmap bitmap)
+    {
+        var count = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        for (var x = 0; x < bitmap.Width; x++)
+        {
+            var pixel = bitmap.GetPixel(x, y);
+            if (pixel.Red < 250 || pixel.Green < 250 || pixel.Blue < 250)
+                count++;
+        }
+
+        return count;
     }
 }
