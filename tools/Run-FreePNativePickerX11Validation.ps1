@@ -16,7 +16,7 @@ param(
     [ValidateRange(480, 4320)][int]$Height = 820,
     [ValidateRange(72, 240)][int]$Dpi = 96,
     [ValidateSet("2g", "4g", "6g", "8g")][string]$MemoryLimit = "4g",
-    [string]$OutputDir = "artifacts/freep-native-picker-x11-wave90-20260801",
+    [string]$OutputDir = "artifacts/fp-picker-w90",
     [string]$PublishDir = "",
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
@@ -107,13 +107,13 @@ function Wait-EvidenceFile {
 
 function Add-ResultEvidence {
     param([Parameter(Mandatory = $true)]$Result, [Parameter(Mandatory = $true)][string[]]$Names)
-    $names = [System.Collections.Generic.List[string]]::new()
+    $evidenceNames = [System.Collections.Generic.List[string]]::new()
     foreach ($name in @($Result.evidence) + $Names) {
-        if (-not [string]::IsNullOrWhiteSpace([string]$name) -and -not $names.Contains([string]$name)) {
-            $names.Add([string]$name)
+        if (-not [string]::IsNullOrWhiteSpace([string]$name) -and -not $evidenceNames.Contains([string]$name)) {
+            $evidenceNames.Add([string]$name)
         }
     }
-    $Result.evidence = $names.ToArray()
+    $Result.evidence = $evidenceNames.ToArray()
 }
 
 function Assert-PackageState {
@@ -233,7 +233,7 @@ try {
 
     $probeInWork = Join-Path $sessionDirectory "run-freep-native-picker-x11-wave90-probe.sh"
     Copy-Item -LiteralPath $probeSource -Destination $probeInWork -Force
-    $manifestPath = Join-Path $sessionDirectory "freep-native-picker-x11-wave90-validation/results.json"
+    $manifestPath = Join-Path $sessionDirectory "picker-x11/results.json"
     $evidenceDirectory = Split-Path -Parent $manifestPath
     New-Item -ItemType Directory -Path $evidenceDirectory -Force | Out-Null
     $probeLog = Join-Path $evidenceDirectory "probe.log"
@@ -257,7 +257,7 @@ try {
         "--env", "FREEP_SCREEN_HEIGHT=$Height",
         "--env", "FREEP_SCREEN_DPI=$Dpi",
         [string]$session.containerName, "bash", "/work/run-freep-native-picker-x11-wave90-probe.sh",
-        "/work/freep-native-picker-x11-wave90-validation"
+        "/work/picker-x11"
     )
     Push-Location $repoRoot
     try {

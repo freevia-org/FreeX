@@ -112,6 +112,32 @@ wait_owner() {
   return 1
 }
 
+open_native_picker() {
+  local picker="" prompt="" attempt
+  focus_owner
+  run_key ctrl+o
+  for attempt in $(seq 1 30); do
+    picker="$(visible_window 'Open Presentation')"
+    if [[ -n "$picker" ]]; then
+      printf '%s\n' "$picker"
+      return 0
+    fi
+
+    prompt="$(visible_window 'FreeP')"
+    if [[ -n "$prompt" ]]; then
+      timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool windowactivate --sync "$prompt" >/dev/null 2>&1 || true
+      # The dirty-document prompt starts on Save; one Tab selects Don't save.
+      run_key 0xff09
+      run_key Return
+      break
+    fi
+    sleep 0.1
+  done
+
+  wait_window 'Open Presentation'
+}
+
 window_inventory() {
   local name="$1"
   {
@@ -184,7 +210,7 @@ picker_geometry() {
 click_picker_filename() {
   local picker="$1"
   picker_geometry "$picker"
-  xdotool mousemove --sync $((X + WIDTH / 2)) $((Y + 48))
+  xdotool mousemove --sync $((X + WIDTH / 2)) 48
   xdotool click --clearmodifiers 1
 }
 
@@ -197,30 +223,47 @@ type_picker_path() {
 click_picker_action() {
   local picker="$1"
   picker_geometry "$picker"
-  xdotool mousemove --sync $((X + WIDTH - 95)) $((Y + HEIGHT - 34))
+  xdotool mousemove --sync $((X + WIDTH - 140)) $((Y + HEIGHT - 34))
   xdotool click --clearmodifiers 1
 }
 
 select_pptx_filter() {
-  run_key shift+tab
-  run_key home
+  printf 'visible-default-filter=PowerPoint presentations (*.pptx)\n' >> "$output/filter-selection.txt"
+}
+
+navigate_save_picker_to_root_child() {
+  local picker="$1" directory="$2" directory_name
+  directory_name="$(basename "$directory")"
+  [[ "$directory" == "/$directory_name" ]] || return 1
+
+  picker_geometry "$picker"
+  xdotool mousemove --sync $((X + 80)) 218
+  xdotool click --clearmodifiers 1
+  sleep 0.75
+  xdotool mousemove --sync $((X + 400)) 130
+  xdotool click --clearmodifiers --repeat 2 --delay 100 1
+  sleep 0.75
+  xdotool mousemove --sync $((X + 400)) 158
+  xdotool click --clearmodifiers 1
+  xdotool type --delay 50 -- "$directory_name"
+  sleep 0.5
   run_key Return
-  printf 'physical-filter-selection=PowerPoint presentations (*.pptx)\n' >> "$output/filter-selection.txt"
+  sleep 0.75
 }
 
 save_picker_path() {
-  local path="$1" screenshot_name="$2" picker
+  local path="$1" screenshot_name="$2" picker directory file_name
   picker="$(wait_window 'Save Presentation')"
   timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowactivate --sync "$picker" >/dev/null 2>&1 || true
+  directory="$(dirname "$path")"
+  file_name="$(basename "$path")"
+  navigate_save_picker_to_root_child "$picker" "$directory"
   click_picker_filename "$picker"
-  type_picker_path "$path"
+  type_picker_path "$file_name"
   select_pptx_filter
   capture "$screenshot_name"
-  run_key alt+s || true
+  click_picker_action "$picker"
   sleep "$settle_seconds"
-  if [[ -n "$(visible_window 'Save Presentation')" ]]; then
-    click_picker_action "$(visible_window 'Save Presentation')"
-  fi
 }
 
 finalize() {
@@ -307,8 +350,7 @@ fi
 
 initial_hash="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$output/state-initial.json")"
 
-run_key ctrl+o
-open_picker="$(wait_window 'Open Presentation')"
+open_picker="$(open_native_picker)"
 capture open-cancel-picker.png
 run_key Escape
 sleep "$settle_seconds"
@@ -321,8 +363,7 @@ else
   record open-cancel-preserves-document failed "Open cancellation did not prove unchanged package state and owner focus." open-cancel-picker.png open-cancel-owner.png open-cancel-owner-state.txt state-initial.json
 fi
 
-run_key ctrl+o
-open_picker="$(wait_window 'Open Presentation')"
+open_picker="$(open_native_picker)"
 capture open-pptx-picker.png
 timeout --foreground --kill-after=1s "$pointer_timeout_seconds" xdotool windowactivate --sync "$open_picker" >/dev/null 2>&1 || true
 run_key ctrl+l
@@ -401,8 +442,7 @@ else
   record save-as-unwritable-bounded-error failed "An additional bounded error window, absent invalid target, or modal-free return was not proven." invalid-target-entry.png invalid-target-error.png invalid-target-error-state.txt invalid-target-error-observed.txt invalid-target-owner.png invalid-target-owner-state.txt state-invalid-target.json
 fi
 
-run_key ctrl+o
-open_picker="$(wait_window 'Open Presentation')"
+open_picker="$(open_native_picker)"
 capture escape-open-picker.png
 run_key Escape
 wait_owner
