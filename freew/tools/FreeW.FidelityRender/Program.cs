@@ -722,7 +722,11 @@ static void RenderDocumentComposite(
                         Math.Max(0, thisPixW - thisMarginLeft - thisMarginRight + 2 * (space + borderWidth)),
                         Math.Max(0, thisPixH - headerDistance - thisMarginBottom + 2 * (space + borderWidth)));
 
-                    if (pb.LineStyle == BorderLineStyle.Double)
+                    if (pb.LineStyle == BorderLineStyle.Wave)
+                    {
+                        DrawWavePageBorderFrame(dc, borderColor, outerFrame, 0);
+                    }
+                    else if (pb.LineStyle == BorderLineStyle.Double)
                     {
                         var pen = new Pen(new SolidColorBrush(borderColor), borderWidth * 0.75);
                         DrawTextRelativePageBorderFrame(dc, pen, outerFrame);
@@ -743,6 +747,10 @@ static void RenderDocumentComposite(
                     // Word's imported double frame starts the second stroke two authored widths
                     // inward. A 4/3-width offset collapses its raster into the first stroke.
                     DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * 2.0, thisPixW, thisPixH);
+                }
+                else if (pb.LineStyle == BorderLineStyle.Wave)
+                {
+                    DrawWavePageBorderFrame(dc, borderColor, new Rect(0, 0, thisPixW, thisPixH), edgeInset);
                 }
                 else
                 {
@@ -1920,6 +1928,29 @@ static void DrawPageBorderFrame(DrawingContext drawingContext, Pen pen, double e
         new Rect(inset, inset,
             Math.Max(0, width - 2 * inset),
             Math.Max(0, height - 2 * inset)));
+}
+
+static void DrawWavePageBorderFrame(
+    DrawingContext drawingContext,
+    Color color,
+    Rect frame,
+    double edgeInset)
+{
+    var waveColor = Color.FromArgb(
+        (byte)Math.Round(255 * PageBorderWaveVisualPlanner.StrokeOpacity),
+        color.R,
+        color.G,
+        color.B);
+    var pen = new Pen(
+        new SolidColorBrush(waveColor),
+        PageBorderWaveVisualPlanner.StrokeWidthDip);
+    foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, edgeInset))
+    {
+        drawingContext.DrawLine(
+            pen,
+            new Point(frame.X + segment.X1Dip, frame.Y + segment.Y1Dip),
+            new Point(frame.X + segment.X2Dip, frame.Y + segment.Y2Dip));
+    }
 }
 
 static void DrawTextRelativePageBorderFrame(DrawingContext drawingContext, Pen pen, Rect outerFrame)
