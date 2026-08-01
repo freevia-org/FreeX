@@ -373,6 +373,7 @@ internal static class TextBodyFlowDocumentConverter
                 if (args.ClickCount >= 2 && OleActivationService.TryActivate(ole))
                     args.Handled = true;
             };
+            WpfOleInPlaceHost.AttachInline(border, ole, width: 42, height: 20);
             return new InlineUIContainer(border)
             {
                 BaselineAlignment = BaselineAlignment.Center,

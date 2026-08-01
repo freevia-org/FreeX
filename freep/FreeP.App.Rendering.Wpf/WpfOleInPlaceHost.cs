@@ -23,21 +23,25 @@ public sealed class WpfOleInPlaceHost : HwndHost
     private const uint StgCreateReadWrite = 0x00000002;
     private const int DvAspectContent = 1;
     private const int TymedNull = 0;
-    private readonly OleObjectInfo _oleObject;
     private readonly string _sourcePath;
     private readonly string _storagePath;
     private readonly byte[] _originalBytes;
+    private readonly Action<byte[]> _commitBytes;
     private OleSite? _site;
     private IOleObject? _ole;
     private IntPtr _child;
     private bool _closed;
+    private bool _started;
 
-    private WpfOleInPlaceHost(OleObjectInfo oleObject, string sourcePath)
+    private WpfOleInPlaceHost(
+        string sourcePath,
+        byte[] originalBytes,
+        Action<byte[]> commitBytes)
     {
-        _oleObject = oleObject;
         _sourcePath = sourcePath;
         _storagePath = sourcePath + ".stg";
-        _originalBytes = oleObject.EmbeddedBytes.ToArray();
+        _originalBytes = originalBytes.ToArray();
+        _commitBytes = commitBytes;
         HorizontalAlignment = HorizontalAlignment.Left;
         VerticalAlignment = VerticalAlignment.Top;
     }
@@ -65,7 +69,10 @@ public sealed class WpfOleInPlaceHost : HwndHost
             Directory.CreateDirectory(directory);
             File.WriteAllBytes(path, oleObject.EmbeddedBytes);
 
-            var candidate = new WpfOleInPlaceHost(oleObject, path)
+            var candidate = new WpfOleInPlaceHost(
+                path,
+                oleObject.EmbeddedBytes,
+                bytes => oleObject.EmbeddedBytes = bytes)
             {
                 Width = Math.Max(1, bounds.Width),
                 Height = Math.Max(1, bounds.Height),
@@ -89,6 +96,91 @@ public sealed class WpfOleInPlaceHost : HwndHost
             TryDelete(path);
             return false;
         }
+    }
+
+    private static bool TryCreateInline(
+        InlineOleObjectInfo inlineObject,
+        double width,
+        double height,
+        out WpfOleInPlaceHost? host)
+    {
+        host = null;
+        string extension = OleActivationService.ResolveExtension(inlineObject);
+        string directory = Path.Combine(Path.GetTempPath(), "FreeP", "Ole", "InPlace");
+        string path = Path.Combine(directory, $"inline-{Guid.NewGuid():N}.{extension}");
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllBytes(path, inlineObject.EmbeddedBytes);
+
+            host = new WpfOleInPlaceHost(
+                path,
+                inlineObject.EmbeddedBytes,
+                bytes => inlineObject.EmbeddedBytes = bytes)
+            {
+                Width = Math.Max(1, width),
+                Height = Math.Max(1, height),
+            };
+            return true;
+        }
+        catch
+        {
+            TryDelete(path);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Defers native OLE hosting for an inline text marker until the containing WPF
+    /// element is loaded.  The placeholder remains visible when the registered OLE
+    /// server cannot be created, so external activation remains available.
+    /// </summary>
+    public static bool AttachInline(
+        Border container,
+        InlineOleObjectInfo? inlineObject,
+        double width,
+        double height)
+    {
+        if (container is null
+            || inlineObject is null
+            || inlineObject.EmbeddedBytes.Length == 0)
+            return false;
+
+        var fallback = container.Child;
+        WpfOleInPlaceHost? host = null;
+
+        void DisposeHost()
+        {
+            host?.Dispose();
+            host = null;
+        }
+
+        void TryAttachHost(object? sender, RoutedEventArgs args)
+        {
+            if (host is not null
+                || !TryCreateInline(inlineObject, width, height, out host)
+                || host is null)
+                return;
+
+            host.Loaded += (_, _) =>
+            {
+                if (host is null || host.TryStart())
+                    return;
+
+                DisposeHost();
+                container.Child = fallback;
+            };
+            container.Child = host;
+            if (host.IsLoaded && !host.TryStart())
+            {
+                DisposeHost();
+                container.Child = fallback;
+            }
+        }
+
+        container.Loaded += TryAttachHost;
+        container.Unloaded += (_, _) => DisposeHost();
+        return true;
     }
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
@@ -120,8 +212,12 @@ public sealed class WpfOleInPlaceHost : HwndHost
 
     private bool TryStart()
     {
+        if (_started)
+            return _ole is not null;
         if (_child == IntPtr.Zero)
             return false;
+
+        _started = true;
 
         _site = new OleSite(this);
         if (StgCreateDocfile(
@@ -187,7 +283,7 @@ public sealed class WpfOleInPlaceHost : HwndHost
             {
                 var bytes = File.ReadAllBytes(_sourcePath);
                 if (bytes.Length > 0 && !bytes.SequenceEqual(_originalBytes))
-                    _oleObject.EmbeddedBytes = bytes;
+                    _commitBytes(bytes);
             }
         }
         catch
