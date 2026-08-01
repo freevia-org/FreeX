@@ -6119,7 +6119,11 @@ public static class DocxReader
 
         var color = edge.Attribute(W + "color")?.Value;
         var width = EighthPointsToPoints(edge.Attribute(W + "sz")?.Value);
-        var lineStyle = BorderLineStyles.FromToken(edge.Attribute(W + "val")?.Value);
+        var styleToken = edge.Attribute(W + "val")?.Value;
+        var hasCanonicalArt = PageBorderArtStyles.TryGetByToken(styleToken, out var artStyle);
+        var lineStyle = hasCanonicalArt
+            ? BorderLineStyle.Single
+            : BorderLineStyles.FromToken(styleToken);
         var space = double.TryParse(edge.Attribute(W + "space")?.Value,
             System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var parsedSpace)
@@ -6130,10 +6134,12 @@ public static class DocxReader
             ? PageBorderOffsetFrom.Text
             : PageBorderOffsetFrom.Page;
 
-        // Read the optional @w:art attribute (Word's decorative art border id 1-166).
+        // Older FreeW packages used a non-schema @w:art attribute. Read it as a compatibility fallback,
+        // while canonical WordprocessingML stores the decorative design directly in @w:val.
         var artStr = edge.Attribute(W + "art")?.Value;
-        var artId = int.TryParse(artStr, System.Globalization.NumberStyles.Integer,
+        var legacyArtId = int.TryParse(artStr, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
+        var artId = hasCanonicalArt ? artStyle.ArtId : legacyArtId;
 
         return new PageBorder(
             color is null or "auto" ? "#000000" : "#" + color.TrimStart('#'),

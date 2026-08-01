@@ -7,7 +7,7 @@ namespace FreeW.Core.IO.Tests;
 /// <summary>
 /// Round-trip tests for the Design-tab depth additions (W23):
 /// <list type="bullet">
-/// <item>Page border <c>@w:art</c> attribute (decorative art border id) write/read.</item>
+/// <item>Canonical page-border art <c>w:val</c> token write/read.</item>
 /// <item>Image watermark bytes + scale + washout round-trip (base-64 custom properties).</item>
 /// <item>Image watermark property names are written when <see cref="WatermarkOptions.IsPicture"/> is true.</item>
 /// </list>
@@ -35,7 +35,28 @@ public class DesignDepthRoundTripTests
     private static XDocument ReadCustomXml(TextDocument document) =>
         ReadPartXml(document, "docProps/custom.xml");
 
-    // ── Page Border @w:art round-trip ─────────────────────────────────────────────────────────────
+    private static TextDocument ReadWithDocumentXmlMutation(TextDocument document, Action<XDocument> mutate)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var original = zip.GetEntry("word/document.xml")!;
+            XDocument xml;
+            using (var source = original.Open())
+                xml = XDocument.Load(source);
+            mutate(xml);
+            original.Delete();
+            using var destination = zip.CreateEntry("word/document.xml").Open();
+            xml.Save(destination);
+        }
+
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
+    // ── Page-border art token round-trip ──────────────────────────────────────────────────────────
 
     [Fact]
     public void PageBorderArtId_RoundTrips_WriteAndRead()
@@ -52,7 +73,7 @@ public class DesignDepthRoundTripTests
     }
 
     [Fact]
-    public void PageBorderArtId_Zero_EmitsNoArtAttribute()
+    public void PageBorderArtId_Zero_EmitsLineStyleWithoutLegacyArtAttribute()
     {
         var doc = new TextDocument();
         doc.Page.PageBorder = new PageBorder("#000000", 1.0) { ArtId = 0 };
@@ -62,15 +83,13 @@ public class DesignDepthRoundTripTests
             .FirstOrDefault();
 
         sectPr.Should().NotBeNull();
-        // No @w:art attribute should be present for id 0.
         var wNs = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
-        sectPr!.Elements()
-            .Should()
-            .NotContain(e => e.Attribute(wNs + "art") != null);
+        sectPr!.Elements().Should().OnlyContain(edge => edge.Attribute(wNs + "val")!.Value == "single");
+        sectPr.Elements().Should().NotContain(edge => edge.Attribute(wNs + "art") != null);
     }
 
     [Fact]
-    public void PageBorderArtId_NonZero_EmitsArtAttributeOnAllEdges()
+    public void PageBorderArtId_NonZero_EmitsCanonicalWordArtTokenOnAllEdges()
     {
         var doc = new TextDocument();
         doc.Page.PageBorder = new PageBorder("#FF0000", 3.0) { ArtId = 84 };
@@ -84,17 +103,33 @@ public class DesignDepthRoundTripTests
         edges.Should().HaveCount(4); // top, left, bottom, right
         foreach (var edge in edges)
         {
-            edge.Attribute(W + "art")!.Value.Should().Be("84");
-            // val must be present and non-empty (art borders still need a valid style token).
-            edge.Attribute(W + "val")!.Value.Should().NotBeNullOrEmpty();
+            edge.Attribute(W + "val")!.Value.Should().Be("people");
+            edge.Attribute(W + "art").Should().BeNull();
+            edge.Attribute(W + "sz")!.Value.Should().Be("24");
+            edge.Attribute(W + "space")!.Value.Should().Be("24");
         }
+    }
+
+    [Fact]
+    public void PageBorderArtId_UnsupportedId_FallsBackToValidLineBorderXml()
+    {
+        var doc = new TextDocument();
+        doc.Page.PageBorder = new PageBorder("#000000", 1.0) { ArtId = 999 };
+
+        var W = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var xml = ReadPartXml(doc, "word/document.xml");
+        var pgBorders = xml.Descendants(W + "pgBorders").Single();
+
+        pgBorders.Elements().Should().OnlyContain(edge =>
+            edge.Attribute(W + "val")!.Value == "single");
+        pgBorders.DescendantsAndSelf().Attributes(W + "art").Should().BeEmpty();
     }
 
     [Theory]
     [InlineData(1)]
     [InlineData(38)]
     [InlineData(84)]
-    [InlineData(166)]
+    [InlineData(160)]
     public void PageBorderArtId_VariousIds_RoundTrip(int artId)
     {
         var doc = new TextDocument();
@@ -106,7 +141,24 @@ public class DesignDepthRoundTripTests
     }
 
     [Fact]
-    public void PageBorderArtId_NoBorder_NoArtEmitted()
+    public void PageBorderArtId_ReadsLegacyFreeWArtAttributeAsCompatibilityFallback()
+    {
+        var doc = new TextDocument();
+        doc.Page.PageBorder = new PageBorder("#FF0000", 3.0);
+        var W = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+
+        var loaded = ReadWithDocumentXmlMutation(doc, xml =>
+        {
+            foreach (var edge in xml.Root!.Descendants(W + "pgBorders").Single().Elements())
+                edge.SetAttributeValue(W + "art", "84");
+        });
+
+        loaded.Page.PageBorder!.ArtId.Should().Be(84);
+        loaded.Page.PageBorder.LineStyle.Should().Be(BorderLineStyle.Single);
+    }
+
+    [Fact]
+    public void PageBorderArtId_NoBorder_NoPageBorderEmitted()
     {
         var doc = new TextDocument();
         doc.Page.PageBorder = null;

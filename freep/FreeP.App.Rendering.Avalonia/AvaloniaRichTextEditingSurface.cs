@@ -189,6 +189,50 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         return false;
     }
 
+    internal bool TryFindInlineTableCell(
+        InlineTableCellHit source,
+        int rowIndex,
+        int columnIndex,
+        out InlineTableCellHit hit)
+    {
+        EnsureLayouts();
+        foreach (var paragraph in _layouts)
+        {
+            foreach (var table in paragraph.InlineTables)
+            {
+                if (!ReferenceEquals(table.Info, source.Table))
+                    continue;
+
+                var inlineRect = paragraph.Layout.HitTestTextPosition(table.Start);
+                var tableOrigin = new Point(
+                    paragraph.Origin.X + inlineRect.X,
+                    paragraph.Origin.Y + inlineRect.Y);
+                if (!InlineTableTextRun.TryGetCellBounds(
+                        table,
+                        tableOrigin,
+                        rowIndex,
+                        columnIndex,
+                        out var cellBounds)
+                    || table.Info.Table.Rows.ElementAtOrDefault(rowIndex)?
+                        .Cells.ElementAtOrDefault(columnIndex)?.TextBody is null)
+                {
+                    continue;
+                }
+
+                hit = new InlineTableCellHit(
+                    source.LogicalPosition,
+                    source.Table,
+                    rowIndex,
+                    columnIndex,
+                    cellBounds);
+                return true;
+            }
+        }
+
+        hit = default;
+        return false;
+    }
+
     internal void SetScrollOffset(double offsetY)
     {
         EnsureLayouts();
@@ -1074,6 +1118,66 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
             rowIndex = -1;
             columnIndex = -1;
+            cellBounds = default;
+            return false;
+        }
+
+        internal static bool TryGetCellBounds(
+            InlineTableLayout tableLayout,
+            Point origin,
+            int targetRow,
+            int targetColumn,
+            out Rect cellBounds)
+        {
+            var table = tableLayout.Info.Table;
+            int rowCount = Math.Max(1, table.Rows.Count);
+            int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
+            if (targetRow < 0 || targetRow >= rowCount
+                || targetColumn < 0 || targetColumn >= columnCount)
+            {
+                cellBounds = default;
+                return false;
+            }
+
+            double[] widths = Enumerable.Range(0, columnCount)
+                .Select(index => index < table.ColumnWidthsEmu.Count
+                    ? Math.Max(24, table.ColumnWidthsEmu[index] / 9525.0)
+                    : 72)
+                .ToArray();
+            double[] heights = Enumerable.Range(0, rowCount)
+                .Select(index => table.Rows[index].HeightEmu > 0
+                    ? Math.Max(20, table.Rows[index].HeightEmu / 9525.0)
+                    : 24)
+                .ToArray();
+            double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
+            double xIndent = table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip;
+            double y = origin.Y;
+
+            for (int row = 0; row < rowCount; row++)
+            {
+                var modelRow = table.Rows.ElementAtOrDefault(row);
+                double rowWidth = modelRow is null
+                    ? widths.Sum()
+                    : widths.Take(Math.Min(widths.Length, modelRow.Cells.Sum(cell => Math.Max(1, cell.GridSpan)))).Sum();
+                double x = origin.X + AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(
+                    modelRow?.HorizontalAlignment,
+                    tableLayout.AvailableWidthDip,
+                    rowWidth) + xIndent;
+                for (int column = 0; column < columnCount; column++)
+                {
+                    var candidate = new Rect(x, y, widths[column], heights[row]);
+                    if (row == targetRow && column == targetColumn)
+                    {
+                        cellBounds = candidate;
+                        return true;
+                    }
+
+                    x += widths[column] + spacing;
+                }
+
+                y += heights[row];
+            }
+
             cellBounds = default;
             return false;
         }
