@@ -3645,6 +3645,9 @@ public sealed class DocumentView : Control
                     || snapshot.RunIndex >= paragraph.Runs.Count
                     || snapshot.Kind is not (DocumentFloatingObjectKind.Image
                         or DocumentFloatingObjectKind.Shape
+                        or DocumentFloatingObjectKind.Chart
+                        or DocumentFloatingObjectKind.WordArt
+                        or DocumentFloatingObjectKind.SmartArt
                         or DocumentFloatingObjectKind.Group))
                     continue;
 
@@ -3676,6 +3679,25 @@ public sealed class DocumentView : Control
                             : [],
                     DocumentFloatingObjectKind.Shape when paragraph.Runs[snapshot.RunIndex].Shape is { IsFloating: true } shape =>
                         BuildPdfShapeOps(shape, snapshot, sourceRect, pageTopDip, pageHeightPt),
+                    DocumentFloatingObjectKind.Chart when paragraph.Runs[snapshot.RunIndex].Chart is { IsFloating: true } chart =>
+                        BuildPdfChartOps(
+                            chart,
+                            DrawingObjectVisualPlanner.BuildVisualPlan(chart, snapshot),
+                            sourceRect,
+                            pageTopDip,
+                            pageHeightPt),
+                    DocumentFloatingObjectKind.WordArt when paragraph.Runs[snapshot.RunIndex].WordArt is { IsFloating: true } wordArt =>
+                        BuildPdfWordArtOps(
+                            DrawingObjectVisualPlanner.BuildVisualPlan(wordArt, snapshot),
+                            sourceRect,
+                            pageTopDip,
+                            pageHeightPt),
+                    DocumentFloatingObjectKind.SmartArt when paragraph.Runs[snapshot.RunIndex].SmartArt is { IsFloating: true } smartArt =>
+                        BuildPdfSmartArtOps(
+                            DrawingObjectVisualPlanner.BuildVisualPlan(smartArt, snapshot),
+                            sourceRect,
+                            pageTopDip,
+                            pageHeightPt),
                     DocumentFloatingObjectKind.Group when paragraph.Runs[snapshot.RunIndex].DrawingGroup is { } group =>
                         BuildPdfGroupOps(group, snapshot, pageTopDip, pageHeightPt),
                     _ => [],
@@ -3895,6 +3917,31 @@ public sealed class DocumentView : Control
                     }
                     break;
 
+                case Chart chart when childPlan.Visual.Kind == DrawingObjectVisualKind.Chart:
+                    childOps.AddRange(BuildPdfChartOps(
+                        chart,
+                        childPlan.Visual,
+                        childRect,
+                        pageTopDip,
+                        pageHeightPt));
+                    break;
+
+                case WordArt when childPlan.Visual.Kind == DrawingObjectVisualKind.WordArt:
+                    childOps.AddRange(BuildPdfWordArtOps(
+                        childPlan.Visual,
+                        childRect,
+                        pageTopDip,
+                        pageHeightPt));
+                    break;
+
+                case SmartArt when childPlan.Visual.Kind == DrawingObjectVisualKind.SmartArt:
+                    childOps.AddRange(BuildPdfSmartArtOps(
+                        childPlan.Visual,
+                        childRect,
+                        pageTopDip,
+                        pageHeightPt));
+                    break;
+
                 case FreeW.Core.Model.DrawingGroup nestedGroup
                     when childPlan.Visual.Kind == DrawingObjectVisualKind.Group:
                     childOps.AddRange(BuildPdfGroupOps(
@@ -3928,6 +3975,725 @@ public sealed class DocumentView : Control
         }
 
         return [boundedOps];
+    }
+
+    private IReadOnlyList<PdfDrawOp> BuildPdfChartOps(
+        Chart chart,
+        DrawingObjectVisualPlan plan,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, sourceRect.Width, sourceRect.Height);
+        var ops = new List<PdfDrawOp>();
+        var frame = PdfRect(sourceRect, 0, 0, sourceRect.Width, sourceRect.Height, pageTopDip, pageHeightPt);
+        ops.Add(new PdfFillRect(frame.X, frame.Y, frame.Width, frame.Height, ParseColor("#F9F9F9")));
+        ops.Add(new PdfStrokeRect(frame.X, frame.Y, frame.Width, frame.Height, ParseColor("#BBBBBB"), 1 / PxPerPoint));
+
+        PdfPoint Point(double xDip, double yDip) => new(
+            (sourceRect.Left + xDip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt,
+            pageHeightPt - ((sourceRect.Top + yDip - pageTopDip) / PxPerPoint));
+        PdfRectValue Rect(ChartSceneRect rect) => PdfRect(
+            sourceRect,
+            rect.X,
+            rect.Y,
+            rect.Width,
+            rect.Height,
+            pageTopDip,
+            pageHeightPt);
+
+        if (scene.PlotFillHex is not null)
+        {
+            var plot = Rect(scene.PlotBounds);
+            ops.Add(new PdfFillRect(plot.X, plot.Y, plot.Width, plot.Height, ParseColor(scene.PlotFillHex)));
+        }
+
+        foreach (var line in scene.GridLines.Concat(scene.AxisLines))
+        {
+            var start = Point(line.X1, line.Y1);
+            var end = Point(line.X2, line.Y2);
+            ops.Add(new PdfLine(start.X, start.Y, end.X, end.Y, ParseColor(line.StrokeHex), line.StrokeWidth / PxPerPoint));
+        }
+
+        foreach (var bar in scene.Bars)
+        {
+            var barRect = Rect(bar.Bounds);
+            var barOp = new PdfFillRect(barRect.X, barRect.Y, barRect.Width, barRect.Height, ParseColor(bar.FillHex));
+            ops.Add(bar.FillOpacity is > 0 and < 1
+                ? new PdfOpacityGroup(bar.FillOpacity, [barOp])
+                : barOp);
+        }
+
+        foreach (var series in scene.LineSeries)
+        {
+            if (series.Points.Count < 2)
+                continue;
+
+            var points = series.Points.Select(point => Point(point.X, point.Y)).ToList();
+            if (series.FillArea)
+            {
+                var areaStart = Point(series.Points[0].X, series.AreaBaselineY);
+                var areaPoints = new List<PdfPathPoint> { new(areaStart.X, areaStart.Y) };
+                areaPoints.AddRange(points.Select(point => new PdfPathPoint(point.X, point.Y)));
+                var areaEnd = Point(series.Points[^1].X, series.AreaBaselineY);
+                areaPoints.Add(new PdfPathPoint(areaEnd.X, areaEnd.Y));
+                var area = new PdfPath(
+                    [new PdfPathContour(areaPoints[0], areaPoints.Skip(1).Select(PdfPathSegment.LineTo).ToArray(), true)],
+                    ParseColor(series.StrokeHex),
+                    null,
+                    0);
+                ops.Add(series.AreaOpacity is > 0 and < 1
+                    ? new PdfOpacityGroup(series.AreaOpacity, [area])
+                    : area);
+            }
+
+            for (var index = 1; index < points.Count; index++)
+            {
+                ops.Add(new PdfLine(
+                    points[index - 1].X,
+                    points[index - 1].Y,
+                    points[index].X,
+                    points[index].Y,
+                    ParseColor(series.StrokeHex),
+                    series.StrokeWidth / PxPerPoint));
+            }
+        }
+
+        foreach (var marker in scene.Markers)
+            AddPdfChartMarker(ops, marker, Point, pageTopDip);
+
+        foreach (var slice in scene.Slices)
+            AddPdfChartSlice(ops, slice, Point);
+
+        foreach (var text in scene.Texts)
+            AddPdfSceneText(ops, text, sourceRect, pageTopDip, pageHeightPt);
+
+        for (var index = 0; index < scene.Legend.Count; index++)
+        {
+            var entry = scene.Legend[index];
+            var swatch = Rect(new ChartSceneRect(entry.SwatchX, entry.SwatchY, entry.SwatchSize, entry.SwatchSize));
+            ops.Add(new PdfFillRect(
+                swatch.X,
+                swatch.Y,
+                swatch.Width,
+                swatch.Height,
+                ParseColor(scene.PaletteHex[index % Math.Max(1, scene.PaletteHex.Count)])));
+            AddPdfSceneText(ops, new ChartSceneText(
+                entry.Text,
+                entry.TextX,
+                entry.TextY,
+                ChartSceneTextAnchor.TopLeft,
+                ChartSceneTextKind.Legend,
+                "#000000",
+                9), sourceRect, pageTopDip, pageHeightPt);
+        }
+
+        return WrapPdfVisualOps(ops, plan, frame);
+    }
+
+    private void AddPdfChartMarker(
+        List<PdfDrawOp> ops,
+        ChartSceneMarker marker,
+        Func<double, double, PdfPoint> point,
+        double pageTopDip)
+    {
+        var center = point(marker.CenterX, marker.CenterY);
+        var radius = marker.Radius / PxPerPoint;
+        var color = ParseColor(marker.FillHex);
+        PdfColor? stroke = marker.StrokeHex is null ? null : ParseColor(marker.StrokeHex);
+        var strokeWidth = Math.Max(0.1, marker.StrokeWidth / PxPerPoint);
+        switch (marker.Kind)
+        {
+            case ChartSceneMarkerKind.Circle:
+                ops.Add(new PdfFillEllipse(center.X - radius, center.Y - radius, radius * 2, radius * 2, color));
+                break;
+            case ChartSceneMarkerKind.Square:
+                ops.Add(new PdfFillRect(center.X - radius, center.Y - radius, radius * 2, radius * 2, color));
+                break;
+            case ChartSceneMarkerKind.Cross:
+                ops.Add(new PdfLine(center.X - radius, center.Y - radius, center.X + radius, center.Y + radius, color, strokeWidth));
+                ops.Add(new PdfLine(center.X + radius, center.Y - radius, center.X - radius, center.Y + radius, color, strokeWidth));
+                break;
+            case ChartSceneMarkerKind.Diamond:
+            case ChartSceneMarkerKind.Triangle:
+            {
+                PdfPathPoint[] points = marker.Kind == ChartSceneMarkerKind.Diamond
+                    ? [new PdfPathPoint(center.X, center.Y + radius), new(center.X + radius, center.Y),
+                        new(center.X, center.Y - radius), new(center.X - radius, center.Y)]
+                    : [new PdfPathPoint(center.X, center.Y + radius), new(center.X + radius, center.Y - radius),
+                        new(center.X - radius, center.Y - radius)];
+                ops.Add(new PdfPath(
+                    [new PdfPathContour(points[0], points.Skip(1).Select(PdfPathSegment.LineTo).ToArray(), true)],
+                    color,
+                    stroke,
+                    strokeWidth));
+                break;
+            }
+        }
+    }
+
+    private void AddPdfChartSlice(
+        List<PdfDrawOp> ops,
+        ChartSceneSlice slice,
+        Func<double, double, PdfPoint> point)
+    {
+        var center = point(slice.CenterX, slice.CenterY);
+        var outerRadius = slice.OuterRadius / PxPerPoint;
+        var innerRadius = slice.InnerRadius / PxPerPoint;
+        var steps = Math.Max(8, (int)Math.Ceiling(Math.Abs(slice.SweepAngleRadians) * 12));
+        var points = new List<PdfPathPoint>(steps * 2 + 2);
+        for (var index = 0; index <= steps; index++)
+        {
+            var angle = slice.StartAngleRadians + slice.SweepAngleRadians * index / steps;
+            points.Add(new PdfPathPoint(
+                center.X + outerRadius * Math.Cos(angle),
+                center.Y - outerRadius * Math.Sin(angle)));
+        }
+
+        if (innerRadius > 0)
+        {
+            for (var index = steps; index >= 0; index--)
+            {
+                var angle = slice.StartAngleRadians + slice.SweepAngleRadians * index / steps;
+                points.Add(new PdfPathPoint(
+                    center.X + innerRadius * Math.Cos(angle),
+                    center.Y - innerRadius * Math.Sin(angle)));
+            }
+        }
+        else
+        {
+            points.Add(new PdfPathPoint(center.X, center.Y));
+        }
+
+        ops.Add(new PdfPath(
+            [new PdfPathContour(points[0], points.Skip(1).Select(PdfPathSegment.LineTo).ToArray(), true)],
+            ParseColor(slice.FillHex),
+            ParseColor(slice.StrokeHex),
+            Math.Max(0.1, slice.StrokeWidth / PxPerPoint)));
+    }
+
+    private void AddPdfSceneText(
+        List<PdfDrawOp> ops,
+        ChartSceneText text,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        if (string.IsNullOrEmpty(text.Text))
+            return;
+
+        var fontSizePt = Math.Max(1, text.FontSize / PxPerPoint);
+        var estimatedWidthDip = text.Text.Length * text.FontSize * 0.5;
+        var xDip = text.Anchor switch
+        {
+            ChartSceneTextAnchor.TopCenter or ChartSceneTextAnchor.Center => text.X - estimatedWidthDip / 2,
+            ChartSceneTextAnchor.CenterRight => text.X - estimatedWidthDip,
+            _ => text.X,
+        };
+        var baselineOffsetDip = text.Anchor is ChartSceneTextAnchor.Center or ChartSceneTextAnchor.CenterRight
+            ? text.FontSize * 0.35
+            : text.FontSize;
+        var xPt = (sourceRect.Left + xDip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+        var yPt = pageHeightPt - ((sourceRect.Top + text.Y + baselineOffsetDip - pageTopDip) / PxPerPoint);
+        var textOp = new PdfText(xPt, yPt, fontSizePt, PdfFontFace.Regular, ParseColor(text.ColorHex), text.Text);
+        if (Math.Abs(text.RotationDegrees) > 0.001)
+        {
+            var centerX = (sourceRect.Left + text.X - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+            var centerY = pageHeightPt - ((sourceRect.Top + text.Y - pageTopDip) / PxPerPoint);
+            ops.Add(new PdfRotationGroup(centerX, centerY, text.RotationDegrees, [textOp]));
+        }
+        else
+        {
+            ops.Add(textOp);
+        }
+    }
+
+    private readonly record struct PdfPoint(double X, double Y);
+
+    private readonly record struct PdfRectValue(double X, double Y, double Width, double Height);
+
+    private PdfRectValue PdfRect(
+        Rect sourceRect,
+        double xDip,
+        double yDip,
+        double widthDip,
+        double heightDip,
+        double pageTopDip,
+        double pageHeightPt) =>
+        new(
+            (sourceRect.Left + xDip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt,
+            pageHeightPt - ((sourceRect.Top + yDip + heightDip - pageTopDip) / PxPerPoint),
+            widthDip / PxPerPoint,
+            heightDip / PxPerPoint);
+
+    private static IReadOnlyList<PdfDrawOp> WrapPdfVisualOps(
+        IReadOnlyList<PdfDrawOp> ops,
+        DrawingObjectVisualPlan plan,
+        PdfRectValue bounds)
+    {
+        if (ops.Count == 0)
+            return [];
+
+        if (Math.Abs(plan.RotationAngle) > 0.001 || plan.FlipH || plan.FlipV)
+        {
+            return [new PdfRotationGroup(
+                bounds.X + bounds.Width / 2,
+                bounds.Y + bounds.Height / 2,
+                plan.RotationAngle,
+                ops,
+                plan.FlipH,
+                plan.FlipV)];
+        }
+
+        return ops;
+    }
+
+    private IReadOnlyList<PdfDrawOp> BuildPdfSmartArtOps(
+        DrawingObjectVisualPlan plan,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        if (plan.SmartArt is not { } smartArt)
+            return [];
+
+        var ops = new List<PdfDrawOp>();
+        var frame = PdfRect(sourceRect, 0, 0, sourceRect.Width, sourceRect.Height, pageTopDip, pageHeightPt);
+        var isNativePyramid = string.Equals(smartArt.LayoutId, "pyramid1", StringComparison.OrdinalIgnoreCase)
+            && smartArt.LayoutGeometry is { Kind: SmartArtLayoutGeometryKind.Pyramid, Nodes.Count: > 0 };
+        if (!isNativePyramid)
+        {
+            ops.Add(new PdfFillRect(frame.X, frame.Y, frame.Width, frame.Height, ParseColor("#F9F9F9")));
+            ops.Add(new PdfStrokeRect(frame.X, frame.Y, frame.Width, frame.Height, ParseColor("#BBBBBB"), 1 / PxPerPoint));
+            AddPdfTextAt(ops, $"SmartArt ({smartArt.Kind})", 4, 2, 8, true, "#555555", sourceRect, pageTopDip, pageHeightPt, clip: null);
+        }
+
+        void AddNode(
+            int nodeIndex,
+            double xDip,
+            double yDip,
+            double widthDip,
+            double heightDip,
+            IReadOnlyList<SmartArtLayoutPoint>? polygon = null)
+        {
+            if (nodeIndex < 0 || nodeIndex >= smartArt.Nodes.Count)
+                return;
+
+            var node = smartArt.Nodes[nodeIndex];
+            var nodeRect = PdfRect(sourceRect, xDip, yDip, widthDip, heightDip, pageTopDip, pageHeightPt);
+            var fill = ParseColor(node.FillHex);
+            var stroke = node.BorderThickness > 0 ? ParseColor(node.BorderHex) : (PdfColor?)null;
+            var strokeWidth = Math.Max(0.1, node.BorderThickness / PxPerPoint);
+            IReadOnlyList<PdfPathContour> contours;
+            if (polygon is { Count: >= 3 })
+            {
+                var points = polygon.Select(point => new PdfPathPoint(
+                    (sourceRect.Left + point.X - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt,
+                    pageHeightPt - ((sourceRect.Top + point.Y - pageTopDip) / PxPerPoint))).ToList();
+                contours = [new PdfPathContour(points[0], points.Skip(1).Select(PdfPathSegment.LineTo).ToArray(), true)];
+            }
+            else
+            {
+                contours = [BuildPdfRoundedRectangleContour(
+                    nodeRect.X,
+                    nodeRect.Y,
+                    nodeRect.Width,
+                    nodeRect.Height)];
+            }
+
+            if (node.ShadowOpacity > 0)
+            {
+                var depth = Math.Clamp(node.ShadowDepth / PxPerPoint, 0, 5 / PxPerPoint);
+                var shadowContours = contours.Select(contour => new PdfPathContour(
+                    new PdfPathPoint(contour.Start.X + depth, contour.Start.Y - depth),
+                    contour.Segments.Select(segment => segment with
+                    {
+                        End = new PdfPathPoint(segment.End.X + depth, segment.End.Y - depth),
+                        Control1 = new PdfPathPoint(segment.Control1.X + depth, segment.Control1.Y - depth),
+                        Control2 = new PdfPathPoint(segment.Control2.X + depth, segment.Control2.Y - depth),
+                    }).ToArray(),
+                    contour.Closed)).ToArray();
+                ops.Add(new PdfOpacityGroup(
+                    node.ShadowOpacity * 0.24,
+                    [new PdfPath(shadowContours, PdfColor.Black, null, 0)]));
+            }
+
+            ops.Add(new PdfPath(contours, fill, stroke, strokeWidth));
+            AddPdfTextAt(
+                ops,
+                node.Text,
+                xDip + widthDip / 2,
+                yDip + heightDip / 2,
+                node.FontSizeDip / PxPerPoint,
+                false,
+                node.TextHex,
+                sourceRect,
+                pageTopDip,
+                pageHeightPt,
+                nodeRect);
+        }
+
+        void AddConnector(int nodeIndex, double x1Dip, double y1Dip, double x2Dip, double y2Dip, bool arrow)
+        {
+            if (nodeIndex < 0 || nodeIndex >= smartArt.Nodes.Count)
+                return;
+
+            var start = new PdfPoint(
+                (sourceRect.Left + x1Dip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt,
+                pageHeightPt - ((sourceRect.Top + y1Dip - pageTopDip) / PxPerPoint));
+            var end = new PdfPoint(
+                (sourceRect.Left + x2Dip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt,
+                pageHeightPt - ((sourceRect.Top + y2Dip - pageTopDip) / PxPerPoint));
+            var node = smartArt.Nodes[nodeIndex];
+            var width = Math.Max(0.1, node.BorderThickness / PxPerPoint);
+            var color = ParseColor(node.ConnectorHex);
+            ops.Add(new PdfLine(start.X, start.Y, end.X, end.Y, color, width));
+            if (arrow)
+            {
+                var dx = end.X - start.X;
+                var dy = end.Y - start.Y;
+                var length = Math.Sqrt(dx * dx + dy * dy);
+                if (length > 0.001)
+                {
+                    var ux = dx / length;
+                    var uy = dy / length;
+                    var px = -uy;
+                    var py = ux;
+                    const double arrowLength = 6 / 1.3333333333333333;
+                    const double arrowWidth = 4 / 1.3333333333333333;
+                    ops.Add(new PdfLine(end.X, end.Y, end.X - ux * arrowLength + px * arrowWidth,
+                        end.Y - uy * arrowLength + py * arrowWidth, color, width));
+                    ops.Add(new PdfLine(end.X, end.Y, end.X - ux * arrowLength - px * arrowWidth,
+                        end.Y - uy * arrowLength - py * arrowWidth, color, width));
+                }
+            }
+        }
+
+        if (isNativePyramid)
+        {
+            var geometry = smartArt.LayoutGeometry!;
+            AddPdfSmartArtLayoutGeometry(ops, smartArt, geometry, sourceRect,
+                new Rect(0, 22, sourceRect.Width, sourceRect.Height), pageTopDip, pageHeightPt, AddNode, AddConnector);
+        }
+        else if (smartArt.HierarchyGeometry is { Nodes.Count: > 0 } hierarchy)
+        {
+            var headerDip = 8 + 6 + 6;
+            var target = new Rect(6, headerDip + 6, Math.Max(1, sourceRect.Width - 12), Math.Max(1, sourceRect.Height - headerDip - 12));
+            AddPdfSmartArtHierarchy(ops, smartArt, hierarchy, sourceRect, target, pageTopDip, pageHeightPt, AddNode, AddConnector);
+        }
+        else if (smartArt.LayoutGeometry is { Nodes.Count: > 0 } layout)
+        {
+            var headerDip = 8 + 6 + 6;
+            var target = new Rect(6, headerDip + 6, Math.Max(1, sourceRect.Width - 12), Math.Max(1, sourceRect.Height - headerDip - 12));
+            AddPdfSmartArtLayoutGeometry(ops, smartArt, layout, sourceRect, target, pageTopDip, pageHeightPt, AddNode, AddConnector);
+        }
+        else if (smartArt.Nodes.Count > 0)
+        {
+            const double nodePad = 6;
+            const double nodeHeight = 26;
+            var areaTop = 8 + 12;
+            var areaHeight = sourceRect.Height - areaTop - nodePad;
+            var areaWidth = sourceRect.Width - 2 * nodePad;
+            var count = smartArt.Nodes.Count;
+            var arrows = smartArt.Kind == SmartArtKind.Process ? count - 1 : 0;
+            var arrowWidth = 12.0;
+            var boxWidth = Math.Max(24, (areaWidth - arrows * (arrowWidth + 2) - 2 * nodePad) / count);
+            var boxY = areaTop + (areaHeight - nodeHeight) / 2;
+            var x = nodePad;
+            for (var index = 0; index < count; index++)
+            {
+                AddNode(index, x, boxY, boxWidth, nodeHeight);
+                x += boxWidth;
+                if (smartArt.Kind == SmartArtKind.Process && index < count - 1)
+                {
+                    AddConnector(index, x + 2, boxY + nodeHeight / 2, x + 2 + arrowWidth, boxY + nodeHeight / 2, true);
+                    x += arrowWidth + 2;
+                }
+            }
+        }
+
+        var wrapped = WrapPdfVisualOps(ops, plan, frame);
+        return wrapped;
+    }
+
+    private void AddPdfSmartArtLayoutGeometry(
+        List<PdfDrawOp> ops,
+        SmartArtVisualPlan smartArt,
+        SmartArtLayoutGeometryPlan layout,
+        Rect sourceRect,
+        Rect target,
+        double pageTopDip,
+        double pageHeightPt,
+        Action<int, double, double, double, double, IReadOnlyList<SmartArtLayoutPoint>?> addNode,
+        Action<int, double, double, double, double, bool> addConnector)
+    {
+        var naturalWidth = Math.Max(1, layout.NaturalWidth);
+        var naturalHeight = Math.Max(1, layout.NaturalHeight);
+        var scale = Math.Min(target.Width / naturalWidth, target.Height / naturalHeight);
+        if (!double.IsFinite(scale) || scale <= 0)
+            scale = 1;
+        var offsetX = target.X + Math.Max(0, (target.Width - naturalWidth * scale) / 2);
+        var offsetY = target.Y + Math.Max(0, (target.Height - naturalHeight * scale) / 2);
+        double X(double value) => offsetX + value * scale;
+        double Y(double value) => offsetY + value * scale;
+
+        foreach (var connector in layout.Connectors)
+            addConnector(connector.SourceNodeIndex, X(connector.X1), Y(connector.Y1), X(connector.X2), Y(connector.Y2), connector.Kind == SmartArtLayoutConnectorKind.Arrow);
+
+        foreach (var node in layout.Nodes)
+        {
+            var polygon = node.HasPolygon
+                ? node.PolygonPoints.Select(point => new SmartArtLayoutPoint(X(point.X), Y(point.Y))).ToList()
+                : null;
+            addNode(node.NodeIndex, X(node.X), Y(node.Y), node.Width * scale, node.Height * scale, polygon);
+        }
+    }
+
+    private void AddPdfSmartArtHierarchy(
+        List<PdfDrawOp> ops,
+        SmartArtVisualPlan smartArt,
+        SmartArtHierarchyGeometryPlan hierarchy,
+        Rect sourceRect,
+        Rect target,
+        double pageTopDip,
+        double pageHeightPt,
+        Action<int, double, double, double, double, IReadOnlyList<SmartArtLayoutPoint>?> addNode,
+        Action<int, double, double, double, double, bool> addConnector)
+    {
+        var naturalWidth = Math.Max(1, hierarchy.NaturalWidth);
+        var naturalHeight = Math.Max(1, hierarchy.NaturalHeight);
+        var scale = Math.Min(target.Width / naturalWidth, target.Height / naturalHeight);
+        if (!double.IsFinite(scale) || scale <= 0)
+            scale = 1;
+        var offsetX = target.X + Math.Max(0, (target.Width - naturalWidth * scale) / 2);
+        var offsetY = target.Y + Math.Max(0, (target.Height - naturalHeight * scale) / 2);
+        double X(double value) => offsetX + value * scale;
+        double Y(double value) => offsetY + value * scale;
+
+        foreach (var connector in hierarchy.Connectors)
+        {
+            var points = connector.Points.Count > 1
+                ? connector.Points
+                : [new SmartArtLayoutPoint(connector.X1, connector.Y1), new(connector.X2, connector.Y2)];
+            for (var index = 1; index < points.Count; index++)
+                addConnector(connector.ParentNodeIndex, X(points[index - 1].X), Y(points[index - 1].Y), X(points[index].X), Y(points[index].Y), false);
+        }
+
+        foreach (var node in hierarchy.Nodes)
+            addNode(node.NodeIndex, X(node.X), Y(node.Y), node.Width * scale, node.Height * scale, null);
+    }
+
+    private void AddPdfTextAt(
+        List<PdfDrawOp> ops,
+        string text,
+        double xDip,
+        double yDip,
+        double fontSizePt,
+        bool bold,
+        string colorHex,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt,
+        PdfRectValue? clip)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var widthDip = text.Length * fontSizePt * PxPerPoint * 0.5;
+        var x = xDip - widthDip / 2;
+        var baseline = pageHeightPt - ((sourceRect.Top + yDip + fontSizePt * PxPerPoint - pageTopDip) / PxPerPoint);
+        var textOp = new PdfText(
+            (sourceRect.Left + x - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt,
+            baseline,
+            Math.Max(1, fontSizePt),
+            bold ? PdfFontFace.Bold : PdfFontFace.Regular,
+            ParseColor(colorHex),
+            text);
+        if (clip is { } bounds)
+            ops.Add(new PdfClipGroup(bounds.X, bounds.Y, bounds.Width, bounds.Height, [textOp]));
+        else
+            ops.Add(textOp);
+    }
+
+    private IReadOnlyList<PdfDrawOp> BuildPdfWordArtOps(
+        DrawingObjectVisualPlan plan,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        if (plan.WordArt is not { } wordArt || string.IsNullOrEmpty(wordArt.Text))
+            return [];
+
+        var frame = PdfRect(sourceRect, 0, 0, sourceRect.Width, sourceRect.Height, pageTopDip, pageHeightPt);
+        var ops = new List<PdfDrawOp>();
+        AddPdfWordArtEffects(ops, plan.Effects, frame);
+        var fill = ResolvePdfShapeFillFallback(wordArt.Fill);
+        var pattern = BuildPdfShapePattern(wordArt.Fill);
+        var gradient = BuildPdfShapeGradient(wordArt.Fill, frame.X, frame.Y, frame.Width, frame.Height);
+        if (gradient is not null)
+            ops.Add(new PdfFillRectLinearGradient(frame.X, frame.Y, frame.Width, frame.Height, gradient, fill ?? ParseColor("#1F4E79")));
+        else if (pattern is not null)
+            ops.Add(new PdfFillRectPattern(frame.X, frame.Y, frame.Width, frame.Height, pattern));
+        else if (fill is { } solidFill)
+            ops.Add(new PdfFillRect(frame.X, frame.Y, frame.Width, frame.Height, solidFill));
+
+        var fontSizeDip = Math.Max(8, wordArt.FontSizeDip);
+        var glyphWidths = wordArt.Text.Select(character =>
+            fontSizeDip * (char.IsWhiteSpace(character) ? 0.34 : 0.56)).ToList();
+        var targetWidthDip = sourceRect.Width * 0.80;
+        var totalWidthDip = glyphWidths.Sum();
+        if (totalWidthDip > targetWidthDip && totalWidthDip > 0)
+        {
+            var scale = targetWidthDip / totalWidthDip;
+            fontSizeDip *= scale;
+            glyphWidths = glyphWidths.Select(width => width * scale).ToList();
+        }
+
+        var textColor = ContrastingPdfTextColor(wordArt.Fill);
+        var face = wordArt.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
+        var placements = wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1
+            ? DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+                wordArt.Warp,
+                glyphWidths,
+                sourceRect.Width,
+                sourceRect.Height).Glyphs
+            : [];
+
+        if (placements.Count == glyphWidths.Count)
+        {
+            for (var index = 0; index < glyphWidths.Count; index++)
+            {
+                var placement = placements[index];
+                AddPdfWordArtGlyph(
+                    ops,
+                    wordArt.Text[index].ToString(),
+                    glyphWidths[index],
+                    fontSizeDip,
+                    placement.CenterXNormalized * sourceRect.Width,
+                    placement.CenterYNormalized * sourceRect.Height,
+                    placement.RotationRadians * 180 / Math.PI,
+                    face,
+                    textColor,
+                    sourceRect,
+                    pageTopDip,
+                    pageHeightPt,
+                    wordArt.Outline);
+            }
+        }
+        else
+        {
+            var xDip = Math.Max(0, (sourceRect.Width - glyphWidths.Sum()) / 2);
+            foreach (var (character, width) in wordArt.Text.Zip(glyphWidths))
+            {
+                AddPdfWordArtGlyph(
+                    ops,
+                    character.ToString(),
+                    width,
+                    fontSizeDip,
+                    xDip + width / 2,
+                    sourceRect.Height / 2,
+                    0,
+                    face,
+                    textColor,
+                    sourceRect,
+                    pageTopDip,
+                    pageHeightPt,
+                    wordArt.Outline);
+                xDip += width;
+            }
+        }
+
+        return WrapPdfVisualOps(ops, plan, frame);
+    }
+
+    private static void AddPdfWordArtEffects(
+        List<PdfDrawOp> ops,
+        DrawingObjectEffectsPlan effects,
+        PdfRectValue frame)
+    {
+        if (effects.HasGlow && effects.GlowOpacity > 0)
+        {
+            var spread = Math.Max(1, effects.GlowRadiusDip / 1.3333333333333333);
+            ops.Add(new PdfOpacityGroup(
+                effects.GlowOpacity * 0.35,
+                [new PdfFillRect(
+                    frame.X - spread,
+                    frame.Y - spread,
+                    frame.Width + spread * 2,
+                    frame.Height + spread * 2,
+                    ParseColor(effects.GlowColorHex))]));
+        }
+
+        if (effects.HasShadow && effects.ShadowOpacity > 0)
+        {
+            var radians = effects.ShadowDirectionDegrees * Math.PI / 180.0;
+            var distance = effects.ShadowDistanceDip / 1.3333333333333333;
+            var blur = Math.Max(1, effects.ShadowBlurDip / 1.3333333333333333 * 0.2);
+            ops.Add(new PdfOpacityGroup(
+                effects.ShadowOpacity * 0.45,
+                [new PdfFillRect(
+                    frame.X + Math.Cos(radians) * distance - blur,
+                    frame.Y - Math.Sin(radians) * distance - blur,
+                    frame.Width + blur * 2,
+                    frame.Height + blur * 2,
+                    ParseColor(effects.ShadowColorHex))]));
+        }
+    }
+
+    private void AddPdfWordArtGlyph(
+        List<PdfDrawOp> ops,
+        string text,
+        double widthDip,
+        double fontSizeDip,
+        double centerXDip,
+        double centerYDip,
+        double rotationDegrees,
+        PdfFontFace face,
+        PdfColor fillColor,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt,
+        DrawingObjectOutlinePlan outline)
+    {
+        var fontSizePt = fontSizeDip / PxPerPoint;
+        var centerXPt = (sourceRect.Left + centerXDip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+        var centerYPt = pageHeightPt - ((sourceRect.Top + centerYDip - pageTopDip) / PxPerPoint);
+        var glyphWidthPt = widthDip / PxPerPoint;
+        var baseline = centerYPt - fontSizePt * 0.35;
+        var textOps = new List<PdfDrawOp>();
+        if (outline.IsVisible && outline.ColorHex is not null)
+        {
+            textOps.Add(new PdfText(
+                centerXPt - glyphWidthPt / 2 + 0.75 / PxPerPoint,
+                baseline - 0.75 / PxPerPoint,
+                fontSizePt,
+                face,
+                ParseColor(outline.ColorHex),
+                text));
+        }
+        textOps.Add(new PdfText(
+            centerXPt - glyphWidthPt / 2,
+            baseline,
+            fontSizePt,
+            face,
+            fillColor,
+            text));
+
+        if (Math.Abs(rotationDegrees) > 0.001)
+            ops.Add(new PdfRotationGroup(centerXPt, centerYPt, rotationDegrees, textOps));
+        else
+            ops.AddRange(textOps);
+    }
+
+    private static PdfColor ContrastingPdfTextColor(DrawingObjectFillPlan fill)
+    {
+        var backgroundHex = fill.ColorHex
+            ?? fill.GradientStops.FirstOrDefault()?.ColorHex
+            ?? fill.PatternBackgroundColorHex
+            ?? fill.PatternForegroundColorHex;
+        var background = ParseColor(backgroundHex);
+        var luminance = (0.2126 * background.R + 0.7152 * background.G + 0.0722 * background.B) / 255.0;
+        return luminance < 0.42 ? new PdfColor(255, 255, 255) : PdfColor.Black;
     }
 
     private IReadOnlyList<PdfDrawOp> BuildPdfShapeOps(

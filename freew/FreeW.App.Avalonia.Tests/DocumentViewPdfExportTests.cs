@@ -548,6 +548,124 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_RecursivelyExportsGroupedChartSmartArtAndWordArtVectorPlans() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 320;
+            document.Page.HeightPt = 240;
+
+            var chart = Chart.Create(
+                ChartKind.Line,
+                ["Q1", "Q2", "Q3"],
+                [2.0, 5.0, 3.0],
+                seriesName: "Revenue",
+                title: "Grouped chart");
+            chart.WidthPt = 118;
+            chart.HeightPt = 72;
+            chart.ShowLegend = true;
+            chart.QuickLayoutId = 5;
+
+            var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Ship", "Review"]);
+            smartArt.WidthPt = 126;
+            smartArt.HeightPt = 68;
+            smartArt.LayoutId = "process1";
+            smartArt.StyleId = "moderate1";
+
+            var wordArt = new WordArt("Grouped WordArt", WordArtStyle.GlowGold, 24)
+            {
+                Warp = WordArtWarp.Wave1,
+                RotationAngle = 9,
+            };
+
+            var inner = new DrawingGroup
+            {
+                WidthPt = 220,
+                HeightPt = 150,
+                RotationAngle = 16,
+                FlipH = true,
+            };
+            inner.Children.Add(chart);
+            inner.ChildOffsets.Add((8, 6));
+            inner.Children.Add(smartArt);
+            inner.ChildOffsets.Add((112, 8));
+            inner.Children.Add(wordArt);
+            inner.ChildOffsets.Add((34, 86));
+
+            var outer = new DrawingGroup
+            {
+                WidthPt = 260,
+                HeightPt = 180,
+                RotationAngle = -12,
+                FlipV = true,
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.InFront,
+                    HorizontalAnchor = HorizontalAnchor.Page,
+                    HorizontalOffsetPt = 26,
+                    VerticalAnchor = VerticalAnchor.Page,
+                    VerticalOffsetPt = 30,
+                    ZOrderIndex = 4,
+                },
+            };
+            outer.Children.Add(inner);
+            outer.ChildOffsets.Add((18, 12));
+
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(900, 1200));
+
+            var pageOps = view.BuildPdfContent().Pages.Single().Ops;
+            var outerTransform = pageOps.OfType<PdfRotationGroup>().Single();
+            outerTransform.RotationDegrees.Should().BeApproximately(-12, 0.001);
+            outerTransform.FlipV.Should().BeTrue();
+            var outerClip = outerTransform.Ops.OfType<PdfClipGroup>().Single();
+            var innerTransform = outerClip.Ops.OfType<PdfRotationGroup>().Single();
+            innerTransform.RotationDegrees.Should().BeApproximately(16, 0.001);
+            innerTransform.FlipH.Should().BeTrue();
+            var innerClip = innerTransform.Ops.OfType<PdfClipGroup>().Single();
+            static IEnumerable<PdfDrawOp> Descendants(IEnumerable<PdfDrawOp> ops)
+            {
+                foreach (var op in ops)
+                {
+                    yield return op;
+                    if (op is PdfRotationGroup rotation)
+                    {
+                        foreach (var child in Descendants(rotation.Ops))
+                            yield return child;
+                    }
+                    else if (op is PdfClipGroup clip)
+                    {
+                        foreach (var child in Descendants(clip.Ops))
+                            yield return child;
+                    }
+                }
+            }
+
+            var childOps = Descendants(innerClip.Ops).ToArray();
+            childOps.OfType<PdfLine>().Should().NotBeEmpty("the chart scene must remain vector geometry");
+            childOps.OfType<PdfText>().Select(op => op.Text)
+                .Should().Contain("Grouped chart");
+            string.Concat(childOps.OfType<PdfText>().Select(op => op.Text))
+                .Should().Contain("Grouped WordArt");
+            childOps.OfType<PdfText>().Select(op => op.Text)
+                .Should().Contain("Plan");
+            childOps.OfType<PdfPath>().Should().NotBeEmpty("SmartArt nodes must remain vector paths");
+            childOps.OfType<PdfRotationGroup>().Any(group => Math.Abs(group.RotationDegrees - 9) < 0.001)
+                .Should().BeTrue();
+
+            var pdfBytes = SkiaPdfWriter.WriteToBytes(view.BuildPdfContent());
+            pdfBytes.Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            var portableBytes = PortablePdfWriter.WriteToBytes(view.BuildPdfContent());
+            portableBytes.Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_RendersFloatingImagesAtTheirPageSpacePixels() =>
         Session.Dispatch(() =>
         {
