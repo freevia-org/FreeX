@@ -5256,7 +5256,8 @@ public sealed class DocumentView : RichTextBox
     {
         base.OnRender(drawingContext);
         if (!PrintLayoutEnabled
-            || _model.Page.PageBorder is not { LineStyle: BorderLineStyle.Wave } border
+            || _model.Page.PageBorder is not { } border
+            || (border.LineStyle != BorderLineStyle.Wave && border.ArtId <= 0)
             || !PageBorderVisibilityPlanner.ShouldRender(border.Display, 0)
             || PageBorderVisibilityPlanner.LayerFor(border.ZOrder) != PageBorderRenderLayer.BehindText)
             return;
@@ -5273,6 +5274,15 @@ public sealed class DocumentView : RichTextBox
         var inset = Math.Min(
             PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
             Math.Min(width, height) / 4);
+        if (PageBorderArtWpfRenderer.TryDraw(
+                drawingContext,
+                border,
+                new Rect(0, 0, width, height),
+                inset))
+        {
+            return;
+        }
+
         var color = ParseColor(border.ColorHex, Colors.Black);
         if (border.LineStyle == BorderLineStyle.Wave)
         {
@@ -5309,7 +5319,7 @@ public sealed class DocumentView : RichTextBox
             && PageBorderVisibilityPlanner.ShouldRender(pb.Display, 0))
         {
             var frontLayer = PageBorderVisibilityPlanner.LayerFor(pb.ZOrder) == PageBorderRenderLayer.InFrontOfText;
-            if (pb.LineStyle == BorderLineStyle.Wave || frontLayer)
+            if (pb.ArtId > 0 || pb.LineStyle == BorderLineStyle.Wave || frontLayer)
             {
                 BorderBrush = null;
                 BorderThickness = new Thickness(0);

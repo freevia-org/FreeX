@@ -640,6 +640,21 @@ internal sealed class HeaderFooterPaginator(
     {
         var visual = new DrawingVisual();
         var color = ParseColor(border.ColorHex);
+        var artInset = Math.Min(
+            PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+            Math.Min(size.Width, size.Height) / 4);
+        using (var artContext = visual.RenderOpen())
+        {
+            if (PageBorderArtWpfRenderer.TryDraw(
+                    artContext,
+                    border,
+                    new Rect(0, 0, size.Width, size.Height),
+                    artInset))
+            {
+                return visual;
+            }
+        }
+
         if (border.LineStyle == BorderLineStyle.Wave)
         {
             var waveInset = Math.Min(

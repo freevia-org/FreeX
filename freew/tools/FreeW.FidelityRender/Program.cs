@@ -1496,6 +1496,22 @@ static SKBitmap RenderSoftwarePageBitmap(
 
 static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width, int height)
 {
+    var artInset = Math.Min(
+        (float)PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+        Math.Min(width, height) / 4f);
+    if (PageBorderArtVisualPlanner.TryBuildApplesFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var appleMotifs))
+    {
+        foreach (var motif in appleMotifs)
+            DrawSoftwareApple(canvas, motif);
+        return;
+    }
+
     using var borderPaint = new SKPaint
     {
         Color = ParseSkiaColor(border.ColorHex, SKColors.Black),
@@ -1512,6 +1528,34 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         inset,
         Math.Max(inset, width - inset),
         Math.Max(inset, height - inset)), borderPaint);
+}
+
+static void DrawSoftwareApple(SKCanvas canvas, PageBorderAppleMotif motif)
+{
+    var x = (float)motif.Xdip;
+    var y = (float)motif.Ydip;
+    var size = (float)motif.SizeDip;
+    using var body = new SKPath();
+    body.MoveTo(x + size * .50f, y + size * .22f);
+    body.CubicTo(x + size * .35f, y + size * .04f, x + size * .04f, y + size * .10f, x + size * .03f, y + size * .51f);
+    body.CubicTo(x + size * .02f, y + size * .82f, x + size * .24f, y + size, x + size * .50f, y + size * .91f);
+    body.CubicTo(x + size * .76f, y + size, x + size * .98f, y + size * .82f, x + size * .97f, y + size * .51f);
+    body.CubicTo(x + size * .96f, y + size * .10f, x + size * .65f, y + size * .04f, x + size * .50f, y + size * .22f);
+    body.Close();
+    using var fill = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleFillRed, 0, 0), IsAntialias = true, Style = SKPaintStyle.Fill };
+    canvas.DrawPath(body, fill);
+
+    using var stem = new SKPath();
+    stem.MoveTo(x + size * .50f, y + size * .30f);
+    stem.CubicTo(x + size * .56f, y + size * .24f, x + size * .61f, y + size * .10f, x + size * .62f, y + size * .03f);
+    using var stemPaint = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleStemRed, 0, 0), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.35f * size / 32f, StrokeCap = SKStrokeCap.Round };
+    canvas.DrawPath(stem, stemPaint);
+
+    using var highlight = new SKPath();
+    highlight.MoveTo(x + size * .25f, y + size * .34f);
+    highlight.CubicTo(x + size * .15f, y + size * .47f, x + size * .15f, y + size * .70f, x + size * .22f, y + size * .78f);
+    using var highlightPaint = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleHighlightRed, PageBorderArtVisualPlanner.AppleHighlightGreen, PageBorderArtVisualPlanner.AppleHighlightBlue), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 2f * size / 32f, StrokeCap = SKStrokeCap.Round };
+    canvas.DrawPath(highlight, highlightPaint);
 }
 
 static void DrawSoftwareWatermark(SKCanvas canvas, PageSettings page, int width, int height)
@@ -1915,6 +1959,33 @@ static void DrawPageBorderVisual(
         PageLayout.PointsToDip(border.SpacePt),
         Math.Min(width, height) / 4.0);
     var borderWidth = Math.Max(1, border.WidthPt * PageLayout.DipPerPoint);
+    if (border.ArtId > 0)
+    {
+        Rect artFrame;
+        double artInset;
+        if (border.OffsetFrom == PageBorderOffsetFrom.Text)
+        {
+            var headerDistance = page.HeaderDistancePt > 0
+                ? PageLayout.PointsToDip(page.HeaderDistancePt)
+                : PageLayout.PointsToDip(36);
+            var space = PageLayout.PointsToDip(border.SpacePt);
+            artFrame = new Rect(
+                Math.Max(0, marginLeft - space - borderWidth),
+                Math.Max(0, headerDistance - space - borderWidth),
+                Math.Max(0, width - marginLeft - marginRight + 2 * (space + borderWidth)),
+                Math.Max(0, height - headerDistance - marginBottom + 2 * (space + borderWidth)));
+            artInset = 0;
+        }
+        else
+        {
+            artFrame = new Rect(0, 0, width, height);
+            artInset = edgeInset;
+        }
+
+        if (PageBorderArtWpfRenderer.TryDraw(drawingContext, border, artFrame, artInset))
+            return;
+    }
+
     if (border.OffsetFrom == PageBorderOffsetFrom.Text)
     {
         var headerDistance = page.HeaderDistancePt > 0

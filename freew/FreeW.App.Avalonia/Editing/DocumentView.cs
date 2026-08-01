@@ -4328,6 +4328,30 @@ public sealed class DocumentView : Control
             return [];
 
         var color = ParseColor(border.ColorHex);
+        var artOriginXDip = border.OffsetFrom == PageBorderOffsetFrom.Text ? x * PxPerPoint : 0;
+        var artOriginTopDip = border.OffsetFrom == PageBorderOffsetFrom.Text
+            ? (pageHeightPt - y - height) * PxPerPoint
+            : 0;
+        var artFrameWidthDip = border.OffsetFrom == PageBorderOffsetFrom.Text
+            ? width * PxPerPoint
+            : pageWidthPt * PxPerPoint;
+        var artFrameHeightDip = border.OffsetFrom == PageBorderOffsetFrom.Text
+            ? height * PxPerPoint
+            : pageHeightPt * PxPerPoint;
+        var artInsetDip = border.OffsetFrom == PageBorderOffsetFrom.Text
+            ? 0
+            : Math.Min(Math.Max(0, border.SpacePt * PxPerPoint), Math.Min(artFrameWidthDip, artFrameHeightDip) / 4);
+        if (PageBorderArtVisualPlanner.TryBuildApplesFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var appleMotifs))
+        {
+            return BuildPdfAppleBorderOps(appleMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
+
         if (border.LineStyle == BorderLineStyle.Wave)
         {
             var opacity = PageBorderWaveVisualPlanner.StrokeOpacity;
@@ -4382,6 +4406,59 @@ public sealed class DocumentView : Control
 
         static byte CompositeWaveChannel(byte channel, double opacity) =>
             (byte)Math.Round(255 + (channel - 255) * opacity);
+    }
+
+    private static IReadOnlyList<PdfDrawOp> BuildPdfAppleBorderOps(
+        IReadOnlyList<PageBorderAppleMotif> motifs,
+        double originXDip,
+        double originTopDip,
+        double pageHeightPt)
+    {
+        var ops = new List<PdfDrawOp>(motifs.Count * 3);
+        var fill = new PdfColor(PageBorderArtVisualPlanner.AppleFillRed, 0, 0);
+        var stem = new PdfColor(PageBorderArtVisualPlanner.AppleStemRed, 0, 0);
+        var highlight = new PdfColor(
+            PageBorderArtVisualPlanner.AppleHighlightRed,
+            PageBorderArtVisualPlanner.AppleHighlightGreen,
+            PageBorderArtVisualPlanner.AppleHighlightBlue);
+        foreach (var motif in motifs)
+        {
+            PdfPathPoint Point(double nx, double ny) => new(
+                (originXDip + motif.Xdip + motif.SizeDip * nx) / PxPerPoint,
+                pageHeightPt - (originTopDip + motif.Ydip + motif.SizeDip * ny) / PxPerPoint);
+
+            ops.Add(new PdfPath(
+                [new PdfPathContour(
+                    Point(.50, .22),
+                    [
+                        PdfPathSegment.BezierTo(Point(.35, .04), Point(.04, .10), Point(.03, .51)),
+                        PdfPathSegment.BezierTo(Point(.02, .82), Point(.24, 1.00), Point(.50, .91)),
+                        PdfPathSegment.BezierTo(Point(.76, 1.00), Point(.98, .82), Point(.97, .51)),
+                        PdfPathSegment.BezierTo(Point(.96, .10), Point(.65, .04), Point(.50, .22)),
+                    ],
+                    true)],
+                fill,
+                null,
+                0));
+            ops.Add(new PdfPath(
+                [new PdfPathContour(
+                    Point(.50, .30),
+                    [PdfPathSegment.BezierTo(Point(.56, .24), Point(.61, .10), Point(.62, .03))],
+                    false)],
+                null,
+                stem,
+                1.35 * motif.SizeDip / 32.0 / PxPerPoint));
+            ops.Add(new PdfPath(
+                [new PdfPathContour(
+                    Point(.25, .34),
+                    [PdfPathSegment.BezierTo(Point(.15, .47), Point(.15, .70), Point(.22, .78))],
+                    false)],
+                null,
+                highlight,
+                2.0 * motif.SizeDip / 32.0 / PxPerPoint));
+        }
+
+        return ops;
     }
 
     private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfLineNumberOps(
@@ -9790,6 +9867,8 @@ public sealed class DocumentView : Control
         };
 
         Rect rect;
+        Rect artFrame;
+        double artInset;
         if (pb.OffsetFrom == PageBorderOffsetFrom.Text)
         {
             var space = Math.Max(0, pb.SpacePt * PxPerPoint);
@@ -9801,15 +9880,22 @@ public sealed class DocumentView : Control
                 pageRect.Y + headerDistance - space - widthDip,
                 Math.Max(0, pageRect.Width - (_doc.Page.MarginLeftPt + _doc.Page.MarginRightPt) * PxPerPoint + 2 * (space + widthDip)),
                 Math.Max(0, pageRect.Height - (headerDistance / PxPerPoint + _doc.Page.MarginBottomPt) * PxPerPoint + 2 * (space + widthDip)));
+            artFrame = outerFrame;
+            artInset = 0;
             rect = outerFrame.Deflate(new Thickness(widthDip / 2));
         }
         else
         {
             var inset = Math.Min(Math.Max(0, pb.SpacePt * PxPerPoint), Math.Min(pageRect.Width, pageRect.Height) / 4);
+            artFrame = pageRect;
+            artInset = inset;
             // Avalonia centers the stroke on this rectangle. Move the paint geometry 1.5 DIPs inward
             // so both rails of an imported double border register with Word's opaque raster bands.
             rect = pageRect.Deflate(new Thickness(inset + 1.5));
         }
+
+        if (TryDrawPageBorderArt(context, pb, artFrame, artInset))
+            return;
 
         if (pb.LineStyle == BorderLineStyle.Wave)
         {
@@ -9842,6 +9928,87 @@ public sealed class DocumentView : Control
         // BorderLineStyle.Double: draw a second, inner stroke a couple of DIP inside the first.
         if (pb.LineStyle == BorderLineStyle.Double)
             context.DrawRectangle(null, pen, rect.Deflate(new Thickness(widthDip + 1.5)));
+    }
+
+    private static bool TryDrawPageBorderArt(
+        DrawingContext context,
+        PageBorder border,
+        Rect frame,
+        double edgeInsetDip)
+    {
+        if (!PageBorderArtVisualPlanner.TryBuildApplesFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var motifs))
+        {
+            return false;
+        }
+
+        var fill = new SolidColorBrush(Color.FromRgb(PageBorderArtVisualPlanner.AppleFillRed, 0, 0));
+        var stem = new Pen(new SolidColorBrush(Color.FromRgb(PageBorderArtVisualPlanner.AppleStemRed, 0, 0)), 1.35)
+        {
+            LineCap = PenLineCap.Round,
+        };
+        var highlight = new Pen(new SolidColorBrush(Color.FromRgb(
+            PageBorderArtVisualPlanner.AppleHighlightRed,
+            PageBorderArtVisualPlanner.AppleHighlightGreen,
+            PageBorderArtVisualPlanner.AppleHighlightBlue)), 2.0)
+        {
+            LineCap = PenLineCap.Round,
+        };
+        foreach (var motif in motifs)
+        {
+            var placed = motif with { Xdip = frame.X + motif.Xdip, Ydip = frame.Y + motif.Ydip };
+            DrawPageBorderApple(context, placed, fill, stem, highlight);
+        }
+
+        return true;
+    }
+
+    private static void DrawPageBorderApple(
+        DrawingContext context,
+        PageBorderAppleMotif motif,
+        IBrush fill,
+        Pen stem,
+        Pen highlight)
+    {
+        var x = motif.Xdip;
+        var y = motif.Ydip;
+        var size = motif.SizeDip;
+        Point Point(double nx, double ny) => new(x + size * nx, y + size * ny);
+
+        var body = new StreamGeometry();
+        using (var path = body.Open())
+        {
+            path.BeginFigure(Point(.50, .22), true);
+            path.CubicBezierTo(Point(.35, .04), Point(.04, .10), Point(.03, .51));
+            path.CubicBezierTo(Point(.02, .82), Point(.24, 1.00), Point(.50, .91));
+            path.CubicBezierTo(Point(.76, 1.00), Point(.98, .82), Point(.97, .51));
+            path.CubicBezierTo(Point(.96, .10), Point(.65, .04), Point(.50, .22));
+            path.EndFigure(true);
+        }
+        context.DrawGeometry(fill, null, body);
+
+        var stemPath = new StreamGeometry();
+        using (var path = stemPath.Open())
+        {
+            path.BeginFigure(Point(.50, .30), false);
+            path.CubicBezierTo(Point(.56, .24), Point(.61, .10), Point(.62, .03));
+            path.EndFigure(false);
+        }
+        context.DrawGeometry(null, new Pen(stem.Brush, stem.Thickness * size / 32.0) { LineCap = PenLineCap.Round }, stemPath);
+
+        var highlightPath = new StreamGeometry();
+        using (var path = highlightPath.Open())
+        {
+            path.BeginFigure(Point(.25, .34), false);
+            path.CubicBezierTo(Point(.15, .47), Point(.15, .70), Point(.22, .78));
+            path.EndFigure(false);
+        }
+        context.DrawGeometry(null, new Pen(highlight.Brush, highlight.Thickness * size / 32.0) { LineCap = PenLineCap.Round }, highlightPath);
     }
 
     // AV-DESIGN: faint watermark drawn behind the body on each page. Mirrors Word's Design >

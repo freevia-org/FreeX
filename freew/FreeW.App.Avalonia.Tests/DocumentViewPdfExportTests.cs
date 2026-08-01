@@ -788,6 +788,37 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedApplesPageBorderMotifs() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.ApplesArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            paths.Should().HaveCount(102 * 3);
+            paths[0].FillColor.Should().Be(new PdfColor(0xB5, 0, 0));
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(36, 762.72));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            bitmap.Width.Should().BeOneOf(816, 817);
+            bitmap.Height.Should().BeOneOf(1056, 1057);
+            bitmap.GetPixel(48, 48).Red.Should().BeGreaterThan((byte)150);
+            bitmap.GetPixel(48, 48).Green.Should().BeLessThan((byte)30);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {
