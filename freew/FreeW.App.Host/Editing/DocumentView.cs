@@ -5246,12 +5246,47 @@ public sealed class DocumentView : RichTextBox
     /// All of the above is purely visual: the model and saved document are untouched, and it cooperates
     /// with zoom (the <see cref="LayoutTransform"/> scales the sized page too) and read mode.
     /// </summary>
+    protected override void OnRender(DrawingContext drawingContext)
+    {
+        base.OnRender(drawingContext);
+        if (!PrintLayoutEnabled || _model.Page.PageBorder is not { LineStyle: BorderLineStyle.Wave } border)
+            return;
+
+        var inset = Math.Min(
+            PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+            Math.Min(ActualWidth, ActualHeight) / 4);
+        var color = ParseColor(border.ColorHex, Colors.Black);
+        var waveColor = Color.FromArgb(
+            (byte)Math.Round(255 * PageBorderWaveVisualPlanner.StrokeOpacity),
+            color.R,
+            color.G,
+            color.B);
+        var pen = new Pen(
+            new SolidColorBrush(waveColor),
+            PageBorderWaveVisualPlanner.StrokeWidthDip);
+        foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(ActualWidth, ActualHeight, inset))
+        {
+            drawingContext.DrawLine(
+                pen,
+                new Point(segment.X1Dip, segment.Y1Dip),
+                new Point(segment.X2Dip, segment.Y2Dip));
+        }
+    }
+
     private void ApplyPageChrome()
     {
         if (_model.Page.PageBorder is { } pb)
         {
-            BorderBrush = new SolidColorBrush(ParseColor(pb.ColorHex, Colors.Black));
-            BorderThickness = new Thickness(Math.Max(1, pb.WidthPt * PxPerPoint));
+            if (pb.LineStyle == BorderLineStyle.Wave)
+            {
+                BorderBrush = null;
+                BorderThickness = new Thickness(0);
+            }
+            else
+            {
+                BorderBrush = new SolidColorBrush(ParseColor(pb.ColorHex, Colors.Black));
+                BorderThickness = new Thickness(Math.Max(1, pb.WidthPt * PxPerPoint));
+            }
         }
         else
         {
@@ -5299,6 +5334,7 @@ public sealed class DocumentView : RichTextBox
         }
 
         // Let passive page-geometry chrome (the ruler) redraw against the new width/margins/print-layout.
+        InvalidateVisual();
         LayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -9562,6 +9598,12 @@ public sealed class DocumentView : RichTextBox
             var (p1, p2) = CellBorderPoints(edge.Edge, rect, 0);
             var pen = CreatePen(edge);
 
+            if (edge.Style == BorderLineStyle.Wave)
+            {
+                DrawWaveEdge(drawingContext, rect, edge, pen);
+                return;
+            }
+
             if (edge.Style == BorderLineStyle.Double)
             {
                 var offset = Math.Max(1.0, edge.WidthDip * 1.5);
@@ -9575,10 +9617,59 @@ public sealed class DocumentView : RichTextBox
             drawingContext.DrawLine(pen, p1, p2);
         }
 
+        private static void DrawWaveEdge(
+            DrawingContext drawingContext,
+            Rect rect,
+            TableCellBorderEdgeVisualPlan edge,
+            Pen pen)
+        {
+            // WPF's border chrome starts inside the nested cell-content host.
+            const double registrationDip = 2.0;
+            var length = edge.Edge is TableCellBorderVisualEdge.Top or TableCellBorderVisualEdge.Bottom
+                ? rect.Width
+                : rect.Height;
+            var offsets = TableCellBorderVisualPlanner.BuildWaveOffsets(length);
+            if (offsets.Count < 2)
+                return;
+
+            var previous = WavePoint(
+                edge.Edge,
+                rect,
+                offsets[0].AlongDip,
+                registrationDip + offsets[0].OutwardDip);
+            foreach (var offset in offsets.Skip(1))
+            {
+                var current = WavePoint(
+                    edge.Edge,
+                    rect,
+                    offset.AlongDip,
+                    registrationDip + offset.OutwardDip);
+                drawingContext.DrawLine(pen, previous, current);
+                previous = current;
+            }
+        }
+
+        private static Point WavePoint(
+            TableCellBorderVisualEdge edge,
+            Rect rect,
+            double along,
+            double outward) => edge switch
+            {
+                TableCellBorderVisualEdge.Top => new Point(rect.Left + along, rect.Top - outward),
+                TableCellBorderVisualEdge.Bottom => new Point(rect.Left + along, rect.Bottom + outward),
+                TableCellBorderVisualEdge.Left => new Point(rect.Left - outward, rect.Top + along),
+                TableCellBorderVisualEdge.Right => new Point(rect.Right + outward, rect.Top + along),
+                _ => new Point(rect.Left + along, rect.Top - outward),
+            };
+
         private static Pen CreatePen(TableCellBorderEdgeVisualPlan edge)
         {
+            var color = ParseColor(edge.ColorHex, Colors.Black);
+            if (edge.Style == BorderLineStyle.Wave)
+                color = Color.FromArgb((byte)Math.Round(255 * edge.StrokeOpacity), color.R, color.G, color.B);
+
             var pen = new Pen(
-                new SolidColorBrush(ParseColor(edge.ColorHex, Colors.Black)),
+                new SolidColorBrush(color),
                 edge.WidthDip);
 
             pen.DashStyle = edge.Style switch

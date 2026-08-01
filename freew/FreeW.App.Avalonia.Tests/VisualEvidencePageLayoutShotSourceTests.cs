@@ -262,6 +262,16 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_UsesSharedWordPageBorderWaveSegments()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, edgeInset)");
+        source.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip)");
+        source.Should().Contain("PageBorderWaveVisualPlanner.StrokeOpacity");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_ReservesWordLikeFootnoteBodyClearanceWithoutChangingNotePaint()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));

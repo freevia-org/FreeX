@@ -61,13 +61,25 @@ public sealed class TableCellBorderVisualPlannerTests
     }
 
     [Fact]
-    public void Build_WaveEdgesCarryHostFallbackNote()
+    public void Build_WaveEdgesCarrySharedRasterPlan()
     {
         var plan = TableCellBorderVisualPlanner.Build(new CellBorders
         {
             Top = new CellBorderEdge(BorderLineStyle.Wave, "#C00000", 1.0)
         });
 
-        plan.Edge(TableCellBorderVisualEdge.Top).FallbackNote.Should().Contain("Wave cell borders");
+        var top = plan.Edge(TableCellBorderVisualEdge.Top);
+        top.IsWave.Should().BeTrue();
+        top.FallbackNote.Should().BeNull();
+        top.StrokeOpacity.Should().BeApproximately(86.0 / 255.0, 0.001);
+
+        var offsets = TableCellBorderVisualPlanner.BuildWaveOffsets(16);
+        offsets.Should().ContainInOrder(
+            new TableCellBorderWavePoint(0, 0),
+            new TableCellBorderWavePoint(1, TableCellBorderVisualPlanner.WaveAmplitudeDip * (1 - Math.Sqrt(0.5)) / 2));
+        offsets.Single(point => point.AlongDip == 4).OutwardDip
+            .Should().BeApproximately(TableCellBorderVisualPlanner.WaveAmplitudeDip, 0.001);
+        offsets.Single(point => point.AlongDip == 8).OutwardDip.Should().BeApproximately(0, 0.001);
+        offsets[^1].Should().Be(new TableCellBorderWavePoint(16, 0));
     }
 }

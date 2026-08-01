@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Headless;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Free.Shared.Pdf;
 using Free.Shared.Pdf.Skia;
@@ -688,6 +689,36 @@ public sealed class DocumentViewPdfExportTests
             borders.Should().HaveCount(2);
             borders[0].Should().Be(new PdfStrokeRect(65, 53, 500, 710, new PdfColor(0xA0, 0x20, 0xF0), 2));
             borders[1].Should().Be(new PdfStrokeRect(68.125, 56.125, 493.75, 703.75, new PdfColor(0xA0, 0x20, 0xF0), 2));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_UsesSharedWavePageBorderSegments() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.PageBorder = new PageBorder("#24536B", 3)
+            {
+                SpacePt = 12,
+                LineStyle = BorderLineStyle.Wave,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var lines = view.BuildPdfContent().Pages.Single().Ops
+                .TakeWhile(op => op is PdfLine)
+                .Cast<PdfLine>()
+                .ToArray();
+            var opacity = PageBorderWaveVisualPlanner.StrokeOpacity;
+            byte Composite(byte channel) => (byte)Math.Round(255 + (channel - 255) * opacity);
+            var color = new PdfColor(Composite(0x24), Composite(0x53), Composite(0x6B));
+
+            lines.Should().NotBeEmpty();
+            lines[0].Should().Be(new PdfLine(15, 168, 17.25, 165.75, color, 0.75));
+            lines[1].Should().Be(new PdfLine(15, 15, 17.25, 12.75, color, 0.75));
+            view.BuildPdfContent().Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
         }, CancellationToken.None);
 
     [Fact]

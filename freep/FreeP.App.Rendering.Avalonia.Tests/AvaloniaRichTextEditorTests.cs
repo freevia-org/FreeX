@@ -177,6 +177,11 @@ public sealed class AvaloniaRichTextEditorTests
             var window = Show(editor, 140, 90);
             try
             {
+                editor.RichTextView.TryHitTestInlineTableCell(new Point(10, 10), out var hit)
+                    .Should().BeTrue();
+                hit.RowIndex.Should().Be(0);
+                hit.ColumnIndex.Should().Be(0);
+
                 byte[] pixels = RenderPixels(editor, 140, 90);
                 int nestedAreaFill = CountRedPixels(
                     pixels,
