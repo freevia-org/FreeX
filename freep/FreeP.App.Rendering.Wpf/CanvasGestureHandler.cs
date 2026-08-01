@@ -30,6 +30,7 @@ public sealed class CanvasGestureHandler : IDisposable
 
     private readonly SlideCanvas       _canvas;
     private readonly EditingSession    _editor;
+    private readonly Func<SlideShape, bool>? _tryOpenOleInPlace;
     private readonly SelectionAdorner  _adorner;
     private readonly AdornerLayer?     _adornerLayer;
     private bool                       _disposed;
@@ -96,10 +97,14 @@ public sealed class CanvasGestureHandler : IDisposable
 
     // ── Construction / attach ─────────────────────────────────────────────────────────────────
 
-    public CanvasGestureHandler(SlideCanvas canvas, EditingSession editor)
+    public CanvasGestureHandler(
+        SlideCanvas canvas,
+        EditingSession editor,
+        Func<SlideShape, bool>? tryOpenOleInPlace = null)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
+        _tryOpenOleInPlace = tryOpenOleInPlace;
 
         // Add adorner to the adorner layer
         _adornerLayer = AdornerLayer.GetAdornerLayer(_canvas);
@@ -191,7 +196,8 @@ public sealed class CanvasGestureHandler : IDisposable
                 : null;
             if (shape?.Kind == SlideShapeKind.Ole)
             {
-                OleActivationService.TryActivate(shape.OleObject);
+                if (!(_tryOpenOleInPlace?.Invoke(shape) ?? false))
+                    OleActivationService.TryActivate(shape.OleObject);
                 e.Handled = true;
                 return;
             }
