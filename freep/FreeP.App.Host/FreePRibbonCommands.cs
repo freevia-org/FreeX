@@ -302,6 +302,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicBlockList)));
         registry.Register(SmartArtAuthoringPlanner.BasicListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicList)));
+        registry.Register(SmartArtAuthoringPlanner.List2LayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.List2)));
         registry.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.StackedList)));
         registry.Register(SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,

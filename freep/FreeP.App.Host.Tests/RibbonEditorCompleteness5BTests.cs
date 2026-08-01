@@ -231,6 +231,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.BlockCycleLayoutCommandId] = SmartArtLayoutPreset.BlockCycle,
             [SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId] = SmartArtLayoutPreset.NonDirectionalCycle,
             [SmartArtAuthoringPlanner.BasicListLayoutCommandId] = SmartArtLayoutPreset.BasicList,
+            [SmartArtAuthoringPlanner.List2LayoutCommandId] = SmartArtLayoutPreset.List2,
             [SmartArtAuthoringPlanner.BasicRadialLayoutCommandId] = SmartArtLayoutPreset.BasicRadial,
             [SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId] = SmartArtLayoutPreset.InvertedPyramid,
             [SmartArtAuthoringPlanner.RadialListLayoutCommandId] = SmartArtLayoutPreset.RadialList,

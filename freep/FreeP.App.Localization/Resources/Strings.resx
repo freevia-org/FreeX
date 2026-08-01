@@ -1546,6 +1546,12 @@
   <data name="Ribbon_Command_SmartArtBasicBlockList_KeyTip" xml:space="preserve">
     <value>B</value>
   </data>
+  <data name="Ribbon_Command_SmartArtList2_Label" xml:space="preserve">
+    <value>List 2</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtList2_KeyTip" xml:space="preserve">
+    <value>L2</value>
+  </data>
   <data name="Ribbon_Command_SmartArtStackedList_Label" xml:space="preserve">
     <value>Stacked List</value>
   </data>

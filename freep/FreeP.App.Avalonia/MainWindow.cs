@@ -2872,6 +2872,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicBlockList)));
         r.Register(SmartArtAuthoringPlanner.BasicListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.BasicList)));
+        r.Register(SmartArtAuthoringPlanner.List2LayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.List2)));
         r.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.StackedList)));
         r.Register(SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
