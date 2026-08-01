@@ -216,6 +216,30 @@ public class DesignDepthModelTests
         people.ArtId.Should().Be(84);
     }
 
+    [Fact]
+    public void PageBorder_PlacementDefaultsMatchWord()
+    {
+        var border = new PageBorder();
+
+        border.Display.Should().Be(PageBorderDisplay.AllPages);
+        border.ZOrder.Should().Be(PageBorderZOrder.Front);
+    }
+
+    [Fact]
+    public void PageBorder_PlacementSurvivesRecordCopy()
+    {
+        var border = new PageBorder
+        {
+            Display = PageBorderDisplay.NotFirstPage,
+            ZOrder = PageBorderZOrder.Behind,
+        };
+
+        var copy = border with { ColorHex = "#123456" };
+
+        copy.Display.Should().Be(PageBorderDisplay.NotFirstPage);
+        copy.ZOrder.Should().Be(PageBorderZOrder.Behind);
+    }
+
     // ── WatermarkOptions image fields ─────────────────────────────────────────────────────────────
 
     [Fact]
