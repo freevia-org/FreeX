@@ -29,6 +29,6 @@ public sealed partial class MainWindow
         }
 
         if (plan.RefreshCommentPanes)
-            _refreshCommentListWindow?.Invoke(CollectSheetNotes(_session.ActiveSheet));
+            _refreshCommentListWindow?.Invoke(CollectThreadedComments(_session.ActiveSheet));
     }
 }

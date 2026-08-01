@@ -138,6 +138,12 @@ public sealed class DialogInteractionValidationTests
             try
             {
                 owner.Show();
+                var commentAddress = new FreeX.Core.Model.CellAddress(
+                    owner.Session.ActiveSheet.Id,
+                    1,
+                    1);
+                owner.Session.ActiveSheet.ThreadedComments[commentAddress] =
+                    new FreeX.Core.Model.ThreadedComment("Modeless contract comment");
 
                 await InvokePrivateTaskAsync(owner, "ShowFindDialogAsync");
                 var findReplace = FindOwnedWindow(owner, "FindReplaceDialog");
@@ -163,10 +169,10 @@ public sealed class DialogInteractionValidationTests
                 errorCheckingWindows.Should().HaveCount(2, "WPF creates a fresh modeless error-checking window per command");
                 errorCheckingWindows.ForEach(window => window.Close());
 
-                await InvokePrivateTaskAsync(owner, "ShowNotesListAsync");
-                var comments = FindOwnedWindow(owner, "ShowNotesDialog");
-                await InvokePrivateTaskAsync(owner, "ShowNotesListAsync");
-                FindOwnedWindow(owner, "ShowNotesDialog").Should().BeSameAs(comments);
+                await InvokePrivateTaskAsync(owner, "ShowCommentsListAsync");
+                var comments = FindOwnedWindow(owner, "ReviewCommentListWindow");
+                await InvokePrivateTaskAsync(owner, "ShowCommentsListAsync");
+                FindOwnedWindow(owner, "ReviewCommentListWindow").Should().BeSameAs(comments);
 
                 owner.Close();
                 comments.IsVisible.Should().BeFalse("owned modeless windows must follow the owner lifetime");

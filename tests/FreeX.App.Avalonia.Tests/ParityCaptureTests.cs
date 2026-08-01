@@ -113,7 +113,7 @@ public sealed class ParityCaptureTests
         {
             ("dialog.ActivateSheetDialog", "dialog.ActivateSheet", "ShowSwitchWindowsDialogAsync"),
             ("dialog.ChartAreaLegendDialog", "dialog.FormatChartArea", "ShowFormatChartAreaDialog"),
-            ("dialog.CommentListWindow", "dialog.CommentList", "ShowNotesListAsync"),
+            ("dialog.CommentListWindow", "dialog.CommentList", "ShowCommentsListAsync"),
             ("dialog.ConfirmPasswordDialog", "dialog.ProtectSheet", "ShowProtectSheetDialogAsync (integrated confirmation field)"),
             ("dialog.HeaderFooterDialog", "dialog.HeaderFooterDialog", "ShowHeaderFooterDialogAsync (dedicated editor)"),
             ("dialog.HyperlinkDialog", "dialog.InsertHyperlink", "ShowInsertHyperlinkInputDialogAsync"),

@@ -1489,8 +1489,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     // Data ▸ Connections ▸ Refresh All: re-import the remembered file source in place; with
                     // no remembered source there is nothing to refresh (no external DB/web connection engine).
                     ["data.refresh"] = RefreshImportedData,
-                    // Review ▸ Show Notes.
-                    ["review.showNotes"] = () => _ = ShowNotesListAsync(),
+                    // Review ▸ Show Notes toggles all legacy note boxes, matching the WPF host.
+                    ["review.showNotes"] = ToggleAllNotesVisibility,
                     // Insert ▸ PivotChart (charts the active pivot's result range).
                     ["insert.pivotChart"] = InsertPivotChart,
                     // View ▸ Window group (multi-window).
@@ -1818,7 +1818,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["Workbook Statistics"] = () => _ = ShowWorkbookStatisticsDialogAsync(),
                     ["Next Comment"] = () => NavigateReviewThreadedComment(previous: false),
                     ["Previous Comment"] = () => NavigateReviewThreadedComment(previous: true),
-                    ["Show Comments"] = () => _ = ShowNotesListAsync(),
+                    ["Show Comments"] = () => _ = ShowCommentsListAsync(),
+                    ["Show Notes"] = ToggleAllNotesVisibility,
                     ["Edit Note"] = () => _ = ShowEditNoteDialogAsync(),
                     ["Delete Note"] = DeleteActiveCellNote,
                     ["Share"] = () => _ = ShareWorkbookAsync(),
@@ -11786,7 +11787,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 DeleteActiveCellNote();
                 break;
             case WorksheetContextMenuAction.ShowNotes:
-                _ = ShowNotesListAsync();
+                ToggleAllNotesVisibility();
                 break;
             case WorksheetContextMenuAction.ShowHideNote:
                 ToggleActiveCellNoteVisibility();

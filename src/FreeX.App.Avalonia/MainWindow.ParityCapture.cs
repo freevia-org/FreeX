@@ -131,7 +131,7 @@ public sealed partial class MainWindow
         Opened("ColorPickerDialog", "dialog.ColorPicker", "ShowMoreColorsDialogAsync"),
         Opened("ColorScaleRuleDialog", "dialog.ColorScaleRule", "ShowConditionalFormatNewRuleDialogAsync (ColorScale)"),
         Opened("ColumnWidthDialog", "dialog.ColumnWidth", "ShowColumnWidthDialogAsync"),
-        Opened("CommentListWindow", "dialog.CommentList", "ShowNotesListAsync"),
+        Opened("CommentListWindow", "dialog.CommentList", "ShowCommentsListAsync"),
         Opened("ConditionalFormatDialog", "dialog.ConditionalFormatNewRule", "ShowConditionalFormatNewRuleDialogAsync"),
         Opened("ConditionalFormatThresholdDialog", "dialog.ConditionalFormatThreshold", "ShowConditionalFormatValuePromptAsync"),
         Opened("ConfirmPasswordDialog", "dialog.ProtectSheet", "ShowProtectSheetDialogAsync (integrated confirmation field)"),
@@ -687,8 +687,12 @@ public sealed partial class MainWindow
     {
         var sheet = _session.ActiveSheet;
         var address = new CellAddress(sheet.Id, 2, 2);
-        _session.ExecuteReviewCommand(new SetCommentCommand(sheet.Id, address, "Review the quarterly total."));
-        await ShowNotesListAsync();
+        _session.ExecuteReviewCommand(new SetThreadedCommentCommand(
+            sheet.Id,
+            address,
+            "Review the quarterly total.",
+            "FreeX"));
+        await ShowCommentsListAsync();
     }
 
     private async Task ShowFunctionArgumentsParityDialogAsync()

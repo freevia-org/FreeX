@@ -300,10 +300,10 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
             window.Session.UpdateViewportSize(880, 1440);
             window.Show();
 
-            ((Task)InvokePrivate(window, "ShowNotesListAsync")!).GetAwaiter().GetResult();
+            ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
             var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
             listWindow.Should().NotBeNull();
-            var list = FindByAutomationId<ListBox>(listWindow, "ShowNotesList");
+            var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
             list.Should().NotBeNull();
             list!.Items.Should().ContainSingle();
             list.Items[0].Should().BeOfType<string>().Which.Should().Contain("Original root");
@@ -320,6 +320,40 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
 
             list.Items.Should().ContainSingle();
             list.Items[0].Should().BeOfType<string>().Which.Should().Contain("Updated root");
+
+            listWindow!.Close();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ShowCommentsList_ExcludesLegacyNotes_AndShowNotesTogglesNoteVisibility()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewCommandFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var noteAddress = new CellAddress(sheet.Id, 1, 1);
+            var commentAddress = new CellAddress(sheet.Id, 2, 2);
+            sheet.Comments[noteAddress] = "Legacy note";
+            sheet.ThreadedComments[commentAddress] = new ThreadedComment("Threaded comment");
+            window.Session.SelectCell(commentAddress);
+            window.Session.UpdateViewportSize(880, 1440);
+            window.Show();
+
+            ((Task)InvokePrivate(window, "ShowCommentsListAsync")!).GetAwaiter().GetResult();
+            var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
+            var list = FindByAutomationId<ListBox>(listWindow, "ReviewCommentList");
+            list.Should().NotBeNull();
+            list!.Items.Should().ContainSingle();
+            list.Items[0].Should().BeOfType<string>().Which.Should().Contain("Threaded comment");
+            list.Items[0].Should().BeOfType<string>().Which.Should().NotContain("Legacy note");
+
+            InvokePrivate(window, "ToggleAllNotesVisibility");
+            sheet.ShownComments.Should().Contain(noteAddress);
+            InvokePrivate(window, "ToggleAllNotesVisibility");
+            sheet.ShownComments.Should().NotContain(noteAddress);
 
             listWindow!.Close();
             window.Close();

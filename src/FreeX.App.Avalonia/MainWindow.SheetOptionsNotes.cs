@@ -24,7 +24,7 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Window? _commentListWindow;
-    private Action<IReadOnlyList<SheetNoteEntry>>? _refreshCommentListWindow;
+    private Action<IReadOnlyList<SheetCommentEntry>>? _refreshCommentListWindow;
 
     private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);
 
@@ -180,12 +180,11 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Review ▸ Show Notes — list every legacy note and threaded comment on the active
-    /// sheet (cell ref + author + text). Double-click a row or use Go To to select that cell.
-    /// Notes are enumerated from Sheet.Comments / Sheet.CommentAuthors and threaded comments
-    /// from Sheet.ThreadedComments (FreeX.Core.Model).
+    /// Review ▸ Show Comments — list every threaded comment on the active sheet
+    /// (cell ref + author + text). Double-click a row or use Go To to select that cell.
+    /// Legacy notes remain a separate WPF-style Show Notes toggle-all command.
     /// </summary>
-    private Task ShowNotesListAsync()
+    private Task ShowCommentsListAsync()
     {
         if (_isOpening || _isSaving)
             return Task.CompletedTask;
@@ -196,11 +195,16 @@ public sealed partial class MainWindow
         ClearSelectedDrawingObject();
 
         var sheet = _session.ActiveSheet;
-        var notes = CollectSheetNotes(sheet);
+        var comments = CollectThreadedComments(sheet);
+        if (comments.Count == 0)
+        {
+            ShowEditIssue(UiText.Get("MainWindowMessage_NoCommentsOnSheet"));
+            return Task.CompletedTask;
+        }
 
         if (_commentListWindow is { IsVisible: true } existing)
         {
-            _refreshCommentListWindow?.Invoke(notes);
+            _refreshCommentListWindow?.Invoke(comments);
             if (existing.WindowState == WindowState.Minimized)
                 existing.WindowState = WindowState.Normal;
             existing.Activate();
@@ -209,13 +213,13 @@ public sealed partial class MainWindow
 
         var listBox = new ListBox { MinHeight = 240, MinWidth = 420 };
         ApplySheetOptionListBoxStyle(listBox);
-        AutomationProperties.SetAutomationId(listBox, "ShowNotesList");
+        AutomationProperties.SetAutomationId(listBox, "ReviewCommentList");
 
         var emptyText = new TextBlock
         {
-            Text = UiText.Get("ShellLoc_NoNotesOnSheet"),
+            Text = UiText.Get("MainWindowMessage_NoCommentsOnSheet"),
             Foreground = Brush(110, 110, 110),
-            IsVisible = notes.Count == 0,
+            IsVisible = comments.Count == 0,
             Margin = new Thickness(0, 0, 0, 8),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
@@ -223,56 +227,56 @@ public sealed partial class MainWindow
 
         var goToButton = new Button { Content = UiText.Get("ShellLoc_GoToButton"), MinWidth = 84, IsEnabled = false };
         ApplySheetOptionButtonChrome(goToButton, 84);
-        AutomationProperties.SetAutomationId(goToButton, "ShowNotesGoToButton");
+        AutomationProperties.SetAutomationId(goToButton, "ReviewCommentListOpenButton");
         var closeButton = new Button
         {
-            Content = UiText.Get("Common_Close"),
+            Content = UiText.Get("ReviewCommentList_CloseButton"),
             IsCancel = true,
             MinWidth = 84,
         };
         ApplySheetOptionButtonChrome(closeButton, 84);
-        AutomationProperties.SetAutomationId(closeButton, "ShowNotesCloseButton");
+        AutomationProperties.SetAutomationId(closeButton, "ReviewCommentListCloseButton");
 
         var dialog = new Window
         {
-            Title = UiText.Get("ShellLoc_NotesTitle"),
+            Title = UiText.Get("MainWindowMessage_CommentsTitle"),
             Width = 520,
             Height = 380,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
-        AutomationProperties.SetAutomationId(dialog, "ShowNotesDialog");
+        AutomationProperties.SetAutomationId(dialog, "ReviewCommentListWindow");
 
-        IReadOnlyList<SheetNoteEntry> currentNotes = notes;
+        IReadOnlyList<SheetCommentEntry> currentComments = comments;
 
-        void RefreshList(IReadOnlyList<SheetNoteEntry> refreshedNotes)
+        void RefreshList(IReadOnlyList<SheetCommentEntry> refreshedComments)
         {
-            var selectedAddress = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentNotes.Count
-                ? currentNotes[listBox.SelectedIndex].Address
+            var selectedAddress = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentComments.Count
+                ? currentComments[listBox.SelectedIndex].Address
                 : (CellAddress?)null;
-            currentNotes = refreshedNotes;
-            listBox.ItemsSource = currentNotes.Select(FormatNoteRow).ToList();
+            currentComments = refreshedComments;
+            listBox.ItemsSource = currentComments.Select(FormatCommentRow).ToList();
             listBox.SelectedIndex = selectedAddress is { } address
-                ? currentNotes.ToList().FindIndex(note => note.Address.Equals(address))
+                ? currentComments.ToList().FindIndex(comment => comment.Address.Equals(address))
                 : -1;
-            if (listBox.SelectedIndex < 0 && currentNotes.Count > 0)
+            if (listBox.SelectedIndex < 0 && currentComments.Count > 0)
                 listBox.SelectedIndex = 0;
-            emptyText.IsVisible = currentNotes.Count == 0;
-            goToButton.IsEnabled = listBox.SelectedIndex >= 0;
+            emptyText.IsVisible = currentComments.Count == 0;
+            goToButton.IsEnabled = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentComments.Count;
         }
 
         void GoToSelected()
         {
             var index = listBox.SelectedIndex;
-            if (index < 0 || index >= currentNotes.Count)
+            if (index < 0 || index >= currentComments.Count)
                 return;
 
-            _session.SelectCell(currentNotes[index].Address);
-            RefreshShell(UiText.Format("ShellLoc_SelectedCell", FormatCellReference(currentNotes[index].Address)));
+            _session.SelectCell(currentComments[index].Address);
+            RefreshShell(UiText.Format("ShellLoc_SelectedCell", FormatCellReference(currentComments[index].Address)));
         }
 
         listBox.SelectionChanged += (_, _) =>
-            goToButton.IsEnabled = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentNotes.Count;
+            goToButton.IsEnabled = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentComments.Count;
         listBox.DoubleTapped += (_, _) => GoToSelected();
         listBox.KeyDown += (_, args) =>
         {
@@ -295,7 +299,7 @@ public sealed partial class MainWindow
             Children = { bottomRow, emptyText, listBox },
         };
 
-        RefreshList(notes);
+        RefreshList(comments);
         _commentListWindow = dialog;
         _refreshCommentListWindow = RefreshList;
         ShowOwnedModelessWindow(
@@ -312,37 +316,28 @@ public sealed partial class MainWindow
         return Task.CompletedTask;
     }
 
-    private static List<SheetNoteEntry> CollectSheetNotes(Sheet sheet)
+    private static List<SheetCommentEntry> CollectThreadedComments(Sheet sheet)
     {
-        var entries = new List<SheetNoteEntry>();
-
-        foreach (var (address, text) in sheet.Comments)
-        {
-            var author = sheet.CommentAuthors.TryGetValue(address, out var a) && !string.IsNullOrWhiteSpace(a)
-                ? a
-                : null;
-            entries.Add(new SheetNoteEntry(address, author, text, IsThreaded: false));
-        }
+        var entries = new List<SheetCommentEntry>();
 
         foreach (var (address, comment) in sheet.ThreadedComments)
-            entries.Add(new SheetNoteEntry(address, comment.Author, comment.Text, IsThreaded: true));
+            entries.Add(new SheetCommentEntry(address, comment.Author, comment.Text));
 
         entries.Sort(static (x, y) => x.Address.CompareTo(y.Address));
         return entries;
     }
 
-    private static string FormatNoteRow(SheetNoteEntry entry)
+    private static string FormatCommentRow(SheetCommentEntry entry)
     {
         var cellRef = FormatCellReference(entry.Address);
-        var kind = entry.IsThreaded ? UiText.Get("ShellLoc_NoteKindComment") : UiText.Get("ShellLoc_NoteKindNote");
         var author = string.IsNullOrWhiteSpace(entry.Author) ? "" : $" — {entry.Author}";
         var body = (entry.Text ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
-        return $"{cellRef} [{kind}]{author}: {body}";
+        return $"{cellRef}{author}: {body}";
     }
 
-    private readonly record struct SheetNoteEntry(CellAddress Address, string? Author, string? Text, bool IsThreaded);
+    private readonly record struct SheetCommentEntry(CellAddress Address, string? Author, string? Text);
 
-    // ── Visual chrome helpers (SheetOptions / ShowNotes dialogs) ─────────────
+    // ── Visual chrome helpers (SheetOptions / Show Comments dialog) ──────────
 
     /// <summary>
     /// Applies standard SheetOption-dialog button chrome (Height=24, FontSize=12, white background, grey/blue border).
@@ -362,7 +357,7 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// Applies standard ShowNotes list-box row chrome (MinHeight=24 per row, FontSize=12).
+    /// Applies standard Show Comments list-box row chrome (MinHeight=24 per row, FontSize=12).
     /// </summary>
     private static void ApplySheetOptionListBoxStyle(ListBox listBox)
         => AvaloniaCompactDialogChrome.ApplyListBox(listBox, SheetOptionsDialogChromeStyle);
