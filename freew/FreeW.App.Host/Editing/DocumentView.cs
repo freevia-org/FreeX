@@ -2340,6 +2340,13 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeKind(ShapeKind kind)
     {
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetShapeKindCommand(
+                nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
         _commands.Execute(new SetShapeKindCommand(blockIndex, runIndex, kind));
@@ -2511,10 +2518,17 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeAltText(string? altText)
     {
         CommitToModel();
+        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetShapeAltTextCommand(
+                nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeAltTextCommand(blockIndex, runIndex,
-            string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim()));
+        _commands.Execute(new SetShapeAltTextCommand(blockIndex, runIndex, normalized));
         Render();
     }
 

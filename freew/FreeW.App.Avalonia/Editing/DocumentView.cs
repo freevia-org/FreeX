@@ -13410,10 +13410,19 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedFloatingAltText(string? altText)
     {
+        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetShapeAltTextCommand(
+                nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
+
         if (_selectedFloating is not { } sel) return;
         if (!TryGetRun(sel.BlockIndex, sel.RunIndex, out var run)) return;
 
-        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
         IDocumentCommand? command = run switch
         {
             { Image: { IsFloating: true } } => new SetImageAltTextCommand(sel.BlockIndex, sel.RunIndex, normalized),
@@ -13637,6 +13646,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedShapeKind(ShapeKind kind)
     {
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetShapeKindCommand(
+                nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
         if (SelectedFloatingShapeLocation() is not { } selected)
             return;
 

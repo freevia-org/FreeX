@@ -944,10 +944,11 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenShapeAltTextDialogAsync()
     {
-        var seed = _editor.SelectedFloatingShape()?.AltText
-                   ?? _editor.SelectedFloatingWordArt()?.AltText;
-        if (_editor.SelectedFloatingInfo?.Kind is not ("Shape" or "WordArt"))
+        var selectedShape = _editor.SelectedFloatingShape();
+        var selectedWordArt = _editor.SelectedFloatingWordArt();
+        if (selectedShape is null && selectedWordArt is null)
             return;
+        var seed = selectedShape?.AltText ?? selectedWordArt?.AltText;
         var result = await ImageAltTextDialog.ShowAsync(this, seed ?? string.Empty);
         if (result is not null)
             _editor.SetSelectedFloatingAltText(result);

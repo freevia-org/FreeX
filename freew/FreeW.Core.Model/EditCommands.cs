@@ -1881,7 +1881,11 @@ public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocu
 /// Change the <see cref="Shape.Kind"/> of the inline shape at the given paragraph/run indices,
 /// snapshotting the prior kind for undo.
 /// </summary>
-public sealed class SetShapeKindCommand(int paragraphIndex, int runIndex, ShapeKind kind) : IDocumentCommand
+public sealed class SetShapeKindCommand(
+    int paragraphIndex,
+    int runIndex,
+    ShapeKind kind,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private ShapeKind _previous;
     private bool _applied;
@@ -1904,8 +1908,8 @@ public sealed class SetShapeKindCommand(int paragraphIndex, int runIndex, ShapeK
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>
@@ -2013,7 +2017,11 @@ public sealed class SetShapeSizeCommand(int paragraphIndex, int runIndex, double
 /// Set the alt-text accessibility description on the inline shape at the given paragraph/run indices,
 /// snapshotting the prior value for undo.
 /// </summary>
-public sealed class SetShapeAltTextCommand(int paragraphIndex, int runIndex, string? altText) : IDocumentCommand
+public sealed class SetShapeAltTextCommand(
+    int paragraphIndex,
+    int runIndex,
+    string? altText,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private string? _previous;
     private bool _applied;
@@ -2036,8 +2044,8 @@ public sealed class SetShapeAltTextCommand(int paragraphIndex, int runIndex, str
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>

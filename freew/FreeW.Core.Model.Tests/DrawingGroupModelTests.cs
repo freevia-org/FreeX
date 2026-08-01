@@ -322,6 +322,18 @@ public sealed class DrawingGroupModelTests
         var effects = new ShapeEffectLst { HasGlow = true, GlowColorHex = "ABCDEF" };
         var style = ShapeStylePreset.Catalog[1];
 
+        var kindCommand = new SetShapeKindCommand(0, 0, ShapeKind.RoundedRectangle, path);
+        kindCommand.Apply(context);
+        leaf.Kind.Should().Be(ShapeKind.RoundedRectangle);
+        kindCommand.Revert(context);
+        leaf.Kind.Should().Be(ShapeKind.Ellipse);
+
+        var altTextCommand = new SetShapeAltTextCommand(0, 0, "Nested leaf", path);
+        altTextCommand.Apply(context);
+        leaf.AltText.Should().Be("Nested leaf");
+        altTextCommand.Revert(context);
+        leaf.AltText.Should().BeNull();
+
         var solidCommand = new SetShapeFillCommand(0, 0, "#334455", path);
         solidCommand.Apply(context);
         leaf.FillColorHex.Should().Be("#334455");
@@ -350,6 +362,8 @@ public sealed class DrawingGroupModelTests
         styleCommand.Revert(context);
 
         sibling.FillColorHex.Should().Be("#222222");
+        sibling.Kind.Should().Be(ShapeKind.Rectangle);
+        sibling.AltText.Should().BeNull();
         sibling.OutlineColorHex.Should().BeNull();
         sibling.ExtendedFill.Should().BeNull();
         sibling.Effects.Should().BeNull();

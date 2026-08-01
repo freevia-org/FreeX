@@ -635,6 +635,8 @@ public sealed class DrawingGroupRoundTripTests
         var context = new CommandContext(document);
         var path = new[] { 0, 1 };
 
+        new SetShapeKindCommand(0, 0, ShapeKind.RoundedRectangle, path).Apply(context);
+        new SetShapeAltTextCommand(0, 0, "Nested leaf", path).Apply(context);
         new SetShapeFillCommand(0, 0, "#ABCDEF", path).Apply(context);
         new SetShapeOutlineCommand(0, 0, "#123456", 2.5, "dash", path).Apply(context);
         new SetShapeEffectsCommand(
@@ -646,6 +648,8 @@ public sealed class DrawingGroupRoundTripTests
         var readSibling = readInner.Children[0].Should().BeOfType<Shape>().Subject;
         var readLeaf = readInner.Children[1].Should().BeOfType<Shape>().Subject;
 
+        readLeaf.Kind.Should().Be(ShapeKind.RoundedRectangle);
+        readLeaf.AltText.Should().Be("Nested leaf");
         readLeaf.FillColorHex.Should().Be("#ABCDEF");
         readLeaf.OutlineColorHex.Should().Be("#123456");
         readLeaf.OutlineWidthPt.Should().BeApproximately(2.5, 0.01);
@@ -653,6 +657,8 @@ public sealed class DrawingGroupRoundTripTests
         readLeaf.Effects.Should().NotBeNull();
         readLeaf.Effects!.HasGlow.Should().BeTrue();
         readLeaf.Effects.GlowColorHex.Should().Be("ABCDEF");
+        readSibling.Kind.Should().Be(ShapeKind.Rectangle);
+        readSibling.AltText.Should().BeNull();
         readSibling.FillColorHex.Should().Be("#222222");
         readSibling.OutlineColorHex.Should().BeNull();
         readSibling.Effects.Should().BeNull();

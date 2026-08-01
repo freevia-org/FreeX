@@ -953,16 +953,27 @@ public sealed class DocumentViewFloatingShapeTests
             var leafRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0, 1])!.Value;
             view.SelectFloatingGroupChildForTest(leafRect.Center).Should().BeTrue();
 
+            view.SetSelectedShapeKind(ShapeKind.RoundedRectangle);
+            view.SetSelectedFloatingAltText(" Nested leaf ");
             view.SetSelectedShapeFill("#ABCDEF");
             view.SetSelectedShapeOutline("#123456", 2, "dash");
-            var applied = leaf.FillColorHex == "#ABCDEF"
+            var applied = leaf.Kind == ShapeKind.RoundedRectangle
+                && leaf.AltText == "Nested leaf"
+                && leaf.FillColorHex == "#ABCDEF"
                 && leaf.OutlineColorHex == "#123456"
+                && sibling.Kind == ShapeKind.Rectangle
+                && sibling.AltText is null
                 && sibling.FillColorHex == "#222222"
                 && sibling.OutlineColorHex is null;
             view.Undo();
             var outlineUndone = leaf.OutlineColorHex is null;
             view.Undo();
-            verified = applied && outlineUndone && leaf.FillColorHex == "#111111";
+            var fillUndone = leaf.FillColorHex == "#111111";
+            view.Undo();
+            var altTextUndone = leaf.AltText is null;
+            view.Undo();
+            verified = applied && outlineUndone && fillUndone && altTextUndone
+                && leaf.Kind == ShapeKind.Ellipse;
         });
         if (!ran) return;
         verified.Should().BeTrue();
