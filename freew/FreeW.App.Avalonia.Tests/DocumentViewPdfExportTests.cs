@@ -611,7 +611,7 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
-    public Task BuildPdfContent_IncludesPageBorderOnEveryPageBeforeDocumentContent() =>
+    public Task BuildPdfContent_IncludesPageBorderOnEveryPageInFrontOfDocumentContent() =>
         Session.Dispatch(() =>
         {
             var document = TextDocument.CreateEmpty();
@@ -638,7 +638,7 @@ public sealed class DocumentViewPdfExportTests
             pdf.Pages.Should().HaveCountGreaterThan(1);
             foreach (var page in pdf.Pages)
             {
-                var border = page.Ops[0].Should().BeOfType<PdfStrokeRect>().Subject;
+                var border = page.Ops[^1].Should().BeOfType<PdfStrokeRect>().Subject;
                 border.X.Should().BeApproximately(13.125, 0.001);
                 border.Y.Should().BeApproximately(13.125, 0.001);
                 border.Width.Should().BeApproximately(233.75, 0.001);
@@ -661,6 +661,36 @@ public sealed class DocumentViewPdfExportTests
                     borderPixels++;
             }
             borderPixels.Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Theory]
+    [InlineData(PageBorderZOrder.Front, false)]
+    [InlineData(PageBorderZOrder.Behind, true)]
+    public Task BuildPdfContent_RespectsPageBorderZOrder(
+        PageBorderZOrder zOrder,
+        bool borderIsFirst) =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.PageBorder = new PageBorder("#24536B", 1.5)
+            {
+                SpacePt = 12,
+                ZOrder = zOrder,
+            };
+            document.Blocks.Add(new Paragraph("Body text above or below the authored border."));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var ops = view.BuildPdfContent().Pages.Single().Ops;
+            var borderIndex = ops
+                .Select((op, index) => (op, index))
+                .Single(item => item.op is PdfStrokeRect stroke
+                    && stroke.Color == new PdfColor(0x24, 0x53, 0x6B))
+                .index;
+
+            borderIndex.Should().Be(borderIsFirst ? 0 : ops.Count - 1);
         }, CancellationToken.None);
 
     [Theory]
@@ -812,7 +842,8 @@ public sealed class DocumentViewPdfExportTests
                 text.Text.Should().Be("CONFIDENTIAL");
                 text.Color.Should().Be(new PdfColor(0x7F, 0x8A, 0x99));
                 text.FontSize.Should().BeGreaterThan(0);
-                page.Ops[1].Should().BeOfType<PdfStrokeRect>();
+                page.Ops[^1].Should().BeOfType<PdfStrokeRect>();
+                page.Ops.Skip(1).SkipLast(1).Should().Contain(op => op is PdfText);
             }
 
             using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).First());
