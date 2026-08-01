@@ -200,6 +200,51 @@ public sealed class AvaloniaRichTextEditorTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(TextVerticalType.Vertical)]
+    [InlineData(TextVerticalType.Vertical270)]
+    public async Task InlineTableRun_RendersRotatedCellText(TextVerticalType verticalType)
+    {
+        await Session.Dispatch(() =>
+        {
+            var table = new TableShape();
+            table.ColumnWidthsEmu.Add(914400);
+            table.Rows.Add(new TableRow
+            {
+                HeightEmu = 685800,
+                Cells =
+                {
+                    new TableCell
+                    {
+                        TextBody = new TextBody
+                        {
+                            VerticalType = verticalType,
+                            Paragraphs =
+                            {
+                                new Paragraph
+                                {
+                                    Runs = { new Run { Text = "Rotate" } },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+            var editor = MakeInlineTableEditor(table, 140, 90);
+            var window = Show(editor, 140, 90);
+            try
+            {
+                byte[] pixels = RenderPixels(editor, 140, 90);
+                CountDarkPixels(pixels, 140, 90).Should().BeGreaterThan(8);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     [Fact]
     public async Task InlineTableSurface_HitTestReturnsMergedAnchorBounds()
     {
@@ -1819,6 +1864,25 @@ public sealed class AvaloniaRichTextEditorTests
                 if (pixels[offset] < 100
                     && pixels[offset + 1] < 130
                     && pixels[offset + 2] > 180
+                    && pixels[offset + 3] > 0)
+                    count++;
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountDarkPixels(byte[] pixels, int width, int height)
+    {
+        int count = 0;
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int offset = (y * width + x) * 4;
+                if (pixels[offset] < 80
+                    && pixels[offset + 1] < 80
+                    && pixels[offset + 2] < 80
                     && pixels[offset + 3] > 0)
                     count++;
             }
