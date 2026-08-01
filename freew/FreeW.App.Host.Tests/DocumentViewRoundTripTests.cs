@@ -1427,6 +1427,9 @@ public sealed class DocumentViewRoundTripTests
         wpfTables[1].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
         wpfTables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should().Be(2,
             "the no-cell-spacing pagination control must retain its original vertical padding");
+        CellContentStack(wpfTables[1].RowGroups[0].Rows[1].Cells[0]).RenderTransform
+            .Should().BeSameAs(System.Windows.Media.Transform.Identity,
+                "the no-cell-spacing pagination control keeps its existing content baseline");
 
         var renderedRows = wpfTables.SelectMany(table => table.RowGroups.SelectMany(group => group.Rows)).ToList();
         renderedRows.Should().HaveCount(modelTable.Rows.Count + repeatedPage.RepeatedHeaderRowIndexes.Count);
@@ -1544,6 +1547,11 @@ public sealed class DocumentViewRoundTripTests
         firstSurface.Margin.Left.Should().BeApproximately(spacingDip / 2, 0.01);
         internalSurface.Margin.Left.Should().BeApproximately(-spacingDip, 0.01);
         lastSurface.Margin.Right.Should().BeApproximately(spacingDip, 0.01);
+        CellContentStack(spacedCell).RenderTransform.Should().BeOfType<System.Windows.Media.TranslateTransform>()
+            .Which.Y.Should().BeApproximately(
+                (sourceTable.Rows[3].Cells[0].Margins ?? sourceTable.DefaultCellMargins!).TopPt * (96.0 / 72.0),
+                0.01,
+                "the resolved per-cell top margin registers content without changing exact row measurement");
         RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");
         RenderedRowText(pageRows[0][2]).Should().Contain("Segment 2");
@@ -1571,6 +1579,11 @@ public sealed class DocumentViewRoundTripTests
         cell.Blocks.OfType<BlockUIContainer>().Single().Child
             .Should().BeOfType<System.Windows.Controls.Grid>().Subject.Children
             .OfType<System.Windows.Controls.Border>().Single();
+
+    private static System.Windows.Controls.StackPanel CellContentStack(System.Windows.Documents.TableCell cell) =>
+        cell.Blocks.OfType<BlockUIContainer>().Single().Child
+            .Should().BeOfType<System.Windows.Controls.Grid>().Subject.Children
+            .OfType<System.Windows.Controls.StackPanel>().Single();
 
     private static List<System.Windows.Documents.Table> RenderedTables(FlowDocument document)
     {
