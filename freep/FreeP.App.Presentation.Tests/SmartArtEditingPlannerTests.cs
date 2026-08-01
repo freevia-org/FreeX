@@ -474,6 +474,13 @@ public sealed class SmartArtEditingPlannerTests
             Bytes = Encoding.UTF8.GetBytes(
                 "<dgm:styleDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"old-style\"><dgm:title val=\"Old\" /></dgm:styleDef>")
         };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
         smartArt.Parts[stylePart.PartPath] = stylePart;
 
         var result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(smartArt, preset);
@@ -482,6 +489,7 @@ public sealed class SmartArtEditingPlannerTests
         result.StyleUniqueId.Should().EndWith($"/quickstyle/{expectedId}");
         smartArt.QuickStyle!.UniqueId.Should().Be(result.StyleUniqueId);
         smartArt.QuickStyle.Title.Should().Be(expectedTitle);
+        smartArt.DiagramRelIds.Should().ContainKey("dm");
         smartArt.DiagramRelIds.Should().ContainKey("qs");
         var root = XDocument.Parse(Encoding.UTF8.GetString(stylePart.Bytes)).Root!;
         root.Attribute("uniqueId")!.Value.Should().Be(result.StyleUniqueId);

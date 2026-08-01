@@ -26,6 +26,7 @@ public sealed class SmartArtAuthoringPlannerTests
         result.Applied.Should().BeTrue();
         result.PartPath.Should().Be("ppt/diagrams/colors-freep-19fb754e.xml");
         result.ColorCount.Should().Be(6);
+        smartArt.DiagramRelIds.Should().ContainKey("dm");
         smartArt.DiagramRelIds["cs"].Should().Be("rIdFreePColors");
         smartArt.Colors!.Palette.Should().HaveCount(6);
         smartArt.Colors.Palette.Select(color => color.SchemeColor!.RoleName)
