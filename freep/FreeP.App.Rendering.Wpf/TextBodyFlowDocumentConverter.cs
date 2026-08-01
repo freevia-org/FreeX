@@ -475,17 +475,25 @@ internal static class TextBodyFlowDocumentConverter
     private static Grid CreateInlineTableEditor(InlineTableInfo info)
     {
         var table = info.Table;
+        double spacingDip = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
         var columnWidths = Enumerable.Range(0, Math.Max(1, table.ColumnWidthsEmu.Count))
             .Select(column => column < table.ColumnWidthsEmu.Count
                 ? Math.Max(24, table.ColumnWidthsEmu[column] / 9525.0)
                 : 72)
             .ToArray();
+        for (int column = 0; column + 1 < columnWidths.Length; column++)
+            columnWidths[column] += spacingDip;
         var grid = new Grid
         {
             Tag = info.Clone(),
             Background = Brushes.Transparent,
             HorizontalAlignment = ToWpfHorizontalAlignment(
                 table.Rows.FirstOrDefault()?.HorizontalAlignment),
+            Margin = new Thickness(
+                Math.Clamp(table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip, -1000, 1000),
+                0,
+                0,
+                0),
             VerticalAlignment = VerticalAlignment.Center,
         };
         int columnCount = columnWidths.Length;
@@ -521,6 +529,9 @@ internal static class TextBodyFlowDocumentConverter
                     AcceptsReturn = true,
                     BorderThickness = new Thickness(0.5),
                     BorderBrush = Brushes.Gray,
+                    Margin = columnIndex + Math.Max(1, cell.GridSpan) < columnCount
+                        ? new Thickness(0, 0, spacingDip, 0)
+                        : new Thickness(0),
                     Padding = new Thickness(
                         cell.InsetLeftPt.GetValueOrDefault() * PtToDip,
                         cell.InsetTopPt.GetValueOrDefault() * PtToDip,

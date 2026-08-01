@@ -212,6 +212,12 @@ public sealed class TableShape
     /// <summary>Column widths in EMU, one per column.</summary>
     public List<long> ColumnWidthsEmu { get; } = new();
 
+    /// <summary>Left table indent in points from an external rich-text source.</summary>
+    public double? RichTextLeftIndentPt { get; set; }
+
+    /// <summary>Gap between adjacent cells in points from an external rich-text source.</summary>
+    public double? RichTextCellSpacingPt { get; set; }
+
     /// <summary>Rows in the table (each row contains one cell per column).</summary>
     public List<TableRow> Rows { get; } = new();
 
