@@ -358,14 +358,14 @@ internal sealed record RibbonHostCallbacks(
     Action? OpenDropCapOptionsDialog = null,
     /// <summary>Layout &gt; Hyphenation &gt; Options. Optional owner-modal shell route.</summary>
     Action? OpenHyphenationOptionsDialog = null,
+    /// <summary>Layout &gt; Hyphenation &gt; Manual. Optional owner-modal per-word review route.</summary>
+    Action? OpenManualHyphenationDialog = null,
     /// <summary>Layout &gt; Line Numbers &gt; Options. Optional owner-modal shell route.</summary>
     Action? OpenLineNumberOptionsDialog = null,
     /// <summary>Layout &gt; Custom Margins. Optional Page Setup route opened on the Margins tab.</summary>
     Action? OpenCustomMarginsDialog = null,
     /// <summary>Layout &gt; More Paper Sizes. Optional Page Setup route opened on the Paper tab.</summary>
     Action? OpenMorePaperSizesDialog = null,
-    /// <summary>Host status for the bounded manual-hyphenation pass.</summary>
-    Action<string>? ShowHyphenationInfo = null,
     /// <summary>Help &gt; Help Online. Optional; the command is disabled when omitted.</summary>
     Action? OpenHelpOnline = null,
     /// <summary>Help &gt; Feedback. Optional; the command is disabled when omitted.</summary>

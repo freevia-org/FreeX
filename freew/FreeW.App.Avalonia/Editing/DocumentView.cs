@@ -17941,6 +17941,14 @@ public sealed class DocumentView : Control
         SetPageSettings(settings);
     }
 
+    /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
+    public void ApplyManualHyphenation(IReadOnlyList<ManualHyphenationEdit> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+        if (edits.Count > 0)
+            _bus.Execute(new ApplyManualHyphenationCommand(edits));
+    }
+
     public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
         ApplyPageSettings(page => PageNumberFormatDialogPlanner.ApplyResult(page, result));
 

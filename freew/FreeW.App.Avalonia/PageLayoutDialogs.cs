@@ -400,6 +400,94 @@ public sealed class HyphenationOptionsDialog : FreeWDialogWindow
     }
 }
 
+public sealed class ManualHyphenationDialog : FreeWDialogWindow
+{
+    private readonly ComboBox _choices;
+
+    public ManualHyphenationDialog(ManualHyphenationCandidate candidate)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);
+        PageLayoutDialogChrome.Configure(this, "Manual Hyphenation", 380);
+
+        _choices = new ComboBox { SelectedIndex = 0, MinWidth = 230 };
+        foreach (var option in candidate.Options)
+            _choices.Items.Add(new ComboBoxItem { Content = option.DisplayText, Tag = option });
+        AvaloniaCompactDialogChrome.ApplyComboBox(_choices, PageLayoutDialogChrome.Style);
+
+        var yes = Button("Yes", isDefault: true, () =>
+        {
+            if (_choices.SelectedItem is ComboBoxItem { Tag: ManualHyphenationOption option })
+                Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Accept, option.BreakPoint));
+        });
+        var no = Button("No", isDefault: false, () =>
+            Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Skip)));
+        var cancel = Button("Cancel", isDefault: false, () =>
+            Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Cancel)));
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Spacing = 8,
+            Margin = new Thickness(0, 16, 0, 0)
+        };
+        buttons.Children.Add(yes);
+        buttons.Children.Add(no);
+        buttons.Children.Add(cancel);
+
+        var content = new StackPanel { Margin = new Thickness(16) };
+        content.Children.Add(new TextBlock { Text = $"Word {candidate.Number}", Margin = new Thickness(0, 0, 0, 4) });
+        content.Children.Add(new TextBlock { Text = candidate.Word, FontWeight = FontWeight.SemiBold, FontSize = 16 });
+        content.Children.Add(new TextBlock { Text = "Hyphenate at:", Margin = new Thickness(0, 12, 0, 4) });
+        content.Children.Add(_choices);
+        content.Children.Add(buttons);
+        Content = content;
+
+        PageLayoutDialogChrome.WireEscape<ManualHyphenationDialogResult?>(this);
+    }
+
+    private static Button Button(string label, bool isDefault, Action action)
+    {
+        var button = new Button { Content = label, MinWidth = 72, IsDefault = isDefault };
+        button.Click += (_, _) => action();
+        AvaloniaCompactDialogChrome.ApplyButton(button, PageLayoutDialogChrome.Style, 72, isDefault);
+        return button;
+    }
+
+    public static async Task ShowAndApplyAsync(Window owner, DocumentView editor, Action<string> report)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        ArgumentNullException.ThrowIfNull(editor);
+        ArgumentNullException.ThrowIfNull(report);
+
+        var session = ManualHyphenationPlanner.CreateSession(editor.Document);
+        if (session.CandidateCount == 0)
+        {
+            report("Manual hyphenation found no words to review.");
+            editor.Focus();
+            return;
+        }
+
+        while (!session.IsComplete)
+        {
+            var result = await new ManualHyphenationDialog(session.Current!)
+                .ShowDialog<ManualHyphenationDialogResult?>(owner);
+            if (result is null || result.Action == ManualHyphenationDialogAction.Cancel)
+                break;
+            if (result.Action == ManualHyphenationDialogAction.Accept && result.BreakPoint is int breakPoint)
+                session.Accept(breakPoint);
+            else
+                session.Skip();
+        }
+
+        editor.ApplyManualHyphenation(session.Edits);
+        report(session.AcceptedCount == 0
+            ? "Manual hyphenation made no changes."
+            : $"Manual hyphenation inserted breaks in {session.AcceptedCount} word(s).");
+        editor.Focus();
+    }
+}
+
 public sealed class LineNumberOptionsDialog : FreeWDialogWindow
 {
     private static readonly CultureInfo DialogCulture = CultureInfo.CurrentCulture;

@@ -861,6 +861,9 @@ public sealed partial class MainWindow : Window
     private Task OpenHyphenationOptionsDialogAsync() =>
         HyphenationOptionsDialog.ShowAndApplyAsync(this, _editor);
 
+    private Task OpenManualHyphenationDialogAsync() =>
+        ManualHyphenationDialog.ShowAndApplyAsync(this, _editor, message => _status.Text = message);
+
     private Task OpenLineNumberOptionsDialogAsync() =>
         LineNumberOptionsDialog.ShowAndApplyAsync(this, _editor);
 
@@ -1724,8 +1727,8 @@ public sealed partial class MainWindow : Window
             OpenCustomParagraphSpacingDialog: () => _ = OpenCustomParagraphSpacingDialogAsync(),
             OpenDropCapOptionsDialog: () => _ = OpenDropCapOptionsDialogAsync(),
             OpenHyphenationOptionsDialog: () => _ = OpenHyphenationOptionsDialogAsync(),
+            OpenManualHyphenationDialog: () => _ = OpenManualHyphenationDialogAsync(),
             OpenLineNumberOptionsDialog: () => _ = OpenLineNumberOptionsDialogAsync(),
-            ShowHyphenationInfo: message => _status.Text = message,
             OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
             AskHeaderFooterText: _askHeaderFooterText ??
                 ((footer, initial) => HeaderFooterTextDialog.ShowAsync(this, footer, initial)),

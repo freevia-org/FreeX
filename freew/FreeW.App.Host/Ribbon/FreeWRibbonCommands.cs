@@ -3154,28 +3154,36 @@ internal static class FreeWRibbonCommands
             editor.ApplyPageSettings(page => page.AutoHyphenation = auto);
     }
 
-    // Hyphenation dropdown — Manual: a simpler pass that proposes hyphenation points for long words. FreeW's
-    // editor uses the same pure Hyphenator the automatic mode does; "Manual" turns hyphenation on (so the
-    // proposed soft-hyphen break points render) and reports how many words it found break candidates for, so
-    // the user can see the pass ran. (Word's interactive per-break confirmation UI is out of scope.)
+    // Hyphenation dropdown - Manual: review candidates in document order, then insert accepted soft hyphens
+    // as one undoable body-text edit without changing the automatic-hyphenation setting.
     private sealed class HyphenationManualCommand(DocumentView editor) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
             editor.CommitToModel();
-            var candidates = PageLayoutCommandPlanner.CountHyphenationCandidates(editor.Model);
-            editor.ApplyPageSettings(page => page.AutoHyphenation = true);
-
             var owner = Window.GetWindow(editor);
-            if (owner is not null)
-                DialogMessageHelper.ShowInfo(owner,
-                    candidates == 0
-                        ? "Manual hyphenation found no long words to hyphenate."
-                        : $"Manual hyphenation proposed break points for {candidates} word(s). They will hyphenate at line ends.",
-                    "Hyphenation");
-        }
+            var session = ManualHyphenationPlanner.CreateSession(editor.Model);
+            if (session.CandidateCount == 0)
+            {
+                if (owner is not null)
+                    DialogMessageHelper.ShowInfo(owner, "Manual hyphenation found no words to review.", "Hyphenation");
+                return;
+            }
 
+            while (!session.IsComplete)
+            {
+                var result = ManualHyphenationDialog.Prompt(owner, session.Current!);
+                if (result is null || result.Action == ManualHyphenationDialogAction.Cancel)
+                    break;
+                if (result.Action == ManualHyphenationDialogAction.Accept && result.BreakPoint is int breakPoint)
+                    session.Accept(breakPoint);
+                else
+                    session.Skip();
+            }
+
+            editor.ApplyManualHyphenation(session.Edits);
+        }
     }
 
     // Hyphenation dropdown — Hyphenation Options…: opens the dialog (auto toggle, zone, consecutive-hyphen
