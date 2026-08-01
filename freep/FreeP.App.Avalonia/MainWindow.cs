@@ -4818,17 +4818,10 @@ public sealed partial class MainWindow : Window
 
     internal PresentationVideoExportPlan RefreshVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
-        LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(request, _presentation);
-        if (_nativeOutputCapabilities.Video.CanEncodeMp4)
-        {
-            var hasSlides = LastVideoExportPlan.SlideRange.SlideNumbers.Count > 0;
-            LastVideoExportPlan = LastVideoExportPlan with
-            {
-                IsImplemented = true,
-                CanExecute = hasSlides,
-                DisabledReason = hasSlides ? null : LastVideoExportPlan.DisabledReason,
-            };
-        }
+        LastVideoExportPlan = PresentationExportPlanner.BuildVideoExportPlan(
+            request,
+            _presentation,
+            _videoExportHostCapabilities);
 
         _statusText.Text = LastVideoExportPlan.DisabledReason ?? "Video export planned";
         return LastVideoExportPlan;
