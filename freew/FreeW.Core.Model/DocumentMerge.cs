@@ -501,6 +501,7 @@ public static class DocumentMerge
                 Run = sourceStyle.Run,
                 Paragraph = sourceStyle.Paragraph,
                 TableBorders = sourceStyle.TableBorders,
+                PreservedTableStyleXml = RemapPreservedTableStyleXml(sourceStyle.PreservedTableStyleXml, styleNames),
                 PreservedNumbering = RemapPreservedNumbering(sourceStyle.PreservedNumbering, numberingIds),
             };
         }
@@ -511,6 +512,30 @@ public static class DocumentMerge
         foreach (var table in clones.OfType<Table>())
             if (table.TableStyleId is { } styleId && styleNames.TryGetValue(styleId, out var mappedStyleId))
                 table.TableStyleId = mappedStyleId;
+    }
+
+    private static string? RemapPreservedTableStyleXml(
+        string? preservedXml,
+        IReadOnlyDictionary<string, string> styleNames)
+    {
+        if (string.IsNullOrEmpty(preservedXml))
+            return null;
+
+        var style = XElement.Parse(preservedXml, LoadOptions.PreserveWhitespace);
+        if (style.Attribute(Wordprocessing + "styleId") is { } styleId
+            && styleNames.TryGetValue(styleId.Value, out var mappedStyleId))
+        {
+            styleId.Value = mappedStyleId;
+        }
+
+        foreach (var referenceName in new[] { "basedOn", "next", "link" })
+        {
+            var value = style.Element(Wordprocessing + referenceName)?.Attribute(Wordprocessing + "val");
+            if (value is not null && styleNames.TryGetValue(value.Value, out var mappedReference))
+                value.Value = mappedReference;
+        }
+
+        return style.ToString(SaveOptions.DisableFormatting);
     }
 
     private static IReadOnlyList<string> SourceStyleClosure(

@@ -453,6 +453,26 @@ public class RibbonTransitionsAnimationsTests
     }
 
     [Fact]
+    public void Cmd_MotionReverse_ReversesTheSelectedMotionPath()
+    {
+        var (ed, pres) = MakeSession();
+        ed.Select(pres.Slides[0].Shapes[0].Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.anim.motion.right");
+        Exec(reg, "freep.anim.motion.reverse");
+
+        var motion = Assert.Single(ed.CurrentSlideAnimations).Motion;
+        Assert.NotNull(motion);
+        Assert.Equal(MotionPathSegmentKind.Move, motion!.Segments[0].Kind);
+        Assert.Equal(0.5, motion.Segments[0].X);
+        Assert.Equal(0, motion.Segments[0].Y);
+        Assert.Equal(MotionPathSegmentKind.Line, motion.Segments[1].Kind);
+        Assert.Equal(0, motion.Segments[1].X);
+        Assert.Equal(0, motion.Segments[1].Y);
+    }
+
+    [Fact]
     public void Cmd_EmphasisPulse_SetsKindEmphasis()
     {
         var (ed, pres) = MakeSession();
