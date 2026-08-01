@@ -172,6 +172,41 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_ExportsSuperscriptAndSubscriptScaleAndBaselines() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Base", RunFormatting.Default with { FontSizePt = 12 }));
+            paragraph.Runs.Add(new Run("Super", RunFormatting.Default with
+            {
+                FontSizePt = 12,
+                VerticalAlign = VerticalAlign.Superscript,
+            }));
+            paragraph.Runs.Add(new Run("Sub", RunFormatting.Default with
+            {
+                FontSizePt = 12,
+                VerticalAlign = VerticalAlign.Subscript,
+            }));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            var text = pdf.Pages[0].Ops.OfType<PdfText>().ToDictionary(item => item.Text);
+            text["Base"].FontSize.Should().BeApproximately(12, 0.001);
+            text["Super"].FontSize.Should().BeApproximately(12 * 0.583, 0.001);
+            text["Sub"].FontSize.Should().BeApproximately(12 * 0.583, 0.001);
+            text["Super"].Y.Should().BeGreaterThan(text["Base"].Y);
+            text["Super"].Y.Should().BeGreaterThan(text["Sub"].Y);
+            Math.Abs(text["Sub"].Y - text["Base"].Y).Should().BeGreaterThan(0.01);
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_ExportsResolvedFirstEvenAndDefaultHeaderImages() =>
         Session.Dispatch(() =>
         {
