@@ -10,11 +10,12 @@ public sealed partial class MainWindow
     private sealed record InternalObjectClipboard(
         SheetId SourceSheetId,
         SelectionPaneObjectKind Kind,
-        Guid ObjectId);
+        Guid ObjectId,
+        bool IsCut = false);
 
     private InternalObjectClipboard? _internalObjectClipboard;
 
-    private bool TryCopySelectedDrawingObject()
+    private bool TryCopySelectedDrawingObject(bool isCut = false)
     {
         if (_selectedDrawingObjectKind is not { } kind ||
             _selectedDrawingObjectId is not { } objectId ||
@@ -27,8 +28,9 @@ public sealed partial class MainWindow
         _internalObjectClipboard = new InternalObjectClipboard(
             _session.ActiveSheet.Id,
             kind,
-            objectId);
-        SetClipboardMarquee(null, isCut: false);
+            objectId,
+            isCut);
+        SetClipboardMarquee(null, isCut);
         return true;
     }
 
@@ -48,12 +50,19 @@ public sealed partial class MainWindow
             objectClip.SourceSheetId,
             destinationSheetId,
             objectClip.Kind,
-            objectClip.ObjectId);
+            objectClip.ObjectId,
+            removeSource: objectClip.IsCut);
         var outcome = _session.ExecuteReviewCommand(command, _session.ActiveCell);
         if (!outcome.Success)
         {
             ShowEditIssue(outcome.ErrorMessage ?? "Paste failed.");
             return;
+        }
+
+        if (objectClip.IsCut)
+        {
+            _internalObjectClipboard = null;
+            SetClipboardMarquee(null, isCut: false);
         }
 
         if (command.NewObjectId is { } newObjectId)

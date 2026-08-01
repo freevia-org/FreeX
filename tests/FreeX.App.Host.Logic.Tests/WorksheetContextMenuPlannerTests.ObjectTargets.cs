@@ -10,6 +10,9 @@ public sealed partial class WorksheetContextMenuPlannerTests
         var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Picture);
 
         commands.Select(command => command.Header).Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
             "Format Picture...",
             "Crop...",
             "Reset Crop",
@@ -32,6 +35,9 @@ public sealed partial class WorksheetContextMenuPlannerTests
         var commands = WorksheetContextMenuPlanner.BuildCommands(targetKind);
 
         commands.Select(command => command.Header).Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
             formatHeader,
             "Size and Properties...",
             "Rotate...",
@@ -58,6 +64,9 @@ public sealed partial class WorksheetContextMenuPlannerTests
         var commands = WorksheetContextMenuPlanner.BuildCommands(WorksheetContextMenuTargetKind.Chart);
 
         commands.Select(command => command.Header).Should().ContainInOrder(
+            "Cut",
+            "Copy",
+            "Paste",
             "Format Chart Area...",
             "Select Data...",
             "Change Chart Type...",

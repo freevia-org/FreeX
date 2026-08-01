@@ -91,6 +91,18 @@ public sealed partial class MainWindow
 
         switch (action)
         {
+            // Clipboard commands intentionally use the same shell entry points as keyboard,
+            // ribbon, and native-menu activation. Object Cut remains pending until Paste succeeds.
+            case WorksheetContextMenuAction.Cut:
+                RunGuarded(CutSelectedRangeToClipboardAsync);
+                break;
+            case WorksheetContextMenuAction.Copy:
+                RunGuarded(CopySelectedRangeToClipboardAsync);
+                break;
+            case WorksheetContextMenuAction.Paste:
+                RunGuarded(PasteClipboardTextAsync);
+                break;
+
             // --- Picture ---
             case WorksheetContextMenuAction.FormatPicture:
                 RunGuarded(OpenFormatPictureDialogAsync);

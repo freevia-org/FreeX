@@ -192,6 +192,10 @@ public static class WorksheetContextMenuPlanner
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildPictureCommands() =>
         Freeze([
+        new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
+        new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
+        new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
+        WorksheetContextMenuCommand.Separator,
         new("Format Picture...", WorksheetContextMenuAction.FormatPicture, AccessHeader: "_Format Picture..."),
         new("Crop...", WorksheetContextMenuAction.CropPicture, AccessHeader: "_Crop..."),
         new("Reset Crop", WorksheetContextMenuAction.ResetPictureCrop, AccessHeader: "_Reset Crop"),
@@ -202,6 +206,10 @@ public static class WorksheetContextMenuPlanner
 
     private static IReadOnlyList<WorksheetContextMenuCommand> BuildChartCommands() =>
         Freeze([
+        new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
+        new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
+        new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
+        WorksheetContextMenuCommand.Separator,
         new("Format Chart Area...", WorksheetContextMenuAction.FormatChartArea, AccessHeader: "_Format Chart Area..."),
         new("Select Data...", WorksheetContextMenuAction.SelectChartData, AccessHeader: "Select _Data..."),
         new("Change Chart Type...", WorksheetContextMenuAction.ChangeChartType, AccessHeader: "_Change Chart Type..."),
@@ -292,6 +300,10 @@ public static class WorksheetContextMenuPlanner
     {
         var commands = new List<WorksheetContextMenuCommand>
         {
+            new("Cut", WorksheetContextMenuAction.Cut, AccessHeader: "Cu_t"),
+            new("Copy", WorksheetContextMenuAction.Copy, AccessHeader: "_Copy"),
+            new("Paste", WorksheetContextMenuAction.Paste, AccessHeader: "_Paste"),
+            WorksheetContextMenuCommand.Separator,
             new(formatHeader, WorksheetContextMenuAction.FormatDrawingObject, AccessHeader: $"_Format {formatHeader["Format ".Length..]}"),
             new("Size and Properties...", WorksheetContextMenuAction.ResizeDrawingObject, AccessHeader: "_Size and Properties..."),
             new("Rotate...", WorksheetContextMenuAction.RotateDrawingObject, AccessHeader: "_Rotate..."),

@@ -35,9 +35,13 @@ public partial class MainWindow
     // MainWindow.ChartCommands.cs/MainWindow.Drawing.cs) leaves SheetGrid.SelectedRange as whatever
     // single-cell range sits under/near the object's anchor -- ExecuteCopy used to only ever look at
     // SelectedRange, so Ctrl+C on a selected chart/shape silently copied that underlying CELL and
-    // Ctrl+V never duplicated the object at all. This tracks a pending object copy separately from
+    // Ctrl+V never duplicated the object at all. This tracks a pending object copy or cut separately from
     // the cell-range clipboard above.
-    private sealed record InternalObjectClipboard(SheetId SourceSheetId, SelectionPaneObjectKind Kind, Guid ObjectId);
+    private sealed record InternalObjectClipboard(
+        SheetId SourceSheetId,
+        SelectionPaneObjectKind Kind,
+        Guid ObjectId,
+        bool IsCut = false);
     private InternalObjectClipboard? _internalObjectClipboard;
 
     private void CancelCopyAndTransientModes()
@@ -89,13 +93,10 @@ public partial class MainWindow
 
     private void ExecuteCopy(bool isCut = false)
     {
-        // R91-io-clipboard-image-formats-5-1: route a selected chart/shape through its own object
-        // clipboard instead of falling into the cell-range copy below (which would silently copy
-        // whatever cell happens to sit under the object's anchor). Only for Copy -- Cut of a
-        // selected object still falls through to the pre-existing range-based behavior unchanged;
-        // true cut/move semantics for objects are a separate follow-up (see round summary).
+        // Route a selected drawing object through its own clipboard instead of falling into the
+        // cell-range path. Object Cut stays pending until Paste executes the shared move command.
         _internalObjectClipboard = null;
-        if (!isCut && TryCopySelectedDrawingObject())
+        if (TryCopySelectedDrawingObject(isCut))
             return;
 
         if (SheetGrid.SelectedRange is not { } range) return;
@@ -254,7 +255,7 @@ public partial class MainWindow
     /// clipboards untouched) for any other selection kind, which keeps falling through to the
     /// pre-existing cell-range copy behavior unchanged.
     /// </summary>
-    private bool TryCopySelectedDrawingObject()
+    private bool TryCopySelectedDrawingObject(bool isCut = false)
     {
         SelectionPaneObjectKind? kind = SheetGrid.SelectedObjectKind switch
         {
@@ -269,15 +270,19 @@ public partial class MainWindow
 
         _internalClipboard = null;
         ClearClipboardVisualState();
-        _internalObjectClipboard = new InternalObjectClipboard(_currentSheetId, kind.Value, SheetGrid.SelectedObjectId);
+        _internalObjectClipboard = new InternalObjectClipboard(
+            _currentSheetId,
+            kind.Value,
+            SheetGrid.SelectedObjectId,
+            isCut);
         return true;
     }
 
     /// <summary>
     /// R91-io-clipboard-image-formats-5-1: the Ctrl+V side of <see cref="TryCopySelectedDrawingObject"/> --
-    /// duplicates the copied chart/shape onto the CURRENT sheet (which may be a different sheet than
-    /// the one it was copied from, if the user switched sheets between Ctrl+C and Ctrl+V) via
-    /// <see cref="DuplicateDrawingObjectCommand"/>, then selects the new duplicate exactly like
+    /// duplicates or moves the copied/cut chart, shape, picture, or text box onto the CURRENT sheet
+    /// (which may be a different sheet than the source if the user switched sheets between commands)
+    /// via <see cref="DuplicateDrawingObjectCommand"/>, then selects the new object exactly like
     /// freshly inserting one does (SelectInsertedChart/SelectInsertedDrawingObject).
     /// </summary>
     private void PasteClipboardObject(InternalObjectClipboard objectClip)
@@ -290,7 +295,8 @@ public partial class MainWindow
                 objectClip.SourceSheetId,
                 destinationSheetId,
                 objectClip.Kind,
-                objectClip.ObjectId);
+                objectClip.ObjectId,
+                removeSource: objectClip.IsCut);
             return command;
         }
 
@@ -300,6 +306,9 @@ public partial class MainWindow
             ShowCommandError(outcome, "Paste");
             return;
         }
+
+        if (objectClip.IsCut)
+            _internalObjectClipboard = null;
 
         if (command?.NewObjectId is { } newObjectId)
         {

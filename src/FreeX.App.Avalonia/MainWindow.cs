@@ -24075,9 +24075,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_isOpening || _isSaving)
             return;
 
-        // Object cut/move is not implemented yet, but a stale object copy must never survive a
-        // later Ctrl+X and make the next ordinary paste duplicate the old object.
+        // Keep object Cut separate from the cell clipboard. The source is removed only by the
+        // shared move command after Paste has validated and added the destination object.
         _internalObjectClipboard = null;
+
+        if (TryCopySelectedDrawingObject(isCut: true))
+            return;
 
         if (!TryCommitPendingFormulaEdit())
             return;

@@ -142,6 +142,65 @@ public sealed class R91_ObjectClipboardCopyPasteTests
         });
     }
 
+    [Fact]
+    public void CutThenPaste_WithChartSelected_MovesTheChartAfterPaste()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var initialWorkbook = new Workbook("Book1");
+            initialWorkbook.AddSheet("Sheet1");
+            var workbookRef = new WorkbookRef { Current = initialWorkbook };
+            var window = new MainWindow(
+                NullLogger<MainWindow>.Instance,
+                new ViewportService(),
+                new CommandBus(_ => new TestCommandContext(workbookRef.Current)),
+                new RecalcEngine(new DependencyGraph(), new FormulaEvaluator()),
+                [],
+                workbookRef,
+                initialWorkbook,
+                NullUserMessageService.Instance);
+
+            try
+            {
+                window.Show();
+                PumpDispatcher();
+
+                var workbook = workbookRef.Current;
+                var sheet = workbook.GetSheetAt(0);
+                var anchor = new CellAddress(sheet.Id, 2, 2);
+                var chart = new ChartModel
+                {
+                    Type = ChartType.Column,
+                    DataRange = new GridRange(anchor, new CellAddress(sheet.Id, 5, 3)),
+                    Title = "Move me"
+                };
+                sheet.Charts.Add(chart);
+
+                var grid = (GridView)window.FindName("SheetGrid");
+                grid.SelectedRange = new GridRange(anchor, anchor);
+                grid.SelectedObjectId = chart.Id;
+                grid.SelectedObjectKind = ObjectKind.Chart;
+
+                InvokeClickHandler(window, "CutBtn_Click");
+                PumpDispatcher();
+                sheet.Charts.Should().ContainSingle("Cut only arms the object move");
+                sheet.Charts[0].Id.Should().Be(chart.Id);
+
+                InvokeClickHandler(window, "PasteBtn_Click");
+                PumpDispatcher();
+
+                sheet.Charts.Should().ContainSingle();
+                sheet.Charts[0].Id.Should().NotBe(chart.Id);
+                sheet.Charts[0].Title.Should().Be("Move me");
+            }
+            finally
+            {
+                MainWindowTestCleanup.CloseWithoutSavePrompt(window);
+                PumpDispatcher();
+            }
+        });
+    }
+
     private static void InvokeClickHandler(MainWindow window, string methodName)
     {
         var method = typeof(MainWindow).GetMethod(
