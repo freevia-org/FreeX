@@ -237,7 +237,10 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("outline-nested-columns-group-physical", runner, StringComparison.Ordinal);
         Assert.Contains("outer-selection=row-header-drag-10:14", probe, StringComparison.Ordinal);
         Assert.Contains("inner-selection=row-header-drag-11:12", probe, StringComparison.Ordinal);
-        Assert.Contains("refresh_grid_origin \"outline-nested-columns-inner-origin.png\"", probe, StringComparison.Ordinal);
+        Assert.Contains("set_expected_outline_origin", probe, StringComparison.Ordinal);
+        Assert.Contains("outline_gutter_size", probe, StringComparison.Ordinal);
+        Assert.Contains("dismiss_active_popups", probe, StringComparison.Ordinal);
+        Assert.DoesNotContain("refresh_grid_origin()", probe, StringComparison.Ordinal);
         Assert.Contains("outline_toggle_visible", probe, StringComparison.Ordinal);
         Assert.Contains("inner-collapse-structural", probe, StringComparison.Ordinal);
         Assert.Contains("outer-expand-structural", probe, StringComparison.Ordinal);

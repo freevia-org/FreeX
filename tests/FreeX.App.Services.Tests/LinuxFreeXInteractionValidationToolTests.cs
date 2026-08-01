@@ -201,7 +201,10 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("inner-selection=row-header-drag-11:12");
         probe.Should().Contain("outer-selection=row-header-drag-10:14");
         probe.Should().Contain("inner-selection=column-header-drag-I:K");
-        probe.Should().Contain("refresh_grid_origin \"outline-nested-rows-inner-origin.png\"");
+        probe.Should().Contain("set_expected_outline_origin \"$expected_inner_depth\" \"$column_outline_depth\" \"outline-nested-rows-inner-origin.png\"");
+        probe.Should().Contain("set_expected_outline_origin \"$row_outline_depth\" \"$expected_inner_depth\" \"outline-nested-columns-inner-origin.png\"");
+        probe.Should().Contain("dismiss_active_popups");
+        probe.Should().NotContain("refresh_grid_origin()");
         probe.Should().Contain("[[ ! \"$target_x\" =~ ^[0-9]+$ || ! \"$target_y\" =~ ^[0-9]+$ ]]");
         probe.Should().Contain("row-gutter-width=$row_gutter_width");
         probe.Should().Contain("column-gutter-height=$column_gutter_height");
