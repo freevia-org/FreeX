@@ -121,6 +121,28 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void AddSlideCommand_PreservesSectionMembershipAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(2);
+        var lastSlideId = p.Slides[^1].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Closing" };
+        section.SlideIds.Add(lastSlideId);
+        p.Sections.Add(section);
+        var added = new Slide { Id = "new-slide" };
+
+        bus.Execute(new AddSlideCommand(added));
+
+        p.Slides[^1].Should().BeSameAs(added);
+        p.Sections[0].SlideIds.Should().Equal(lastSlideId, added.Id);
+
+        bus.Undo();
+        p.Sections[0].SlideIds.Should().Equal(lastSlideId);
+
+        bus.Redo();
+        p.Sections[0].SlideIds.Should().Equal(lastSlideId, added.Id);
+    }
+
+    [Fact]
     public void AddSlideCommand_Revert_RemovesSlide()
     {
         var (p, bus) = Make();
