@@ -3922,7 +3922,8 @@ public sealed partial class MainWindow : Window
                 _animPane = new AnimationPane(
                     Editor,
                     onPreview: StartAnimationPanePreview,
-                    onAccessibilityChanged: RefreshPaneAccessibilityMetadata);
+                    onAccessibilityChanged: RefreshPaneAccessibilityMetadata,
+                    onEditMotionPath: OpenMotionPathEditor);
                 _animPaneHost.Child = _animPane;
             }
             _animPaneHost.Visibility = Visibility.Visible;
@@ -3940,9 +3941,19 @@ public sealed partial class MainWindow : Window
         _animPane = new AnimationPane(
             Editor,
             onPreview: StartAnimationPanePreview,
-            onAccessibilityChanged: RefreshPaneAccessibilityMetadata);
+            onAccessibilityChanged: RefreshPaneAccessibilityMetadata,
+            onEditMotionPath: OpenMotionPathEditor);
         _animPaneHost.Child = _animPane;
         RefreshPaneAccessibilityMetadata();
+    }
+
+    private void OpenMotionPathEditor(int animationIndex)
+    {
+        var dialog = new MotionPathEditorDialog(Editor, animationIndex)
+        {
+            Owner = this,
+        };
+        dialog.ShowDialog();
     }
 
     private void StartAnimationPanePreview(AnimationPanePlaybackSessionPlan session)
