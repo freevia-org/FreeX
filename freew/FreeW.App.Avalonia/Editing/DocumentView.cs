@@ -9578,9 +9578,16 @@ public sealed class DocumentView : Control
             BorderLineStyle.Dotted => new DashStyle([1, 2], 0),
             _ => null,
         };
+        var brush = edge.IsWave ? WaveBorderBrush(edge) : BrushFor(edge.ColorHex);
         var pen = dashStyle is not null
-            ? new Pen(BrushFor(edge.ColorHex), edge.WidthDip, dashStyle)
-            : new Pen(BrushFor(edge.ColorHex), edge.WidthDip);
+            ? new Pen(brush, edge.WidthDip, dashStyle)
+            : new Pen(brush, edge.WidthDip);
+
+        if (edge.IsWave)
+        {
+            DrawWaveCellEdge(context, edge, rect, pen);
+            return;
+        }
 
         if (edge.Style == BorderLineStyle.Double)
         {
@@ -9593,6 +9600,70 @@ public sealed class DocumentView : Control
         }
 
         context.DrawLine(pen, p1, p2);
+    }
+
+    private static void DrawWaveCellEdge(
+        DrawingContext context,
+        TableCellBorderEdgeVisualPlan edge,
+        Rect rect,
+        Pen pen)
+    {
+        // Avalonia's cell rect owns the outer surface; Word's visible half-wave sits inside it.
+        const double registrationDip = -4.0;
+        var length = edge.Edge is TableCellBorderVisualEdge.Top or TableCellBorderVisualEdge.Bottom
+            ? rect.Width
+            : rect.Height;
+        var offsets = TableCellBorderVisualPlanner.BuildWaveOffsets(length);
+        if (offsets.Count < 2)
+            return;
+
+        var previous = WaveCellBorderPoint(
+            edge.Edge,
+            rect,
+            offsets[0].AlongDip,
+            registrationDip + offsets[0].OutwardDip);
+        foreach (var offset in offsets.Skip(1))
+        {
+            var current = WaveCellBorderPoint(
+                edge.Edge,
+                rect,
+                offset.AlongDip,
+                registrationDip + offset.OutwardDip);
+            context.DrawLine(pen, previous, current);
+            previous = current;
+        }
+    }
+
+    private static Point WaveCellBorderPoint(
+        TableCellBorderVisualEdge edge,
+        Rect rect,
+        double along,
+        double outward) => edge switch
+        {
+            TableCellBorderVisualEdge.Top => new Point(rect.Left + along, rect.Top - outward),
+            TableCellBorderVisualEdge.Bottom => new Point(rect.Left + along, rect.Bottom + outward),
+            TableCellBorderVisualEdge.Left => new Point(rect.Left - outward, rect.Top + along),
+            TableCellBorderVisualEdge.Right => new Point(rect.Right + outward, rect.Top + along),
+            _ => new Point(rect.Left + along, rect.Top - outward),
+        };
+
+    private static IBrush WaveBorderBrush(TableCellBorderEdgeVisualPlan edge)
+    {
+        Color color;
+        try
+        {
+            color = Color.Parse(edge.ColorHex);
+        }
+        catch (FormatException)
+        {
+            color = Colors.Black;
+        }
+
+        return new SolidColorBrush(Color.FromArgb(
+            (byte)Math.Round(255 * edge.StrokeOpacity),
+            color.R,
+            color.G,
+            color.B));
     }
 
     private static (Point Start, Point End) CellBorderPoints(TableCellBorderVisualEdge edge, Rect rect, double inwardOffset) =>
