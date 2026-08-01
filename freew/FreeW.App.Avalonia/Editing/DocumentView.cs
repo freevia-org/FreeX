@@ -3783,6 +3783,15 @@ public sealed class DocumentView : Control
                 new Free.Shared.Pdf.PdfColor(0x70, 0x70, 0x70), 0.5));
         }
 
+        if (_doc.Page.PageBorder is not null)
+        {
+            var borderedPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
+            EnsurePage(borderedPageCount - 1);
+            var borderOps = BuildPdfPageBorderOps(pageWidthPt, pageHeightPt);
+            for (var pageIndex = 0; pageIndex < borderedPageCount; pageIndex++)
+                pagesOps[pageIndex].InsertRange(0, borderOps);
+        }
+
         if (pagesOps.Count == 0)
             pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
 
@@ -3794,6 +3803,84 @@ public sealed class DocumentView : Control
             Author: string.IsNullOrWhiteSpace(_doc.Properties.Author) ? null : _doc.Properties.Author,
             Creator: "FreeW");
         return new Free.Shared.Pdf.PdfContentDocument(pages, properties);
+    }
+
+    private IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> BuildPdfPageBorderOps(
+        double pageWidthPt,
+        double pageHeightPt)
+    {
+        if (_doc.Page.PageBorder is not { } border)
+            return [];
+
+        var widthPt = Math.Max(0.5 / PxPerPoint, border.WidthPt);
+        var dash = border.LineStyle switch
+        {
+            BorderLineStyle.Dotted => new Free.Shared.Pdf.PdfDashPattern([widthPt, 2 * widthPt]),
+            BorderLineStyle.Dashed => new Free.Shared.Pdf.PdfDashPattern([3 * widthPt, 2 * widthPt]),
+            _ => null,
+        };
+
+        double x;
+        double y;
+        double width;
+        double height;
+        if (border.OffsetFrom == PageBorderOffsetFrom.Text)
+        {
+            var spacePt = Math.Max(0, border.SpacePt);
+            var headerDistancePt = _doc.Page.HeaderDistancePt > 0
+                ? _doc.Page.HeaderDistancePt
+                : 36;
+            x = _doc.Page.MarginLeftPt - spacePt - widthPt / 2;
+            y = _doc.Page.MarginBottomPt - spacePt - widthPt / 2;
+            width = pageWidthPt
+                - _doc.Page.MarginLeftPt
+                - _doc.Page.MarginRightPt
+                + 2 * spacePt
+                + widthPt;
+            height = pageHeightPt
+                - headerDistancePt
+                - _doc.Page.MarginBottomPt
+                + 2 * spacePt
+                + widthPt;
+        }
+        else
+        {
+            var insetPt = Math.Min(
+                Math.Max(0, border.SpacePt),
+                Math.Min(pageWidthPt, pageHeightPt) / 4);
+            var compositorRegistrationPt = 1.5 / PxPerPoint;
+            x = insetPt + compositorRegistrationPt;
+            y = insetPt + compositorRegistrationPt;
+            width = pageWidthPt - 2 * x;
+            height = pageHeightPt - 2 * y;
+        }
+
+        if (width <= 0 || height <= 0)
+            return [];
+
+        var color = ParseColor(border.ColorHex);
+        var ops = new List<Free.Shared.Pdf.PdfDrawOp>
+        {
+            new Free.Shared.Pdf.PdfStrokeRect(x, y, width, height, color, widthPt, dash),
+        };
+        if (border.LineStyle == BorderLineStyle.Double)
+        {
+            var innerInsetPt = widthPt + 1.5 / PxPerPoint;
+            var innerWidth = width - 2 * innerInsetPt;
+            var innerHeight = height - 2 * innerInsetPt;
+            if (innerWidth > 0 && innerHeight > 0)
+            {
+                ops.Add(new Free.Shared.Pdf.PdfStrokeRect(
+                    x + innerInsetPt,
+                    y + innerInsetPt,
+                    innerWidth,
+                    innerHeight,
+                    color,
+                    widthPt));
+            }
+        }
+
+        return ops;
     }
 
     private static string FormatKey(RunFormatting fmt) =>
