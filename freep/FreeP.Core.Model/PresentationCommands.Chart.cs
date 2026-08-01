@@ -259,7 +259,15 @@ public sealed class AddChartSeriesCommand : IPresentationCommand
 
         _added = new ChartSeries { Name = _name };
         for (int i = 0; i < chart.Categories.Count; i++)
+        {
             _added.Values.Add(0.0);
+            if (chart.ChartType is ChartType.Scatter or ChartType.Bubble)
+            {
+                _added.XValues.Add(i + 1.0);
+                if (chart.ChartType == ChartType.Bubble)
+                    _added.BubbleSizes.Add(1.0);
+            }
+        }
 
         chart.Series.Add(_added);
         ChartHelper.MarkWorkbookDirty(chart);

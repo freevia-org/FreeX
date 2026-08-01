@@ -280,6 +280,23 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void AddChartSeries_BubbleSeedsCoordinatesAndUndoRemovesThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Bubble;
+
+        bus.Execute(new AddChartSeriesCommand(0, id, "New Bubble Series"));
+
+        chart.Series[^1].Values.Should().HaveCount(3);
+        chart.Series[^1].XValues.Should().Equal(1.0, 2.0, 3.0);
+        chart.Series[^1].BubbleSizes.Should().Equal(1.0, 1.0, 1.0);
+
+        bus.Undo();
+        chart.Series.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void AddChartSeries_Revert_RemovesSeries()
     {
         var (p, bus, id) = MakeChartPresentation();
