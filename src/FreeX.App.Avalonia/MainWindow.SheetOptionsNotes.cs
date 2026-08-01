@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -223,6 +224,8 @@ public sealed partial class MainWindow
         listBox.ItemTemplate = new FuncDataTemplate<SheetCommentEntry>(
             (entry, _) => BuildCommentListRow(entry),
             supportsRecycling: true);
+        var visibleComments = new ObservableCollection<SheetCommentEntry>();
+        listBox.ItemsSource = visibleComments;
 
         var emptyText = new TextBlock
         {
@@ -264,7 +267,10 @@ public sealed partial class MainWindow
                 ? currentComments[listBox.SelectedIndex].Address
                 : (CellAddress?)null;
             currentComments = refreshedComments;
-            listBox.ItemsSource = currentComments;
+            visibleComments.Clear();
+            foreach (var comment in currentComments)
+                visibleComments.Add(comment);
+            listBox.UpdateLayout();
             listBox.SelectedIndex = selectedAddress is { } address
                 ? currentComments.ToList().FindIndex(comment => comment.Address.Equals(address))
                 : -1;
