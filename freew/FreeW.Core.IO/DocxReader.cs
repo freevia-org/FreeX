@@ -3022,6 +3022,7 @@ public static class DocxReader
         var gallery = docPart?.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value;
         var category = docPart?.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
         var hasDocPartUnique = docPart?.Element(W + "docPartUnique") is not null;
+        var lockMode = ReadContentControlLock(sdtPr);
 
         var kind = gallery is not null
             && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
@@ -3038,7 +3039,8 @@ public static class DocxReader
             string.IsNullOrEmpty(alias) ? null : alias,
             string.IsNullOrEmpty(gallery) ? null : gallery,
             string.IsNullOrEmpty(category) ? null : category,
-            hasDocPartUnique);
+            hasDocPartUnique,
+            lockMode);
     }
 
     private static ContentControl ReadContentControl(XElement? sdtPr)
@@ -3047,6 +3049,7 @@ public static class DocxReader
         var alias = sdtPr?.Element(W + "alias")?.Attribute(W + "val")?.Value;
         var normTag = string.IsNullOrEmpty(tag) ? null : tag;
         var normAlias = string.IsNullOrEmpty(alias) ? null : alias;
+        var lockMode = ReadContentControlLock(sdtPr);
 
         var checkbox = sdtPr?.Element(W14 + "checkbox") ?? sdtPr?.Element(W + "checkbox");
         if (checkbox is not null)
@@ -3055,7 +3058,7 @@ public static class DocxReader
                 ?.Attribute(W14 + "val")?.Value
                 ?? (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))?.Attribute(W + "val")?.Value;
             var isChecked = val is "1" or "true" or "on";
-            return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked);
+            return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked, LockMode: lockMode);
         }
 
         var date = sdtPr?.Element(W + "date");
@@ -3063,24 +3066,35 @@ public static class DocxReader
         {
             var format = date.Element(W + "dateFormat")?.Attribute(W + "val")?.Value;
             return new ContentControl(ContentControlKind.DatePicker, normTag, normAlias,
-                DateFormat: string.IsNullOrEmpty(format) ? ContentControl.DefaultDateFormat : format);
+                DateFormat: string.IsNullOrEmpty(format) ? ContentControl.DefaultDateFormat : format,
+                LockMode: lockMode);
         }
 
         var dropDown = sdtPr?.Element(W + "dropDownList");
         if (dropDown is not null)
             return new ContentControl(ContentControlKind.DropDownList, normTag, normAlias,
-                ListItems: ReadListItems(dropDown));
+                ListItems: ReadListItems(dropDown), LockMode: lockMode);
 
         var combo = sdtPr?.Element(W + "comboBox");
         if (combo is not null)
             return new ContentControl(ContentControlKind.ComboBox, normTag, normAlias,
-                ListItems: ReadListItems(combo));
+                ListItems: ReadListItems(combo), LockMode: lockMode);
 
         if (sdtPr?.Element(W + "richText") is not null)
-            return new ContentControl(ContentControlKind.RichText, normTag, normAlias);
+            return new ContentControl(ContentControlKind.RichText, normTag, normAlias, LockMode: lockMode);
 
-        return new ContentControl(ContentControlKind.PlainText, normTag, normAlias);
+        return new ContentControl(ContentControlKind.PlainText, normTag, normAlias, LockMode: lockMode);
     }
+
+    private static ContentControlLockMode ReadContentControlLock(XElement? sdtPr) =>
+        sdtPr?.Element(W + "lock")?.Attribute(W + "val")?.Value switch
+        {
+            "unlocked" => ContentControlLockMode.Unlocked,
+            "contentLocked" => ContentControlLockMode.ContentLocked,
+            "sdtLocked" => ContentControlLockMode.ControlLocked,
+            "sdtContentLocked" => ContentControlLockMode.ControlAndContentLocked,
+            _ => ContentControlLockMode.NotSpecified,
+        };
 
     /// <summary>
     /// Reads the w:listItem choices (w:displayText / w:value) of a w:dropDownList / w:comboBox element

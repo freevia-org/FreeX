@@ -112,6 +112,28 @@ public sealed class DocumentViewContentControlInteractionTests
         paragraph.Runs[0].Control!.Checked.Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(ContentControlLockMode.ControlLocked, true)]
+    [InlineData(ContentControlLockMode.ContentLocked, false)]
+    [InlineData(ContentControlLockMode.ControlAndContentLocked, false)]
+    public void PublicInteractionMethods_HonorContentControlLock(
+        ContentControlLockMode lockMode,
+        bool expected)
+    {
+        var run = Run.CheckBoxControl(@checked: false);
+        run.Control = run.Control! with { LockMode = lockMode };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(run);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+
+        view.ToggleContentControl(0, 0).Should().Be(expected);
+        paragraph.Runs[0].Control!.Checked.Should().Be(expected);
+    }
+
     private static Run InsertedRun(Action<DocumentView> insert)
     {
         var view = new DocumentView();

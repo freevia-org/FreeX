@@ -67,6 +67,7 @@ public static class ContentControlInteractionPlanner
         Run run,
         RestrictEditingEnforcementPolicy protectionPolicy) =>
         run.Control is not null
+        && run.Control.LockMode is not (ContentControlLockMode.ContentLocked or ContentControlLockMode.ControlAndContentLocked)
         && protectionPolicy.DecisionFor(RestrictEditingOperationKind.FormFieldEdit).IsAllowed;
 
     public static string Tooltip(ContentControl control)

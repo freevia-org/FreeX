@@ -2506,6 +2506,8 @@ public static class DocxWriter
         var sdtPr = new XElement(W + "sdtPr");
         if (control.Alias is { Length: > 0 } alias)
             sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
+        if (ContentControlLockToken(control.LockMode) is { } lockToken)
+            sdtPr.Add(new XElement(W + "lock", new XAttribute(W + "val", lockToken)));
         if (control.Tag is { Length: > 0 } tag)
             sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
 
@@ -2550,6 +2552,8 @@ public static class DocxWriter
         var sdtPr = new XElement(W + "sdtPr");
         if (control.Alias is { Length: > 0 } alias)
             sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
+        if (ContentControlLockToken(control.LockMode) is { } lockToken)
+            sdtPr.Add(new XElement(W + "lock", new XAttribute(W + "val", lockToken)));
         if (control.Tag is { Length: > 0 } tag)
             sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
         switch (control.Kind)
@@ -2578,6 +2582,15 @@ public static class DocxWriter
         }
         return sdtPr;
     }
+
+    private static string? ContentControlLockToken(ContentControlLockMode mode) => mode switch
+    {
+        ContentControlLockMode.Unlocked => "unlocked",
+        ContentControlLockMode.ContentLocked => "contentLocked",
+        ContentControlLockMode.ControlLocked => "sdtLocked",
+        ContentControlLockMode.ControlAndContentLocked => "sdtContentLocked",
+        _ => null,
+    };
 
     /// <summary>
     /// Builds the w:dropDownList / w:comboBox element for a list content control: a w:listItem

@@ -1168,6 +1168,16 @@ public enum ContentControlKind
     ComboBox
 }
 
+/// <summary>Word content-control locking from w:sdtPr/w:lock.</summary>
+public enum ContentControlLockMode
+{
+    NotSpecified,
+    Unlocked,
+    ContentLocked,
+    ControlLocked,
+    ControlAndContentLocked
+}
+
 /// <summary>
 /// A single choice (w:listItem) of a drop-down list or combo box content control: the visible
 /// <see cref="DisplayText"/> (w:displayText) and the stored <see cref="Value"/> (w:value). Modelled as
@@ -1194,7 +1204,8 @@ public sealed record ContentControl(
     string? Alias = null,
     bool Checked = false,
     string? DateFormat = null,
-    IReadOnlyList<ContentControlListItem>? ListItems = null)
+    IReadOnlyList<ContentControlListItem>? ListItems = null,
+    ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";
@@ -1846,7 +1857,8 @@ public sealed record BlockContentControl(
     string? Alias = null,
     string? DocPartGallery = null,
     string? DocPartCategory = null,
-    bool DocPartUnique = false)
+    bool DocPartUnique = false,
+    ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified)
 {
     public const string BibliographyTag = "Bibliography";
     public const string BibliographyAlias = "Bibliography";

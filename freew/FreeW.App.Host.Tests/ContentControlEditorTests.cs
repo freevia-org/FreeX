@@ -123,6 +123,28 @@ public sealed class ContentControlEditorTests
         run.Control!.Items.Should().NotBeEmpty("a list control inserted without items gets a default sample");
     }
 
+    [StaTheory]
+    [InlineData(ContentControlLockMode.ControlLocked, true)]
+    [InlineData(ContentControlLockMode.ContentLocked, false)]
+    [InlineData(ContentControlLockMode.ControlAndContentLocked, false)]
+    public void ExistingControlInteraction_HonorsContentControlLock(
+        ContentControlLockMode lockMode,
+        bool expected)
+    {
+        var run = Run.CheckBoxControl(@checked: false);
+        run.Control = run.Control! with { LockMode = lockMode };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(run);
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        view.ToggleContentControl(0, 0).Should().Be(expected);
+        view.Model.Paragraphs.Single().Runs.Single().Control!.Checked.Should().Be(expected);
+    }
+
     private static System.Windows.Documents.TextPointer PositionAfterText(
         System.Windows.Documents.Paragraph paragraph,
         string text)
