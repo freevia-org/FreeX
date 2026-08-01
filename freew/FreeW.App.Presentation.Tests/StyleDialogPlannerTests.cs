@@ -6,6 +6,15 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class StyleDialogPlannerTests
 {
     [Fact]
+    public void LayoutMetrics_KeepCompactStyleEditorsOnTheSharedContract()
+    {
+        StyleDialogMetrics.DialogMargin.Should().Be(16);
+        StyleDialogMetrics.FieldBottomMargin.Should().Be(10);
+        StyleDialogMetrics.NameTextBoxHeight.Should().Be(20);
+        StyleDialogMetrics.ActionRowTopMargin.Should().Be(12);
+    }
+
+    [Fact]
     public void TryBuildDefinition_TrimsName_AndMapsFormattingChoices()
     {
         var input = new StyleDialogInput(

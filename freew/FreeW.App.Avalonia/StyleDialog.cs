@@ -93,7 +93,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
         effects.Children.Add(_italic);
         effects.Children.Add(_underline);
 
-        var panel = new StackPanel { Margin = new Thickness(16) };
+        var panel = new StackPanel { Margin = new Thickness(StyleDialogMetrics.DialogMargin) };
         AddRow(panel, "Name:", _name);
         AddRow(panel, "Style based on:", _basedOn);
         AddRow(panel, "Style for following paragraph:", _nextStyle);
@@ -106,7 +106,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
             () => _ = AcceptAsync(),
             () => Close(null),
             buttonWidth: 72,
-            margin: new Thickness(0, 12, -1, 0),
+            margin: new Thickness(0, StyleDialogMetrics.ActionRowTopMargin, -1, 0),
             style: DialogChromeStyle);
         panel.Children.Add(actionRow);
         Content = panel;
@@ -221,7 +221,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
             FontSize = DialogChromeStyle.FontSize,
             Margin = new Thickness(0, 0, 0, 2),
         });
-        field.Margin = new Thickness(0, 0, 0, 10);
+        field.Margin = new Thickness(0, 0, 0, StyleDialogMetrics.FieldBottomMargin);
         panel.Children.Add(field);
     }
 
@@ -229,9 +229,9 @@ internal sealed class StyleDialog : FreeWDialogWindow
     {
         AvaloniaCompactDialogChrome.ApplyTextBox(_name, DialogChromeStyle);
         _name.Foreground = Brushes.Black;
-        _name.Height = 18;
-        _name.MinHeight = 18;
-        _name.MaxHeight = 18;
+        _name.Height = StyleDialogMetrics.NameTextBoxHeight;
+        _name.MinHeight = StyleDialogMetrics.NameTextBoxHeight;
+        _name.MaxHeight = StyleDialogMetrics.NameTextBoxHeight;
         AvaloniaCompactDialogChrome.ApplyComboBox(_basedOn, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_nextStyle, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_size, DialogChromeStyle);
