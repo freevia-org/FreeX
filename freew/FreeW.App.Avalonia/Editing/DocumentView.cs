@@ -167,7 +167,8 @@ public sealed class DocumentView : Control
     private readonly Dictionary<int, DocumentFootnoteContinuationPlan> _footnoteContinuationByBodyPage = new();
     private DocumentFootnotePhysicalPagePlan _footnotePhysicalPagePlan = DocumentFootnotePhysicalPagePlan.Empty;
     private int _bodyPageCount;
-    // FO4: inline (non-floating) charts, WordArt, SmartArt — rendered in the text flow like inline images.
+    // FO4: inline (non-floating) drawing objects rendered in the text flow.
+    private readonly List<FloatingShapeData>    _inlineShapes    = new();
     private readonly List<FloatingChartData>    _inlineCharts    = new();
     private readonly List<FloatingWordArtData>  _inlineWordArts  = new();
     private readonly List<FloatingSmartArtData> _inlineSmartArts = new();
@@ -2897,6 +2898,22 @@ public sealed class DocumentView : Control
 
     // ── FO4 introspection properties (inline objects) ────────────────────────────────────────────────
 
+    /// <summary>Number of inline (non-floating) shapes laid out in the last layout pass.</summary>
+    public int InlineShapeCount
+    {
+        get { if (_laidOutWidth < 0) Relayout(FallbackWidth); return _inlineShapes.Count; }
+    }
+
+    /// <summary>Snapshot of inline shape rects for tests.</summary>
+    public IReadOnlyList<(Rect Rect, ShapeKind Kind, string? Text)> InlineShapeRects
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineShapes.Select(shape => (shape.Rect, shape.Kind, shape.Text)).ToList();
+        }
+    }
+
     /// <summary>Number of inline (non-floating) charts laid out in the last layout pass.</summary>
     public int InlineChartCount
     {
@@ -3883,6 +3900,31 @@ public sealed class DocumentView : Control
             while (inlineDrawingOpsByPage.Count <= pageIndex)
                 inlineDrawingOpsByPage.Add([]);
             inlineDrawingOpsByPage[pageIndex].AddRange(objectOps);
+        }
+
+        foreach (var shapeData in _inlineShapes)
+        {
+            if (shapeData.Model is not { } shape)
+                continue;
+            var pageIndex = PageIndexFromPageSpaceY(shapeData.Rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+            var snapshot = BuildInlineDrawingSnapshot(
+                DocumentFloatingObjectKind.Shape,
+                shapeData.Rect,
+                shapeData.BlockIndex,
+                shapeData.RunIndex,
+                shape.RotationAngle,
+                shape.FlipH,
+                shape.FlipV);
+            AddInlineDrawingOps(
+                shapeData.Rect,
+                BuildPdfShapeOps(
+                    shape,
+                    snapshot,
+                    shapeData.Rect,
+                    _surfacePlan.PageTopDip(pageIndex),
+                    pageHeightPt));
         }
 
         foreach (var chartData in _inlineCharts)
@@ -5638,6 +5680,7 @@ public sealed class DocumentView : Control
             return;
 
         var cachedLayout = _floatingShapes
+            .Concat(_inlineShapes)
             .FirstOrDefault(item => item.BlockIndex == snapshot.BlockIndex
                 && item.RunIndex == snapshot.RunIndex)
             ?.TextLayout;
@@ -5926,6 +5969,7 @@ public sealed class DocumentView : Control
         _floatingSnapshots.Clear();
         _dropCapLayoutPlans.Clear();
         _wrapExclusions.Clear();
+        _inlineShapes.Clear();
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
         _inlineSmartArts.Clear();
@@ -6047,6 +6091,7 @@ public sealed class DocumentView : Control
                 _floatingSnapshots.Clear();
                 _dropCapLayoutPlans.Clear();
                 _wrapExclusions.Clear();
+                _inlineShapes.Clear();
                 _inlineCharts.Clear();
                 _inlineWordArts.Clear();
                 _inlineSmartArts.Clear();
@@ -6123,11 +6168,12 @@ public sealed class DocumentView : Control
                 // paragraphs so that the anchor content-Y is tracked; their images are collected
                 // into _floatingImages by CollectFloatingObjects() called from within each layout method.
                 var hasInlineImage   = paragraph.Runs.Any(r => r.Image    is { IsFloating: false });
+                var hasInlineShape   = paragraph.Runs.Any(r => r.Shape    is { IsFloating: false });
                 var hasInlineChart   = paragraph.Runs.Any(r => r.Chart    is { IsFloating: false });
                 var hasInlineWordArt = paragraph.Runs.Any(r => r.WordArt  is { IsFloating: false });
                 var hasInlineSmArt   = paragraph.Runs.Any(r => r.SmartArt is { IsFloating: false });
                 var hasAnyImage    = paragraph.Runs.Any(r => r.Image is not null);
-                if (hasAnyImage)
+                if (hasAnyImage && !hasInlineShape && !hasInlineChart && !hasInlineWordArt && !hasInlineSmArt)
                 {
                     // Always collect floating images from this paragraph (done inside each layout path).
                     if (hasInlineImage)
@@ -6144,8 +6190,8 @@ public sealed class DocumentView : Control
                     // which calls CollectFloatingObjects at the start of EmitLinePaged.
                 }
 
-                // FO4: route paragraphs with inline charts / SmartArt / WordArt to the dedicated path.
-                if (hasInlineChart || hasInlineWordArt || hasInlineSmArt)
+                // FO4: route mixed inline drawing objects through the shared flow owner.
+                if (hasInlineShape || hasInlineChart || hasInlineWordArt || hasInlineSmArt)
                 {
                     // Non-list paragraph: reset all counters (list run ended).
                     Array.Clear(levelCounters, 0, MaxListDepth);
@@ -8607,8 +8653,17 @@ public sealed class DocumentView : Control
         // the inline object correctly broke to the next page but the floating object anchored to this
         // paragraph stayed on the prior page (wrong).  Mirrors the TT1/VV1 fix in LayoutImageParagraphPaged.
         double firstObjHeight = DefaultFontSizePt * PxPerPoint * 1.3; // fallback: default text line height
-        foreach (var run in paragraph.Runs)
+        for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
         {
+            var run = paragraph.Runs[runIndex];
+            if (run.Shape is { IsFloating: false } firstShape)
+            {
+                var h = firstShape.HeightPt > 0 ? firstShape.HeightPt * PxPerPoint : 80;
+                var w = firstShape.WidthPt > 0 ? firstShape.WidthPt * PxPerPoint : 120;
+                if (w > textWidth) h *= textWidth / w;
+                firstObjHeight = h;
+                break;
+            }
             if (run.Chart is { IsFloating: false } firstChart)
             {
                 var h = firstChart.HeightPt > 0 ? firstChart.HeightPt * PxPerPoint : 216 * PxPerPoint;
@@ -8655,8 +8710,56 @@ public sealed class DocumentView : Control
             ? _placed.Max(p => p.Block == blockIndex ? p.Offset : -1) + 1
             : 0;
 
-        foreach (var run in paragraph.Runs)
+        for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
         {
+            var run = paragraph.Runs[runIndex];
+            if (run.Image is { IsFloating: false } image)
+            {
+                var width = image.WidthPt > 0 ? image.WidthPt * PxPerPoint : 120;
+                var height = image.HeightPt > 0 ? image.HeightPt * PxPerPoint : 80;
+                if (width > textWidth) { var scale = textWidth / width; width = textWidth; height *= scale; }
+
+                var contentY = ReserveContentY(height);
+                var pageSpaceY = ContentYToPageSpaceY(contentY);
+                var x = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
+                _images.Add((new Rect(x, pageSpaceY, width, height), DecodeRenderedImage(image), image, image.ReflectionPreset));
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                    RunFormatting.Default, '\0', Sentinel: false));
+                _layoutContentY = contentY + height + ReflectionExtraHeight(image.ReflectionPreset, height) + gap;
+                continue;
+            }
+
+            if (run.Shape is { IsFloating: false } shape)
+            {
+                var width = shape.WidthPt > 0 ? shape.WidthPt * PxPerPoint : 120;
+                var height = shape.HeightPt > 0 ? shape.HeightPt * PxPerPoint : 80;
+                if (width > textWidth) { var scale = textWidth / width; width = textWidth; height *= scale; }
+
+                var contentY = ReserveContentY(height);
+                var pageSpaceY = ContentYToPageSpaceY(contentY);
+                var x = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
+                var rect = new Rect(x, pageSpaceY, width, height);
+                var snapshot = BuildInlineDrawingSnapshot(
+                    DocumentFloatingObjectKind.Shape,
+                    rect,
+                    blockIndex,
+                    runIndex,
+                    shape.RotationAngle,
+                    shape.FlipH,
+                    shape.FlipV);
+                var shapeData = BuildFloatingShapeData(
+                    DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot),
+                    blockIndex,
+                    runIndex);
+                shapeData.Model = shape;
+                shapeData.TextLayout = BuildFloatingShapeTextLayout(shapeData, rect);
+                _inlineShapes.Add(shapeData);
+                BuildShapeTextCaretStops(shapeData);
+                _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
+                    RunFormatting.Default, '\0', Sentinel: false));
+                _layoutContentY = contentY + height + gap;
+                continue;
+            }
             // ── Inline chart ─────────────────────────────────────────────────────────
             if (run.Chart is { IsFloating: false } chart)
             {
@@ -8671,7 +8774,10 @@ public sealed class DocumentView : Control
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
                 // Build inline chart data (reuses the same struct as floating charts).
-                _inlineCharts.Add(BuildChartData(chart, rect, behindText: false, zOrder: 0));
+                var chartData = BuildChartData(chart, rect, behindText: false, zOrder: 0);
+                chartData.BlockIndex = blockIndex;
+                chartData.RunIndex = runIndex;
+                _inlineCharts.Add(chartData);
 
                 // ZZ1 fix: use the FULL object box as the hit-test band so TryHitTest/MoveCaretVertical
                 // can reach a tall inline chart from above (pressing Down) or via a click in the upper
@@ -8699,7 +8805,7 @@ public sealed class DocumentView : Control
                 var x          = ColumnLeftFor(contentY) + AlignmentOffset(alignment, textWidth, width);
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
-                _inlineWordArts.Add(BuildInlineWordArtData(wa, rect, blockIndex, runIndex: -1));
+                _inlineWordArts.Add(BuildInlineWordArtData(wa, rect, blockIndex, runIndex));
 
                 // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
@@ -8728,7 +8834,7 @@ public sealed class DocumentView : Control
                     behindText: false,
                     zOrder: 0,
                     blockIndex,
-                    runIndex: -1));
+                    runIndex));
 
                 // ZZ1 fix: full-height sentinel for correct hit-test reach (see chart site above).
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
@@ -9725,7 +9831,9 @@ public sealed class DocumentView : Control
         foreach (var (rect, bitmap, _, reflectionPreset) in _images)
             DrawFloatingImage(context, rect, bitmap, reflectionPreset);
 
-        // FO4: inline charts, WordArt, SmartArt — rendered in the text flow using the same FO3 helpers.
+        // FO4: inline drawing objects rendered in the text flow using the same FO3 helpers.
+        foreach (var shape in _inlineShapes)
+            DrawFloatingShape(context, shape);
         foreach (var cd in _inlineCharts)
             DrawFloatingChart(context, cd);
         foreach (var wd in _inlineWordArts)
@@ -22412,6 +22520,7 @@ public sealed class DocumentView : Control
         public int BlockIndex;
         public int RunIndex;
         public IReadOnlyList<int>? ChildPath;
+        public Shape? Model;
 
         // Geometry
         public ShapeKind Kind;

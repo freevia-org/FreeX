@@ -976,6 +976,64 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_IncludesInlineShapeAndMixedInlineDrawingFamilies() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(new InlineImage(SolidPng(SKColors.Red), 48, 24)));
+
+            var shape = Shape.TextBoxWith("Inline PDF Shape", 150, 60, "#4472C4");
+            shape.OutlineColorHex = "#1F4E79";
+            shape.OutlineWidthPt = 1.5;
+            paragraph.Runs.Add(Run.FromShape(shape));
+
+            var chart = Chart.Create(
+                ChartKind.Column,
+                ["A", "B"],
+                [5.0, 9.0],
+                "Series 1",
+                "Mixed Inline Chart");
+            chart.WidthPt = 180;
+            chart.HeightPt = 90;
+            paragraph.Runs.Add(new Run(string.Empty) { Chart = chart });
+            document.Blocks.Add(paragraph);
+            document.Blocks.Add(new Paragraph("Tail after mixed objects"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            view.InlineShapeCount.Should().Be(1);
+            view.InlineChartCount.Should().Be(1);
+            view.InlineShapeRects.Single().Should().Match<(Rect Rect, ShapeKind Kind, string? Text)>(item =>
+                item.Kind == ShapeKind.TextBox
+                && item.Text == "Inline PDF Shape"
+                && item.Rect.Width > 0
+                && item.Rect.Height > 0);
+
+            var flattened = FlattenPdfOps(pdf.Pages.SelectMany(page => page.Ops)).ToList();
+            var shapeFill = flattened.OfType<PdfFillRect>()
+                .Single(fill => fill.Color == new PdfColor(0x44, 0x72, 0xC4)
+                    && Math.Abs(fill.Width - 150) < 0.01
+                    && Math.Abs(fill.Height - 60) < 0.01);
+            var pdfTexts = flattened.OfType<PdfText>().ToList();
+            string.Concat(pdfTexts.Select(text => text.Text)).Should().Contain("Inline PDF Shape");
+            var shapeText = pdfTexts.First(text => text.Text.Contains("Inline", StringComparison.Ordinal));
+            var chartTitle = flattened.OfType<PdfText>().Single(text => text.Text == "Mixed Inline Chart");
+            var tail = flattened.OfType<PdfText>()
+                .Single(text => text.Text.Contains("Tail after mixed objects", StringComparison.Ordinal));
+            flattened.IndexOf(shapeFill).Should().BeLessThan(flattened.IndexOf(shapeText));
+            flattened.IndexOf(shapeText).Should().BeLessThan(flattened.IndexOf(chartTitle));
+            flattened.IndexOf(chartTitle).Should().BeLessThan(flattened.IndexOf(tail));
+
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var rendered = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            CountNonWhitePixels(rendered).Should().BeGreaterThan(500);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_RendersInlineImageThroughSharedSkiaBackend() =>
         Session.Dispatch(() =>
         {
