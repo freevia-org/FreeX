@@ -213,7 +213,7 @@ internal sealed class BackstageView : Window
             MinWidth = 360,
             MaxWidth = 520,
             Height = 30,
-            Margin = new Thickness(0, 0, 0, 12),
+            Margin = new Thickness(4, 0, 0, 12),
             Padding = new Thickness(8, 3),
             VerticalContentAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -244,6 +244,7 @@ internal sealed class BackstageView : Window
         {
             Width = 640,
             Margin = new Thickness(0, 0, 0, 14),
+            HorizontalAlignment = HorizontalAlignment.Left,
             HorizontalContentAlignment = HorizontalAlignment.Left,
             VerticalContentAlignment = VerticalAlignment.Top,
             Items =
@@ -276,6 +277,7 @@ internal sealed class BackstageView : Window
             Setters =
             {
                 new Setter(Layoutable.MarginProperty, new Thickness(0)),
+                new Setter(ContentPresenter.PaddingProperty, new Thickness(4, 0, 0, 0)),
                 new Setter(ContentPresenter.HorizontalContentAlignmentProperty, HorizontalAlignment.Left),
                 new Setter(ContentPresenter.VerticalContentAlignmentProperty, VerticalAlignment.Top),
             },
@@ -292,7 +294,7 @@ internal sealed class BackstageView : Window
 
             selectedPane.Margin = new Thickness(0);
             selectedPane.HorizontalAlignment = HorizontalAlignment.Stretch;
-            selectedPane.Padding = new Thickness(0);
+            selectedPane.Padding = new Thickness(4, 0, 0, 0);
         }
 
         tabs.AttachedToVisualTree += (_, _) => NormalizeSelectedContentHost();

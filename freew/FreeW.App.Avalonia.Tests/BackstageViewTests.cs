@@ -200,6 +200,7 @@ public class BackstageViewTests
                 panel.Spacing == 0 && panel.Width == 638 && panel.HorizontalAlignment == HorizontalAlignment.Left);
             tabs.HorizontalContentAlignment.Should().Be(HorizontalAlignment.Left);
             tabs.VerticalContentAlignment.Should().Be(VerticalAlignment.Top);
+            tabs.HorizontalAlignment.Should().Be(HorizontalAlignment.Left);
             tabs.Measure(new Size(523, 480));
             tabs.Arrange(new Rect(0, 0, 523, 480));
             var selectedContentHost = tabs.GetVisualDescendants()
@@ -208,7 +209,8 @@ public class BackstageViewTests
             selectedContentHost.HorizontalContentAlignment.Should().Be(HorizontalAlignment.Left);
             selectedContentHost.VerticalContentAlignment.Should().Be(VerticalAlignment.Top);
             var selectedContentChild = selectedContentHost.GetVisualChildren().Single();
-            selectedContentChild.Bounds.X.Should().Be(1);
+            tabs.Bounds.X.Should().Be(0);
+            selectedContentChild.Bounds.X.Should().Be(5);
             selectedContentChild.GetVisualDescendants()
                 .OfType<TextBlock>()
                 .First()
@@ -219,6 +221,7 @@ public class BackstageViewTests
             search.Height.Should().Be(30);
             search.MinHeight.Should().Be(30);
             search.MaxHeight.Should().Be(30);
+            search.Margin.Should().Be(new Thickness(4, 0, 0, 12));
             search.Padding.Should().Be(new Thickness(8, 3));
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
@@ -243,6 +246,7 @@ public class BackstageViewTests
                 .Single(presenter => presenter.Name == "PART_SelectedContentHost");
             selectedContentHost.Margin.Should().Be(new Thickness(0));
             selectedContentHost.HorizontalAlignment.Should().Be(HorizontalAlignment.Stretch);
+            selectedContentHost.Padding.Should().Be(new Thickness(4, 0, 0, 0));
             view.Close();
         }, CancellationToken.None);
     }
