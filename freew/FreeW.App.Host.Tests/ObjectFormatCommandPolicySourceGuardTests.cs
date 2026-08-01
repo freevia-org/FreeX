@@ -13,6 +13,7 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
         source.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Picture)");
         source.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Picture)");
         source.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Picture)");
+        source.Should().Contain("ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Shape)");
         source.Should().Contain("ObjectFormatCommandPlanner.WrapCommands(ObjectFormatTarget.Shape)");
         source.Should().Contain("ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Shape)");
         source.Should().NotContain("new ImageWrapCommand(editor, ImageWrapping.");
@@ -51,9 +52,13 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
 
         wpfEditor.Should().Contain("public bool RotateSelectedFloating(double angleDeg)");
         wpfEditor.Should().Contain("new SetDrawingGroupChildRotationCommand(");
+        wpfEditor.Should().Contain("new ChangeDrawingGroupChildZOrderCommand(");
+        wpfEditor.Should().Contain("RestoreSelectedFloatingGroupChildPath(selectedChild)");
         wpfEditor.Should().Contain("SelectedFloatingGroupChildTransform()");
         wpfRibbon.Should().Contain("new FloatingTransformCommand(editor, command)");
         avaloniaEditor.Should().Contain("new SetDrawingGroupChildRotationCommand(");
+        avaloniaEditor.Should().Contain("new ChangeDrawingGroupChildZOrderCommand(");
+        avaloniaRibbon.Should().Contain("editor.ChangeSelectedFloatingZOrder(operation, requiredKind)");
         avaloniaRibbon.Should().Contain("editor.RotateSelectedFloating(command.RotationDeltaDegrees)");
         avaloniaRibbon.Should().Contain("editor.FlipSelectedFloating(horizontal: true)");
     }

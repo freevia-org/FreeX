@@ -973,14 +973,19 @@ public sealed class DocumentViewFloatingShapeTests
             view.SetSelectedFloatingAltText(" Nested leaf ");
             view.SetSelectedShapeFill("#ABCDEF");
             view.SetSelectedShapeOutline("#123456", 2, "dash");
+            var reordered = view.ChangeSelectedFloatingZOrder(
+                ZOrderOperation.SendBackward, "Shape");
             var applied = selectedSize == (42d, 24d)
                 && selectedPosition == (30d, 18d,
                     HorizontalAnchor.Column, VerticalAnchor.Paragraph, true)
-                && inner.ChildOffsets[1] == (46d, 29d)
                 && outer.Placement.HorizontalOffsetPt == 72
                 && outer.Placement.VerticalOffsetPt == 36
                 && outer.Placement.HorizontalAnchor == HorizontalAnchor.Margin
                 && outer.Placement.VerticalAnchor == VerticalAnchor.Page
+                && reordered
+                && ReferenceEquals(inner.Children[0], leaf)
+                && inner.ChildOffsets[0] == (46d, 29d)
+                && ReferenceEquals(view.SelectedFloatingShape(), leaf)
                 && leaf.WidthPt == 80
                 && leaf.HeightPt == 50
                 && leaf.Kind == ShapeKind.RoundedRectangle
@@ -992,6 +997,10 @@ public sealed class DocumentViewFloatingShapeTests
                 && sibling.FillColorHex == "#222222"
                 && sibling.OutlineColorHex is null;
             view.Undo();
+            var zOrderUndone = ReferenceEquals(inner.Children[1], leaf)
+                && inner.ChildOffsets[1] == (46d, 29d)
+                && ReferenceEquals(view.SelectedFloatingShape(), leaf);
+            view.Undo();
             var outlineUndone = leaf.OutlineColorHex is null;
             view.Undo();
             var fillUndone = leaf.FillColorHex == "#111111";
@@ -1002,7 +1011,7 @@ public sealed class DocumentViewFloatingShapeTests
             view.Undo();
             var sizeUndone = leaf.WidthPt == 42 && leaf.HeightPt == 24;
             view.Undo();
-            verified = applied && outlineUndone && fillUndone && altTextUndone && kindUndone
+            verified = applied && zOrderUndone && outlineUndone && fillUndone && altTextUndone && kindUndone
                 && sizeUndone
                 && inner.ChildOffsets[1] == (30d, 18d)
                 && outer.Placement.HorizontalOffsetPt == 72

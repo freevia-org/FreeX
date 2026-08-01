@@ -193,6 +193,26 @@ public sealed class DocumentView : RichTextBox
 
     private FloatingGroupChildSelection? _selectedFloatingGroupChild;
 
+    private object? SelectedFloatingGroupChildObject() =>
+        _selectedFloatingGroupChild is { } selected
+        && DrawingGroupChildPathResolver.TryGetChild(
+            selected.RootGroup, selected.ChildPath, out _, out var child)
+            ? child
+            : null;
+
+    private void RestoreSelectedFloatingGroupChildPath(object? selectedChild)
+    {
+        if (selectedChild is null
+            || _selectedFloatingGroupChild is not { } selected
+            || !DrawingGroupChildPathResolver.TryFindPath(
+                selected.RootGroup, selectedChild, out var childPath))
+        {
+            return;
+        }
+
+        _selectedFloatingGroupChild = selected with { ChildPath = childPath };
+    }
+
     // Multi-select: the set of currently selected floating objects (each an InlineImage / Shape / Chart /
     // SmartArt / WordArt / FreeW.Core.Model.DrawingGroup). Populated by Shift/Ctrl-click; the single-select path keeps this
     // in sync (1-element set).  Group command uses this to collect members.
@@ -856,7 +876,9 @@ public sealed class DocumentView : RichTextBox
                 RestrictEditingOperationKind.HistoryUndo,
                 _commands.NextUndoMutationKind))
         {
+            var selectedChild = SelectedFloatingGroupChildObject();
             _commands.Undo();
+            RestoreSelectedFloatingGroupChildPath(selectedChild);
         }
     }
 
@@ -874,7 +896,9 @@ public sealed class DocumentView : RichTextBox
                 RestrictEditingOperationKind.HistoryRedo,
                 _commands.NextRedoMutationKind))
         {
+            var selectedChild = SelectedFloatingGroupChildObject();
             _commands.Redo();
+            RestoreSelectedFloatingGroupChildPath(selectedChild);
         }
     }
 
@@ -2208,13 +2232,14 @@ public sealed class DocumentView : RichTextBox
             && nestedChild is Shape nestedShape)
             return nestedShape;
 
-        return SelectedShapeLocation().Shape;
+        return _selectedFloatingObject as Shape ?? SelectedShapeLocation().Shape;
     }
 
     // Locate the model paragraph/run index of the inline shape under the selection, plus the shape itself.
     private (int BlockIndex, int RunIndex, Shape? Shape) SelectedShapeLocation()
     {
-        var shape = ShapeAtPointer(CaretPosition)
+        var shape = _selectedFloatingObject as Shape
+            ?? ShapeAtPointer(CaretPosition)
             ?? ShapeAtPointer(Selection.Start)
             ?? ShapeAtPointer(Selection.End)
             ?? ShapeInElement(CaretPosition?.Parent as TextElement)
@@ -7455,15 +7480,32 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Adds z-order commands to the method set. Called by the host via the ribbon command bus.
     /// </summary>
-    public void ChangeSelectedImageZOrder(ZOrderOperation operation)
+    public bool ChangeSelectedFloatingZOrder(ZOrderOperation operation)
     {
         CommitToModel();
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && DrawingGroupChildPathResolver.TryGetChild(
+                selectedChild.RootGroup,
+                selectedChild.ChildPath,
+                out _,
+                out var child))
+        {
+            var (groupBlockIndex, groupRunIndex) = FindFloatingObjectLocation(selectedChild.RootGroup);
+            if (groupBlockIndex < 0)
+                return false;
+            _commands.Execute(new ChangeDrawingGroupChildZOrderCommand(
+                groupBlockIndex, groupRunIndex, selectedChild.ChildPath, operation));
+            RestoreSelectedFloatingGroupChildPath(child);
+            SyncFloatingObjectsCanvas();
+            return true;
+        }
+
         var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is { IsFloating: true })
         {
             _commands.Execute(new ChangeZOrderCommand(blockIndex, runIndex, operation));
             SyncFloatingObjectsCanvas();
-            return;
+            return true;
         }
         if (_selectedFloatingObject is not null)
         {
@@ -7472,9 +7514,15 @@ public sealed class DocumentView : RichTextBox
             {
                 _commands.Execute(new ChangeZOrderCommand(bi, ri, operation));
                 SyncFloatingObjectsCanvas();
+                return true;
             }
         }
+
+        return false;
     }
+
+    public void ChangeSelectedImageZOrder(ZOrderOperation operation) =>
+        ChangeSelectedFloatingZOrder(operation);
 
     /// <summary>
     /// Groups the current multi-select set into a FreeW.Core.Model.DrawingGroup, if at least 2 objects are selected.
