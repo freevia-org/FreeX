@@ -116,6 +116,45 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var ribbonPlan))
+        {
+            foreach (var fill in ribbonPlan.Fills)
+            {
+                context.DrawRectangle(
+                    Brushes.Black,
+                    null,
+                    new Rect(frame.X + fill.Xdip, frame.Y + fill.Ydip, fill.WidthDip, fill.HeightDip));
+            }
+            foreach (var polygon in ribbonPlan.Polygons)
+            {
+                if (polygon.Points.Count == 0)
+                    continue;
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(
+                        new Point(frame.X + polygon.Points[0].XDip, frame.Y + polygon.Points[0].YDip),
+                        true,
+                        true);
+                    path.PolyLineTo(
+                        polygon.Points.Skip(1)
+                            .Select(point => new Point(frame.X + point.XDip, frame.Y + point.YDip))
+                            .ToList(),
+                        true,
+                        false);
+                }
+                geometry.Freeze();
+                context.DrawGeometry(GrayBrush(polygon.Red), null, geometry);
+            }
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -266,6 +305,7 @@ public static class PageBorderArtWpfRenderer
         0x33 => FrozenBrush(0x33, 0x33, 0x33),
         0x60 => FrozenBrush(0x60, 0x60, 0x60),
         0xB2 => FrozenBrush(0xB2, 0xB2, 0xB2),
+        0xC0 => FrozenBrush(0xC0, 0xC0, 0xC0),
         0xCC => FrozenBrush(0xCC, 0xCC, 0xCC),
         0xFF => Brushes.White,
         _ => FrozenBrush(value, value, value),

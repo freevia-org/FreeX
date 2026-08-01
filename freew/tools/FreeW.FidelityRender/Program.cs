@@ -1547,6 +1547,17 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
             DrawSoftwareBat(canvas, motif);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var ribbonPlan))
+    {
+        DrawSoftwareWeavingRibbon(canvas, ribbonPlan);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
             border.ArtId,
             border.WidthPt,
@@ -1641,6 +1652,38 @@ static void DrawSoftwareBat(SKCanvas canvas, PageBorderBatMotif motif)
         Style = SKPaintStyle.Fill,
     };
     canvas.DrawPath(path, paint);
+}
+
+static void DrawSoftwareWeavingRibbon(SKCanvas canvas, PageBorderWeavingRibbonPlan plan)
+{
+    using var black = new SKPaint { Color = SKColors.Black, IsAntialias = false, Style = SKPaintStyle.Fill };
+    foreach (var fill in plan.Fills)
+    {
+        canvas.DrawRect(
+            (float)fill.Xdip,
+            (float)fill.Ydip,
+            (float)(fill.Xdip + fill.WidthDip),
+            (float)(fill.Ydip + fill.HeightDip),
+            black);
+    }
+
+    foreach (var polygon in plan.Polygons)
+    {
+        if (polygon.Points.Count == 0)
+            continue;
+        using var path = new SKPath();
+        path.MoveTo((float)polygon.Points[0].XDip, (float)polygon.Points[0].YDip);
+        foreach (var point in polygon.Points.Skip(1))
+            path.LineTo((float)point.XDip, (float)point.YDip);
+        path.Close();
+        using var paint = new SKPaint
+        {
+            Color = new SKColor(polygon.Red, polygon.Green, polygon.Blue),
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+        };
+        canvas.DrawPath(path, paint);
+    }
 }
 
 static void DrawSoftwareDecorativeArch(SKCanvas canvas, PageBorderDecorativeArchPlan plan)
