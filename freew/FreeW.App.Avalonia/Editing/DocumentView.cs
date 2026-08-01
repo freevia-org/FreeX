@@ -3299,7 +3299,9 @@ public sealed class DocumentView : Control
         var pagesOps = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
 
         var runStartX = 0.0;
+        var runEndX = 0.0;
         var runY = 0.0;
+        var runLineHeight = 0.0;
         var runText = new StringBuilder();
         RunFormatting? runFmt = null;
         var runPageIndex = -1;
@@ -3317,7 +3319,13 @@ public sealed class DocumentView : Control
                 pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
 
             var fontSizePt = runFmt.FontSizePt ?? DefaultFontSizePt;
-            var face = runFmt.Bold ? Free.Shared.Pdf.PdfFontFace.Bold : Free.Shared.Pdf.PdfFontFace.Regular;
+            var face = (runFmt.Bold, runFmt.Italic) switch
+            {
+                (true, true) => Free.Shared.Pdf.PdfFontFace.BoldItalic,
+                (true, false) => Free.Shared.Pdf.PdfFontFace.Bold,
+                (false, true) => Free.Shared.Pdf.PdfFontFace.Italic,
+                _ => Free.Shared.Pdf.PdfFontFace.Regular,
+            };
             var color = ParseColor(runFmt.ColorHex);
 
             // Convert px -> pt and flip to PDF y-up. The glyph Y is the top of the line box; the text
@@ -3330,6 +3338,20 @@ public sealed class DocumentView : Control
             var yWithinPagePx = runY - _surfacePlan.PageTopDip(runPageIndex);
             var baselineFromTopPt = yWithinPagePx / PxPerPoint + fontSizePt;
             var yPt = pageHeightPt - baselineFromTopPt;
+
+            var decorationPlan = RunDecorationVisualPlanner.Build(runFmt, PxPerPoint);
+            if (decorationPlan.HasBackground)
+            {
+                var widthPt = Math.Max(1, runEndX - runStartX) / PxPerPoint;
+                var heightPt = Math.Max(1, runLineHeight) / PxPerPoint;
+                var bottomPt = pageHeightPt - (yWithinPagePx + Math.Max(1, runLineHeight)) / PxPerPoint;
+                pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfFillRect(
+                    Math.Max(0, xPt),
+                    bottomPt,
+                    widthPt,
+                    heightPt,
+                    ParseColor(decorationPlan.BackgroundColorHex)));
+            }
 
             pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfText(
                 Math.Max(0, xPt), yPt, fontSizePt, face, color, runText.ToString()));
@@ -3357,12 +3379,16 @@ public sealed class DocumentView : Control
             {
                 Flush();
                 runStartX = g.X;
+                runEndX = g.X;
                 runY = g.Y;
+                runLineHeight = 0;
                 runFmt = g.Fmt;
                 runPageIndex = pageIndex;
             }
 
             runText.Append(g.Ch);
+            runEndX = Math.Max(runEndX, g.X + Math.Max(1, g.W));
+            runLineHeight = Math.Max(runLineHeight, g.LineHeight);
         }
 
         Flush();
@@ -4342,7 +4368,8 @@ public sealed class DocumentView : Control
     }
 
     private static string FormatKey(RunFormatting fmt) =>
-        $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}";
+        $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
+        $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}";
 
     private static DocumentFloatingObjectSnapshot BuildInlineDrawingSnapshot(
         DocumentFloatingObjectKind kind,

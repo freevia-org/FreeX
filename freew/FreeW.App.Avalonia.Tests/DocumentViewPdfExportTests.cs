@@ -49,6 +49,45 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_ExportsRunBackgroundPrecedenceAndItalicFace() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Highlighted", RunFormatting.Default with
+            {
+                HighlightColorHex = "#FFFF00",
+                Italic = true,
+            }));
+            paragraph.Runs.Add(new Run(" Shaded", RunFormatting.Default with
+            {
+                HighlightColorHex = "#FF0000",
+                CharacterShadingHex = "#00FF00",
+            }));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            var ops = pdf.Pages[0].Ops.ToList();
+            var fills = ops.OfType<PdfFillRect>().ToList();
+            fills.Select(fill => fill.Color).Should().Contain(new PdfColor(0xFF, 0xFF, 0x00));
+            fills.Select(fill => fill.Color).Should().Contain(new PdfColor(0x00, 0xFF, 0x00));
+            fills.Select(fill => fill.Color).Should().NotContain(new PdfColor(0xFF, 0x00, 0x00),
+                "character shading takes precedence over highlight in live Print Layout");
+            fills.Should().OnlyContain(fill => fill.Width > 0 && fill.Height > 0);
+
+            var italic = ops.OfType<PdfText>().Single(text => text.Text == "Highlighted");
+            italic.Face.Should().Be(PdfFontFace.Italic);
+            ops.IndexOf(fills.Single(fill => fill.Color == new PdfColor(0xFF, 0xFF, 0x00)))
+                .Should().BeLessThan(ops.IndexOf(italic));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_ExportsResolvedFirstEvenAndDefaultHeaderImages() =>
         Session.Dispatch(() =>
         {
