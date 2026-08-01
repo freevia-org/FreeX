@@ -10,6 +10,11 @@ namespace Free.Shared.Shell.Avalonia;
 /// <summary>Shared Avalonia realization of the WPF product About dialog.</summary>
 public class AvaloniaAboutDialog : AvaloniaDialogWindow
 {
+    private static readonly IBrush FocusedInputBorderBrush =
+        new SolidColorBrush(Color.FromRgb(0x56, 0x9D, 0xE5));
+    private static readonly IBrush InputBorderBrush =
+        new SolidColorBrush(Color.FromRgb(0xAB, 0xAD, 0xB3));
+    private Button _okButton = null!;
     private readonly TextBox _aboutTextBox;
 
     public AvaloniaAboutDialog(
@@ -39,6 +44,7 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
             IsReadOnly = true,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
+            FontSize = 12.3,
             Padding = new Thickness(8),
             BorderThickness = new Thickness(1),
             MinHeight = 220,
@@ -56,17 +62,25 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         Content = CreateContent(okAutomationId, helpText);
         Opened += (_, _) =>
         {
-            _aboutTextBox.Padding = new Thickness(8);
+            // WPF's layout rounding leaves the right edge one device pixel farther right than
+            // Avalonia's symmetric 16 DIP margin. The local root compensation keeps both bounds
+            // and the single action button on the same authority pixels.
+            _aboutTextBox.FontSize = 12.3;
+            _aboutTextBox.Padding = new Thickness(10, 8, 8, 8);
+            _aboutTextBox.BorderBrush = FocusedInputBorderBrush;
+            _okButton.BorderBrush = InputBorderBrush;
             FocusInitialKeyboardTarget();
         };
+        _aboutTextBox.GotFocus += (_, _) => _aboutTextBox.BorderBrush = FocusedInputBorderBrush;
+        _aboutTextBox.LostFocus += (_, _) => _aboutTextBox.BorderBrush = InputBorderBrush;
     }
 
     internal TextBox AboutTextBoxForTest => _aboutTextBox;
 
     private Control CreateContent(string okAutomationId, string helpText)
     {
-        var root = new DockPanel { Margin = new Thickness(16) };
-        var ok = new Button
+        var root = new DockPanel { Margin = new Thickness(16, 16, 15, 16) };
+        var ok = _okButton = new Button
         {
             Content = "_OK",
             IsDefault = true,
@@ -76,7 +90,9 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
             ok,
             AvaloniaCompactDialogChrome.WindowsStyle,
             minWidth: 84,
-            isDefault: true);
+            // Preserve IsDefault for keyboard behavior, but match the WPF resting border. WPF's
+            // default button is neutral in the authority capture while the text box owns focus.
+            isDefault: false);
         AutomationProperties.SetAutomationId(ok, okAutomationId);
         AutomationProperties.SetHelpText(ok, helpText);
         ok.Click += (_, _) => Close();

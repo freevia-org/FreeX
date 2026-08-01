@@ -1224,19 +1224,27 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia consume shared inherited MathNode.MathProperties and MathRoot/MathParagraph layout metadata with no renderer-local math-property policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-omml-math-default-inheritance-20260801.md"
+                "docs/parity/freep-omml-math-default-inheritance-wave100-20260801.md"
             ],
             Verification:
             [
+                "freep/FreeP.Core.Model/OmmlMathProperties.cs",
+                "freep/FreeP.Core.Model/MathRunInfo.cs",
+                "freep/FreeP.Core.Model/Presentation.cs",
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SlideCompositor.cs",
                 "freep/FreeP.App.Presentation/Math/MathNode.cs",
                 "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
                 "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlMathDefaultsIntegrationTests.cs",
                 "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
                 "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/OmmlMathDefaultsParityTests.cs",
                 "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/OmmlMathDefaultsParityTests.cs",
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
             ],
-            RemainingWork: "Shared OMML parsing now resolves caller/document defaults, the nearest math graphic m:mathPr, paragraph-local m:mathPr, and explicit m:oMathParaPr break properties by property-wise precedence; m:mathFont reaches inline and paragraph glyph plans consumed by WPF and Avalonia. PowerPoint-authoritative default propagation, font fallback, exact Cambria Math metrics, and broader settings-part package corpus baselines remain deferred."),
+            RemainingWork: "FreeP now propagates authored defaults from a related PresentationML settings part when one exists, then containing a:graphicData/m:mathPr, raw math-wrapper m:mathPr, paragraph-local m:mathPr, and local oMathParaPr properties by property-wise precedence. Standard PowerPoint packages expose no document settings source in the current corpus, so the package level remains null rather than fabricating defaults. PowerPoint-authoritative font fallback, exact Cambria Math metrics, and broader authored settings-part corpus baselines remain deferred."),
         new(
             EvidenceId: "freep.omml.nary-limit-location",
             Area: "OMML n-ary limit-location semantics",

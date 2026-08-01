@@ -1886,7 +1886,9 @@ public enum BlockContentControlKind
     RichText,
     PlainText,
     DocumentPart,
-    Bibliography
+    Bibliography,
+    RepeatingSection,
+    RepeatingSectionItem
 }
 
 /// <summary>
@@ -1903,7 +1905,10 @@ public sealed record BlockContentControl(
     string? DocPartCategory = null,
     bool DocPartUnique = false,
     ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified,
-    ContentControlWordMetadata? WordMetadata = null)
+    ContentControlWordMetadata? WordMetadata = null,
+    string? RepeatingSectionTitle = null,
+    bool DoNotAllowInsertDeleteSection = false,
+    BlockContentControl? Parent = null)
 {
     public const string BibliographyTag = "Bibliography";
     public const string BibliographyAlias = "Bibliography";
@@ -1916,6 +1921,36 @@ public sealed record BlockContentControl(
             Alias: BibliographyAlias,
             DocPartGallery: BibliographyGallery,
             DocPartUnique: true);
+
+    /// <summary>Creates a Word 2013 repeating-section content control (w15:repeatingSection).</summary>
+    public static BlockContentControl RepeatingSection(
+        string? title = null,
+        bool doNotAllowInsertDeleteSection = false,
+        string? tag = null,
+        string? alias = null) =>
+        new(
+            BlockContentControlKind.RepeatingSection,
+            Tag: tag,
+            Alias: alias,
+            RepeatingSectionTitle: title,
+            DoNotAllowInsertDeleteSection: doNotAllowInsertDeleteSection);
+
+    /// <summary>Creates one item nested inside a Word 2013 repeating-section content control.</summary>
+    public static BlockContentControl RepeatingSectionItem(
+        BlockContentControl parent,
+        string? tag = null,
+        string? alias = null)
+    {
+        ArgumentNullException.ThrowIfNull(parent);
+        if (parent.Kind != BlockContentControlKind.RepeatingSection)
+            throw new ArgumentException("A repeating-section item must have a repeating-section parent.", nameof(parent));
+
+        return new BlockContentControl(
+            BlockContentControlKind.RepeatingSectionItem,
+            Tag: tag,
+            Alias: alias,
+            Parent: parent);
+    }
 }
 
 /// <summary>

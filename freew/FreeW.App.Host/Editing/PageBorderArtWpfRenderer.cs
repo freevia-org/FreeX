@@ -14,6 +14,10 @@ public static class PageBorderArtWpfRenderer
         PageBorderArtVisualPlanner.AppleHighlightGreen,
         PageBorderArtVisualPlanner.AppleHighlightBlue,
         2.0);
+    private static readonly Brush ShadowedSquareFill = FrozenBrush(
+        0,
+        0,
+        PageBorderArtVisualPlanner.ShadowedSquareBlue);
 
     public static bool TryDraw(
         DrawingContext context,
@@ -21,20 +25,56 @@ public static class PageBorderArtWpfRenderer
         Rect frame,
         double edgeInsetDip)
     {
-        if (!PageBorderArtVisualPlanner.TryBuildApplesFrame(
+        if (PageBorderArtVisualPlanner.TryBuildApplesFrame(
                 border.ArtId,
                 border.WidthPt,
                 frame.Width,
                 frame.Height,
                 edgeInsetDip,
-                out var motifs))
+                out var appleMotifs))
         {
-            return false;
+            foreach (var motif in appleMotifs)
+                DrawApple(context, motif with { Xdip = frame.X + motif.Xdip, Ydip = frame.Y + motif.Ydip });
+            return true;
         }
 
-        foreach (var motif in motifs)
-            DrawApple(context, motif with { Xdip = frame.X + motif.Xdip, Ydip = frame.Y + motif.Ydip });
-        return true;
+        if (PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var squareMotifs))
+        {
+            foreach (var motif in squareMotifs)
+                DrawShadowedSquare(context, motif with { Xdip = frame.X + motif.Xdip, Ydip = frame.Y + motif.Ydip });
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void DrawShadowedSquare(DrawingContext context, PageBorderShadowedSquareMotif motif)
+    {
+        var shadowSize = Math.Max(0, motif.SizeDip - 4.0);
+        context.DrawRectangle(
+            ShadowedSquareFill,
+            null,
+            new Rect(motif.Xdip, motif.Ydip, shadowSize, shadowSize));
+
+        var faceInset = PageBorderArtVisualPlanner.ShadowedSquareFaceInsetDip;
+        var faceSize = Math.Max(0, motif.SizeDip - 6.0);
+        var faceX = motif.Xdip + faceInset;
+        var faceY = motif.Ydip + faceInset;
+        context.DrawRectangle(Brushes.White, null, new Rect(faceX, faceY, faceSize, faceSize));
+        var outlineInset = PageBorderArtVisualPlanner.ShadowedSquareOutlineInsetDip;
+        var outlineSize = Math.Max(0, motif.SizeDip - 4.0);
+        var outlineX = motif.Xdip + outlineInset;
+        var outlineY = motif.Ydip + outlineInset;
+        context.DrawRectangle(ShadowedSquareFill, null, new Rect(outlineX, outlineY, outlineSize, 1));
+        context.DrawRectangle(ShadowedSquareFill, null, new Rect(outlineX, outlineY + outlineSize - 1, outlineSize, 1));
+        context.DrawRectangle(ShadowedSquareFill, null, new Rect(outlineX, outlineY, 1, outlineSize));
+        context.DrawRectangle(ShadowedSquareFill, null, new Rect(outlineX + outlineSize - 1, outlineY, 1, outlineSize));
     }
 
     private static void DrawApple(DrawingContext context, PageBorderAppleMotif motif)

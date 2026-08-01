@@ -109,6 +109,13 @@ public sealed class Presentation
     /// </summary>
     public PptxPackageSnapshot? PackageSnapshot { get; set; }
 
+    /// <summary>
+    /// Authored package/document-level OMML defaults, when the PresentationML
+    /// package exposes a related settings part. Normal PPTX files generally do
+    /// not expose this source, so null is the correct value in that case.
+    /// </summary>
+    public OmmlMathProperties? DocumentMathProperties { get; set; }
+
     // ── Sections ──────────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -1511,6 +1511,18 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
             DrawSoftwareApple(canvas, motif);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var squareMotifs))
+    {
+        foreach (var motif in squareMotifs)
+            DrawSoftwareShadowedSquare(canvas, motif);
+        return;
+    }
 
     using var borderPaint = new SKPaint
     {
@@ -1528,6 +1540,31 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         inset,
         Math.Max(inset, width - inset),
         Math.Max(inset, height - inset)), borderPaint);
+}
+
+static void DrawSoftwareShadowedSquare(SKCanvas canvas, PageBorderShadowedSquareMotif motif)
+{
+    var x = (float)motif.Xdip;
+    var y = (float)motif.Ydip;
+    var size = (float)motif.SizeDip;
+    var color = new SKColor(0, 0, PageBorderArtVisualPlanner.ShadowedSquareBlue);
+    using var fill = new SKPaint { Color = color, IsAntialias = true, Style = SKPaintStyle.Fill };
+    canvas.DrawRect(x, y, x + size - 4f, y + size - 4f, fill);
+
+    var faceInset = (float)PageBorderArtVisualPlanner.ShadowedSquareFaceInsetDip;
+    var faceSize = Math.Max(0, size - 6f);
+    var faceX = x + faceInset;
+    var faceY = y + faceInset;
+    using var faceFill = new SKPaint { Color = SKColors.White, IsAntialias = true, Style = SKPaintStyle.Fill };
+    canvas.DrawRect(faceX, faceY, faceX + faceSize, faceY + faceSize, faceFill);
+    var outlineInset = (float)PageBorderArtVisualPlanner.ShadowedSquareOutlineInsetDip;
+    var outlineSize = Math.Max(0, size - 4f);
+    var outlineX = x + outlineInset;
+    var outlineY = y + outlineInset;
+    canvas.DrawRect(outlineX, outlineY, outlineX + outlineSize, outlineY + 1, fill);
+    canvas.DrawRect(outlineX, outlineY + outlineSize - 1, outlineX + outlineSize, outlineY + outlineSize, fill);
+    canvas.DrawRect(outlineX, outlineY, outlineX + 1, outlineY + outlineSize, fill);
+    canvas.DrawRect(outlineX + outlineSize - 1, outlineY, outlineX + outlineSize, outlineY + outlineSize, fill);
 }
 
 static void DrawSoftwareApple(SKCanvas canvas, PageBorderAppleMotif motif)

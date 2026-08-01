@@ -310,6 +310,7 @@ internal static class PresentationModelCloneHelper
             {
                 RawXml = source.RawXml,
                 IsAlternateContent = source.IsAlternateContent,
+                ContainingProperties = source.ContainingProperties,
             };
 
     private static RunTextShadow? CloneRunShadow(RunTextShadow? source) =>

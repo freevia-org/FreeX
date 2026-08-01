@@ -33,6 +33,7 @@ public sealed class WpfAuthoritySurfaceParityTests
             var text = dialog.GetLogicalDescendants().OfType<TextBox>()
                 .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AboutFreeWText");
             text.IsReadOnly.Should().BeTrue();
+            text.FontSize.Should().BeApproximately(12.3, 0.001);
             text.Text.Should().Contain("A free word processor for DOCX editing and format-fidelity work.");
             text.Text.Should().Contain("Built with .NET 10 and Avalonia.");
             text.Text.Should().Contain("Help > Legal Notices");

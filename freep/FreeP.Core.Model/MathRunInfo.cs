@@ -39,4 +39,11 @@ public sealed class MathRunInfo
     /// Stored so the writer can re-emit the correct wrapper structure.
     /// </summary>
     public bool IsAlternateContent { get; set; }
+
+    /// <summary>
+    /// Authored <c>m:mathPr</c> from the containing <c>a:graphicData</c>, when
+    /// the package places the equation in that wrapper. This is below package
+    /// defaults and below any <c>m:mathPr</c> carried by <see cref="RawXml"/>.
+    /// </summary>
+    public OmmlMathProperties? ContainingProperties { get; set; }
 }
