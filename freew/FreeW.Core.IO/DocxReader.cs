@@ -3136,7 +3136,7 @@ public static class DocxReader
         var docPart = sdtPr?.Element(W + "docPartObj");
         var gallery = docPart?.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value;
         var category = docPart?.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
-        var hasDocPartUnique = docPart?.Element(W + "docPartUnique") is not null;
+        var hasDocPartUnique = ReadOnOffElement(docPart?.Element(W + "docPartUnique"));
         var lockMode = ReadContentControlLock(sdtPr);
         var wordMetadata = ReadContentControlWordMetadata(sdtPr);
 
@@ -3149,7 +3149,7 @@ public static class DocxReader
                     && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
                         ? BlockContentControlKind.Bibliography
                         : docPart is not null
-                            ? BlockContentControlKind.DocumentPart
+                            ? BlockContentControlKind.BuildingBlockGallery
                             : sdtPr?.Element(W + "text") is not null
                                 ? BlockContentControlKind.PlainText
                                 : BlockContentControlKind.RichText;
@@ -3177,6 +3177,22 @@ public static class DocxReader
         var normAlias = string.IsNullOrEmpty(alias) ? null : alias;
         var lockMode = ReadContentControlLock(sdtPr);
         var wordMetadata = ReadContentControlWordMetadata(sdtPr);
+
+        var docPart = sdtPr?.Element(W + "docPartObj");
+        if (docPart is not null)
+        {
+            var gallery = docPart.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value;
+            var category = docPart.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
+            return new ContentControl(
+                ContentControlKind.BuildingBlockGallery,
+                normTag,
+                normAlias,
+                LockMode: lockMode,
+                WordMetadata: wordMetadata,
+                DocPartGallery: string.IsNullOrEmpty(gallery) ? null : gallery,
+                DocPartCategory: string.IsNullOrEmpty(category) ? null : category,
+                DocPartUnique: ReadOnOffElement(docPart.Element(W + "docPartUnique")));
+        }
 
         var checkbox = sdtPr?.Element(W14 + "checkbox") ?? sdtPr?.Element(W + "checkbox");
         if (checkbox is not null)

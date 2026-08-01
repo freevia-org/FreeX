@@ -1139,6 +1139,31 @@ public sealed class Run(string text, RunFormatting? formatting = null)
             Image = image,
             Control = new ContentControl(ContentControlKind.Picture, tag, alias)
         };
+
+    /// <summary>
+    /// Creates an inline building-block gallery content control backed by w:sdtPr/w:docPartObj.
+    /// The gallery is required; category is optional and unique maps to the presence of w:docPartUnique.
+    /// </summary>
+    public static Run BuildingBlockGalleryControl(
+        string text,
+        string gallery,
+        string? category = null,
+        bool unique = false,
+        string? tag = null,
+        string? alias = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gallery);
+        return new Run(text)
+        {
+            Control = new ContentControl(
+                ContentControlKind.BuildingBlockGallery,
+                tag,
+                alias,
+                DocPartGallery: gallery,
+                DocPartCategory: category,
+                DocPartUnique: unique)
+        };
+    }
 }
 
 /// <summary>A formatted fragment in the base or phonetic text of a Word ruby annotation.</summary>
@@ -1193,7 +1218,8 @@ public enum RubyAlignment
 /// <see cref="DropDownList"/> is a drop-down list (w:sdtPr/w:dropDownList + w:listItem entries) the user
 /// can only pick from; <see cref="ComboBox"/> is a combo box (w:sdtPr/w:comboBox + w:listItem entries)
 /// that additionally allows free text; <see cref="Picture"/> is a picture control (w:sdtPr/w:picture)
-/// whose run carries an <see cref="InlineImage"/>.
+/// whose run carries an <see cref="InlineImage"/>; and <see cref="BuildingBlockGallery"/> is a
+/// building-block gallery control (w:sdtPr/w:docPartObj).
 /// </summary>
 public enum ContentControlKind
 {
@@ -1203,7 +1229,8 @@ public enum ContentControlKind
     DatePicker,
     DropDownList,
     ComboBox,
-    Picture
+    Picture,
+    BuildingBlockGallery
 }
 
 /// <summary>Word content-control locking from w:sdtPr/w:lock.</summary>
@@ -1250,7 +1277,9 @@ public sealed record ContentControlWordMetadata(
 /// Records the control <see cref="Kind"/>, an optional <see cref="Tag"/> (w:tag) and <see cref="Alias"/>
 /// (w:alias), and the kind-specific extras: <see cref="Checked"/> (checkbox state), <see cref="DateFormat"/>
 /// (a date picker's w:dateFormat string), and <see cref="ListItems"/> (the w:listItem choices of a
-/// drop-down list or combo box). Modelled as an immutable record so it mirrors how other small marks
+/// drop-down list or combo box). Building-block gallery controls additionally retain
+/// <see cref="DocPartGallery"/>, <see cref="DocPartCategory"/>, and <see cref="DocPartUnique"/>.
+/// Modelled as an immutable record so it mirrors how other small marks
 /// (<see cref="PageBorder"/>, <see cref="TableFormatting"/>) are modelled and so consecutive runs can
 /// share one instance to coalesce into a single w:sdt on save.
 /// </summary>
@@ -1262,7 +1291,10 @@ public sealed record ContentControl(
     string? DateFormat = null,
     IReadOnlyList<ContentControlListItem>? ListItems = null,
     ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified,
-    ContentControlWordMetadata? WordMetadata = null)
+    ContentControlWordMetadata? WordMetadata = null,
+    string? DocPartGallery = null,
+    string? DocPartCategory = null,
+    bool DocPartUnique = false)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";
@@ -1901,7 +1933,8 @@ public enum BlockContentControlKind
     DocumentPart,
     Bibliography,
     RepeatingSection,
-    RepeatingSectionItem
+    RepeatingSectionItem,
+    BuildingBlockGallery
 }
 
 /// <summary>
@@ -1934,6 +1967,24 @@ public sealed record BlockContentControl(
             Alias: BibliographyAlias,
             DocPartGallery: BibliographyGallery,
             DocPartUnique: true);
+
+    /// <summary>Creates a body-level building-block gallery content control (w:docPartObj).</summary>
+    public static BlockContentControl BuildingBlockGalleryRegion(
+        string gallery,
+        string? category = null,
+        bool unique = false,
+        string? tag = null,
+        string? alias = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gallery);
+        return new BlockContentControl(
+            BlockContentControlKind.BuildingBlockGallery,
+            Tag: tag,
+            Alias: alias,
+            DocPartGallery: gallery,
+            DocPartCategory: category,
+            DocPartUnique: unique);
+    }
 
     /// <summary>Creates a Word 2013 repeating-section content control (w15:repeatingSection).</summary>
     public static BlockContentControl RepeatingSection(
