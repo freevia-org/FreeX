@@ -671,6 +671,42 @@ public sealed class ExternalRichTextClipboardTests
     }
 
     [Fact]
+    public void RtfInlineTable_PreservesTableIndentAlignmentAndCellGap()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+\trowd\itap1\trrh-480\trleft240\trgaph60\trqc\trpaddl120\trpaddr240\trpaddt60\trpaddb80
+\clpadl300\cellx2000\cellx4000
+\intbl Outer A\cell
+\trowd\itap2\nesttableprops\trrh720\cellx1000\cellx2000
+\intbl Inner B\nestcell
+\intbl Inner C\nestcell
+\nestrow
+\itap1\cell
+\row
+ Before and after}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var table = payload!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table;
+        table.RichTextLeftIndentPt.Should().Be(12);
+        table.RichTextCellSpacingPt.Should().Be(6);
+        table.RichTextAlignment.Should().Be(TextAlign.Center);
+
+        var reopened = InCanvasRichClipboardPlanner.Deserialize(
+            InCanvasRichClipboardPlanner.Serialize(payload));
+        var reopenedTable = reopened!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table;
+        reopenedTable.RichTextLeftIndentPt.Should().Be(12);
+        reopenedTable.RichTextCellSpacingPt.Should().Be(6);
+        reopenedTable.RichTextAlignment.Should().Be(TextAlign.Center);
+    }
+
+    [Fact]
     public void RtfSuperscriptAndSubscript_PreserveBaselineControls()
     {
         const string rtf =

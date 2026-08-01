@@ -1064,10 +1064,24 @@ public static class ExternalRichTextClipboardPlanner
                 case "clvmgf": _pendingCellStyle.VerticalMergeStart = true; break;
                 case "clvmrg": _pendingCellStyle.VerticalMergeContinuation = true; break;
                 case "trleft":
+                    if (CurrentTableCapture() is { } indentCapture && parameter is { } indentTwips)
+                        indentCapture.Table.RichTextLeftIndentPt = indentTwips / 20.0;
+                    break;
                 case "trgaph":
+                    if (CurrentTableCapture() is { } spacingCapture && parameter is { } gapTwips)
+                        spacingCapture.Table.RichTextCellSpacingPt = Math.Max(0, gapTwips / 10.0);
+                    break;
                 case "trqc":
+                    if (CurrentTableCapture() is { } centerCapture)
+                        centerCapture.Table.RichTextAlignment = TextAlign.Center;
+                    break;
                 case "trql":
+                    if (CurrentTableCapture() is { } leftAlignCapture)
+                        leftAlignCapture.Table.RichTextAlignment = TextAlign.Left;
+                    break;
                 case "trqr":
+                    if (CurrentTableCapture() is { } rightAlignTable)
+                        rightAlignTable.Table.RichTextAlignment = TextAlign.Right;
                     break;
                 case "trpaddl":
                     if (CurrentTableCapture() is { } leftCapture && parameter is { } leftPadding)

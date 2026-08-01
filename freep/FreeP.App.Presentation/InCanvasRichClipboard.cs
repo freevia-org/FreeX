@@ -461,6 +461,9 @@ public static class InCanvasRichClipboardPlanner
         return new ClipboardInlineTableDto
         {
             ColumnWidthsEmu = info.Table.ColumnWidthsEmu.ToList(),
+            RichTextAlignment = info.Table.RichTextAlignment,
+            RichTextLeftIndentPt = info.Table.RichTextLeftIndentPt,
+            RichTextCellSpacingPt = info.Table.RichTextCellSpacingPt,
             Rows = info.Table.Rows.Select(row => new ClipboardInlineTableRowDto
             {
                 HeightEmu = row.HeightEmu,
@@ -519,6 +522,9 @@ public static class InCanvasRichClipboardPlanner
 
         var table = new TableShape();
         table.ColumnWidthsEmu.AddRange(dto.ColumnWidthsEmu ?? []);
+        table.RichTextAlignment = dto.RichTextAlignment;
+        table.RichTextLeftIndentPt = dto.RichTextLeftIndentPt;
+        table.RichTextCellSpacingPt = dto.RichTextCellSpacingPt;
         foreach (var rowDto in dto.Rows ?? [])
         {
             var row = new TableRow
@@ -1148,6 +1154,9 @@ public static class InCanvasRichClipboardPlanner
     private sealed class ClipboardInlineTableDto
     {
         public List<long>? ColumnWidthsEmu { get; set; }
+        public TextAlign? RichTextAlignment { get; set; }
+        public double? RichTextLeftIndentPt { get; set; }
+        public double? RichTextCellSpacingPt { get; set; }
         public List<ClipboardInlineTableRowDto>? Rows { get; set; }
     }
 

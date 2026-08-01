@@ -1054,7 +1054,10 @@ internal static class TextBodyModelCloner
 
         var left = a.Table;
         var right = b.Table;
-        if (!left.ColumnWidthsEmu.SequenceEqual(right.ColumnWidthsEmu)
+        if (left.RichTextAlignment != right.RichTextAlignment
+            || left.RichTextLeftIndentPt != right.RichTextLeftIndentPt
+            || left.RichTextCellSpacingPt != right.RichTextCellSpacingPt
+            || !left.ColumnWidthsEmu.SequenceEqual(right.ColumnWidthsEmu)
             || left.Rows.Count != right.Rows.Count)
             return false;
 
