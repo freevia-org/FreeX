@@ -157,7 +157,15 @@ function Assert-ManifestContract {
             "file-print-shortcut-dialog-dismissal",
             "file-new-shortcut-dirty-prompt-open",
             "file-new-shortcut-cancel-preserves",
-            "file-new-shortcut-discard-creates-clean"
+            "file-new-shortcut-discard-creates-clean",
+            "backstage-print-open",
+            "backstage-print-dismissal",
+            "backstage-export-open",
+            "backstage-export-dismissal",
+            "options-open",
+            "options-tab-navigation",
+            "options-focus",
+            "options-close"
         )
     } else {
         $requiredIds += @(
@@ -184,7 +192,7 @@ function Assert-ManifestContract {
     if ($ids.Count -ne ($ids | Select-Object -Unique).Count) {
         throw "Manifest contains duplicate result IDs."
     }
-    $expectedResultCount = if ($App -eq "FreeP") { 24 } else { 37 }
+    $expectedResultCount = if ($App -eq "FreeP") { 24 } else { 45 }
     if ($results.Count -ne $expectedResultCount) {
         throw "$App family baseline must contain exactly $expectedResultCount result rows."
     }
@@ -357,7 +365,15 @@ try {
                 "file-print-shortcut-dialog-dismissal",
                 "file-new-shortcut-dirty-prompt-open",
                 "file-new-shortcut-cancel-preserves",
-                "file-new-shortcut-discard-creates-clean"
+                "file-new-shortcut-discard-creates-clean",
+                "backstage-print-open",
+                "backstage-print-dismissal",
+                "backstage-export-open",
+                "backstage-export-dismissal",
+                "options-open",
+                "options-tab-navigation",
+                "options-focus",
+                "options-close"
             )
         } else {
             $failureIds += @(

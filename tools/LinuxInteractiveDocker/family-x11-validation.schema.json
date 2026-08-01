@@ -110,7 +110,7 @@
     },
     {
       "if": { "properties": { "app": { "const": "FreeW" } } },
-      "then": { "properties": { "results": { "minItems": 37, "maxItems": 37 } } }
+      "then": { "properties": { "results": { "minItems": 45, "maxItems": 45 } } }
     }
   ]
 }

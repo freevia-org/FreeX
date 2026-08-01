@@ -105,11 +105,24 @@ public sealed class LinuxFamilyInteractionToolTests
             "file-print-shortcut-dialog-dismissal",
             "file-new-shortcut-dirty-prompt-open",
             "file-new-shortcut-cancel-preserves",
-            "file-new-shortcut-discard-creates-clean"
+            "file-new-shortcut-discard-creates-clean",
+            "backstage-print-open",
+            "backstage-print-dismissal",
+            "backstage-export-open",
+            "backstage-export-dismissal",
+            "options-open",
+            "options-tab-navigation",
+            "options-focus",
+            "options-close"
         })
         {
             probe.Should().Contain($"\"{id}\"");
         }
+        probe.Should().Contain("run_backstage_pane_lifecycle \"backstage-print\" 10 \"Print\"");
+        probe.Should().Contain("run_backstage_pane_lifecycle \"backstage-export\" 11 \"Export\"");
+        probe.Should().Contain("send_active_key ctrl+Tab");
+        probe.Should().Contain("options-click=");
+        probe.Should().Contain("window-count-restored=");
         probe.Should().Contain("\"editor-autocorrect-typing\"");
         probe.Should().Contain("send_active_text 'I teh '");
         probe.Should().Contain("printf '%s' 'I the '");
@@ -176,7 +189,7 @@ public sealed class LinuxFamilyInteractionToolTests
         runner.Should().Contain("Length -le 0");
         runner.Should().Contain("exhaustive -ne $false");
         runner.Should().Contain("Run-FreeXLinuxInteractionValidation.ps1");
-        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 24 } else { 37 }");
+        runner.Should().Contain("$expectedResultCount = if ($App -eq \"FreeP\") { 24 } else { 45 }");
         runner.Should().Contain("if ($App -eq \"FreeW\") { $startArguments += \"-CupsDryRun\" }");
         foreach (var id in new[]
         {
@@ -190,7 +203,15 @@ public sealed class LinuxFamilyInteractionToolTests
             "file-print-shortcut-dialog-dismissal",
             "file-new-shortcut-dirty-prompt-open",
             "file-new-shortcut-cancel-preserves",
-            "file-new-shortcut-discard-creates-clean"
+            "file-new-shortcut-discard-creates-clean",
+            "backstage-print-open",
+            "backstage-print-dismissal",
+            "backstage-export-open",
+            "backstage-export-dismissal",
+            "options-open",
+            "options-tab-navigation",
+            "options-focus",
+            "options-close"
         })
         {
             runner.Should().Contain($"\"{id}\"");
@@ -228,8 +249,8 @@ public sealed class LinuxFamilyInteractionToolTests
         freePContract.GetProperty("minItems").GetInt32().Should().Be(24);
         freePContract.GetProperty("maxItems").GetInt32().Should().Be(24);
         var freeWContract = root.GetProperty("allOf")[1].GetProperty("then").GetProperty("properties").GetProperty("results");
-        freeWContract.GetProperty("minItems").GetInt32().Should().Be(37);
-        freeWContract.GetProperty("maxItems").GetInt32().Should().Be(37);
+        freeWContract.GetProperty("minItems").GetInt32().Should().Be(45);
+        freeWContract.GetProperty("maxItems").GetInt32().Should().Be(45);
         root.GetProperty("allOf").GetArrayLength().Should().Be(2);
     }
 
@@ -247,13 +268,32 @@ public sealed class LinuxFamilyInteractionToolTests
         doc.Should().Contain("contractValidation");
         doc.Should().Contain("Run-FamilyLinuxInteractionValidation.ps1");
         doc.Should().Contain("exact twenty-four-row contract");
-        doc.Should().Contain("exact thirty-seven-row contract");
+        doc.Should().Contain("exact forty-five-row contract");
         doc.Should().Contain("animation-pane-physical-workflow");
         doc.Should().Contain("file-new-shortcut-discard-creates-clean");
+        doc.Should().Contain("backstage-print-open");
+        doc.Should().Contain("backstage-export-open");
+        doc.Should().Contain("options-tab-navigation");
         doc.Should().Contain("slide-pane-new-slide-create");
         doc.Should().Contain("slide-pane-delete-undo");
         doc.Should().Contain("nested-keytip-prefix-deferral");
         doc.Should().Contain("Ctrl+Z").And.Contain("Shift+F10");
+    }
+
+    [Fact]
+    public void Wave95FreeWPhysicalExpansionDocStatesBoundedBackstageAndOptionsRows()
+    {
+        var doc = File.ReadAllText(RepositoryFileLocator.Find(
+            "docs", "parity", "freew-wave95-physical-backstage-options-20260801.md"));
+
+        doc.Should().Contain("exactly forty-five result rows");
+        doc.Should().Contain("backstage-print-dismissal");
+        doc.Should().Contain("backstage-export-dismissal");
+        doc.Should().Contain("options-open");
+        doc.Should().Contain("options-focus");
+        doc.Should().Contain("physical-x11-input");
+        doc.Should().Contain("coverage.exhaustive");
+        doc.Should().Contain("No product files");
     }
 
     [Fact]
