@@ -835,6 +835,7 @@ public static class DocumentCompare
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,
+        SubDocument = source.SubDocument,
         FieldKind = source.FieldKind,
         FootnoteId = source.FootnoteId,
         EndnoteId = source.EndnoteId,

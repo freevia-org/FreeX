@@ -113,6 +113,8 @@ internal static class StrictOoxmlTransform
                 = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
             ["http://purl.oclc.org/ooxml/officeDocument/relationships/hyperlink"]
                 = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+            ["http://purl.oclc.org/ooxml/officeDocument/relationships/subDocument"]
+                = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/subDocument",
             ["http://purl.oclc.org/ooxml/officeDocument/relationships/numbering"]
                 = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering",
             ["http://purl.oclc.org/ooxml/officeDocument/relationships/footnotes"]

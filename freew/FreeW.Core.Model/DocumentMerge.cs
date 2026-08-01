@@ -146,6 +146,7 @@ public static class DocumentMerge
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,
+        SubDocument = source.SubDocument,
         FieldKind = source.FieldKind,
         TableFormula = source.TableFormula,
         FootnoteId = source.FootnoteId,

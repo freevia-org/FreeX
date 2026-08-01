@@ -66,6 +66,7 @@ public static class DocxReader
         var imageRelationships = ReadImageRelationships(archive);
         var hyperlinkRelationships = ReadHyperlinkRelationships(archive);
         var altChunkRelationships = ReadAltChunkRelationships(archive);
+        var subDocumentRelationships = ReadSubDocumentRelationships(archive);
         var (numbering, startOverrides) = ReadNumbering(archive, document);
 
         MarkDuplicateDrawingIdentities(documentXml.Root);
@@ -81,7 +82,7 @@ public static class DocxReader
             Paragraph? prevPara = null;
             var prevAfterAuto = false;
             foreach (var element in body.Elements())
-                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
+                AddBodyBlock(element, document, archive, imageRelationships, hyperlinkRelationships, altChunkRelationships, subDocumentRelationships, numbering, startOverrides, ref prevPara, ref prevAfterAuto);
         }
 
         if (document.Blocks.Count == 0)
@@ -1409,7 +1410,8 @@ public static class DocxReader
         TextDocument? preservedDrawingTarget = null,
         IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets = null,
         ContentControl? inheritedControl = null,
-        IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null)
+        IReadOnlyDictionary<(int NumId, int Level), int>? startOverrides = null,
+        IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
     {
         var paragraph = new Paragraph();
         var pPr = p.Element(W + "pPr");
@@ -1616,7 +1618,8 @@ public static class DocxReader
                     hyperlinkAnchor: null,
                     hyperlinkTooltip: null,
                     preservedDrawingTarget,
-                    preservedDrawingRelationshipTargets);
+                    preservedDrawingRelationshipTargets,
+                    subDocumentRelationships);
             }
         }
 
@@ -1683,6 +1686,7 @@ public static class DocxReader
         IReadOnlyDictionary<string, string> imageRelationships,
         IReadOnlyDictionary<string, string> hyperlinkRelationships,
         IReadOnlyDictionary<string, string> altChunkRelationships,
+        IReadOnlyDictionary<string, string> subDocumentRelationships,
         IReadOnlyDictionary<int, ListKind> numbering,
         IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         ref Paragraph? prevPara,
@@ -1702,7 +1706,8 @@ public static class DocxReader
                 capturePreservedNumbering: true,
                 preservedDrawingTarget: document,
                 inheritedControl: inheritedControl,
-                startOverrides: startOverrides);
+                startOverrides: startOverrides,
+                subDocumentRelationships: subDocumentRelationships);
             para.BlockContentControl = inheritedBlockContentControl;
             para.BlockCustomXml = inheritedBlockCustomXml;
             document.Blocks.Add(para);
@@ -1718,7 +1723,16 @@ public static class DocxReader
         }
         else if (element.Name == W + "tbl")
         {
-            var table = ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl);
+            var table = ReadTable(
+                element,
+                archive,
+                imageRelationships,
+                hyperlinkRelationships,
+                numbering,
+                startOverrides,
+                document,
+                inheritedControl,
+                subDocumentRelationships);
             table.BlockContentControl = inheritedBlockContentControl;
             table.BlockCustomXml = inheritedBlockCustomXml;
             document.Blocks.Add(table);
@@ -1764,6 +1778,7 @@ public static class DocxReader
                     imageRelationships,
                     hyperlinkRelationships,
                     altChunkRelationships,
+                    subDocumentRelationships,
                     numbering,
                     startOverrides,
                     ref prevPara,
@@ -1788,6 +1803,7 @@ public static class DocxReader
                     imageRelationships,
                     hyperlinkRelationships,
                     altChunkRelationships,
+                    subDocumentRelationships,
                     numbering,
                     startOverrides,
                     ref prevPara,
@@ -2082,7 +2098,8 @@ public static class DocxReader
         string? hyperlinkAnchor,
         string? hyperlinkTooltip,
         TextDocument? preservedDrawingTarget,
-        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets)
+        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets,
+        IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
     {
         var fieldDepth = 0;
         var fieldInstr = new System.Text.StringBuilder();
@@ -2150,7 +2167,7 @@ public static class DocxReader
                 continue;
             }
 
-            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            AddParagraphContentElement(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
         }
     }
 
@@ -2217,7 +2234,8 @@ public static class DocxReader
         string? hyperlinkAnchor,
         string? hyperlinkTooltip,
         TextDocument? preservedDrawingTarget,
-        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets)
+        IReadOnlyDictionary<string, string>? preservedDrawingRelationshipTargets,
+        IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
     {
         if (child.Name == W + "r")
         {
@@ -2238,13 +2256,35 @@ public static class DocxReader
             else
                 AddRun(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, hyperlinkUrl, hyperlinkAnchor, commentId, revision, control, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
         }
+        else if (child.Name == W + "subDoc")
+        {
+            var relationshipId = child.Attribute(R + "id")?.Value;
+            if (relationshipId is not null
+                && subDocumentRelationships?.TryGetValue(relationshipId, out var target) == true)
+            {
+                var subDocumentRun = Run.FromSubDocument(target);
+                subDocumentRun.CommentId = commentId;
+                subDocumentRun.Control = control;
+                subDocumentRun.HyperlinkUrl = hyperlinkUrl;
+                subDocumentRun.HyperlinkAnchor = hyperlinkAnchor;
+                subDocumentRun.HyperlinkTooltip = hyperlinkTooltip;
+                if (revision.Kind != RevisionKind.None)
+                {
+                    subDocumentRun.Revision = revision.Kind;
+                    subDocumentRun.RevisionAuthor = revision.Author;
+                    subDocumentRun.RevisionDateXml = revision.DateXml;
+                    subDocumentRun.MoveRevisionId = revision.MoveId;
+                }
+                paragraph.Runs.Add(subDocumentRun);
+            }
+        }
         else if (child.Name == W + "hyperlink")
         {
             var anchor = child.Attribute(W + "anchor")?.Value;
             var id = child.Attribute(R + "id")?.Value;
             var url = id is not null && hyperlinkRelationships.TryGetValue(id, out var target) ? target : null;
             var tooltip = child.Attribute(W + "tooltip")?.Value;
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, url, url is null ? anchor : null, tooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
         }
         else if (child.Name == W + "ins" || child.Name == W + "del" || child.Name == W + "moveTo" || child.Name == W + "moveFrom")
         {
@@ -2259,17 +2299,17 @@ public static class DocxReader
                 child.Attribute(W + "author")?.Value,
                 child.Attribute(W + "date")?.Value,
                 isMove && int.TryParse(child.Attribute(W + "id")?.Value, out var moveId) ? moveId : null);
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, childRevision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
         }
         else if (child.Name == W + "sdt")
         {
-            AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, preservedDrawingTarget, preservedDrawingRelationshipTargets, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+            AddContentControlRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, preservedDrawingTarget, preservedDrawingRelationshipTargets, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, subDocumentRelationships);
         }
         else if (child.Name == W + "smartTag" || child.Name == W + "customXml")
         {
             // Legacy Word smart tags and custom-XML ranges annotate inline content. The model preserves the
             // package custom-XML parts but not inline wrapper metadata, so retain the visible child runs.
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
         }
         else if (child.Name == W + "dir" || child.Name == W + "bdo")
         {
@@ -2277,7 +2317,7 @@ public static class DocxReader
             // is the closest editable equivalent, so retain every child run and apply it to an RTL scope.
             // LTR is already the model default and needs no synthetic run property.
             var firstRun = paragraph.Runs.Count;
-            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets);
+            AddParagraphRuns(paragraph, child, archive, imageRelationships, hyperlinkRelationships, numbering, commentId, revision, control, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip, preservedDrawingTarget, preservedDrawingRelationshipTargets, subDocumentRelationships);
             if (string.Equals(child.Attribute(W + "val")?.Value, "rtl", StringComparison.OrdinalIgnoreCase))
             {
                 for (var index = firstRun; index < paragraph.Runs.Count; index++)
@@ -3054,7 +3094,8 @@ public static class DocxReader
         ContentControl? inheritedControl = null,
         string? hyperlinkUrl = null,
         string? hyperlinkAnchor = null,
-        string? hyperlinkTooltip = null)
+        string? hyperlinkTooltip = null,
+        IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
     {
         var sdtPr = sdt.Element(W + "sdtPr");
         var sdtContent = sdt.Element(W + "sdtContent");
@@ -3081,7 +3122,8 @@ public static class DocxReader
             hyperlinkAnchor,
             hyperlinkTooltip,
             preservedDrawingTarget,
-            preservedDrawingRelationshipTargets);
+            preservedDrawingRelationshipTargets,
+            subDocumentRelationships);
     }
 
     private static BlockContentControl ReadBlockContentControl(XElement? sdtPr)
@@ -3525,7 +3567,8 @@ public static class DocxReader
         IReadOnlyDictionary<int, ListKind> numbering,
         IReadOnlyDictionary<(int NumId, int Level), int> startOverrides,
         TextDocument? preservedDrawingTarget = null,
-        ContentControl? inheritedControl = null)
+        ContentControl? inheritedControl = null,
+        IReadOnlyDictionary<string, string>? subDocumentRelationships = null)
     {
         var table = new Table();
 
@@ -3721,7 +3764,8 @@ public static class DocxReader
                             capturePreservedNumbering: true,
                             preservedDrawingTarget: preservedDrawingTarget,
                             inheritedControl: inheritedControl,
-                            startOverrides: startOverrides));
+                            startOverrides: startOverrides,
+                            subDocumentRelationships: subDocumentRelationships));
                     }
                     else if (child.Name == W + "sdt")
                     {
@@ -3737,7 +3781,8 @@ public static class DocxReader
                                 capturePreservedNumbering: true,
                                 preservedDrawingTarget: preservedDrawingTarget,
                                 inheritedControl: control,
-                                startOverrides: startOverrides));
+                                startOverrides: startOverrides,
+                                subDocumentRelationships: subDocumentRelationships));
                         }
                     }
                 }
@@ -5736,6 +5781,18 @@ public static class DocxReader
             "word/_rels/document.xml.rels",
             relationship => relationship.Target,
             relationship => relationship.Type.EndsWith("/hyperlink", StringComparison.Ordinal));
+
+    /// <summary>
+    /// Maps a conforming master-document anchor relationship id to its exact external target. Word requires
+    /// subdocument relationships to use the dedicated type and <c>TargetMode="External"</c>; package-local
+    /// or differently typed relationships are deliberately not promoted into the editable model.
+    /// </summary>
+    private static Dictionary<string, string> ReadSubDocumentRelationships(ZipArchive archive) =>
+        OpcRelationships.LoadTargetMap(
+            archive,
+            "word/_rels/document.xml.rels",
+            relationship => relationship.Target,
+            relationship => relationship.IsExternal && relationship.Type == SubDocumentRelType);
 
     /// <summary>Maps a body <c>w:altChunk/@r:id</c> to its package-local source payload.</summary>
     private static Dictionary<string, string> ReadAltChunkRelationships(ZipArchive archive) =>

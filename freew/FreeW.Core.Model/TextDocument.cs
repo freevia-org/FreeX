@@ -613,6 +613,12 @@ public static class PictureStyleCatalog
 /// A contiguous span of text sharing one run formatting, or — when <see cref="Image"/> is set — an
 /// inline image anchored in the run flow. An image run carries no text (<see cref="Text"/> is empty).
 /// </summary>
+/// <summary>
+/// An external Word master-document subdocument anchor. The target is retained exactly as authored in
+/// the package relationship (for example <c>Chapter1.docx</c> or a <c>file:</c> URI).
+/// </summary>
+public sealed record SubDocumentReference(string Target);
+
 public sealed class Run(string text, RunFormatting? formatting = null)
 {
     private string _text = text;
@@ -778,6 +784,17 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// null so existing hyperlinks (without a ScreenTip) round-trip unchanged.
     /// </summary>
     public string? HyperlinkTooltip { get; set; }
+
+    /// <summary>
+    /// Optional external master-document subdocument anchor (<c>w:subDoc</c>). It occupies an ordered
+    /// position in the paragraph but carries no literal text; the target is emitted through an external
+    /// <c>subDocument</c> relationship.
+    /// </summary>
+    public SubDocumentReference? SubDocument { get; set; }
+
+    /// <summary>Creates a textless run that anchors an external Word subdocument.</summary>
+    public static Run FromSubDocument(string target) =>
+        new(string.Empty) { SubDocument = new SubDocumentReference(target) };
 
     /// <summary>
     /// When set, this run is a simple field rather than literal text — e.g. a PAGE field whose value

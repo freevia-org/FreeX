@@ -84,6 +84,8 @@ public static class DocxWriter
         var smartArts = CollectSmartArts(document, drawingIdSeed: images.Count + charts.Count);
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
+        // Master-document anchors are ordered run content backed by their own external relationship type.
+        var subDocuments = CollectSubDocuments(document);
         // Chapter-prefixed PAGE fields require Word's linked heading-list metadata even when the
         // heading paragraph did not otherwise carry a list instance.
         var chapterPageNumberingLevels = document.Sections
@@ -249,8 +251,8 @@ public static class DocxWriter
             BuildCoreProperties(document));
         if (hasCustomProps)
             WritePart(archive, OpcPackageProperties.CustomPropertiesZipEntry, BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
-        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
+        WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, subDocuments, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
+        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, subDocuments, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
@@ -888,6 +890,21 @@ public static class DocxWriter
         return byUrl;
     }
 
+    /// <summary>Maps each distinct external subdocument target to one deterministic relationship id.</summary>
+    private static Dictionary<string, string> CollectSubDocuments(TextDocument document)
+    {
+        var byTarget = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var paragraph in EnumerateParagraphs(document))
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.SubDocument?.Target is { Length: > 0 } target && !byTarget.ContainsKey(target))
+                    byTarget[target] = $"rIdSubDocument{byTarget.Count + 1}";
+            }
+        }
+        return byTarget;
+    }
+
     private static IEnumerable<Paragraph> EnumerateHyperlinkParagraphs(IEnumerable<Paragraph> paragraphs)
     {
         foreach (var paragraph in paragraphs)
@@ -1226,6 +1243,7 @@ public static class DocxWriter
     private static XDocument BuildDocumentRels(
         IReadOnlyList<ImagePart> images,
         IReadOnlyDictionary<string, string> hyperlinks,
+        IReadOnlyDictionary<string, string> subDocuments,
         bool includeNumbering,
         IReadOnlyList<HeaderFooterPart> headerFooterParts,
         bool hasFootnotes,
@@ -1296,6 +1314,8 @@ public static class DocxWriter
         }
         foreach (var (url, relationshipId) in hyperlinks)
             relationships.Add(Relationship(relationshipId, HyperlinkRel, url, external: true));
+        foreach (var (target, relationshipId) in subDocuments)
+            relationships.Add(Relationship(relationshipId, SubDocumentRelType, target, external: true));
         // One document relationship per preserved part that the document references directly (customXml items,
         // webSettings and unmodelled chart/chartex parts carry a RelationshipType; their props/_rels/media do
         // not, being referenced from the part's own _rels instead). The Target is reconstructed relative to
@@ -1347,6 +1367,7 @@ public static class DocxWriter
         IReadOnlyList<EmbeddedObjectPart> embeddedObjects,
         IReadOnlyList<SmartArtPart> smartArts,
         IReadOnlyDictionary<string, string> hyperlinks,
+        IReadOnlyDictionary<string, string> subDocuments,
         IReadOnlyList<HeaderFooterPart> headerFooterParts,
         PreservedNumberingPlan? preservedNumbering,
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int> restartOverrides,
@@ -1415,7 +1436,7 @@ public static class DocxWriter
 
         var drawings = new RunDrawings(
             imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, preservedDrawingRelIds,
-            imagesByGroupChild, chartsByGroupChild, smartArtsByGroupChild);
+            subDocuments, imagesByGroupChild, chartsByGroupChild, smartArtsByGroupChild);
 
         var body = new XElement(W + "body");
         void AddContentControlGroups(XElement parent, int start, int end)
@@ -1610,6 +1631,7 @@ public static class DocxWriter
         IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
         IdAllocator Ids,
         IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null,
+        IReadOnlyDictionary<string, string>? SubDocuments = null,
         IReadOnlyDictionary<InlineImage, ImagePart>? GroupImages = null,
         IReadOnlyDictionary<Chart, ChartPart>? GroupCharts = null,
         IReadOnlyDictionary<SmartArt, SmartArtPart>? GroupSmartArts = null)
@@ -1620,6 +1642,7 @@ public static class DocxWriter
             new Dictionary<Run, EmbeddedObjectPart>(),
             new Dictionary<Run, SmartArtPart>(),
             new IdAllocator(),
+            null,
             null,
             new Dictionary<InlineImage, ImagePart>(),
             new Dictionary<Chart, ChartPart>(),
@@ -2358,6 +2381,7 @@ public static class DocxWriter
                 HyperlinkUrl = run.HyperlinkUrl,
                 HyperlinkAnchor = run.HyperlinkAnchor,
                 HyperlinkTooltip = run.HyperlinkTooltip,
+                SubDocument = run.SubDocument,
                 FieldKind = run.FieldKind,
                 FootnoteId = run.FootnoteId,
                 EndnoteId = run.EndnoteId,
@@ -3403,6 +3427,12 @@ public static class DocxWriter
         PreservedNumberingPlan? preservedNumbering = null,
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
+        if (run.SubDocument?.Target is { Length: > 0 } subDocumentTarget
+            && drawings.SubDocuments?.TryGetValue(subDocumentTarget, out var subDocumentRelationshipId) == true)
+        {
+            return new XElement(W + "subDoc", new XAttribute(R + "id", subDocumentRelationshipId));
+        }
+
         // An inline equation serialises as an m:oMath emitted in place of the run (a paragraph-level
         // sibling of w:r, never wrapped in one), carrying its math fragments as m:r/m:sSup/m:f.
         if (run.Equation is { } equation)

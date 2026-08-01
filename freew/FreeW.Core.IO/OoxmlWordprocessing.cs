@@ -98,6 +98,9 @@ internal static class Ooxml
     /// <summary>The document relationship type used by body-level <c>w:altChunk</c> import payloads.</summary>
     public const string AltChunkRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk";
 
+    /// <summary>The external relationship type used by Word master-document <c>w:subDoc</c> anchors.</summary>
+    public const string SubDocumentRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/subDocument";
+
     /// <summary>
     /// The DrawingML diagram namespace (dgm / "diagram"), used by the SmartArt data/layout/quickStyle/colors
     /// parts (dgm:dataModel / dgm:ptLst / dgm:pt / dgm:t / …) and the dgm:relIds element that references the

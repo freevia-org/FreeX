@@ -238,6 +238,7 @@ public static class RevisionEditPlanner
         HyperlinkUrl = source.HyperlinkUrl,
         HyperlinkAnchor = source.HyperlinkAnchor,
         HyperlinkTooltip = source.HyperlinkTooltip,
+        SubDocument = source.SubDocument,
         FieldKind = source.FieldKind,
         TableFormula = source.TableFormula,
         Citation = source.Citation,
