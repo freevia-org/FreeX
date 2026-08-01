@@ -2719,9 +2719,10 @@ public static class DocxWriter
     /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
     /// set, then the control-kind element: w:text for a plain-text control; a w14:checkbox carrying the
     /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
-    /// w:date carrying the w:dateFormat for a date picker; or a w:dropDownList / w:comboBox carrying a
-    /// w:listItem (w:displayText/w:value) per choice for a list control. This is the minimal valid shape
-    /// FreeW's own reader recovers (see <see cref="DocxReader"/>).
+    /// w:date carrying the w:dateFormat for a date picker; a w:dropDownList / w:comboBox carrying a
+    /// w:listItem (w:displayText/w:value) per choice for a list control; or an empty w:picture for a
+    /// picture control. This is the minimal valid shape FreeW's own reader recovers (see
+    /// <see cref="DocxReader"/>).
     /// </summary>
     private static XElement BuildSdtProperties(ContentControl control)
     {
@@ -2752,6 +2753,9 @@ public static class DocxWriter
                 break;
             case ContentControlKind.ComboBox:
                 sdtPr.Add(BuildListElement(W + "comboBox", control.Items));
+                break;
+            case ContentControlKind.Picture:
+                sdtPr.Add(new XElement(W + "picture"));
                 break;
             default:
                 sdtPr.Add(new XElement(W + "text"));
