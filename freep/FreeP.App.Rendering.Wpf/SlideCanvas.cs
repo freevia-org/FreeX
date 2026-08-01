@@ -263,6 +263,19 @@ public sealed class SlideCanvas : FrameworkElement
     /// Used by <see cref="OnRender"/> and by off-screen rasterization.
     /// </summary>
     public void RenderToDrawingContext(DrawingContext dc, double renderW, double renderH)
+        => RenderToDrawingContext(dc, renderW, renderH, preserveAspectRatio: true);
+
+    /// <summary>
+    /// Renders into a WPF drawing context, optionally stretching the slide to the
+    /// requested surface. Export adapters may use the stretch mode when matching a
+    /// reference application's fixed-size bitmap export; the live canvas remains
+    /// aspect-preserving by default.
+    /// </summary>
+    public void RenderToDrawingContext(
+        DrawingContext dc,
+        double renderW,
+        double renderH,
+        bool preserveAspectRatio)
     {
         EnsureOps();
 
@@ -272,14 +285,21 @@ public sealed class SlideCanvas : FrameworkElement
         if (renderW <= 0 || renderH <= 0) return;
 
         // Scale slide DIP coordinates → actual render pixels (uniform fit).
-        CurrentTransform = ComputeViewTransform(renderW, renderH, _slideWidthDip, _slideHeightDip);
-        double scale = CurrentTransform.Scale;
-        double offsetX = CurrentTransform.OffsetX;
-        double offsetY = CurrentTransform.OffsetY;
-
         var transform = new TransformGroup();
-        transform.Children.Add(new ScaleTransform(scale, scale));
-        transform.Children.Add(new TranslateTransform(offsetX, offsetY));
+        if (preserveAspectRatio)
+        {
+            CurrentTransform = ComputeViewTransform(renderW, renderH, _slideWidthDip, _slideHeightDip);
+            transform.Children.Add(new ScaleTransform(CurrentTransform.Scale, CurrentTransform.Scale));
+            transform.Children.Add(new TranslateTransform(CurrentTransform.OffsetX, CurrentTransform.OffsetY));
+        }
+        else
+        {
+            // PowerPoint COM Slide.Export fills the requested bitmap even when it
+            // differs from the deck's native aspect ratio.
+            transform.Children.Add(new ScaleTransform(
+                renderW / _slideWidthDip,
+                renderH / _slideHeightDip));
+        }
 
         dc.PushTransform(transform);
 
