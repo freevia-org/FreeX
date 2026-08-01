@@ -116,6 +116,18 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildPapyrusFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var papyrusPlan))
+        {
+            DrawFilledShapePlan(context, frame, papyrusPlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -124,34 +136,7 @@ public static class PageBorderArtWpfRenderer
                 edgeInsetDip,
                 out var ribbonPlan))
         {
-            foreach (var fill in ribbonPlan.Fills)
-            {
-                context.DrawRectangle(
-                    Brushes.Black,
-                    null,
-                    new Rect(frame.X + fill.Xdip, frame.Y + fill.Ydip, fill.WidthDip, fill.HeightDip));
-            }
-            foreach (var polygon in ribbonPlan.Polygons)
-            {
-                if (polygon.Points.Count == 0)
-                    continue;
-                var geometry = new StreamGeometry();
-                using (var path = geometry.Open())
-                {
-                    path.BeginFigure(
-                        new Point(frame.X + polygon.Points[0].XDip, frame.Y + polygon.Points[0].YDip),
-                        true,
-                        true);
-                    path.PolyLineTo(
-                        polygon.Points.Skip(1)
-                            .Select(point => new Point(frame.X + point.XDip, frame.Y + point.YDip))
-                            .ToList(),
-                        true,
-                        false);
-                }
-                geometry.Freeze();
-                context.DrawGeometry(GrayBrush(polygon.Red), null, geometry);
-            }
+            DrawFilledShapePlan(context, frame, ribbonPlan);
             return true;
         }
 
@@ -197,6 +182,41 @@ public static class PageBorderArtWpfRenderer
         }
 
         return false;
+    }
+
+    private static void DrawFilledShapePlan(
+        DrawingContext context,
+        Rect frame,
+        PageBorderArtFilledShapePlan plan)
+    {
+        foreach (var fill in plan.Fills)
+        {
+            context.DrawRectangle(
+                FrozenBrush(fill.Red, fill.Green, fill.Blue),
+                null,
+                new Rect(frame.X + fill.Xdip, frame.Y + fill.Ydip, fill.WidthDip, fill.HeightDip));
+        }
+        foreach (var polygon in plan.Polygons)
+        {
+            if (polygon.Points.Count == 0)
+                continue;
+            var geometry = new StreamGeometry();
+            using (var path = geometry.Open())
+            {
+                path.BeginFigure(
+                    new Point(frame.X + polygon.Points[0].XDip, frame.Y + polygon.Points[0].YDip),
+                    true,
+                    true);
+                path.PolyLineTo(
+                    polygon.Points.Skip(1)
+                        .Select(point => new Point(frame.X + point.XDip, frame.Y + point.YDip))
+                        .ToList(),
+                    true,
+                    false);
+            }
+            geometry.Freeze();
+            context.DrawGeometry(FrozenBrush(polygon.Red, polygon.Green, polygon.Blue), null, geometry);
+        }
     }
 
     private static void DrawShadowedSquare(DrawingContext context, PageBorderShadowedSquareMotif motif)
