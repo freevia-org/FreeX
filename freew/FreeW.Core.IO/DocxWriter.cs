@@ -37,6 +37,7 @@ public static class DocxWriter
     private const string BibliographyRelationshipId = "rIdBibliography";
     private const string ThemeRelationshipId = "rIdTheme1";
     private const string FreeWChartDesignExtensionUri = "urn:freew:chart-design:2026";
+    private static readonly XNamespace Mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
     // Minimal numbering scheme: one abstract num per list kind, mapped 1:1 to a w:num. Bullets use
     // abstractNumId 0 / numId 1; decimal numbering uses abstractNumId 1 / numId 2; multilevel (legal
@@ -1439,11 +1440,24 @@ public static class DocxWriter
             ? new XElement(W + "background", new XAttribute(W + "color", bg.TrimStart('#')))
             : null;
         var webExtensions = BuildPreservedWebExtensions(document.Preserved.WebExtensions, preservedDrawingRelIds);
+        var hasModernContentControlMetadata = document.Blocks.Any(block =>
+                block.BlockContentControl?.WordMetadata is { Appearance: not null } or { Color: not null })
+            || EnumerateStoryParagraphs(document).SelectMany(paragraph => paragraph.Runs).Any(run =>
+                run.Control?.WordMetadata is { Appearance: not null } or { Color: not null });
 
         return new XDocument(
             new XElement(W + "document",
                 new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                hasModernContentControlMetadata
+                    ? new XAttribute(XNamespace.Xmlns + "w15", W15.NamespaceName)
+                    : null,
+                hasModernContentControlMetadata
+                    ? new XAttribute(XNamespace.Xmlns + "mc", Mc.NamespaceName)
+                    : null,
+                hasModernContentControlMetadata
+                    ? new XAttribute(Mc + "Ignorable", "w15")
+                    : null,
                 // w14 carries the checkbox content control element (w14:checkbox in a w:sdtPr).
                 new XAttribute(XNamespace.Xmlns + "w14", W14.NamespaceName),
                 // m carries inline equations (m:oMath and its children).
@@ -2582,6 +2596,7 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
         if (ContentControlLockToken(control.LockMode) is { } lockToken)
             sdtPr.Add(new XElement(W + "lock", new XAttribute(W + "val", lockToken)));
+        AddContentControlWordMetadata(sdtPr, control.WordMetadata);
         if (control.Tag is { Length: > 0 } tag)
             sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
 
@@ -2628,6 +2643,7 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "alias", new XAttribute(W + "val", alias)));
         if (ContentControlLockToken(control.LockMode) is { } lockToken)
             sdtPr.Add(new XElement(W + "lock", new XAttribute(W + "val", lockToken)));
+        AddContentControlWordMetadata(sdtPr, control.WordMetadata);
         if (control.Tag is { Length: > 0 } tag)
             sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
         switch (control.Kind)
@@ -2655,6 +2671,37 @@ public static class DocxWriter
                 break;
         }
         return sdtPr;
+    }
+
+    private static void AddContentControlWordMetadata(XElement sdtPr, ContentControlWordMetadata? metadata)
+    {
+        if (metadata is null)
+            return;
+
+        if (metadata.PlaceholderDocPart is { Length: > 0 } placeholder)
+            sdtPr.Add(new XElement(W + "placeholder",
+                new XElement(W + "docPart", new XAttribute(W + "val", placeholder))));
+        if (metadata.ShowingPlaceholder)
+            sdtPr.Add(new XElement(W + "showingPlcHdr"));
+        if (metadata.DataBinding is { } binding)
+        {
+            var element = new XElement(W + "dataBinding");
+            if (binding.PrefixMappings is { Length: > 0 } prefixMappings)
+                element.Add(new XAttribute(W + "prefixMappings", prefixMappings));
+            if (binding.XPath is { Length: > 0 } xpath)
+                element.Add(new XAttribute(W + "xpath", xpath));
+            if (binding.StoreItemId is { Length: > 0 } storeItemId)
+                element.Add(new XAttribute(W + "storeItemID", storeItemId));
+            sdtPr.Add(element);
+        }
+        if (metadata.Temporary)
+            sdtPr.Add(new XElement(W + "temporary"));
+        if (metadata.Id is { Length: > 0 } id)
+            sdtPr.Add(new XElement(W + "id", new XAttribute(W + "val", id)));
+        if (metadata.Color is { Length: > 0 } color)
+            sdtPr.Add(new XElement(W15 + "color", new XAttribute(W15 + "val", color)));
+        if (metadata.Appearance is { Length: > 0 } appearance)
+            sdtPr.Add(new XElement(W15 + "appearance", new XAttribute(W15 + "val", appearance)));
     }
 
     private static string? ContentControlLockToken(ContentControlLockMode mode) => mode switch

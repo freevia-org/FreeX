@@ -1197,6 +1197,24 @@ public sealed record ContentControlListItem(string DisplayText, string Value)
     public ContentControlListItem(string displayText) : this(displayText, displayText) { }
 }
 
+/// <summary>Word data binding carried by w:sdtPr/w:dataBinding.</summary>
+public sealed record ContentControlDataBinding(
+    string? StoreItemId,
+    string? XPath,
+    string? PrefixMappings);
+
+/// <summary>
+/// Word-specific structured-document-tag metadata that remains active after displayed content is edited.
+/// </summary>
+public sealed record ContentControlWordMetadata(
+    string? Id = null,
+    ContentControlDataBinding? DataBinding = null,
+    string? PlaceholderDocPart = null,
+    bool ShowingPlaceholder = false,
+    bool Temporary = false,
+    string? Appearance = null,
+    string? Color = null);
+
 /// <summary>
 /// An immutable content-control (structured document tag / w:sdt) mark carried by a <see cref="Run"/>.
 /// Records the control <see cref="Kind"/>, an optional <see cref="Tag"/> (w:tag) and <see cref="Alias"/>
@@ -1213,7 +1231,8 @@ public sealed record ContentControl(
     bool Checked = false,
     string? DateFormat = null,
     IReadOnlyList<ContentControlListItem>? ListItems = null,
-    ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified)
+    ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified,
+    ContentControlWordMetadata? WordMetadata = null)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";
@@ -1866,7 +1885,8 @@ public sealed record BlockContentControl(
     string? DocPartGallery = null,
     string? DocPartCategory = null,
     bool DocPartUnique = false,
-    ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified)
+    ContentControlLockMode LockMode = ContentControlLockMode.NotSpecified,
+    ContentControlWordMetadata? WordMetadata = null)
 {
     public const string BibliographyTag = "Bibliography";
     public const string BibliographyAlias = "Bibliography";

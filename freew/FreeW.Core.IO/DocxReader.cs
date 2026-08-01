@@ -3063,6 +3063,7 @@ public static class DocxReader
         var category = docPart?.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
         var hasDocPartUnique = docPart?.Element(W + "docPartUnique") is not null;
         var lockMode = ReadContentControlLock(sdtPr);
+        var wordMetadata = ReadContentControlWordMetadata(sdtPr);
 
         var kind = gallery is not null
             && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
@@ -3080,7 +3081,8 @@ public static class DocxReader
             string.IsNullOrEmpty(gallery) ? null : gallery,
             string.IsNullOrEmpty(category) ? null : category,
             hasDocPartUnique,
-            lockMode);
+            lockMode,
+            wordMetadata);
     }
 
     private static ContentControl ReadContentControl(XElement? sdtPr)
@@ -3090,6 +3092,7 @@ public static class DocxReader
         var normTag = string.IsNullOrEmpty(tag) ? null : tag;
         var normAlias = string.IsNullOrEmpty(alias) ? null : alias;
         var lockMode = ReadContentControlLock(sdtPr);
+        var wordMetadata = ReadContentControlWordMetadata(sdtPr);
 
         var checkbox = sdtPr?.Element(W14 + "checkbox") ?? sdtPr?.Element(W + "checkbox");
         if (checkbox is not null)
@@ -3098,7 +3101,8 @@ public static class DocxReader
                 ?.Attribute(W14 + "val")?.Value
                 ?? (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))?.Attribute(W + "val")?.Value;
             var isChecked = val is "1" or "true" or "on";
-            return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked, LockMode: lockMode);
+            return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked,
+                LockMode: lockMode, WordMetadata: wordMetadata);
         }
 
         var date = sdtPr?.Element(W + "date");
@@ -3107,23 +3111,51 @@ public static class DocxReader
             var format = date.Element(W + "dateFormat")?.Attribute(W + "val")?.Value;
             return new ContentControl(ContentControlKind.DatePicker, normTag, normAlias,
                 DateFormat: string.IsNullOrEmpty(format) ? ContentControl.DefaultDateFormat : format,
-                LockMode: lockMode);
+                LockMode: lockMode,
+                WordMetadata: wordMetadata);
         }
 
         var dropDown = sdtPr?.Element(W + "dropDownList");
         if (dropDown is not null)
             return new ContentControl(ContentControlKind.DropDownList, normTag, normAlias,
-                ListItems: ReadListItems(dropDown), LockMode: lockMode);
+                ListItems: ReadListItems(dropDown), LockMode: lockMode, WordMetadata: wordMetadata);
 
         var combo = sdtPr?.Element(W + "comboBox");
         if (combo is not null)
             return new ContentControl(ContentControlKind.ComboBox, normTag, normAlias,
-                ListItems: ReadListItems(combo), LockMode: lockMode);
+                ListItems: ReadListItems(combo), LockMode: lockMode, WordMetadata: wordMetadata);
 
         if (sdtPr?.Element(W + "richText") is not null)
-            return new ContentControl(ContentControlKind.RichText, normTag, normAlias, LockMode: lockMode);
+            return new ContentControl(ContentControlKind.RichText, normTag, normAlias,
+                LockMode: lockMode, WordMetadata: wordMetadata);
 
-        return new ContentControl(ContentControlKind.PlainText, normTag, normAlias, LockMode: lockMode);
+        return new ContentControl(ContentControlKind.PlainText, normTag, normAlias,
+            LockMode: lockMode, WordMetadata: wordMetadata);
+    }
+
+    private static ContentControlWordMetadata? ReadContentControlWordMetadata(XElement? sdtPr)
+    {
+        if (sdtPr is null)
+            return null;
+
+        var binding = sdtPr.Element(W + "dataBinding");
+        var dataBinding = binding is null
+            ? null
+            : new ContentControlDataBinding(
+                binding.Attribute(W + "storeItemID")?.Value,
+                binding.Attribute(W + "xpath")?.Value,
+                binding.Attribute(W + "prefixMappings")?.Value);
+        var metadata = new ContentControlWordMetadata(
+            Id: sdtPr.Element(W + "id")?.Attribute(W + "val")?.Value,
+            DataBinding: dataBinding,
+            PlaceholderDocPart: sdtPr.Element(W + "placeholder")?.Element(W + "docPart")
+                ?.Attribute(W + "val")?.Value,
+            ShowingPlaceholder: sdtPr.Element(W + "showingPlcHdr") is not null,
+            Temporary: sdtPr.Element(W + "temporary") is not null,
+            Appearance: sdtPr.Element(W15 + "appearance")?.Attribute(W15 + "val")?.Value,
+            Color: sdtPr.Element(W15 + "color")?.Attribute(W15 + "val")?.Value);
+
+        return metadata == new ContentControlWordMetadata() ? null : metadata;
     }
 
     private static ContentControlLockMode ReadContentControlLock(XElement? sdtPr) =>
