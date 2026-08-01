@@ -485,6 +485,21 @@ public sealed class VisualEvidenceRunnerScriptTests
         baselineSource.Should().Contain("@('-TracePath', $TracePath)");
     }
 
+    [Fact]
+    public void PageBorderArtProbeGenerator_AuthorsCanonicalIsolatedPackage()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew-fidelity-corpus",
+            "tools",
+            "New-PageBorderArtProbe.ps1"));
+
+        source.Should().Contain("[ValidatePattern('^[A-Za-z][A-Za-z0-9]*$')][string]$Token");
+        source.Should().Contain("<w:pgBorders w:offsetFrom=\"page\">");
+        source.Should().Contain("w:val=\"$escapedToken\" w:sz=\"$size\" w:space=\"$space\"");
+        source.Should().Contain("[IO.Compression.ZipArchiveMode]::Create");
+        source.Should().Contain("Get-FileHash -Algorithm SHA256");
+    }
+
     private static string RepositoryFile(params string[] parts)
     {
         var directory = AppContext.BaseDirectory;

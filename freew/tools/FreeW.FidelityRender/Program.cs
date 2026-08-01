@@ -1535,6 +1535,17 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
             DrawSoftwareShorebirdTrack(canvas, motif);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var archPlan))
+    {
+        DrawSoftwareDecorativeArch(canvas, archPlan);
+        return;
+    }
 
     using var borderPaint = new SKPaint
     {
@@ -1597,6 +1608,47 @@ static void DrawSoftwareShorebirdTrack(SKCanvas canvas, PageBorderShorebirdTrack
             (float)segment.X2Dip,
             (float)segment.Y2Dip,
             paint);
+    }
+}
+
+static void DrawSoftwareDecorativeArch(SKCanvas canvas, PageBorderDecorativeArchPlan plan)
+{
+    foreach (var fill in plan.Fills)
+    {
+        using var paint = new SKPaint
+        {
+            Color = new SKColor(fill.Red, fill.Green, fill.Blue),
+            IsAntialias = false,
+            Style = SKPaintStyle.Fill,
+        };
+        canvas.DrawRect(
+            (float)fill.Xdip,
+            (float)fill.Ydip,
+            (float)(fill.Xdip + fill.WidthDip),
+            (float)(fill.Ydip + fill.HeightDip),
+            paint);
+    }
+
+    foreach (var stroke in plan.Strokes)
+    {
+        using var path = new SKPath();
+        path.MoveTo((float)stroke.StartXDip, (float)stroke.StartYDip);
+        path.CubicTo(
+            (float)stroke.Control1XDip,
+            (float)stroke.Control1YDip,
+            (float)stroke.Control2XDip,
+            (float)stroke.Control2YDip,
+            (float)stroke.EndXDip,
+            (float)stroke.EndYDip);
+        using var paint = new SKPaint
+        {
+            Color = new SKColor(stroke.Red, stroke.Green, stroke.Blue),
+            IsAntialias = true,
+            Style = SKPaintStyle.Stroke,
+            StrokeWidth = (float)stroke.WidthDip,
+            StrokeCap = SKStrokeCap.Butt,
+        };
+        canvas.DrawPath(path, paint);
     }
 }
 
