@@ -264,11 +264,9 @@ public sealed class ChartDataDialogPlanner
     {
         if (chartType != ChartType.Unknown)
         {
-            var wasScatterLike = IsScatterLike(_chartType);
             _chartType = chartType;
             EnsureCoordinateShape();
-            if (!wasScatterLike && IsScatterLike(chartType) ||
-                chartType == ChartType.Bubble && _bubbleSizes.All(values => values.All(value => value is null)))
+            if (IsScatterLike(chartType))
             {
                 SeedMissingCoordinates();
             }

@@ -80,6 +80,47 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void EditingSmartArtQuickStyleAndColors_PreservesSchemaValidPackage()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var smartArt = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Select(shape => shape.SmartArt)
+            .FirstOrDefault(candidate => candidate is not null);
+
+        smartArt.Should().NotBeNull("the live SmartArt corpus must contain an editable diagram");
+
+        var styleResult = SmartArtAuthoringPlanner.ApplyQuickStylePreset(
+            smartArt,
+            SmartArtQuickStylePreset.IntenseEffect);
+        styleResult.Applied.Should().BeTrue(styleResult.Message);
+
+        var colorResult = SmartArtAuthoringPlanner.ApplyColorPreset(
+            smartArt,
+            SmartArtColorPreset.ColoredFillAccent2,
+            presentation.Theme);
+        colorResult.Applied.Should().BeTrue(colorResult.Message);
+
+        using var roundTrip = new MemoryStream();
+        PptxPackageWriter.Write(presentation, roundTrip);
+        var roundTripBytes = roundTrip.ToArray();
+        ValidateSlideSchema(roundTripBytes)
+            .Should()
+            .BeEmpty("native SmartArt style and color edits must remain Open XML schema-valid");
+
+        var reread = PptxPackageReader.Read(new MemoryStream(roundTripBytes));
+        var rereadSmartArt = reread.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Select(shape => shape.SmartArt)
+            .FirstOrDefault(candidate => candidate is not null);
+
+        rereadSmartArt.Should().NotBeNull();
+        rereadSmartArt!.QuickStyle!.UniqueId.Should().Be(styleResult.StyleUniqueId);
+        rereadSmartArt.Colors!.UniqueId.Should().Be(smartArt.Colors!.UniqueId);
+    }
+
+    [Fact]
     public void MotionPathRoundTrip_UsesPowerPointTimingRoot()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "10-motionpath.pptx");

@@ -126,6 +126,7 @@ public sealed class InsertSlideCommand : IPresentationCommand
 {
     private readonly int _index;
     private readonly Slide _slide;
+    private List<SectionSnapshot>? _beforeSections;
 
     public InsertSlideCommand(int index, Slide slide)
     {
@@ -138,10 +139,86 @@ public sealed class InsertSlideCommand : IPresentationCommand
     public void Apply(Presentation p)
     {
         var idx = Math.Clamp(_index, 0, p.Slides.Count);
+
+        if (_beforeSections is null)
+        {
+            _beforeSections = p.Sections
+                .Select(section => new SectionSnapshot(
+                    section.Id,
+                    section.Name,
+                    section.SlideIds.ToArray()))
+                .ToList();
+        }
+
         p.Slides.Insert(idx, _slide);
+        AddSlideToNeighborSection(p, idx, _slide.Id);
     }
 
-    public void Revert(Presentation p) => p.Slides.Remove(_slide);
+    public void Revert(Presentation p)
+    {
+        p.Slides.Remove(_slide);
+        RestoreSections(p, _beforeSections);
+    }
+
+    private static void AddSlideToNeighborSection(
+        Presentation p,
+        int insertedIndex,
+        string insertedSlideId)
+    {
+        if (p.Slides.Count <= 1)
+            return;
+
+        if (insertedIndex > 0)
+        {
+            var previousSlideId = p.Slides[insertedIndex - 1].Id;
+            foreach (var section in p.Sections)
+            {
+                var neighborIndex = section.SlideIds.FindIndex(id =>
+                    string.Equals(id, previousSlideId, StringComparison.Ordinal));
+                if (neighborIndex < 0)
+                    continue;
+
+                section.SlideIds.Insert(neighborIndex + 1, insertedSlideId);
+                return;
+            }
+        }
+        else
+        {
+            var nextSlideId = p.Slides[1].Id;
+            foreach (var section in p.Sections)
+            {
+                var neighborIndex = section.SlideIds.FindIndex(id =>
+                    string.Equals(id, nextSlideId, StringComparison.Ordinal));
+                if (neighborIndex < 0)
+                    continue;
+
+                section.SlideIds.Insert(neighborIndex, insertedSlideId);
+                return;
+            }
+        }
+    }
+
+    private static void RestoreSections(
+        Presentation p,
+        IReadOnlyList<SectionSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        p.Sections.Clear();
+        foreach (var snapshot in snapshots)
+        {
+            var section = new PresentationSection
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+            };
+            section.SlideIds.AddRange(snapshot.SlideIds);
+            p.Sections.Add(section);
+        }
+    }
+
+    private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 }
 
 /// <summary>
@@ -150,10 +227,72 @@ public sealed class InsertSlideCommand : IPresentationCommand
 public sealed class AddSlideCommand : IPresentationCommand
 {
     private readonly Slide _slide;
+    private List<SectionSnapshot>? _beforeSections;
+
     public AddSlideCommand(Slide slide) => _slide = slide;
     public string Label => "Add Slide";
-    public void Apply(Presentation p) => p.Slides.Add(_slide);
-    public void Revert(Presentation p) => p.Slides.Remove(_slide);
+
+    public void Apply(Presentation p)
+    {
+        if (_beforeSections is null)
+        {
+            _beforeSections = p.Sections
+                .Select(section => new SectionSnapshot(
+                    section.Id,
+                    section.Name,
+                    section.SlideIds.ToArray()))
+                .ToList();
+        }
+
+        p.Slides.Add(_slide);
+        AddSlideToPreviousSection(p, _slide.Id);
+    }
+
+    public void Revert(Presentation p)
+    {
+        p.Slides.Remove(_slide);
+        RestoreSections(p, _beforeSections);
+    }
+
+    private static void AddSlideToPreviousSection(Presentation p, string slideId)
+    {
+        if (p.Slides.Count < 2)
+            return;
+
+        var previousSlideId = p.Slides[^2].Id;
+        foreach (var section in p.Sections)
+        {
+            var previousIndex = section.SlideIds.FindIndex(id =>
+                string.Equals(id, previousSlideId, StringComparison.Ordinal));
+            if (previousIndex < 0)
+                continue;
+
+            section.SlideIds.Insert(previousIndex + 1, slideId);
+            return;
+        }
+    }
+
+    private static void RestoreSections(
+        Presentation p,
+        IReadOnlyList<SectionSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        p.Sections.Clear();
+        foreach (var snapshot in snapshots)
+        {
+            var section = new PresentationSection
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+            };
+            section.SlideIds.AddRange(snapshot.SlideIds);
+            p.Sections.Add(section);
+        }
+    }
+
+    private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 }
 
 /// <summary>
@@ -164,6 +303,8 @@ public sealed class DeleteSlideCommand : IPresentationCommand
 {
     private readonly int _index;
     private Slide? _captured;
+    private List<SectionSnapshot>? _beforeSections;
+    private List<CustomShowSnapshot>? _beforeCustomShows;
 
     public DeleteSlideCommand(int index) => _index = index;
 
@@ -173,8 +314,26 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     {
         if (_index < 0 || _index >= p.Slides.Count)
             return;
-        _captured = p.Slides[_index];
+
+        if (_captured is null)
+        {
+            _captured = p.Slides[_index];
+            _beforeSections = p.Sections
+                .Select(section => new SectionSnapshot(
+                    section.Id,
+                    section.Name,
+                    section.SlideIds.ToArray()))
+                .ToList();
+            _beforeCustomShows = p.CustomShows
+                .Select(show => new CustomShowSnapshot(
+                    show.Id,
+                    show.Name,
+                    show.SlideIds.ToArray()))
+                .ToList();
+        }
+
         p.Slides.RemoveAt(_index);
+        RemoveSlideReferences(p, _captured.Id);
     }
 
     public void Revert(Presentation p)
@@ -182,7 +341,62 @@ public sealed class DeleteSlideCommand : IPresentationCommand
         if (_captured is null) return;
         var idx = Math.Clamp(_index, 0, p.Slides.Count);
         p.Slides.Insert(idx, _captured);
+        RestoreSections(p, _beforeSections);
+        RestoreCustomShows(p, _beforeCustomShows);
     }
+
+    private static void RemoveSlideReferences(Presentation p, string slideId)
+    {
+        foreach (var section in p.Sections)
+            section.SlideIds.RemoveAll(id => string.Equals(id, slideId, StringComparison.Ordinal));
+
+        foreach (var customShow in p.CustomShows)
+            customShow.SlideIds.RemoveAll(id => string.Equals(id, slideId, StringComparison.Ordinal));
+    }
+
+    private static void RestoreSections(
+        Presentation p,
+        IReadOnlyList<SectionSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        p.Sections.Clear();
+        foreach (var snapshot in snapshots)
+        {
+            var section = new PresentationSection
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+            };
+            section.SlideIds.AddRange(snapshot.SlideIds);
+            p.Sections.Add(section);
+        }
+    }
+
+    private static void RestoreCustomShows(
+        Presentation p,
+        IReadOnlyList<CustomShowSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        p.CustomShows.Clear();
+        foreach (var snapshot in snapshots)
+        {
+            var customShow = new PresentationCustomShow
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+            };
+            customShow.SlideIds.AddRange(snapshot.SlideIds);
+            p.CustomShows.Add(customShow);
+        }
+    }
+
+    private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
+
+    private sealed record CustomShowSnapshot(uint Id, string Name, IReadOnlyList<string> SlideIds);
 }
 
 /// <summary>
@@ -193,6 +407,7 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
 {
     private readonly int _sourceIndex;
     private Slide? _duplicate;
+    private List<SectionSnapshot>? _beforeSections;
 
     public DuplicateSlideCommand(int sourceIndex) => _sourceIndex = sourceIndex;
 
@@ -202,15 +417,68 @@ public sealed class DuplicateSlideCommand : IPresentationCommand
     {
         if (_sourceIndex < 0 || _sourceIndex >= p.Slides.Count)
             return;
-        _duplicate = SlideCloner.CloneSlide(p.Slides[_sourceIndex]);
+
+        var source = p.Slides[_sourceIndex];
+        if (_beforeSections is null)
+        {
+            _beforeSections = p.Sections
+                .Select(section => new SectionSnapshot(
+                    section.Id,
+                    section.Name,
+                    section.SlideIds.ToArray()))
+                .ToList();
+        }
+
+        _duplicate = SlideCloner.CloneSlide(source);
         p.Slides.Insert(_sourceIndex + 1, _duplicate);
+        AddDuplicateToSourceSection(p, source.Id, _duplicate.Id);
     }
 
     public void Revert(Presentation p)
     {
         if (_duplicate is not null)
             p.Slides.Remove(_duplicate);
+        RestoreSections(p, _beforeSections);
     }
+
+    private static void AddDuplicateToSourceSection(
+        Presentation p,
+        string sourceSlideId,
+        string duplicateSlideId)
+    {
+        foreach (var section in p.Sections)
+        {
+            var sourceIndex = section.SlideIds.FindIndex(id =>
+                string.Equals(id, sourceSlideId, StringComparison.Ordinal));
+            if (sourceIndex < 0)
+                continue;
+
+            section.SlideIds.Insert(sourceIndex + 1, duplicateSlideId);
+            return;
+        }
+    }
+
+    private static void RestoreSections(
+        Presentation p,
+        IReadOnlyList<SectionSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        p.Sections.Clear();
+        foreach (var snapshot in snapshots)
+        {
+            var section = new PresentationSection
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+            };
+            section.SlideIds.AddRange(snapshot.SlideIds);
+            p.Sections.Add(section);
+        }
+    }
+
+    private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 }
 
 /// <summary>
@@ -221,6 +489,7 @@ public sealed class MoveSlideCommand : IPresentationCommand
 {
     private readonly int _from;
     private readonly int _to;
+    private List<SectionSnapshot>? _beforeSections;
 
     public MoveSlideCommand(int from, int to)
     {
@@ -230,8 +499,74 @@ public sealed class MoveSlideCommand : IPresentationCommand
 
     public string Label => "Move Slide";
 
-    public void Apply(Presentation p) => MoveInList(p.Slides, _from, _to);
-    public void Revert(Presentation p) => MoveInList(p.Slides, _to, _from);
+    public void Apply(Presentation p)
+    {
+        if (_from < 0 || _from >= p.Slides.Count)
+            return;
+
+        if (_beforeSections is null)
+        {
+            _beforeSections = p.Sections
+                .Select(section => new SectionSnapshot(
+                    section.Id,
+                    section.Name,
+                    section.SlideIds.ToArray()))
+                .ToList();
+        }
+
+        MoveInList(p.Slides, _from, _to);
+        SynchronizeSectionOrder(p);
+    }
+
+    public void Revert(Presentation p)
+    {
+        MoveInList(p.Slides, _to, _from);
+        RestoreSections(p, _beforeSections);
+    }
+
+    private static void SynchronizeSectionOrder(Presentation p)
+    {
+        foreach (var section in p.Sections)
+        {
+            var remaining = section.SlideIds.ToList();
+            var ordered = new List<string>(remaining.Count);
+
+            foreach (var slide in p.Slides)
+            {
+                var index = remaining.FindIndex(id =>
+                    string.Equals(id, slide.Id, StringComparison.Ordinal));
+                if (index < 0)
+                    continue;
+
+                ordered.Add(remaining[index]);
+                remaining.RemoveAt(index);
+            }
+
+            ordered.AddRange(remaining);
+            section.SlideIds.Clear();
+            section.SlideIds.AddRange(ordered);
+        }
+    }
+
+    private static void RestoreSections(
+        Presentation p,
+        IReadOnlyList<SectionSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        p.Sections.Clear();
+        foreach (var snapshot in snapshots)
+        {
+            var section = new PresentationSection
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+            };
+            section.SlideIds.AddRange(snapshot.SlideIds);
+            p.Sections.Add(section);
+        }
+    }
 
     private static void MoveInList<T>(List<T> list, int from, int to)
     {
@@ -241,6 +576,8 @@ public sealed class MoveSlideCommand : IPresentationCommand
         var dest = Math.Clamp(to, 0, list.Count);
         list.Insert(dest, item);
     }
+
+    private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 }
 
 // ════════════════════════════════════════════════════════════════════════════════

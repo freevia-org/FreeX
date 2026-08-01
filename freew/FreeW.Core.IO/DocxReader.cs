@@ -5869,6 +5869,7 @@ public static class DocxReader
             LineRule = rule,
             LineSpacing = ls,
             LineHeightPt = lh,
+            LineSpacingIsSet = lineVal is not null,
         };
     }
 
@@ -6801,7 +6802,13 @@ public static class DocxReader
         var docDefaults = stylesXml.Root?.Element(W + "docDefaults");
         var ddPr = docDefaults?.Element(W + "pPrDefault")?.Element(W + "pPr");
         if (ddPr is not null)
+        {
+            // A package-authored paragraph-default root is authoritative even when it omits w:line:
+            // Word then uses the font's natural single-line box rather than the application/template
+            // fallback used by packages with no paragraph defaults at all.
+            document.UseWordApplicationDefaultLineSpacing = false;
             document.DefaultParagraph = ReadDocDefaultParagraph(ddPr);
+        }
 
         // w:docDefaults/w:rPrDefault/w:rPr carries the document default run properties (default font
         // family, size, color, language). Word blank documents store their body font (e.g. Calibri 11pt /

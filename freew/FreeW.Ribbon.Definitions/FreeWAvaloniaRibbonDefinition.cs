@@ -1424,10 +1424,10 @@ internal static class FreeWAvaloniaRibbonDefinition
                         g.Dropdown("freew.image-position", "Position", BuildFloatingPositionMenu("image"));
                         g.Dropdown("freew.image-wrap", "Wrap Text", BuildWrapMenu("image"));
                         g.Dropdown("freew.image-rotate", "Rotate", BuildRotateMenu("image"));
-                        g.Button("freew.image-bring-to-front", "Bring to Front");
-                        g.Button("freew.image-send-to-back",   "Send to Back");
-                        g.Button("freew.image-bring-forward",  "Bring Forward");
-                        g.Button("freew.image-send-backward",  "Send Backward");
+                        g.Button("freew.shape-bring-to-front", "Bring to Front");
+                        g.Button("freew.shape-send-to-back",   "Send to Back");
+                        g.Button("freew.shape-bring-forward",  "Bring Forward");
+                        g.Button("freew.shape-send-backward",  "Send Backward");
                         g.Button("freew.image-align-left", "Align Left");
                         g.Button("freew.image-align-center", "Align Center");
                         g.Button("freew.image-align-right", "Align Right");

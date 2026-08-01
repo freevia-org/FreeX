@@ -107,6 +107,28 @@ public sealed class LineHeightMultipleTests
     }
 
     [StaFact]
+    public void ImportedExplicitDocumentDefaultMultiple_AppliesWordLineHeight()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+        doc.DefaultParagraph = ParagraphFormatting.Default with
+        {
+            LineSpacing = 1.15,
+            LineRule = LineSpacingRule.Multiple,
+            LineSpacingIsSet = true,
+        };
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("body text"));
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        var ratio = new System.Windows.Media.FontFamily("Calibri").LineSpacing;
+        Assert.Equal(1.15 * ratio * 11 * PxPerPoint, wpf.LineHeight, 1);
+    }
+
+    [StaFact]
     public void ImportedApplicationRunDefault_AppliesMeasuredLineHeight()
     {
         var doc = TextDocument.CreateEmpty();
