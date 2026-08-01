@@ -20,6 +20,7 @@ namespace Free.Shared.Shell.Avalonia;
 public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 {
     private const double TextFontSizeCompensation = 12.1;
+    private const double ShortDocumentLineHeightCompensation = 14.6;
     private static readonly Regex NonAutomationIdCharacter =
         new("[^A-Za-z0-9]+", RegexOptions.Compiled);
 
@@ -229,6 +230,9 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             var inset = AvaloniaCompactDialogChrome.CalculateReadOnlyDocumentInset(
                 scrollViewer.Viewport.Height,
                 presenter.DesiredSize.Height);
+            // Preserve the native-layout inset while closing Avalonia's six-pixel
+            // cumulative baseline shortfall across the short WPF authority document.
+            textBox.LineHeight = ShortDocumentLineHeightCompensation;
             if (inset > 0)
             {
                 textBox.Padding = new Thickness(

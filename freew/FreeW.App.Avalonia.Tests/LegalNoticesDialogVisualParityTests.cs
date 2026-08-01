@@ -84,7 +84,10 @@ public sealed class LegalNoticesDialogVisualParityTests
                 text.Padding.Right.Should().Be(LegalNoticesDialogMetrics.TextPadding);
                 text.Padding.Bottom.Should().Be(LegalNoticesDialogMetrics.TextPadding);
                 text.FontSize.Should().Be(12.1);
-                double.IsNaN(text.LineHeight).Should().BeTrue();
+                if (ReferenceEquals(text, tabItems[0].Content))
+                    text.LineHeight.Should().Be(14.6);
+                else
+                    double.IsNaN(text.LineHeight).Should().BeTrue();
                 text.FontFamily.Should().Be(new FontFamily("Consolas"));
                 text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
                 text.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
