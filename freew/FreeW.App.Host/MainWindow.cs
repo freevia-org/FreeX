@@ -3095,7 +3095,9 @@ public sealed class MainWindow : Window
         }
     }
 
-    private void OpenFindReplace(FindReplaceDialogOpenMode openMode = FindReplaceDialogOpenMode.Find)
+    private void OpenFindReplace() => OpenFindReplace(FindReplaceDialogOpenMode.Find);
+
+    private void OpenFindReplace(FindReplaceDialogOpenMode openMode)
     {
         if (_findDialog is null)
         {

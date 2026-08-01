@@ -879,6 +879,7 @@ internal static class FreeWRibbonCommands
         // Drawing Tools > Arrange — Rotate / Flip (mirrors image-rotate-* / image-flip-* pattern).
         foreach (var command in ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Shape))
             registry.Register(command.CommandId, BuildShapeTransformCommand(editor, command));
+        registry.Register("freew.shape-rotate", EmptyRibbonCommand.Instance);
         foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Shape))
             registry.Register(command.CommandId, new FloatingZOrderCommand(
                 editor, ObjectFormatTarget.Shape, command.Operation));
@@ -5927,18 +5928,17 @@ internal static class FreeWRibbonCommands
                     $"Yes: {choices[0].Label}",
                     $"No: {choices[1].Label}",
                     "Cancel: Do nothing");
-                var answer = MessageBox.Show(
+                var answer = DialogMessageHelper.ShowMessage(
                     dialog,
                     message,
                     SourceManagementDialogPlanner.SourceConflictDialogTitle,
-                    MessageBoxButton.YesNoCancel,
-                    MessageBoxImage.Warning,
-                    MessageBoxResult.Cancel);
+                    UserMessageButtons.YesNoCancel,
+                    UserMessageIcon.Warning);
 
                 return answer switch
                 {
-                    MessageBoxResult.Yes => choices[0].Action,
-                    MessageBoxResult.No => choices[1].Action,
+                    UserMessageResult.Yes => choices[0].Action,
+                    UserMessageResult.No => choices[1].Action,
                     _ => null
                 };
             }

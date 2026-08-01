@@ -201,6 +201,78 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task InlineTableSurface_HitTestReturnsMergedAnchorBounds()
+    {
+        await Session.Dispatch(() =>
+        {
+            var table = new TableShape();
+            table.ColumnWidthsEmu.Add(457200);
+            table.ColumnWidthsEmu.Add(457200);
+            table.Rows.Add(new TableRow
+            {
+                HeightEmu = 228600,
+                Cells =
+                {
+                    new TableCell
+                    {
+                        GridSpan = 2,
+                        RowSpan = 2,
+                        TextBody = BodyWithText("Merged"),
+                    },
+                    new TableCell { HMerge = true },
+                },
+            });
+            table.Rows.Add(new TableRow
+            {
+                HeightEmu = 228600,
+                Cells =
+                {
+                    new TableCell { VMerge = true },
+                    new TableCell { VMerge = true },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs =
+                        {
+                            new Run
+                            {
+                                Text = "\uFFFC",
+                                InlineTable = new InlineTableInfo { Table = table },
+                            },
+                        },
+                    },
+                },
+            }, backgroundAlpha: 0xCC)
+            {
+                Width = 140,
+                Height = 80,
+            };
+            var window = Show(editor, 140, 80);
+            try
+            {
+                editor.RichTextView.TryHitTestInlineTableCell(
+                        new Point(60, 36),
+                        out var hit)
+                    .Should().BeTrue();
+                hit.RowIndex.Should().Be(0);
+                hit.ColumnIndex.Should().Be(0);
+                hit.Bounds.Width.Should().BeApproximately(96, 0.01);
+                hit.Bounds.Height.Should().BeApproximately(48, 0.01);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineTableCellEditor_TabNavigationCommitsAndMovesAcrossCells()
     {
         await Session.Dispatch(async () =>

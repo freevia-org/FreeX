@@ -59,7 +59,7 @@ internal sealed class BackstageView : UserControl
             });
     }
 
-    public void Show() => Show("Info");
+    public void Show() => _backstage.Show();
 
     internal void Show(string paneLabelOrAutomationId)
     {

@@ -21120,6 +21120,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        _lastInPlaceAdvancedFilter =
+            FreeX.App.Presentation.Filtering.AdvancedFilterReapplyPlanner.CreateState(
+                plan.ListRange,
+                plan.CriteriaRange,
+                plan.OutputMode == AdvancedFilterOutputMode.FilterInPlace,
+                plan.UniqueRecordsOnly);
+
         RefreshShell(FormatAdvancedFilterStatus(plan));
     }
 
