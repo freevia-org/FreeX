@@ -426,6 +426,20 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartCellValue_Revert_RestoresMissingPointAsGap()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.Series[0].Values[1] = null;
+
+        bus.Execute(new SetChartCellValueCommand(0, id, 0, 1, 250.0));
+        chart.Series[0].Values[1].Should().Be(250.0);
+
+        bus.Undo();
+        chart.Series[0].Values[1].Should().BeNull("undo must preserve an authored chart gap");
+    }
+
+    [Fact]
     public void ReplaceChartData_WithChartType_ChangesTypeAndUndoRestoresIt()
     {
         var (p, bus, id) = MakeChartPresentation();

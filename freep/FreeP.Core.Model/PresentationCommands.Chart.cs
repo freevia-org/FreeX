@@ -95,7 +95,7 @@ public sealed class SetChartCellValueCommand : IPresentationCommand
     private readonly int    _seriesIndex;
     private readonly int    _categoryIndex;
     private readonly double _newValue;
-    private double          _oldValue;
+    private double?         _oldValue;
 
     public SetChartCellValueCommand(
         int slideIndex, uint shapeId,
@@ -118,7 +118,9 @@ public sealed class SetChartCellValueCommand : IPresentationCommand
         if (_seriesIndex < 0 || _seriesIndex >= chart.Series.Count) return;
         var values = chart.Series[_seriesIndex].Values;
         if (_categoryIndex < 0 || _categoryIndex >= values.Count) return;
-        _oldValue = values[_categoryIndex] ?? 0.0;
+        // A missing point is a chart gap, not a numeric zero. Preserve that distinction
+        // so undo restores the authored chart semantics exactly.
+        _oldValue = values[_categoryIndex];
         values[_categoryIndex] = _newValue;
         ChartHelper.MarkWorkbookDirty(chart);
     }
