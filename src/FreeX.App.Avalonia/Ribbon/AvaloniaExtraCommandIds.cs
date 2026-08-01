@@ -63,7 +63,7 @@ internal static class AvaloniaExtraCommandIds
         "Sort", "Sort A to Z", "Sort Z to A", "Filter", "Custom Sort", "Goal Seek", "Scenario Manager",
         "Data Table", "Show Detail", "Hide Detail", "Clear Outline",
         // ── Review tab menu items ─────────────────────────────────────────────────────────────────────
-        "Allow Users to Edit Ranges", "Show Comments", "Next Comment", "Previous Comment",
+        "Allow Users to Edit Ranges", "Show Comments", "Show Notes", "Next Comment", "Previous Comment",
         "Delete Note", "Edit Note", "Workbook Statistics", "Share",
         // ── View tab menu items ───────────────────────────────────────────────────────────────────────
         "Ruler", "Switch Windows", "Reset Window Position", "Custom Views",
