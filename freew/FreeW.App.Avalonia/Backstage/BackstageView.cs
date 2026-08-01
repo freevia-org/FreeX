@@ -204,17 +204,18 @@ internal sealed class BackstageView : Window
     private Control BuildOpenPane()
     {
         var surface = BuildOpenSurface(filter: null);
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         var content = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
-        content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
+        content.Children.Add(BuildOpenPaneHeader(surface.Title, surface.Description, metrics));
 
         var searchBox = new TextBox
         {
-            Width = 520,
-            MinWidth = 360,
-            MaxWidth = 520,
-            Height = 30,
-            Margin = new Thickness(4, 0, 0, 12),
-            Padding = new Thickness(8, 3),
+            Width = metrics.SearchWidth,
+            MinWidth = metrics.SearchMinWidth,
+            MaxWidth = metrics.SearchWidth,
+            Height = metrics.SearchHeight,
+            Margin = ToThickness(metrics.SearchMargin),
+            Padding = ToThickness(metrics.SearchPadding),
             VerticalContentAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
@@ -222,9 +223,9 @@ internal sealed class BackstageView : Window
             searchBox,
             new AvaloniaCompactDialogChromeStyle(BackstageFontFamily)
             {
-                ControlHeight = 30,
-                TextBoxHeight = 30,
-                TextBoxPadding = new Thickness(8, 3),
+                ControlHeight = metrics.SearchHeight,
+                TextBoxHeight = metrics.SearchHeight,
+                TextBoxPadding = ToThickness(metrics.SearchPadding),
             });
         AutomationProperties.SetName(searchBox, surface.Search.AutomationName);
         AutomationProperties.SetAutomationId(searchBox, "OpenSearchBox");
@@ -242,8 +243,8 @@ internal sealed class BackstageView : Window
         };
         var tabs = new TabControl
         {
-            Width = 640,
-            Margin = new Thickness(0, 0, 0, 14),
+            Width = metrics.TabsWidth,
+            Margin = ToThickness(metrics.TabsMargin),
             HorizontalAlignment = HorizontalAlignment.Left,
             HorizontalContentAlignment = HorizontalAlignment.Left,
             VerticalContentAlignment = VerticalAlignment.Top,
@@ -708,19 +709,20 @@ internal sealed class BackstageView : Window
 
     private static Control BuildOpenActionRow(BackstageActionRow action)
     {
-        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
+        var stack = new StackPanel { Margin = ToThickness(metrics.ActionRowMargin) };
         stack.Children.Add(CreateLinkButton(
             action.Label,
             action.Invoke,
-            fontSize: 13,
+            fontSize: metrics.ActionFontSize,
             automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}"));
         stack.Children.Add(new TextBlock
         {
             Text = action.Description,
             Foreground = SecondaryInk,
-            FontSize = 11,
+            FontSize = metrics.DescriptionFontSize,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 0),
+            Margin = ToThickness(metrics.DescriptionMargin),
         });
         return stack;
     }
@@ -872,6 +874,36 @@ internal sealed class BackstageView : Window
         }
         return panel;
     }
+
+    private static Control BuildOpenPaneHeader(
+        string title,
+        string description,
+        BackstageOpenPaneVisualMetrics metrics)
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = 26,
+            FontWeight = FontWeight.Light,
+            Foreground = PrimaryInk,
+            Margin = ToThickness(metrics.HeadingBottomMargin),
+        });
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = description,
+                Foreground = SecondaryInk,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = ToThickness(metrics.DescriptionBottomMargin),
+            });
+        }
+        return panel;
+    }
+
+    private static Thickness ToThickness(BackstageThickness thickness) =>
+        new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 
     internal static TextBlock BuildSectionHeader(string text) =>
         CreateSectionHeader(text);

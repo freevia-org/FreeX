@@ -124,6 +124,77 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task Reapply_CombinesTwoAutoFilterColumnsAndInPlaceAdvancedFilter_AsOneUndoRedoUnit()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            Window? dialog = null;
+            Task? opener = null;
+            try
+            {
+                window.Show();
+                var sheet = window.Session.ActiveSheet;
+                SeedCombinedReapplyFixture(sheet);
+
+                var listRange = Range(sheet, 1, 1, 6, 3);
+                var criteriaRange = Range(sheet, 1, 5, 2, 5);
+                sheet.AutoFilter = new WorksheetAutoFilterModel(listRange.ToString(), null);
+                window.Session.SelectRange(listRange);
+
+                // These are the production AutoFilter command routes, applied to two columns.
+                window.RunAutoFilterForTest(listRange, 0, ["West"]);
+                window.RunAutoFilterForTest(listRange, 1, ["200"]);
+
+                opener = InvokeAdvancedFilterOpener(window);
+                dialog = await WaitForOwnedDialogAsync(window);
+                var controls = GetControls(dialog);
+                controls.ListRange.Text = "A1:C6";
+                controls.CriteriaRange.Text = "E1:E2";
+                controls.OkButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, controls.OkButton));
+                await AwaitClosedAsync(opener);
+                opener = null;
+                dialog = null;
+
+                // Advanced Filter's initial application is intentionally followed by Reapply; the
+                // latter is the WPF-authoritative operation that combines all active definitions.
+                sheet.FilterHiddenRows.Should().BeEquivalentTo([4u, 5u, 6u]);
+
+                // Row 4 now passes both AutoFilter criteria. Row 5 now passes Advanced Filter, while
+                // row 3 still fails Amount and row 6 still fails both mechanisms.
+                sheet.SetCell(new CellAddress(sheet.Id, 4, 1), new TextValue("West"));
+                sheet.SetCell(new CellAddress(sheet.Id, 5, 3), new TextValue("Keep"));
+                InvokeReapply(window);
+
+                sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+                window.Session.SelectedRange.Should().Be(listRange);
+
+                // A single undo restores the visibility before Reapply, proving the composite was
+                // recorded as one history item instead of one item per filter definition.
+                window.Session.UndoLastEdit().Success.Should().BeTrue();
+                sheet.FilterHiddenRows.Should().BeEquivalentTo([4u, 5u, 6u]);
+                window.Session.RedoLastEdit().Success.Should().BeTrue();
+                sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+
+                // Corrupt the remembered criteria after the successful operation. Reapply must fail
+                // without disturbing the current visibility state.
+                sheet.SetCell(new CellAddress(sheet.Id, 1, 5), new TextValue("Missing"));
+                InvokeReapply(window);
+                sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+            }
+            finally
+            {
+                if (dialog?.IsVisible == true)
+                    dialog.Close();
+                if (opener is not null)
+                    await AwaitClosedAsync(opener);
+                if (window.IsVisible)
+                    window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static void SeedFixture(Sheet sheet)
     {
         Set(sheet, 1, 1, "Region");
@@ -138,6 +209,30 @@ public sealed class R101_AvaloniaAdvancedFilterProductionWorkflowTests
         Set(sheet, 5, 2, 30);
         Set(sheet, 1, 4, "Region");
         Set(sheet, 2, 4, "West");
+    }
+
+    private static void SeedCombinedReapplyFixture(Sheet sheet)
+    {
+        Set(sheet, 1, 1, "Region");
+        Set(sheet, 1, 2, "Amount");
+        Set(sheet, 1, 3, "Status");
+        Set(sheet, 2, 1, "West");
+        Set(sheet, 2, 2, 200);
+        Set(sheet, 2, 3, "Keep");
+        Set(sheet, 3, 1, "West");
+        Set(sheet, 3, 2, 100);
+        Set(sheet, 3, 3, "Keep");
+        Set(sheet, 4, 1, "East");
+        Set(sheet, 4, 2, 200);
+        Set(sheet, 4, 3, "Keep");
+        Set(sheet, 5, 1, "West");
+        Set(sheet, 5, 2, 200);
+        Set(sheet, 5, 3, "Drop");
+        Set(sheet, 6, 1, "East");
+        Set(sheet, 6, 2, 100);
+        Set(sheet, 6, 3, "Drop");
+        Set(sheet, 1, 5, "Status");
+        Set(sheet, 2, 5, "Keep");
     }
 
     private static void Set(Sheet sheet, uint row, uint col, string value) =>

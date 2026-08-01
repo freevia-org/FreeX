@@ -171,15 +171,21 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                         out var rowIndex,
                         out var columnIndex,
                         out var cellBounds)
-                    && table.Info.Table.Rows.ElementAtOrDefault(rowIndex)?
-                        .Cells.ElementAtOrDefault(columnIndex) is { TextBody: not null })
+                    && InlineTableTextRun.TryGetCell(
+                        table,
+                        tableOrigin,
+                        rowIndex,
+                        columnIndex,
+                        out var cell)
+                    && cell.Cell?.TextBody is not null)
                 {
                     hit = new InlineTableCellHit(
                         paragraph.Paragraph.GlobalStart + table.Start,
                         table.Info,
                         rowIndex,
                         columnIndex,
-                        cellBounds);
+                        cellBounds,
+                        cell.SourceCellIndex);
                     return true;
                 }
             }
@@ -200,7 +206,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         {
             foreach (var table in paragraph.InlineTables)
             {
-                if (!ReferenceEquals(table.Info, source.Table))
+                if (!MatchesInlineTable(paragraph, table, source))
                     continue;
 
                 var inlineRect = paragraph.Layout.HitTestTextPosition(table.Start);
@@ -220,16 +226,86 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
                 hit = new InlineTableCellHit(
                     source.LogicalPosition,
-                    source.Table,
+                    table.Info,
                     cell.RowIndex,
                     cell.ColumnIndex,
-                    cell.Bounds);
+                    cell.Bounds,
+                    cell.SourceCellIndex);
                 return true;
             }
         }
 
         hit = default;
         return false;
+    }
+
+    internal bool TryFindAdjacentInlineTableCell(
+        InlineTableCellHit source,
+        bool backwards,
+        out InlineTableCellHit hit)
+    {
+        EnsureLayouts();
+        foreach (var paragraph in _layouts)
+        {
+            foreach (var table in paragraph.InlineTables)
+            {
+                if (!MatchesInlineTable(paragraph, table, source))
+                    continue;
+
+                var grid = AvaloniaInlineTableGridLayout.Create(
+                    table.Info.Table,
+                    new Point(
+                        paragraph.Origin.X + paragraph.Layout.HitTestTextPosition(table.Start).X,
+                        paragraph.Origin.Y + paragraph.Layout.HitTestTextPosition(table.Start).Y),
+                    table.AvailableWidthDip);
+                int currentIndex = -1;
+                for (int index = 0; index < grid.Cells.Count; index++)
+                {
+                    var cell = grid.Cells[index];
+                    if (cell.RowIndex == source.RowIndex
+                        && cell.ColumnIndex == source.ColumnIndex)
+                    {
+                        currentIndex = index;
+                        break;
+                    }
+                }
+                if (currentIndex < 0 || currentIndex >= grid.Cells.Count)
+                    continue;
+
+                int step = backwards ? -1 : 1;
+                for (int index = currentIndex + step;
+                     index >= 0 && index < grid.Cells.Count;
+                     index += step)
+                {
+                    var cell = grid.Cells[index];
+                    if (cell.Cell?.TextBody is null)
+                        continue;
+
+                    hit = new InlineTableCellHit(
+                        source.LogicalPosition,
+                        table.Info,
+                        cell.RowIndex,
+                        cell.ColumnIndex,
+                        cell.Bounds,
+                        cell.SourceCellIndex);
+                    return true;
+                }
+            }
+        }
+
+        hit = default;
+        return false;
+    }
+
+    private static bool MatchesInlineTable(
+        ParagraphLayout paragraph,
+        InlineTableLayout table,
+        InlineTableCellHit source)
+    {
+        if (ReferenceEquals(table.Info, source.Table))
+            return true;
+
+        return paragraph.Paragraph.GlobalStart + table.Start == source.LogicalPosition;
     }
 
     internal void SetScrollOffset(double offsetY)
@@ -1210,5 +1286,6 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         InlineTableInfo Table,
         int RowIndex,
         int ColumnIndex,
-        Rect Bounds);
+        Rect Bounds,
+        int SourceCellIndex);
 }

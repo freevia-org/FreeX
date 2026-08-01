@@ -218,15 +218,44 @@ public class BackstageViewTests
             items[0].Bounds.X.Should().Be(0);
             items[1].Bounds.X.Should().Be(items[0].Bounds.Right - 1);
             var search = FindControl<TextBox>(view, "OpenSearchBox");
-            search.Height.Should().Be(30);
-            search.MinHeight.Should().Be(30);
-            search.MaxHeight.Should().Be(30);
-            search.Margin.Should().Be(new Thickness(4, 0, 0, 12));
-            search.Padding.Should().Be(new Thickness(8, 3));
+            var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
+            search.Height.Should().Be(metrics.SearchHeight);
+            search.MinHeight.Should().Be(metrics.SearchHeight);
+            search.MaxHeight.Should().Be(metrics.SearchHeight);
+            search.Margin.Should().Be(new Thickness(
+                metrics.SearchMargin.Left,
+                metrics.SearchMargin.Top,
+                metrics.SearchMargin.Right,
+                metrics.SearchMargin.Bottom));
+            search.Padding.Should().Be(new Thickness(
+                metrics.SearchPadding.Left,
+                metrics.SearchPadding.Top,
+                metrics.SearchPadding.Right,
+                metrics.SearchPadding.Bottom));
+            search.Margin.Left.Should().Be(0);
+            search.Width.Should().Be(metrics.SearchWidth);
             tabs.Items.Cast<TabItem>().Should().OnlyContain(item => item.MinHeight == 22);
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
         }, CancellationToken.None);
+    }
+
+    [Fact]
+    public void BackstageView_Open_visual_metrics_are_WPF_authority_values()
+    {
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
+
+        metrics.SearchWidth.Should().Be(520);
+        metrics.SearchMinWidth.Should().Be(360);
+        metrics.SearchHeight.Should().Be(30);
+        metrics.SearchMargin.Should().Be(new BackstageThickness(0, 0, 0, 12));
+        metrics.SearchPadding.Should().Be(new BackstageThickness(8, 3, 8, 3));
+        metrics.TabsWidth.Should().Be(640);
+        metrics.TabsMargin.Should().Be(new BackstageThickness(0, 0, 0, 14));
+        metrics.ActionFontSize.Should().Be(13);
+        metrics.DescriptionFontSize.Should().Be(11);
+        metrics.ActionRowMargin.Should().Be(new BackstageThickness(0, 0, 0, 10));
+        metrics.DescriptionMargin.Should().Be(new BackstageThickness(0, 2, 0, 0));
     }
 
     [Fact]

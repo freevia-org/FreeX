@@ -75,7 +75,8 @@ internal sealed record AvaloniaInlineTableCellLayout(
     int RowIndex,
     int ColumnIndex,
     TableCell? Cell,
-    Rect Bounds);
+    Rect Bounds,
+    int SourceCellIndex);
 
 internal sealed class AvaloniaInlineTableGridLayout
 {
@@ -184,7 +185,8 @@ internal sealed class AvaloniaInlineTableGridLayout
                     rowIndex,
                     columnIndex,
                     sourceCell,
-                    bounds));
+                    bounds,
+                    GetSourceCellIndex(table, rowIndex, columnIndex, columnCount)));
             }
         }
 
@@ -376,18 +378,38 @@ internal sealed class AvaloniaInlineTableGridLayout
         var row = table.Rows.ElementAtOrDefault(rowIndex);
         if (row is null)
             return null;
-        if (row.Cells.Count >= columnCount)
-            return row.Cells.ElementAtOrDefault(columnIndex);
+
+        int sourceIndex = GetSourceCellIndex(table, rowIndex, columnIndex, columnCount);
+        return sourceIndex >= 0
+            ? row.Cells.ElementAtOrDefault(sourceIndex)
+            : null;
+    }
+
+    private static int GetSourceCellIndex(
+        TableShape table,
+        int rowIndex,
+        int columnIndex,
+        int columnCount)
+    {
+        var row = table.Rows.ElementAtOrDefault(rowIndex);
+        if (row is null || columnIndex < 0)
+            return -1;
+
+        bool compact = row.Cells.Count < columnCount
+            && row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)) <= columnCount;
+        if (!compact)
+            return columnIndex < row.Cells.Count ? columnIndex : -1;
 
         int currentColumn = 0;
-        foreach (var cell in row.Cells)
+        for (int sourceIndex = 0; sourceIndex < row.Cells.Count; sourceIndex++)
         {
-            int span = Math.Max(1, cell.GridSpan);
+            int span = Math.Max(1, row.Cells[sourceIndex].GridSpan);
             if (columnIndex >= currentColumn && columnIndex < currentColumn + span)
-                return cell;
+                return sourceIndex;
+
             currentColumn += span;
         }
 
-        return null;
+        return -1;
     }
 }
