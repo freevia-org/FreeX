@@ -1558,6 +1558,17 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         DrawSoftwareFilledShapePlan(canvas, muffinPlan);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var cakePlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, cakePlan);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildVineFrame(
             border.ArtId,
             border.WidthPt,

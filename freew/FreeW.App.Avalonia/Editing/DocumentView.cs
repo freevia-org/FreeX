@@ -4391,6 +4391,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfFilledShapeBorderOps(muffinPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var cakePlan))
+        {
+            return BuildPdfFilledShapeBorderOps(cakePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -10311,6 +10321,18 @@ public sealed class DocumentView : Control
                 out var muffinPlan))
         {
             DrawFilledShapePlan(context, frame, muffinPlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var cakePlan))
+        {
+            DrawFilledShapePlan(context, frame, cakePlan);
             return true;
         }
 

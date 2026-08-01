@@ -50,7 +50,7 @@ public sealed class PageBorderArtVisualPlannerTests
             .Should().BeTrue();
 
         plan.Fills.Should().BeEmpty();
-        plan.Polygons.Should().HaveCount(816);
+        plan.Polygons.Should().HaveCount(510);
         plan.Polygons[0].Points.Take(4).Should().Equal(
             new PageBorderArtPoint(37, 45),
             new PageBorderArtPoint(35, 44),
@@ -60,6 +60,26 @@ public sealed class PageBorderArtVisualPlannerTests
         plan.Polygons[1].Green.Should().Be(0x80);
         plan.Polygons[2].Red.Should().Be(0xBF);
         plan.Polygons[184].Points[0].Should().Be(new PageBorderArtPoint(37, 1005));
+    }
+
+    [Fact]
+    public void CakeSlice_UsesWordCadenceAndSharedCreamPinkLayerGeometry()
+    {
+        PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(3, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(816);
+        plan.Polygons[0].Points.Take(4).Should().Equal(
+            new PageBorderArtPoint(39, 36),
+            new PageBorderArtPoint(44, 34),
+            new PageBorderArtPoint(49, 36),
+            new PageBorderArtPoint(54, 32));
+        plan.Polygons[1].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xFF && polygon.Green == 0xEE && polygon.Blue == 0xCA);
+        plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xFF && polygon.Green == 0x99 && polygon.Blue == 0xC2);
+        plan.Polygons[115].Points[0].Should().Be(new PageBorderArtPoint(39, 996));
     }
 
     [Fact]
