@@ -96,6 +96,30 @@ public class DocDefaultsSpacingReaderTests
     }
 
     [Fact]
+    public void ExplicitDocumentDefaultsWithoutLineRule_UseNaturalLineBox()
+    {
+        var doc = Read(
+            "<w:p><w:r><w:t>body</w:t></w:r></w:p>",
+            docDefaultsSpacing: "<w:spacing w:after=\"160\"/>");
+
+        doc.UseWordApplicationDefaultLineSpacing.Should().BeFalse();
+        doc.DefaultParagraph.LineSpacingIsSet.Should().BeFalse();
+        FirstFormatting(doc).LineSpacingIsSet.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExplicitDocumentDefaultLineRule_RemainsAuthoritative()
+    {
+        var doc = Read(
+            "<w:p><w:r><w:t>body</w:t></w:r></w:p>",
+            docDefaultsSpacing: "<w:spacing w:after=\"160\" w:line=\"276\" w:lineRule=\"auto\"/>");
+
+        doc.UseWordApplicationDefaultLineSpacing.Should().BeFalse();
+        doc.DefaultParagraph.LineSpacing.Should().Be(1.15);
+        doc.DefaultParagraph.LineSpacingIsSet.Should().BeTrue();
+    }
+
+    [Fact]
     public void ExplicitSingleLineRule_RemainsAuthoritativeOverWordApplicationDefault()
     {
         var doc = Read("<w:p><w:pPr><w:spacing w:line=\"240\" w:lineRule=\"auto\"/></w:pPr><w:r><w:t>body</w:t></w:r></w:p>");

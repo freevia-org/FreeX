@@ -16478,7 +16478,13 @@ public sealed class DocumentView : RichTextBox
             // inherited docDefault/built-in value, which the reader already baked into p). The IsSet flag
             // distinguishes an explicit setting from an inherited one, so a paragraph with no direct line
             // spacing correctly takes its style's — not the docDefault that masked it before.
-            var lineFrom = p.LineSpacingIsSet ? p : sp.LineSpacingIsSet ? sp : p;
+            var lineFrom = p.LineSpacingIsSet
+                ? p
+                : sp.LineSpacingIsSet
+                    ? sp
+                    : document.DefaultParagraph.LineSpacingIsSet
+                        ? document.DefaultParagraph
+                        : p;
             return p with
             {
                 ContextualSpacing = p.ContextualSpacing ?? sp.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
@@ -16497,7 +16503,7 @@ public sealed class DocumentView : RichTextBox
                 LineSpacing = lineFrom.LineSpacing,
                 LineRule = lineFrom.LineRule,
                 LineHeightPt = lineFrom.LineHeightPt,
-                LineSpacingIsSet = p.LineSpacingIsSet || sp.LineSpacingIsSet,
+                LineSpacingIsSet = p.LineSpacingIsSet || sp.LineSpacingIsSet || document.DefaultParagraph.LineSpacingIsSet,
                 IndentLeftPt = p.IndentLeftPt != d.IndentLeftPt ? p.IndentLeftPt : sp.IndentLeftPt,
                 IndentRightPt = p.IndentRightPt != d.IndentRightPt ? p.IndentRightPt : sp.IndentRightPt,
                 FirstLineIndentPt = p.FirstLineIndentPt != d.FirstLineIndentPt ? p.FirstLineIndentPt : sp.FirstLineIndentPt,
@@ -16505,7 +16511,20 @@ public sealed class DocumentView : RichTextBox
                 ShadingColorHex = p.ShadingColorHex ?? sp.ShadingColorHex,
             };
         }
-        return p with { ContextualSpacing = p.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing };
+        return p with
+        {
+            ContextualSpacing = p.ContextualSpacing ?? document.DefaultParagraph.ContextualSpacing,
+            LineSpacing = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
+                ? document.DefaultParagraph.LineSpacing
+                : p.LineSpacing,
+            LineRule = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
+                ? document.DefaultParagraph.LineRule
+                : p.LineRule,
+            LineHeightPt = !p.LineSpacingIsSet && document.DefaultParagraph.LineSpacingIsSet
+                ? document.DefaultParagraph.LineHeightPt
+                : p.LineHeightPt,
+            LineSpacingIsSet = p.LineSpacingIsSet || document.DefaultParagraph.LineSpacingIsSet,
+        };
     }
 
     private static bool SuppressesContextualSpacing(
