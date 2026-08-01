@@ -421,7 +421,16 @@ public sealed record DrawingObjectEffectsPlan(
     double ReflectionDistanceDip = 4,
     double ReflectionDirectionDegrees = 90,
     double BevelWidthDip = 3,
-    double BevelHeightDip = 3)
+    double BevelHeightDip = 3,
+    double ReflectionBlurDip = 0.5,
+    double ReflectionStartPosition = 0,
+    double ReflectionEndOpacity = 0,
+    double ReflectionEndPosition = 1,
+    double ReflectionFadeDirectionDegrees = 90,
+    double ReflectionScaleX = 1,
+    double ReflectionScaleY = -1,
+    double ReflectionSkewXDegrees = 0,
+    double ReflectionSkewYDegrees = 0)
 {
     public static DrawingObjectEffectsPlan None { get; } = new(
         HasShadow: false,
@@ -982,7 +991,16 @@ public static class DrawingObjectVisualPlanner
             EmuToDip(effects.ReflectionDist),
             effects.ReflectionDir / 60000.0,
             EmuToDip(effects.BevelW),
-            EmuToDip(effects.BevelH));
+            EmuToDip(effects.BevelH),
+            EmuToDip(effects.ReflectionBlurRad),
+            Math.Clamp(effects.ReflectionStartPosition / 100000.0, 0, 1),
+            Math.Clamp(effects.ReflectionEndAlpha / 100000.0, 0, 1),
+            Math.Clamp(effects.ReflectionEndPosition / 100000.0, 0, 1),
+            effects.ReflectionFadeDir / 60000.0,
+            Math.Clamp(effects.ReflectionScaleX / 100000.0, -4, 4),
+            Math.Clamp(effects.ReflectionScaleY / 100000.0, -4, 4),
+            effects.ReflectionSkewX / 60000.0,
+            effects.ReflectionSkewY / 60000.0);
     }
 
     private static DrawingObjectWordArtPlan BuildWordArtPlan(WordArt wordArt)

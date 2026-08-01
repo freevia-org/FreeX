@@ -603,25 +603,18 @@ public static class SkiaPdfWriter
         {
             case PdfEffectKind.Shadow:
                 RenderEffectPass(canvas, group.Ops, parameters.Color, opacity,
-                    parameters.OffsetX, parameters.OffsetY, parameters.Radius * 0.18,
+                    parameters.OffsetX, parameters.OffsetY, parameters.Radius * 0.5,
                     pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
                 break;
             case PdfEffectKind.Glow:
-                for (var index = 3; index >= 1; index--)
-                {
-                    var spread = Math.Max(1, parameters.Radius) * index / 3;
-                    RenderEffectPass(canvas, group.Ops, parameters.Color,
-                        opacity * (0.18 + 0.08 * (3 - index)), 0, 0, spread,
-                        pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
-                }
+                RenderEffectPass(canvas, group.Ops, parameters.Color, opacity * 0.72,
+                    0, 0, Math.Max(1, parameters.Radius) * 0.5,
+                    pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
                 break;
             case PdfEffectKind.SoftEdge:
-                for (var index = 3; index >= 1; index--)
-                {
-                    var spread = Math.Max(1, parameters.Radius) * index / 3;
-                    RenderEffectPass(canvas, group.Ops, parameters.Color, opacity * 0.12,
-                        0, 0, spread, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
-                }
+                RenderEffectPass(canvas, group.Ops, parameters.Color, opacity * 0.34,
+                    0, 0, Math.Max(1, parameters.Radius) * 0.5,
+                    pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
                 break;
             case PdfEffectKind.Reflection:
             {
@@ -631,16 +624,24 @@ public static class SkiaPdfWriter
                 var axisAngle = (float)(parameters.ReflectionDirectionDegrees - 90);
                 canvas.Translate(centerX, centerY);
                 canvas.RotateDegrees(axisAngle);
-                canvas.Scale(1, -1);
+                canvas.Skew(
+                    ToSkewFactor(parameters.ReflectionSkewXDegrees),
+                    ToSkewFactor(parameters.ReflectionSkewYDegrees));
+                canvas.Scale((float)parameters.ReflectionScaleX, (float)parameters.ReflectionScaleY);
                 canvas.RotateDegrees(-axisAngle);
                 canvas.Translate(-centerX, -centerY);
+                using var reflectionFilter = parameters.Radius > 0
+                    ? SKImageFilter.CreateBlur((float)parameters.Radius * 0.5f, (float)parameters.Radius * 0.5f)
+                    : null;
                 using var reflectionLayer = new SKPaint
                 {
                     Color = new SKColor(255, 255, 255, ToAlphaByte(opacity)),
+                    ImageFilter = reflectionFilter,
                 };
                 canvas.SaveLayer(reflectionLayer);
                 foreach (var op in group.Ops)
                     RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, parameters.Color);
+                ApplyReflectionFade(canvas, group, pageHeight, opacity);
                 canvas.Restore();
                 canvas.Restore();
                 break;
@@ -666,7 +667,7 @@ public static class SkiaPdfWriter
         double opacity,
         double offsetX,
         double offsetY,
-        double spread,
+        double blurRadius,
         float pageHeight,
         SKTypeface regular,
         SKTypeface bold,
@@ -675,23 +676,75 @@ public static class SkiaPdfWriter
         SKPaint textPaint,
         FallbackTextRenderer textRenderer)
     {
+        using var imageFilter = blurRadius > 0
+            ? SKImageFilter.CreateBlur((float)blurRadius, (float)blurRadius)
+            : null;
         using var layerPaint = new SKPaint
         {
             Color = new SKColor(255, 255, 255, ToAlphaByte(opacity)),
+            ImageFilter = imageFilter,
         };
         canvas.SaveLayer(layerPaint);
         canvas.Translate((float)offsetX, (float)-offsetY);
-        var passes = spread > 0 ? 3 : 1;
-        for (var index = 0; index < passes; index++)
-        {
-            var distance = spread * (index + 1) / passes;
-            if (distance != 0)
-                canvas.Translate((float)(distance * 0.35), (float)(-distance * 0.2));
-            foreach (var op in ops)
-                RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, color);
-        }
+        foreach (var op in ops)
+            RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, color);
         canvas.Restore();
     }
+
+    private static void ApplyReflectionFade(
+        SKCanvas canvas,
+        PdfEffectGroup group,
+        float pageHeight,
+        double startOpacity)
+    {
+        var width = (float)Math.Max(0, group.BoundsWidth);
+        var height = (float)Math.Max(0, group.BoundsHeight);
+        if (width <= 0 || height <= 0)
+            return;
+
+        var start = PdfRenderGeometry.NormalizeOpacity(startOpacity);
+        var end = PdfRenderGeometry.NormalizeOpacity(group.Parameters.ReflectionEndOpacity);
+        var endMask = start <= 0 ? 0 : Math.Clamp(end / start, 0, 1);
+        var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, group.BoundsY, group.BoundsHeight);
+        var bottom = top + height;
+        var center = new SKPoint((float)group.BoundsX + width / 2, top + height / 2);
+        var direction = (group.Parameters.ReflectionFadeDirectionDegrees - 90) * Math.PI / 180d;
+        var dx = (float)Math.Sin(direction);
+        var dy = (float)Math.Cos(direction);
+        var halfLength = MathF.Sqrt(width * width + height * height) / 2;
+        var axisStart = new SKPoint(center.X + dx * halfLength, center.Y + dy * halfLength);
+        var axisEnd = new SKPoint(center.X - dx * halfLength, center.Y - dy * halfLength);
+        var startPosition = Math.Clamp(group.Parameters.ReflectionStartPosition, 0, 1);
+        var endPosition = Math.Clamp(group.Parameters.ReflectionEndPosition, 0, 1);
+        if (endPosition <= startPosition)
+        {
+            startPosition = 0;
+            endPosition = 1;
+        }
+
+        var gradientStart = Lerp(axisStart, axisEnd, startPosition);
+        var gradientEnd = Lerp(axisStart, axisEnd, endPosition);
+        using var shader = SKShader.CreateLinearGradient(
+            gradientStart,
+            gradientEnd,
+            [new SKColor(255, 255, 255, 255), new SKColor(255, 255, 255, ToAlphaByte(endMask))],
+            [0, 1],
+            SKShaderTileMode.Clamp);
+        using var maskPaint = new SKPaint
+        {
+            Shader = shader,
+            BlendMode = SKBlendMode.DstIn,
+        };
+        canvas.DrawRect(new SKRect((float)group.BoundsX, top, (float)group.BoundsX + width, bottom), maskPaint);
+    }
+
+    private static SKPoint Lerp(SKPoint start, SKPoint end, double amount) =>
+        new(
+            start.X + (end.X - start.X) * (float)amount,
+            start.Y + (end.Y - start.Y) * (float)amount);
+
+    internal static float ToSkewFactor(double degrees) =>
+        (float)Math.Tan(degrees * Math.PI / 180d);
 
     internal static SKImage? ApplyColorEffects(SKImage image, PdfImageColorEffects effects)
     {

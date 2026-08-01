@@ -145,6 +145,79 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void ReflectionSkew_ConvertsOfficeDegreesToSkiaFactors()
+    {
+        const double degrees = 9;
+        var expected = Math.Tan(degrees * Math.PI / 180d);
+
+        ((double)SkiaPdfWriter.ToSkewFactor(degrees)).Should().BeApproximately(expected, 0.000001);
+        Math.Abs(SkiaPdfWriter.ToSkewFactor(degrees) - degrees).Should().BeGreaterThan(0.01,
+            "SKCanvas.Skew consumes tangent factors, not the Office degree value");
+    }
+
+    [Fact]
+    public void RenderPagesToPng_UsesTrueBlurAndReflectionFadeWithOfficeTransformParameters()
+    {
+        var page = new PdfContentPage(140, 110, new PdfDrawOp[]
+        {
+            new PdfEffectGroup(
+                PdfEffectKind.SoftEdge,
+                20,
+                45,
+                30,
+                20,
+                new PdfEffectParameters(null, 1, 12),
+                [new PdfFillRect(20, 45, 30, 20, new PdfColor(0xD0, 0x30, 0x30))]),
+            new PdfEffectGroup(
+                PdfEffectKind.Reflection,
+                78,
+                50,
+                24,
+                16,
+                new PdfEffectParameters(
+                    null,
+                    0.8,
+                    0,
+                    ReflectionGap: 4,
+                    ReflectionDirectionDegrees: 90,
+                    ReflectionEndOpacity: 0,
+                    ReflectionFadeDirectionDegrees: 90,
+                    ReflectionScaleX: 0.82,
+                    ReflectionScaleY: -0.96,
+                    ReflectionSkewXDegrees: 9),
+                [new PdfFillRect(78, 50, 24, 16, new PdfColor(0x20, 0x70, 0xD0))]),
+        });
+
+        using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(new PdfContentDocument([page])).Single());
+
+        var nearSoftEdge = bitmap.GetPixel(24, 60);
+        var farSoftEdge = bitmap.GetPixel(10, 60);
+        (nearSoftEdge.Red - nearSoftEdge.Green).Should().BeGreaterThan(5,
+            "Skia soft-edge should produce a colored, partially blurred perimeter outside the source bounds");
+        (farSoftEdge.Red - farSoftEdge.Green).Should().BeLessThan(3,
+            "the blur should remain bounded rather than painting a distant silhouette");
+
+        static int BlueStrength(SKColor pixel) => pixel.Blue - Math.Max(pixel.Red, pixel.Green);
+        var nearReflection = 0;
+        var farReflection = 0;
+        for (var x = 70; x < bitmap.Width; x++)
+        {
+            nearReflection += Math.Max(0, BlueStrength(bitmap.GetPixel(x, 86)));
+            farReflection += Math.Max(0, BlueStrength(bitmap.GetPixel(x, 108)));
+        }
+
+        nearReflection.Should().BeGreaterThan(farReflection,
+            "reflection alpha should fade away from the object while retaining its skew/direction transform");
+        nearReflection.Should().BeGreaterThan(20);
+
+        var expectedFootprint = 0;
+        for (var x = 100; x <= 135; x++)
+            expectedFootprint += Math.Max(0, BlueStrength(bitmap.GetPixel(x, 86)));
+        expectedFootprint.Should().BeGreaterThan(20,
+            "a 9-degree Office skew should keep the reflected footprint near the transformed object; passing 9 as a Skia factor moves it to a distant pixel range");
+    }
+
+    [Fact]
     public void RenderPagesToPng_EffectOverridesReplacePatternAndGradientPaint()
     {
         var overrideColor = new PdfColor(0xFF, 0x00, 0x00);

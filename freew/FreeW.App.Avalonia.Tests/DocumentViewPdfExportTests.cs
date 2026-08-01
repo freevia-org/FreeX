@@ -383,9 +383,18 @@ public sealed class DocumentViewPdfExportTests
                 HasSoftEdge = true,
                 SoftEdgeRad = 38100,
                 HasReflection = true,
+                ReflectionBlurRad = 25400,
                 ReflectionStartAlpha = 45000,
+                ReflectionStartPosition = 12000,
+                ReflectionEndAlpha = 5000,
+                ReflectionEndPosition = 90000,
                 ReflectionDist = 19050,
                 ReflectionDir = 5400000,
+                ReflectionFadeDir = 3000000,
+                ReflectionScaleX = 85000,
+                ReflectionScaleY = -95000,
+                ReflectionSkewX = 600000,
+                ReflectionSkewY = -300000,
                 HasBevel = true,
                 BevelW = 38100,
                 BevelH = 50800,
@@ -441,6 +450,16 @@ public sealed class DocumentViewPdfExportTests
                 .Should().Contain([PdfEffectKind.Shadow, PdfEffectKind.Glow, PdfEffectKind.SoftEdge,
                     PdfEffectKind.Reflection, PdfEffectKind.Bevel]);
             operations.OfType<PdfEffectGroup>().Should().Contain(effect => effect.Parameters.Opacity > 0);
+            var reflection = operations.OfType<PdfEffectGroup>().Single(effect => effect.Kind == PdfEffectKind.Reflection);
+            reflection.Parameters.Radius.Should().BeApproximately(2, 0.001);
+            reflection.Parameters.ReflectionEndOpacity.Should().BeApproximately(0.05, 0.001);
+            reflection.Parameters.ReflectionStartPosition.Should().BeApproximately(0.12, 0.001);
+            reflection.Parameters.ReflectionEndPosition.Should().BeApproximately(0.9, 0.001);
+            reflection.Parameters.ReflectionFadeDirectionDegrees.Should().BeApproximately(50, 0.001);
+            reflection.Parameters.ReflectionScaleX.Should().BeApproximately(0.85, 0.001);
+            reflection.Parameters.ReflectionScaleY.Should().BeApproximately(-0.95, 0.001);
+            reflection.Parameters.ReflectionSkewXDegrees.Should().BeApproximately(10, 0.001);
+            reflection.Parameters.ReflectionSkewYDegrees.Should().BeApproximately(-5, 0.001);
             operations.OfType<PdfText>().Select(text => text.Text).Should().Contain(text => text.Contains("Effects", StringComparison.Ordinal));
             string.Concat(operations.OfType<PdfText>().Select(text => text.Text))
                 .Should().Contain("Glow");

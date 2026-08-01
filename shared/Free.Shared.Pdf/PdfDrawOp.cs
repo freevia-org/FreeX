@@ -352,7 +352,15 @@ public sealed record PdfEffectParameters(
     double OffsetY = 0,
     double ReflectionGap = 0,
     double ReflectionDirectionDegrees = 90,
-    PdfColor? SecondaryColor = null);
+    PdfColor? SecondaryColor = null,
+    double ReflectionEndOpacity = 0,
+    double ReflectionStartPosition = 0,
+    double ReflectionEndPosition = 1,
+    double ReflectionFadeDirectionDegrees = 90,
+    double ReflectionScaleX = 1,
+    double ReflectionScaleY = -1,
+    double ReflectionSkewXDegrees = 0,
+    double ReflectionSkewYDegrees = 0);
 
 /// <summary>
 /// Renders a composable vector layer from the child operations. This is intentionally an

@@ -514,6 +514,46 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_ReflectionFallbackUsesBoundedFadeBandsAndOfficeTransformParameters()
+    {
+        var source = new PdfDrawOp[]
+        {
+            new PdfFillRect(30, 40, 24, 16, new PdfColor(0x11, 0x22, 0x33)),
+        };
+        var page = new PdfContentPage(100, 100, new PdfDrawOp[]
+        {
+            new PdfEffectGroup(
+                PdfEffectKind.Reflection,
+                30,
+                40,
+                24,
+                16,
+                new PdfEffectParameters(
+                    null,
+                    0.72,
+                    0,
+                    ReflectionGap: 5,
+                    ReflectionDirectionDegrees: 127,
+                    ReflectionEndOpacity: 0.04,
+                    ReflectionStartPosition: 0.1,
+                    ReflectionEndPosition: 0.9,
+                    ReflectionFadeDirectionDegrees: 68,
+                    ReflectionScaleX: 0.78,
+                    ReflectionScaleY: -0.92,
+                    ReflectionSkewXDegrees: 11),
+                source),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument([page])))
+            .Replace("\r\n", "\n");
+
+        pdf.Split(" re W n", StringSplitOptions.None).Should().HaveCount(7,
+            "portable PDF should retain a bounded, visibly fading reflection instead of collapsing it to one opaque pass");
+        pdf.Should().Contain("/GS");
+        pdf.Should().Contain(" cm");
+    }
+
+    [Fact]
     public void Write_AppliesPngImageColorEffectsBeforeEmbedding()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

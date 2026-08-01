@@ -4674,9 +4674,17 @@ public sealed class DocumentView : Control
                 new PdfEffectParameters(
                     null,
                     effects.ReflectionOpacity,
-                    0,
+                    effects.ReflectionBlurDip / PxPerPoint,
                     ReflectionGap: effects.ReflectionDistanceDip / PxPerPoint,
-                    ReflectionDirectionDegrees: effects.ReflectionDirectionDegrees),
+                    ReflectionDirectionDegrees: effects.ReflectionDirectionDegrees,
+                    ReflectionEndOpacity: effects.ReflectionEndOpacity,
+                    ReflectionStartPosition: effects.ReflectionStartPosition,
+                    ReflectionEndPosition: effects.ReflectionEndPosition,
+                    ReflectionFadeDirectionDegrees: effects.ReflectionFadeDirectionDegrees,
+                    ReflectionScaleX: effects.ReflectionScaleX,
+                    ReflectionScaleY: effects.ReflectionScaleY,
+                    ReflectionSkewXDegrees: effects.ReflectionSkewXDegrees,
+                    ReflectionSkewYDegrees: effects.ReflectionSkewYDegrees),
                 source));
         }
 

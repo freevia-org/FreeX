@@ -469,6 +469,10 @@ public static class PortablePdfWriter
                     case PdfEffectKind.SoftEdge:
                         yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.12);
                         break;
+                    case PdfEffectKind.Reflection:
+                        for (var index = 0; index < 6; index++)
+                            yield return ReflectionPassOpacity(group, index);
+                        break;
                     case PdfEffectKind.Bevel:
                         yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.72);
                         yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.52);
@@ -1138,7 +1142,7 @@ public static class PortablePdfWriter
             }
 
             case PdfEffectKind.Reflection:
-                AppendEffectReflection(content, group, opacity, imageResources, opacityResources, patternResources);
+                AppendEffectReflection(content, group, imageResources, opacityResources, patternResources);
                 break;
 
             case PdfEffectKind.Bevel:
@@ -1192,27 +1196,73 @@ public static class PortablePdfWriter
     private static void AppendEffectReflection(
         StringBuilder content,
         PdfEffectGroup group,
-        double opacity,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
         IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
         PatternResourceSet patternResources)
     {
-        var resourceName = opacityResources.TryGetValue(opacity, out var resource)
-            ? resource.ResourceName
-            : null;
-        content.AppendLine("q");
-        AppendOpacityState(content, resourceName);
+        const int passCount = 6;
+        var startOpacity = PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity);
+        var endOpacity = PdfRenderGeometry.NormalizeOpacity(group.Parameters.ReflectionEndOpacity);
+        var startPosition = Math.Clamp(group.Parameters.ReflectionStartPosition, 0, 1);
+        var endPosition = Math.Clamp(group.Parameters.ReflectionEndPosition, 0, 1);
+        if (endPosition <= startPosition)
+        {
+            startPosition = 0;
+            endPosition = 1;
+        }
+
+        for (var index = 0; index < passCount; index++)
+        {
+            var t0 = startPosition + (endPosition - startPosition) * index / passCount;
+            var t1 = startPosition + (endPosition - startPosition) * (index + 1) / passCount;
+            var opacity = PdfRenderGeometry.NormalizeOpacity(
+                startOpacity + (endOpacity - startOpacity) * (index + 0.5) / passCount);
+            var resourceName = opacityResources.TryGetValue(opacity, out var resource)
+                ? resource.ResourceName
+                : null;
+            content.AppendLine("q");
+            AppendOpacityState(content, resourceName);
+            AppendReflectionTransform(content, group);
+            content.AppendLine($"{FormatNumber(group.BoundsX)} {FormatNumber(group.BoundsY + group.BoundsHeight * t0)} {FormatNumber(group.BoundsWidth)} {FormatNumber(group.BoundsHeight * (t1 - t0))} re W n");
+            foreach (var op in group.Ops)
+                AppendDrawOp(content, op, imageResources, opacityResources, patternResources, group.Parameters.Color);
+            content.AppendLine("Q");
+        }
+    }
+
+    private static double ReflectionPassOpacity(PdfEffectGroup group, int index)
+    {
+        var start = PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity);
+        var end = PdfRenderGeometry.NormalizeOpacity(group.Parameters.ReflectionEndOpacity);
+        var opacity = start + (end - start) * (index + 0.5) / 6;
+        return PdfRenderGeometry.NormalizeOpacity(opacity);
+    }
+
+    private static void AppendReflectionTransform(StringBuilder content, PdfEffectGroup group)
+    {
         var axisAngle = (group.Parameters.ReflectionDirectionDegrees - 90) * Math.PI / 180d;
-        var cos = Math.Cos(axisAngle * 2);
-        var sin = Math.Sin(axisAngle * 2);
+        var cos = Math.Cos(axisAngle);
+        var sin = Math.Sin(axisAngle);
+        var skewX = Math.Tan(group.Parameters.ReflectionSkewXDegrees * Math.PI / 180d);
+        var skewY = Math.Tan(group.Parameters.ReflectionSkewYDegrees * Math.PI / 180d);
+        var sx = group.Parameters.ReflectionScaleX;
+        var sy = group.Parameters.ReflectionScaleY;
+
+        // Compose R(axis) * (skew * scale) * R(-axis), retaining the original PDF reflection
+        // matrix when all optional Office reflection parameters are at their defaults.
+        var localA = sx;
+        var localB = skewY * sx;
+        var localC = skewX * sy;
+        var localD = sy;
+        var a = cos * (localA * cos + localC * sin) - sin * (localB * cos + localD * sin);
+        var b = sin * (localA * cos + localC * sin) + cos * (localB * cos + localD * sin);
+        var c = cos * (-localA * sin + localC * cos) - sin * (-localB * sin + localD * cos);
+        var d = sin * (-localA * sin + localC * cos) + cos * (-localB * sin + localD * cos);
         var centerX = group.BoundsX + group.BoundsWidth / 2;
         var centerY = group.BoundsY - group.Parameters.ReflectionGap / 2;
-        var e = centerX - cos * centerX - sin * centerY;
-        var f = centerY - sin * centerX + cos * centerY;
-        content.AppendLine($"{FormatNumber(cos)} {FormatNumber(sin)} {FormatNumber(sin)} {FormatNumber(-cos)} {FormatNumber(e)} {FormatNumber(f)} cm");
-        foreach (var op in group.Ops)
-            AppendDrawOp(content, op, imageResources, opacityResources, patternResources, group.Parameters.Color);
-        content.AppendLine("Q");
+        var e = centerX - a * centerX - c * centerY;
+        var f = centerY - b * centerX - d * centerY;
+        content.AppendLine($"{FormatNumber(a)} {FormatNumber(b)} {FormatNumber(c)} {FormatNumber(d)} {FormatNumber(e)} {FormatNumber(f)} cm");
     }
 
     private static void AppendOpacityState(StringBuilder content, string? opacityResourceName)
