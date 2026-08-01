@@ -286,10 +286,56 @@ public sealed class AvaloniaReviewCommentInlineRuntimeTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task OpenReviewCommentList_RefreshesAfterInlineCommentMutation()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.Workbook.AddSheet("ReviewCommentListFixture");
+            window.Session.SelectSheet(sheet.Id);
+            var address = new CellAddress(sheet.Id, 2, 2);
+            sheet.ThreadedComments[address] = new ThreadedComment("Original root");
+            window.Session.SelectCell(address);
+            window.Session.UpdateViewportSize(880, 1440);
+            window.Show();
+
+            ((Task)InvokePrivate(window, "ShowNotesListAsync")!).GetAwaiter().GetResult();
+            var listWindow = GetPrivateField<Window>(window, "_commentListWindow");
+            listWindow.Should().NotBeNull();
+            var list = FindByAutomationId<ListBox>(listWindow, "ShowNotesList");
+            list.Should().NotBeNull();
+            list!.Items.Should().ContainSingle();
+            list.Items[0].Should().BeOfType<string>().Which.Should().Contain("Original root");
+
+            ((Task)InvokePrivate(window, "ShowEditThreadedCommentDialogAsync")!).GetAwaiter().GetResult();
+            var renderedGrid = window.RebuildSheetGridForTest();
+            var editor = FindByAutomationId<Border>(renderedGrid, "WorksheetThreadedCommentInlineEditor");
+            var rootBox = FindByAutomationId<TextBox>(editor, "GridThreadedCommentRootBox");
+            var save = FindByAutomationId<Button>(editor, "GridCommentInlineSaveButton");
+            rootBox.Should().NotBeNull();
+            save.Should().NotBeNull();
+            rootBox!.Text = "Updated root";
+            save!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+            list.Items.Should().ContainSingle();
+            list.Items[0].Should().BeOfType<string>().Which.Should().Contain("Updated root");
+
+            listWindow!.Close();
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     private static object? InvokePrivate(MainWindow window, string methodName, params object[] args) =>
         typeof(MainWindow)
             .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)
             ?.Invoke(window, args);
+
+    private static T? GetPrivateField<T>(MainWindow window, string fieldName)
+        where T : class =>
+        typeof(MainWindow)
+            .GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?.GetValue(window) as T;
 
     private static T? FindByAutomationId<T>(Control? root, string automationId)
         where T : Control =>

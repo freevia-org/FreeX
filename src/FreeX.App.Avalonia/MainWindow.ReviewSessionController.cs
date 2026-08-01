@@ -27,5 +27,8 @@ public sealed partial class MainWindow
         {
             RefreshShell(status);
         }
+
+        if (plan.RefreshCommentPanes)
+            _refreshCommentListWindow?.Invoke(CollectSheetNotes(_session.ActiveSheet));
     }
 }
