@@ -394,7 +394,16 @@ public sealed class AddChartCategoryCommand : IPresentationCommand
         if (chart is null) return;
         chart.Categories.Add(_label);
         foreach (var series in chart.Series)
+        {
             series.Values.Add(0.0);
+            if (chart.ChartType is ChartType.Scatter or ChartType.Bubble)
+            {
+                if (series.XValues.Count > 0)
+                    series.XValues.Add(series.XValues.Count + 1.0);
+                if (chart.ChartType == ChartType.Bubble && series.BubbleSizes.Count > 0)
+                    series.BubbleSizes.Add(1.0);
+            }
+        }
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -405,8 +414,17 @@ public sealed class AddChartCategoryCommand : IPresentationCommand
         if (chart.Categories.Count == 0) return;
         chart.Categories.RemoveAt(chart.Categories.Count - 1);
         foreach (var series in chart.Series)
+        {
             if (series.Values.Count > 0)
                 series.Values.RemoveAt(series.Values.Count - 1);
+            if (chart.ChartType is ChartType.Scatter or ChartType.Bubble)
+            {
+                if (series.XValues.Count > 0)
+                    series.XValues.RemoveAt(series.XValues.Count - 1);
+                if (chart.ChartType == ChartType.Bubble && series.BubbleSizes.Count > 0)
+                    series.BubbleSizes.RemoveAt(series.BubbleSizes.Count - 1);
+            }
+        }
         ChartHelper.MarkWorkbookDirty(chart);
     }
 }
@@ -422,6 +440,8 @@ public sealed class RemoveChartCategoryCommand : IPresentationCommand
     private readonly int             _categoryIndex;
     private string                   _capturedLabel   = string.Empty;
     private List<double?>            _capturedValues  = new();
+    private List<List<double?>>      _capturedXValues = new();
+    private List<List<double?>>      _capturedBubbleSizes = new();
 
     public RemoveChartCategoryCommand(int slideIndex, uint shapeId, int categoryIndex)
     {
@@ -442,11 +462,22 @@ public sealed class RemoveChartCategoryCommand : IPresentationCommand
         _capturedValues = chart.Series
             .Select(s => _categoryIndex < s.Values.Count ? s.Values[_categoryIndex] : (double?)null)
             .ToList();
+        _capturedXValues = chart.Series.Select(s => s.XValues.ToList()).ToList();
+        _capturedBubbleSizes = chart.Series.Select(s => s.BubbleSizes.ToList()).ToList();
 
         chart.Categories.RemoveAt(_categoryIndex);
         foreach (var series in chart.Series)
+        {
             if (_categoryIndex < series.Values.Count)
                 series.Values.RemoveAt(_categoryIndex);
+            if (chart.ChartType is ChartType.Scatter or ChartType.Bubble)
+            {
+                if (_categoryIndex < series.XValues.Count)
+                    series.XValues.RemoveAt(_categoryIndex);
+                if (chart.ChartType == ChartType.Bubble && _categoryIndex < series.BubbleSizes.Count)
+                    series.BubbleSizes.RemoveAt(_categoryIndex);
+            }
+        }
         ChartHelper.MarkWorkbookDirty(chart);
     }
 
@@ -463,6 +494,16 @@ public sealed class RemoveChartCategoryCommand : IPresentationCommand
             var v = si < _capturedValues.Count ? _capturedValues[si] : 0.0;
             var vi = Math.Clamp(idx, 0, chart.Series[si].Values.Count);
             chart.Series[si].Values.Insert(vi, v);
+            if (si < _capturedXValues.Count)
+            {
+                chart.Series[si].XValues.Clear();
+                chart.Series[si].XValues.AddRange(_capturedXValues[si]);
+            }
+            if (si < _capturedBubbleSizes.Count)
+            {
+                chart.Series[si].BubbleSizes.Clear();
+                chart.Series[si].BubbleSizes.AddRange(_capturedBubbleSizes[si]);
+            }
         }
         ChartHelper.MarkWorkbookDirty(chart);
     }

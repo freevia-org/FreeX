@@ -391,6 +391,58 @@ public sealed class ChartDataCommandTests
     // ════════════════════════════════════════════════════════════════════════════════
 
     [Fact]
+    public void AddChartCategory_BubbleMaintainsCoordinatesAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Bubble;
+        foreach (var series in chart.Series)
+        {
+            series.XValues.AddRange([1.0, 2.0, 3.0]);
+            series.BubbleSizes.AddRange([4.0, 5.0, 6.0]);
+        }
+
+        bus.Execute(new AddChartCategoryCommand(0, id, "Q4"));
+
+        chart.Categories.Should().EndWith("Q4");
+        chart.Series.Should().AllSatisfy(series =>
+        {
+            series.Values.Should().HaveCount(4);
+            series.XValues.Should().Equal(1.0, 2.0, 3.0, 4.0);
+            series.BubbleSizes.Should().Equal(4.0, 5.0, 6.0, 1.0);
+        });
+
+        bus.Undo();
+        chart.Categories.Should().HaveCount(3);
+        chart.Series.Should().AllSatisfy(series =>
+        {
+            series.XValues.Should().Equal(1.0, 2.0, 3.0);
+            series.BubbleSizes.Should().Equal(4.0, 5.0, 6.0);
+        });
+    }
+
+    [Fact]
+    public void RemoveChartCategory_ScatterRemovesCoordinatesAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Scatter;
+        foreach (var series in chart.Series)
+            series.XValues.AddRange([10.0, 20.0, 30.0]);
+
+        bus.Execute(new RemoveChartCategoryCommand(0, id, categoryIndex: 1));
+
+        chart.Categories.Should().Equal("Q1", "Q3");
+        chart.Series.Should().AllSatisfy(series =>
+            series.XValues.Should().Equal(10.0, 30.0));
+
+        bus.Undo();
+        chart.Categories.Should().Equal("Q1", "Q2", "Q3");
+        chart.Series.Should().AllSatisfy(series =>
+            series.XValues.Should().Equal(10.0, 20.0, 30.0));
+    }
+
+    [Fact]
     public void ReplaceChartData_Apply_ReplacesAllData()
     {
         var (p, bus, id) = MakeChartPresentation();
