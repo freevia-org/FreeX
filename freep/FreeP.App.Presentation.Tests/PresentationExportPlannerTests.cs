@@ -1799,6 +1799,31 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void VideoExportPlan_UsesHostEncoderCapabilityForExecutionState()
+    {
+        var host = new PresentationVideoExportHandoffHostCapabilities(
+            "Windows MediaComposition",
+            CanEncodeMp4: true,
+            CanCaptureNarration: false,
+            CanCaptureCameraAndMedia: false,
+            "ready");
+
+        var plan = PresentationExportPlanner.BuildVideoExportPlan(
+            new PresentationVideoExportRequest(
+                new PresentationSlideRangeRequest(
+                    PresentationSlideRangeKind.CustomRange,
+                    StartSlideNumber: 2,
+                    EndSlideNumber: 3)),
+            slideCount: 4,
+            host);
+
+        plan.IsImplemented.Should().BeTrue();
+        plan.CanExecute.Should().BeTrue();
+        plan.DisabledReason.Should().BeNull();
+        plan.SlideRange.SlideNumbers.Should().Equal(2, 3);
+    }
+
+    [Fact]
     public void VideoExportPlan_NormalizesPowerPointWorkflowOptionsAndEmptyDeckState()
     {
         var request = new PresentationVideoExportRequest(
