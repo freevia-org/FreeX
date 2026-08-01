@@ -54,6 +54,7 @@ public sealed class AnimationPane : Border
     private readonly EditingSession _editor;
     private readonly Action<AnimationPanePlaybackSessionPlan>? _onPreview;
     private readonly Action? _onAccessibilityChanged;
+    private readonly Action<int>? _onEditMotionPath;
 
     private readonly StackPanel _listPanel;
     private readonly StackPanel _playbackControlsPanel;
@@ -89,11 +90,13 @@ public sealed class AnimationPane : Border
     public AnimationPane(
         EditingSession editor,
         Action<AnimationPanePlaybackSessionPlan>? onPreview = null,
-        Action? onAccessibilityChanged = null)
+        Action? onAccessibilityChanged = null,
+        Action<int>? onEditMotionPath = null)
     {
         _editor    = editor    ?? throw new ArgumentNullException(nameof(editor));
         _onPreview = onPreview;
         _onAccessibilityChanged = onAccessibilityChanged;
+        _onEditMotionPath = onEditMotionPath;
 
         Background      = BackBrush;
         BorderBrush     = RowBorder;
@@ -583,6 +586,25 @@ public sealed class AnimationPane : Border
                 Rebuild();
         };
 
+        Button? editMotionPathBtn = null;
+        if (item.Kind == AnimationKind.Motion && _onEditMotionPath is not null)
+        {
+            editMotionPathBtn = new Button
+            {
+                Content = "Edit",
+                FontSize = 9,
+                MinWidth = 34,
+                Height = 18,
+                Padding = new Thickness(2, 0, 2, 0),
+                Margin = new Thickness(1),
+                Background = ButtonBg,
+                BorderThickness = new Thickness(1),
+                ToolTip = "Edit motion path geometry",
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            editMotionPathBtn.Click += (_, _) => _onEditMotionPath(item.Index);
+        }
+
         // ── Assemble button cluster ──────────────────────────────────────────────
         var btnPanel = new StackPanel
         {
@@ -592,6 +614,8 @@ public sealed class AnimationPane : Border
         btnPanel.Children.Add(upBtn);
         btnPanel.Children.Add(downBtn);
         btnPanel.Children.Add(paragraphBuildBtn);
+        if (editMotionPathBtn is not null)
+            btnPanel.Children.Add(editMotionPathBtn);
         btnPanel.Children.Add(removeBtn);
 
         // ── Inner content panel ──────────────────────────────────────────────────
