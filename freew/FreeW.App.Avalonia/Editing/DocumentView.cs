@@ -3356,6 +3356,34 @@ public sealed class DocumentView : Control
             pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfText(
                 Math.Max(0, xPt), yPt, fontSizePt, face, color, runText.ToString()));
 
+            var decorationLineWidthPt = Math.Max(1, fontSizePt * PxPerPoint / 14) / PxPerPoint;
+            var runWidthPt = Math.Max(1, runEndX - runStartX) / PxPerPoint;
+            if (runFmt.Underline)
+            {
+                var underlineY = pageHeightPt
+                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.82) / PxPerPoint;
+                pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
+                    Math.Max(0, xPt),
+                    underlineY,
+                    Math.Max(0, xPt) + runWidthPt,
+                    underlineY,
+                    color,
+                    decorationLineWidthPt));
+            }
+
+            if (runFmt.Strikethrough)
+            {
+                var strikeY = pageHeightPt
+                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.5) / PxPerPoint;
+                pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
+                    Math.Max(0, xPt),
+                    strikeY,
+                    Math.Max(0, xPt) + runWidthPt,
+                    strikeY,
+                    color,
+                    decorationLineWidthPt));
+            }
+
             runText.Clear();
             runFmt = null;
         }
@@ -3369,10 +3397,17 @@ public sealed class DocumentView : Control
             //   pageSpaceY = DeskPadding + pageIndex*(pageHeightPx+PageGap) + marginTopDip + offsetWithinPage
             var rel = g.Y - _surfacePlan.DeskPaddingDip;
             var pageIndex = Math.Max(0, (int)(rel / pageStride));
+            var pdfFmt = g.IsHyperlink
+                ? g.Fmt with
+                {
+                    ColorHex = string.IsNullOrWhiteSpace(g.Fmt.ColorHex) ? HyperlinkColorHex : g.Fmt.ColorHex,
+                    Underline = true,
+                }
+                : g.Fmt;
             var sameRun = runFmt is not null
                 && runPageIndex == pageIndex
                 && Math.Abs(g.Y - runY) < 0.5
-                && FormatKey(g.Fmt) == FormatKey(runFmt)
+                && FormatKey(pdfFmt) == FormatKey(runFmt)
                 && g.X >= runStartX; // left-to-right on the line
 
             if (!sameRun)
@@ -3382,7 +3417,7 @@ public sealed class DocumentView : Control
                 runEndX = g.X;
                 runY = g.Y;
                 runLineHeight = 0;
-                runFmt = g.Fmt;
+                runFmt = pdfFmt;
                 runPageIndex = pageIndex;
             }
 
@@ -4369,7 +4404,7 @@ public sealed class DocumentView : Control
 
     private static string FormatKey(RunFormatting fmt) =>
         $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
-        $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}";
+        $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|{fmt.Strikethrough}";
 
     private static DocumentFloatingObjectSnapshot BuildInlineDrawingSnapshot(
         DocumentFloatingObjectKind kind,

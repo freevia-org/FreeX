@@ -88,6 +88,53 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_ExportsUnderlineStrikeAndHyperlinkVisualStyle() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Under", RunFormatting.Default with
+            {
+                Underline = true,
+                ColorHex = "#CC0000",
+            }));
+            paragraph.Runs.Add(new Run(" Strike", RunFormatting.Default with
+            {
+                Strikethrough = true,
+                ColorHex = "#0055AA",
+            }));
+            paragraph.Runs.Add(new Run(" Link")
+            {
+                HyperlinkUrl = "https://example.com",
+            });
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            var ops = pdf.Pages[0].Ops.ToList();
+            var underlineText = ops.OfType<PdfText>().Single(text => text.Text == "Under");
+            var strikeText = ops.OfType<PdfText>().Single(text => text.Text == " Strike");
+            var linkText = ops.OfType<PdfText>().Single(text => text.Text == " Link");
+            linkText.Color.Should().Be(new PdfColor(0x05, 0x63, 0xC1));
+
+            var underline = ops.OfType<PdfLine>().Single(line => line.Color == underlineText.Color);
+            var strike = ops.OfType<PdfLine>().Single(line => line.Color == strikeText.Color);
+            var linkUnderline = ops.OfType<PdfLine>().Single(line => line.Color == linkText.Color);
+            strike.Y1.Should().BeGreaterThan(underline.Y1);
+            underline.X1.Should().BeApproximately(underlineText.X, 0.001);
+            linkUnderline.X1.Should().BeApproximately(linkText.X, 0.001);
+            new[] { underline, strike, linkUnderline }.Should().OnlyContain(line =>
+                line.X2 > line.X1 && line.LineWidth > 0 && Math.Abs(line.Y1 - line.Y2) < 0.001);
+            ops.IndexOf(underline).Should().BeGreaterThan(ops.IndexOf(underlineText));
+            ops.IndexOf(strike).Should().BeGreaterThan(ops.IndexOf(strikeText));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_ExportsResolvedFirstEvenAndDefaultHeaderImages() =>
         Session.Dispatch(() =>
         {
