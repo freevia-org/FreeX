@@ -175,6 +175,7 @@ public sealed partial class MainWindow : Window
 
     private Presentation _presentation = Presentation.CreateEmpty();
     private readonly SisterAvaloniaFileCommandWorkflow _fileWorkflow;
+    private readonly StartupDirtyTrace _startupDirtyTrace = new();
     private readonly SisterAvaloniaAsyncWindowCloseCoordinator _closeCoordinator;
     private readonly AvaloniaPresentationClipboardService _clipboardService;
     private Func<FileOpenPickerPlan, Task<string?>>? _openPickerOverrideForTests;
@@ -406,6 +407,8 @@ public sealed partial class MainWindow : Window
         .ToArray();
 
     internal bool IsDirty => _fileWorkflow.IsDirty;
+    internal int DirtyGeneration => _fileWorkflow.DirtyGeneration;
+    internal IReadOnlyList<StartupDirtyTraceEntry> StartupDirtyTraceForTests => _startupDirtyTrace.Entries;
     internal bool IsCloseDecisionPendingForTests => _closeCoordinator.IsClosePending;
     internal PresentationViewShowState ViewShowStateForTests => _viewShowState;
     internal PresentationViewZoomState ViewZoomStateForTests => _viewZoomState;
@@ -796,12 +799,13 @@ public sealed partial class MainWindow : Window
                 Separator: " \u2014 ",
                 ApplicationPlacement: WindowTitleApplicationPlacement.DocumentThenApplication),
             maxRecentEntries: () => _options.RecentFilesCap,
-            onChanged: UpdateStatus,
+            onChanged: OnFileWorkflowChanged,
             loadRecentFilesStore: loadRecentFilesStore,
             saveAsync: FileSaveAsync,
             promptSaveChangesAsync: promptSaveChangesAsync,
             showFileCommandErrorAsync: showFileCommandErrorAsync,
             restoreOwnerFocus: RestoreOwnerFocus);
+        _startupDirtyTrace.Record("file-workflow-created", _fileWorkflow);
         _closeCoordinator = new SisterAvaloniaAsyncWindowCloseCoordinator(
             confirmCloseAllowedAsync: () => _fileWorkflow.ConfirmCloseAllowedAsync("closing"),
             requestClose: Close,
@@ -903,6 +907,9 @@ public sealed partial class MainWindow : Window
 
         var startupPresentation = startupArguments
             .FirstOrDefault(a => IsSupportedPresentationPath(a) && File.Exists(a));
+        _startupDirtyTrace.Record(
+            startupPresentation is null ? "startup-load-not-requested" : "startup-load-begin",
+            _fileWorkflow);
 
         Exception? startupOpenError = null;
         if (startupPresentation is not null)
@@ -911,12 +918,14 @@ public sealed partial class MainWindow : Window
             {
                 var result = PresentationFilePersistenceWorkflow.Open(startupPresentation);
                 LoadPresentationAsSaved(result.Presentation, result.SavedPath, result.SuppressRecentFiles);
+                _startupDirtyTrace.Record("startup-load-saved", _fileWorkflow);
                 _statusText.Text = SisterAppFileTextPlanner.FormatOpened(Path.GetFileName(startupPresentation));
             }
             catch (Exception ex)
             {
                 startupOpenError = ex;
                 LoadPresentationAsSaved(_presentation, path: null);
+                _startupDirtyTrace.Record("startup-load-failed-fallback-saved", _fileWorkflow);
                 _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
                     SisterAppFileTextPlanner.OpenCommand,
                     ex.Message);
@@ -925,13 +934,18 @@ public sealed partial class MainWindow : Window
         else
         {
             LoadPresentationAsSaved(_presentation, path: null);
+            _startupDirtyTrace.Record("startup-empty-saved", _fileWorkflow);
         }
 
         SeedPhysicalSmartArtTextPaneIfRequested();
         SeedPhysicalHyperlinkFixtureIfRequested();
+        _startupDirtyTrace.Record("startup-seeds-complete", _fileWorkflow);
 
         Content = windowFrame.Root;
+        _startupDirtyTrace.Record("content-assigned", _fileWorkflow);
         UpdateStatus();
+        _startupDirtyTrace.Record("constructor-complete", _fileWorkflow);
+        Opened += (_, _) => _startupDirtyTrace.Record("window-opened", _fileWorkflow);
         if (startupOpenError is not null)
         {
             var error = startupOpenError;
@@ -8933,12 +8947,7 @@ public sealed partial class MainWindow : Window
             LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
                 _presentation,
                 Editor.CurrentSlideIndex);
-            var notes = Editor.CurrentSlideNotes;
-            _notesBox.Text = notes is null
-                ? string.Empty
-                : string.Join(
-                    Environment.NewLine,
-                    notes.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
+            _notesBox.Text = FormatNotesText(Editor.CurrentSlideNotes);
         }
         finally
         {
@@ -8951,7 +8960,12 @@ public sealed partial class MainWindow : Window
     {
         if (_notesRefreshing)
             return;
-        Editor.SetCurrentSlideNotesText(_notesBox.Text);
+        _startupDirtyTrace.Record("notes-text-changed", _fileWorkflow);
+        var text = _notesBox.Text ?? string.Empty;
+        if (string.Equals(text, FormatNotesText(Editor.CurrentSlideNotes), StringComparison.Ordinal))
+            return;
+
+        Editor.SetCurrentSlideNotesText(text);
         LastNotesPagePreviewPlan = PresentationNotesPagePreviewPlanner.Build(
             _presentation,
             Editor.CurrentSlideIndex);
@@ -8962,7 +8976,9 @@ public sealed partial class MainWindow : Window
 
     private void OnEditorChanged()
     {
+        _startupDirtyTrace.Record("editor-changed-before-mark", _fileWorkflow);
         _fileWorkflow.MarkDirty();
+        _startupDirtyTrace.Record("editor-changed", _fileWorkflow);
         SyncRibbonCommandStates();
         RefreshSlidePane();
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
@@ -8976,6 +8992,7 @@ public sealed partial class MainWindow : Window
 
     private void OnCurrentSlideChanged(object? sender, EventArgs e)
     {
+        _startupDirtyTrace.Record("current-slide-changed", _fileWorkflow);
         _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
             _slidePaneSessionState,
             Editor.CurrentSlideIndex);
@@ -9023,6 +9040,18 @@ public sealed partial class MainWindow : Window
         RefreshVisibleAnimationPane();
         _selectionPane?.Refresh();
         RefreshPaneAccessibilityMetadata();
+    }
+
+    private static string FormatNotesText(TextBody? notes) => notes is null
+        ? string.Empty
+        : string.Join(
+            Environment.NewLine,
+            notes.Paragraphs.Select(p => string.Concat(p.Runs.Select(r => r.Text))));
+
+    private void OnFileWorkflowChanged()
+    {
+        _startupDirtyTrace.Record("file-workflow-changed", _fileWorkflow);
+        UpdateStatus();
     }
 
     // ── Status ─────────────────────────────────────────────────────────────────

@@ -47,6 +47,20 @@ public sealed class StartupDocumentAttachmentTests
                     Dispatcher.UIThread.RunJobs();
 
                     window.IsDirty.Should().BeFalse();
+                    window.DirtyGeneration.Should().Be(0);
+
+                    // Avalonia may raise a late TextChanged while attaching the notes TextBox.
+                    // Replaying the loaded value is a no-op and must not create an edit.
+                    window.NotesPaneForAccessibilityTests.Text.Should().Be("Speaker notes loaded at startup");
+                    window.NotesPaneForAccessibilityTests.Text = "Speaker notes loaded at startup";
+                    Dispatcher.UIThread.RunJobs();
+                    window.IsDirty.Should().BeFalse();
+                    window.DirtyGeneration.Should().Be(0);
+
+                    window.NotesPaneForAccessibilityTests.Text = "A genuine post-startup notes edit";
+                    Dispatcher.UIThread.RunJobs();
+                    window.IsDirty.Should().BeTrue();
+                    window.DirtyGeneration.Should().Be(1);
 
                     window.Editor.InsertSlide();
                     window.IsDirty.Should().BeTrue();

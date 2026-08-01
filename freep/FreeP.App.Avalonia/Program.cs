@@ -66,6 +66,17 @@ internal static class Program
         }
         args = accessibilityStartupArguments;
 
+        if (!StartupDirtyTraceOptions.TryParse(
+                args,
+                out var startupDirtyTraceOptions,
+                out var startupDirtyTraceArguments,
+                out var startupDirtyTraceError))
+        {
+            Console.Error.WriteLine(startupDirtyTraceError);
+            return 2;
+        }
+        args = startupDirtyTraceArguments;
+
         // Headless engine smoke (no display): exercise the model + .pptx round-trip and exit.
         if (PackagingSmoke.TryRun(args, Console.Out, Console.Error, out var packagingExit))
             return packagingExit;
@@ -78,6 +89,7 @@ internal static class Program
         }
 
         App.StartupArguments = startupArguments;
+        App.StartupDirtyTraceOptions = startupDirtyTraceOptions;
         App.PhysicalValidationOptions = physicalValidationOptions;
         App.AccessibilityValidationOptions = accessibilityValidationOptions;
         App.LaunchSmokeOptions = launchSmoke;

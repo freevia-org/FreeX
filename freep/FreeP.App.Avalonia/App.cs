@@ -12,6 +12,7 @@ public sealed class App : Application
 {
     public static IReadOnlyList<string> StartupArguments { get; set; } = [];
     internal static LaunchSmokeOptions? LaunchSmokeOptions { get; set; }
+    internal static StartupDirtyTraceOptions? StartupDirtyTraceOptions { get; set; }
     internal static PhysicalValidationOptions? PhysicalValidationOptions { get; set; }
     internal static AccessibilityValidationOptions? AccessibilityValidationOptions { get; set; }
     internal static string? DialogPaneVisualEvidenceOutputRoot { get; set; }
@@ -39,6 +40,11 @@ public sealed class App : Application
                 args => new MainWindow(args, loadRecentFilesStore: null, options: options),
                 mainWindow =>
                 {
+                    if (StartupDirtyTraceOptions is { } startupDirtyTraceOptions)
+                    {
+                        StartupDirtyTraceCoordinator.Start(mainWindow, startupDirtyTraceOptions);
+                        return;
+                    }
                     if (WholeWindowVisualEvidenceOutputRoot is { } wholeWindowOutputRoot)
                     {
                         AvaloniaWholeWindowVisualEvidenceCapture.Start(mainWindow, wholeWindowOutputRoot, WholeWindowVisualEvidenceScenarioId);
