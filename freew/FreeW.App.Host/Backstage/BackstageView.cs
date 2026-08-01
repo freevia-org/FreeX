@@ -227,23 +227,27 @@ internal sealed class BackstageView : UserControl
     private UIElement BuildOpenPane()
     {
         var surface = BuildOpenSurface(filter: null);
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         var panel = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(Kit.HeadingText(surface.Title));
+        var heading = Kit.HeadingText(surface.Title);
+        heading.Margin = ToThickness(metrics.HeadingBottomMargin);
+        panel.Children.Add(heading);
         panel.Children.Add(new TextBlock
         {
             Text = surface.Description,
             Foreground = Kit.Muted,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16)
+            Margin = ToThickness(metrics.DescriptionBottomMargin)
         });
 
         var searchBox = new TextBox
         {
-            MinWidth = 360,
-            MaxWidth = 520,
-            Height = 30,
-            Margin = new Thickness(0, 0, 0, 12),
-            Padding = new Thickness(8, 3, 8, 3),
+            Width = metrics.SearchWidth,
+            MinWidth = metrics.SearchMinWidth,
+            MaxWidth = metrics.SearchWidth,
+            Height = metrics.SearchHeight,
+            Margin = ToThickness(metrics.SearchMargin),
+            Padding = ToThickness(metrics.SearchPadding),
             VerticalContentAlignment = VerticalAlignment.Center
         };
         searchBox.SetCurrentValue(System.Windows.Automation.AutomationProperties.NameProperty, surface.Search.AutomationName);
@@ -251,7 +255,11 @@ internal sealed class BackstageView : UserControl
 
         var documentsPanel = new StackPanel();
         var foldersPanel = new StackPanel();
-        var tabs = new TabControl { Margin = new Thickness(0, 0, 0, 14), Width = 640 };
+        var tabs = new TabControl
+        {
+            Margin = ToThickness(metrics.TabsMargin),
+            Width = metrics.TabsWidth
+        };
         tabs.Items.Add(new TabItem { Header = surface.Tabs.DocumentsTabLabel, Content = documentsPanel });
         tabs.Items.Add(new TabItem { Header = surface.Tabs.FoldersTabLabel, Content = foldersPanel });
         panel.Children.Add(tabs);
@@ -535,19 +543,24 @@ internal sealed class BackstageView : UserControl
 
     private UIElement OpenActionRow(BackstageActionRow action)
     {
-        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
+        var stack = new StackPanel { Margin = ToThickness(metrics.ActionRowMargin) };
         var button = Kit.LinkButton(action.Label, action.Invoke);
+        button.FontSize = metrics.ActionFontSize;
         stack.Children.Add(button);
         stack.Children.Add(new TextBlock
         {
             Text = action.Description,
             Foreground = Kit.Muted,
-            FontSize = 11,
+            FontSize = metrics.DescriptionFontSize,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 0)
+            Margin = ToThickness(metrics.DescriptionMargin)
         });
         return stack;
     }
+
+    private static Thickness ToThickness(BackstageThickness thickness) =>
+        new(thickness.Left, thickness.Top, thickness.Right, thickness.Bottom);
 
     private static string ReplaceFileNameExtension(string fileName, string extension)
     {

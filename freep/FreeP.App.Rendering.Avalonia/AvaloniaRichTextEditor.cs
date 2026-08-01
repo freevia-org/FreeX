@@ -46,6 +46,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private AvaloniaRichTextEditor? _activeInlineTableCellEditor;
     private AvaloniaRichTextEditingSurface.InlineTableCellHit? _activeInlineTableCellHit;
     private readonly Func<bool, bool>? _navigateInlineTableCell;
+    private readonly List<PendingInlineTableRows> _pendingInlineTableRows = new();
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
@@ -141,7 +142,9 @@ internal sealed class AvaloniaRichTextEditor : Grid
         {
             CommitInlineTableCellEdit(focusParent: false);
             SynchronizeText();
-            return _buffer.Body;
+            var body = _buffer.Body;
+            ApplyPendingInlineTableRows(body);
+            return body;
         }
     }
 
@@ -483,6 +486,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         try
         {
             var body = _buffer.Body;
+            ApplyPendingInlineTableRows(body);
             _richTextView.UpdateBody(
                 body,
                 _fallbackFontFamily,
@@ -549,9 +553,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
 
     private bool TryBeginInlineTableCellEdit(Point point)
     {
-        if (!_richTextView.TryHitTestInlineTableCell(point, out var hit)
-            || hit.Table.Table.Rows.ElementAtOrDefault(hit.RowIndex)?
-                .Cells.ElementAtOrDefault(hit.ColumnIndex)?.TextBody is null)
+        if (!_richTextView.TryHitTestInlineTableCell(point, out var hit))
             return false;
 
         return BeginInlineTableCellEdit(hit);
@@ -562,71 +564,42 @@ internal sealed class AvaloniaRichTextEditor : Grid
         if (_activeInlineTableCellHit is not { } current)
             return false;
 
-        var table = current.Table.Table;
-        int rowCount = Math.Max(1, table.Rows.Count);
-        int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
-        int row = current.RowIndex;
-        int column = current.ColumnIndex;
-        int rowStep = backwards ? -1 : 1;
-        int columnStep = backwards ? -1 : 1;
-
-        for (int attempt = 0; attempt <= rowCount * columnCount; attempt++)
-        {
-            column += columnStep;
-            if (column >= columnCount)
-            {
-                column = 0;
-                row++;
-            }
-            else if (column < 0)
-            {
-                column = columnCount - 1;
-                row--;
-            }
-
-            if (row >= rowCount)
-            {
-                if (backwards)
-                    return false;
-
-                return AppendInlineTableRow(current, columnCount);
-            }
-            if (row < 0)
-                return false;
-
-            if (table.Rows.ElementAtOrDefault(row)?
-                    .Cells.ElementAtOrDefault(column)?.TextBody is null
-                || !_richTextView.TryFindInlineTableCell(
-                    current,
-                    row,
-                    column,
-                    out var next))
-            {
-                continue;
-            }
-
+        if (_richTextView.TryFindAdjacentInlineTableCell(
+            current,
+            backwards,
+            out var next))
             return BeginInlineTableCellEdit(next);
-        }
 
-        return false;
+        return backwards ? false : AppendInlineTableRow(current);
     }
 
     private bool AppendInlineTableRow(
-        AvaloniaRichTextEditingSurface.InlineTableCellHit current,
-        int columnCount)
+        AvaloniaRichTextEditingSurface.InlineTableCellHit current)
     {
         CommitInlineTableCellEdit(focusParent: false);
         var table = current.Table.Table;
+        int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
         long rowHeight = table.Rows.LastOrDefault()?.HeightEmu ?? 0;
         var row = new TableRow { HeightEmu = rowHeight };
         for (int column = 0; column < columnCount; column++)
             row.Cells.Add(new TableCell { TextBody = new TextBody() });
-        table.Rows.Add(row);
+
+        var pending = _pendingInlineTableRows.FirstOrDefault(item =>
+            item.LogicalPosition == current.LogicalPosition);
+        if (pending is null)
+        {
+            pending = new PendingInlineTableRows(
+                current.LogicalPosition,
+                table.Rows.Count);
+            _pendingInlineTableRows.Add(pending);
+        }
+        pending.Rows.Add(row);
         RenderBody();
 
+        int targetRow = pending.FirstRowIndex + pending.Rows.Count - 1;
         return _richTextView.TryFindInlineTableCell(
                 current,
-                table.Rows.Count - 1,
+                targetRow,
                 0,
                 out var next)
             && BeginInlineTableCellEdit(next);
@@ -647,11 +620,25 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _activeInlineTableCellEditor = null;
         _activeInlineTableCellHit = null;
         cellEditor.InputBox.LostFocus -= OnInlineTableCellEditorLostFocus;
-        _buffer.UpdateInlineTableCellAt(
-            hit.Value.LogicalPosition,
-            hit.Value.RowIndex,
-            hit.Value.ColumnIndex,
-            cellEditor.EditedBody);
+        var editedBody = cellEditor.EditedBody;
+        var pending = _pendingInlineTableRows.FirstOrDefault(item =>
+            item.LogicalPosition == hit.Value.LogicalPosition
+            && hit.Value.RowIndex >= item.FirstRowIndex);
+        if (pending is not null)
+        {
+            int pendingRowIndex = hit.Value.RowIndex - pending.FirstRowIndex;
+            if (pending.Rows.ElementAtOrDefault(pendingRowIndex)?
+                    .Cells.ElementAtOrDefault(hit.Value.SourceCellIndex) is { } cell)
+                cell.TextBody = editedBody;
+        }
+        else
+        {
+            _buffer.UpdateInlineTableCellAt(
+                hit.Value.LogicalPosition,
+                hit.Value.RowIndex,
+                hit.Value.SourceCellIndex,
+                editedBody);
+        }
         Children.Remove(cellEditor);
         RenderBody();
         if (focusParent)
@@ -662,7 +649,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         AvaloniaRichTextEditingSurface.InlineTableCellHit hit)
     {
         if (hit.Table.Table.Rows.ElementAtOrDefault(hit.RowIndex)?
-                .Cells.ElementAtOrDefault(hit.ColumnIndex)?.TextBody is not { } body)
+                .Cells.ElementAtOrDefault(hit.SourceCellIndex)?.TextBody is not { } body)
         {
             return false;
         }
@@ -692,6 +679,92 @@ internal sealed class AvaloniaRichTextEditor : Grid
         Children.Add(cellEditor);
         cellEditor.FocusEditor();
         return true;
+    }
+
+    private void ApplyPendingInlineTableRows(TextBody body)
+    {
+        foreach (var pending in _pendingInlineTableRows)
+        {
+            if (!TryFindInlineTable(body, pending.LogicalPosition, out var table))
+                continue;
+
+            for (int index = 0; index < pending.Rows.Count; index++)
+            {
+                int rowIndex = pending.FirstRowIndex + index;
+                if (rowIndex < table.Rows.Count)
+                    continue;
+
+                table.Rows.Add(CloneTableRow(pending.Rows[index]));
+            }
+        }
+    }
+
+    private static bool TryFindInlineTable(
+        TextBody body,
+        int logicalPosition,
+        out TableShape table)
+    {
+        int position = 0;
+        foreach (var paragraph in body.Paragraphs)
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                int length = Math.Max(1, run.Text?.Length ?? 0);
+                if (run.InlineTable is { } inlineTable
+                    && logicalPosition >= position
+                    && logicalPosition < position + length)
+                {
+                    table = inlineTable.Table;
+                    return true;
+                }
+
+                position += run.Text?.Length ?? 0;
+            }
+
+            position++;
+        }
+
+        table = null!;
+        return false;
+    }
+
+    private static TableRow CloneTableRow(TableRow source)
+    {
+        var row = new TableRow
+        {
+            HeightEmu = source.HeightEmu,
+            HeightRule = source.HeightRule,
+            HorizontalAlignment = source.HorizontalAlignment,
+        };
+        foreach (var sourceCell in source.Cells)
+        {
+            row.Cells.Add(new TableCell
+            {
+                TextBody = sourceCell.TextBody is null
+                    ? null
+                    : new InCanvasRichTextEditBuffer(sourceCell.TextBody).Body,
+                Fill = sourceCell.Fill,
+                Borders = sourceCell.Borders,
+                GridSpan = sourceCell.GridSpan,
+                RowSpan = sourceCell.RowSpan,
+                HMerge = sourceCell.HMerge,
+                VMerge = sourceCell.VMerge,
+                InsetLeftPt = sourceCell.InsetLeftPt,
+                InsetRightPt = sourceCell.InsetRightPt,
+                InsetTopPt = sourceCell.InsetTopPt,
+                InsetBottomPt = sourceCell.InsetBottomPt,
+                Anchor = sourceCell.Anchor,
+            });
+        }
+
+        return row;
+    }
+
+    private sealed class PendingInlineTableRows(int logicalPosition, int firstRowIndex)
+    {
+        internal int LogicalPosition { get; } = logicalPosition;
+        internal int FirstRowIndex { get; } = firstRowIndex;
+        internal List<TableRow> Rows { get; } = new();
     }
 
     private bool TryActivateInlineOleAt(int logicalPosition)

@@ -12,6 +12,19 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class BackstagePaneSurfacePlannerTests
 {
     [Fact]
+    public void OpenPaneVisualMetrics_match_WPF_authority_surface_registration()
+    {
+        var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
+
+        metrics.SearchMargin.Should().Be(new BackstageThickness(0, 0, 0, 12));
+        metrics.SearchPadding.Should().Be(new BackstageThickness(8, 3, 8, 3));
+        metrics.TabsWidth.Should().Be(640);
+        metrics.TabsMargin.Should().Be(new BackstageThickness(0, 0, 0, 14));
+        metrics.ActionRowMargin.Should().Be(new BackstageThickness(0, 0, 0, 10));
+        metrics.DescriptionMargin.Should().Be(new BackstageThickness(0, 2, 0, 0));
+    }
+
+    [Fact]
     public void BuildPrintPane_ReturnsPageFieldsAndWiredActions()
     {
         var printed = false;

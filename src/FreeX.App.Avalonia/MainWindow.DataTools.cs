@@ -24,9 +24,10 @@ public sealed partial class MainWindow
 
     // ── Reapply ─────────────────────────────────────────────────────────────────
     //
-    // AutoFilter and Sort reapply from their durable worksheet metadata. In-place Advanced Filter keeps
-    // its list/criteria intent in the shared presentation reapply contract because that definition is not
-    // persisted as worksheet metadata. When no mechanism carries replayable criteria, report that honestly.
+    // AutoFilter reapply comes from durable worksheet metadata. In-place Advanced Filter keeps its
+    // list/criteria intent in the shared presentation reapply contract because that definition is not
+    // persisted as worksheet metadata. Reapply deliberately does not replay SortState: WPF treats
+    // Reapply as filter-only, and sorting is a separate user action.
     private void ReapplyCurrentFilterSort()
     {
         if (!TryCommitPendingFormulaEdit())
@@ -34,8 +35,20 @@ public sealed partial class MainWindow
 
         var sheet = _session.ActiveSheet;
         var sheetId = sheet.Id;
-        var applied = 0;
-        var hasAdvancedFilter = _lastInPlaceAdvancedFilter is not null;
+        var selectedRange = _session.SelectedRange;
+        var selectedRanges = _session.SelectedRanges;
+        var activeCell = _session.ActiveCell;
+        var commands = new List<IWorkbookCommand>();
+
+        // AdvancedFilterCommand replaces the visibility decisions in its list range. Appending the
+        // AutoFilter commands after it lets FilterCommand's ownership-aware recompute add the active
+        // AutoFilter exclusions without un-hiding rows that Advanced Filter just excluded. The
+        // resulting FilterHiddenRows set is therefore the AND of both mechanisms.
+        if (_lastInPlaceAdvancedFilter is not null)
+        {
+            var plan = PresentationAdvancedFilterReapplyPlanner.CreatePlan(_lastInPlaceAdvancedFilter);
+            commands.Add(plan.CreateCommand());
+        }
 
         if (TryGetAutoFilterReapplyRange(sheet, out var filterRange))
         {
@@ -49,53 +62,40 @@ public sealed partial class MainWindow
                 if (column.Values.Count == 0)
                     continue;
 
-                var result = _session.ExecuteReviewCommand(
-                    new FilterCommand(sheetId, filterRange, (uint)column.ColumnId, column.Values));
-                if (!result.Success)
-                {
-                    ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplyFilterFailed"));
-                    return;
-                }
-
-                applied++;
+                commands.Add(new FilterCommand(
+                    sheetId,
+                    filterRange,
+                    (uint)column.ColumnId,
+                    column.Values));
             }
         }
 
-        if (hasAdvancedFilter)
+        if (commands.Count == 0)
         {
-            var plan = PresentationAdvancedFilterReapplyPlanner.CreatePlan(_lastInPlaceAdvancedFilter!);
-            var result = _session.ExecuteAdvancedFilterPlan(
-                new AdvancedFilterPlan(
-                    plan.ListRange,
-                    plan.CriteriaRange,
-                    AdvancedFilterOutputMode.FilterInPlace,
-                    plan.UniqueRecordsOnly));
-            if (!result.Success)
-            {
-                ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplyFilterFailed"));
-                return;
-            }
-
-            applied++;
+            RefreshShell(UiText.Get("TableLoc_NoReapplyableFilterOrSort"));
+            return;
         }
 
-        if (TryGetSortReapplyPlan(sheet, out var sortRange, out var sortKeys))
+        var result = _session.ExecuteReviewCommand(
+            new CompositeWorkbookCommand("Reapply Filters", commands),
+            activeCell);
+        if (!result.Success)
         {
-            var result = _session.ExecuteReviewCommand(new SortCommand(sheetId, sortRange, sortKeys));
-            if (!result.Success)
-            {
-                ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplySortFailed"));
-                return;
-            }
-
-            applied++;
+            ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplyFilterFailed"));
+            return;
         }
 
-        RefreshShell(applied == 0
-            ? UiText.Get("TableLoc_NoReapplyableFilterOrSort")
-            : UiText.Format(
-                applied == 1 ? "TableLoc_ReapplyedDefinitionsOne" : "TableLoc_ReapplyedDefinitionsMany",
-                applied));
+        // Reapply is a visibility mutation rather than a cell edit. SUBTOTAL/AGGREGATE formulas
+        // must nevertheless see the new hidden-row set immediately, matching WPF's filter routes.
+        RecalculateAfterAutoFilterMutation();
+
+        // ExecuteReviewCommand intentionally collapses ordinary command selections. Reapply is
+        // view-preserving in WPF, so restore the exact selection (including multi-area selections)
+        // after the atomic command succeeds.
+        _session.SelectRanges(selectedRange, selectedRanges, activeCell);
+        RefreshShell(UiText.Format(
+            commands.Count == 1 ? "TableLoc_ReapplyedDefinitionsOne" : "TableLoc_ReapplyedDefinitionsMany",
+            commands.Count));
     }
 
     private static bool TryGetAutoFilterReapplyRange(Sheet sheet, out GridRange range)
@@ -121,71 +121,6 @@ public sealed partial class MainWindow
         {
             return false;
         }
-    }
-
-    private static bool TryGetSortReapplyPlan(Sheet sheet, out GridRange range, out IReadOnlyList<SortKey> keys)
-    {
-        range = default;
-        keys = [];
-        if (sheet.SortState is not { } sortState ||
-            sortState.Conditions.Count == 0 ||
-            string.IsNullOrWhiteSpace(sortState.Reference))
-        {
-            return false;
-        }
-
-        GridRange sortRange;
-        try
-        {
-            sortRange = GridRange.Parse(sortState.Reference, sheet.Id);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-        catch (ArgumentException)
-        {
-            return false;
-        }
-
-        var sortKeys = new List<SortKey>();
-        foreach (var condition in sortState.Conditions)
-        {
-            if (string.IsNullOrWhiteSpace(condition.Reference))
-                continue;
-
-            GridRange conditionRange;
-            try
-            {
-                conditionRange = GridRange.Parse(condition.Reference, sheet.Id);
-            }
-            catch (FormatException)
-            {
-                continue;
-            }
-            catch (ArgumentException)
-            {
-                continue;
-            }
-
-            // The condition reference points at the sorted column; its offset within the sort range
-            // is the SortKey column offset. Sort metadata persists Descending; SortKey wants ascending.
-            if (conditionRange.Start.Col < sortRange.Start.Col)
-                continue;
-
-            var offset = conditionRange.Start.Col - sortRange.Start.Col;
-            if (offset >= sortRange.ColCount)
-                continue;
-
-            sortKeys.Add(new SortKey(offset, condition.Descending != true));
-        }
-
-        if (sortKeys.Count == 0)
-            return false;
-
-        range = sortRange;
-        keys = sortKeys;
-        return true;
     }
 
     // ── Circle Invalid Data / Clear Validation Circles ───────────────────────────

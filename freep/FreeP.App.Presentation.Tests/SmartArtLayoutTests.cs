@@ -578,6 +578,22 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void MultidirectionalCycle_UsesLiveCircularBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Discover", "Plan", "Build", "Review");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/multidirectionalCycle";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("multidirectionalCycle is admitted through the shared cycle-family planner");
+        shapes!.Count(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).Should().Be(4);
+        shapes.Count(s => s.AutoShapeKind == DrawingShapeKind.Line).Should().Be(4);
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().BeEquivalentTo(new[] { "Discover", "Plan", "Build", "Review" });
+    }
+
+    [Fact]
     public void Cycle2_UsesNativeEllipseRingAndTangentArrows()
     {
         var data = MakeData(SmartArtFamily.Cycle, "Idea", "Plan", "Execute", "Review", "Improve");

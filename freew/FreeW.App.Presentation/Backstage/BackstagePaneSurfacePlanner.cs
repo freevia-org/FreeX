@@ -9,6 +9,22 @@ namespace FreeW.App.Presentation.Backstage;
 
 public static class BackstagePaneSurfacePlanner
 {
+    public static BackstageOpenPaneVisualMetrics OpenPaneVisualMetrics { get; } =
+        new(
+            HeadingBottomMargin: new(0, 0, 0, 18),
+            DescriptionBottomMargin: new(0, 0, 0, 16),
+            SearchWidth: 520,
+            SearchMinWidth: 360,
+            SearchHeight: 30,
+            SearchMargin: new(0, 0, 0, 12),
+            SearchPadding: new(8, 3, 8, 3),
+            TabsWidth: 640,
+            TabsMargin: new(0, 0, 0, 14),
+            ActionFontSize: 13,
+            DescriptionFontSize: 11,
+            ActionRowMargin: new(0, 0, 0, 10),
+            DescriptionMargin: new(0, 2, 0, 0));
+
     private const string OpenSearchAutomationName = "Search recent documents";
     private const string OpenDocumentsTabLabel = "Documents";
     private const string OpenFoldersTabLabel = "Folders";
@@ -355,6 +371,29 @@ public sealed record BackstageOpenPaneTabSurface(
     string EmptyFoldersText,
     string PlacesHeading,
     string RecoveryHeading);
+
+public readonly record struct BackstageOpenPaneVisualMetrics(
+    BackstageThickness HeadingBottomMargin,
+    BackstageThickness DescriptionBottomMargin,
+    double SearchWidth,
+    double SearchMinWidth,
+    double SearchHeight,
+    BackstageThickness SearchMargin,
+    BackstageThickness SearchPadding,
+    double TabsWidth,
+    BackstageThickness TabsMargin,
+    double ActionFontSize,
+    double DescriptionFontSize,
+    BackstageThickness ActionRowMargin,
+    BackstageThickness DescriptionMargin);
+
+public readonly record struct BackstageThickness(double Left, double Top, double Right, double Bottom)
+{
+    public BackstageThickness(double horizontal, double vertical)
+        : this(horizontal, vertical, horizontal, vertical)
+    {
+    }
+}
 
 public sealed record BackstageSaveAsPaneSurfaceSpec(
     string Title,

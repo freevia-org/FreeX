@@ -292,6 +292,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.TrapezoidList)));
         registry.Register(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicCycle)));
+        registry.Register(SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.MultidirectionalCycle)));
         registry.Register(SmartArtAuthoringPlanner.Cycle2LayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.Cycle2)));
         registry.Register(SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId,

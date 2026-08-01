@@ -367,6 +367,59 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task InlineTableCellEditor_CompactGridSpanTabUsesSourceCell()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var table = new TableShape();
+            table.ColumnWidthsEmu.Add(457200);
+            table.ColumnWidthsEmu.Add(457200);
+            table.ColumnWidthsEmu.Add(457200);
+            table.Rows.Add(new TableRow
+            {
+                HeightEmu = 228600,
+                Cells =
+                {
+                    new TableCell { GridSpan = 2, TextBody = BodyWithText("Wide") },
+                    new TableCell { TextBody = BodyWithText("Last") },
+                },
+            });
+
+            var editor = MakeInlineTableEditor(table, 190, 50);
+            var window = Show(editor, 190, 50);
+            try
+            {
+                var firstPoint = new Point(20, 10);
+                window.MouseMove(firstPoint, RawInputModifiers.None);
+                window.MouseDown(firstPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(firstPoint, MouseButton.Left, RawInputModifiers.None);
+                window.MouseDown(firstPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(firstPoint, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                editor.Children.OfType<AvaloniaRichTextEditor>().Single().Text.Should().Be("Wide");
+                Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                var lastEditor = editor.Children.OfType<AvaloniaRichTextEditor>().Single();
+                lastEditor.Text.Should().Be("Last");
+                Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.Shift);
+                await DrainInputAsync();
+
+                editor.Children.OfType<AvaloniaRichTextEditor>().Single().Text.Should().Be("Wide");
+                var edited = editor.EditedBody;
+                var editedTable = edited.Paragraphs.Single().Runs.Single().InlineTable!.Table;
+                PlainText(editedTable.Rows[0].Cells[0].TextBody).Should().Be("Wide");
+                PlainText(editedTable.Rows[0].Cells[1].TextBody).Should().Be("Last");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineImageRun_ReservesAuthoredWidthForFollowingText()
     {
         await Session.Dispatch(async () =>
@@ -1834,6 +1887,31 @@ public sealed class AvaloniaRichTextEditorTests
     {
         Paragraphs = { new Paragraph { Runs = { new Run { Text = text } } } },
     };
+
+    private static AvaloniaRichTextEditor MakeInlineTableEditor(
+        TableShape table,
+        double width,
+        double height) => new(new TextBody
+        {
+            Paragraphs =
+            {
+                new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run
+                        {
+                            Text = "\uFFFC",
+                            InlineTable = new InlineTableInfo { Table = table },
+                        },
+                    },
+                },
+            },
+        }, backgroundAlpha: 0xCC)
+        {
+            Width = width,
+            Height = height,
+        };
 
     private static string PlainText(TextBody? body) => body is null
         ? string.Empty

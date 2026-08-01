@@ -123,6 +123,48 @@ public sealed class AvaloniaInlineTableLayoutPlannerTests
         plan.HitTest(new Point(70, 12))!.ColumnIndex.Should().Be(0);
     }
 
+    [Fact]
+    public void Cells_EnumeratesEachLogicalAnchorOnceAndKeepsSourceCellIndex()
+    {
+        var table = new TableShape();
+        for (int column = 0; column < 3; column++)
+            table.ColumnWidthsEmu.Add(457200);
+
+        table.Rows.Add(new TableRow
+        {
+            HeightEmu = 228600,
+            Cells =
+            {
+                new TableCell { GridSpan = 2, RowSpan = 2 },
+                new TableCell { HMerge = true },
+                new TableCell(),
+            },
+        });
+        table.Rows.Add(new TableRow
+        {
+            HeightEmu = 228600,
+            Cells =
+            {
+                new TableCell { VMerge = true },
+                new TableCell { VMerge = true },
+                new TableCell(),
+            },
+        });
+
+        var plan = AvaloniaInlineTableGridLayout.Create(
+            table,
+            new Point(0, 0),
+            availableWidth: 144);
+
+        plan.Cells.Select(cell => (cell.RowIndex, cell.ColumnIndex, cell.SourceCellIndex))
+            .Should().Equal(
+                (0, 0, 0),
+                (0, 2, 2),
+                (1, 2, 2));
+        plan.GetCell(0, 1).Should().Be(plan.Cells[0]);
+        plan.GetCell(1, 0).Should().Be(plan.Cells[0]);
+    }
+
     private static TableShape MakeTable(int rows, int columns)
     {
         var table = new TableShape();
