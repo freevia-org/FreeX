@@ -554,6 +554,17 @@ public static class SlideCloner
 
         foreach (var label in source.StyleLabels)
             copy.StyleLabels.Add(label);
+        foreach (var label in source.StyleLabelMetadata)
+        {
+            copy.StyleLabelMetadata.Add(new SmartArtQuickStyleLabelMetadata
+            {
+                Name = label.Name,
+                LineReferenceIndex = label.LineReferenceIndex,
+                FillReferenceIndex = label.FillReferenceIndex,
+                EffectReferenceIndex = label.EffectReferenceIndex,
+                FontReferenceIndex = label.FontReferenceIndex,
+            });
+        }
 
         return copy;
     }
