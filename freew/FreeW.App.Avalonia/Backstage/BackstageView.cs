@@ -630,36 +630,83 @@ internal sealed class BackstageView : Window
 
     private static Control BuildExportActionGroupContent(BackstageActionPaneSurfaceSpec surface)
     {
-        var content = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
-        content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
+        var metrics = BackstageExportPanePlanner.VisualMetrics;
+        var content = new StackPanel
+        {
+            MaxWidth = metrics.PaneMaxWidth,
+            HorizontalAlignment = HorizontalAlignment.Left,
+        };
+        content.Children.Add(BuildExportPaneHeader(surface.Title, surface.Description, metrics));
         foreach (var group in surface.Groups)
         {
-            content.Children.Add(BuildSectionHeader(group.Heading));
+            content.Children.Add(BuildExportSectionHeader(group.Heading, metrics));
             foreach (var action in group.Actions)
-                content.Children.Add(BuildExportActionRow(action));
+                content.Children.Add(BuildExportActionRow(action, metrics));
         }
 
         return CreateScroll(content);
     }
 
-    private static Control BuildExportActionRow(BackstageActionRow action)
+    private static Control BuildExportActionRow(
+        BackstageActionRow action,
+        BackstageExportPaneVisualMetrics metrics)
     {
-        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        var stack = new StackPanel { Margin = ToThickness(metrics.ActionRowMargin) };
         stack.Children.Add(CreateLinkButton(
             action.Label,
             action.Invoke,
-            fontSize: 14,
+            fontSize: metrics.ActionFontSize,
             automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}"));
         stack.Children.Add(new TextBlock
         {
             Text = action.Description,
             Foreground = SecondaryInk,
-            FontSize = 11,
+            FontSize = metrics.DescriptionTextFontSize,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 2, 0, 0),
+            Margin = ToThickness(metrics.ActionDescriptionMargin),
         });
         return stack;
     }
+
+    private static Control BuildExportPaneHeader(
+        string title,
+        string description,
+        BackstageExportPaneVisualMetrics metrics)
+    {
+        var panel = new StackPanel();
+        panel.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = metrics.HeadingFontSize,
+            FontWeight = FontWeight.Light,
+            Foreground = PrimaryInk,
+            Margin = ToThickness(metrics.HeadingBottomMargin),
+        });
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = description,
+                Foreground = SecondaryInk,
+                FontSize = metrics.DescriptionFontSize,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = ToThickness(metrics.DescriptionBottomMargin),
+            });
+        }
+
+        return panel;
+    }
+
+    private static TextBlock BuildExportSectionHeader(
+        string text,
+        BackstageExportPaneVisualMetrics metrics) => new()
+        {
+            Text = text,
+            FontSize = metrics.SectionHeaderFontSize,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = PrimaryInk,
+            Margin = ToThickness(metrics.SectionHeaderMargin),
+        };
 
     private Control BuildActionGroup(BackstageActionGroup group, bool isLast)
     {

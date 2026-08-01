@@ -100,6 +100,7 @@ public sealed partial class MainWindow : Window
         _session = replacement;
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
+        ResetSlicerTimelinePaneState();
         previousSession.Dispose();
         WindowRegistry.RefreshWindowNumbering();
     }

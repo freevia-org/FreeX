@@ -1,5 +1,6 @@
 using Avalonia;
 using Free.Shared.AppServices;
+using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Rendering.Avalonia;
@@ -82,6 +83,7 @@ internal sealed class AvaloniaInlineTableGridLayout
 {
     private readonly IReadOnlyList<AvaloniaInlineTableCellLayout> _cells;
     private readonly TableGridGeometry _geometry;
+    private readonly InlineTableLogicalGridPlan _logicalGrid;
     private readonly TableShape _table;
     private readonly Point _origin;
     private readonly double[] _widths;
@@ -93,6 +95,7 @@ internal sealed class AvaloniaInlineTableGridLayout
     private AvaloniaInlineTableGridLayout(
         IReadOnlyList<AvaloniaInlineTableCellLayout> cells,
         TableGridGeometry geometry,
+        InlineTableLogicalGridPlan logicalGrid,
         TableShape table,
         Point origin,
         double[] widths,
@@ -103,6 +106,7 @@ internal sealed class AvaloniaInlineTableGridLayout
     {
         _cells = cells;
         _geometry = geometry;
+        _logicalGrid = logicalGrid;
         _table = table;
         _origin = origin;
         _widths = widths;
@@ -135,10 +139,11 @@ internal sealed class AvaloniaInlineTableGridLayout
             * AvaloniaInlineTableLayoutPlanner.PtToDip;
         double indent = table.RichTextLeftIndentPt.GetValueOrDefault()
             * AvaloniaInlineTableLayoutPlanner.PtToDip;
+        var logicalGrid = InlineTableLogicalGridPlan.Create(table);
         var geometry = new TableGridGeometry(
             widths,
             heights,
-            BuildGridCells(table, rowCount, columnCount));
+            logicalGrid.GridCells);
         var rowOffsets = new double[rowCount];
         for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
         {
@@ -153,46 +158,28 @@ internal sealed class AvaloniaInlineTableGridLayout
         }
 
         var cells = new List<AvaloniaInlineTableCellLayout>();
-        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
+        foreach (var logicalCell in logicalGrid.Cells)
         {
-            for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
-            {
-                var anchor = TableGridGeometryPlanner.ResolveCell(
-                    geometry,
-                    rowIndex,
-                    columnIndex);
-                if (anchor is null
-                    || anchor.Value.Row != rowIndex
-                    || anchor.Value.Col != columnIndex)
-                    continue;
-
-                var sourceCell = GetSourceCell(
-                    table,
-                    rowIndex,
-                    columnIndex,
-                    columnCount);
-                var bounds = GetAnchorBounds(
-                    geometry,
-                    table,
-                    origin,
-                    rowIndex,
-                    columnIndex,
-                    widths,
-                    spacing,
-                    indent,
-                    rowOffsets);
-                cells.Add(new AvaloniaInlineTableCellLayout(
-                    rowIndex,
-                    columnIndex,
-                    sourceCell,
-                    bounds,
-                    GetSourceCellIndex(table, rowIndex, columnIndex, columnCount)));
-            }
+            var bounds = GetAnchorBounds(
+                geometry,
+                origin,
+                logicalCell,
+                widths,
+                spacing,
+                indent,
+                rowOffsets);
+            cells.Add(new AvaloniaInlineTableCellLayout(
+                logicalCell.RowIndex,
+                logicalCell.ColumnIndex,
+                logicalCell.Cell,
+                bounds,
+                logicalCell.SourceCellIndex));
         }
 
         return new AvaloniaInlineTableGridLayout(
             cells,
             geometry,
+            logicalGrid,
             table,
             origin,
             widths,
@@ -204,15 +191,12 @@ internal sealed class AvaloniaInlineTableGridLayout
 
     internal AvaloniaInlineTableCellLayout? GetCell(int rowIndex, int columnIndex)
     {
-        var anchor = TableGridGeometryPlanner.ResolveCell(
-            _geometry,
-            rowIndex,
-            columnIndex);
-        return anchor is null
+        var logicalCell = _logicalGrid.ResolveCell(rowIndex, columnIndex);
+        return logicalCell is null
             ? null
             : _cells.FirstOrDefault(cell =>
-                cell.RowIndex == anchor.Value.Row
-                && cell.ColumnIndex == anchor.Value.Col);
+                cell.RowIndex == logicalCell.RowIndex
+                && cell.ColumnIndex == logicalCell.ColumnIndex);
     }
 
     internal AvaloniaInlineTableCellLayout? HitTest(Point point)
@@ -243,10 +227,8 @@ internal sealed class AvaloniaInlineTableGridLayout
 
     private static Rect GetAnchorBounds(
         TableGridGeometry geometry,
-        TableShape table,
         Point origin,
-        int rowIndex,
-        int columnIndex,
+        InlineTableLogicalCell logicalCell,
         IReadOnlyList<double> widths,
         double spacing,
         double indent,
@@ -254,162 +236,19 @@ internal sealed class AvaloniaInlineTableGridLayout
     {
         var gridRect = TableGridGeometryPlanner.GetCellRect(
             geometry,
-            origin.X + indent + rowOffsets[rowIndex],
+            origin.X + indent + rowOffsets[logicalCell.RowIndex],
             origin.Y,
-            rowIndex,
-            columnIndex)!.Value;
-        var cell = GetSourceCell(
-            table,
-            rowIndex,
-            columnIndex,
-            widths.Count);
+            logicalCell.RowIndex,
+            logicalCell.ColumnIndex)!.Value;
+        var cell = logicalCell.Cell;
         int span = Math.Min(
-            Math.Max(1, cell?.GridSpan ?? 1),
-            widths.Count - columnIndex);
+            Math.Max(1, cell.GridSpan),
+            widths.Count - logicalCell.ColumnIndex);
         return new Rect(
-            gridRect.X + spacing * columnIndex,
+            gridRect.X + spacing * logicalCell.ColumnIndex,
             gridRect.Y,
             gridRect.Width + spacing * Math.Max(0, span - 1),
             gridRect.Height);
     }
 
-    private static IReadOnlyList<IReadOnlyList<TableGridCell>> BuildGridCells(
-        TableShape table,
-        int rowCount,
-        int columnCount)
-    {
-        var result = new List<IReadOnlyList<TableGridCell>>(rowCount);
-        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
-        {
-            var row = table.Rows.ElementAtOrDefault(rowIndex);
-            var cells = Enumerable.Repeat(default(TableGridCell), columnCount).ToArray();
-            if (row is not null)
-            {
-                bool compact = row.Cells.Count < columnCount
-                    && row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)) <= columnCount;
-                int sourceIndex = 0;
-                int columnIndex = 0;
-                foreach (var sourceCell in row.Cells)
-                {
-                    int targetColumn = compact ? columnIndex : sourceIndex;
-                    if (targetColumn >= columnCount)
-                        break;
-
-                    int gridSpan = Math.Min(
-                        Math.Max(1, sourceCell.GridSpan),
-                        columnCount - targetColumn);
-                    cells[targetColumn] = ToGridCell(sourceCell);
-                    for (int coveredColumn = targetColumn + 1;
-                         coveredColumn < targetColumn + gridSpan;
-                         coveredColumn++)
-                    {
-                        cells[coveredColumn] = new TableGridCell(1, 1, true, false);
-                    }
-
-                    if (compact)
-                        columnIndex += gridSpan;
-                    sourceIndex++;
-                }
-            }
-
-            result.Add(cells);
-        }
-
-        for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
-        {
-            var row = table.Rows.ElementAtOrDefault(rowIndex);
-            if (row is null)
-                continue;
-            bool compact = row.Cells.Count < columnCount
-                && row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)) <= columnCount;
-            int sourceIndex = 0;
-            int columnIndex = 0;
-            foreach (var sourceCell in row.Cells)
-            {
-                int targetColumn = compact ? columnIndex : sourceIndex;
-                if (targetColumn >= columnCount)
-                    break;
-                int gridSpan = Math.Min(
-                    Math.Max(1, sourceCell.GridSpan),
-                    columnCount - targetColumn);
-                if (sourceCell.HMerge || sourceCell.VMerge)
-                {
-                    sourceIndex++;
-                    if (compact)
-                        columnIndex += gridSpan;
-                    continue;
-                }
-
-                int rowSpan = Math.Min(
-                    Math.Max(1, sourceCell.RowSpan),
-                    rowCount - rowIndex);
-                for (int coveredRow = rowIndex + 1;
-                     coveredRow < rowIndex + rowSpan;
-                     coveredRow++)
-                {
-                    for (int coveredColumn = targetColumn;
-                         coveredColumn < targetColumn + gridSpan;
-                         coveredColumn++)
-                    {
-                        var coveredCells = result[coveredRow].ToArray();
-                        coveredCells[coveredColumn] = new TableGridCell(1, 1, false, true);
-                        result[coveredRow] = coveredCells;
-                    }
-                }
-
-                sourceIndex++;
-                if (compact)
-                    columnIndex += gridSpan;
-            }
-        }
-
-        return result;
-    }
-
-    private static TableGridCell ToGridCell(TableCell cell) =>
-        new(cell.GridSpan, cell.RowSpan, cell.HMerge, cell.VMerge);
-
-    private static TableCell? GetSourceCell(
-        TableShape table,
-        int rowIndex,
-        int columnIndex,
-        int columnCount)
-    {
-        var row = table.Rows.ElementAtOrDefault(rowIndex);
-        if (row is null)
-            return null;
-
-        int sourceIndex = GetSourceCellIndex(table, rowIndex, columnIndex, columnCount);
-        return sourceIndex >= 0
-            ? row.Cells.ElementAtOrDefault(sourceIndex)
-            : null;
-    }
-
-    private static int GetSourceCellIndex(
-        TableShape table,
-        int rowIndex,
-        int columnIndex,
-        int columnCount)
-    {
-        var row = table.Rows.ElementAtOrDefault(rowIndex);
-        if (row is null || columnIndex < 0)
-            return -1;
-
-        bool compact = row.Cells.Count < columnCount
-            && row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)) <= columnCount;
-        if (!compact)
-            return columnIndex < row.Cells.Count ? columnIndex : -1;
-
-        int currentColumn = 0;
-        for (int sourceIndex = 0; sourceIndex < row.Cells.Count; sourceIndex++)
-        {
-            int span = Math.Max(1, row.Cells[sourceIndex].GridSpan);
-            if (columnIndex >= currentColumn && columnIndex < currentColumn + span)
-                return sourceIndex;
-
-            currentColumn += span;
-        }
-
-        return -1;
-    }
 }

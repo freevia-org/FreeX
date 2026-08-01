@@ -502,6 +502,7 @@ internal static class TextBodyFlowDocumentConverter
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(columnWidths[column]) });
 
         double tableWidth = columnWidths.Sum();
+        var logicalGrid = InlineTableLogicalGridPlan.Create(table);
         for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
             var row = table.Rows[rowIndex];
@@ -518,15 +519,20 @@ internal static class TextBodyFlowDocumentConverter
                 rowDefinition.Height = new GridLength(height);
             }
             grid.RowDefinitions.Add(rowDefinition);
-            int columnIndex = 0;
-            foreach (var cell in row.Cells)
+            foreach (var logicalCell in logicalGrid.Cells.Where(cell => cell.RowIndex == rowIndex))
             {
+                var cell = logicalCell.Cell;
+                int columnIndex = logicalCell.ColumnIndex;
                 var textBox = new TextBox
                 {
                     Text = cell.TextBody is null
                         ? string.Empty
                         : InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody),
-                    Tag = new InlineTableCellBinding(rowIndex, cell, columnIndex),
+                    Tag = new InlineTableCellBinding(
+                        logicalCell.RowIndex,
+                        logicalCell.ColumnIndex,
+                        logicalCell.SourceCellIndex,
+                        cell),
                     AcceptsReturn = true,
                     BorderThickness = new Thickness(0.5),
                     BorderBrush = Brushes.Gray,
@@ -559,7 +565,6 @@ internal static class TextBodyFlowDocumentConverter
                 textBox.PreviewKeyDown += (_, args) =>
                     OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
                 grid.Children.Add(textBox);
-                columnIndex += Math.Max(1, cell.GridSpan);
             }
         }
         return grid;
@@ -586,19 +591,21 @@ internal static class TextBodyFlowDocumentConverter
         TextBox current,
         bool backwards)
     {
-        var cells = grid.Children.OfType<TextBox>()
-            .Where(child => child.Tag is InlineTableCellBinding)
-            .OrderBy(child => ((InlineTableCellBinding)child.Tag!).RowIndex)
-            .ThenBy(child => ((InlineTableCellBinding)child.Tag!).CellIndex)
-            .ToList();
-        int currentIndex = cells.IndexOf(current);
-        if (currentIndex < 0)
+        if (current.Tag is not InlineTableCellBinding binding)
             return false;
 
-        int nextIndex = currentIndex + (backwards ? -1 : 1);
-        if (nextIndex >= 0 && nextIndex < cells.Count)
+        var logicalGrid = InlineTableLogicalGridPlan.Create(info.Table);
+        var currentCell = logicalGrid.ResolveCell(binding.RowIndex, binding.ColumnIndex);
+        if (currentCell is null)
+            return false;
+
+        if (logicalGrid.TryGetAdjacent(currentCell, backwards, out var next))
         {
-            cells[nextIndex].Focus();
+            grid.Children.OfType<TextBox>()
+                .FirstOrDefault(child => child.Tag is InlineTableCellBinding nextBinding
+                    && nextBinding.RowIndex == next.RowIndex
+                    && nextBinding.ColumnIndex == next.ColumnIndex)
+                ?.Focus();
             return true;
         }
 
@@ -613,7 +620,7 @@ internal static class TextBodyFlowDocumentConverter
         grid.Children.OfType<TextBox>()
             .Where(child => child.Tag is InlineTableCellBinding binding
                 && binding.RowIndex == newRowIndex
-                && binding.CellIndex == 0)
+                && binding.ColumnIndex == 0)
             .FirstOrDefault()
             ?.Focus();
         return true;
@@ -624,12 +631,7 @@ internal static class TextBodyFlowDocumentConverter
         var table = info.Table;
         int rowIndex = table.Rows.Count;
         int columnCount = Math.Max(1, grid.ColumnDefinitions.Count);
-        var row = new ModelTableRow
-        {
-            HeightEmu = table.Rows.LastOrDefault()?.HeightEmu ?? 0,
-        };
-        for (int column = 0; column < columnCount; column++)
-            row.Cells.Add(new ModelTableCell { TextBody = new TextBody() });
+        var row = InlineTableLogicalGridPlan.CreateAppendRow(table);
         table.Rows.Add(row);
 
         double spacingDip = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
@@ -683,7 +685,7 @@ internal static class TextBodyFlowDocumentConverter
             Text = cell.TextBody is null
                 ? string.Empty
                 : InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody),
-            Tag = new InlineTableCellBinding(rowIndex, cell, columnIndex),
+            Tag = new InlineTableCellBinding(rowIndex, columnIndex, columnIndex, cell),
             AcceptsReturn = true,
             BorderThickness = new Thickness(0.5),
             BorderBrush = Brushes.Gray,
@@ -744,7 +746,11 @@ internal static class TextBodyFlowDocumentConverter
         _ => HorizontalAlignment.Left,
     };
 
-    private sealed record InlineTableCellBinding(int RowIndex, ModelTableCell SourceCell, int CellIndex);
+    private sealed record InlineTableCellBinding(
+        int RowIndex,
+        int ColumnIndex,
+        int SourceCellIndex,
+        ModelTableCell SourceCell);
 
     /// <summary>
     /// Recursively enumerates the leaf <see cref="Inline"/> elements of a paragraph,
@@ -838,7 +844,7 @@ internal static class TextBodyFlowDocumentConverter
                 if (textBox.Tag is not InlineTableCellBinding binding)
                     continue;
                 var row = table.Table.Rows.ElementAtOrDefault(binding.RowIndex);
-                var cell = row?.Cells.ElementAtOrDefault(binding.CellIndex);
+                var cell = row?.Cells.ElementAtOrDefault(binding.SourceCellIndex);
                 if (cell is null)
                     continue;
 

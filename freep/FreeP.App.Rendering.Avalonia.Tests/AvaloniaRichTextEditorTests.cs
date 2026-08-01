@@ -343,6 +343,11 @@ public sealed class AvaloniaRichTextEditorTests
                 returnedEditor.Text.Should().Be("First!");
                 returnedEditor.Should().NotBeSameAs(secondEditor);
 
+                Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.Shift);
+                await DrainInputAsync();
+                editor.Children.OfType<AvaloniaRichTextEditor>().Single()
+                    .Should().BeSameAs(returnedEditor);
+
                 Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.None);
                 await DrainInputAsync();
                 Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.None);

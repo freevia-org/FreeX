@@ -220,8 +220,8 @@ public sealed partial class MainWindow
             Margin = new Thickness(layout.DateLabelRect.Left * zoomFactor, layout.DateLabelRect.Top * zoomFactor, 0, 0),
         });
 
-        // Granularity dropdown label ("MONTHS ▾" etc.) — affordance for switching granularity.
-        // Interactivity (the actual popup) is render-only here; dropdown click is deferred.
+        // Granularity dropdown label ("MONTHS ▾" etc.) — the pointer route below cycles the
+        // shared timeline granularity command, matching the WPF/native timeline behavior.
         if (layout.GranularityDropdownRect.Width > 0)
         {
             var granLabel = layout.Granularity switch

@@ -422,6 +422,62 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
+    public void BuildExportPane_Uses_one_shared_WPF_authority_action_order_contract()
+    {
+        var invoked = new List<string>();
+        var surface = BackstagePaneSurfacePlanner.BuildExportPane(
+            Formats(),
+            exportPdf: () => invoked.Add("pdf"),
+            exportXps: () => invoked.Add("xps"),
+            saveAsFormat: (_, _) => invoked.Add("format"));
+
+        surface.Groups.SelectMany(group => group.Actions).Select(action => action.Label)
+            .Should().Equal(
+                "Create PDF or XPS",
+                "Export to XPS",
+                "Word Document (*.docx)",
+                "Strict Open XML Document (*.docx)",
+                "Word Macro-Enabled Document (*.docm)",
+                "Word Template (*.dotx)",
+                "Word Macro-Enabled Template (*.dotm)",
+                "Word XML Document (*.xml)",
+                "Word 2003 XML Document (*.xml)",
+                "Web Page, Filtered (*.htm, *.html)",
+                "Web Page (*.htm, *.html)",
+                "Single File Web Page (*.mht, *.mhtml)",
+                "OpenDocument Text (*.odt)",
+                "OpenDocument Text Template (*.ott)",
+                "Rich Text Format (*.rtf)",
+                "Plain Text (*.txt, *.text)",
+                "Log File (*.log)",
+                "Word 97-2003 Document (*.doc)",
+                "Word 97-2003 Template (*.dot)");
+
+        surface.Groups[0].Actions[0].Invoke();
+        surface.Groups[0].Actions[1].Invoke();
+        surface.Groups[1].Actions[0].Invoke();
+        invoked.Should().Equal("pdf", "xps", "format");
+    }
+
+    [Fact]
+    public void ExportPaneVisualMetrics_encode_the_measured_WPF_authority_geometry()
+    {
+        var metrics = BackstageExportPanePlanner.VisualMetrics;
+
+        metrics.PaneMaxWidth.Should().Be(720);
+        metrics.HeadingFontSize.Should().Be(26);
+        metrics.HeadingBottomMargin.Should().Be(new BackstageThickness(0, 0, 0, 18));
+        metrics.DescriptionFontSize.Should().Be(12);
+        metrics.DescriptionBottomMargin.Should().Be(new BackstageThickness(0, 0, 0, 16));
+        metrics.SectionHeaderFontSize.Should().Be(15);
+        metrics.SectionHeaderMargin.Should().Be(new BackstageThickness(0, 16, 0, 6));
+        metrics.ActionFontSize.Should().Be(14);
+        metrics.DescriptionTextFontSize.Should().Be(11);
+        metrics.ActionRowMargin.Should().Be(new BackstageThickness(0, 0, 0, 10));
+        metrics.ActionDescriptionMargin.Should().Be(new BackstageThickness(0, 2, 0, 0));
+    }
+
+    [Fact]
     public void BackstageExportPaneSurfaceText_FallsBackForUnresolvedDescriptorResources()
     {
         var descriptor = SisterBackstagePaneTextDescriptorPlanner.Build(SisterBackstageAppKind.FreeW).Export;
