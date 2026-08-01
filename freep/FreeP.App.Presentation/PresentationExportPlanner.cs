@@ -398,12 +398,14 @@ public static class PresentationExportPlanner
 
     public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
         PresentationPrintRequest? request,
-        int slideCount,
+        Presentation presentation,
         double slideWidth = 16,
         double slideHeight = 9,
         double pageWidth = DefaultPrintPageWidth,
         double pageHeight = DefaultPrintPageHeight)
     {
+        ArgumentNullException.ThrowIfNull(presentation);
+
         request ??= new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts);
         var handoutRequest = request with
         {
@@ -412,7 +414,7 @@ public static class PresentationExportPlanner
                 ? request.HandoutSlidesPerPage
                 : null,
         };
-        var printPlan = BuildPrintPlan(handoutRequest, slideCount);
+        var printPlan = BuildPrintPlan(handoutRequest, presentation);
         var slidesPerPage = printPlan.Layout.SlidesPerPage;
         var slideAspect = NormalizeAspectRatio(slideWidth, slideHeight);
         var pages = BuildHandoutPages(
@@ -432,14 +434,12 @@ public static class PresentationExportPlanner
 
     public static PresentationHandoutLayoutPlan BuildHandoutLayoutPlan(
         PresentationPrintRequest? request,
-        Presentation presentation,
+        int slideCount,
         double slideWidth = 16,
         double slideHeight = 9,
         double pageWidth = DefaultPrintPageWidth,
         double pageHeight = DefaultPrintPageHeight)
     {
-        ArgumentNullException.ThrowIfNull(presentation);
-
         request ??= new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts);
         var handoutRequest = request with
         {
@@ -448,7 +448,7 @@ public static class PresentationExportPlanner
                 ? request.HandoutSlidesPerPage
                 : null,
         };
-        var printPlan = BuildPrintPlan(handoutRequest, presentation);
+        var printPlan = BuildPrintPlan(handoutRequest, slideCount);
         var slidesPerPage = printPlan.Layout.SlidesPerPage;
         var slideAspect = NormalizeAspectRatio(slideWidth, slideHeight);
         var pages = BuildHandoutPages(

@@ -69,6 +69,12 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("LastVideoFramePackage");
         source.Should().Contain("LastVideoExecutionDescriptor.HandoffPlan");
         source.Should().Contain("LastVideoExportHandoffPlan");
+        source.Should().Contain("PresentationExportPlanner.PrintCommandId");
+        source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
+        source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
+        source.Should().Contain("PresentationImageExportExecutor.Export(");
+        source.Should().Contain("internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(");
+        source.Should().Contain("LastHandoutLayoutPlan");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions");
         source.Should().Contain("BuildCurrentSlideImageExportRange()");

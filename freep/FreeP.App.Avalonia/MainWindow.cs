@@ -2384,8 +2384,13 @@ public sealed partial class MainWindow : Window
         r.Register(PresentationExportPlanner.PdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportPdfAsync()));
         r.Register(PresentationExportPlanner.NotesPagePdfExportCommandId, new ActionRibbonCommand(() => _ = FileExportNotesPagePdfAsync()));
         r.Register(PresentationExportPlanner.ImageExportCommandId, new ActionRibbonCommand(() => _ = FileExportImagesAsync()));
-        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(ShowPrintBackstage));
+        r.Register(PresentationExportPlanner.PrintCommandId, new ActionRibbonCommand(() =>
+        {
+            RefreshHandoutLayoutPlan();
+            ShowPrintBackstage();
+        }));
         r.Register(PresentationExportPlanner.VideoExportCommandId, new ActionRibbonCommand(() => _ = FileExportVideoAsync()));
+        
 
         // Slide navigation/management
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
@@ -2930,6 +2935,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStack)));
         r.Register(SmartArtAuthoringPlanner.PictureLineupLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureLineup)));
+        r.Register(SmartArtAuthoringPlanner.PictureStripsLayoutCommandId,
+            new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.PictureStrips)));
         r.Register(SmartArtAuthoringPlanner.ContinuousPictureListLayoutCommandId,
             new ActionRibbonCommand(() => ApplySmartArtLayoutPreset(SmartArtLayoutPreset.ContinuousPictureList)));
         r.Register(SmartArtAuthoringPlanner.PictureGridLayoutCommandId,

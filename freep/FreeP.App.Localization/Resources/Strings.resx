@@ -1714,6 +1714,12 @@
   <data name="Ribbon_Command_SmartArtPictureLineup_KeyTip" xml:space="preserve">
     <value>L</value>
   </data>
+  <data name="Ribbon_Command_SmartArtPictureStrips_Label" xml:space="preserve">
+    <value>Picture Strips</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureStrips_KeyTip" xml:space="preserve">
+    <value>PS</value>
+  </data>
   <data name="Ribbon_Command_SmartArtContinuousPictureList_Label" xml:space="preserve">
     <value>Continuous Picture List</value>
   </data>
@@ -2493,6 +2499,24 @@
   </data>
   <data name="Ribbon_Command_AnimationMotionArcRight_KeyTip" xml:space="preserve">
     <value>A</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcLeft_Label" xml:space="preserve">
+    <value>Arc Left</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcLeft_KeyTip" xml:space="preserve">
+    <value>AL</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcUp_Label" xml:space="preserve">
+    <value>Arc Up</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcUp_KeyTip" xml:space="preserve">
+    <value>AU</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcDown_Label" xml:space="preserve">
+    <value>Arc Down</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcDown_KeyTip" xml:space="preserve">
+    <value>AD</value>
   </data>
   <data name="Ribbon_Group_AnimationTiming_Label" xml:space="preserve">
     <value>Timing</value>

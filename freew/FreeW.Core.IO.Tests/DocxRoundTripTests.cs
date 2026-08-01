@@ -3154,6 +3154,93 @@ public class DocxRoundTripTests
             .Should().Be(ContentControlLockMode.NotSpecified);
     }
 
+    [Fact]
+    public void DataBoundInlineContentControl_PreservesWordMetadataAcrossTextEditAndSecondSave()
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        XNamespace w15 = "http://schemas.microsoft.com/office/word/2012/wordml";
+        const string storeItemId = "{11111111-2222-3333-4444-555555555555}";
+        var document = ReadHandAuthoredDocx(
+            $$"""
+            <w:p>
+              <w:sdt xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+                <w:sdtPr>
+                  <w:alias w:val="Bound name"/>
+                  <w:placeholder><w:docPart w:val="DefaultPlaceholder_1"/></w:placeholder>
+                  <w:showingPlcHdr/>
+                  <w:dataBinding w:prefixMappings="xmlns:ns0='urn:freew:test'" w:xpath="/ns0:root/ns0:name" w:storeItemID="{{storeItemId}}"/>
+                  <w:temporary/>
+                  <w:id w:val="-123456"/>
+                  <w:tag w:val="BoundName"/>
+                  <w15:color w15:val="2E74B5"/>
+                  <w15:appearance w15:val="boundingBox"/>
+                  <w:text/>
+                </w:sdtPr>
+                <w:sdtContent><w:r><w:t>placeholder</w:t></w:r></w:sdtContent>
+              </w:sdt>
+            </w:p>
+            """);
+
+        var run = document.Paragraphs.Single().Runs.Single();
+        var metadata = run.Control!.WordMetadata!;
+        metadata.Id.Should().Be("-123456");
+        metadata.DataBinding.Should().Be(new ContentControlDataBinding(
+            storeItemId,
+            "/ns0:root/ns0:name",
+            "xmlns:ns0='urn:freew:test'"));
+        metadata.PlaceholderDocPart.Should().Be("DefaultPlaceholder_1");
+        metadata.ShowingPlaceholder.Should().BeTrue();
+        metadata.Temporary.Should().BeTrue();
+        metadata.Color.Should().Be("2E74B5");
+        metadata.Appearance.Should().Be("boundingBox");
+
+        run.Text = "Edited in FreeW";
+        var firstXml = WriteDocumentXml(document);
+        var sdtPr = firstXml.Descendants(w + "sdtPr").Single();
+        sdtPr.Elements(w + "dataBinding").Should().ContainSingle();
+        sdtPr.Element(w + "dataBinding")!.Attribute(w + "storeItemID")!.Value.Should().Be(storeItemId);
+        sdtPr.Element(w + "id")!.Attribute(w + "val")!.Value.Should().Be("-123456");
+        sdtPr.Element(w15 + "appearance")!.Attribute(w15 + "val")!.Value.Should().Be("boundingBox");
+
+        var reopened = RoundTrip(document);
+        reopened.Paragraphs.Single().Runs.Single().Text.Should().Be("Edited in FreeW");
+        reopened.Paragraphs.Single().Runs.Single().Control!.WordMetadata.Should().Be(metadata);
+        var secondSdtPr = WriteDocumentXml(reopened).Descendants(w + "sdtPr").Single();
+        secondSdtPr.ToString(SaveOptions.DisableFormatting)
+            .Should().Be(sdtPr.ToString(SaveOptions.DisableFormatting));
+    }
+
+    [Fact]
+    public void DataBoundBlockContentControl_PreservesBindingAndIdentity()
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        var document = ReadHandAuthoredDocx(
+            """
+            <w:sdt>
+              <w:sdtPr>
+                <w:dataBinding w:xpath="/root/value" w:storeItemID="{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}"/>
+                <w:id w:val="42"/>
+                <w:tag w:val="BoundBlock"/>
+                <w:richText/>
+              </w:sdtPr>
+              <w:sdtContent><w:p><w:r><w:t>block value</w:t></w:r></w:p></w:sdtContent>
+            </w:sdt>
+            """);
+
+        var control = document.Blocks.Single().BlockContentControl!;
+        control.WordMetadata!.Id.Should().Be("42");
+        control.WordMetadata.DataBinding.Should().Be(new ContentControlDataBinding(
+            "{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}",
+            "/root/value",
+            null));
+
+        document.Paragraphs.Single().Runs.Single().Text = "edited block value";
+        var reopened = RoundTrip(document);
+        reopened.Paragraphs.Single().PlainText.Should().Be("edited block value");
+        reopened.Blocks.Single().BlockContentControl!.WordMetadata.Should().Be(control.WordMetadata);
+        WriteDocumentXml(reopened).Descendants(w + "dataBinding").Should().ContainSingle();
+    }
+
     [Theory]
     [InlineData(RevisionKind.Inserted)]
     [InlineData(RevisionKind.Deleted)]

@@ -456,6 +456,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtPictureAccentListCommand { get; } = new("Ribbon_Command_SmartArtPictureAccentList_Label", "Ribbon_Command_SmartArtPictureAccentList_KeyTip");
     public static RibbonText SmartArtPictureStackCommand { get; } = new("Ribbon_Command_SmartArtPictureStack_Label", "Ribbon_Command_SmartArtPictureStack_KeyTip");
     public static RibbonText SmartArtPictureLineupCommand { get; } = new("Ribbon_Command_SmartArtPictureLineup_Label", "Ribbon_Command_SmartArtPictureLineup_KeyTip");
+    public static RibbonText SmartArtPictureStripsCommand { get; } = new("Ribbon_Command_SmartArtPictureStrips_Label", "Ribbon_Command_SmartArtPictureStrips_KeyTip");
     public static RibbonText SmartArtContinuousPictureListCommand { get; } = new("Ribbon_Command_SmartArtContinuousPictureList_Label", "Ribbon_Command_SmartArtContinuousPictureList_KeyTip");
     public static RibbonText SmartArtPictureGridCommand { get; } = new("Ribbon_Command_SmartArtPictureGrid_Label", "Ribbon_Command_SmartArtPictureGrid_KeyTip");
     public static RibbonText SmartArtLabeledHierarchyCommand { get; } = new("Ribbon_Command_SmartArtLabeledHierarchy_Label", "Ribbon_Command_SmartArtLabeledHierarchy_KeyTip");
@@ -603,6 +604,9 @@ internal static class FreePRibbonText
     public static RibbonText AnimationMotionUpCommand { get; } = new("Ribbon_Command_AnimationMotionUp_Label", "Ribbon_Command_AnimationMotionUp_KeyTip");
     public static RibbonText AnimationMotionDownCommand { get; } = new("Ribbon_Command_AnimationMotionDown_Label", "Ribbon_Command_AnimationMotionDown_KeyTip");
     public static RibbonText AnimationMotionArcRightCommand { get; } = new("Ribbon_Command_AnimationMotionArcRight_Label", "Ribbon_Command_AnimationMotionArcRight_KeyTip");
+    public static RibbonText AnimationMotionArcLeftCommand { get; } = new("Ribbon_Command_AnimationMotionArcLeft_Label", "Ribbon_Command_AnimationMotionArcLeft_KeyTip");
+    public static RibbonText AnimationMotionArcUpCommand { get; } = new("Ribbon_Command_AnimationMotionArcUp_Label", "Ribbon_Command_AnimationMotionArcUp_KeyTip");
+    public static RibbonText AnimationMotionArcDownCommand { get; } = new("Ribbon_Command_AnimationMotionArcDown_Label", "Ribbon_Command_AnimationMotionArcDown_KeyTip");
     public static RibbonText AnimationTimingGroup { get; } = new("Ribbon_Group_AnimationTiming_Label", "Ribbon_Group_AnimationTiming_KeyTip");
     public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label", "Ribbon_Command_AnimationTrigger_KeyTip");
     public static RibbonText AnimationDurationCommand { get; } = new("Ribbon_Command_AnimationDuration_Label", "Ribbon_Command_AnimationDuration_KeyTip");

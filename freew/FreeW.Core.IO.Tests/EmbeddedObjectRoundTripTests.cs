@@ -267,6 +267,80 @@ public class EmbeddedObjectRoundTripTests
     }
 
     [Fact]
+    public void LinkedObject_ExternalTargetAndIcon_SurviveTextEditAndTwoWrites()
+    {
+        const string target = "file:///C:/Data/Quarterly%20Results.xlsx";
+        var linked = EmbeddedObject.CreateLinked(
+            target,
+            "Excel.Sheet.12",
+            new InlineImage(IconPng, 84, 42));
+        var document = new TextDocument();
+        var objectParagraph = new Paragraph();
+        objectParagraph.Runs.Add(Run.FromEmbeddedObject(linked));
+        document.Blocks.Add(objectParagraph);
+        document.Blocks.Add(new Paragraph("Original body text"));
+
+        var imported = DocxReader.Read(new MemoryStream(WriteBytes(document)));
+        var importedParagraphs = imported.Paragraphs.ToList();
+        var importedObject = importedParagraphs[0].Runs.Single().EmbeddedObject!;
+        importedObject.IsLinked.Should().BeTrue();
+        importedObject.LinkedTarget.Should().Be(target);
+        importedObject.ProgId.Should().Be("Excel.Sheet.12");
+        importedObject.Payload.Should().BeEmpty();
+        importedObject.Icon!.PngBytes.Should().Equal(IconPng);
+        importedObject.WidthPt.Should().Be(84);
+        importedObject.HeightPt.Should().Be(42);
+
+        importedParagraphs[1].Runs[0].Text = "Edited body text";
+        var firstWrite = WriteBytes(imported);
+        AssertLinkedPackage(firstWrite, target);
+
+        var reopened = DocxReader.Read(new MemoryStream(firstWrite));
+        var reopenedParagraphs = reopened.Paragraphs.ToList();
+        reopenedParagraphs[1].Runs[0].Text.Should().Be("Edited body text");
+        var reopenedObject = reopenedParagraphs[0].Runs.Single().EmbeddedObject!;
+        reopenedObject.IsLinked.Should().BeTrue();
+        reopenedObject.LinkedTarget.Should().Be(target);
+        reopenedObject.Icon!.PngBytes.Should().Equal(IconPng);
+
+        var secondWrite = WriteBytes(reopened);
+        AssertLinkedPackage(secondWrite, target);
+        DocxReader.Read(new MemoryStream(secondWrite)).Paragraphs.First().Runs.Single()
+            .EmbeddedObject!.LinkedTarget.Should().Be(target);
+    }
+
+    private static void AssertLinkedPackage(byte[] docx, string target)
+    {
+        using (var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read))
+        {
+            zip.Entries.Should().NotContain(entry =>
+                entry.FullName.StartsWith("word/embeddings/oleObject", StringComparison.Ordinal));
+            zip.GetEntry("word/media/image1.png").Should().NotBeNull();
+        }
+
+        EntryXml(docx, "[Content_Types].xml").Root!.Elements(Ct + "Default")
+            .Should().NotContain(element => element.Attribute("Extension") != null
+                && element.Attribute("Extension")!.Value == "bin");
+
+        var relationships = EntryXml(docx, "word/_rels/document.xml.rels").Root!
+            .Elements(Rel + "Relationship").ToList();
+        var oleRelationship = relationships.Single(element =>
+            element.Attribute("Type")!.Value.EndsWith("/oleObject", StringComparison.Ordinal));
+        oleRelationship.Attribute("Target")!.Value.Should().Be(target);
+        oleRelationship.Attribute("TargetMode")!.Value.Should().Be("External");
+
+        var imageRelationship = relationships.Single(element =>
+            element.Attribute("Type")!.Value.EndsWith("/image", StringComparison.Ordinal));
+        var documentXml = EntryXml(docx, "word/document.xml");
+        var ole = documentXml.Descendants(O + "OLEObject").Single();
+        ole.Attribute("Type")!.Value.Should().Be("Link");
+        ole.Attribute("ProgID")!.Value.Should().Be("Excel.Sheet.12");
+        ole.Attribute(R + "id")!.Value.Should().Be(oleRelationship.Attribute("Id")!.Value);
+        documentXml.Descendants(V + "imagedata").Single().Attribute(R + "id")!.Value
+            .Should().Be(imageRelationship.Attribute("Id")!.Value);
+    }
+
+    [Fact]
     public void EmbeddedObject_RoundTripsInsideTableCell()
     {
         // Embedded objects are an inline run mark, so they must flow through table cells like any other run.
