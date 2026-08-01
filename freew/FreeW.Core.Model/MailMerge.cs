@@ -1697,6 +1697,7 @@ public static class MailMerge
             DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
+        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run, row));
         return clone;
@@ -1777,6 +1778,7 @@ public static class MailMerge
             DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
+        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRunWithRules(run, row, state, recordIndex));
         return clone;

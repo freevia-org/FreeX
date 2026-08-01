@@ -242,6 +242,7 @@ public static class DocumentCombine
             DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
+        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
         foreach (var run in source.Runs)
             clone.Runs.Add(CloneRun(run));
         return clone;

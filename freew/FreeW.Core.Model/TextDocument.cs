@@ -1894,6 +1894,30 @@ public abstract class Block
     public BlockContentControl? BlockContentControl { get; set; }
 }
 
+/// <summary>Whether a preserved Word bookmark boundary opens or closes its paired range.</summary>
+public enum BookmarkBoundaryKind
+{
+    Start,
+    End
+}
+
+/// <summary>
+/// One invisible Word bookmark boundary positioned immediately before <see cref="RunIndex"/> in a
+/// paragraph. <see cref="PairKey"/> pairs starts and ends across paragraphs; it is an internal identity,
+/// not a serialized relationship id. Start boundaries retain Word's optional table-column and custom-XML
+/// displacement attributes. <see cref="OwnerControl"/> retains a surrounding run-level content control.
+/// Boundaries at <c>Runs.Count</c> are paragraph-end markers.
+/// </summary>
+public sealed record BookmarkBoundary(
+    string PairKey,
+    BookmarkBoundaryKind Kind,
+    int RunIndex,
+    string? Name = null,
+    int? ColumnFirst = null,
+    int? ColumnLast = null,
+    string? DisplacedByCustomXml = null,
+    ContentControl? OwnerControl = null);
+
 /// <summary>
 /// A body-level <c>w:altChunk</c> import that FreeW preserves without attempting to interpret its source
 /// payload. Word resolves the referenced HTML, RTF, or nested Word package when it opens the document.
@@ -1939,6 +1963,7 @@ public sealed class Paragraph : Block
         get => BookmarkNames.Count > 0 ? BookmarkNames[0] : null;
         set
         {
+            var previousName = BookmarkNames.Count > 0 ? BookmarkNames[0] : null;
             if (string.IsNullOrEmpty(value))
             {
                 // null / empty: clear ALL bookmarks on this paragraph (matches the pre-existing contract where
@@ -1950,6 +1975,23 @@ public sealed class Paragraph : Block
                 BookmarkNames[0] = value;
             else
                 BookmarkNames.Add(value);
+
+            if (previousName is not { Length: > 0 }
+                || value is not { Length: > 0 }
+                || string.Equals(previousName, value, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            for (var index = 0; index < BookmarkBoundaries.Count; index++)
+            {
+                var boundary = BookmarkBoundaries[index];
+                if (boundary.Kind == BookmarkBoundaryKind.Start
+                    && string.Equals(boundary.Name, previousName, StringComparison.Ordinal))
+                {
+                    BookmarkBoundaries[index] = boundary with { Name = value };
+                }
+            }
         }
     }
 
@@ -1961,6 +2003,13 @@ public sealed class Paragraph : Block
     /// null when empty) for backward compatibility.
     /// </summary>
     public List<string> BookmarkNames { get; } = [];
+
+    /// <summary>
+    /// Imported bookmark starts and ends in source order. Newly authored names that have no boundary
+    /// metadata retain the historical whole-paragraph serialization. Public names removed from
+    /// <see cref="BookmarkNames"/> are not resurrected from this retained package metadata.
+    /// </summary>
+    public List<BookmarkBoundary> BookmarkBoundaries { get; } = [];
 
     /// <summary>
     /// Optional section break carried by this paragraph. When non-null this paragraph is the <em>last</em>

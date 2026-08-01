@@ -1888,6 +1888,7 @@ public static class DocxReader
         Paragraph paragraph => paragraph.SectionBreak is not null
             || paragraph.PreservedNumbering is not null
             || paragraph.BookmarkNames.Count != 0
+            || paragraph.BookmarkBoundaries.Count != 0
             || paragraph.Runs.Any(run => run.FootnoteId is not null
                 || run.EndnoteId is not null
                 || run.CommentId is not null
@@ -2285,15 +2286,42 @@ public static class DocxReader
         }
         else if (child.Name == W + "bookmarkStart")
         {
-            // Capture every non-internal bookmark name on the paragraph. Word emits an implicit
-            // "_GoBack" bookmark on the document; skip it so it is not mistaken for a target. A
-            // paragraph with multiple bookmarks (e.g. a heading that is both a cross-ref target and
-            // a user bookmark) used to lose all but the first; now all are preserved.
+            // Keep the exact invisible boundary at the current run index. _GoBack remains hidden from
+            // the public navigation-name list, but its package boundary is retained for Word round-trip.
+            var pairKey = child.Attribute(W + "id")?.Value;
             var name = child.Attribute(W + "name")?.Value;
+            if (pairKey is { Length: > 0 })
+            {
+                paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+                    pairKey,
+                    BookmarkBoundaryKind.Start,
+                    paragraph.Runs.Count,
+                    name,
+                    ParseNullableInt(child.Attribute(W + "colFirst")?.Value),
+                    ParseNullableInt(child.Attribute(W + "colLast")?.Value),
+                    child.Attribute(W + "displacedByCustomXml")?.Value,
+                    control));
+            }
             if (name is { Length: > 0 } && name != "_GoBack" && !paragraph.BookmarkNames.Contains(name))
                 paragraph.BookmarkNames.Add(name);
         }
+        else if (child.Name == W + "bookmarkEnd")
+        {
+            var pairKey = child.Attribute(W + "id")?.Value;
+            if (pairKey is { Length: > 0 })
+            {
+                paragraph.BookmarkBoundaries.Add(new BookmarkBoundary(
+                    pairKey,
+                    BookmarkBoundaryKind.End,
+                    paragraph.Runs.Count,
+                    DisplacedByCustomXml: child.Attribute(W + "displacedByCustomXml")?.Value,
+                    OwnerControl: control));
+            }
+        }
     }
+
+    private static int? ParseNullableInt(string? value) =>
+        int.TryParse(value, out var result) ? result : null;
 
     /// <summary>
     /// Reads a Word phonetic guide (<c>w:ruby</c>). The base characters remain the run's fallback text so

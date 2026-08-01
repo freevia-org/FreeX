@@ -314,6 +314,8 @@ public class DocumentMergeTests
         var sourceParagraph = new Paragraph("Source target");
         sourceParagraph.BookmarkNames.Add("Shared");
         sourceParagraph.BookmarkNames.Add("SourceOnly");
+        sourceParagraph.BookmarkBoundaries.Add(new BookmarkBoundary("5", BookmarkBoundaryKind.Start, 0, "Shared"));
+        sourceParagraph.BookmarkBoundaries.Add(new BookmarkBoundary("5", BookmarkBoundaryKind.End, 2));
         sourceParagraph.Runs.Add(new Run("jump") { HyperlinkAnchor = "Shared" });
         sourceParagraph.Runs.Add(Run.CrossReferenceFieldRun(
             new CrossReferenceField(CrossRefFieldKind.Ref, "Shared", CrossRefInsertAs.Text, Hyperlink: true),
@@ -334,11 +336,15 @@ public class DocumentMergeTests
 
         var merged = inserted.Single().Should().BeOfType<Paragraph>().Subject;
         merged.BookmarkNames.Should().Equal("Shared_FreeW2", "SourceOnly");
+        merged.BookmarkBoundaries.Should().Equal(
+            new BookmarkBoundary("5", BookmarkBoundaryKind.Start, 0, "Shared_FreeW2"),
+            new BookmarkBoundary("5", BookmarkBoundaryKind.End, 2));
         merged.Runs.Single(run => run.Text == "jump").HyperlinkAnchor.Should().Be("Shared_FreeW2");
         merged.Runs.Single(run => run.CrossReference is not null).CrossReference!.Target.Should().Be("Shared_FreeW2");
         target.Footnotes[1].Content.Single().Runs.Last().HyperlinkAnchor.Should().Be("Shared_FreeW2");
         target.Blocks[0].Should().BeOfType<Paragraph>().Which.BookmarkName.Should().Be("Shared");
         sourceParagraph.BookmarkNames.Should().Equal("Shared", "SourceOnly");
+        sourceParagraph.BookmarkBoundaries[0].Name.Should().Be("Shared");
         sourceParagraph.Runs.Single(run => run.Text == "jump").HyperlinkAnchor.Should().Be("Shared");
     }
 

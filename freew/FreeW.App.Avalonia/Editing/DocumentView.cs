@@ -16210,6 +16210,7 @@ public sealed class DocumentView : Control
             ParagraphFormatRevision = source.ParagraphFormatRevision
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
+        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
         return clone;
     }
 
