@@ -122,6 +122,16 @@ public sealed partial class XlsxFileAdapter
             XlsxWorksheetFormControlPreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
         if (sourceParts.HasLegacyComments)
             XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
+        if (sourceParts.HasFormControls && sourceParts.HasLegacyComments)
+        {
+            // R112-io-formcontrol-vml-anchor-comment-reorder-1: XlsxLegacyCommentPreserver.Preserve
+            // just unconditionally rebuilt the shared legacyDrawing VML part from the pristine source
+            // archive whenever the sheet has any Notes (see its own doc comments), discarding the
+            // Form Control anchor sync XlsxWorksheetFormControlPreserver.Preserve wrote into the
+            // target moments earlier. Re-apply the anchor sync now, last, so it always wins.
+            XlsxWorksheetFormControlPreserver.ReapplyVmlAnchorsAfterCommentReconciliation(
+                sourceArchive, generatedArchive, context, workbook);
+        }
         if (sourceParts.HasSharedStrings)
             XlsxSharedStringMetadataPreserver.PreserveRichTextAndPhonetics(sourceArchive, generatedArchive);
         if (sourcePackage.HasUnsupportedConditionalFormatting ?? HasUnsupportedConditionalFormatting(sourceArchive))

@@ -48,7 +48,8 @@ public sealed partial class RemainingDialogTests
             "FillSeriesStep_Month",
             "FillSeriesStep_Year",
             "FillSeriesStep_StepValueLabel",
-            "FillSeriesStep_StopValueLabel"
+            "FillSeriesStep_StopValueLabel",
+            "FillSeriesStep_Trend"
         };
         var labels = labelKeys.Select(UiText.Get).ToArray();
 
@@ -77,7 +78,7 @@ public sealed partial class RemainingDialogTests
     {
         var source = ReadClassSource("FillSeriesStepDialog.cs", "public sealed class FillSeriesStepDialog", "public sealed record __NoNextFillSeriesStepDialog");
 
-        source.Should().Contain("Height = 356;");
+        source.Should().Contain("Height = 386;");
         source.Should().Contain("DialogButtonRowFactory.Create(Accept, 72, rowMargin: new Thickness(0, 16, 0, 0))");
     }
 

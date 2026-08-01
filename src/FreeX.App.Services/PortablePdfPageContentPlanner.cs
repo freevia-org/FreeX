@@ -1,5 +1,6 @@
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Calc;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -147,6 +148,16 @@ public static class PortablePdfPageContentPlanner
         var cfRulesByPriority = BuildConditionalFormatRulesByPriority(sheet);
         var cfStatsCache = new Dictionary<ConditionalFormat, ConditionalFormatStatistics>(ReferenceEqualityComparer.Instance);
 
+        // R112-pdf-width-overflow-1: precompute each page column's character-width budget once
+        // (from the sheet's real column width, same source ComputeActualGridSizes already reads for
+        // PDF column geometry) so GetDisplayText can reproduce Excel's '#' overflow indicator for an
+        // over-wide numeric/date value -- mirroring ViewportService.GetColumnWidthPixels /
+        // EstimateCharacterWidth (the interactive grid) and PageContentRenderModelBuilder's identical
+        // print-path estimate, which both already pass this into NumberFormatter.FormatWithColor.
+        var columnWidthChars = new Dictionary<uint, int>(columns.Count);
+        foreach (var column in columns)
+            columnWidthChars.TryAdd(column.Column, EstimateCharacterWidth(GetColumnWidthPixels(sheet, column.Column)));
+
         foreach (var row in rows)
         {
             foreach (var column in columns)
@@ -165,7 +176,7 @@ public static class PortablePdfPageContentPlanner
                 cells.Add(new PortablePdfPageCell(
                     row.Row,
                     column.Column,
-                    GetDisplayText(workbook, sheet, cell, styleId),
+                    GetDisplayText(workbook, sheet, cell, styleId, columnWidthChars[column.Column]),
                     styleId,
                     row.Role == PortablePdfPageAxisRole.Title,
                     column.Role == PortablePdfPageAxisRole.Title,
@@ -413,7 +424,8 @@ public static class PortablePdfPageContentPlanner
         Workbook workbook,
         Sheet sheet,
         Cell? cell,
-        StyleId styleId)
+        StyleId styleId,
+        int targetWidthCharacters)
     {
         if (cell is null)
             return "";
@@ -422,16 +434,48 @@ public static class PortablePdfPageContentPlanner
             return "=" + cell.FormulaText;
 
         var style = workbook.GetStyle(styleId);
+        // R112-pdf-width-overflow-1: pass the page column's character-width budget (and honor
+        // ShrinkToFit the same way ViewportService.GetDisplayText does -- Excel never shows '####'
+        // when the cell shrinks its font to fit instead) so an over-wide numeric/date value renders
+        // Excel's '#' overflow indicator here too, instead of the raw digits silently overflowing
+        // into the neighboring cell on the PDF page.
         var displayText = NumberFormatter.FormatWithColor(
             cell.Value,
             style.NumberFormat,
+            targetWidthCharacters,
             workbook.IndexedColors,
             workbook.Theme,
-            workbook.Uses1904DateSystem).Text;
+            workbook.Uses1904DateSystem,
+            suppressWidthOverflowIndicator: style.ShrinkToFit).Text;
 
         // N47: honor Page Setup > Sheet > "Cell errors as" (blank/dashes/#N/A) the same way the WPF
         // PrintRenderer path does via PagePrintTextPlanner.FormatPrintedCellText, so error cells print
         // consistently substituted on the Avalonia/portable PDF path too.
         return PagePrintTextPlanner.FormatPrintedCellText(displayText, sheet.PrintErrorValue);
+    }
+
+    /// <summary>
+    /// The page column's raw pixel width, mirroring <c>ViewportService.GetColumnWidthPixels</c> and
+    /// the identical read <c>WorkbookPdfContentBuilder.ComputeActualGridSizes</c> already performs
+    /// for PDF column geometry (sheet.ColumnWidths, falling back to DefaultColumnWidth).
+    /// </summary>
+    private static double GetColumnWidthPixels(Sheet sheet, uint col) =>
+        Math.Max(1, ColumnWidthPixelMapper.ColumnWidthToPixels(sheet.ColumnWidths.GetValueOrDefault(col, sheet.DefaultColumnWidth)));
+
+    /// <summary>
+    /// Converts a column's pixel width to an approximate character-width budget, matching
+    /// <c>ViewportService.EstimateCharacterWidth</c> / <c>PageContentRenderModelBuilder.EstimateCharacterWidth</c>
+    /// (~7 pixels/character above 12px, else pixels/12) so the PDF export's overflow detection agrees
+    /// with the interactive grid and the print path.
+    /// </summary>
+    private static int EstimateCharacterWidth(double pixelWidth)
+    {
+        if (!double.IsFinite(pixelWidth) || pixelWidth <= 0)
+            return 1;
+
+        var width = pixelWidth <= 12
+            ? pixelWidth / 12.0
+            : (pixelWidth - 5.0) / 7.0;
+        return Math.Max(1, (int)Math.Round(width, MidpointRounding.AwayFromZero));
     }
 }

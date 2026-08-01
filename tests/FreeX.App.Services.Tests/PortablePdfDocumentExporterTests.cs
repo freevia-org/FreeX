@@ -219,6 +219,13 @@ public sealed class PortablePdfDocumentExporterTests
         var dateStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "[$-F800]" });
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), DateTimeValue.FromDateTime(new DateTime(2026, 12, 1)));
         sheet.GetCell(1, 1)!.StyleId = dateStyle;
+        // R112-pdf-width-overflow-1: a long-date format ("1 décembre 2026") is wider than the
+        // default ~8-character column, and the PDF export now correctly reproduces Excel's '#'
+        // width-overflow indicator for over-wide dates (see PortablePdfPageContentPlannerTests'
+        // R112_* tests) -- widen the column here so this test keeps exercising what it actually
+        // targets (WinAnsi hex encoding of the accented date text) instead of colliding with that
+        // now-correct overflow behavior.
+        sheet.ColumnWidths[1] = 60;
         var exportPlan = CreateExportPlan(workbook, sheet, GridRange.Parse("A1:A1", sheet.Id));
         using var stream = new MemoryStream();
 

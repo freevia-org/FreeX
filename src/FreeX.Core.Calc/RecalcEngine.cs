@@ -15,8 +15,13 @@ public sealed class RecalcEngine
     // Keep only tiny ranges as exact cell edges; larger ranges avoid repeated dependent-list fan-out.
     private const long CompactRangeCellThreshold = 8;
     private const int MaxDependencyPlanCacheEntries = 1024;
-    // Sane upper bound on chained spill-dependent follow-up passes (see the loop in Recalculate),
-    // so a pathological/self-perpetuating chain cannot spin forever; ordinary sheets converge in 1-2.
+    // Floor on chained spill-dependent follow-up passes (see the loop in
+    // ResolveSpillTargetDependentsFixpoint): a safety net so a pathological/self-perpetuating chain
+    // cannot spin forever even in a workbook with very few formula cells. Ordinary sheets converge
+    // in 1-2 passes; the loop's real ceiling is the larger of this floor and the workbook's total
+    // formula-cell count (a chain of dependent spilling formulas cannot be deeper than the number
+    // of formula cells that exist to form it), so a legitimately long chain of plain-address spill
+    // readers is never truncated mid-convergence. See finding R112 spill-chain-depth-cap.
     private const int MaxSpillDependentPasses = 64;
     private static readonly IReadOnlySet<CellAddress> EmptyDependencyCells = FrozenSet<CellAddress>.Empty;
     private static readonly IReadOnlyList<CellAddress> EmptyCells = [];
@@ -1936,7 +1941,25 @@ public sealed class RecalcEngine
         // materializes in a later pass) would be permanently skipped after its first, incomplete
         // evaluation, keeping a stale value forever. See finding H3.
         var seenSpillDependentInputCounts = new Dictionary<CellAddress, int>();
-        for (var pass = 0; pass < MaxSpillDependentPasses; pass++)
+
+        // The natural termination condition below (spillDependents.Count == 0, i.e. a real
+        // fixpoint) already stops the loop as soon as no further generation of spill-target
+        // readers is discovered — MaxSpillDependentPasses on its own would truncate a chain of
+        // more than 64 dependent spilling formulas that plain-address-reference each other's
+        // spill members (rather than via ANCHORARRAY/#, which gets a real dependency-graph edge
+        // and never needs this loop at all) while it is still legitimately converging. Raise the
+        // ceiling to the workbook's total formula-cell count when that is larger: a chain of
+        // dependent spilling formulas cannot have more links than there are formula cells to form
+        // them, so this bound is provably never hit by any legal spill nesting depth while still
+        // guarding against a pathological/self-perpetuating chain spinning forever.
+        var maxPasses = MaxSpillDependentPasses;
+        var totalFormulaCellCount = 0;
+        foreach (var sheet in workbook.Sheets)
+            totalFormulaCellCount += sheet.FormulaCellCount;
+        if (totalFormulaCellCount > maxPasses)
+            maxPasses = totalFormulaCellCount;
+
+        for (var pass = 0; pass < maxPasses; pass++)
         {
             var spillDependents = CollectSpillTargetDependentFormulaCells(
                 workbook,

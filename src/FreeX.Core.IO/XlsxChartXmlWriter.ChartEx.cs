@@ -78,6 +78,44 @@ internal static partial class XlsxChartXmlWriter
         Sheet sheet,
         XNamespace chartExNs)
     {
+        // R112-io-chartex-verbatim-series-3: when every series in this chart was loaded through
+        // XlsxChartPartReader.Deferred.cs's "every series' formula is an unresolvable named range"
+        // fallback (see BuildChartExVerbatimSeriesFormulas there), chart.DataRange is a synthetic
+        // 1x1 placeholder that carries no real strip span at all. Falling through to the
+        // GetSeriesStripLayout-driven loop below would collapse to a single (or otherwise wrong)
+        // count of <cx:data> elements cut from that placeholder, silently rewriting or dropping
+        // the user's named-range series on save — the exact defect this branch exists to prevent.
+        // TryReadDeferredAdvancedChart is the ONLY reader that ever produces a chartEx-family
+        // ChartModel, so any VerbatimSeriesFormulas present on one is guaranteed to be this
+        // whole-chart chartEx-native capture (never the classic per-series partial capture used by
+        // the non-chartEx families), making this check safe and exhaustive.
+        if (chart.VerbatimSeriesFormulas is { Count: > 0 } verbatimSeries && ChartTypeSupport.IsChartExFamily(chart.Type))
+        {
+            foreach (var entry in verbatimSeries.OrderBy(e => e.SeriesIndex))
+            {
+                var categoryCache = entry.CatCacheXml is { Length: > 0 } catCacheXml ? TryParseChartXml(catCacheXml) : null;
+                var valueCache = entry.ValCacheXml is { Length: > 0 } valCacheXml ? TryParseChartXml(valCacheXml) : null;
+
+                yield return new XElement(chartExNs + "data",
+                    new XAttribute("id", ToChartExDataId(entry.SeriesIndex)),
+                    string.IsNullOrEmpty(entry.CatFormula)
+                        ? null
+                        : new XElement(chartExNs + "strDim",
+                            new XAttribute("type", "cat"),
+                            new XElement(chartExNs + "f", entry.CatFormula),
+                            categoryCache),
+                    new XElement(chartExNs + "numDim",
+                        new XAttribute("type", ToChartExNumericDimensionType(chart.Type)),
+                        new XElement(chartExNs + "f", entry.ValFormula),
+                        string.IsNullOrEmpty(entry.TxFormula)
+                            ? null
+                            : new XElement(chartExNs + "nf", entry.TxFormula),
+                        valueCache));
+            }
+
+            yield break;
+        }
+
         var layout = GetSeriesStripLayout(chart);
         var hasCategoryStrip = chart.FirstColIsCategories && layout.LastStrip > layout.CategoryStrip;
         var firstValueStrip = hasCategoryStrip ? layout.CategoryStrip + 1 : layout.CategoryStrip;
@@ -259,6 +297,28 @@ internal static partial class XlsxChartXmlWriter
     {
         if (chart.Type != ChartType.BoxAndWhisker || !chart.FirstRowIsHeader)
             return null;
+
+        // R112-io-chartex-verbatim-series-4: chart.DataRange is a synthetic 1x1 placeholder for a
+        // BoxAndWhisker chart loaded through the named-range verbatim fallback (see
+        // BuildChartExData above) — GetSeriesStripLayout/GetChartExSeriesValueStrip below would
+        // compute a meaningless header-cell reference from it. Use the series' own captured name
+        // formula (the numDim <cx:nf>, repurposed as TxFormula) and cached name (EmbeddedSeriesData,
+        // captured from the series' own <cx:tx>/<cx:txData>/<cx:v> at load time) instead.
+        var verbatim = chart.VerbatimSeriesFormulas?.FirstOrDefault(f => f.SeriesIndex == seriesIndex);
+        if (verbatim is not null)
+        {
+            if (string.IsNullOrEmpty(verbatim.TxFormula))
+                return null;
+
+            var cachedName = chart.EmbeddedSeriesData?.FirstOrDefault(d => d.SeriesIndex == seriesIndex)?.SeriesName;
+            if (string.IsNullOrEmpty(cachedName))
+                return null;
+
+            return new XElement(chartExNs + "tx",
+                new XElement(chartExNs + "txData",
+                    new XElement(chartExNs + "f", verbatim.TxFormula),
+                    new XElement(chartExNs + "v", cachedName)));
+        }
 
         var layout = GetSeriesStripLayout(chart);
         var seriesStrip = GetChartExSeriesValueStrip(chart, layout, seriesIndex);

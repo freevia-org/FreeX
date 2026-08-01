@@ -304,8 +304,11 @@ public static class CommandGuards
     /// Rejects an edit/delete of <paramref name="addresses"/> if any of them belongs to a legacy CSE
     /// array or a dynamic-array spill range whose full anchor+extent is not entirely included in
     /// <paramref name="addresses"/>. Mirrors Excel's "You cannot change part of an array" rule: a
-    /// single member (or even just the anchor alone) cannot be edited or cleared in isolation, but
-    /// selecting and editing/clearing the whole array range at once is allowed.
+    /// single member cannot be edited or cleared in isolation, but selecting and editing/clearing
+    /// the whole array range at once is allowed. A modern dynamic array's anchor cell is a further
+    /// exception -- see the R112-array-anchor-edit carve-out below -- it can always be re-typed or
+    /// replaced directly, unlike a legacy Ctrl+Shift+Enter (CSE) array's anchor, which still
+    /// requires the whole originally-declared range to be selected/edited as a unit.
     /// </summary>
     public static CommandOutcome? RejectIfSplitsArray(Sheet sheet, IEnumerable<CellAddress> addresses)
     {
@@ -319,6 +322,19 @@ public static class CommandGuards
             if (sheet.HasArrayOrSpillMembers && sheet.TryGetArrayExtent(address, out var anchor, out var rows, out var cols))
             {
                 addressSet ??= new HashSet<CellAddress>(addresses);
+
+                // R112-array-anchor-edit: editing/clearing a modern dynamic-array formula's anchor
+                // cell directly is always allowed in real Excel, even when the rest of its live
+                // spill is not part of the edit -- that's the defining UX difference from a legacy
+                // CSE array, whose anchor still requires the whole declared range to be selected.
+                // The edit naturally clears/re-establishes the spill via SetCell's ClearSpillRange
+                // side effect, so skip the "every member must be included" check for this array
+                // when the address IS its own anchor and the anchor is not a legacy fixed-extent
+                // CSE formula (Cell.LegacyArrayRows == 0). Any other split shape -- a non-anchor
+                // member alone, or the anchor together with only some of the body -- still falls
+                // through to the ordinary rejecting check below.
+                if (address.Equals(anchor) && (sheet.GetCell(anchor)?.LegacyArrayRows ?? 0) == 0)
+                    continue;
 
                 for (var r = 0u; r < rows; r++)
                 {

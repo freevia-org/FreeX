@@ -60,13 +60,17 @@ public sealed class ConfigurePivotChartOptionsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
             return pivotProtectedOutcome;
 
         if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.PivotChartNotFound();
+
+        // R112-model-drawing-object-lock-1-1 sibling fix: layer in the per-chart Locked override so
+        // an author-unlocked PivotChart's options stay editable even while the sheet blocks "Edit
+        // objects" -- matches ChangePivotChartTypeCommand.
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
+            return protectedOutcome;
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return ChartCommandGuards.SelectedChartIsNotPivotChart();
 

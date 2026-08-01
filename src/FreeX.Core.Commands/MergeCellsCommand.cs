@@ -36,6 +36,29 @@ public sealed class MergeCellsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;
 
+        // Excel refuses outright to merge a selection that touches ANY cell of a live dynamic-array
+        // spill (or a legacy CSE / cached-array range loaded from a file) -- there is no exception for
+        // selecting the array's exact full extent, unlike CommandGuards.RejectIfSplitsArray's "the
+        // whole array may be replaced as a unit" rule for editing/clearing commands. That exception
+        // does not apply here: a merge never removes the anchor's formula, it only blanks the other
+        // covered cells and adds a merged region -- so even a merge whose footprint matches the spill's
+        // full extent leaves the anchor cell itself part of a merged region afterwards, and
+        // Sheet.IsSpillBlocked refuses to re-spill into (or through) a merged region on the very next
+        // recalculation, silently turning the array into #SPILL!. This is the single choke point every
+        // merge-creating command funnels through (see the worksheet-bounds comment above), so checking
+        // here -- rather than relying on CellMergePlanner.HasLiveSpillTarget, which only the
+        // ribbon-driven Merge & Center / Merge Cells / Merge Across paths call before ever constructing
+        // this command -- also protects FormatPainterCommandFactory.AddTiledMerges' tiled-merge path,
+        // which constructs MergeCellsCommand directly with no upstream guard of its own.
+        if (sheet.HasArrayOrSpillMembers)
+        {
+            foreach (var addr in _range.AllCells())
+            {
+                if (sheet.TryGetArrayExtent(addr, out _, out _, out _))
+                    return new CommandOutcome(false, "Can't merge cells that overlap a dynamic array's spill range.");
+            }
+        }
+
         // Real Excel allows merging a range that fully CONTAINS one or more smaller existing merged
         // regions: the smaller region(s) are silently absorbed (un-merged) and replaced by the single
         // new merge over the full selection. Only a genuinely PARTIAL overlap -- the new range

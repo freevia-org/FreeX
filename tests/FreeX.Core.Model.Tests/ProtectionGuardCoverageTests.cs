@@ -552,10 +552,23 @@ public class ProtectionGuardCoverageTests
                     transpose: false);
             },
 
-            // R92: removing a chart series is governed by the EditObjects protection bit
-            // (ChartCommandGuards.RejectIfEditObjectsBlocked runs before the chart lookup).
+            // R92/R112-sibling-fix: removing a chart series is governed by the EditObjects
+            // protection bit. As of the R112 sibling fix ChartCommandGuards.RejectIfEditObjectsBlocked
+            // now runs AFTER the chart lookup (it needs the chart to check its per-object Locked
+            // flag), so a real (non-pivot, column-major) chart must be seeded here -- otherwise the
+            // command would fail with "chart not found" instead of exercising protection.
             ["RemoveChartSeriesCommand"] = (wb, sheet) =>
-                new RemoveChartSeriesCommand(sheet.Id, Guid.NewGuid(), seriesIndex: 0),
+            {
+                var chart = new ChartModel
+                {
+                    Type = ChartType.Column,
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2))
+                };
+                sheet.IsProtected = false;
+                sheet.Charts.Add(chart);
+                sheet.IsProtected = true;
+                return new RemoveChartSeriesCommand(sheet.Id, chart.Id, seriesIndex: 0);
+            },
 
             // ---- Goal Seek ----
             ["GoalSeekCommand"] = (wb, sheet) =>
@@ -702,15 +715,28 @@ public class ProtectionGuardCoverageTests
                     new CellAddress(sheet.Id, 1, 2),
                     SparklineKind.Line),
 
-            // R92: the Select-Data dialog's Hidden-and-Empty-Cells setting is a chart mutation and is
-            // governed by the EditObjects protection bit (ChartCommandGuards.RejectIfEditObjectsBlocked
-            // runs before the chart lookup, so no seeded chart is required here).
+            // R92/R112-sibling-fix: the Select-Data dialog's Hidden-and-Empty-Cells setting is a
+            // chart mutation governed by the EditObjects protection bit. As of the R112 sibling fix
+            // ChartCommandGuards.RejectIfEditObjectsBlocked now runs AFTER the chart lookup (it needs
+            // the chart to check its per-object Locked flag), so a real chart must be seeded here --
+            // otherwise the command would fail with "chart not found" instead of exercising
+            // protection, defeating the point of this test.
             ["ConfigureChartHiddenEmptyCellsCommand"] = (wb, sheet) =>
-                new ConfigureChartHiddenEmptyCellsCommand(
+            {
+                var chart = new ChartModel
+                {
+                    Type = ChartType.Column,
+                    DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2))
+                };
+                sheet.IsProtected = false;
+                sheet.Charts.Add(chart);
+                sheet.IsProtected = true;
+                return new ConfigureChartHiddenEmptyCellsCommand(
                     sheet.Id,
-                    Guid.NewGuid(),
+                    chart.Id,
                     ChartBlankDisplayMode.Gap,
-                    showDataInHiddenRowsAndColumns: false),
+                    showDataInHiddenRowsAndColumns: false);
+            },
 
             // R91: duplicating a drawing object is governed by the EditObjects protection bit
             // (DrawingShapeCommandGuards/ChartCommandGuards.RejectIfEditObjectsBlocked). The command

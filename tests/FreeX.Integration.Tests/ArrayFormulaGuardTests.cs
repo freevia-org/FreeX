@@ -55,16 +55,22 @@ public class ArrayFormulaGuardTests
     }
 
     [Fact]
-    public void EditCellsCommand_OnAnchorAlone_IsBlocked()
+    public void EditCellsCommand_OnAnchorAlone_ForDynamicArray_IsAllowed()
     {
-        // Excel blocks editing just the anchor of an existing multi-cell array too, unless the
-        // whole array range is selected - editing "part of an array" includes the anchor alone.
+        // R112-array-anchor-edit: real Excel always allows retyping/replacing a modern dynamic
+        // array's anchor cell directly - that's the defining UX difference from a legacy
+        // Ctrl+Shift+Enter (CSE) array, whose anchor still requires the whole declared range to be
+        // selected. Editing the anchor alone naturally clears/re-establishes the spill.
         var (_, sheet, anchor, ctx) = MakeLiveSpillSetup();
+        var member = new CellAddress(sheet.Id, 1, 9); // I1 - was part of the old spill
 
         var outcome = EditCellsCommand.ForValue(sheet.Id, anchor, new NumberValue(999)).Apply(ctx);
 
-        outcome.Success.Should().BeFalse();
-        outcome.ErrorMessage.Should().Be(CannotChangePartOfArrayMessage);
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        sheet.GetValue(anchor).Should().Be(new NumberValue(999));
+        // The old spill's members must have been vacated by the anchor's own SetCell, not left
+        // dangling with stale values as if the array were still live.
+        sheet.GetValue(member).Should().Be(BlankValue.Instance);
     }
 
     [Fact]

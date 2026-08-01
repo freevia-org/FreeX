@@ -204,6 +204,26 @@ public static partial class XlsxChartPartReader
                 // parse already failed above (that's why ranges.Count == 0), so there is nothing
                 // left to detect a multi-column strip from.
                 result.SeriesInRows = false;
+
+                // R112-io-chartex-verbatim-series-1: r108's ApplyVerbatimSeriesFormulasIfNeeded
+                // call is what lets XlsxChartXmlWriter's classic BuildSeriesStripSequence
+                // (Series.cs) re-derive the series from the ORIGINAL captured formula/cache
+                // instead of a degenerate positional strip cut from the synthetic 1x1 DataRange
+                // above -- every one of the seven r108-fixed readers (e.g. Bar.cs) calls it in
+                // this exact fallback shape. This eighth reader shipped without it, so a
+                // ThreeDBar/ThreeDColumn/Surface/ThreeDSurface chart loaded through the classic
+                // <c:ser> half of this branch got chart.VerbatimSeriesFormulas == null and
+                // silently lost its named-range series on the very next save. The true
+                // <cx:series>-shaped chartEx half (Waterfall/Histogram/BoxAndWhisker/Treemap/
+                // Sunburst/Funnel/Pareto) has no classic <c:ser>/<c:val> shape for
+                // ApplyVerbatimSeriesFormulasIfNeeded to read at all, so it gets its own
+                // chartEx-native capture below feeding XlsxChartXmlWriter.ChartEx.cs's
+                // BuildChartExData.
+                if (chartExSeries.Length > 0)
+                    result.VerbatimSeriesFormulas = BuildChartExVerbatimSeriesFormulas(chartXml, chartExSeries);
+                else
+                    ApplyVerbatimSeriesFormulasIfNeeded(seriesElements, sheetId, sheetNameResolver, result);
+
                 XlsxChartLevelReader.ApplyChartLevelProperties(chartXml, result);
                 XlsxChartSanitizer.SanitizeLoadedChart(result);
                 chart = result;
@@ -378,7 +398,17 @@ public static partial class XlsxChartPartReader
             var series = chartExSeriesElements[i];
             var data = FindChartExData(chartXml, series);
             var catDimension = FindChartExDimension(data, "strDim", "cat");
-            var valDimension = FindChartExDimension(data, "numDim", "val");
+            // A <cx:data> element carries exactly one <cx:numDim> (see BuildChartExData in
+            // XlsxChartXmlWriter.ChartEx.cs), but its @type varies by chart family:
+            // ToChartExNumericDimensionType emits "size" for Treemap/Sunburst (the chartEx
+            // area-size dimension for hierarchical charts) and "val" for every other chartEx
+            // type. Matching on @type=="val" only (as this used to) silently drops Treemap and
+            // Sunburst series entirely. Since there is only ever one numDim per data element,
+            // match it by local name alone rather than re-deriving the chart-type-specific type
+            // string here -- consistent with the other numDim readers in this file (see the
+            // hasTitleRange/DetectDeferredSeriesInRows lookups above, which never filter numDim
+            // by @type either).
+            var valDimension = FindChartExDimension(data, "numDim", dimensionType: null);
             var seriesName = ReadChartExSeriesNameCache(series);
             var categories = ReadChartExStringCacheValues(catDimension);
             var values = ReadChartExNumericCacheValues(valDimension);
@@ -388,11 +418,82 @@ public static partial class XlsxChartPartReader
         return result.Any(s => s.Values.Count > 0) ? result : null;
     }
 
-    /// <summary>Finds a &lt;cx:numDim&gt;/&lt;cx:strDim&gt; child of a chartEx &lt;cx:data&gt; element by its @type attribute.</summary>
-    private static XElement? FindChartExDimension(XElement? data, string dimensionLocalName, string dimensionType) =>
+    /// <summary>
+    /// R112-io-chartex-verbatim-series-2: chartEx analogue of
+    /// <see cref="ApplyVerbatimSeriesFormulasIfNeeded(IEnumerable{XElement}, SheetId, IReadOnlyDictionary{string, SheetId}?, ChartModel)"/>
+    /// for the true &lt;cx:series&gt;-shaped members of the advanced-chart family. Only called from
+    /// the "every series' formula is an unresolvable named range" branch above, so — unlike the
+    /// classic per-series <see cref="XlsxChartSeriesRangeReader.TryCollectVerbatimFormulas"/>, which
+    /// only flags a series whose OWN formula is unparsable — every series gets an entry here
+    /// unconditionally: there is no live chart.DataRange left for
+    /// <c>XlsxChartXmlWriter.ChartEx.cs</c>'s <c>BuildChartExData</c> to derive a positional strip
+    /// range from anyway (see the synthetic 1x1 placeholder set just above this call), so ALL of
+    /// them need the verbatim bypass, not just the ones that happen to look unparsable in
+    /// isolation. Each entry carries the raw &lt;cx:f&gt; formula text for the value (numDim) and
+    /// category (strDim) dimensions, the raw &lt;cx:lvl&gt; cache fragment for each (reused verbatim
+    /// on save exactly like the classic ValCacheXml/CatCacheXml fields), and the raw &lt;cx:nf&gt;
+    /// "name formula" text from the numDim (repurposing the record's TxFormula slot) so the
+    /// series' header-cell reference round-trips too instead of silently reverting to a formula
+    /// built from the synthetic placeholder DataRange.
+    /// </summary>
+    private static List<ChartSeriesVerbatimFormulas> BuildChartExVerbatimSeriesFormulas(
+        XDocument chartXml,
+        IReadOnlyList<XElement> chartExSeriesElements)
+    {
+        var result = new List<ChartSeriesVerbatimFormulas>(chartExSeriesElements.Count);
+        for (var i = 0; i < chartExSeriesElements.Count; i++)
+        {
+            var series = chartExSeriesElements[i];
+            var data = FindChartExData(chartXml, series);
+            var valDimension = FindChartExDimension(data, "numDim", dimensionType: null);
+            var catDimension = FindChartExDimension(data, "strDim", "cat");
+
+            var valFormula = ReadChartExDimensionElementText(valDimension, "f");
+            var catFormula = ReadChartExDimensionElementText(catDimension, "f");
+            var nameFormula = ReadChartExDimensionElementText(valDimension, "nf");
+            var valCacheXml = (valDimension is null ? null : FirstChildElementByLocalName(valDimension, "lvl"))?
+                .ToString(SaveOptions.DisableFormatting);
+            var catCacheXml = (catDimension is null ? null : FirstChildElementByLocalName(catDimension, "lvl"))?
+                .ToString(SaveOptions.DisableFormatting);
+
+            result.Add(new ChartSeriesVerbatimFormulas(
+                SeriesIndex: i,
+                // A CT_NumericDimension requires a <cx:f>, so this should never actually be null
+                // for a well-formed file; the empty-string fallback only guards against a
+                // malformed/truncated <cx:data> so the series-index alignment with
+                // BuildChartExSeries's positional dataId assignment never develops a gap.
+                ValFormula: valFormula ?? string.Empty,
+                CatFormula: catFormula,
+                TxFormula: nameFormula,
+                ValCacheXml: valCacheXml,
+                CatCacheXml: catCacheXml));
+        }
+
+        return result;
+    }
+
+    /// <summary>Reads a direct child element's text by local name, or null when absent/blank.</summary>
+    private static string? ReadChartExDimensionElementText(XElement? dimension, string childLocalName)
+    {
+        if (dimension is null)
+            return null;
+
+        var value = FirstChildElementByLocalName(dimension, childLocalName)?.Value;
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    /// <summary>
+    /// Finds a &lt;cx:numDim&gt;/&lt;cx:strDim&gt; child of a chartEx &lt;cx:data&gt; element. When
+    /// <paramref name="dimensionType"/> is non-null, the child's @type attribute must match it
+    /// (e.g. "cat" picks the category &lt;cx:strDim&gt; out from among others). Pass null to accept
+    /// any @type -- used for &lt;cx:numDim&gt;, which a &lt;cx:data&gt; element carries exactly one
+    /// of regardless of its @type ("val" for most chartEx types, "size" for Treemap/Sunburst; see
+    /// <c>ToChartExNumericDimensionType</c> in XlsxChartXmlWriter.ChartEx.cs).
+    /// </summary>
+    private static XElement? FindChartExDimension(XElement? data, string dimensionLocalName, string? dimensionType) =>
         data?.Elements().FirstOrDefault(element =>
             element.Name.LocalName == dimensionLocalName &&
-            string.Equals(element.Attribute("type")?.Value, dimensionType, StringComparison.OrdinalIgnoreCase));
+            (dimensionType is null || string.Equals(element.Attribute("type")?.Value, dimensionType, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>Reads a chartEx series' own cached name from &lt;cx:tx&gt;/&lt;cx:txData&gt;/&lt;cx:v&gt;.</summary>
     private static string? ReadChartExSeriesNameCache(XElement series) =>

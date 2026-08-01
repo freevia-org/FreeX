@@ -155,11 +155,13 @@ public sealed class SetTextBoxTextCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
             return TextBoxCommandGuards.TextBoxNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-text-box Locked override so an
+        // author-unlocked text box stays text-editable even while the sheet blocks "Edit objects".
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousText = textBox.Text;
         textBox.Text = _text;
@@ -201,11 +203,13 @@ public sealed class RotateTextBoxCommand : IWorkbookCommand
             return new CommandOutcome(false, "Text box rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
             return TextBoxCommandGuards.TextBoxNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-text-box Locked override so an
+        // author-unlocked text box stays rotatable even while the sheet blocks "Edit objects".
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousRotationDegrees = textBox.RotationDegrees;
         _previousIsSourceLoaded = textBox.IsSourceLoaded;
@@ -270,11 +274,13 @@ public sealed class SetTextBoxColorsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
             return TextBoxCommandGuards.TextBoxNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-text-box Locked override so an
+        // author-unlocked text box's colors stay editable even while the sheet blocks "Edit objects".
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousFillColor = textBox.FillColor;
         _previousOutlineColor = textBox.OutlineColor;

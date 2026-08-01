@@ -21,6 +21,7 @@ public sealed class FillSeriesStepDialog : Window
     private readonly RadioButton _weekdayButton = new() { Content = UiText.Get("FillSeriesStep_Weekday"), GroupName = "DateUnit" };
     private readonly RadioButton _monthButton = new() { Content = UiText.Get("FillSeriesStep_Month"), GroupName = "DateUnit" };
     private readonly RadioButton _yearButton = new() { Content = UiText.Get("FillSeriesStep_Year"), GroupName = "DateUnit" };
+    private readonly CheckBox _trendBox = new() { Content = UiText.Get("FillSeriesStep_Trend") };
 
     public FillSeriesOptions Result { get; private set; } = FillSeriesPlanner.DefaultOptions;
 
@@ -29,7 +30,7 @@ public sealed class FillSeriesStepDialog : Window
         Result = FillSeriesPlanner.CreateDefaultOptions(step);
         Title = UiText.Get("FillSeriesStep_Title");
         Width = 380;
-        Height = 356;
+        Height = 386;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -41,12 +42,20 @@ public sealed class FillSeriesStepDialog : Window
         AutomationProperties.SetName(_stopBox, UiText.Get("FillSeriesStep_StopValueAutomationName"));
         AutomationProperties.SetAutomationId(_stopBox, "FillSeriesStopValueBox");
         AutomationProperties.SetHelpText(_stopBox, UiText.Get("FillSeriesStep_StopValueHelpText"));
+        AutomationProperties.SetAutomationId(_trendBox, "FillSeriesTrendCheckBox");
         _linearButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _growthButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _dateButton.Checked += (_, _) => UpdateDateUnitAvailability();
         _autoFillButton.Checked += (_, _) => UpdateDateUnitAvailability();
+        _linearButton.Checked += (_, _) => UpdateTrendAvailability();
+        _growthButton.Checked += (_, _) => UpdateTrendAvailability();
+        _dateButton.Checked += (_, _) => UpdateTrendAvailability();
+        _autoFillButton.Checked += (_, _) => UpdateTrendAvailability();
+        _trendBox.Checked += (_, _) => UpdateTrendAvailability();
+        _trendBox.Unchecked += (_, _) => UpdateTrendAvailability();
         Content = CreateSeriesContent();
         UpdateDateUnitAvailability();
+        UpdateTrendAvailability();
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
@@ -63,6 +72,17 @@ public sealed class FillSeriesStepDialog : Window
         _weekdayButton.IsEnabled = isDateSeries;
         _monthButton.IsEnabled = isDateSeries;
         _yearButton.IsEnabled = isDateSeries;
+    }
+
+    private void UpdateTrendAvailability()
+    {
+        var isTrendEligible = FillSeriesPlanner.IsTrendEnabled(SelectedSeriesType());
+        _trendBox.IsEnabled = isTrendEligible;
+        if (!isTrendEligible)
+            _trendBox.IsChecked = false;
+
+        // Excel's Step value plays no part in Trend mode -- the box is disabled while Trend is checked.
+        _stepBox.IsEnabled = !(isTrendEligible && _trendBox.IsChecked == true);
     }
 
     public static bool TryCreateResult(string? input, out FillSeriesOptions result, out string? error)
@@ -97,6 +117,18 @@ public sealed class FillSeriesStepDialog : Window
         string? stopText,
         out FillSeriesOptions result,
         out string? error,
+        out FillSeriesInputError inputError) =>
+        TryCreateResult(seriesIn, type, dateUnit, stepText, stopText, trend: false, out result, out error, out inputError);
+
+    public static bool TryCreateResult(
+        FillSeriesDirection seriesIn,
+        FillSeriesType type,
+        FillSeriesDateUnit dateUnit,
+        string? stepText,
+        string? stopText,
+        bool trend,
+        out FillSeriesOptions result,
+        out string? error,
         out FillSeriesInputError inputError)
     {
         if (FillSeriesPlanner.TryCreateOptions(
@@ -105,6 +137,7 @@ public sealed class FillSeriesStepDialog : Window
                 dateUnit,
                 stepText,
                 stopText,
+                trend,
                 CultureInfo.CurrentCulture,
                 out result,
                 out inputError))
@@ -113,7 +146,7 @@ public sealed class FillSeriesStepDialog : Window
             return true;
         }
 
-        result = FillSeriesPlanner.DefaultOptions with { SeriesIn = seriesIn, Type = type, DateUnit = dateUnit };
+        result = FillSeriesPlanner.DefaultOptions with { SeriesIn = seriesIn, Type = type, DateUnit = dateUnit, Trend = trend };
         error = ToErrorMessage(inputError);
         return false;
     }
@@ -137,6 +170,8 @@ public sealed class FillSeriesStepDialog : Window
         stack.Children.Add(CreateHorizontalRow(_dayButton, _weekdayButton, _monthButton, _yearButton));
         stack.Children.Add(CreateLabeledTextBox(UiText.Get("FillSeriesStep_StepValueLabel"), _stepBox));
         stack.Children.Add(CreateLabeledTextBox(UiText.Get("FillSeriesStep_StopValueLabel"), _stopBox));
+        _trendBox.Margin = new Thickness(0, 10, 0, 0);
+        stack.Children.Add(_trendBox);
         stack.Children.Add(DialogButtonRowFactory.Create(Accept, 72, rowMargin: new Thickness(0, 16, 0, 0)));
         return stack;
     }
@@ -149,6 +184,7 @@ public sealed class FillSeriesStepDialog : Window
                 SelectedDateUnit(),
                 _stepBox.Text,
                 _stopBox.Text,
+                _trendBox.IsEnabled && _trendBox.IsChecked == true,
                 out var result,
                 out var error,
                 out var inputError))

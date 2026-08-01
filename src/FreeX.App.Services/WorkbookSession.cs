@@ -705,55 +705,62 @@ public sealed class WorkbookSession : IDisposable
     /// <summary>Whether a repeatable command is available for <see cref="RepeatLastAction"/> (F4).</summary>
     public bool CanRepeatLastAction => _cellEditService.CanRepeatLastEdit(Workbook.Id);
 
-    public bool IsSelectedRangeStartBold => GetCellStyle(SelectedRange.Start).Bold;
+    // NOTE: these read GetCellStyle(ActiveCell), NOT GetCellStyle(SelectedRange.Start). SelectedRange.Start
+    // is GridRange's normalized top-left corner (see GridRange.cs), which is only the same cell as
+    // ActiveCell when the selection gesture happened to run down/right. ActiveCell is pinned to the actual
+    // anchor cell the user started the drag/shift-extend from (see SelectAnchoredRange), and that is the
+    // cell whose formatting Excel's ribbon toggles show/flip -- e.g. click C5 (bold), shift-click up to A1:
+    // Excel keeps the active cell at C5 and shows Bold as pressed, even though most of A1:C5 isn't bold.
+    // Reading Start here instead would report/flip against the wrong corner on any upward or leftward drag.
+    public bool IsSelectedRangeStartBold => GetCellStyle(ActiveCell).Bold;
 
-    public bool IsSelectedRangeStartItalic => GetCellStyle(SelectedRange.Start).Italic;
+    public bool IsSelectedRangeStartItalic => GetCellStyle(ActiveCell).Italic;
 
     public bool IsSelectedRangeStartUnderline
     {
         get
         {
-            var style = GetCellStyle(SelectedRange.Start);
+            var style = GetCellStyle(ActiveCell);
             return style.Underline && !style.Strikethrough;
         }
     }
 
-    public bool IsSelectedRangeStartStrikethrough => GetCellStyle(SelectedRange.Start).Strikethrough;
+    public bool IsSelectedRangeStartStrikethrough => GetCellStyle(ActiveCell).Strikethrough;
 
-    public bool IsSelectedRangeStartDoubleUnderline => GetCellStyle(SelectedRange.Start).DoubleUnderline;
+    public bool IsSelectedRangeStartDoubleUnderline => GetCellStyle(ActiveCell).DoubleUnderline;
 
-    public bool IsSelectedRangeStartWrapText => GetCellStyle(SelectedRange.Start).WrapText;
+    public bool IsSelectedRangeStartWrapText => GetCellStyle(ActiveCell).WrapText;
 
-    public bool IsSelectedRangeStartLocked => GetCellStyle(SelectedRange.Start).Locked;
+    public bool IsSelectedRangeStartLocked => GetCellStyle(ActiveCell).Locked;
 
     public bool IsSelectedRangeMerged => CellMergePlanner.IsSelectionMerged(ActiveSheet, SelectedRange);
 
     public HorizontalAlignment SelectedRangeStartHorizontalAlignment =>
-        GetCellStyle(SelectedRange.Start).HorizontalAlignment;
+        GetCellStyle(ActiveCell).HorizontalAlignment;
 
     public VerticalAlignment SelectedRangeStartVerticalAlignment =>
-        GetCellStyle(SelectedRange.Start).VerticalAlignment;
+        GetCellStyle(ActiveCell).VerticalAlignment;
 
     public int SelectedRangeStartIndentLevel =>
-        GetCellStyle(SelectedRange.Start).IndentLevel;
+        GetCellStyle(ActiveCell).IndentLevel;
 
     public double SelectedRangeStartFontSize =>
-        GetCellStyle(SelectedRange.Start).FontSize;
+        GetCellStyle(ActiveCell).FontSize;
 
     public int SelectedRangeStartTextRotation =>
-        GetCellStyle(SelectedRange.Start).TextRotation;
+        GetCellStyle(ActiveCell).TextRotation;
 
     public CellColor SelectedRangeStartFontColor =>
-        GetCellStyle(SelectedRange.Start).FontColor;
+        GetCellStyle(ActiveCell).FontColor;
 
     public CellColor? SelectedRangeStartFillColor =>
-        GetCellStyle(SelectedRange.Start).FillColor;
+        GetCellStyle(ActiveCell).FillColor;
 
     /// <summary>Returns the concrete style used to seed Format Cells, including theme references.</summary>
-    public CellStyle SelectedRangeStartStyle => GetCellStyle(SelectedRange.Start).Clone();
+    public CellStyle SelectedRangeStartStyle => GetCellStyle(ActiveCell).Clone();
 
     public string SelectedRangeStartNumberFormat =>
-        GetCellStyle(SelectedRange.Start).NumberFormat;
+        GetCellStyle(ActiveCell).NumberFormat;
 
     public WorkbookSelectionStats SelectionStats =>
         _selectionStatsCache.GetOrCalculate(ActiveSheet, SelectedRanges, _selectionStatsRevision);
@@ -1030,17 +1037,22 @@ public sealed class WorkbookSession : IDisposable
             out range);
     }
 
+    // R112-model-active-cell-vs-selection-1-1 sibling fix: read ActiveCell, NOT SelectedRange.Start.
+    // A selection made upward/leftward (e.g. drag from D4 up to A1) pins ActiveCell to D4 while
+    // SelectedRange.Start normalizes to A1 -- Excel opens the hyperlink under the ACTIVE cell, not
+    // the selection's normalized top-left corner. See the ribbon-toggle-state precedent a few
+    // members above (IsSelectedRangeStartBold etc.) for the same ActiveCell-vs-Start distinction.
     public bool CanOpenSelectedHyperlink =>
-        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _);
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, ActiveCell, CurrentFilePath, out _);
 
     public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan) =>
-        TryGetHyperlinkPlan(SelectedRange.Start, out plan);
+        TryGetHyperlinkPlan(ActiveCell, out plan);
 
     public bool TryGetHyperlinkPlan(CellAddress address, out HyperlinkNavigationPlan? plan) =>
         HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, address, CurrentFilePath, out plan);
 
     public WorkbookNavigationResult OpenSelectedHyperlink() =>
-        OpenHyperlink(SelectedRange.Start);
+        OpenHyperlink(ActiveCell);
 
     public WorkbookNavigationResult OpenHyperlink(CellAddress address)
     {

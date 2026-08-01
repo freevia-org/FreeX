@@ -185,16 +185,32 @@ public sealed partial class XlsxFileAdapter
         if (featurePlan.HasHeaderFooterPictures)
         {
             IReadOnlySet<string>? sheetsToPreserve = null;
+            IReadOnlySet<int>? reservedHeaderFooterVmlIndices = null;
             if (SourcePackages.TryGetValue(workbook, out var headerFooterSourcePackage))
             {
                 using var sourceStream = headerFooterSourcePackage.OpenRead();
                 sheetsToPreserve = XlsxHeaderFooterPictureReaderWriter.FindSheetsWithUnchangedSourcePictures(
                     sourceStream,
                     workbook);
+
+                // R112-io-hf-vml-path-collision: learn which "freexHeaderFooterN.vml" indices the
+                // sheets we are ABOUT to skip (sheetsToPreserve) still reference in the SOURCE
+                // package, so the Save() call below never restarts its own counter onto one of
+                // those numbers and overwrites a picture the preservation pass further down this
+                // method (XlsxWorksheetVmlReferencePreserver, via PreserveSourcePackageParts) is
+                // about to copy into the SAME path.
+                if (sheetsToPreserve.Count > 0)
+                {
+                    sourceStream.Position = 0;
+                    reservedHeaderFooterVmlIndices = XlsxHeaderFooterPictureReaderWriter.GetPreservedVmlIndices(
+                        sourceStream,
+                        workbook,
+                        sheetsToPreserve);
+                }
             }
 
             packageStream.Position = 0;
-            XlsxHeaderFooterPictureReaderWriter.Save(packageStream, workbook, sheetsToPreserve);
+            XlsxHeaderFooterPictureReaderWriter.Save(packageStream, workbook, sheetsToPreserve, reservedHeaderFooterVmlIndices);
         }
 
         if (featurePlan.HasPersistableViewState)

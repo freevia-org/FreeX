@@ -103,9 +103,24 @@ internal static class XlsxUnsupportedSheetReferencePreserver
         var reclaimedWorksheetParts = new List<(string Part, string? RelId)>();
         var changed = false;
 
+        // R112-io-preserver-order-1: tracks the last target <sheet> element known to sit at or
+        // before the current point in SOURCE order, so a preserved dialog/macro sheet (which has
+        // no placeholder of its own) can be re-inserted at its original ordinal position instead of
+        // always landing at the end of <sheets>. Updated whenever the current source sheet still
+        // has a live counterpart in the target (by name, or -- for a renamed chartsheet -- via the
+        // Case 1 match below) and left untouched when the source sheet has no target counterpart at
+        // all (a deleted chartsheet), so it always reflects the nearest preceding survivor.
+        XElement? previousTargetSheet = null;
+
         foreach (var sourceSheet in sourceSheets.Elements(workbookNs + "sheet"))
         {
             var name = sourceSheet.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(name) &&
+                targetSheetsByName.TryGetValue(name, out var survivingTargetSheet))
+            {
+                previousTargetSheet = survivingTargetSheet;
+            }
+
             var sourceRelId = sourceSheet.Attribute(relNs + "id")?.Value;
             if (string.IsNullOrWhiteSpace(name) ||
                 string.IsNullOrWhiteSpace(sourceRelId) ||
@@ -157,6 +172,10 @@ internal static class XlsxUnsupportedSheetReferencePreserver
                     reclaimedWorksheetParts.Add((collidingWorksheetPart, collidingRelId));
                 }
 
+                // The name-based lookup above only finds a same-named survivor; a renamed
+                // chartsheet reclaimed via the dequeue is this source sheet's actual counterpart,
+                // so it must become the position anchor for whatever follows in source order.
+                previousTargetSheet = collidingTargetSheet;
                 changed = true;
                 continue;
             }
@@ -181,7 +200,19 @@ internal static class XlsxUnsupportedSheetReferencePreserver
             var preservedSheet = new XElement(sourceSheet);
             preservedSheet.SetAttributeValue(relNs + "id", targetRelId);
             preservedSheet.SetAttributeValue("sheetId", nextSheetId.ToString(CultureInfo.InvariantCulture));
-            targetSheets.Add(preservedSheet);
+
+            // R112-io-preserver-order-1: re-insert at this sheet's original ordinal position
+            // (immediately after the nearest preceding surviving sheet) instead of unconditionally
+            // appending to the end of <sheets> -- otherwise every full-rebuild save silently drags
+            // a macro/dialog sheet that sat in the middle of the tab strip down to the last tab.
+            // previousTargetSheet is updated as we insert, so a run of consecutive preserved sheets
+            // chains in source order rather than reversing.
+            if (previousTargetSheet is not null)
+                previousTargetSheet.AddAfterSelf(preservedSheet);
+            else
+                targetSheets.AddFirst(preservedSheet);
+            previousTargetSheet = preservedSheet;
+
             targetSheetNames.Add(name);
             usedSheetIds.Add(nextSheetId);
             changed = true;

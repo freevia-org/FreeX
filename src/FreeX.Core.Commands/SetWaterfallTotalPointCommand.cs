@@ -28,11 +28,14 @@ public sealed class SetWaterfallTotalPointCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
+
+        // R112-model-drawing-object-lock-1-1 sibling fix: layer in the per-chart Locked override so
+        // an author-unlocked waterfall chart's total-point flags stay editable even while the sheet
+        // blocks "Edit objects".
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
+            return protectedOutcome;
 
         if (chart.Type != ChartType.Waterfall)
             return new CommandOutcome(false, "Set as Total is only available for waterfall charts.");

@@ -726,6 +726,41 @@ public static partial class BuiltInFunctions
         bool ignoreNestedAggregates,
         List<double> nums)
     {
+        // Processes one genuine worksheet-range argument (or one area of a union argument -- see
+        // the UnionValue branch below) into `nums`, honoring ignore-errors/hidden-row/nested-
+        // AGGREGATE options. Extracted to a local function so a UnionValue's areas can each run
+        // through the identical logic a plain RangeValue argument does, mirroring
+        // BuiltInFunctions.Subtotal.cs's ProcessSubtotalRange pattern (R112-aggregate-union-ref1).
+        ErrorValue? CollectRange(RangeValue rv)
+        {
+            // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
+            // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
+            // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
+            // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
+            // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
+            // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
+            // no coordinate heuristic can distinguish the two without wrongly dropping elements.
+            bool isReference = rv.IsSheetReference;
+            for (int r = 0; r < rv.RowCount; r++)
+            {
+                uint absRow = rv.StartRow + (uint)r;
+                if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                for (int c = 0; c < rv.ColCount; c++)
+                {
+                    uint absCol = rv.StartCol + (uint)c;
+                    if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                    var cell = rv.Cells[r, c];
+                    if (cell is ErrorValue ce)
+                    {
+                        if (ignoreErrors) continue;
+                        return ce;
+                    }
+                    if (TryCellNumber(cell, out double value)) nums.Add(value);
+                }
+            }
+            return null;
+        }
+
         // Collect from positional value args (skip funcNum, options, and a potential k arg).
         for (int i = 2; i < args.Count; i++)
         {
@@ -738,30 +773,22 @@ public static partial class BuiltInFunctions
             }
             if (arg is RangeValue rv)
             {
-                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
-                // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
-                // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
-                // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
-                // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
-                // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
-                // no coordinate heuristic can distinguish the two without wrongly dropping elements.
-                bool isReference = rv.IsSheetReference;
-                for (int r = 0; r < rv.RowCount; r++)
+                var rangeError = CollectRange(rv);
+                if (rangeError is not null) return rangeError;
+            }
+            else if (arg is UnionValue uv)
+            {
+                // R112-aggregate-union-ref1: a parenthesized union argument (e.g.
+                // AGGREGATE(9,0,(A1:A5,C1:C5))) is a genuine single reference, exactly as it is for
+                // SUBTOTAL/SUM/etc. (see BuiltInFunctions.Subtotal.cs's own UnionValue branch). Each
+                // area inside the union is a real RangeValue carrying its own IsSheetReference/
+                // StartRow/SheetName, so process each area individually through the same CollectRange
+                // logic rather than treating the opaque UnionValue as a scalar (which silently
+                // contributed nothing before this fix).
+                foreach (var area in uv.Areas)
                 {
-                    uint absRow = rv.StartRow + (uint)r;
-                    if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
-                    for (int c = 0; c < rv.ColCount; c++)
-                    {
-                        uint absCol = rv.StartCol + (uint)c;
-                        if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
-                        var cell = rv.Cells[r, c];
-                        if (cell is ErrorValue ce)
-                        {
-                            if (ignoreErrors) continue;
-                            return ce;
-                        }
-                        if (TryCellNumber(cell, out double value)) nums.Add(value);
-                    }
+                    var areaError = CollectRange(area);
+                    if (areaError is not null) return areaError;
                 }
             }
             else if (TryCellNumber(arg, out double value)) nums.Add(value);
@@ -780,6 +807,40 @@ public static partial class BuiltInFunctions
         bool ignoreNestedAggregates)
     {
         var mode = new AggregateModeAccumulator();
+
+        // See CollectAggregateNumbers's CollectRange local function for why this is extracted
+        // (R112-aggregate-union-ref1): a UnionValue's areas must run through the identical
+        // per-range logic a plain RangeValue argument does.
+        ErrorValue? CollectRange(RangeValue rv)
+        {
+            // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
+            // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
+            // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
+            // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
+            // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
+            // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
+            // no coordinate heuristic can distinguish the two without wrongly dropping elements.
+            bool isReference = rv.IsSheetReference;
+            for (int r = 0; r < rv.RowCount; r++)
+            {
+                uint absRow = rv.StartRow + (uint)r;
+                if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                for (int c = 0; c < rv.ColCount; c++)
+                {
+                    uint absCol = rv.StartCol + (uint)c;
+                    if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                    var cell = rv.Cells[r, c];
+                    if (cell is ErrorValue ce)
+                    {
+                        if (ignoreErrors) continue;
+                        return ce;
+                    }
+                    if (TryCellNumber(cell, out double value)) mode.Add(value);
+                }
+            }
+            return null;
+        }
+
         for (int i = 2; i < args.Count; i++)
         {
             var arg = args[i];
@@ -791,30 +852,18 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
-                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
-                // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
-                // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
-                // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
-                // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
-                // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
-                // no coordinate heuristic can distinguish the two without wrongly dropping elements.
-                bool isReference = rv.IsSheetReference;
-                for (int r = 0; r < rv.RowCount; r++)
+                var rangeError = CollectRange(rv);
+                if (rangeError is not null) return rangeError;
+            }
+            else if (arg is UnionValue uv)
+            {
+                // R112-aggregate-union-ref1: see CollectAggregateNumbers's identical UnionValue
+                // branch -- a parenthesized union argument is a genuine single reference and each
+                // area must be processed individually.
+                foreach (var area in uv.Areas)
                 {
-                    uint absRow = rv.StartRow + (uint)r;
-                    if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
-                    for (int c = 0; c < rv.ColCount; c++)
-                    {
-                        uint absCol = rv.StartCol + (uint)c;
-                        if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
-                        var cell = rv.Cells[r, c];
-                        if (cell is ErrorValue ce)
-                        {
-                            if (ignoreErrors) continue;
-                            return ce;
-                        }
-                        if (TryCellNumber(cell, out double value)) mode.Add(value);
-                    }
+                    var areaError = CollectRange(area);
+                    if (areaError is not null) return areaError;
                 }
             }
             else if (TryCellNumber(arg, out double value))
@@ -841,6 +890,40 @@ public static partial class BuiltInFunctions
         bool ignoreNestedAggregates)
     {
         long count = 0;
+
+        // See CollectAggregateNumbers's CollectRange local function for why this is extracted
+        // (R112-aggregate-union-ref1): a UnionValue's areas must run through the identical
+        // per-range logic a plain RangeValue argument does.
+        ErrorValue? CollectRange(RangeValue rv)
+        {
+            // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
+            // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
+            // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
+            // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
+            // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
+            // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
+            // no coordinate heuristic can distinguish the two without wrongly dropping elements.
+            bool isReference = rv.IsSheetReference;
+            for (int r = 0; r < rv.RowCount; r++)
+            {
+                uint absRow = rv.StartRow + (uint)r;
+                if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                for (int c = 0; c < rv.ColCount; c++)
+                {
+                    uint absCol = rv.StartCol + (uint)c;
+                    if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                    var cell = rv.Cells[r, c];
+                    if (cell is ErrorValue ce)
+                    {
+                        if (ignoreErrors) continue;
+                        return ce;
+                    }
+                    if (cell is not BlankValue) count++;
+                }
+            }
+            return null;
+        }
+
         for (int i = 2; i < args.Count; i++)
         {
             if (i == kIndex) continue;
@@ -853,30 +936,20 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
-                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
-                // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
-                // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
-                // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
-                // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
-                // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
-                // no coordinate heuristic can distinguish the two without wrongly dropping elements.
-                bool isReference = rv.IsSheetReference;
-                for (int r = 0; r < rv.RowCount; r++)
+                var rangeError = CollectRange(rv);
+                if (rangeError is not null) return rangeError;
+            }
+            else if (arg is UnionValue uv)
+            {
+                // R112-aggregate-union-ref1: see CollectAggregateNumbers's identical UnionValue
+                // branch -- a parenthesized union argument is a genuine single reference (e.g.
+                // AGGREGATE(3,0,(A1:A5,C1:C5)) for COUNTA-mode) and each area must be counted
+                // individually rather than the whole union matching "not BlankValue" and
+                // incrementing count by exactly 1.
+                foreach (var area in uv.Areas)
                 {
-                    uint absRow = rv.StartRow + (uint)r;
-                    if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
-                    for (int c = 0; c < rv.ColCount; c++)
-                    {
-                        uint absCol = rv.StartCol + (uint)c;
-                        if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
-                        var cell = rv.Cells[r, c];
-                        if (cell is ErrorValue ce)
-                        {
-                            if (ignoreErrors) continue;
-                            return ce;
-                        }
-                        if (cell is not BlankValue) count++;
-                    }
+                    var areaError = CollectRange(area);
+                    if (areaError is not null) return areaError;
                 }
             }
             else if (arg is not BlankValue)
@@ -898,6 +971,40 @@ public static partial class BuiltInFunctions
         bool ignoreNestedAggregates)
     {
         var numeric = new AggregateNumericAccumulator();
+
+        // See CollectAggregateNumbers's CollectRange local function for why this is extracted
+        // (R112-aggregate-union-ref1): a UnionValue's areas must run through the identical
+        // per-range logic a plain RangeValue argument does.
+        ErrorValue? CollectRange(RangeValue rv)
+        {
+            // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
+            // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
+            // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
+            // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
+            // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
+            // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
+            // no coordinate heuristic can distinguish the two without wrongly dropping elements.
+            bool isReference = rv.IsSheetReference;
+            for (int r = 0; r < rv.RowCount; r++)
+            {
+                uint absRow = rv.StartRow + (uint)r;
+                if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
+                for (int c = 0; c < rv.ColCount; c++)
+                {
+                    uint absCol = rv.StartCol + (uint)c;
+                    if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
+                    var cell = rv.Cells[r, c];
+                    if (cell is ErrorValue ce)
+                    {
+                        if (ignoreErrors) continue;
+                        return ce;
+                    }
+                    if (TryCellNumber(cell, out double value)) numeric.Add(value, funcNum);
+                }
+            }
+            return null;
+        }
+
         for (int i = 2; i < args.Count; i++)
         {
             if (i == kIndex) continue;
@@ -910,30 +1017,18 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
-                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
-                // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
-                // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
-                // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
-                // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
-                // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
-                // no coordinate heuristic can distinguish the two without wrongly dropping elements.
-                bool isReference = rv.IsSheetReference;
-                for (int r = 0; r < rv.RowCount; r++)
+                var rangeError = CollectRange(rv);
+                if (rangeError is not null) return rangeError;
+            }
+            else if (arg is UnionValue uv)
+            {
+                // R112-aggregate-union-ref1: see CollectAggregateNumbers's identical UnionValue
+                // branch -- a parenthesized union argument is a genuine single reference and each
+                // area must be processed individually.
+                foreach (var area in uv.Areas)
                 {
-                    uint absRow = rv.StartRow + (uint)r;
-                    if (ignoreHiddenRows && isReference && IsAggregateRowHidden(ctx, rv, absRow)) continue;
-                    for (int c = 0; c < rv.ColCount; c++)
-                    {
-                        uint absCol = rv.StartCol + (uint)c;
-                        if (ignoreNestedAggregates && isReference && IsNestedSubtotalOrAggregateCell(ctx, rv, absRow, absCol)) continue;
-                        var cell = rv.Cells[r, c];
-                        if (cell is ErrorValue ce)
-                        {
-                            if (ignoreErrors) continue;
-                            return ce;
-                        }
-                        if (TryCellNumber(cell, out double value)) numeric.Add(value, funcNum);
-                    }
+                    var areaError = CollectRange(area);
+                    if (areaError is not null) return areaError;
                 }
             }
             else if (TryCellNumber(arg, out double value))

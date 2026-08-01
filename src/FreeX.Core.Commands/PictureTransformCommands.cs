@@ -141,11 +141,13 @@ public sealed class RotatePictureCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
             return PictureCommandGuards.PictureNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-picture Locked override so an
+        // author-unlocked picture stays rotatable even while the sheet blocks "Edit objects".
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousRotationDegrees = picture.RotationDegrees;
         picture.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);
@@ -184,11 +186,14 @@ public sealed class SetPictureLockAspectRatioCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
             return PictureCommandGuards.PictureNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-picture Locked override so an
+        // author-unlocked picture's aspect-ratio lock stays editable even while the sheet blocks
+        // "Edit objects".
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousLockAspectRatio = picture.LockAspectRatio;
         picture.LockAspectRatio = _lockAspectRatio;
@@ -235,11 +240,13 @@ public sealed class SetPictureCropCommand : IWorkbookCommand
             return new CommandOutcome(false, "Picture crop values must be finite percentages between 0 and 100%, with visible width and height remaining.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!PictureCommandGuards.TryFindPicture(sheet, _pictureId, out var picture))
             return PictureCommandGuards.PictureNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-picture Locked override so an
+        // author-unlocked picture stays croppable even while the sheet blocks "Edit objects".
+        if (PictureCommandGuards.RejectIfEditObjectsBlocked(sheet, picture) is { } protectedOutcome)
+            return protectedOutcome;
         if (picture.Kind != PictureKind.Image)
             return new CommandOutcome(false, "Only inserted image pictures can be cropped.");
 

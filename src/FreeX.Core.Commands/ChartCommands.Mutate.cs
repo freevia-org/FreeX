@@ -22,13 +22,16 @@ public sealed class ChangePivotChartTypeCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.UsePivotTableReports) is { } pivotProtectedOutcome)
             return pivotProtectedOutcome;
 
         if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.PivotChartNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-chart Locked override so an
+        // author-unlocked PivotChart's type stays editable even while the sheet blocks "Edit objects".
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
+            return protectedOutcome;
         if (!chart.IsPivotChart || string.IsNullOrWhiteSpace(chart.PivotTableName))
             return ChartCommandGuards.SelectedChartIsNotPivotChart();
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
@@ -76,11 +79,13 @@ public sealed class SetChartStyleCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-chart Locked override so an
+        // author-unlocked chart's style stays editable even while the sheet blocks "Edit objects".
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousChartStyleId = chart.ChartStyleId;
         chart.ChartStyleId = _chartStyleId;
@@ -130,11 +135,13 @@ public sealed class ChangeChartTypeCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-chart Locked override so an
+        // author-unlocked chart's type stays editable even while the sheet blocks "Edit objects".
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
+            return protectedOutcome;
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
         if (ChartAuthoringPlanner.RejectIfUnsupported(_chartType) is { } unsupportedOutcome)
@@ -245,11 +252,14 @@ public sealed class ChangeChartSourceCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!ChartCommandGuards.TryFindChart(sheet, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-chart Locked override so an
+        // author-unlocked chart's data source stays editable even while the sheet blocks
+        // "Edit objects".
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(sheet, chart) is { } protectedOutcome)
+            return protectedOutcome;
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
         if (_dataRange.Start.Sheet != _sheetId || _dataRange.End.Sheet != _sheetId)
