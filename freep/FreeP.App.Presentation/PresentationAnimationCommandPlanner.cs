@@ -23,6 +23,8 @@ public enum PresentationMotionPathPreset
     Down,
     ArcRight,
     ArcLeft,
+    ArcUp,
+    ArcDown,
 }
 
 public sealed record PresentationAnimationCommandPlan(
@@ -89,6 +91,8 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.motion.down", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.Down),
             new PresentationAnimationCommandPlan("freep.anim.motion.arc-right", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.ArcRight),
             new PresentationAnimationCommandPlan("freep.anim.motion.arc-left", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.ArcLeft),
+            new PresentationAnimationCommandPlan("freep.anim.motion.arc-up", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.ArcUp),
+            new PresentationAnimationCommandPlan("freep.anim.motion.arc-down", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.ArcDown),
             new PresentationAnimationCommandPlan("freep.anim.none", PresentationAnimationCommandIntentKind.RemoveSelectedShapeAnimations),
             new PresentationAnimationCommandPlan("freep.anim.trigger", PresentationAnimationCommandIntentKind.SetTrigger),
             new PresentationAnimationCommandPlan("freep.anim.duration", PresentationAnimationCommandIntentKind.SetDuration),
@@ -243,6 +247,12 @@ public static class PresentationAnimationCommandPlanner
                 break;
             case PresentationMotionPathPreset.ArcLeft:
                 motion.Segments.Add(MotionPathSegment.CubicTo(-0.15, -0.25, -0.35, -0.25, -0.5, 0));
+                break;
+            case PresentationMotionPathPreset.ArcUp:
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.25, -0.15, 0.25, -0.35, 0, -0.5));
+                break;
+            case PresentationMotionPathPreset.ArcDown:
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.25, 0.15, 0.25, 0.35, 0, 0.5));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(preset), preset, null);

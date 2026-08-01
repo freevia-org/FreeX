@@ -1139,6 +1139,8 @@ public static class FreePRibbon
             group.Medium("freep.anim.motion.down", FreePRibbonText.AnimationMotionDownCommand.Label, RibbonCommandIconKind.ArrowDown, FreePRibbonText.AnimationMotionDownCommand.KeyTip);
             group.Medium("freep.anim.motion.arc-right", FreePRibbonText.AnimationMotionArcRightCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionArcRightCommand.KeyTip);
             group.Medium("freep.anim.motion.arc-left", FreePRibbonText.AnimationMotionArcLeftCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionArcLeftCommand.KeyTip);
+            group.Medium("freep.anim.motion.arc-up", FreePRibbonText.AnimationMotionArcUpCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionArcUpCommand.KeyTip);
+            group.Medium("freep.anim.motion.arc-down", FreePRibbonText.AnimationMotionArcDownCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionArcDownCommand.KeyTip);
         });
         tab.Group("animation-timing", FreePRibbonText.AnimationTimingGroup.Label, FreePRibbonText.AnimationTimingGroup.KeyTip, 90, group =>
         {
