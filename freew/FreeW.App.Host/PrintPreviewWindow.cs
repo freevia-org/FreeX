@@ -626,6 +626,31 @@ internal sealed class HeaderFooterPaginator(
     {
         var visual = new DrawingVisual();
         var color = ParseColor(border.ColorHex);
+        if (border.LineStyle == BorderLineStyle.Wave)
+        {
+            var waveInset = Math.Min(
+                PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+                Math.Min(size.Width, size.Height) / 4);
+            var waveColor = Color.FromArgb(
+                (byte)Math.Round(255 * PageBorderWaveVisualPlanner.StrokeOpacity),
+                color.R,
+                color.G,
+                color.B);
+            var wavePen = new Pen(
+                new SolidColorBrush(waveColor),
+                PageBorderWaveVisualPlanner.StrokeWidthDip);
+            using var waveContext = visual.RenderOpen();
+            foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(size.Width, size.Height, waveInset))
+            {
+                waveContext.DrawLine(
+                    wavePen,
+                    new Point(segment.X1Dip, segment.Y1Dip),
+                    new Point(segment.X2Dip, segment.Y2Dip));
+            }
+
+            return visual;
+        }
+
         var thickness = Math.Max(1, PageLayout.PointsToDip(border.WidthPt));
         var pen = new Pen(new SolidColorBrush(color), thickness);
         // Inset by half the stroke width plus the 24pt offsetFrom="page" gap used on save, clamped so

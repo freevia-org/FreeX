@@ -4306,7 +4306,9 @@ public sealed class DocumentView : Control
             var insetPt = Math.Min(
                 Math.Max(0, border.SpacePt),
                 Math.Min(pageWidthPt, pageHeightPt) / 4);
-            var compositorRegistrationPt = 1.5 / PxPerPoint;
+            var compositorRegistrationPt = border.LineStyle == BorderLineStyle.Wave
+                ? 0
+                : 1.5 / PxPerPoint;
             x = insetPt + compositorRegistrationPt;
             y = insetPt + compositorRegistrationPt;
             width = pageWidthPt - 2 * x;
@@ -4317,6 +4319,35 @@ public sealed class DocumentView : Control
             return [];
 
         var color = ParseColor(border.ColorHex);
+        if (border.LineStyle == BorderLineStyle.Wave)
+        {
+            var opacity = PageBorderWaveVisualPlanner.StrokeOpacity;
+            var waveColor = new Free.Shared.Pdf.PdfColor(
+                CompositeWaveChannel(color.R, opacity),
+                CompositeWaveChannel(color.G, opacity),
+                CompositeWaveChannel(color.B, opacity));
+            var originXDip = border.OffsetFrom == PageBorderOffsetFrom.Text ? x * PxPerPoint : 0;
+            var originTopDip = border.OffsetFrom == PageBorderOffsetFrom.Text
+                ? (pageHeightPt - y - height) * PxPerPoint
+                : 0;
+            var frameWidthDip = border.OffsetFrom == PageBorderOffsetFrom.Text
+                ? width * PxPerPoint
+                : pageWidthPt * PxPerPoint;
+            var frameHeightDip = border.OffsetFrom == PageBorderOffsetFrom.Text
+                ? height * PxPerPoint
+                : pageHeightPt * PxPerPoint;
+            var edgeInsetDip = border.OffsetFrom == PageBorderOffsetFrom.Text ? 0 : x * PxPerPoint;
+            return PageBorderWaveVisualPlanner.BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip)
+                .Select(segment => new Free.Shared.Pdf.PdfLine(
+                    (originXDip + segment.X1Dip) / PxPerPoint,
+                    pageHeightPt - (originTopDip + segment.Y1Dip) / PxPerPoint,
+                    (originXDip + segment.X2Dip) / PxPerPoint,
+                    pageHeightPt - (originTopDip + segment.Y2Dip) / PxPerPoint,
+                    waveColor,
+                    PageBorderWaveVisualPlanner.StrokeWidthDip / PxPerPoint))
+                .ToList();
+        }
+
         var ops = new List<Free.Shared.Pdf.PdfDrawOp>
         {
             new Free.Shared.Pdf.PdfStrokeRect(x, y, width, height, color, widthPt, dash),
@@ -4339,6 +4370,9 @@ public sealed class DocumentView : Control
         }
 
         return ops;
+
+        static byte CompositeWaveChannel(byte channel, double opacity) =>
+            (byte)Math.Round(255 + (channel - 255) * opacity);
     }
 
     private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfLineNumberOps(
@@ -9766,6 +9800,34 @@ public sealed class DocumentView : Control
             // so both rails of an imported double border register with Word's opaque raster bands.
             rect = pageRect.Deflate(new Thickness(inset + 1.5));
         }
+
+        if (pb.LineStyle == BorderLineStyle.Wave)
+        {
+            var waveColor = Color.FromArgb(
+                (byte)Math.Round(255 * PageBorderWaveVisualPlanner.StrokeOpacity),
+                color.R,
+                color.G,
+                color.B);
+            var wavePen = new Pen(
+                new SolidColorBrush(waveColor),
+                PageBorderWaveVisualPlanner.StrokeWidthDip);
+            var frame = pb.OffsetFrom == PageBorderOffsetFrom.Text ? rect : pageRect;
+            var edgeInset = pb.OffsetFrom == PageBorderOffsetFrom.Text
+                ? 0
+                : Math.Min(
+                    Math.Max(0, pb.SpacePt * PxPerPoint),
+                    Math.Min(pageRect.Width, pageRect.Height) / 4);
+            foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, edgeInset))
+            {
+                context.DrawLine(
+                    wavePen,
+                    new Point(frame.X + segment.X1Dip, frame.Y + segment.Y1Dip),
+                    new Point(frame.X + segment.X2Dip, frame.Y + segment.Y2Dip));
+            }
+
+            return;
+        }
+
         context.DrawRectangle(null, pen, rect);
         // BorderLineStyle.Double: draw a second, inner stroke a couple of DIP inside the first.
         if (pb.LineStyle == BorderLineStyle.Double)

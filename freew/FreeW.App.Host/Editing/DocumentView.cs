@@ -5246,12 +5246,47 @@ public sealed class DocumentView : RichTextBox
     /// All of the above is purely visual: the model and saved document are untouched, and it cooperates
     /// with zoom (the <see cref="LayoutTransform"/> scales the sized page too) and read mode.
     /// </summary>
+    protected override void OnRender(DrawingContext drawingContext)
+    {
+        base.OnRender(drawingContext);
+        if (!PrintLayoutEnabled || _model.Page.PageBorder is not { LineStyle: BorderLineStyle.Wave } border)
+            return;
+
+        var inset = Math.Min(
+            PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+            Math.Min(ActualWidth, ActualHeight) / 4);
+        var color = ParseColor(border.ColorHex, Colors.Black);
+        var waveColor = Color.FromArgb(
+            (byte)Math.Round(255 * PageBorderWaveVisualPlanner.StrokeOpacity),
+            color.R,
+            color.G,
+            color.B);
+        var pen = new Pen(
+            new SolidColorBrush(waveColor),
+            PageBorderWaveVisualPlanner.StrokeWidthDip);
+        foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(ActualWidth, ActualHeight, inset))
+        {
+            drawingContext.DrawLine(
+                pen,
+                new Point(segment.X1Dip, segment.Y1Dip),
+                new Point(segment.X2Dip, segment.Y2Dip));
+        }
+    }
+
     private void ApplyPageChrome()
     {
         if (_model.Page.PageBorder is { } pb)
         {
-            BorderBrush = new SolidColorBrush(ParseColor(pb.ColorHex, Colors.Black));
-            BorderThickness = new Thickness(Math.Max(1, pb.WidthPt * PxPerPoint));
+            if (pb.LineStyle == BorderLineStyle.Wave)
+            {
+                BorderBrush = null;
+                BorderThickness = new Thickness(0);
+            }
+            else
+            {
+                BorderBrush = new SolidColorBrush(ParseColor(pb.ColorHex, Colors.Black));
+                BorderThickness = new Thickness(Math.Max(1, pb.WidthPt * PxPerPoint));
+            }
         }
         else
         {
@@ -5299,6 +5334,7 @@ public sealed class DocumentView : RichTextBox
         }
 
         // Let passive page-geometry chrome (the ruler) redraw against the new width/margins/print-layout.
+        InvalidateVisual();
         LayoutChanged?.Invoke(this, EventArgs.Empty);
     }
 
