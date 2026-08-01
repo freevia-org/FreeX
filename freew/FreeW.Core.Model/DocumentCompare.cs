@@ -290,6 +290,7 @@ public static class DocumentCompare
         var result = new Paragraph
         {
             BlockContentControl = revised.BlockContentControl,
+            BlockCustomXml = revised.BlockCustomXml,
             Formatting = revised.Formatting,
             StyleId = revised.StyleId,
             DropCap = revised.DropCap,
@@ -389,6 +390,7 @@ public static class DocumentCompare
         var clone = new Paragraph
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
@@ -739,6 +741,7 @@ public static class DocumentCompare
         var clone = new Paragraph
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
@@ -798,6 +801,7 @@ public static class DocumentCompare
         var clone = new Table
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             Borders = source.Borders
         };

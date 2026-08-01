@@ -1902,6 +1902,15 @@ public sealed record BlockContentControl(
 }
 
 /// <summary>
+/// Metadata for a body-level w:customXml wrapper. Consecutive blocks sharing the same instance
+/// serialize back into one wrapper while inline custom XML continues to flatten into ordinary runs.
+/// </summary>
+public sealed record BlockCustomXml(
+    string? Element,
+    string? Uri,
+    string? PropertiesXml = null);
+
+/// <summary>
 /// A top-level document block. The document body is an ordered sequence of blocks; today that is
 /// paragraphs and tables, mirroring how WordprocessingML interleaves w:p and w:tbl inside w:body.
 /// </summary>
@@ -1912,6 +1921,12 @@ public abstract class Block
     /// sharing the same instance into one outer w:sdt; run-level controls still live on <see cref="Run"/>.
     /// </summary>
     public BlockContentControl? BlockContentControl { get; set; }
+
+    /// <summary>
+    /// Optional body-level custom XML wrapper metadata. Blocks imported from one wrapper share the
+    /// same instance so the DOCX writer can restore the original grouping.
+    /// </summary>
+    public BlockCustomXml? BlockCustomXml { get; set; }
 }
 
 /// <summary>Whether a preserved Word bookmark boundary opens or closes its paired range.</summary>

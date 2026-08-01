@@ -1688,7 +1688,8 @@ public static class DocxReader
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
         ContentControl? inheritedControl = null,
-        BlockContentControl? inheritedBlockContentControl = null)
+        BlockContentControl? inheritedBlockContentControl = null,
+        BlockCustomXml? inheritedBlockCustomXml = null)
     {
         if (element.Name == W + "p")
         {
@@ -1703,6 +1704,7 @@ public static class DocxReader
                 inheritedControl: inheritedControl,
                 startOverrides: startOverrides);
             para.BlockContentControl = inheritedBlockContentControl;
+            para.BlockCustomXml = inheritedBlockCustomXml;
             document.Blocks.Add(para);
             var sp = element.Element(W + "pPr")?.Element(W + "spacing");
             var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
@@ -1718,6 +1720,7 @@ public static class DocxReader
         {
             var table = ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl);
             table.BlockContentControl = inheritedBlockContentControl;
+            table.BlockCustomXml = inheritedBlockCustomXml;
             document.Blocks.Add(table);
             prevPara = null;
             prevAfterAuto = false;
@@ -1732,6 +1735,7 @@ public static class DocxReader
                     foreach (var importedBlock in importedBlocks)
                     {
                         importedBlock.BlockContentControl = inheritedBlockContentControl;
+                        importedBlock.BlockCustomXml = inheritedBlockCustomXml;
                         document.Blocks.Add(importedBlock);
                     }
                 }
@@ -1739,7 +1743,8 @@ public static class DocxReader
                 {
                     var altChunk = new AltChunkBlock(partName)
                     {
-                        BlockContentControl = inheritedBlockContentControl
+                        BlockContentControl = inheritedBlockContentControl,
+                        BlockCustomXml = inheritedBlockCustomXml
                     };
                     document.Blocks.Add(altChunk);
                 }
@@ -1764,7 +1769,32 @@ public static class DocxReader
                     ref prevPara,
                     ref prevAfterAuto,
                     inheritedControl,
-                    blockControl);
+                    blockControl,
+                    inheritedBlockCustomXml);
+            }
+        }
+        else if (element.Name == W + "customXml")
+        {
+            var blockCustomXml = new BlockCustomXml(
+                element.Attribute(W + "element")?.Value,
+                element.Attribute(W + "uri")?.Value,
+                element.Element(W + "customXmlPr")?.ToString(SaveOptions.DisableFormatting));
+            foreach (var child in element.Elements().Where(child => child.Name != W + "customXmlPr"))
+            {
+                AddBodyBlock(
+                    child,
+                    document,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    altChunkRelationships,
+                    numbering,
+                    startOverrides,
+                    ref prevPara,
+                    ref prevAfterAuto,
+                    inheritedControl,
+                    inheritedBlockContentControl,
+                    blockCustomXml);
             }
         }
     }

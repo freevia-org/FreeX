@@ -1683,7 +1683,11 @@ public static class MailMerge
     {
         Paragraph p => CloneParagraph(p, row),
         Table t => CloneTable(t, row),
-        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName) { BlockContentControl = altChunk.BlockContentControl },
+        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName)
+        {
+            BlockContentControl = altChunk.BlockContentControl,
+            BlockCustomXml = altChunk.BlockCustomXml
+        },
         _ => new Paragraph()
     };
 
@@ -1692,6 +1696,7 @@ public static class MailMerge
         var clone = new Paragraph
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
@@ -1735,6 +1740,7 @@ public static class MailMerge
         var clone = new Table
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             Borders = source.Borders
         };
@@ -1764,7 +1770,11 @@ public static class MailMerge
     {
         Paragraph p => CloneParagraphWithRules(p, row, state, recordIndex),
         Table t => CloneTableWithRules(t, row, state, recordIndex),
-        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName) { BlockContentControl = altChunk.BlockContentControl },
+        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName)
+        {
+            BlockContentControl = altChunk.BlockContentControl,
+            BlockCustomXml = altChunk.BlockCustomXml
+        },
         _ => new Paragraph()
     };
 
@@ -1773,6 +1783,7 @@ public static class MailMerge
         var clone = new Paragraph
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
@@ -1817,6 +1828,7 @@ public static class MailMerge
         var clone = new Table
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             Borders = source.Borders
         };

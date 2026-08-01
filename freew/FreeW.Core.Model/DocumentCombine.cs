@@ -115,6 +115,7 @@ public static class DocumentCombine
         var merged = new Paragraph
         {
             BlockContentControl = bParagraph.BlockContentControl ?? aParagraph?.BlockContentControl,
+            BlockCustomXml = bParagraph.BlockCustomXml ?? aParagraph?.BlockCustomXml,
             Formatting = bParagraph.Formatting,
             StyleId = bParagraph.StyleId,
             DropCap = bParagraph.DropCap,
@@ -247,6 +248,7 @@ public static class DocumentCombine
         var clone = new Paragraph
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
@@ -263,6 +265,7 @@ public static class DocumentCombine
         var clone = new Table
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             Borders = source.Borders
         };
