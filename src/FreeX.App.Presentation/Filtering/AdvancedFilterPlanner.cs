@@ -60,6 +60,11 @@ public sealed record AdvancedFilterDialogResult(
     bool UniqueRecordsOnly,
     GridRange? CopyToRange = null);
 
+public sealed record AdvancedFilterReapplyState(
+    GridRange ListRange,
+    GridRange CriteriaRange,
+    bool UniqueRecordsOnly);
+
 public sealed record AdvancedFilterPlanResult(
     AdvancedFilterPlan? Plan,
     AdvancedFilterPlanError Error,
@@ -333,4 +338,30 @@ public static class AdvancedFilterPlanner
         };
 
     private static string NormalizeInput(string? input) => input?.Trim() ?? "";
+}
+
+public static class AdvancedFilterReapplyPlanner
+{
+    public static AdvancedFilterReapplyState? CreateState(AdvancedFilterPlan plan) =>
+        CreateState(
+            plan.ListRange,
+            plan.CriteriaRange,
+            plan.OutputMode == AdvancedFilterOutputMode.FilterInPlace,
+            plan.UniqueRecordsOnly);
+
+    public static AdvancedFilterReapplyState? CreateState(
+        GridRange listRange,
+        GridRange criteriaRange,
+        bool filterInPlace,
+        bool uniqueRecordsOnly) =>
+        filterInPlace
+            ? new AdvancedFilterReapplyState(listRange, criteriaRange, uniqueRecordsOnly)
+            : null;
+
+    public static AdvancedFilterPlan CreatePlan(AdvancedFilterReapplyState state) =>
+        new(
+            state.ListRange,
+            state.CriteriaRange,
+            AdvancedFilterOutputMode.FilterInPlace,
+            state.UniqueRecordsOnly);
 }

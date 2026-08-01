@@ -7,6 +7,9 @@ using FreeX.App.Services;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
+using PresentationAdvancedFilterReapplyPlanner = FreeX.App.Presentation.Filtering.AdvancedFilterReapplyPlanner;
+using PresentationAdvancedFilterReapplyState = FreeX.App.Presentation.Filtering.AdvancedFilterReapplyState;
+
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
@@ -17,16 +20,13 @@ public sealed partial class MainWindow
     // arrows): we keep the active invalid-cell set in this field and repaint it on every overlay rebuild
     // (RefreshShell -> BuildSheetGrid -> BuildDrawingObjectOverlay). Clearing empties the set and refreshes.
     private readonly List<CellAddress> _validationCircleCells = new();
+    private PresentationAdvancedFilterReapplyState? _lastInPlaceAdvancedFilter;
 
     // ── Reapply ─────────────────────────────────────────────────────────────────
     //
-    // The Avalonia AutoFilter UI runs FilterCommand / SortCommand directly against the live sheet and does
-    // not record an in-session "active criteria" object we could replay. The durable record of intent is the
-    // worksheet metadata the model already persists: Sheet.AutoFilter (per-column allowed values) and
-    // Sheet.SortState (sort conditions). Reapply re-executes those persisted definitions, which is exactly
-    // what "re-run the current filter/sort" means for a sheet loaded from a workbook or toggled via AutoFilter.
-    // When neither persisted definition carries replayable criteria, we report that honestly rather than
-    // pretending work happened.
+    // AutoFilter and Sort reapply from their durable worksheet metadata. In-place Advanced Filter keeps
+    // its list/criteria intent in the shared presentation reapply contract because that definition is not
+    // persisted as worksheet metadata. When no mechanism carries replayable criteria, report that honestly.
     private void ReapplyCurrentFilterSort()
     {
         if (!TryCommitPendingFormulaEdit())
@@ -35,6 +35,7 @@ public sealed partial class MainWindow
         var sheet = _session.ActiveSheet;
         var sheetId = sheet.Id;
         var applied = 0;
+        var hasAdvancedFilter = _lastInPlaceAdvancedFilter is not null;
 
         if (TryGetAutoFilterReapplyRange(sheet, out var filterRange))
         {
@@ -58,6 +59,24 @@ public sealed partial class MainWindow
 
                 applied++;
             }
+        }
+
+        if (hasAdvancedFilter)
+        {
+            var plan = PresentationAdvancedFilterReapplyPlanner.CreatePlan(_lastInPlaceAdvancedFilter!);
+            var result = _session.ExecuteAdvancedFilterPlan(
+                new AdvancedFilterPlan(
+                    plan.ListRange,
+                    plan.CriteriaRange,
+                    AdvancedFilterOutputMode.FilterInPlace,
+                    plan.UniqueRecordsOnly));
+            if (!result.Success)
+            {
+                ShowEditIssue(result.ErrorMessage ?? UiText.Get("TableLoc_ReapplyFilterFailed"));
+                return;
+            }
+
+            applied++;
         }
 
         if (TryGetSortReapplyPlan(sheet, out var sortRange, out var sortKeys))

@@ -207,14 +207,13 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 var tableOrigin = new Point(
                     paragraph.Origin.X + inlineRect.X,
                     paragraph.Origin.Y + inlineRect.Y);
-                if (!InlineTableTextRun.TryGetCellBounds(
+                if (!InlineTableTextRun.TryGetCell(
                         table,
                         tableOrigin,
                         rowIndex,
                         columnIndex,
-                        out var cellBounds)
-                    || table.Info.Table.Rows.ElementAtOrDefault(rowIndex)?
-                        .Cells.ElementAtOrDefault(columnIndex)?.TextBody is null)
+                        out var cell)
+                    || cell.Cell?.TextBody is null)
                 {
                     continue;
                 }
@@ -222,9 +221,9 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 hit = new InlineTableCellHit(
                     source.LogicalPosition,
                     source.Table,
-                    rowIndex,
-                    columnIndex,
-                    cellBounds);
+                    cell.RowIndex,
+                    cell.ColumnIndex,
+                    cell.Bounds);
                 return true;
             }
         }
@@ -1020,49 +1019,25 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         public override void Draw(DrawingContext drawingContext, Point origin)
         {
             var table = _table.Info.Table;
-            int rowCount = Math.Max(1, table.Rows.Count);
-            int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
-            double[] widths = Enumerable.Range(0, columnCount)
-                .Select(index => index < table.ColumnWidthsEmu.Count
-                    ? Math.Max(24, table.ColumnWidthsEmu[index] / 9525.0)
-                    : 72)
-                .ToArray();
-            double[] heights = Enumerable.Range(0, rowCount)
-                .Select(index => table.Rows[index].HeightEmu > 0
-                    ? Math.Max(20, table.Rows[index].HeightEmu / 9525.0)
-                    : 24)
-                .ToArray();
-
-            double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
-            double xIndent = table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip;
-            double y = origin.Y;
-            for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
+            var grid = AvaloniaInlineTableGridLayout.Create(
+                table,
+                origin,
+                _table.AvailableWidthDip);
+            foreach (var cellLayout in grid.Cells)
             {
-                var row = table.Rows.ElementAtOrDefault(rowIndex);
-                double rowWidth = row is null
-                    ? widths.Sum()
-                    : widths.Take(Math.Min(widths.Length, row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)))).Sum();
-                double x = origin.X + AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(
-                    row?.HorizontalAlignment,
-                    _table.AvailableWidthDip,
-                    rowWidth) + xIndent;
-                for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
-                {
-                    double width = widths[columnIndex];
-                    var cell = row?.Cells.ElementAtOrDefault(columnIndex);
-                    IBrush fill = cell?.Fill is ShapeFill.Solid solid
-                        ? (IBrush)new SolidColorBrush(Color.FromRgb(
-                            solid.Color.Resolved.R,
-                            solid.Color.Resolved.G,
-                            solid.Color.Resolved.B))
-                        : Brushes.Transparent;
-                    var rect = new Rect(x, y, width, heights[rowIndex]);
-                    drawingContext.DrawRectangle(fill, new Pen(Brushes.Gray, 0.5), rect);
-                    if (cell?.TextBody is { } body)
-                        DrawCellBody(drawingContext, cell, rect, body);
-                    x += width + spacing;
-                }
-                y += heights[rowIndex];
+                var cell = cellLayout.Cell;
+                IBrush fill = cell?.Fill is ShapeFill.Solid solid
+                    ? (IBrush)new SolidColorBrush(Color.FromRgb(
+                        solid.Color.Resolved.R,
+                        solid.Color.Resolved.G,
+                        solid.Color.Resolved.B))
+                    : Brushes.Transparent;
+                drawingContext.DrawRectangle(
+                    fill,
+                    new Pen(Brushes.Gray, 0.5),
+                    cellLayout.Bounds);
+                if (cell?.TextBody is { } body)
+                    DrawCellBody(drawingContext, cell, cellLayout.Bounds, body);
             }
         }
 
@@ -1074,46 +1049,16 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             out int columnIndex,
             out Rect cellBounds)
         {
-            var table = tableLayout.Info.Table;
-            int rowCount = Math.Max(1, table.Rows.Count);
-            int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
-            double[] widths = Enumerable.Range(0, columnCount)
-                .Select(index => index < table.ColumnWidthsEmu.Count
-                    ? Math.Max(24, table.ColumnWidthsEmu[index] / 9525.0)
-                    : 72)
-                .ToArray();
-            double[] heights = Enumerable.Range(0, rowCount)
-                .Select(index => table.Rows[index].HeightEmu > 0
-                    ? Math.Max(20, table.Rows[index].HeightEmu / 9525.0)
-                    : 24)
-                .ToArray();
-            double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
-            double xIndent = table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip;
-            double y = origin.Y;
-
-            for (int row = 0; row < rowCount; row++)
+            var grid = AvaloniaInlineTableGridLayout.Create(
+                tableLayout.Info.Table,
+                origin,
+                tableLayout.AvailableWidthDip);
+            if (grid.HitTest(point) is { } hit)
             {
-                var modelRow = table.Rows.ElementAtOrDefault(row);
-                double rowWidth = modelRow is null
-                    ? widths.Sum()
-                    : widths.Take(Math.Min(widths.Length, modelRow.Cells.Sum(cell => Math.Max(1, cell.GridSpan)))).Sum();
-                double x = origin.X + AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(
-                    modelRow?.HorizontalAlignment,
-                    tableLayout.AvailableWidthDip,
-                    rowWidth) + xIndent;
-                for (int column = 0; column < columnCount; column++)
-                {
-                    var candidate = new Rect(x, y, widths[column], heights[row]);
-                    if (candidate.Contains(point))
-                    {
-                        rowIndex = row;
-                        columnIndex = column;
-                        cellBounds = candidate;
-                        return true;
-                    }
-                    x += widths[column] + spacing;
-                }
-                y += heights[row];
+                rowIndex = hit.RowIndex;
+                columnIndex = hit.ColumnIndex;
+                cellBounds = hit.Bounds;
+                return true;
             }
 
             rowIndex = -1;
@@ -1129,56 +1074,38 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             int targetColumn,
             out Rect cellBounds)
         {
-            var table = tableLayout.Info.Table;
-            int rowCount = Math.Max(1, table.Rows.Count);
-            int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
-            if (targetRow < 0 || targetRow >= rowCount
-                || targetColumn < 0 || targetColumn >= columnCount)
+            var grid = AvaloniaInlineTableGridLayout.Create(
+                tableLayout.Info.Table,
+                origin,
+                tableLayout.AvailableWidthDip);
+            if (grid.GetCell(targetRow, targetColumn) is { } cell)
             {
-                cellBounds = default;
-                return false;
-            }
-
-            double[] widths = Enumerable.Range(0, columnCount)
-                .Select(index => index < table.ColumnWidthsEmu.Count
-                    ? Math.Max(24, table.ColumnWidthsEmu[index] / 9525.0)
-                    : 72)
-                .ToArray();
-            double[] heights = Enumerable.Range(0, rowCount)
-                .Select(index => table.Rows[index].HeightEmu > 0
-                    ? Math.Max(20, table.Rows[index].HeightEmu / 9525.0)
-                    : 24)
-                .ToArray();
-            double spacing = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
-            double xIndent = table.RichTextLeftIndentPt.GetValueOrDefault() * PtToDip;
-            double y = origin.Y;
-
-            for (int row = 0; row < rowCount; row++)
-            {
-                var modelRow = table.Rows.ElementAtOrDefault(row);
-                double rowWidth = modelRow is null
-                    ? widths.Sum()
-                    : widths.Take(Math.Min(widths.Length, modelRow.Cells.Sum(cell => Math.Max(1, cell.GridSpan)))).Sum();
-                double x = origin.X + AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(
-                    modelRow?.HorizontalAlignment,
-                    tableLayout.AvailableWidthDip,
-                    rowWidth) + xIndent;
-                for (int column = 0; column < columnCount; column++)
-                {
-                    var candidate = new Rect(x, y, widths[column], heights[row]);
-                    if (row == targetRow && column == targetColumn)
-                    {
-                        cellBounds = candidate;
-                        return true;
-                    }
-
-                    x += widths[column] + spacing;
-                }
-
-                y += heights[row];
+                cellBounds = cell.Bounds;
+                return true;
             }
 
             cellBounds = default;
+            return false;
+        }
+
+        internal static bool TryGetCell(
+            InlineTableLayout tableLayout,
+            Point origin,
+            int targetRow,
+            int targetColumn,
+            out AvaloniaInlineTableCellLayout cell)
+        {
+            var grid = AvaloniaInlineTableGridLayout.Create(
+                tableLayout.Info.Table,
+                origin,
+                tableLayout.AvailableWidthDip);
+            if (grid.GetCell(targetRow, targetColumn) is { } layout)
+            {
+                cell = layout;
+                return true;
+            }
+
+            cell = null!;
             return false;
         }
 

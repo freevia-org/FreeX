@@ -35,8 +35,28 @@ public static class TableGridGeometryPlanner
         if (row < 0 || col < 0)
             return null;
 
+        return ResolveCell(geometry, row, col);
+    }
+
+    /// <summary>
+    /// Resolves a grid coordinate to the top-left anchor of its merged cell.
+    /// </summary>
+    public static TableGridHit? ResolveCell(
+        TableGridGeometry geometry,
+        int row,
+        int col)
+    {
+        ArgumentNullException.ThrowIfNull(geometry);
+
+        if (row < 0 || row >= geometry.RowHeights.Count
+            || col < 0 || col >= geometry.ColumnWidths.Count
+            || !TryGetCell(geometry, row, col, out _))
+            return null;
+
         var anchor = FindAnchor(geometry, row, col);
-        return new TableGridHit(anchor.Row, anchor.Col);
+        return TryGetCell(geometry, anchor.Row, anchor.Col, out _)
+            ? anchor
+            : null;
     }
 
     public static TableGridRect? GetCellRect(
@@ -52,15 +72,17 @@ public static class TableGridGeometryPlanner
             return null;
         if (col < 0 || col >= geometry.ColumnWidths.Count)
             return null;
-        if (!TryGetCell(geometry, row, col, out var cell))
+        var anchor = ResolveCell(geometry, row, col);
+        if (anchor is null
+            || !TryGetCell(geometry, anchor.Value.Row, anchor.Value.Col, out var cell))
             return null;
 
-        var x = originX + SumBefore(geometry.ColumnWidths, col);
-        var y = originY + SumBefore(geometry.RowHeights, row);
+        var x = originX + SumBefore(geometry.ColumnWidths, anchor.Value.Col);
+        var y = originY + SumBefore(geometry.RowHeights, anchor.Value.Row);
         var gridSpan = Math.Max(1, cell.GridSpan);
         var rowSpan = Math.Max(1, cell.RowSpan);
-        var width = SumRange(geometry.ColumnWidths, col, gridSpan);
-        var height = SumRange(geometry.RowHeights, row, rowSpan);
+        var width = SumRange(geometry.ColumnWidths, anchor.Value.Col, gridSpan);
+        var height = SumRange(geometry.RowHeights, anchor.Value.Row, rowSpan);
 
         return new TableGridRect(x, y, width, height);
     }

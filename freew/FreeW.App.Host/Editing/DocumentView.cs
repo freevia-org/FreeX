@@ -13487,7 +13487,9 @@ public sealed class DocumentView : RichTextBox
     {
         var widthPx = chart.WidthPt * PxPerPoint;
         var heightPx = chart.HeightPt * PxPerPoint;
-        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, widthPx, heightPx);
+        var settings = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
+        ChartValueAxisPlan ValueAxis = settings.ValueAxis;
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, settings, widthPx, heightPx);
         var strokeThickness = EffectLineThickness(effectSet);
 
         var root = BuildChartSceneCanvas(scene);
@@ -13520,6 +13522,10 @@ public sealed class DocumentView : RichTextBox
 
     private static void RenderChartScene(Canvas canvas, ChartScene scene)
     {
+        var axis = scene.ValueAxis;
+        if (!double.IsFinite(axis.Range) || axis.Range <= 0 || !double.IsFinite(axis.ValueFraction(axis.Minimum)))
+            return;
+
         if (scene.PlotFillHex is not null)
         {
             var plotFill = new Border

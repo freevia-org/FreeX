@@ -196,7 +196,8 @@ public sealed record ChartScene(
     IReadOnlyList<ChartSceneMarker> Markers,
     IReadOnlyList<ChartSceneSlice> Slices,
     IReadOnlyList<ChartSceneText> Texts,
-    IReadOnlyList<ChartSceneLegendEntry> Legend);
+    IReadOnlyList<ChartSceneLegendEntry> Legend,
+    ChartValueAxisPlan ValueAxis);
 
 public sealed record ChartVisualPlan(
     ChartKind Kind,
@@ -459,7 +460,14 @@ public static class ChartSmartArtVisualPlanner
     {
         ArgumentNullException.ThrowIfNull(chart);
 
-        var plan = BuildChartPlan(chart);
+        return BuildChartScene(chart, BuildChartPlan(chart), width, height);
+    }
+
+    public static ChartScene BuildChartScene(Chart chart, ChartVisualPlan plan, double width, double height)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        ArgumentNullException.ThrowIfNull(plan);
+
         var frame = new ChartSceneRect(0, 0, Math.Max(24, width), Math.Max(24, height));
         var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
         var categoryCount = Math.Max(
@@ -787,7 +795,7 @@ public static class ChartSmartArtVisualPlanner
             frame, plot,
             plan.PlotAreaFill && !isPie ? "#D9E2F3" : null,
             paletteHex, chart.Categories.ToList(), plan.Series.Count,
-            gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
+            gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend, plan.ValueAxis);
     }
 
     private static bool UsesCategoryLegend(Chart chart, ChartVisualPlan plan, bool isPie) =>

@@ -23170,6 +23170,7 @@ public sealed class DocumentView : Control
         public int BlockIndex;
         public int RunIndex;
         public Chart? Model;
+        public ChartValueAxisPlan ValueAxis = new(0, 1);
         public ChartScene Scene = new(
             Kind: ChartKind.Column,
             GeometryKind: ChartVisualGeometryKind.Bars,
@@ -23189,7 +23190,8 @@ public sealed class DocumentView : Control
             Markers: [],
             Slices: [],
             Texts: [],
-            Legend: []);
+            Legend: [],
+            ValueAxis: new(0, 1));
     }
 
     private sealed class FloatingWordArtData
@@ -23515,7 +23517,9 @@ public sealed class DocumentView : Control
     /// </summary>
     private static FloatingChartData BuildChartData(Chart chart, Rect rect, bool behindText, int zOrder)
     {
-        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, rect.Width, rect.Height);
+        var settings = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
+        ChartValueAxisPlan ValueAxis = settings.ValueAxis;
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, settings, rect.Width, rect.Height);
 
         return new FloatingChartData
         {
@@ -23523,6 +23527,7 @@ public sealed class DocumentView : Control
             BehindText        = behindText,
             ZOrder            = zOrder,
             Model             = chart,
+            ValueAxis         = ValueAxis,
             Scene             = scene,
         };
     }
@@ -23536,6 +23541,10 @@ public sealed class DocumentView : Control
     /// </summary>
     private void DrawFloatingChart(DrawingContext context, FloatingChartData cd)
     {
+        var axis = cd.ValueAxis;
+        if (!double.IsFinite(axis.Range) || axis.Range <= 0 || !double.IsFinite(axis.ValueFraction(axis.Minimum)))
+            return;
+
         context.FillRectangle(ChartFrameFill, cd.Rect);
         context.DrawRectangle(null, ChartFramePen, cd.Rect);
         using var translation = context.PushTransform(Matrix.CreateTranslation(cd.Rect.X, cd.Rect.Y));
