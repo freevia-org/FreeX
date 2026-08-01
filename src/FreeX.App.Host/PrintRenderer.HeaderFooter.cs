@@ -76,27 +76,6 @@ public static partial class PrintRenderer
         var cellDestinationOverlays = new List<PdfCellDestinationOverlay>();
         using var dc = visual.RenderOpen();
         dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, pageW, pageH));
-        DrawHeaderFooter(
-            dc,
-            textOverlays,
-            pageW,
-            pageH,
-            marginLeft,
-            marginRight,
-            marginBottom,
-            headerMargin,
-            footerMargin,
-            pageHeader,
-            pageFooter,
-            pageHeaderPictures,
-            pageFooterPictures,
-            workbookName,
-            sheetName,
-            alignHeaderFooterWithMargins,
-            pageNumber,
-            totalPages,
-            draftQuality,
-            workbookDirectory);
 
         var printedWidth = measurement.HeaderWidth + measurement.TotalColumnWidth(pageColumns.Count);
         var printedHeight = measurement.HeaderHeight + measurement.TotalRowHeight(pageRows.Count);
@@ -139,6 +118,41 @@ public static partial class PrintRenderer
         if (!double.IsFinite(scaleRatio) || scaleRatio <= 0)
             scaleRatio = 1.0;
 
+        // R111-app-host-headerfooter-scale-with-document-1: Sheet.HeaderFooterScaleWithDocument
+        // (Excel's Page Setup > Header/Footer > "Scale with document" checkbox, default checked) governs
+        // ONLY whether the header/footer TEXT's own font size follows the page's print scale -- it has
+        // no effect on the grid/content scale computed above, which always applies regardless of this
+        // flag. When checked (the default), header/footer text shrinks/grows by the exact same
+        // scaleRatio as the grid; when unchecked, Excel keeps header/footer text at its authored size
+        // no matter how the page content is scaled. Resolved once here (the grid's own scaleRatio is
+        // fully known at this point) and threaded into DrawHeaderFooter below as a single value instead
+        // of re-deriving it deeper in the call tree, so no future header/footer draw path can forget to
+        // consult the flag.
+        var headerFooterFontScale = PageGeometryRules.ResolveHeaderFooterFontScale(sheet.HeaderFooterScaleWithDocument, scaleRatio);
+
+        DrawHeaderFooter(
+            dc,
+            textOverlays,
+            pageW,
+            pageH,
+            marginLeft,
+            marginRight,
+            marginBottom,
+            headerMargin,
+            footerMargin,
+            pageHeader,
+            pageFooter,
+            pageHeaderPictures,
+            pageFooterPictures,
+            workbookName,
+            sheetName,
+            alignHeaderFooterWithMargins,
+            pageNumber,
+            totalPages,
+            draftQuality,
+            headerFooterFontScale,
+            workbookDirectory);
+
         var scaledWidth = printedWidth * scaleRatio;
         var scaledHeight = printedHeight * scaleRatio;
         var xOffset = centerHorizontally ? Math.Max(0, (printableW - scaledWidth) / 2) : 0;
@@ -167,7 +181,9 @@ public static partial class PrintRenderer
             // text boxes, comments) about the content's own top-left corner so it shrinks (Scale% &lt;
             // 100) or grows (Scale% &gt; 100, e.g. "Adjust to 200% normal size") in place without
             // shifting off the already-applied centering offset. Header/footer bands are drawn outside
-            // this transform (matching Excel, which never scales header/footer text).
+            // this transform -- they were already drawn above (before this transform is pushed) using
+            // headerFooterFontScale, which independently governs their own text scale per
+            // Sheet.HeaderFooterScaleWithDocument (R111-app-host-headerfooter-scale-with-document-1).
             dc.PushTransform(new TranslateTransform(contentLeft, contentTop));
             dc.PushTransform(new ScaleTransform(scaleRatio, scaleRatio));
             dc.PushTransform(new TranslateTransform(-contentLeft, -contentTop));

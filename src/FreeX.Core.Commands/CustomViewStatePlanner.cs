@@ -132,7 +132,7 @@ public static class CustomViewStatePlanner
                 sheet.FilterHiddenRows.Add(row);
         }
         if (state.AutoFilter is not null)
-            sheet.AutoFilter = state.AutoFilter;
+            sheet.AutoFilter = CloneAutoFilterSnapshot(state.AutoFilter);
         if (state.PrintAreas is { } printAreas)
             sheet.SetPrintAreas(printAreas);
         if (state.PageOrientation is { } pageOrientation)
@@ -162,4 +162,77 @@ public static class CustomViewStatePlanner
 
     private static uint? SanitizeColumn(uint? column) =>
         column is >= 1 and <= CellAddress.MaxCol ? column.Value : null;
+
+    // R111-custom-view-autofilter-alias: a WorksheetCustomViewState's AutoFilter must never be
+    // the same live, mutable WorksheetAutoFilterModel instance as any sheet's Sheet.AutoFilter --
+    // in either direction. WorksheetAutoFilterColumnSync.Apply/Restore (FilterCommand.cs) mutates
+    // sheet.AutoFilter.FilterColumns in place via RemoveAll/Add/Sort on the exact object every
+    // ordinary filter command touches, and FilterColumns has no setter (get-only List<T>), so it is
+    // designed to be mutated in place. If a captured/persisted state (e.g. a saved Custom View, or
+    // an undo snapshot) ever shares that object with a live sheet, a later ordinary filter edit
+    // silently rewrites the "frozen" snapshot too -- corrupting an already-saved named view (and the
+    // customView XML written for it) to reflect whatever the live filter happens to be now, instead
+    // of what it was at save time. So every boundary crossing (sheet -> captured state, and captured
+    // state -> sheet) must produce an independent copy. Mirrors Sheet.Clone.AutoFilter.cs's
+    // CloneAutoFilter/CloneAutoFilterColumn (used when duplicating a whole sheet) and
+    // ToggleWorksheetAutoFilterCommand's private CloneAutoFilter (used for its own undo/redo), which
+    // both already needed the same deep clone for the same reason.
+    public static WorksheetAutoFilterModel? CloneAutoFilterSnapshot(WorksheetAutoFilterModel? autoFilter)
+    {
+        if (autoFilter is null)
+            return null;
+
+        var clone = new WorksheetAutoFilterModel(autoFilter.Reference, autoFilter.NativeXml)
+        {
+            NativeAttributes = CloneReadOnlyDictionary(autoFilter.NativeAttributes),
+            NativeChildXmls = autoFilter.NativeChildXmls?.ToArray()
+        };
+        clone.FilterColumns.AddRange(autoFilter.FilterColumns.Select(CloneAutoFilterColumn));
+        return clone;
+    }
+
+    private static WorksheetAutoFilterColumnModel CloneAutoFilterColumn(WorksheetAutoFilterColumnModel column) =>
+        new(
+            column.ColumnId,
+            column.Values.ToArray(),
+            column.IncludeBlank,
+            column.CustomFilters.Select(CloneAutoFilterCustomFilter).ToArray(),
+            column.CustomFiltersAnd,
+            column.CustomFiltersAndRaw,
+            CloneReadOnlyDictionary(column.NativeCustomFiltersAttributes),
+            CloneAutoFilterTop10(column.Top10),
+            CloneAutoFilterDynamicFilter(column.DynamicFilter),
+            CloneAutoFilterColorFilter(column.ColorFilter),
+            CloneAutoFilterIconFilter(column.IconFilter),
+            column.DateGroups.Select(CloneAutoFilterDateGroup).ToArray(),
+            CloneReadOnlyDictionary(column.NativeFiltersAttributes),
+            column.NativeFilterXmls.ToArray(),
+            CloneReadOnlyDictionary(column.NativeAttributes));
+
+    private static WorksheetAutoFilterCustomFilterModel CloneAutoFilterCustomFilter(
+        WorksheetAutoFilterCustomFilterModel filter) =>
+        new(filter.Operator, filter.Value, CloneReadOnlyDictionary(filter.NativeAttributes));
+
+    private static WorksheetAutoFilterDateGroupItemModel CloneAutoFilterDateGroup(
+        WorksheetAutoFilterDateGroupItemModel dateGroup) =>
+        dateGroup with { NativeAttributes = CloneReadOnlyDictionary(dateGroup.NativeAttributes) };
+
+    private static WorksheetAutoFilterTop10Model? CloneAutoFilterTop10(WorksheetAutoFilterTop10Model? top10) =>
+        top10 is null ? null : top10 with { NativeAttributes = CloneReadOnlyDictionary(top10.NativeAttributes) };
+
+    private static WorksheetAutoFilterDynamicFilterModel? CloneAutoFilterDynamicFilter(
+        WorksheetAutoFilterDynamicFilterModel? dynamicFilter) =>
+        dynamicFilter is null ? null : dynamicFilter with { NativeAttributes = CloneReadOnlyDictionary(dynamicFilter.NativeAttributes) };
+
+    private static WorksheetAutoFilterColorFilterModel? CloneAutoFilterColorFilter(
+        WorksheetAutoFilterColorFilterModel? colorFilter) =>
+        colorFilter is null ? null : colorFilter with { NativeAttributes = CloneReadOnlyDictionary(colorFilter.NativeAttributes) };
+
+    private static WorksheetAutoFilterIconFilterModel? CloneAutoFilterIconFilter(
+        WorksheetAutoFilterIconFilterModel? iconFilter) =>
+        iconFilter is null ? null : iconFilter with { NativeAttributes = CloneReadOnlyDictionary(iconFilter.NativeAttributes) };
+
+    private static IReadOnlyDictionary<string, string>? CloneReadOnlyDictionary(
+        IReadOnlyDictionary<string, string>? source) =>
+        source is null ? null : new Dictionary<string, string>(source, StringComparer.Ordinal);
 }

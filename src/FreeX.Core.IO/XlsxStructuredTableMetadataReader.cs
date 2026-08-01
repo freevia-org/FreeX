@@ -342,6 +342,7 @@ internal static class XlsxStructuredTableMetadataReader
             {
                 var filters = column.Element(workbookNs + "filters");
                 var customFilters = column.Element(workbookNs + "customFilters");
+                var colorFilterElement = column.Element(workbookNs + "colorFilter");
                 var nativeFilters = XlsxStructuredTableNativeMetadataReader.ReadFilterXmls(column, workbookNs);
                 var nativeCustomFiltersAttributes = customFilters?
                     .Attributes()
@@ -379,17 +380,93 @@ internal static class XlsxStructuredTableMetadataReader
                     customFilters?.Attribute("and")?.Value,
                     nativeCustomFiltersAttributes?.Count > 0 ? nativeCustomFiltersAttributes : null,
                     nativeFilters,
-                    XlsxStructuredTableNativeMetadataReader.ReadFilterColumnAttributes(column));
+                    XlsxStructuredTableNativeMetadataReader.ReadFilterColumnAttributes(column))
+                {
+                    // R111-io-structured-table-colorfilter-roundtrip-1: a Table's own <colorFilter>
+                    // (Filter by Cell/Font Colour or No Fill) now has to be parsed into the typed
+                    // ColorFilter field, not left to the generic NativeFilterXmls passthrough --
+                    // XlsxStructuredTableWriter.ToFilterColumnXml unconditionally excludes
+                    // "colorFilter" from that passthrough (it re-emits ColorFilter itself instead),
+                    // so a loaded table whose colorFilter never lands here was silently dropped on
+                    // the very next save. Mirrors XlsxWorksheetAutoFilterXmlMapper.ReadColorFilter,
+                    // minus dxf-color resolution: this reader has no access to the workbook's
+                    // resolved differential styles, but Color is purely an informational
+                    // convenience (the writer only ever emits dxfId/cellColor), so leaving it null
+                    // here does not affect round-trip fidelity.
+                    ColorFilter = ReadColorFilter(colorFilterElement),
+                    // R111-io-structured-table-dategroup-roundtrip-1: parse <filters>/<dateGroupItem>
+                    // children (Excel's built-in Year/Quarter/Month/Day date-checklist filter) the same
+                    // way XlsxWorksheetAutoFilterXmlMapper.ReadDateGroupItem does for the sheet-level
+                    // AutoFilter path -- see StructuredTableFilterColumnModel.DateGroups for the full
+                    // rationale. A <filters> element whose only children are dateGroupItem has no
+                    // <filter> children at all, so without this the column had Values.Count==0 and
+                    // nothing else to keep it, and the inclusion guard below dropped it entirely.
+                    DateGroups = filters?
+                        .Elements(workbookNs + "dateGroupItem")
+                        .Select(ReadDateGroupItem)
+                        .ToList() ?? [],
+                };
             })
             .Where(column => column.ColumnId >= 0 &&
                 (column.Values.Count > 0 ||
                  column.IncludeBlank ||
+                 column.DateGroups.Count > 0 ||
                  column.CustomFilters.Count > 0 ||
                  column.CustomFiltersAndRaw is not null ||
                  column.NativeCustomFiltersAttributes?.Count > 0 ||
+                 column.ColorFilter is not null ||
                  column.NativeFilterXmls.Count > 0 ||
                  column.NativeAttributes?.Count > 0))
             .ToList();
+    }
+
+    /// <summary>Mirrors XlsxWorksheetAutoFilterXmlMapper.ReadDateGroupItem exactly (same model type, same attribute set) so a table's &lt;dateGroupItem&gt; parses identically to the sheet-level AutoFilter path.</summary>
+    private static WorksheetAutoFilterDateGroupItemModel ReadDateGroupItem(XElement dateGroup)
+    {
+        var nativeAttributes = dateGroup.Attributes()
+            .Where(attribute =>
+                !IsModeledAttribute(attribute, "year") &&
+                !IsModeledAttribute(attribute, "month") &&
+                !IsModeledAttribute(attribute, "day") &&
+                !IsModeledAttribute(attribute, "hour") &&
+                !IsModeledAttribute(attribute, "minute") &&
+                !IsModeledAttribute(attribute, "second") &&
+                !IsModeledAttribute(attribute, "dateTimeGrouping"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+        return new WorksheetAutoFilterDateGroupItemModel(
+            Year: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "year"),
+            Month: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "month"),
+            Day: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "day"),
+            Hour: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "hour"),
+            Minute: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "minute"),
+            Second: XlsxXmlAttributeReader.ReadIntAttribute(dateGroup, "second"),
+            DateTimeGrouping: dateGroup.Attribute("dateTimeGrouping")?.Value,
+            YearRaw: dateGroup.Attribute("year")?.Value,
+            MonthRaw: dateGroup.Attribute("month")?.Value,
+            DayRaw: dateGroup.Attribute("day")?.Value,
+            HourRaw: dateGroup.Attribute("hour")?.Value,
+            MinuteRaw: dateGroup.Attribute("minute")?.Value,
+            SecondRaw: dateGroup.Attribute("second")?.Value,
+            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
+    }
+
+    private static WorksheetAutoFilterColorFilterModel? ReadColorFilter(XElement? colorFilter)
+    {
+        if (colorFilter is null)
+            return null;
+
+        var nativeAttributes = colorFilter.Attributes()
+            .Where(attribute =>
+                !IsModeledAttribute(attribute, "dxfId") &&
+                !IsModeledAttribute(attribute, "cellColor"))
+            .ToDictionary(attribute => attribute.Name.ToString(), attribute => attribute.Value, StringComparer.Ordinal);
+
+        return new WorksheetAutoFilterColorFilterModel(
+            DifferentialFormatId: XlsxXmlAttributeReader.ReadIntAttribute(colorFilter, "dxfId"),
+            CellColor: XlsxXmlAttributeReader.ReadBoolAttribute(colorFilter, "cellColor", defaultValue: true),
+            DifferentialFormatIdRaw: colorFilter.Attribute("dxfId")?.Value,
+            CellColorRaw: colorFilter.Attribute("cellColor")?.Value,
+            NativeAttributes: nativeAttributes.Count == 0 ? null : nativeAttributes);
     }
 
     private static IReadOnlyDictionary<string, string>? ReadCustomFilterNativeAttributes(XElement filter)

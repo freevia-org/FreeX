@@ -88,7 +88,19 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
             return splitsArrayRejection;
 
         var (maxOccupied, movedSnapshot) = CaptureMovedCells(sheet);
-        if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxRow)
+        // R111-commands-insert-overflow-metadata-1: maxOccupied above only sees rows holding an
+        // actual Cell object. A row past the last data row can still carry row-level state that
+        // lives entirely outside the cell dictionary -- a style-only formatting band (whole-row
+        // header select with no value), a RowHeights override, a hidden-row flag, or an outline
+        // level -- and that state shifts (and overflows) exactly like a real cell would. Fold in
+        // the highest such row, but only if it actually falls within the shifted region (>=
+        // _beforeRow): HighestFormattedOrOccupiedRow is sheet-wide, and a formatted row ABOVE the
+        // insert point never moves, so it must not count toward the overflow check.
+        var highestFormattedRow = RowColumnShiftHelpers.HighestFormattedOrOccupiedRow(sheet);
+        var maxOccupiedOrFormatted = Math.Max(
+            maxOccupied,
+            highestFormattedRow >= _beforeRow ? highestFormattedRow : 0);
+        if (maxOccupiedOrFormatted > 0 && maxOccupiedOrFormatted + _count > Model.CellAddress.MaxRow)
             return new CommandOutcome(false,
                 ErrorMessage: CommandGuards.CannotInsertRowsPastLastRow(_count));
 

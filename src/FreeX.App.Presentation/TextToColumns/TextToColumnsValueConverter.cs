@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using FreeX.Core.IO;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.TextToColumns;
@@ -166,47 +167,29 @@ public static class TextToColumnsValueConverter
         return date.Date >= new DateTime(1900, 1, 1);
     }
 
-    // Only attempt a date parse when the text already "looks like" a date (at least two digit
-    // groups, plus either a recognized date separator with 3+ groups or a letter, e.g. a month
-    // name) - otherwise DateTime.TryParse is lenient enough to misread plain numbers/fractions.
+    // Only attempt a date parse when the text already "looks like" a date -- otherwise
+    // DateTime.TryParse is lenient enough to misread plain numbers/fractions. '/' and '-' are
+    // universally treated by Excel as date separators regardless of locale; '.' only counts when
+    // it is the current culture's own actual date separator (e.g. de-DE/it-IT), otherwise a plain
+    // decimal-looking string like "1.2.3" under en-US (whose date separator is '/') would be
+    // misread as a date instead of staying text. See FreeX.Core.IO.DateEntryShapeRecognizer for
+    // the shared, single-source implementation of this heuristic (also used by
+    // DelimitedTextWorkbookReader's CSV import and CellEntryParser's typed-cell-entry path) --
+    // including its year-less two-digit-group "M/d"/"M-d" rule (e.g. a bare "3/4" is a date to
+    // Excel, matching CSV import and typed cell entry).
     private static bool LooksLikeGeneralDateCandidate(string text)
     {
-        // '/' and '-' are universally treated by Excel as date separators regardless of locale;
-        // '.' only counts when it is the current culture's own actual date separator (e.g.
-        // de-DE/it-IT), otherwise a plain decimal-looking string like "1.2.3" under en-US (whose
-        // date separator is '/') would be misread as a date instead of staying text.
         var cultureDateSeparator = CultureInfo.CurrentCulture.DateTimeFormat.DateSeparator;
+        var dotCountsAsDateSeparator = cultureDateSeparator.Length == 1 && cultureDateSeparator[0] == '.';
 
-        var digitGroups = 0;
-        var inDigitGroup = false;
-        var hasDateSeparator = false;
-        var hasLetter = false;
-
-        foreach (var c in text)
-        {
-            if (char.IsDigit(c))
-            {
-                if (!inDigitGroup)
-                {
-                    digitGroups++;
-                    inDigitGroup = true;
-                }
-
-                continue;
-            }
-
-            inDigitGroup = false;
-            hasDateSeparator |= c is '/' or '-' ||
-                (cultureDateSeparator.Length == 1 && c == cultureDateSeparator[0]);
-            hasLetter |= char.IsLetter(c);
-        }
-
-        if (digitGroups < 2)
-        {
-            return false;
-        }
-
-        return (hasDateSeparator && digitGroups >= 3) || hasLetter;
+        // Text-to-Columns has no separate time-parsing step for the General column format, so a
+        // standalone colon must not qualify as a date candidate on its own (colonAlwaysQualifies:
+        // false); this matches the pre-existing behavior, where a colon was never treated as a
+        // date separator here at all.
+        return DateEntryShapeRecognizer.LooksLikeDateCandidate(
+            text.AsSpan(),
+            dotCountsAsDateSeparator,
+            colonAlwaysQualifies: false);
     }
 
     private static bool TryParseDate(string text, DatePartOrder partOrder, out DateTime date)

@@ -1709,6 +1709,23 @@ public sealed class RecalcEngine
         _graph.ClearDependencies(cell);
         _volatileCells.Remove(cell);
         ClearAnchorArraySpillTracking(cell);
+
+        // R111-calc-stale-cyclic-leak: a cell whose formula has just been cleared/replaced (this is
+        // the choke point every real caller routes through -- WorkbookCellEditService.
+        // UpdateFormulaDependencies for a plain edit or Undo/Redo, and ClearVacatedFormulaDependencies
+        // above for a structural relocation) can by definition no longer participate in ANY circular
+        // reference. Without this, a cell that was previously classified cyclic and is then edited to
+        // a plain value (not a new formula) never runs through the ordinary evaluation loop's own
+        // _cyclicCells.Remove (that loop only visits cells that still HasFormula), so the stale
+        // #CIRCULAR! entry would otherwise survive forever -- including across F9/full recalc and
+        // save/reload -- and keep being reported by FormulaAuditingService's "Formulas with circular
+        // references" error-checking rule (WPF Formulas > Error Checking, File > Info's
+        // circular-reference count, and the Avalonia Error Checking command all read CyclicCells
+        // straight through) even though Excel never flags a non-formula cell this way.
+        if (_cyclicCells.Count > 0)
+            _cyclicCells.Remove(cell);
+        if (_activeIterativeCyclicCells.Count > 0)
+            _activeIterativeCyclicCells.Remove(cell);
     }
 
     /// <summary>Rebuild dependency and volatile-function tracking from every formula in a workbook.</summary>
@@ -2461,6 +2478,52 @@ public sealed class RecalcEngine
 
             case UnaryOpNode unary:
                 return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+
+            // R111-calc-union-intersection-endpoint-deps: a parenthesized multi-area union
+            // (e.g. "(A1:A5,C1:C5)", parsed to UnionNode -- see R93_AreasUnionValueModelTests),
+            // a space-intersection ("A1:B5 B1:C10", IntersectionNode), or an INDEX(...)-anchored
+            // range endpoint (NamedRangeEndpointNode, e.g. "A1:INDEX(B:B,5)") are all fully
+            // evaluated shapes (FormulaEvaluator.cs's EvaluateUnionNode/EvaluateIntersectionNode/
+            // EvaluateNamedRangeEndpointNode) that can appear as a bare argument to a function
+            // (e.g. "=SUM((A1:A5,C1:C5))") without ever going through BinaryOpNode/FunctionCallNode.
+            // Before this case existed, none of these three node kinds had ANY arm in this switch,
+            // so falling into one contributed zero dependency edges and zero volatility signal --
+            // silently the same defect class R29/R92 already fixed for ANCHORARRAY's implicit union
+            // rectangle (see the case immediately below), just one AST level higher. Recurse into
+            // every constituent sub-expression and OR their volatility, exactly like the existing
+            // BinaryOpNode/FunctionCallNode cases do, so a plain precedent inside any area still
+            // gets a dependency edge and a volatile function nested anywhere inside still marks
+            // the whole formula volatile.
+            case UnionNode union:
+            {
+                var areas = union.Areas;
+                var hasVolatile = false;
+                for (var i = 0; i < areas.Count; i++)
+                {
+                    if (CollectReferences(areas[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack))
+                        hasVolatile = true;
+                }
+                return hasVolatile;
+            }
+
+            case IntersectionNode intersection:
+            {
+                // True dependency tracking would ideally register only the cells in the actual
+                // intersected range, but recursing into both sides (mirroring BinaryOpNode) is at
+                // minimum correct for the common case: any cell that could affect either operand's
+                // extent or value still dirties this formula, and a volatile function on either
+                // side still marks it volatile -- never silently dropped as before.
+                var leftHasVolatile = CollectReferences(intersection.Left, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                var rightHasVolatile = CollectReferences(intersection.Right, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                return leftHasVolatile || rightHasVolatile;
+            }
+
+            case NamedRangeEndpointNode endpointNode:
+            {
+                var startHasVolatile = CollectReferences(endpointNode.Start, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                var endHasVolatile = CollectReferences(endpointNode.End, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                return startHasVolatile || endHasVolatile;
+            }
 
             // A1#:B5 spill-range-union reference (ANCHORARRAY(anchor, end), see Parser.cs's ':' handling
             // after a '#' anchor). FormulaEvaluator.Functions.cs EvaluateAnchorArray reads every cell in

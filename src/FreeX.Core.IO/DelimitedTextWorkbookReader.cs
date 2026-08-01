@@ -448,8 +448,16 @@ internal static partial class DelimitedTextWorkbookReader
         }
         catch (DecoderFallbackException)
         {
-            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-            return Encoding.GetEncoding(1252).GetString(bytes);
+            // Mirror the writer's ResolveAnsiEncoding (DelimitedTextWorkbookWriter): a plain,
+            // BOM-less .csv/.txt that isn't valid UTF-8 was almost certainly produced -- by this
+            // app or by real Excel's plain "CSV (Comma delimited)" Save-As -- using the OS's
+            // current-culture ANSI code page (e.g. 1252 on English Windows, 932/Shift-JIS on
+            // Japanese, 1251/Cyrillic on Russian, 936/GBK on Chinese). Decoding with a hard-coded
+            // Windows-1252 fallback regardless of locale would mojibake any non-Western-European
+            // Windows install's own round-tripped files. Share the exact same resolution the
+            // writer uses so Save-then-Open of a plain CSV/TXT is symmetric per-locale, just like
+            // Excel's.
+            return DelimitedTextWorkbookWriter.ResolveAnsiEncoding().GetString(bytes);
         }
     }
 
@@ -616,45 +624,14 @@ internal static partial class DelimitedTextWorkbookReader
             dateTime.Date != DateTime.MinValue.Date;
     }
 
-    private static bool LooksLikeCurrentCultureDateCandidate(ReadOnlySpan<char> field)
-    {
-        var digitGroups = 0;
-        var inDigitGroup = false;
-        var hasDateSeparator = false;
-        var hasLetter = false;
-        var hasColon = false;
-
-        foreach (var c in field)
-        {
-            if (char.IsDigit(c))
-            {
-                if (!inDigitGroup)
-                {
-                    digitGroups++;
-                    inDigitGroup = true;
-                }
-
-                continue;
-            }
-
-            inDigitGroup = false;
-            hasDateSeparator |= c is '/' or '-' or '.';
-            hasLetter |= char.IsLetter(c);
-            hasColon |= c == ':';
-        }
-
-        if (digitGroups < 2)
-        {
-            return false;
-        }
-
-        if (hasColon && !hasDateSeparator && digitGroups <= 2)
-        {
-            return false;
-        }
-
-        return (hasDateSeparator && digitGroups >= 3) || hasLetter;
-    }
+    // CSV/TXT import unconditionally treats '.' as a date separator (dotCountsAsDateSeparator:
+    // true) and routes a standalone time literal through the separate TryParseTime step below
+    // instead of through this date candidate, so colon never qualifies here on its own
+    // (colonAlwaysQualifies: false). See DateEntryShapeRecognizer for the shared, single-source
+    // implementation of this heuristic (also used by CellEntryParser and
+    // TextToColumnsValueConverter for the typed-cell-entry and Text-to-Columns paths).
+    private static bool LooksLikeCurrentCultureDateCandidate(ReadOnlySpan<char> field) =>
+        DateEntryShapeRecognizer.LooksLikeDateCandidate(field, dotCountsAsDateSeparator: true, colonAlwaysQualifies: false);
 
     private static bool TryParseIsoDateTimeOffset(ReadOnlySpan<char> field, out DateTime dateTime)
     {

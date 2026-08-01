@@ -61,6 +61,29 @@ public static class PageGeometryRules
         Math.Min(widthScale, heightScale);
 
     /// <summary>
+    /// Resolves Excel's Page Setup &gt; Header/Footer &gt; "Scale with document" checkbox
+    /// (<c>Sheet.HeaderFooterScaleWithDocument</c>, default checked) into the multiplier a renderer
+    /// should apply to header/footer TEXT font size and line spacing. The flag governs ONLY the
+    /// header/footer text's own size -- it has no effect on the grid/content scale
+    /// (<paramref name="contentScaleRatio"/>) itself, which every renderer always applies regardless
+    /// of this flag, and it never affects an inserted header/footer picture's own size. When checked
+    /// (the default), header/footer text shrinks/grows by the exact same ratio as the page's grid
+    /// content; when unchecked, Excel keeps header/footer text at its authored size no matter how the
+    /// page content is scaled (so this returns 1.0 -- a no-op). Extracted to this shared home
+    /// (R112-presentation-headerfooter-scale-with-document-shared-1) so the native desktop print/
+    /// print-preview renderer and the portable PDF export tier -- which each need to derive this
+    /// exact same multiplier from their own independently-resolved content scale ratio -- consult one
+    /// formula instead of two copies that can silently drift apart.
+    /// </summary>
+    /// <param name="scaleWithDocument">Sheet.HeaderFooterScaleWithDocument.</param>
+    /// <param name="contentScaleRatio">The renderer's own fully-resolved grid/content scale ratio for
+    /// this page (1.0 = no scaling), already reflecting the sheet's Scale%/Fit-to-pages setting and
+    /// any defensive residual-overflow shrink.</param>
+    /// <returns>The multiplier to apply to header/footer font size and line spacing.</returns>
+    public static double ResolveHeaderFooterFontScale(bool scaleWithDocument, double contentScaleRatio) =>
+        scaleWithDocument ? contentScaleRatio : 1.0;
+
+    /// <summary>
     /// Returns whether <paramref name="value"/> (a row or column index) falls inside a print-title
     /// repeat range, e.g. so a caller walking a print range can skip title rows/columns it will already
     /// account for separately via <see cref="CountRepeatItems"/>.

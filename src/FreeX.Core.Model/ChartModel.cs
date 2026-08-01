@@ -60,6 +60,25 @@ public sealed class ChartModel
     public ChartType Type { get; set; } = ChartType.Column;
     public GridRange DataRange { get; set; }
     public bool IsVisible { get; set; } = true;
+
+    /// <summary>
+    /// R111-model-drawing-object-lock-1-1: whether this chart is locked against move/resize while its
+    /// sheet is protected with the "Edit objects" permission blocked -- mirrors
+    /// <see cref="DrawingShapeModel.Locked"/> (matching OOXML
+    /// <c>&lt;a:graphicFrameLocks noMove="1" noResize="1".../&gt;</c>). Defaults to <see langword="true"/>,
+    /// matching Excel's default of a locked chart. When an author explicitly unlocks a chart (unchecks
+    /// Format Chart Area &gt; Properties &gt; Locked) that one chart stays movable/resizable even while
+    /// the sheet protection has "Edit objects" turned off, while other (default-locked) charts on the
+    /// same protected sheet remain immovable.
+    /// </summary>
+    /// <remarks>
+    /// Reading/writing the OOXML per-chart lock attribute (<c>a:graphicFrameLocks</c>) on load/save is
+    /// deferred follow-up work, exactly like <see cref="DrawingShapeModel.Locked"/> -- this field is
+    /// currently in-memory/session-only and defaults to locked, matching Excel's authored default when
+    /// no lock override is present.
+    /// </remarks>
+    public bool Locked { get; set; } = true;
+
     public bool IsPivotChart { get; set; }
     public string? PivotSourceSheetName { get; set; }
     public string? PivotTableName { get; set; }

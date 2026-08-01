@@ -456,7 +456,7 @@ public static class PasteCommandFactory
                 if (ShouldCarryComments(sourceSheet, sourceRange, targetSheet, specialFootprint))
                 {
                     specialExtraCommands.AddRange(BuildCommentCarryCommands(
-                        targetSheetId, sourceRange, destination, specialFootprint, options.Transpose));
+                        targetSheetId, sourceRange, destination, specialFootprint, options.Transpose, sourceAreas));
                 }
 
                 var picturesToCarry = FindPicturesAnchoredIn(sourceSheet, sourceRange);
@@ -570,7 +570,7 @@ public static class PasteCommandFactory
         if (sourceSheet is not null && sourceSheet.MergedRegions.Any(region => region.Overlaps(sourceRange)))
             extraCommands.Add(new PasteMergedRegionsCommand(targetSheetId, sourceRange, destination, transpose: false));
         if (carriesFormatting && ShouldCarryComments(sourceSheet, sourceRange, targetSheet, pasteFootprint))
-            extraCommands.AddRange(BuildCommentCarryCommands(targetSheetId, sourceRange, destination, pasteFootprint, transpose: false));
+            extraCommands.AddRange(BuildCommentCarryCommands(targetSheetId, sourceRange, destination, pasteFootprint, transpose: false, sourceAreas));
         // R91-io-clipboard-image-formats-5-2: a plain Ctrl+V (mode All, no Paste Special options)
         // must bring along any picture anchored inside the copied range, exactly as it brings along
         // the cell values/formats themselves -- matching real Excel.
@@ -967,7 +967,8 @@ public static class PasteCommandFactory
                     targetRows,
                     targetCols,
                     tiledFootprint,
-                    options.Transpose));
+                    options.Transpose,
+                    sourceAreas));
             }
 
             // R91-io-clipboard-image-formats-5-2: tiled counterpart of the non-tiled picture carry
@@ -1155,10 +1156,11 @@ public static class PasteCommandFactory
         GridRange sourceRange,
         CellAddress destination,
         GridRange destinationFootprint,
-        bool transpose)
+        bool transpose,
+        IReadOnlyList<GridRange>? sourceAreas = null)
     {
         yield return new ClearCommentsCommand(targetSheetId, destinationFootprint);
-        yield return new PasteCommentsCommand(targetSheetId, sourceRange, destination, transpose);
+        yield return new PasteCommentsCommand(targetSheetId, sourceRange, destination, transpose, sourceAreas);
     }
 
     /// <summary>
@@ -1173,7 +1175,8 @@ public static class PasteCommandFactory
         uint targetRows,
         uint targetCols,
         GridRange destinationFootprint,
-        bool transpose)
+        bool transpose,
+        IReadOnlyList<GridRange>? sourceAreas = null)
     {
         yield return new ClearCommentsCommand(targetSheetId, destinationFootprint);
 
@@ -1187,7 +1190,7 @@ public static class PasteCommandFactory
                     targetSheetId,
                     destination.Row + rowOffset,
                     destination.Col + colOffset);
-                yield return new PasteCommentsCommand(targetSheetId, sourceRange, tileDestination, transpose);
+                yield return new PasteCommentsCommand(targetSheetId, sourceRange, tileDestination, transpose, sourceAreas);
             }
         }
     }

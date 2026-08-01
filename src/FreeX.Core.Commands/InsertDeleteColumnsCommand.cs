@@ -87,7 +87,17 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
             return splitsArrayRejection;
 
         var (maxOccupied, movedSnapshot) = CaptureMovedCells(sheet);
-        if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxCol)
+        // R111-commands-insert-overflow-metadata-1: mirror InsertRowsCommand's identical fix --
+        // maxOccupied above only sees columns holding an actual Cell object, missing a style-only
+        // formatting band, ColumnWidths override, hidden-column flag, or outline level at/after the
+        // insert point. Fold in the highest such column, but only when it actually falls within the
+        // shifted region (>= _beforeCol); HighestFormattedOrOccupiedColumn is sheet-wide, and a
+        // formatted column BEFORE the insert point never moves.
+        var highestFormattedCol = RowColumnShiftHelpers.HighestFormattedOrOccupiedColumn(sheet);
+        var maxOccupiedOrFormatted = Math.Max(
+            maxOccupied,
+            highestFormattedCol >= _beforeCol ? highestFormattedCol : 0);
+        if (maxOccupiedOrFormatted > 0 && maxOccupiedOrFormatted + _count > Model.CellAddress.MaxCol)
             return new CommandOutcome(false,
                 ErrorMessage: CommandGuards.CannotInsertColumnsPastLastColumn(_count));
 

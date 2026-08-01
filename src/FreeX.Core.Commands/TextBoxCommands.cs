@@ -100,11 +100,13 @@ public sealed class ResizeTextBoxCommand : IWorkbookCommand
             return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
             return TextBoxCommandGuards.TextBoxNotFound();
+
+        // R111-model-drawing-object-lock-1-1: layer in the per-text-box Locked override so an
+        // author-unlocked text box stays resizable even while the sheet blocks "Edit objects".
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousWidth = textBox.Width;
         _previousHeight = textBox.Height;
@@ -336,10 +338,13 @@ public sealed class RepositionTextBoxCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
         if (!TextBoxCommandGuards.TryFindTextBox(sheet, _textBoxId, out var textBox))
             return TextBoxCommandGuards.TextBoxNotFound();
+
+        // R111-model-drawing-object-lock-1-1: layer in the per-text-box Locked override so an
+        // author-unlocked text box stays movable even while the sheet blocks "Edit objects".
+        if (TextBoxCommandGuards.RejectIfEditObjectsBlocked(sheet, textBox) is { } protectedOutcome)
+            return protectedOutcome;
         _previousAnchor = textBox.Anchor;
         textBox.Anchor = _anchor;
         _applied = true;
@@ -363,6 +368,18 @@ internal static class TextBoxCommandGuards
 
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
+
+    /// <summary>
+    /// R111-model-drawing-object-lock-1-1: same sheet-level "Edit objects" protection check as
+    /// <see cref="RejectIfEditObjectsBlocked(Sheet)"/>, but layers in the per-text-box
+    /// <see cref="TextBoxModel.Locked"/> flag -- mirrors
+    /// <see cref="DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(Sheet, DrawingShapeModel)"/>: an
+    /// author-unlocked text box (<c>Locked == false</c>) stays movable/resizable even while the sheet
+    /// is protected with "Edit objects" blocked, matching Excel's per-object Locked checkbox. A locked
+    /// text box (the default) is rejected exactly like the sheet-only overload.
+    /// </summary>
+    public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet, TextBoxModel textBox) =>
+        textBox.Locked ? RejectIfEditObjectsBlocked(sheet) : null;
 
     public static CommandOutcome? RejectInvalidSize(double width, double height) =>
         double.IsFinite(width) && double.IsFinite(height) && width > 0 && height > 0
