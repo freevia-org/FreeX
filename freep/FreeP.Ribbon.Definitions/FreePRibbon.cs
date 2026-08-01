@@ -1148,6 +1148,7 @@ public static class FreePRibbon
             group.Medium("freep.anim.motion.loop", FreePRibbonText.AnimationMotionLoopCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionLoopCommand.KeyTip);
             group.Medium("freep.anim.motion.s", FreePRibbonText.AnimationMotionSCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionSCommand.KeyTip);
             group.Medium("freep.anim.motion.figure-eight", FreePRibbonText.AnimationMotionFigureEightCommand.Label, RibbonCommandIconKind.Effects, FreePRibbonText.AnimationMotionFigureEightCommand.KeyTip);
+            group.Medium("freep.anim.motion.reverse", FreePRibbonText.AnimationMotionReverseCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.AnimationMotionReverseCommand.KeyTip);
         });
         tab.Group("animation-timing", FreePRibbonText.AnimationTimingGroup.Label, FreePRibbonText.AnimationTimingGroup.KeyTip, 90, group =>
         {

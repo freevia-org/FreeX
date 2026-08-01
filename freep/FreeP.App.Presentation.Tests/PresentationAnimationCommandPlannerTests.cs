@@ -78,6 +78,7 @@ public sealed class PresentationAnimationCommandPlannerTests
     [InlineData("freep.anim.delay", PresentationAnimationCommandIntentKind.SetDelay)]
     [InlineData("freep.anim.move-earlier", PresentationAnimationCommandIntentKind.MoveEarlier)]
     [InlineData("freep.anim.move-later", PresentationAnimationCommandIntentKind.MoveLater)]
+    [InlineData("freep.anim.motion.reverse", PresentationAnimationCommandIntentKind.ReverseMotionPath)]
     [InlineData("freep.anim.pane", PresentationAnimationCommandIntentKind.TogglePane)]
     public void TryPlan_MapsNonEffectCommandIdsToTypedIntents(
         string commandId,
@@ -212,6 +213,46 @@ public sealed class PresentationAnimationCommandPlannerTests
         motion.Segments.Skip(1).Should().OnlyContain(segment => segment.Kind == MotionPathSegmentKind.Cubic);
         motion.Segments[^1].X.Should().Be(0);
         motion.Segments[^1].Y.Should().Be(0);
+    }
+
+    [Fact]
+    public void TryApply_ReverseMotionPath_ReversesSelectedPathAndSupportsUndo()
+    {
+        var editor = MakeSession(out _, out var shapeId);
+        var motion = new MotionPath { Origin = "parent", PtsTypes = "F" };
+        motion.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+        motion.Segments.Add(MotionPathSegment.LineTo(0.5, 0.25));
+        motion.Segments.Add(MotionPathSegment.CubicTo(0.6, 0.3, 0.8, 0.4, 1, 0.5));
+        editor.AddAnimation(0, new ShapeAnimation
+        {
+            ShapeId = shapeId,
+            Kind = AnimationKind.Motion,
+            Motion = motion,
+            Trigger = AnimationTrigger.OnClick,
+        });
+        PresentationAnimationCommandPlanner.TryPlan("freep.anim.motion.reverse", out var plan)
+            .Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        var reversed = editor.CurrentSlideAnimations.Should().ContainSingle().Subject.Motion;
+        reversed.Should().NotBeNull();
+        reversed!.Origin.Should().Be("parent");
+        reversed.PtsTypes.Should().Be("F");
+        reversed.Segments.Select(segment => segment.Kind)
+            .Should().Equal(MotionPathSegmentKind.Move, MotionPathSegmentKind.Cubic, MotionPathSegmentKind.Line);
+        reversed.Segments[0].X.Should().Be(1);
+        reversed.Segments[0].Y.Should().Be(0.5);
+        reversed.Segments[1].X.Should().Be(0.5);
+        reversed.Segments[1].Y.Should().Be(0.25);
+        reversed.Segments[2].X.Should().Be(0);
+        reversed.Segments[2].Y.Should().Be(0);
+        editor.Bus.CanUndo.Should().BeTrue();
+
+        editor.Bus.Undo();
+        editor.CurrentSlideAnimations.Single().Motion!.Segments[0].X.Should().Be(0);
+        editor.Bus.Redo();
+        editor.CurrentSlideAnimations.Single().Motion!.Segments[0].X.Should().Be(1);
     }
 
     [Fact]

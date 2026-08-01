@@ -3506,6 +3506,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_motion_reverse_reverses_the_selected_path()
+    {
+        MotionPath? motion = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(shape.Id);
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.motion.right", out var addCommand).Should().BeTrue();
+            registry.TryGet("freep.anim.motion.reverse", out var reverseCommand).Should().BeTrue();
+
+            addCommand!.Execute(RibbonCommandContext.Empty);
+            reverseCommand!.Execute(RibbonCommandContext.Empty);
+            motion = window.Editor.CurrentSlideAnimations.Single().Motion;
+        });
+
+        if (!ran) return;
+        motion.Should().NotBeNull();
+        motion!.Segments[0].Kind.Should().Be(MotionPathSegmentKind.Move);
+        motion.Segments[0].X.Should().Be(0.5);
+        motion.Segments[0].Y.Should().Be(0);
+        motion.Segments[1].Kind.Should().Be(MotionPathSegmentKind.Line);
+        motion.Segments[1].X.Should().Be(0);
+        motion.Segments[1].Y.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Animation_pane_renders_shared_timeline_rows_and_action_state()
     {
         AnimationPaneTimelinePlan? panePlan = null;
