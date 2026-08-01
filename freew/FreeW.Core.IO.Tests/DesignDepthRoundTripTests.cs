@@ -168,6 +168,62 @@ public class DesignDepthRoundTripTests
         docXml.Root!.Descendants(W + "pgBorders").Should().BeEmpty();
     }
 
+    [Fact]
+    public void PageBorder_DefaultPlacement_OmitsDisplayAndZOrder()
+    {
+        var doc = new TextDocument();
+        doc.Page.PageBorder = new PageBorder();
+        var W = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+
+        var pgBorders = ReadPartXml(doc, "word/document.xml")
+            .Descendants(W + "pgBorders").Single();
+
+        pgBorders.Attribute(W + "display").Should().BeNull();
+        pgBorders.Attribute(W + "zOrder").Should().BeNull();
+        var loaded = RoundTrip(doc).Page.PageBorder!;
+        loaded.Display.Should().Be(PageBorderDisplay.AllPages);
+        loaded.ZOrder.Should().Be(PageBorderZOrder.Front);
+    }
+
+    [Fact]
+    public void PageBorder_NonDefaultPlacement_WritesCanonicalTokensAndReopens()
+    {
+        var doc = new TextDocument();
+        doc.Page.PageBorder = new PageBorder
+        {
+            Display = PageBorderDisplay.FirstPage,
+            ZOrder = PageBorderZOrder.Behind,
+        };
+        var W = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+
+        var pgBorders = ReadPartXml(doc, "word/document.xml")
+            .Descendants(W + "pgBorders").Single();
+        pgBorders.Attribute(W + "display")!.Value.Should().Be("firstPage");
+        pgBorders.Attribute(W + "zOrder")!.Value.Should().Be("behind");
+
+        var loaded = RoundTrip(doc).Page.PageBorder!;
+        loaded.Display.Should().Be(PageBorderDisplay.FirstPage);
+        loaded.ZOrder.Should().Be(PageBorderZOrder.Behind);
+    }
+
+    [Fact]
+    public void PageBorder_ReaderPreservesNotFirstPageAndBehindText()
+    {
+        var doc = new TextDocument();
+        doc.Page.PageBorder = new PageBorder();
+        var W = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+
+        var loaded = ReadWithDocumentXmlMutation(doc, xml =>
+        {
+            var pgBorders = xml.Descendants(W + "pgBorders").Single();
+            pgBorders.SetAttributeValue(W + "display", "notFirstPage");
+            pgBorders.SetAttributeValue(W + "zOrder", "behind");
+        }).Page.PageBorder!;
+
+        loaded.Display.Should().Be(PageBorderDisplay.NotFirstPage);
+        loaded.ZOrder.Should().Be(PageBorderZOrder.Behind);
+    }
+
     // ── Image watermark round-trip ────────────────────────────────────────────────────────────────
 
     // A small 1x1 PNG (the shortest valid PNG: 67 bytes).

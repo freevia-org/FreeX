@@ -6133,6 +6133,16 @@ public static class DocxReader
             StringComparison.OrdinalIgnoreCase)
             ? PageBorderOffsetFrom.Text
             : PageBorderOffsetFrom.Page;
+        var display = pgBorders.Attribute(W + "display")?.Value switch
+        {
+            "firstPage" => PageBorderDisplay.FirstPage,
+            "notFirstPage" => PageBorderDisplay.NotFirstPage,
+            _ => PageBorderDisplay.AllPages,
+        };
+        var zOrder = string.Equals(pgBorders.Attribute(W + "zOrder")?.Value, "behind",
+            StringComparison.OrdinalIgnoreCase)
+            ? PageBorderZOrder.Behind
+            : PageBorderZOrder.Front;
 
         // Older FreeW packages used a non-schema @w:art attribute. Read it as a compatibility fallback,
         // while canonical WordprocessingML stores the decorative design directly in @w:val.
@@ -6149,6 +6159,8 @@ public static class DocxReader
             SpacePt = Math.Max(0, space),
             LineStyle = lineStyle,
             ArtId = artId,
+            Display = display,
+            ZOrder = zOrder,
         };
     }
 

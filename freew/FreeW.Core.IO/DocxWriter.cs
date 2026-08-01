@@ -7758,6 +7758,21 @@ public static class DocxWriter
         var offsetFrom = border.OffsetFrom == PageBorderOffsetFrom.Text ? "text" : "page";
         var space = Math.Max(0, (int)Math.Round(border.SpacePt, MidpointRounding.AwayFromZero));
 
+        XElement Frame(params XElement[] edges)
+        {
+            var frame = new XElement(W + "pgBorders",
+                new XAttribute(W + "offsetFrom", offsetFrom));
+            if (border.Display != PageBorderDisplay.AllPages)
+            {
+                frame.Add(new XAttribute(W + "display",
+                    border.Display == PageBorderDisplay.FirstPage ? "firstPage" : "notFirstPage"));
+            }
+            if (border.ZOrder == PageBorderZOrder.Behind)
+                frame.Add(new XAttribute(W + "zOrder", "behind"));
+            frame.Add(edges);
+            return frame;
+        }
+
         if (border.ArtId > 0)
         {
             var artToken = PageBorderArtStyles.TryGetById(border.ArtId, out var artStyle)
@@ -7768,9 +7783,7 @@ public static class DocxWriter
                 new XAttribute(W + "sz", PointsToEighthPoints(border.WidthPt)),
                 new XAttribute(W + "space", space),
                 new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
-            return new XElement(W + "pgBorders",
-                new XAttribute(W + "offsetFrom", offsetFrom),
-                ArtEdge("top"), ArtEdge("left"), ArtEdge("bottom"), ArtEdge("right"));
+            return Frame(ArtEdge("top"), ArtEdge("left"), ArtEdge("bottom"), ArtEdge("right"));
         }
 
         var styleToken = BorderLineStyles.ToToken(border.LineStyle);
@@ -7780,9 +7793,7 @@ public static class DocxWriter
             new XAttribute(W + "space", space),
             new XAttribute(W + "color", border.ColorHex.TrimStart('#')));
 
-        return new XElement(W + "pgBorders",
-            new XAttribute(W + "offsetFrom", offsetFrom),
-            Edge("top"), Edge("left"), Edge("bottom"), Edge("right"));
+        return Frame(Edge("top"), Edge("left"), Edge("bottom"), Edge("right"));
     }
 
     // Preserved-numbering merge plan: the smallest disjoint id above FreeW's fixed reservations. FreeW's own
