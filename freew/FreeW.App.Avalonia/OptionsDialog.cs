@@ -35,16 +35,19 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     private readonly CheckBox _correctTwoInitialCaps = new();
     private readonly CheckBox _capitalizeDayNames = new();
     private readonly CheckBox _replaceText = new();
-    private readonly TextBox _replacements = new()
-    {
-        AcceptsReturn = true,
-        TextWrapping = TextWrapping.Wrap,
-        MinHeight = 110,
-        Width = 300,
-    };
+    private readonly Border _replacements = new() { Height = 180, VerticalAlignment = VerticalAlignment.Top };
+    private readonly Grid _replacementGrid = new();
+    private readonly List<ReplacementEditor> _replacementEditors = [];
     private readonly TextBlock _status = new();
 
     public FreeWOptions? Result { get; private set; }
+
+    internal TextBox RecentFilesCapForTest => _recentFilesCap;
+
+    internal IReadOnlyList<(TextBox Replace, TextBox With)> ReplacementEditorsForTest =>
+        _replacementEditors.Select(row => (row.Replace, row.With)).ToArray();
+
+    internal void AcceptForTest() => Accept();
 
     public OptionsDialog(FreeWOptions options)
     {
@@ -62,12 +65,11 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         _defaultFormat.ItemsSource = _surface.General.FormatChoices;
         _defaultFormat.SelectedIndex = 0;
         _uiLanguage.Text = _seed.UiLanguage;
-        _replacements.Text = _surface.AutoCorrect.ReplacementsText;
+        BuildReplacementTable();
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_recentFilesCap, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyComboBox(_defaultFormat, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_uiLanguage, DialogChromeStyle);
-        AvaloniaCompactDialogChrome.ApplyTextBox(_replacements, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
         var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
@@ -76,14 +78,12 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });
 
-        var ok = new Button { Content = "OK", IsDefault = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
-        ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
-        cancel.Click += (_, _) => Close();
-
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
+        var buttons = AvaloniaDialogButtonRowFactory.CreateOkCancel(
+            Accept,
+            Close,
+            buttonWidth: 84,
+            rowMargin: new Thickness(16, 8, 16, 12),
+            style: DialogChromeStyle);
         DockPanel.SetDock(buttons, Dock.Bottom);
 
         Content = new DockPanel
@@ -95,6 +95,8 @@ internal sealed class OptionsDialog : FreeWDialogWindow
                 new StackPanel { Children = { tabs, _status } },
             },
         };
+
+        Opened += (_, _) => AvaloniaCompactDialogChrome.FocusAndSelect(_recentFilesCap);
     }
 
     private void Accept()
@@ -105,17 +107,6 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             _status.Text = $"Enter a whole number between {FreeWOptions.MinRecentFilesCap} and {FreeWOptions.MaxRecentFilesCap}.";
             _status.IsVisible = true;
             _recentFilesCap.Focus();
-            return;
-        }
-
-        if (!OptionsDialogPlanner.TryParseAutoCorrectReplacements(
-            _replacements.Text,
-            out var replacements,
-            out var replacementsError))
-        {
-            _status.Text = replacementsError ?? _surface.AutoCorrect.ReplacementsValidationMessage;
-            _status.IsVisible = true;
-            _replacements.Focus();
             return;
         }
 
@@ -138,7 +129,11 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             CorrectTwoInitialCapitals = _correctTwoInitialCaps.IsChecked == true,
             CapitalizeDayNames = _capitalizeDayNames.IsChecked == true,
             ReplaceText = _replaceText.IsChecked == true,
-            Replacements = replacements.ToList(),
+            Replacements = _replacementEditors
+                .Select(row => new { Replace = row.Replace.Text, With = row.With.Text })
+                .Where(row => !string.IsNullOrWhiteSpace(row.Replace) && !string.IsNullOrWhiteSpace(row.With))
+                .Select(row => new AutoCorrectReplacement(row.Replace!.Trim(), row.With!))
+                .ToList(),
         };
 
         Result = OptionsDialogPlanner.BuildResult(
@@ -193,6 +188,75 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         _replaceText.IsCheckedChanged += (_, _) => SyncReplacements();
         SyncReplacements();
         return panel;
+    }
+
+    private void BuildReplacementTable()
+    {
+        _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(2, GridUnitType.Star)));
+        _replacementGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+        _replacementGrid.Children.Add(HeaderCell("Replace", 0));
+        _replacementGrid.Children.Add(HeaderCell("With", 1));
+
+        foreach (var replacement in _seed.AutoCorrect?.Replacements ?? [])
+            AddReplacementRow(replacement.Replace, replacement.With);
+
+        AddReplacementRow();
+        _replacements.Child = _replacementGrid;
+        _replacements.BorderBrush = new SolidColorBrush(Color.FromRgb(171, 173, 179));
+        _replacements.BorderThickness = new Thickness(1);
+        _replacements.ClipToBounds = true;
+    }
+
+    private void AddReplacementRow(string replace = "", string with = "")
+    {
+        var row = new ReplacementEditor();
+        row.Replace.Text = replace;
+        row.With.Text = with;
+        AvaloniaCompactDialogChrome.ApplyTextBox(row.Replace, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyTextBox(row.With, DialogChromeStyle);
+
+        var rowIndex = _replacementGrid.RowDefinitions.Count;
+        _replacementGrid.RowDefinitions.Add(new RowDefinition(new GridLength(24)));
+        Grid.SetRow(row.Replace, rowIndex);
+        Grid.SetColumn(row.Replace, 0);
+        Grid.SetRow(row.With, rowIndex);
+        Grid.SetColumn(row.With, 1);
+        _replacementGrid.Children.Add(row.Replace);
+        _replacementGrid.Children.Add(row.With);
+        _replacementEditors.Add(row);
+
+        row.Replace.TextChanged += ReplacementChanged;
+        row.With.TextChanged += ReplacementChanged;
+    }
+
+    private void ReplacementChanged(object? sender, TextChangedEventArgs e)
+    {
+        if (_replacementEditors.Count == 0)
+            return;
+
+        var last = _replacementEditors[^1];
+        if (!string.IsNullOrWhiteSpace(last.Replace.Text) || !string.IsNullOrWhiteSpace(last.With.Text))
+            AddReplacementRow();
+    }
+
+    private static Border HeaderCell(string text, int column)
+    {
+        var cell = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(240, 240, 240)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(171, 173, 179)),
+            BorderThickness = new Thickness(0, 0, 1, 1),
+            Child = new TextBlock
+            {
+                Text = text,
+                FontWeight = FontWeight.SemiBold,
+                Margin = new Thickness(4, 3),
+            },
+        };
+        Grid.SetRow(cell, 0);
+        Grid.SetColumn(cell, column);
+        return cell;
     }
 
     private Control BuildAutoFormatTab()
@@ -312,5 +376,11 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     {
         var name = System.Globalization.CultureInfo.CurrentCulture.Name;
         return string.IsNullOrEmpty(name) ? "invariant" : name;
+    }
+
+    private sealed class ReplacementEditor
+    {
+        public TextBox Replace { get; } = new();
+        public TextBox With { get; } = new();
     }
 }
