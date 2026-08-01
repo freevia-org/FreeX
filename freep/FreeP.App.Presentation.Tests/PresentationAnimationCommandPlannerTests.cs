@@ -97,6 +97,8 @@ public sealed class PresentationAnimationCommandPlannerTests
     [InlineData("freep.anim.motion.down", PresentationMotionPathPreset.Down)]
     [InlineData("freep.anim.motion.arc-right", PresentationMotionPathPreset.ArcRight)]
     [InlineData("freep.anim.motion.arc-left", PresentationMotionPathPreset.ArcLeft)]
+    [InlineData("freep.anim.motion.arc-up", PresentationMotionPathPreset.ArcUp)]
+    [InlineData("freep.anim.motion.arc-down", PresentationMotionPathPreset.ArcDown)]
     public void TryPlan_MapsMotionCommandsToTypedPathPresets(
         string commandId,
         PresentationMotionPathPreset expectedPreset)
@@ -155,6 +157,8 @@ public sealed class PresentationAnimationCommandPlannerTests
     [InlineData("freep.anim.motion.right", MotionPathSegmentKind.Line, 0.5, 0)]
     [InlineData("freep.anim.motion.arc-right", MotionPathSegmentKind.Cubic, 0.5, 0)]
     [InlineData("freep.anim.motion.arc-left", MotionPathSegmentKind.Cubic, -0.5, 0)]
+    [InlineData("freep.anim.motion.arc-up", MotionPathSegmentKind.Cubic, 0, -0.5)]
+    [InlineData("freep.anim.motion.arc-down", MotionPathSegmentKind.Cubic, 0, 0.5)]
     public void TryApply_MotionCommand_AddsUndoableMotionPath(
         string commandId,
         MotionPathSegmentKind expectedSegmentKind,
