@@ -135,6 +135,30 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void WordLevelChange_MapsRevisedBookmarkAroundSurvivingText()
+    {
+        var original = DocWith("A old C");
+        var revised = new TextDocument();
+        var revisedParagraph = new Paragraph();
+        revisedParagraph.Runs.Add(new Run("A "));
+        revisedParagraph.Runs.Add(new Run("new "));
+        revisedParagraph.Runs.Add(new Run("C"));
+        revisedParagraph.BookmarkNames.Add("Target");
+        revisedParagraph.BookmarkBoundaries.Add(new BookmarkBoundary("8", BookmarkBoundaryKind.Start, 2, "Target"));
+        revisedParagraph.BookmarkBoundaries.Add(new BookmarkBoundary("8", BookmarkBoundaryKind.End, 3));
+        revised.Blocks.Add(revisedParagraph);
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        var paragraph = result.Paragraphs.Single();
+        paragraph.BookmarkBoundaries.Should().HaveCount(2);
+        var start = paragraph.BookmarkBoundaries[0];
+        var end = paragraph.BookmarkBoundaries[1];
+        paragraph.Runs[start.RunIndex].Text.Should().Be("C");
+        end.RunIndex.Should().Be(start.RunIndex + 1);
+    }
+
+    [Fact]
     public void Compare_DoesNotMutateInputs()
     {
         var original = DocWith("alpha beta");

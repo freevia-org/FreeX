@@ -113,6 +113,7 @@ public static class RevisionEditPlanner
         if (hi <= lo)
             return new DeleteResult(lo, KeptDeletedText: false);
 
+        var bookmarkPositions = BookmarkBoundaryMapper.Capture(paragraph);
         var rebuilt = new List<Run>();
         var position = 0;
         var keptDeletedText = false;
@@ -161,6 +162,7 @@ public static class RevisionEditPlanner
 
         paragraph.Runs.Clear();
         paragraph.Runs.AddRange(rebuilt);
+        BookmarkBoundaryMapper.Restore(paragraph, bookmarkPositions);
         return new DeleteResult(lo, keptDeletedText);
     }
 
@@ -181,6 +183,7 @@ public static class RevisionEditPlanner
         if (hi <= lo)
             return false;
 
+        var bookmarkPositions = BookmarkBoundaryMapper.Capture(paragraph);
         var rebuilt = new List<Run>();
         var position = 0;
         var marked = false;
@@ -217,6 +220,7 @@ public static class RevisionEditPlanner
 
         paragraph.Runs.Clear();
         paragraph.Runs.AddRange(rebuilt);
+        BookmarkBoundaryMapper.Restore(paragraph, bookmarkPositions);
         return marked;
     }
 

@@ -9,6 +9,7 @@ public sealed class AddCommentCommand(
     Comment comment) : IDocumentCommand
 {
     private List<Run>? _savedRuns;
+    private List<BookmarkBoundary>? _savedBookmarkBoundaries;
     private bool _applied;
 
     public string Label => "Insert Comment";
@@ -23,12 +24,15 @@ public sealed class AddCommentCommand(
             return;
 
         _savedRuns = paragraph.Runs.Select(CloneRunMarks).ToList();
+        _savedBookmarkBoundaries = [.. paragraph.BookmarkBoundaries];
+        var bookmarkPositions = BookmarkBoundaryMapper.Capture(paragraph);
 
         if (!MarkCommentRange(paragraph, startOffset, endOffset, commentId))
         {
             _savedRuns = null;
             return;
         }
+        BookmarkBoundaryMapper.Restore(paragraph, bookmarkPositions);
 
         context.Document.Comments[commentId] = comment;
         _applied = true;
@@ -44,6 +48,9 @@ public sealed class AddCommentCommand(
         {
             paragraph.Runs.Clear();
             paragraph.Runs.AddRange(_savedRuns);
+            paragraph.BookmarkBoundaries.Clear();
+            if (_savedBookmarkBoundaries is not null)
+                paragraph.BookmarkBoundaries.AddRange(_savedBookmarkBoundaries);
         }
 
         _applied = false;
@@ -133,6 +140,7 @@ public sealed class AddCommentCommand(
 public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
 {
     private readonly Dictionary<int, List<Run>> _savedRuns = new();
+    private readonly Dictionary<int, List<BookmarkBoundary>> _savedBookmarkBoundaries = new();
     private Comment? _savedComment;
     private int _savedOrdinal = -1;
 
@@ -154,12 +162,17 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
             foreach (var paragraph in ParagraphsInBlock(doc.Blocks[bi]))
             {
                 if (paragraph.Runs.Any(r => r.CommentId is { } cid && ResolveTopLevel(doc, cid) == commentId))
-                    _savedRuns[BlockParagraphKey(doc, bi, paragraph)] = paragraph.Runs.Select(CloneRun).ToList();
+                {
+                    var key = BlockParagraphKey(doc, bi, paragraph);
+                    _savedRuns[key] = paragraph.Runs.Select(CloneRun).ToList();
+                    _savedBookmarkBoundaries[key] = [.. paragraph.BookmarkBoundaries];
+                }
             }
         }
 
         foreach (var paragraph in doc.Blocks.SelectMany(ParagraphsInBlock))
         {
+            var bookmarkPositions = BookmarkBoundaryMapper.Capture(paragraph);
             for (var i = paragraph.Runs.Count - 1; i >= 0; i--)
             {
                 var run = paragraph.Runs[i];
@@ -171,6 +184,7 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
                 else
                     run.CommentId = null;
             }
+            BookmarkBoundaryMapper.Restore(paragraph, bookmarkPositions);
         }
 
         doc.Comments.Remove(commentId);
@@ -206,6 +220,9 @@ public sealed class DeleteCommentCommand(int commentId) : IDocumentCommand
 
             paragraph.Runs.Clear();
             paragraph.Runs.AddRange(runs);
+            paragraph.BookmarkBoundaries.Clear();
+            if (_savedBookmarkBoundaries.TryGetValue(key, out var boundaries))
+                paragraph.BookmarkBoundaries.AddRange(boundaries);
         }
     }
 

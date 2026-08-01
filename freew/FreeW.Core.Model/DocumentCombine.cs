@@ -123,11 +123,13 @@ public static class DocumentCombine
 
         var aRuns = aParagraph?.Runs ?? new List<Run>();
         var bRuns = bParagraph.Runs;
+        var bBoundaryOutputIndices = new int?[bRuns.Count + 1];
         var ai = 0;
         var bi = 0;
 
         while (ai < aRuns.Count || bi < bRuns.Count)
         {
+            bBoundaryOutputIndices[bi] ??= merged.Runs.Count;
             // A's deletions (base-only text struck by A) are off-spine: emit them, attributed to authorA.
             if (ai < aRuns.Count && aRuns[ai].Revision == RevisionKind.Deleted)
             {
@@ -142,6 +144,7 @@ public static class DocumentCombine
                 var bRun = bRuns[bi];
                 merged.Runs.Add(Stamp(bRun, RevisionKind.Inserted, bRun.RevisionAuthor ?? authorB, bRun.RevisionDateXml ?? dateXml));
                 bi++;
+                bBoundaryOutputIndices[bi] ??= merged.Runs.Count;
                 continue;
             }
 
@@ -181,7 +184,14 @@ public static class DocumentCombine
             if (aRun is not null)
                 ai++;
             bi++;
+            bBoundaryOutputIndices[bi] ??= merged.Runs.Count;
         }
+
+        bBoundaryOutputIndices[bRuns.Count] ??= merged.Runs.Count;
+        merged.BookmarkBoundaries.AddRange(bParagraph.BookmarkBoundaries.Select(boundary => boundary with
+        {
+            RunIndex = bBoundaryOutputIndices[Math.Clamp(boundary.RunIndex, 0, bRuns.Count)] ?? merged.Runs.Count
+        }));
 
         return merged;
     }
