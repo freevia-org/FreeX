@@ -3041,12 +3041,13 @@ public static class DocxWriter
     /// <summary>
     /// Builds one <c>w:tab</c> for a paragraph tab stop: alignment in <c>w:val</c>, position in
     /// <c>w:pos</c> (dxa), and an optional <c>w:leader</c> fill emitted only when the stop carries
-    /// one (so leaderless stops round-trip byte-for-byte as before).
+    /// one (so leaderless stops round-trip byte-for-byte as before). Clear operations emit only
+    /// <c>w:val="clear"</c> plus their position.
     /// </summary>
     private static XElement BuildTabStop(TabStop stop)
     {
         var tab = new XElement(W + "tab",
-            new XAttribute(W + "val", stop.Alignment switch
+            new XAttribute(W + "val", stop.IsClear ? "clear" : stop.Alignment switch
             {
                 TabStopAlignment.Center => "center",
                 TabStopAlignment.Right => "right",
@@ -3054,7 +3055,7 @@ public static class DocxWriter
                 _ => "left"
             }),
             new XAttribute(W + "pos", PointsToDxa(stop.PositionPt)));
-        if (stop.Leader != TabLeader.None)
+        if (!stop.IsClear && stop.Leader != TabLeader.None)
             tab.Add(new XAttribute(W + "leader", stop.Leader switch
             {
                 TabLeader.Dots => "dot",
@@ -8655,6 +8656,12 @@ public static class DocxWriter
         // triggers Word's strict validator ("unreadable content / repair") whenever a tracked paragraph-
         // format revision (w:pPrChange) or a style definition carries a non-Left alignment together with
         // indent or spacing values.
+
+        // Style tab stops are part of EG_PPrBase too. Preserve both concrete stops and clear operations;
+        // a paragraph can use the latter to cancel a stop inherited from this style.
+        if (f.TabStops.Count > 0)
+            pPr.Add(new XElement(W + "tabs",
+                f.TabStops.Select(BuildTabStop)));
 
         // w:spacing carries before/after and line spacing — CT_PPrBase order: after bidi, before ind.
         // before/after emitted only when non-zero; line spacing only when it differs from the model

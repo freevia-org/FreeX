@@ -379,6 +379,55 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void TabStopClear_ReadsAndSurvivesReopenRoundTrip()
+    {
+        var loaded = ReadHandAuthoredDocx(
+            """
+            <w:p>
+              <w:pPr>
+                <w:tabs><w:tab w:val="clear" w:pos="1440"/></w:tabs>
+              </w:pPr>
+              <w:r><w:t>cleared inherited tab</w:t></w:r>
+            </w:p>
+            """);
+
+        var read = loaded.Paragraphs.Single().Formatting.TabStops.Single();
+        read.PositionPt.Should().BeApproximately(72, 0.001);
+        read.IsClear.Should().BeTrue();
+        read.Leader.Should().Be(TabLeader.None);
+
+        var reopened = RoundTrip(loaded).Paragraphs.Single().Formatting.TabStops.Single();
+        reopened.Should().Be(read);
+    }
+
+    [Fact]
+    public void TabStopClear_WritesClearTokenPositionAndNoLeader()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("clear inherited stop")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                TabStops =
+                [
+                    new TabStop(
+                        72,
+                        TabStopAlignment.Right,
+                        TabLeader.Dots,
+                        IsClear: true),
+                ],
+            },
+        });
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tab = WriteDocumentXml(doc).Descendants(ns + "tab").Single();
+
+        tab.Attribute(ns + "val")!.Value.Should().Be("clear");
+        tab.Attribute(ns + "pos")!.Value.Should().Be("1440");
+        tab.Attribute(ns + "leader").Should().BeNull();
+    }
+
+    [Fact]
     public void DefaultTabStop_RoundTripsThroughSettings()
     {
         var doc = new TextDocument();

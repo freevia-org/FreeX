@@ -37,10 +37,12 @@ public enum TabLeader { None, Dots, Dashes, Underline }
 /// <param name="PositionPt">Tab-stop position from the left margin, in points.</param>
 /// <param name="Alignment">How text aligns at the stop.</param>
 /// <param name="Leader">Fill drawn across the tab gap; <see cref="TabLeader.None"/> leaves it blank.</param>
+/// <param name="IsClear">Whether this operation removes an inherited stop at the same position.</param>
 public sealed record TabStop(
     double PositionPt,
     TabStopAlignment Alignment = TabStopAlignment.Left,
-    TabLeader Leader = TabLeader.None);
+    TabLeader Leader = TabLeader.None,
+    bool IsClear = false);
 
 /// <summary>
 /// Vertical alignment of a run's glyphs relative to the baseline (rPr/w:vertAlign). Maps to docx

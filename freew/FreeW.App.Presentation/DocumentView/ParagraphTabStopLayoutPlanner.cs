@@ -22,6 +22,7 @@ public sealed record ParagraphTabStopPlacementPlan(
 public static class ParagraphTabStopLayoutPlanner
 {
     public const double SameStopToleranceDip = 0.5;
+    private const double SameStopTolerancePt = 0.01;
     public const double MinimumAdvanceDip = 1.0;
 
     public static ParagraphTabStopResolution ResolveNextStop(
@@ -31,7 +32,7 @@ public static class ParagraphTabStopLayoutPlanner
         double dipPerPoint)
     {
         var safeDipPerPoint = Math.Max(0.01, dipPerPoint);
-        foreach (var stop in tabStops.OrderBy(s => s.PositionPt))
+        foreach (var stop in ResolveEffectiveStops(tabStops))
         {
             var stopDip = stop.PositionPt * safeDipPerPoint;
             if (stopDip > penPositionDip + SameStopToleranceDip)
@@ -41,6 +42,21 @@ public static class ParagraphTabStopLayoutPlanner
         var interval = Math.Max(MinimumAdvanceDip, defaultTabStopPt * safeDipPerPoint);
         var next = (Math.Floor(penPositionDip / interval) + 1) * interval;
         return new ParagraphTabStopResolution(next, TabStopAlignment.Left, TabLeader.None, IsExplicit: false);
+    }
+
+    private static IReadOnlyList<TabStop> ResolveEffectiveStops(IEnumerable<TabStop> tabStops)
+    {
+        var effective = new List<TabStop>();
+        foreach (var stop in tabStops)
+        {
+            effective.RemoveAll(candidate =>
+                Math.Abs(candidate.PositionPt - stop.PositionPt) <= SameStopTolerancePt);
+            if (!stop.IsClear)
+                effective.Add(stop);
+        }
+
+        effective.Sort((left, right) => left.PositionPt.CompareTo(right.PositionPt));
+        return effective;
     }
 
     public static ParagraphTabStopPlacementPlan BuildPlacementPlan(
