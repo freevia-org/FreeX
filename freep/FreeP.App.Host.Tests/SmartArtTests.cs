@@ -1083,6 +1083,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.TrapezoidList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.MultidirectionalCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.ContinuousCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.GearCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.TextCycle, SmartArtFamily.Cycle)]

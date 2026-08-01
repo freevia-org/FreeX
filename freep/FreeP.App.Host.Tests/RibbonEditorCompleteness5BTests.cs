@@ -228,6 +228,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId] = SmartArtLayoutPreset.Hierarchy3,
             [SmartArtAuthoringPlanner.GearCycleLayoutCommandId] = SmartArtLayoutPreset.GearCycle,
             [SmartArtAuthoringPlanner.Cycle2LayoutCommandId] = SmartArtLayoutPreset.Cycle2,
+            [SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId] = SmartArtLayoutPreset.MultidirectionalCycle,
             [SmartArtAuthoringPlanner.ContinuousCycleLayoutCommandId] = SmartArtLayoutPreset.ContinuousCycle,
             [SmartArtAuthoringPlanner.TextCycleLayoutCommandId] = SmartArtLayoutPreset.TextCycle,
             [SmartArtAuthoringPlanner.BlockCycleLayoutCommandId] = SmartArtLayoutPreset.BlockCycle,

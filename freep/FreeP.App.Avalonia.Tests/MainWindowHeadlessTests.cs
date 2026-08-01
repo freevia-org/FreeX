@@ -6278,6 +6278,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.RadialClusterLayoutCommandId,
                 SmartArtAuthoringPlanner.RadialListLayoutCommandId,
                 SmartArtAuthoringPlanner.Cycle2LayoutCommandId,
+                SmartArtAuthoringPlanner.MultidirectionalCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.GearCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.TextCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.BlockCycleLayoutCommandId,

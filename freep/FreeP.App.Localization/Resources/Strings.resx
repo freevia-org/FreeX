@@ -1540,6 +1540,12 @@
   <data name="Ribbon_Command_SmartArtBasicCycle_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_SmartArtMultidirectionalCycle_Label" xml:space="preserve">
+    <value>Multidirectional Cycle</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtMultidirectionalCycle_KeyTip" xml:space="preserve">
+    <value>MC</value>
+  </data>
   <data name="Ribbon_Command_SmartArtCycle2_Label" xml:space="preserve">
     <value>Cycle 2</value>
   </data>
