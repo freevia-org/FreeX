@@ -30,6 +30,8 @@ public sealed class NameBoxSheetScopedNavigationTests
     [Fact]
     public void NameBoxEnter_ToNameOnAnotherSheet_RefreshesSheetTabActiveState()
     {
+        StaTestRunner.Run(() =>
+        {
         using var harness = MainWindowHarness.Create();
         var sheet2 = harness.Workbook.AddSheet("Sheet2");
         var targetRange = new GridRange(new CellAddress(sheet2.Id, 2, 2), new CellAddress(sheet2.Id, 2, 2));
@@ -44,11 +46,14 @@ public sealed class NameBoxSheetScopedNavigationTests
         harness.CurrentSheetId.Should().Be(sheet2.Id);
         harness.ActiveSheetTabId.Should().Be(sheet2.Id,
             "Name Box navigation to a name on another sheet must refresh the sheet-tab strip's active tab");
+        });
     }
 
     [Fact]
     public void NameBoxSelectionChanged_ToNameOnAnotherSheet_RefreshesSheetTabActiveState()
     {
+        StaTestRunner.Run(() =>
+        {
         using var harness = MainWindowHarness.Create();
         var sheet2 = harness.Workbook.AddSheet("Sheet2");
         var targetRange = new GridRange(new CellAddress(sheet2.Id, 3, 3), new CellAddress(sheet2.Id, 3, 3));
@@ -60,11 +65,14 @@ public sealed class NameBoxSheetScopedNavigationTests
         harness.CurrentSheetId.Should().Be(sheet2.Id);
         harness.ActiveSheetTabId.Should().Be(sheet2.Id,
             "selecting a Name Box dropdown entry on another sheet must refresh the sheet-tab strip's active tab");
+        });
     }
 
     [Fact]
     public void NameBoxEnter_WithSheetScopedNameOnActiveSheet_NavigatesToScopedRange()
     {
+        StaTestRunner.Run(() =>
+        {
         using var harness = MainWindowHarness.Create();
         var sheet1 = harness.Workbook.Sheets[0];
         var scopedRange = new GridRange(new CellAddress(sheet1.Id, 6, 2), new CellAddress(sheet1.Id, 7, 3));
@@ -76,11 +84,14 @@ public sealed class NameBoxSheetScopedNavigationTests
         harness.PressCellAddressBoxKey(Key.Enter).Should().BeTrue();
 
         harness.SelectedRange.Should().Be(scopedRange);
+        });
     }
 
     [Fact]
     public void NameBoxEnter_WithNameScopedToOtherSheet_IsNotVisibleFromActiveSheet()
     {
+        StaTestRunner.Run(() =>
+        {
         using var harness = MainWindowHarness.Create();
         var sheet1 = harness.Workbook.Sheets[0];
         var sheet2 = harness.Workbook.AddSheet("Sheet2");
@@ -97,11 +108,14 @@ public sealed class NameBoxSheetScopedNavigationTests
         harness.SelectedRange.Should().Be(new GridRange(
             new CellAddress(sheet1.Id, 1, 1),
             new CellAddress(sheet1.Id, 1, 1)));
+        });
     }
 
     [Fact]
     public void NameBoxEnter_WithScopedNameShadowingGlobalName_PrefersScopedRange()
     {
+        StaTestRunner.Run(() =>
+        {
         using var harness = MainWindowHarness.Create();
         var sheet1 = harness.Workbook.Sheets[0];
         var globalRange = new GridRange(new CellAddress(sheet1.Id, 1, 1), new CellAddress(sheet1.Id, 1, 1));
@@ -114,11 +128,14 @@ public sealed class NameBoxSheetScopedNavigationTests
 
         harness.SelectedRange.Should().Be(scopedRange,
             "sheet-scoped names take precedence over a same-named workbook-global name, matching formula evaluation");
+        });
     }
 
     [Fact]
     public void NameBoxDropDownOpened_IncludesSheetScopedNameForActiveSheet()
     {
+        StaTestRunner.Run(() =>
+        {
         using var harness = MainWindowHarness.Create();
         var sheet1 = harness.Workbook.Sheets[0];
         var scopedRange = new GridRange(new CellAddress(sheet1.Id, 4, 4), new CellAddress(sheet1.Id, 4, 4));
@@ -127,11 +144,14 @@ public sealed class NameBoxSheetScopedNavigationTests
         var names = harness.OpenCellAddressBoxDropdown();
 
         names.Should().Contain("ScopedDropdownName");
+        });
     }
 
     [Fact]
     public void NameBoxDropDownOpened_ExcludesSheetScopedNameFromOtherSheet()
     {
+        StaTestRunner.Run(() =>
+        {
         using var harness = MainWindowHarness.Create();
         var sheet2 = harness.Workbook.AddSheet("Sheet2");
         var scopedRange = new GridRange(new CellAddress(sheet2.Id, 4, 4), new CellAddress(sheet2.Id, 4, 4));
@@ -140,6 +160,7 @@ public sealed class NameBoxSheetScopedNavigationTests
         var names = harness.OpenCellAddressBoxDropdown();
 
         names.Should().NotContain("OtherSheetScopedName");
+        });
     }
 
     [Fact]
