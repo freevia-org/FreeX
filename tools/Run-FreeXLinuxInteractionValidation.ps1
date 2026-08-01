@@ -96,6 +96,21 @@ function Get-SourceCommit {
     $commit.Trim()
 }
 
+function Copy-LongPathSafeFile {
+    param(
+        [Parameter(Mandatory = $true)][string]$Source,
+        [Parameter(Mandatory = $true)][string]$Destination
+    )
+
+    $sourcePath = [IO.Path]::GetFullPath($Source)
+    $destinationPath = [IO.Path]::GetFullPath($Destination)
+    if ([string]::Equals($sourcePath, $destinationPath, [StringComparison]::OrdinalIgnoreCase)) {
+        return
+    }
+
+    [IO.File]::Copy("\\?\$sourcePath", "\\?\$destinationPath", $true)
+}
+
 function Get-DirectoryFingerprint {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -1417,12 +1432,7 @@ try {
     New-Item -ItemType Directory -Path $x11ReportDirectory -Force | Out-Null
     foreach ($evidenceFile in Get-ChildItem -LiteralPath $x11EvidenceDirectory -File) {
         $evidenceDestination = Join-Path $x11ReportDirectory $evidenceFile.Name
-        if (-not [string]::Equals(
-            [IO.Path]::GetFullPath($evidenceFile.FullName),
-            [IO.Path]::GetFullPath($evidenceDestination),
-            [StringComparison]::OrdinalIgnoreCase)) {
-            Copy-Item -LiteralPath $evidenceFile.FullName -Destination $evidenceDestination -Force
-        }
+        Copy-LongPathSafeFile -Source $evidenceFile.FullName -Destination $evidenceDestination
     }
     if ($PhysicalProbeSelector -eq "name-box-dropdown-parity") {
         $nativePairSource = Join-Path $x11EvidenceDirectory "name-box-dropdown-parity-native"
@@ -1433,10 +1443,7 @@ try {
         New-Item -ItemType Directory -Path $nativePairDestination -Force | Out-Null
         foreach ($nativePairFile in Get-ChildItem -LiteralPath $nativePairSource -File) {
             $nativePairFileDestination = Join-Path $nativePairDestination $nativePairFile.Name
-            [IO.File]::Copy(
-                "\\?\$([IO.Path]::GetFullPath($nativePairFile.FullName))",
-                "\\?\$([IO.Path]::GetFullPath($nativePairFileDestination))",
-                $true)
+            Copy-LongPathSafeFile -Source $nativePairFile.FullName -Destination $nativePairFileDestination
         }
     }
 

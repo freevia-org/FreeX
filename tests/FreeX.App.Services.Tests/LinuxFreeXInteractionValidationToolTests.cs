@@ -48,6 +48,33 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void PhysicalEvidencePackagingUsesLongPathSafeExactFileCopies()
+    {
+        var script = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        const string longestObservedEvidenceName =
+            "selection-outline-nested-column-inner-collapsed-visible-slot.png";
+
+        var helperStart = script.IndexOf("function Copy-LongPathSafeFile", StringComparison.Ordinal);
+        var helperEnd = script.IndexOf("function Get-DirectoryFingerprint", helperStart, StringComparison.Ordinal);
+        var packagingStart = script.IndexOf("$x11ReportDirectory =", StringComparison.Ordinal);
+        var packagingEnd = script.IndexOf("if ($PhysicalOnly)", packagingStart, StringComparison.Ordinal);
+
+        helperStart.Should().BeGreaterThanOrEqualTo(0);
+        helperEnd.Should().BeGreaterThan(helperStart);
+        script[helperStart..helperEnd].Should().Contain("[IO.File]::Copy(\"\\\\?\\$sourcePath\"");
+        packagingStart.Should().BeGreaterThanOrEqualTo(0);
+        packagingEnd.Should().BeGreaterThan(packagingStart);
+        script[packagingStart..packagingEnd]
+            .Should().Contain("Copy-LongPathSafeFile -Source $evidenceFile.FullName -Destination $evidenceDestination")
+            .And.NotContain("Copy-Item");
+
+        Path.Combine(new string('x', 240), longestObservedEvidenceName)
+            .Length.Should().BeGreaterThan(260,
+                "the observed nested-outline evidence name must exercise the Windows MAX_PATH regression");
+    }
+
+    [Fact]
     public void NameBoxObjectValidationUsesFixedIdentityContractsAndNeutralBaselines()
     {
         var script = File.ReadAllText(RepositoryFileLocator.Find(
