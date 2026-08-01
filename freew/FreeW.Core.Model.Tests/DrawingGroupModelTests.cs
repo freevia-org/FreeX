@@ -208,6 +208,41 @@ public sealed class DrawingGroupModelTests
     }
 
     [Fact]
+    public void ChangeDrawingGroupChildZOrderCommand_ReordersNestedChildWithOffsetAndUndoRedo()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var sibling = new Shape(ShapeKind.Rectangle, 36, 22);
+        var leaf = new Shape(ShapeKind.Ellipse, 44, 28);
+        var inner = new DrawingGroup();
+        inner.Children.Add(sibling);
+        inner.ChildOffsets.Add((10, 8));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((58, 30));
+        var outer = new DrawingGroup();
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((28, 22));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+        document.Blocks.Add(paragraph);
+        var bus = new DocumentCommandBus(new TestCtx(document));
+
+        bus.Execute(new ChangeDrawingGroupChildZOrderCommand(
+            0, 0, [0, 1], ZOrderOperation.SendBackward));
+
+        inner.Children.Should().Equal(leaf, sibling);
+        inner.ChildOffsets.Should().Equal((58, 30), (10, 8));
+        DrawingGroupChildPathResolver.TryFindPath(outer, leaf, out var movedPath).Should().BeTrue();
+        movedPath.Should().Equal(0, 0);
+        bus.Undo().Should().BeTrue();
+        inner.Children.Should().Equal(sibling, leaf);
+        inner.ChildOffsets.Should().Equal((10, 8), (58, 30));
+        bus.Redo().Should().BeTrue();
+        inner.Children.Should().Equal(leaf, sibling);
+        inner.ChildOffsets.Should().Equal((58, 30), (10, 8));
+    }
+
+    [Fact]
     public void SetDrawingGroupChildSizeCommand_PersistsShapeSizeAndUndoesWithoutChangingGroup()
     {
         var doc = TextDocument.CreateEmpty();

@@ -532,7 +532,8 @@ internal static class FreeWRibbonCommands
         }
         // Picture Format tab — Arrange > Z-order (floating images only).
         foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Picture))
-            registry.Register(command.CommandId, new ImageZOrderCommand(editor, command.Operation));
+            registry.Register(command.CommandId, new FloatingZOrderCommand(
+                editor, ObjectFormatTarget.Picture, command.Operation));
         // Picture Format / Drawing Format — Arrange > Group / Ungroup (Phase 4).
         registry.Register("freew.object-group",   new ObjectGroupCommand(editor));
         registry.Register("freew.object-ungroup", new ObjectUngroupCommand(editor));
@@ -878,6 +879,9 @@ internal static class FreeWRibbonCommands
         // Drawing Tools > Arrange — Rotate / Flip (mirrors image-rotate-* / image-flip-* pattern).
         foreach (var command in ObjectFormatCommandPlanner.TransformCommands(ObjectFormatTarget.Shape))
             registry.Register(command.CommandId, BuildShapeTransformCommand(editor, command));
+        foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(ObjectFormatTarget.Shape))
+            registry.Register(command.CommandId, new FloatingZOrderCommand(
+                editor, ObjectFormatTarget.Shape, command.Operation));
         // Drawing Tools > Arrange — Position (opens the same dialog as image-position, applied to shape).
         registry.Register("freew.shape-position", new ShapePositionCommand(editor));
 
@@ -3803,19 +3807,26 @@ internal static class FreeWRibbonCommands
     }
 
     // Picture Format > Arrange > Z-order: bring/send a floating image forward or to front/back.
-    private sealed class ImageZOrderCommand(DocumentView editor, ZOrderOperation operation) : IRibbonCommand
+    private sealed class FloatingZOrderCommand(
+        DocumentView editor,
+        ObjectFormatTarget target,
+        ZOrderOperation operation) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var image = editor.SelectedImage();
-            if (image is null || !image.IsFloating)
+            var selected = target == ObjectFormatTarget.Picture
+                ? editor.SelectedImage() is not null
+                : editor.SelectedShape() is not null;
+            if (!selected || !editor.ChangeSelectedFloatingZOrder(operation))
             {
                 DialogMessageHelper.ShowInfo(Window.GetWindow(editor),
-                    "Select a floating picture first.", "Z-Order");
+                    target == ObjectFormatTarget.Picture
+                        ? "Select a floating picture first."
+                        : "Select a floating shape first.",
+                    "Z-Order");
                 return;
             }
-            editor.ChangeSelectedImageZOrder(operation);
         }
     }
 

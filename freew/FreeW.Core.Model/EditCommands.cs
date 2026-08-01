@@ -3599,6 +3599,119 @@ public sealed class SetDrawingGroupChildPositionCommand : IDocumentCommand
 }
 
 /// <summary>
+/// Reorder one direct or nested group child while keeping its local offset paired with it.
+/// DrawingML group child order is the child-local paint order, so this command does not mutate
+/// the floating root's page-level <see cref="FloatingPlacement.ZOrderIndex"/>.
+/// </summary>
+public sealed class ChangeDrawingGroupChildZOrderCommand : IDocumentCommand
+{
+    private readonly int _paragraphIndex;
+    private readonly int _runIndex;
+    private readonly IReadOnlyList<int> _childPath;
+    private readonly ZOrderOperation _operation;
+    private DrawingGroup? _owningGroup;
+    private object[]? _childrenSnapshot;
+    private (double X, double Y)[]? _offsetsSnapshot;
+
+    public ChangeDrawingGroupChildZOrderCommand(
+        int paragraphIndex,
+        int runIndex,
+        IReadOnlyList<int> childPath,
+        ZOrderOperation operation)
+    {
+        _paragraphIndex = paragraphIndex;
+        _runIndex = runIndex;
+        _childPath = childPath.ToArray();
+        _operation = operation;
+    }
+
+    public string Label => _operation switch
+    {
+        ZOrderOperation.BringToFront => "Bring Group Child to Front",
+        ZOrderOperation.SendToBack => "Send Group Child to Back",
+        ZOrderOperation.BringForward => "Bring Group Child Forward",
+        ZOrderOperation.SendBackward => "Send Group Child Backward",
+        _ => "Reorder Group Child"
+    };
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetOwningGroup(context, out var owningGroup) || _childPath.Count == 0)
+            return;
+
+        var sourceIndex = _childPath[^1];
+        var targetIndex = ResolveTargetIndex(sourceIndex, owningGroup.Children.Count, _operation);
+        if (targetIndex == sourceIndex)
+            return;
+
+        _owningGroup = owningGroup;
+        _childrenSnapshot = owningGroup.Children.ToArray();
+        _offsetsSnapshot = owningGroup.ChildOffsets.ToArray();
+        SetDrawingGroupChildPositionCommand.EnsureOffsetSlot(
+            owningGroup, owningGroup.Children.Count - 1);
+
+        var child = owningGroup.Children[sourceIndex];
+        var offset = owningGroup.ChildOffsets[sourceIndex];
+        owningGroup.Children.RemoveAt(sourceIndex);
+        owningGroup.ChildOffsets.RemoveAt(sourceIndex);
+        owningGroup.Children.Insert(targetIndex, child);
+        owningGroup.ChildOffsets.Insert(targetIndex, offset);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (_owningGroup is null || _childrenSnapshot is null || _offsetsSnapshot is null)
+            return;
+
+        _owningGroup.Children.Clear();
+        foreach (var child in _childrenSnapshot)
+            _owningGroup.Children.Add(child);
+        _owningGroup.ChildOffsets.Clear();
+        foreach (var offset in _offsetsSnapshot)
+            _owningGroup.ChildOffsets.Add(offset);
+        _owningGroup = null;
+        _childrenSnapshot = null;
+        _offsetsSnapshot = null;
+    }
+
+    public static int ResolveTargetIndex(
+        int sourceIndex,
+        int childCount,
+        ZOrderOperation operation)
+    {
+        if (sourceIndex < 0 || sourceIndex >= childCount)
+            return sourceIndex;
+        return operation switch
+        {
+            ZOrderOperation.BringToFront => childCount - 1,
+            ZOrderOperation.SendToBack => 0,
+            ZOrderOperation.BringForward => Math.Min(sourceIndex + 1, childCount - 1),
+            ZOrderOperation.SendBackward => Math.Max(sourceIndex - 1, 0),
+            _ => sourceIndex
+        };
+    }
+
+    private bool TryGetOwningGroup(
+        IDocumentCommandContext context,
+        out DrawingGroup owningGroup)
+    {
+        owningGroup = null!;
+        if (_paragraphIndex < 0
+            || _paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[_paragraphIndex] is not Paragraph paragraph
+            || _runIndex < 0
+            || _runIndex >= paragraph.Runs.Count
+            || paragraph.Runs[_runIndex].DrawingGroup is not { } root)
+        {
+            return false;
+        }
+
+        return DrawingGroupChildPathResolver.TryGetChild(
+            root, _childPath, out owningGroup, out _);
+    }
+}
+
+/// <summary>
 /// Set the local width and height of one group child. WordArt has no stored width/height;
 /// its font size is scaled proportionally so its derived child bounds follow the resize gesture.
 /// </summary>

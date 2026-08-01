@@ -94,6 +94,44 @@ public sealed class DrawingGroup
 /// </summary>
 public static class DrawingGroupChildPathResolver
 {
+    /// <summary>Find a root-relative child path by object identity.</summary>
+    public static bool TryFindPath(
+        DrawingGroup root,
+        object target,
+        out IReadOnlyList<int> childPath)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(target);
+
+        var path = new List<int>();
+        if (TryFindPathCore(root, target, path))
+        {
+            childPath = path.ToArray();
+            return true;
+        }
+
+        childPath = [];
+        return false;
+    }
+
+    private static bool TryFindPathCore(DrawingGroup group, object target, List<int> path)
+    {
+        for (var index = 0; index < group.Children.Count; index++)
+        {
+            path.Add(index);
+            var child = group.Children[index];
+            if (ReferenceEquals(child, target)
+                || child is DrawingGroup nested && TryFindPathCore(nested, target, path))
+            {
+                return true;
+            }
+
+            path.RemoveAt(path.Count - 1);
+        }
+
+        return false;
+    }
+
     public static bool TryGetChild(
         DrawingGroup root,
         IReadOnlyList<int> childPath,

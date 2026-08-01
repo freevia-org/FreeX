@@ -959,11 +959,11 @@ public static class FreeWRibbon
                     g.Medium("freew.shape-align-to-margin", "Align to Margin", RibbonCommandIconKind.Margins);
                     g.Medium("freew.shape-distribute-h", "Distribute Horizontally", RibbonCommandIconKind.AlignCenter);
                     g.Medium("freew.shape-distribute-v", "Distribute Vertically", RibbonCommandIconKind.AlignCenter);
-                    // Z-order commands for floating shapes (reuse same command ids as image z-order).
-                    g.Medium("freew.image-bring-to-front",  "Bring to Front",  RibbonCommandIconKind.BringToFront);
-                    g.Medium("freew.image-send-to-back",    "Send to Back",    RibbonCommandIconKind.SendToBack);
-                    g.Medium("freew.image-bring-forward",   "Bring Forward",   RibbonCommandIconKind.BringForward);
-                    g.Medium("freew.image-send-backward",   "Send Backward",   RibbonCommandIconKind.SendBackward);
+                    // Shape-specific ids keep Drawing Format dispatch separate from Picture Format.
+                    g.Medium("freew.shape-bring-to-front",  "Bring to Front",  RibbonCommandIconKind.BringToFront);
+                    g.Medium("freew.shape-send-to-back",    "Send to Back",    RibbonCommandIconKind.SendToBack);
+                    g.Medium("freew.shape-bring-forward",   "Bring Forward",   RibbonCommandIconKind.BringForward);
+                    g.Medium("freew.shape-send-backward",   "Send Backward",   RibbonCommandIconKind.SendBackward);
                     // Group / Ungroup (Phase 4).
                     g.Medium("freew.object-group", "Group", RibbonCommandIconKind.Generic);
                     g.Medium("freew.object-ungroup", "Ungroup", RibbonCommandIconKind.Generic);

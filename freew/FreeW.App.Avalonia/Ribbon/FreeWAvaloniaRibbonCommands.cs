@@ -1435,7 +1435,9 @@ internal static class FreeWAvaloniaRibbonCommands
             foreach (var command in ObjectFormatCommandPlanner.ZOrderCommands(target))
             {
                 var operation = command.Operation;
-                r.Register(command.CommandId, new ActionRibbonCommand(() => editor.ChangeFloatingZOrder(operation)));
+                var requiredKind = target == ObjectFormatTarget.Picture ? "Image" : "Shape";
+                r.Register(command.CommandId, new ActionRibbonCommand(() =>
+                    editor.ChangeSelectedFloatingZOrder(operation, requiredKind)));
             }
 
             foreach (var command in ObjectFormatCommandPlanner.SizeCommands(target))

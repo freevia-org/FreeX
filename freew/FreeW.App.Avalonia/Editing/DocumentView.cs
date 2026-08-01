@@ -240,6 +240,29 @@ public sealed class DocumentView : Control
     }
 
     private FloatingGroupChildSelection? _selectedFloatingGroupChild;
+
+    private object? SelectedFloatingGroupChildObject() =>
+        _selectedFloatingGroupChild is { } selected
+        && TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+        && run.DrawingGroup is { } root
+        && DrawingGroupChildPathResolver.TryGetChild(
+            root, selected.ChildPath, out _, out var child)
+            ? child
+            : null;
+
+    private void RestoreSelectedFloatingGroupChildPath(object? selectedChild)
+    {
+        if (selectedChild is null
+            || _selectedFloatingGroupChild is not { } selected
+            || !TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.DrawingGroup is not { } root
+            || !DrawingGroupChildPathResolver.TryFindPath(root, selectedChild, out var childPath))
+        {
+            return;
+        }
+
+        _selectedFloatingGroupChild = selected with { ChildPath = childPath };
+    }
     // AV-HANDLES: drag state — non-null while the user is dragging a selected float (move OR resize).
     // PointerDown : pointer page-space position when the drag started.
     // FloatRect   : the float's page-space Rect at drag start (used to revert on Esc + as the resize base).
@@ -598,8 +621,12 @@ public sealed class DocumentView : Control
                 _bus.NextUndoMutationKind))
             return;
 
+        var selectedChild = SelectedFloatingGroupChildObject();
         if (_bus.Undo())
+        {
+            RestoreSelectedFloatingGroupChildPath(selectedChild);
             ClampCaret();
+        }
     }
 
     public void Redo()
@@ -609,8 +636,12 @@ public sealed class DocumentView : Control
                 _bus.NextRedoMutationKind))
             return;
 
+        var selectedChild = SelectedFloatingGroupChildObject();
         if (_bus.Redo())
+        {
+            RestoreSelectedFloatingGroupChildPath(selectedChild);
             ClampCaret();
+        }
     }
 
     /// <summary>Set the document's Word-style Mark as Final advisory read-only state.</summary>
@@ -13299,13 +13330,37 @@ public sealed class DocumentView : Control
     /// Change the z-order of the selected floating object. Undoable.
     /// No-op when nothing is selected.
     /// </summary>
-    public void ChangeFloatingZOrder(ZOrderOperation op)
+    public bool ChangeSelectedFloatingZOrder(ZOrderOperation op, string? requiredKind = null)
     {
-        if (_selectedFloating is not { } sel) return;
+        if (_selectedFloatingGroupChild is { } selectedChild
+            && (requiredKind is null || selectedChild.Kind == requiredKind)
+            && TryGetRun(selectedChild.BlockIndex, selectedChild.RunIndex, out var groupRun)
+            && groupRun.DrawingGroup is { } root
+            && DrawingGroupChildPathResolver.TryGetChild(
+                root, selectedChild.ChildPath, out _, out var child))
+        {
+            _bus.Execute(new ChangeDrawingGroupChildZOrderCommand(
+                selectedChild.BlockIndex, selectedChild.RunIndex, selectedChild.ChildPath, op));
+            RestoreSelectedFloatingGroupChildPath(child);
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(
+                selectedChild.BlockIndex, selectedChild.RunIndex, "Group");
+            return true;
+        }
+
+        if (_selectedFloating is not { } sel
+            || requiredKind is not null && sel.Kind != requiredKind)
+        {
+            return false;
+        }
         _bus.Execute(new ChangeZOrderCommand(sel.BlockIndex, sel.RunIndex, op));
         InvalidateLayoutAndVisual();
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+        return true;
     }
+
+    public void ChangeFloatingZOrder(ZOrderOperation op) =>
+        ChangeSelectedFloatingZOrder(op);
 
     /// <summary>
     /// Set the floating position (offset + anchor) of the selected object. Undoable.

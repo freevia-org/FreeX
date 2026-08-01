@@ -671,6 +671,28 @@ public sealed class DrawingGroupRoundTripTests
     }
 
     [Fact]
+    public void DrawingGroup_ChildZOrderCommand_RoundTripsPaintOrderWithOffsets()
+    {
+        var group = TwoMemberGroup();
+        var shape = group.Children[1].Should().BeOfType<Shape>().Subject;
+        var document = DocumentWith(group);
+
+        new ChangeDrawingGroupChildZOrderCommand(
+            0, 0, [1], ZOrderOperation.SendToBack).Apply(new CommandContext(document));
+
+        group.Children[0].Should().BeSameAs(shape);
+        group.ChildOffsets[0].Should().Be((90, 30));
+        var recovered = RoundTrip(document);
+        var readGroup = ((Paragraph)recovered.Blocks[0]).Runs.Single().DrawingGroup!;
+        readGroup.Children[0].Should().BeOfType<Shape>();
+        readGroup.Children[1].Should().BeOfType<InlineImage>();
+        readGroup.ChildOffsets[0].X.Should().BeApproximately(90, 0.01);
+        readGroup.ChildOffsets[0].Y.Should().BeApproximately(30, 0.01);
+        readGroup.ChildOffsets[1].X.Should().BeApproximately(0, 0.01);
+        readGroup.ChildOffsets[1].Y.Should().BeApproximately(0, 0.01);
+    }
+
+    [Fact]
     public void DrawingGroup_ChartAndSmartArtChildTransforms_RoundTripThroughDocx()
     {
         var group = ChartAndSmartArtGroup();

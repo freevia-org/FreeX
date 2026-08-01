@@ -391,6 +391,7 @@ public sealed class DrawingGroupHostTests
     public void NestedGroupShape_FormattingRoutesTargetLeafAndUndoThroughWpfHost()
     {
         var doc = NestedChildDoc(out var outer, out var inner, out var leaf);
+        var innerSibling = inner.Children[0];
         var sibling = (Shape)outer.Children[1];
         var outerPosition = (
             outer.Placement.HorizontalOffsetPt,
@@ -412,8 +413,15 @@ public sealed class DrawingGroupHostTests
         view.SetSelectedShapeAltText(" Nested leaf ");
         view.SetSelectedShapeFill("#ABCDEF");
         view.SetSelectedShapeOutline("#123456", 2, "dash");
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet("freew.shape-send-backward", out var sendBackward).Should().BeTrue();
+        sendBackward!.Execute(RibbonCommandContext.Empty);
 
-        inner.ChildOffsets[1].Should().Be((75, 41));
+        inner.Children[0].Should().BeSameAs(leaf);
+        inner.ChildOffsets[0].Should().Be((75, 41));
+        inner.Children[1].Should().BeSameAs(innerSibling);
+        inner.ChildOffsets[1].Should().Be((10, 8));
+        view.SelectedShape().Should().BeSameAs(leaf);
         (outer.Placement.HorizontalOffsetPt,
             outer.Placement.VerticalOffsetPt,
             outer.Placement.HorizontalAnchor,
@@ -427,6 +435,11 @@ public sealed class DrawingGroupHostTests
         sibling.AltText.Should().BeNull();
         sibling.FillColorHex.Should().Be("#222222");
         sibling.OutlineColorHex.Should().BeNull();
+        view.Undo();
+        inner.Children[0].Should().BeSameAs(innerSibling);
+        inner.Children[1].Should().BeSameAs(leaf);
+        inner.ChildOffsets[1].Should().Be((75, 41));
+        view.SelectedShape().Should().BeSameAs(leaf);
         view.Undo();
         leaf.OutlineColorHex.Should().BeNull();
         view.Undo();

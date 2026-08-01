@@ -2956,21 +2956,19 @@ public sealed class FreeWRibbonParityTests
     [StaFact]
     public void DrawingArrange_ZOrder_CommandsExistInRibbonAndRegistry()
     {
-        // The z-order commands in drawing-arrange reuse the existing freew.image-bring-* / freew.image-send-*
-        // command ids (ChangeSelectedImageZOrder works for any floating object including shapes).
         var definition = FreeWRibbon.Build();
         var arrange = definition.FindTab("drawing-format")!.FindGroup("drawing-arrange");
         var ids = arrange!.Controls.Select(c => c.CommandId.Value).ToList();
-        ids.Should().Contain("freew.image-bring-to-front",  "Drawing Tools > Arrange must expose Bring to Front");
-        ids.Should().Contain("freew.image-send-to-back",    "Drawing Tools > Arrange must expose Send to Back");
-        ids.Should().Contain("freew.image-bring-forward",   "Drawing Tools > Arrange must expose Bring Forward");
-        ids.Should().Contain("freew.image-send-backward",   "Drawing Tools > Arrange must expose Send Backward");
+        ids.Should().Contain("freew.shape-bring-to-front",  "Drawing Tools > Arrange must expose Bring to Front");
+        ids.Should().Contain("freew.shape-send-to-back",    "Drawing Tools > Arrange must expose Send to Back");
+        ids.Should().Contain("freew.shape-bring-forward",   "Drawing Tools > Arrange must expose Bring Forward");
+        ids.Should().Contain("freew.shape-send-backward",   "Drawing Tools > Arrange must expose Send Backward");
 
         var registry = FreeWRibbonCommands.Build(new DocumentView(), new RibbonStateStore());
-        registry.TryGet("freew.image-bring-to-front", out _).Should().BeTrue("z-order bring-to-front backed for shapes");
-        registry.TryGet("freew.image-send-to-back",   out _).Should().BeTrue("z-order send-to-back backed for shapes");
-        registry.TryGet("freew.image-bring-forward",  out _).Should().BeTrue("z-order bring-forward backed for shapes");
-        registry.TryGet("freew.image-send-backward",  out _).Should().BeTrue("z-order send-backward backed for shapes");
+        registry.TryGet("freew.shape-bring-to-front", out _).Should().BeTrue("z-order bring-to-front backed for shapes");
+        registry.TryGet("freew.shape-send-to-back",   out _).Should().BeTrue("z-order send-to-back backed for shapes");
+        registry.TryGet("freew.shape-bring-forward",  out _).Should().BeTrue("z-order bring-forward backed for shapes");
+        registry.TryGet("freew.shape-send-backward",  out _).Should().BeTrue("z-order send-backward backed for shapes");
     }
 
     [StaFact]
