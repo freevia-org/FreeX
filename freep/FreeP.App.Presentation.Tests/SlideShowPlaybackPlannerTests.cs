@@ -1270,6 +1270,58 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanFrame_ProjectsFiniteRepeatAndAutoReversePasses()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 17,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Fade,
+                DurationMs = 100,
+                RepeatCount = 2,
+                AutoReverse = true
+            },
+            startDelayMs: 25);
+
+        var before = SlideShowPlaybackFramePlanner.PlanFrame(plan, 24, 960, 540);
+        var firstPass = SlideShowPlaybackFramePlanner.PlanFrame(plan, 75, 960, 540);
+        var reversePass = SlideShowPlaybackFramePlanner.PlanFrame(plan, 175, 960, 540);
+        var complete = SlideShowPlaybackFramePlanner.PlanFrame(plan, 225, 960, 540);
+
+        before.IsBeforeStart.Should().BeTrue();
+        before.Progress.Should().Be(0);
+        firstPass.Progress.Should().BeApproximately(0.5, 0.0001);
+        reversePass.Progress.Should().BeApproximately(0.5, 0.0001);
+        complete.IsComplete.Should().BeTrue();
+        complete.Progress.Should().Be(0);
+    }
+
+    [Fact]
+    public void PlanAnimationStepCheckpoints_IncludeFiniteRepeatDuration()
+    {
+        var step = new AnimationStep(new[]
+        {
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 18,
+                    Kind = AnimationKind.Emphasis,
+                    Preset = AnimationPreset.Pulse,
+                    DurationMs = 200,
+                    RepeatCount = 3
+                },
+                StartDelayMs: 50)
+        });
+
+        var checkpoints = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(step, 960, 540);
+
+        checkpoints.Select(checkpoint => checkpoint.ElapsedMs)
+            .Should().Equal(0, 325, 650);
+        checkpoints[^1].Frames.Single().IsComplete.Should().BeTrue();
+    }
+
+    [Fact]
     public void PlanShapeAnimation_MapsAdvancedImportedEffects()
     {
         var split = SlideShowPlaybackPlanner.PlanShapeAnimation(
