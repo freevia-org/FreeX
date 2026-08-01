@@ -279,8 +279,15 @@ public class BackstageViewTests
                 .ToArray();
 
             actionButtons.Should().NotBeEmpty();
-            actionButtons.Should().OnlyContain(button => button.Content is StackPanel);
-            actionButtons.Should().OnlyContain(button => button.HorizontalAlignment == HorizontalAlignment.Stretch);
+            actionButtons.Should().OnlyContain(button => button.Content is string);
+            actionButtons.Should().OnlyContain(button => button.FontSize == 13);
+            actionButtons.Should().OnlyContain(button => button.HorizontalAlignment == HorizontalAlignment.Left);
+
+            var thisPc = actionButtons.Single(button => button.Content as string == "This PC");
+            thisPc.Padding.Should().Be(new Thickness(0));
+            thisPc.Parent.Should().BeOfType<StackPanel>();
+            ((StackPanel)thisPc.Parent!).Children.OfType<TextBlock>()
+                .Single(block => block.Text == "Save to local folders and connected drives.");
         }, CancellationToken.None);
     }
 

@@ -1107,7 +1107,32 @@ internal sealed class BackstageView : Window
     {
         panel.Children.Add(CreateSectionHeader(group.Heading));
         foreach (var action in group.Actions)
-            panel.Children.Add(BuildActionRow(action));
+            panel.Children.Add(BuildSaveAsActionRow(action));
+    }
+
+    // WPF Save As uses the compact link-button row rather than the full-width
+    // stacked action row used by Home and the other action panes.
+    private static Control BuildSaveAsActionRow(BackstageActionRow action)
+    {
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        stack.Children.Add(CreateLinkButton(
+            action.Label,
+            action.Invoke,
+            fontSize: 13,
+            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}"));
+        if (!string.IsNullOrWhiteSpace(action.Description))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = action.Description,
+                Foreground = SecondaryInk,
+                FontSize = 11,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 2, 0, 0),
+            });
+        }
+
+        return stack;
     }
 
     private static string ReplaceFileNameExtension(string fileName, string extension)
