@@ -4970,7 +4970,12 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(dgmNs + "title", new XAttribute("val", "Intense Effect")),
                 new XElement(dgmNs + "catLst",
                     new XElement(dgmNs + "cat", new XAttribute("type", "3D"))),
-                new XElement(dgmNs + "styleLbl", new XAttribute("name", "node0"))));
+                new XElement(dgmNs + "styleLbl",
+                    new XAttribute("name", "node0"),
+                    new XElement(aNs + "lnRef", new XAttribute("idx", "2")),
+                    new XElement(aNs + "fillRef", new XAttribute("idx", "5")),
+                    new XElement(aNs + "effectRef", new XAttribute("idx", "1")),
+                    new XElement(aNs + "fontRef", new XAttribute("idx", "major")))));
 
         var colorsXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dgmNs + "colorsDef",
@@ -5001,6 +5006,12 @@ public sealed class SmartArtTests : IDisposable
         sa.QuickStyle.Title.Should().Be("Intense Effect");
         sa.QuickStyle.Category.Should().Be("3D");
         sa.QuickStyle.StyleLabels.Should().Contain("node0");
+        sa.QuickStyle.StyleLabelMetadata.Should().ContainSingle(label =>
+            label.Name == "node0"
+            && label.LineReferenceIndex == 2
+            && label.FillReferenceIndex == 5
+            && label.EffectReferenceIndex == 1
+            && label.FontReferenceIndex == "major");
 
         sa.Colors.Should().NotBeNull();
         sa.Colors!.UniqueId.Should().Be("urn:smartart:colors:colorful-accent");

@@ -723,7 +723,22 @@ public sealed class SmartArtEditingPlannerTests
             Kind = SlideShapeKind.SmartArt,
             SmartArt = new SmartArtShape
             {
-                Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Source"))
+                Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Source")),
+                QuickStyle = new SmartArtQuickStyleMetadata
+                {
+                    UniqueId = "urn:smartart:style:3d1",
+                    StyleLabelMetadata =
+                    {
+                        new SmartArtQuickStyleLabelMetadata
+                        {
+                            Name = "node0",
+                            LineReferenceIndex = 2,
+                            FillReferenceIndex = 5,
+                            EffectReferenceIndex = 1,
+                            FontReferenceIndex = "major",
+                        }
+                    }
+                }
             }
         };
         shape.SmartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
@@ -740,6 +755,12 @@ public sealed class SmartArtEditingPlannerTests
         clone.SmartArt.Data!.Nodes[0].Text.Should().Be("Clone");
         clone.SmartArt.Parts.Should().ContainKey("ppt/diagrams/data1.xml");
         clone.SmartArt.Parts.Should().NotBeSameAs(shape.SmartArt.Parts);
+        clone.SmartArt.QuickStyle!.StyleLabelMetadata.Should().ContainSingle(label =>
+            label.Name == "node0"
+            && label.LineReferenceIndex == 2
+            && label.FillReferenceIndex == 5
+            && label.EffectReferenceIndex == 1
+            && label.FontReferenceIndex == "major");
     }
 
     [Fact]

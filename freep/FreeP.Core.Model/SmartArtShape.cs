@@ -98,6 +98,19 @@ public sealed class DiagramPart
 /// Bounded metadata parsed from a SmartArt quickStyle diagram part.
 /// Raw quickStyle bytes remain preserved in <see cref="SmartArtShape.Parts"/>.
 /// </summary>
+public sealed class SmartArtQuickStyleLabelMetadata
+{
+    public string Name { get; set; } = string.Empty;
+
+    public int? LineReferenceIndex { get; set; }
+
+    public int? FillReferenceIndex { get; set; }
+
+    public int? EffectReferenceIndex { get; set; }
+
+    public string? FontReferenceIndex { get; set; }
+}
+
 public sealed class SmartArtQuickStyleMetadata
 {
     public string UniqueId { get; set; } = string.Empty;
@@ -107,6 +120,13 @@ public sealed class SmartArtQuickStyleMetadata
     public string Category { get; set; } = string.Empty;
 
     public List<string> StyleLabels { get; } = new();
+
+    /// <summary>
+    /// Native DrawingML style references carried by each <c>dgm:styleLbl</c>.
+    /// These are semantic metadata only; the raw quickStyle part remains authoritative
+    /// for any style content not represented here.
+    /// </summary>
+    public List<SmartArtQuickStyleLabelMetadata> StyleLabelMetadata { get; } = new();
 }
 
 /// <summary>
