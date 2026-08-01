@@ -698,6 +698,9 @@ public abstract class DrawOp
         /// <summary>Bounding box of the chart frame in DIP.</summary>
         public LayoutRect BoundsDip { get; init; }
 
+        /// <summary>Rotation around the chart frame center, in degrees clockwise.</summary>
+        public double RotationDeg { get; init; }
+
         /// <summary>The chart data model (ChartType, Series, Categories, Axes, Legend).</summary>
         public FreeP.Core.Model.ChartShape ChartShape { get; init; } = new();
 

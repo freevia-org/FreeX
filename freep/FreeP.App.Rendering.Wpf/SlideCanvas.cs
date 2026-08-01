@@ -983,6 +983,22 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderChart(DrawingContext dc, DrawOp.Chart chartOp)
     {
+        var transform = ShapeTransformPlanner.PlanShapeTransform(
+            chartOp.BoundsDip,
+            chartOp.RotationDeg,
+            flipH: false,
+            flipV: false);
+        if (!transform.IsIdentity)
+            dc.PushTransform(ToWpfTransform(transform));
+
+        RenderChartCore(dc, chartOp);
+
+        if (!transform.IsIdentity)
+            dc.Pop();
+    }
+
+    private static void RenderChartCore(DrawingContext dc, DrawOp.Chart chartOp)
+    {
         var bounds = chartOp.BoundsDip;
         var chart = chartOp.ChartShape;
         var scene = ChartRenderPlanner.BuildScenePlan(

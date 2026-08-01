@@ -62,6 +62,34 @@ public sealed class CanvasTransformPreviewComposerTests
     }
 
     [Fact]
+    public void Compose_ChartClone_ResizesFrameAndCarriesRotationAndResolvedPaint()
+    {
+        var source = new DrawOp.Chart
+        {
+            ShapeId = 17,
+            BoundsDip = new LayoutRect(5, 6, 40, 30),
+            RotationDeg = 8,
+            ChartShape = new ChartShape { ChartType = ChartType.LineMarkers },
+            SeriesColors = [new SrgbColor(0x11, 0x22, 0x33)],
+            FillPlans = new ChartFillPlanSet(),
+            ChartAreaFill = new ChartFillPlan(new SrgbColor(0x44, 0x55, 0x66), 200),
+            PlotAreaOutline = new ChartStrokePlan(new SrgbColor(0xAA, 0xBB, 0xCC), 255, 1),
+        };
+        var plan = Plan(17, 50, 60, 80, 90, 38);
+
+        var preview = CanvasTransformPreviewComposer.Compose([source], plan)[17]
+            .Should().BeOfType<DrawOp.Chart>().Subject;
+
+        preview.BoundsDip.Should().Be(new LayoutRect(50, 60, 80, 90));
+        preview.RotationDeg.Should().Be(38);
+        preview.ChartShape.Should().BeSameAs(source.ChartShape);
+        preview.SeriesColors.Should().BeSameAs(source.SeriesColors);
+        preview.FillPlans.Should().BeSameAs(source.FillPlans);
+        preview.ChartAreaFill.Should().Be(source.ChartAreaFill);
+        preview.PlotAreaOutline.Should().Be(source.PlotAreaOutline);
+    }
+
+    [Fact]
     public void Compose_UsesShapeIdAndSkipsUnsupportedOps()
     {
         var source = new DrawOp.Shape

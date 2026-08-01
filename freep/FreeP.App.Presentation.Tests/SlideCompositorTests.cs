@@ -2490,6 +2490,28 @@ public sealed class SlideCompositorTests
 
     // ─── BV1: doughnut chart per-point slice colors ───────────────────────────────────────────
 
+    [Fact]
+    public void Compose_Chart_CarriesShapeRotationIntoDrawOp()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 8,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 457200,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 3429000,
+            RotationDeg = 27,
+            Chart = new ChartShape { ChartType = ChartType.Line },
+        });
+
+        var chartOp = SlideCompositor.Compose(p, FirstSlide(p)).OfType<DrawOp.Chart>().Single();
+
+        chartOp.RotationDeg.Should().Be(27);
+    }
+
     /// <summary>
     /// BV1: A doughnut chart must expand seriesColors one-per-POINT (like pie), not one-per-series.
     /// Before the fix the per-series branch produced seriesColors.Length == 1 (single series)

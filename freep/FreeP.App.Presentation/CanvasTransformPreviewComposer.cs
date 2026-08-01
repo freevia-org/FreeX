@@ -135,6 +135,7 @@ public static class CanvasTransformPreviewComposer
         {
             ShapeId = source.ShapeId,
             BoundsDip = ToBounds(transform),
+            RotationDeg = transform.RotationDeg,
             ChartShape = source.ChartShape,
             SeriesColors = source.SeriesColors,
             FillPlans = source.FillPlans,

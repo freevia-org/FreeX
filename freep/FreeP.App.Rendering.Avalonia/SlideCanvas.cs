@@ -1122,6 +1122,23 @@ public sealed class SlideCanvas : Control
 
     private static void RenderChart(DrawingContext dc, DrawOp.Chart chartOp)
     {
+        var transform = ShapeTransformPlanner.PlanShapeTransform(
+            chartOp.BoundsDip,
+            chartOp.RotationDeg,
+            flipH: false,
+            flipV: false);
+        if (!transform.IsIdentity)
+        {
+            using var transformScope = dc.PushTransform(ToAvaloniaMatrix(transform));
+            RenderChartCore(dc, chartOp);
+            return;
+        }
+
+        RenderChartCore(dc, chartOp);
+    }
+
+    private static void RenderChartCore(DrawingContext dc, DrawOp.Chart chartOp)
+    {
         var bounds = chartOp.BoundsDip;
         var chart = chartOp.ChartShape;
         var scene = ChartRenderPlanner.BuildScenePlan(

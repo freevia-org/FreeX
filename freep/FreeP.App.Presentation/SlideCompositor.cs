@@ -866,6 +866,7 @@ public static class SlideCompositor
         {
             ShapeId      = shape.Id,
             BoundsDip    = frameBounds,
+            RotationDeg  = shape.RotationDeg,
             ChartShape   = chart,
             SeriesColors = seriesColors,
             FillPlans    = fillPlans,

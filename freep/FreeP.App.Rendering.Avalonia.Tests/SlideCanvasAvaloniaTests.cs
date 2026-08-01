@@ -766,6 +766,65 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task SlideCanvas_MultiTransformPreview_RotatesChartAndClears()
+    {
+        byte[]? baseline = null;
+        byte[]? transformed = null;
+        byte[]? cleared = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                var chart = new ChartShape
+                {
+                    ChartType = ChartType.ColumnClustered,
+                    Title = "Preview chart",
+                };
+                chart.Categories.AddRange(["A", "B", "C"]);
+                var series = new ChartSeries { Name = "Series" };
+                series.Values.AddRange([10.0, 20.0, 15.0]);
+                chart.Series.Add(series);
+                presence.Slides[0].Shapes.Add(new SlideShape
+                {
+                    Id = 9,
+                    Kind = SlideShapeKind.Chart,
+                    OffsetXEmu = 100 * 9525L,
+                    OffsetYEmu = 100 * 9525L,
+                    ExtentCxEmu = 240 * 9525L,
+                    ExtentCyEmu = 160 * 9525L,
+                    Chart = chart,
+                });
+            });
+            var canvas = new SlideCanvas
+            {
+                Presentation = presentation,
+                Slide = presentation.Slides[0],
+            };
+
+            baseline = RenderPixels(canvas, 960, 540);
+            canvas.UpdateTransformPreview(new CanvasMultiTransformPlan(
+                [new CanvasShapeTransform(9, 100 * 9525L, 100 * 9525L, 240 * 9525L, 160 * 9525L, 35)],
+                [new CanvasShapeTransformPreview(9, new SlideScreenRect(100, 100, 240, 160), 35)],
+                new SlideScreenRect(100, 100, 240, 160),
+                35));
+            transformed = RenderPixels(canvas, 960, 540, refresh: false);
+
+            canvas.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
+            cleared = RenderPixels(canvas, 960, 540, refresh: false);
+        });
+
+        baseline.Should().NotBeNullOrEmpty();
+        transformed.Should().NotBeNullOrEmpty();
+        cleared.Should().NotBeNullOrEmpty();
+        CountPixelDifferences(baseline!, transformed!, 960, 50, 50, 420, 340)
+            .Should().BeGreaterThan(0, "the chart frame and content should rotate during preview");
+        CountPixelDifferences(baseline!, cleared!, 960, 0, 0, 960, 540)
+            .Should().Be(0, "clearing the transient chart preview should restore the composed slide");
+    }
+
+    [Fact]
     public async Task InCanvasTextEditor_FormatActiveShapeOverlay_UsesSharedPlanAndPreservesMixedRunsOnCommit()
     {
         SlideShape? shape = null;

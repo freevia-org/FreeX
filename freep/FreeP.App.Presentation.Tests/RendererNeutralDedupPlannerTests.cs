@@ -544,6 +544,23 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_ApplySharedChartFrameRotation()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+
+        foreach (var source in new[] { wpf, avalonia })
+        {
+            source.Should().Contain("ShapeTransformPlanner.PlanShapeTransform(");
+            source.Should().Contain("chartOp.RotationDeg");
+            source.Should().Contain("RenderChartCore(dc, chartOp)");
+        }
+
+        wpf.Should().Contain("ToWpfTransform(transform)");
+        avalonia.Should().Contain("ToAvaloniaMatrix(transform)");
+    }
+
+    [Fact]
     public void RadarLowerLabelRegistration_IsHostLocalAndImportedScoped()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
