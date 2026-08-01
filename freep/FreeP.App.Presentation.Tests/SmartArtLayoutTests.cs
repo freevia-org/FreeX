@@ -170,9 +170,18 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull();
-        var boxes = shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        var boxes = shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Trapezoid).ToList();
         boxes.Should().HaveCount(3);
         boxes.Select(shape => shape.PlainText).Should().Equal("One", "Two", "Three");
+        boxes.Select(shape => shape.OffsetYEmu).Should().BeInAscendingOrder();
+        boxes.Should().OnlyContain(shape =>
+            shape.OffsetXEmu >= FrameX &&
+            shape.OffsetYEmu >= FrameY &&
+            shape.OffsetXEmu + shape.ExtentCxEmu <= FrameX + FrameCx &&
+            shape.OffsetYEmu + shape.ExtentCyEmu <= FrameY + FrameCy);
+        boxes.Should().OnlyContain(shape => shape.PresetGeometryAdjustments.ContainsKey("adj"));
+        boxes.Select(shape => shape.PresetGeometryAdjustments["adj"])
+            .Should().OnlyContain(adjustment => adjustment == 25000);
     }
 
     [Fact]
