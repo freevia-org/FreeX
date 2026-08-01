@@ -221,6 +221,69 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_RepeatsResolvedColumnRulesOnEveryPage() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            document.Page.ColumnCount = 3;
+            document.Page.ColumnSpacingPt = 12;
+            document.Page.ColumnsLineBetween = true;
+            for (var index = 0; index < 40; index++)
+            {
+                document.Blocks.Add(new Paragraph($"Column line {index + 1}")
+                {
+                    Formatting = ParagraphFormatting.Default with
+                    {
+                        SpaceAfterPt = 0,
+                        SpaceAfterIsSet = true,
+                    },
+                });
+            }
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            foreach (var page in pdf.Pages)
+            {
+                var rules = page.Ops.OfType<PdfLine>()
+                    .Where(line => line.Color == PdfColor.Black && Math.Abs(line.X1 - line.X2) < 0.001)
+                    .ToArray();
+                rules.Should().HaveCount(2);
+                rules.Select(rule => rule.X1).Should().BeInAscendingOrder();
+                rules.Should().OnlyContain(rule => rule.X1 > 18 && rule.X1 < 242);
+                rules.Should().OnlyContain(rule => Math.Abs(rule.Y1 - 18) < 0.001);
+                rules.Should().OnlyContain(rule => Math.Abs(rule.Y2 - 162) < 0.001);
+                rules.Should().OnlyContain(rule => Math.Abs(rule.LineWidth - 0.75) < 0.001);
+            }
+
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_DoesNotEmitColumnRulesWhenSeparatorIsDisabled() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.ColumnCount = 2;
+            document.Page.ColumnsLineBetween = false;
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfLine>()
+                .Should().NotContain(line => line.Color == PdfColor.Black && Math.Abs(line.X1 - line.X2) < 0.001);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesPageBorderOnEveryPageBeforeDocumentContent() =>
         Session.Dispatch(() =>
         {

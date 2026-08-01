@@ -3899,14 +3899,32 @@ public sealed class DocumentView : Control
                 new Free.Shared.Pdf.PdfColor(0x70, 0x70, 0x70), 0.5));
         }
 
-        foreach (var (pageIndex, lineNumberOps) in BuildPdfLineNumberOps(pageHeightPt))
+        var columnRuleCountsByPage = new List<int>();
+        foreach (var (pageIndex, columnRuleOps) in BuildPdfColumnRuleOps(pageHeightPt))
         {
             EnsurePage(pageIndex);
-            var insertionIndex = pageIndex < tableSurfaceCountsByPage.Count
+            var tableCount = pageIndex < tableSurfaceCountsByPage.Count
                 ? tableSurfaceCountsByPage[pageIndex]
                 : 0;
             pagesOps[pageIndex].InsertRange(
-                Math.Min(insertionIndex, pagesOps[pageIndex].Count),
+                Math.Min(tableCount, pagesOps[pageIndex].Count),
+                columnRuleOps);
+            while (columnRuleCountsByPage.Count <= pageIndex)
+                columnRuleCountsByPage.Add(0);
+            columnRuleCountsByPage[pageIndex] = columnRuleOps.Count;
+        }
+
+        foreach (var (pageIndex, lineNumberOps) in BuildPdfLineNumberOps(pageHeightPt))
+        {
+            EnsurePage(pageIndex);
+            var tableCount = pageIndex < tableSurfaceCountsByPage.Count
+                ? tableSurfaceCountsByPage[pageIndex]
+                : 0;
+            var columnRuleCount = pageIndex < columnRuleCountsByPage.Count
+                ? columnRuleCountsByPage[pageIndex]
+                : 0;
+            pagesOps[pageIndex].InsertRange(
+                Math.Min(tableCount + columnRuleCount, pagesOps[pageIndex].Count),
                 lineNumberOps);
         }
 
@@ -4058,6 +4076,44 @@ public sealed class DocumentView : Control
         return byPage.ToDictionary(
             pair => pair.Key,
             pair => (IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>)pair.Value);
+    }
+
+    private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfColumnRuleOps(
+        double pageHeightPt)
+    {
+        if (_viewMode != DocumentViewMode.PrintLayout
+            || _colCount <= 1
+            || !_colLineBetween)
+        {
+            return new Dictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>>();
+        }
+
+        var byPage = new Dictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>>();
+        var yBottom = _marginBottomDip / PxPerPoint;
+        var yTop = pageHeightPt - _marginTopDip / PxPerPoint;
+        for (var pageIndex = 0; pageIndex < _pageCount; pageIndex++)
+        {
+            var ops = new List<Free.Shared.Pdf.PdfDrawOp>(_colCount - 1);
+            for (var columnIndex = 0; columnIndex < _colCount - 1; columnIndex++)
+            {
+                var gapCenterDip = _contentLeft
+                    + (columnIndex + 1) * (_colWidth + _colGap)
+                    - _colGap / 2;
+                var pixelCenteredDip = Math.Floor(gapCenterDip) - 0.5;
+                var x = (pixelCenteredDip - _pageLeft) / PxPerPoint;
+                ops.Add(new Free.Shared.Pdf.PdfLine(
+                    x,
+                    yBottom,
+                    x,
+                    yTop,
+                    Free.Shared.Pdf.PdfColor.Black,
+                    1 / PxPerPoint));
+            }
+
+            byPage[pageIndex] = ops;
+        }
+
+        return byPage;
     }
 
     private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfParagraphDecorationOps(
