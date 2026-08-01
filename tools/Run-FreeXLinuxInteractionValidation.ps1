@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag")]
+    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -1210,6 +1210,8 @@ try {
             "grid-selection-border-move-physical",
             "grid-selection-border-copy-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "outline-group") {
+        @("outline-group-physical")
     } else {
         @(
         "inline-edit-f2-escape",
@@ -1310,6 +1312,8 @@ try {
             "grid-selection-border-move-physical",
             "grid-selection-border-copy-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "outline-group") {
+        @("outline-group-physical")
     } else {
         @(
         "worksheet-context-copy-physical",

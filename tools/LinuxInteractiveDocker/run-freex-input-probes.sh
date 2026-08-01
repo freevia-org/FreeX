@@ -2311,6 +2311,97 @@ probe_grid_drag_parity() {
     fi
 }
 
+outline_green_score() {
+    local screenshot="$1" top="$2" height="$3" width score
+    width=$((a1_x - window_x))
+    (( width < 18 )) && width=30
+    score="$(convert "$screenshot" \
+        -crop "${width}x${height}+${window_x}+${top}" \
+        -alpha off \
+        -fx '((g-r)>0.08 && (g-b)>0.08) ? 1 : 0' \
+        -format '%[fx:mean]' info: 2>/dev/null || true)"
+    awk -v score="$score" 'BEGIN { exit !(score > 0.005) }'
+}
+
+probe_outline_group_physical() {
+    local row2_value="" row3_value="" row4_value=""
+    local grouped_score=false collapse_changed=false expand_changed=false expanded_score=false
+    local values_restored=false group_command=false
+    local toggle_x toggle_y collapsed_toggle_y
+    local artifacts="outline-rows-selected.png;outline-grouped.png;outline-collapsed.png;outline-expanded.png;outline-group-postcondition.txt"
+
+    # Seed three distinct values through the production inline editor. The values make the
+    # model/UI restoration assertion independent of the default CSV contents.
+    if ! set_cell_text_without_save 1 1 B2 OutlineRow2 ||
+       ! set_cell_text_without_save 1 2 B3 OutlineRow3 ||
+       ! set_cell_text_without_save 1 3 B4 OutlineRow4; then
+        write_artifact "outline-group-postcondition.txt" "seeded=false\n"
+        record "outline-group-physical" "failed" "outline-group-postcondition.txt" \
+            "Could not seed the row-group fixture through real X11 inline editing." "$artifacts"
+        return
+    fi
+
+    # Select rows 2:4 using the real worksheet shortcut, then invoke the production Data ribbon
+    # keytip route Alt+A, G, G (Data > Group > Group). This exercises Avalonia's actual ribbon
+    # renderer and command registry instead of replaying a model command.
+    if select_cell 1 1 B2; then
+        send_key shift+space
+        send_key shift+Down
+        send_key shift+Down
+        capture "outline-rows-selected.png"
+        send_key alt+a
+        send_key g
+        send_key g
+        sleep "$settle_seconds"
+        capture "outline-grouped.png"
+        group_command=true
+    fi
+
+    # A level-1 row group with summary rows below places its real +/- control on row 5. The
+    # green gutter/bracket is rendered by WorksheetOutlineOverlay, while the click below targets
+    # the actual Avalonia Button rather than replaying a model command.
+    toggle_x=$((a1_x - 16))
+    toggle_y="$(cell_center_y 4)"
+    if $group_command && outline_green_score "$output/outline-grouped.png" "$(cell_y 1)" "$((cell_height * 4))"; then
+        grouped_score=true
+        focus_app
+        xdotool_mousemove_sync "$toggle_x" "$toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-collapsed.png"
+        screen_changed "$output/outline-grouped.png" "$output/outline-collapsed.png" 300 && collapse_changed=true
+
+        # After collapse rows 2:4 disappear and the summary/toggle row 5 occupies row slot 2.
+        # Click that same visible +/- button again through its post-collapse position.
+        collapsed_toggle_y="$(cell_center_y 1)"
+        focus_app
+        xdotool_mousemove_sync "$toggle_x" "$collapsed_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-expanded.png"
+        screen_changed "$output/outline-collapsed.png" "$output/outline-expanded.png" 300 && expand_changed=true
+        outline_green_score "$output/outline-expanded.png" "$(cell_y 1)" "$((cell_height * 4))" && expanded_score=true
+    fi
+
+    row2_value="$(copy_cell_formula 1 1 B2 || true)"
+    row3_value="$(copy_cell_formula 1 2 B3 || true)"
+    row4_value="$(copy_cell_formula 1 3 B4 || true)"
+    if [[ "$row2_value" == "OutlineRow2" && "$row3_value" == "OutlineRow3" && "$row4_value" == "OutlineRow4" ]]; then
+        values_restored=true
+    fi
+
+    write_artifact "outline-group-postcondition.txt" \
+        "seeded=true\nselection-gesture=Shift+Space,Shift+Down,Shift+Down\ngroup-gesture=Alt+A,G,G\ngroup-command=$group_command\ngrouped-outline-green=$grouped_score\ncollapse-screen-changed=$collapse_changed\nexpand-screen-changed=$expand_changed\nexpanded-outline-green=$expanded_score\nrestored-values=$row2_value,$row3_value,$row4_value\nvalues-restored=$values_restored\n"
+    if $group_command && $grouped_score && $collapse_changed && $expand_changed && $expanded_score && $values_restored; then
+        record "outline-group-physical" "passed" \
+            "outline-rows-selected.png; outline-grouped.png; outline-collapsed.png; outline-expanded.png; rows=2:4; values=OutlineRow2,OutlineRow3,OutlineRow4" \
+            "Real X11 row selection and Data > Group input rendered the outline gutter; a physical +/- collapse hid the grouped rows, a second physical +/- expanded them, and all three model values read back exactly." "$artifacts"
+    else
+        record "outline-group-physical" "failed" \
+            "outline-rows-selected.png; outline-grouped.png; outline-collapsed.png; outline-expanded.png; outline-group-postcondition.txt" \
+            "The real-input Group/Outline workflow did not prove every required state: group-command=$group_command, grouped-outline-green=$grouped_score, collapse-screen-changed=$collapse_changed, expand-screen-changed=$expand_changed, expanded-outline-green=$expanded_score, values-restored=$values_restored." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
 probe_formula_bar_point_mode_multi_area_edit() {
     local committed_formula="" committed_display="" normalized_formula=""
     local formula_passed=false result_passed=false selection_passed=false
@@ -3366,6 +3457,19 @@ if [[ "$probe_selector" == "grid-drag" ]]; then
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "outline-group" ]]; then
+    # Focused iteration mode for physical row grouping plus the visible outline +/- control.
+    probe_outline_group_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused Group/Outline probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
         exit 1
     fi
     exit 0

@@ -158,4 +158,24 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("\"resized\": False");
         probe.Should().NotContain("-resize 208x136");
     }
+
+    [Fact]
+    public void OutlineGroupPhysicalLaneRequiresRealSelectionRibbonAndGutterRestorationEvidence()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        runner.Should().Contain("\"outline-group\"");
+        runner.Should().Contain("outline-group-physical");
+        probe.Should().Contain("probe_outline_group_physical()");
+        probe.Should().Contain("send_key shift+space");
+        probe.Should().Contain("send_key alt+a");
+        probe.Should().Contain("outline_green_score");
+        probe.Should().Contain("outline-collapsed.png");
+        probe.Should().Contain("outline-expanded.png");
+        probe.Should().Contain("values-restored=$values_restored");
+        probe.Should().Contain("xdotool_mousemove_sync \"$toggle_x\" \"$toggle_y\" click 1");
+    }
 }
