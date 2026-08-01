@@ -1180,6 +1180,40 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Theory]
+    [InlineData(TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow)]
+    [InlineData(TableCellEditPlanner.TableLastRowCommandId, TableStyleFlagKind.LastRow)]
+    [InlineData(TableCellEditPlanner.TableFirstColCommandId, TableStyleFlagKind.FirstCol)]
+    [InlineData(TableCellEditPlanner.TableLastColCommandId, TableStyleFlagKind.LastCol)]
+    [InlineData(TableCellEditPlanner.TableBandRowCommandId, TableStyleFlagKind.BandRow)]
+    [InlineData(TableCellEditPlanner.TableBandColCommandId, TableStyleFlagKind.BandCol)]
+    public void Cmd_TableStyleFlag_WithSelectedTable_TogglesAndUndoes(
+        string commandId,
+        TableStyleFlagKind kind)
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(2, 2);
+        ed.Select(shape.Id);
+        var before = GetTableStyleFlag(shape.Table!.Flags, kind);
+
+        Exec(MakeRegistry(ed), commandId);
+
+        Assert.Equal(!before, GetTableStyleFlag(shape.Table.Flags, kind));
+        ed.Undo();
+        Assert.Equal(before, GetTableStyleFlag(shape.Table.Flags, kind));
+    }
+
+    private static bool GetTableStyleFlag(TableStyleFlags flags, TableStyleFlagKind kind) => kind switch
+    {
+        TableStyleFlagKind.FirstRow => flags.FirstRow,
+        TableStyleFlagKind.LastRow => flags.LastRow,
+        TableStyleFlagKind.FirstCol => flags.FirstCol,
+        TableStyleFlagKind.LastCol => flags.LastCol,
+        TableStyleFlagKind.BandRow => flags.BandRow,
+        TableStyleFlagKind.BandCol => flags.BandCol,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
+    [Theory]
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
     [InlineData("freep.underline", TableCellTextFormatKind.Underline)]

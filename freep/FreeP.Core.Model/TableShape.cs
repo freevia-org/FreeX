@@ -50,6 +50,17 @@ public enum TableCellInsetSide
     Bottom = 3,
 }
 
+/// <summary>One of PowerPoint's table design emphasis flags.</summary>
+public enum TableStyleFlagKind
+{
+    FirstRow = 0,
+    LastRow = 1,
+    FirstCol = 2,
+    LastCol = 3,
+    BandRow = 4,
+    BandCol = 5,
+}
+
 /// <summary>
 /// Per-cell borders for a table cell. Each side may be null (use table-style default) or a
 /// concrete outline (None = no border, Visible = drawn border).

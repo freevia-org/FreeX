@@ -440,6 +440,12 @@ public static class TableCellEditPlanner
 {
     public const string MergeCellsCommandId = "freep.table.merge-cells";
     public const string SplitCellCommandId = "freep.table.split-cell";
+    public const string TableFirstRowCommandId = "freep.table.first-row";
+    public const string TableLastRowCommandId = "freep.table.last-row";
+    public const string TableFirstColCommandId = "freep.table.first-column";
+    public const string TableLastColCommandId = "freep.table.last-column";
+    public const string TableBandRowCommandId = "freep.table.banded-rows";
+    public const string TableBandColCommandId = "freep.table.banded-columns";
 
     private const int MaxParagraphLevel = 8;
     private const long ParagraphIndentStepEmu = DrawingMlCoordinateUnits.EmuPerInch / 2;

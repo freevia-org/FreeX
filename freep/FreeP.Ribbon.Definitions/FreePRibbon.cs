@@ -269,6 +269,24 @@ public static class FreePRibbon
             FreePRibbonText.TableSplitCellLabel,
             RibbonCommandIconKind.Table,
             FreePRibbonText.TableSplitCellKeyTip);
+        group.IconToggle(TableCellEditPlanner.TableFirstRowCommandId,
+            FreePRibbonText.TableFirstRowLabel, RibbonCommandIconKind.Table,
+            FreePRibbonText.TableFirstRowKeyTip);
+        group.IconToggle(TableCellEditPlanner.TableLastRowCommandId,
+            FreePRibbonText.TableLastRowLabel, RibbonCommandIconKind.Table,
+            FreePRibbonText.TableLastRowKeyTip);
+        group.IconToggle(TableCellEditPlanner.TableFirstColCommandId,
+            FreePRibbonText.TableFirstColLabel, RibbonCommandIconKind.Table,
+            FreePRibbonText.TableFirstColKeyTip);
+        group.IconToggle(TableCellEditPlanner.TableLastColCommandId,
+            FreePRibbonText.TableLastColLabel, RibbonCommandIconKind.Table,
+            FreePRibbonText.TableLastColKeyTip);
+        group.IconToggle(TableCellEditPlanner.TableBandRowCommandId,
+            FreePRibbonText.TableBandRowLabel, RibbonCommandIconKind.Table,
+            FreePRibbonText.TableBandRowKeyTip);
+        group.IconToggle(TableCellEditPlanner.TableBandColCommandId,
+            FreePRibbonText.TableBandColLabel, RibbonCommandIconKind.Table,
+            FreePRibbonText.TableBandColKeyTip);
         group.IconToggle("freep.bold", FreePRibbonText.BoldLabel, RibbonCommandIconKind.Bold, FreePRibbonText.BoldKeyTip);
         group.IconToggle("freep.italic", FreePRibbonText.ItalicLabel, RibbonCommandIconKind.Italic, FreePRibbonText.ItalicKeyTip);
         group.IconToggle("freep.underline", FreePRibbonText.UnderlineLabel, RibbonCommandIconKind.Underline,

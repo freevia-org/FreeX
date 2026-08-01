@@ -2139,6 +2139,48 @@ public sealed class MainWindowHeadlessTests
         splitSpan.Should().Be(1);
     }
 
+    [Theory]
+    [InlineData(TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow)]
+    [InlineData(TableCellEditPlanner.TableLastRowCommandId, TableStyleFlagKind.LastRow)]
+    [InlineData(TableCellEditPlanner.TableFirstColCommandId, TableStyleFlagKind.FirstCol)]
+    [InlineData(TableCellEditPlanner.TableLastColCommandId, TableStyleFlagKind.LastCol)]
+    [InlineData(TableCellEditPlanner.TableBandRowCommandId, TableStyleFlagKind.BandRow)]
+    [InlineData(TableCellEditPlanner.TableBandColCommandId, TableStyleFlagKind.BandCol)]
+    public async Task Ribbon_table_design_flags_route_to_editor(string commandId, TableStyleFlagKind kind)
+    {
+        var before = false;
+        var after = false;
+        var undone = false;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet(commandId, out var command).Should().BeTrue();
+            var shape = window.Editor.InsertTable(2, 2);
+            window.Editor.Select(shape.Id);
+            before = GetTableStyleFlag(shape.Table!.Flags, kind);
+            command!.Execute(RibbonCommandContext.Empty);
+            after = GetTableStyleFlag(shape.Table.Flags, kind);
+            window.Editor.Undo();
+            undone = GetTableStyleFlag(shape.Table.Flags, kind);
+        });
+
+        if (!ran) return;
+        after.Should().Be(!before);
+        undone.Should().Be(before);
+    }
+
+    private static bool GetTableStyleFlag(TableStyleFlags flags, TableStyleFlagKind kind) => kind switch
+    {
+        TableStyleFlagKind.FirstRow => flags.FirstRow,
+        TableStyleFlagKind.LastRow => flags.LastRow,
+        TableStyleFlagKind.FirstCol => flags.FirstCol,
+        TableStyleFlagKind.LastCol => flags.LastCol,
+        TableStyleFlagKind.BandRow => flags.BandRow,
+        TableStyleFlagKind.BandCol => flags.BandCol,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
     [Fact]
     public async Task Ribbon_font_size_and_color_commands_route_to_editor()
     {

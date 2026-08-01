@@ -2890,6 +2890,36 @@ public sealed class EditingSession
         return true;
     }
 
+    /// <summary>Toggles one PowerPoint table-design emphasis flag on the selected table.</summary>
+    public bool ToggleSelectedTableStyleFlag(TableStyleFlagKind kind)
+    {
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null)
+            return false;
+
+        var command = new SetTableStyleFlagCommand(
+            _currentSlideIndex,
+            shapeId,
+            kind,
+            !GetTableStyleFlagValue(table.Flags, kind));
+        if (!command.HasEffect(Presentation))
+            return false;
+
+        Bus.Execute(command);
+        return true;
+    }
+
+    private static bool GetTableStyleFlagValue(TableStyleFlags flags, TableStyleFlagKind kind) => kind switch
+    {
+        TableStyleFlagKind.FirstRow => flags.FirstRow,
+        TableStyleFlagKind.LastRow => flags.LastRow,
+        TableStyleFlagKind.FirstCol => flags.FirstCol,
+        TableStyleFlagKind.LastCol => flags.LastCol,
+        TableStyleFlagKind.BandRow => flags.BandRow,
+        TableStyleFlagKind.BandCol => flags.BandCol,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
     // ── Row / column insert and delete ────────────────────────────────────────────
 
     /// <summary>Inserts a row above the active cell's row. Undoable.</summary>
