@@ -490,6 +490,19 @@ public sealed class SmartArtEditingPlannerTests
         result.StyleUniqueId.Should().EndWith($"/quickstyle/{expectedId}");
         smartArt.QuickStyle!.UniqueId.Should().Be(result.StyleUniqueId);
         smartArt.QuickStyle.Title.Should().Be(expectedTitle);
+        smartArt.QuickStyle.Category.Should().Be(
+            preset is SmartArtQuickStylePreset.Polished
+                or SmartArtQuickStylePreset.Inset
+                or SmartArtQuickStylePreset.Cartoon
+                or SmartArtQuickStylePreset.Powder
+                or SmartArtQuickStylePreset.BrickScene
+                or SmartArtQuickStylePreset.FlatScene
+                or SmartArtQuickStylePreset.MetallicScene
+                or SmartArtQuickStylePreset.SunsetScene
+                or SmartArtQuickStylePreset.BirdsEyeScene
+                ? "3D"
+                : "simple");
+        smartArt.QuickStyle.StyleLabels.Should().Contain("node0");
         smartArt.DiagramRelIds.Should().ContainKey("dm");
         smartArt.DiagramRelIds.Should().ContainKey("qs");
         var root = XDocument.Parse(Encoding.UTF8.GetString(stylePart.Bytes)).Root!;
