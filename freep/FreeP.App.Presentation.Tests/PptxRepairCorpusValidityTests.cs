@@ -44,6 +44,42 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void EditingSmartArtVerticalBlockList_PreservesSchemaValidPackage()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var smartArt = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Select(shape => shape.SmartArt)
+            .FirstOrDefault(candidate => candidate is not null);
+
+        smartArt.Should().NotBeNull("the live SmartArt corpus must contain an editable diagram");
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
+            smartArt,
+            SmartArtLayoutPreset.VerticalBlockList);
+
+        result.Applied.Should().BeTrue(result.Message);
+        smartArt!.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+
+        using var roundTrip = new MemoryStream();
+        PptxPackageWriter.Write(presentation, roundTrip);
+        var roundTripBytes = roundTrip.ToArray();
+        ValidateSlideSchema(roundTripBytes)
+            .Should()
+            .BeEmpty("an edited SmartArt package must remain Open XML schema-valid");
+
+        using var rereadStream = new MemoryStream(roundTripBytes);
+        var reread = PptxPackageReader.Read(rereadStream);
+        var rereadSmartArt = reread.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Select(shape => shape.SmartArt)
+            .FirstOrDefault(candidate => candidate is not null);
+
+        rereadSmartArt.Should().NotBeNull();
+        rereadSmartArt!.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+    }
+
+    [Fact]
     public void MotionPathRoundTrip_UsesPowerPointTimingRoot()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "10-motionpath.pptx");
