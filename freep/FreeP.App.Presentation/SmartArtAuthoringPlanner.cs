@@ -445,6 +445,7 @@ public static class SmartArtAuthoringPlanner
             titleElement.SetAttributeValue("val", title);
 
         part.Bytes = Serialize(document);
+        EnsureDiagramRelationship(smartArt, "qs", "rIdFreePQuickStyle");
         smartArt.QuickStyle ??= new SmartArtQuickStyleMetadata();
         smartArt.QuickStyle.UniqueId = styleId;
         smartArt.QuickStyle.Title = title;
@@ -653,6 +654,7 @@ public static class SmartArtAuthoringPlanner
 
         layoutDefinition.SetAttributeValue("uniqueId", layoutId);
         layoutPart.Bytes = Serialize(document);
+        EnsureDiagramRelationship(smartArt, "lo", "rIdFreePLayout");
         if (smartArt.Data is { } data)
         {
             data.LayoutUniqueId = layoutId;
@@ -746,6 +748,7 @@ public static class SmartArtAuthoringPlanner
         }
 
         part.Bytes = Serialize(document);
+        EnsureDiagramRelationship(smartArt, "cs", "rIdFreePColors");
         smartArt.Colors ??= new SmartArtColorMetadata();
         smartArt.Colors.UniqueId = gallery.UniqueId;
         smartArt.Colors.Title = gallery.Title;
@@ -781,6 +784,12 @@ public static class SmartArtAuthoringPlanner
         smartArt.Parts[part.PartPath] = part;
         smartArt.DiagramRelIds["cs"] = "rIdFreePColors";
         return part;
+    }
+
+    private static void EnsureDiagramRelationship(SmartArtShape smartArt, string key, string fallbackRelId)
+    {
+        if (!smartArt.DiagramRelIds.ContainsKey(key))
+            smartArt.DiagramRelIds[key] = fallbackRelId;
     }
 
     private static DiagramPart CreateQuickStylePart(SmartArtShape smartArt)
