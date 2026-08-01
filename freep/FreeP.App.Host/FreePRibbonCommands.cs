@@ -698,6 +698,11 @@ internal static class FreePRibbonCommands
 
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
+        registry.Register(TableCellEditPlanner.MergeCellsCommandId,
+            new ActionRibbonCommand(() => editor.TryMergeActiveTableCell()));
+        registry.Register(TableCellEditPlanner.SplitCellCommandId,
+            new ActionRibbonCommand(() => editor.TrySplitActiveTableCell()));
+
         RegisterTransitionCommands(registry, stateStore, editor, onTransitionSound);
 
         // ── Wave 4C: Slide Show buttons ──────────────────────────────────────────

@@ -2530,6 +2530,10 @@ public sealed partial class MainWindow : Window
 
             Editor.TryApplyActiveTableRowHeight(heightEmu);
         }));
+        r.Register(TableCellEditPlanner.MergeCellsCommandId,
+            new ActionRibbonCommand(() => Editor.TryMergeActiveTableCell()));
+        r.Register(TableCellEditPlanner.SplitCellCommandId,
+            new ActionRibbonCommand(() => Editor.TrySplitActiveTableCell()));
         r.Register("freep.bold", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;
