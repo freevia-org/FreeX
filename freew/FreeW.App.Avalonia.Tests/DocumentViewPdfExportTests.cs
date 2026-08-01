@@ -342,6 +342,98 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_IncludesResolvedLineNumbersBeforeBodyText() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.LineNumberMode = LineNumberMode.Continuous;
+            document.Page.LineNumberStartAt = 3;
+            document.Page.LineNumberCountBy = 2;
+            document.Blocks.Add(new Paragraph("First"));
+            document.Blocks.Add(new Paragraph("Suppressed")
+            {
+                Formatting = ParagraphFormatting.Default with
+                {
+                    SuppressLineNumbers = true,
+                    SuppressLineNumbersIsSet = true,
+                },
+            });
+            document.Blocks.Add(new Paragraph("Third"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var ops = pdf.Pages.Single().Ops.ToList();
+            var lineNumbers = ops.OfType<PdfText>()
+                .Where(text => text.Color == new PdfColor(0x60, 0x60, 0x60))
+                .ToArray();
+
+            lineNumbers.Select(text => text.Text).Should().Equal("3", "5");
+            lineNumbers.Should().OnlyContain(text => text.FontSize == 8 && text.X < document.Page.MarginLeftPt);
+            ops.IndexOf(lineNumbers[0]).Should().BeLessThan(
+                ops.FindIndex(op => op is PdfText text && text.Text.Contains("First", StringComparison.Ordinal)));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var gutterRight = (int)Math.Ceiling(document.Page.MarginLeftPt * 96 / 72);
+            var gutterInk = 0;
+            for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < gutterRight; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red < 180 && pixel.Green < 180 && pixel.Blue < 180)
+                    gutterInk++;
+            }
+            gutterInk.Should().BeGreaterThan(3);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_RestartsLineNumbersOnEachPdfPage() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.LineNumberMode = LineNumberMode.RestartEachPage;
+            document.Page.LineNumberStartAt = 2;
+            document.Page.LineNumberCountBy = 1;
+            for (var index = 0; index < 30; index++)
+                document.Blocks.Add(new Paragraph($"Numbered line {index + 1}"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            foreach (var page in pdf.Pages)
+            {
+                page.Ops.OfType<PdfText>()
+                    .Where(text => text.Color == new PdfColor(0x60, 0x60, 0x60))
+                    .Select(text => text.Text)
+                    .First()
+                    .Should().Be("2");
+            }
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_DoesNotEmitLineNumbersWhenDisabled() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.LineNumberMode = LineNumberMode.None;
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfText>()
+                .Should().NotContain(text => text.Color == new PdfColor(0x60, 0x60, 0x60));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesLaidOutInlineImageWithSharedCropOpacityRotationAndOrdering() =>
         Session.Dispatch(() =>
         {

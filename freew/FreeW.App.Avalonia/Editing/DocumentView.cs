@@ -3784,6 +3784,17 @@ public sealed class DocumentView : Control
                 new Free.Shared.Pdf.PdfColor(0x70, 0x70, 0x70), 0.5));
         }
 
+        foreach (var (pageIndex, lineNumberOps) in BuildPdfLineNumberOps(pageHeightPt))
+        {
+            EnsurePage(pageIndex);
+            var insertionIndex = pageIndex < tableSurfaceCountsByPage.Count
+                ? tableSurfaceCountsByPage[pageIndex]
+                : 0;
+            pagesOps[pageIndex].InsertRange(
+                Math.Min(insertionIndex, pagesOps[pageIndex].Count),
+                lineNumberOps);
+        }
+
         if (_doc.Page.PageBorder is not null)
         {
             var borderedPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
@@ -3891,6 +3902,41 @@ public sealed class DocumentView : Control
         }
 
         return ops;
+    }
+
+    private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfLineNumberOps(
+        double pageHeightPt)
+    {
+        var byPage = new Dictionary<int, List<Free.Shared.Pdf.PdfDrawOp>>();
+        var fontSizePt = LineNumberFormatting.FontSizePt ?? 8;
+        var color = ParseColor(LineNumberFormatting.ColorHex);
+        foreach (var item in BuildLineNumberRenderItems())
+        {
+            var number = item.Number.ToString(CultureInfo.InvariantCulture);
+            var formatted = Build(number, LineNumberFormatting);
+            var xDip = item.GutterRight - formatted.WidthIncludingTrailingWhitespace;
+            var yDip = item.Y + Math.Max(0, (item.LineHeight - formatted.Height) / 2);
+            var pageTopDip = _surfacePlan.PageTopDip(item.PageIndex);
+            var xPt = (xDip - _pageLeft) / PxPerPoint;
+            var yPt = pageHeightPt - ((yDip - pageTopDip) / PxPerPoint + fontSizePt);
+            if (!byPage.TryGetValue(item.PageIndex, out var ops))
+            {
+                ops = [];
+                byPage[item.PageIndex] = ops;
+            }
+
+            ops.Add(new Free.Shared.Pdf.PdfText(
+                xPt,
+                yPt,
+                fontSizePt,
+                Free.Shared.Pdf.PdfFontFace.Regular,
+                color,
+                number));
+        }
+
+        return byPage.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>)pair.Value);
     }
 
     private IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> BuildPdfWatermarkOps(
