@@ -427,6 +427,31 @@ public class RibbonTransitionsAnimationsTests
         Assert.Equal(0, animation.Motion.Segments[1].Y);
     }
 
+    [Theory]
+    [InlineData("freep.anim.motion.circle", 5)]
+    [InlineData("freep.anim.motion.loop", 3)]
+    [InlineData("freep.anim.motion.s", 5)]
+    [InlineData("freep.anim.motion.figure-eight", 5)]
+    public void Cmd_AdditionalMotionPaths_AreReachableAndCubic(
+        string commandId,
+        int expectedSegmentCount)
+    {
+        var (ed, pres) = MakeSession();
+        ed.Select(pres.Slides[0].Shapes[0].Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, commandId);
+
+        var motion = Assert.Single(ed.CurrentSlideAnimations).Motion;
+        Assert.NotNull(motion);
+        Assert.Equal(expectedSegmentCount, motion!.Segments.Count);
+        Assert.Equal(MotionPathSegmentKind.Move, motion.Segments[0].Kind);
+        Assert.All(motion.Segments.Skip(1), segment =>
+            Assert.Equal(MotionPathSegmentKind.Cubic, segment.Kind));
+        Assert.Equal(0, motion.Segments[^1].X);
+        Assert.Equal(0, motion.Segments[^1].Y);
+    }
+
     [Fact]
     public void Cmd_EmphasisPulse_SetsKindEmphasis()
     {

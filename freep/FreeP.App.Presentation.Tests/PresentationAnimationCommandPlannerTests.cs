@@ -99,6 +99,10 @@ public sealed class PresentationAnimationCommandPlannerTests
     [InlineData("freep.anim.motion.arc-left", PresentationMotionPathPreset.ArcLeft)]
     [InlineData("freep.anim.motion.arc-up", PresentationMotionPathPreset.ArcUp)]
     [InlineData("freep.anim.motion.arc-down", PresentationMotionPathPreset.ArcDown)]
+    [InlineData("freep.anim.motion.circle", PresentationMotionPathPreset.Circle)]
+    [InlineData("freep.anim.motion.loop", PresentationMotionPathPreset.Loop)]
+    [InlineData("freep.anim.motion.s", PresentationMotionPathPreset.S)]
+    [InlineData("freep.anim.motion.figure-eight", PresentationMotionPathPreset.FigureEight)]
     public void TryPlan_MapsMotionCommandsToTypedPathPresets(
         string commandId,
         PresentationMotionPathPreset expectedPreset)
@@ -185,6 +189,29 @@ public sealed class PresentationAnimationCommandPlannerTests
         editor.CurrentSlideAnimations.Should().BeEmpty();
         editor.Bus.Redo();
         editor.CurrentSlideAnimations.Should().ContainSingle().Which.Kind.Should().Be(AnimationKind.Motion);
+    }
+
+    [Theory]
+    [InlineData("freep.anim.motion.circle", 5)]
+    [InlineData("freep.anim.motion.loop", 3)]
+    [InlineData("freep.anim.motion.s", 5)]
+    [InlineData("freep.anim.motion.figure-eight", 5)]
+    public void TryApply_GalleryMotionCommand_BuildsMultiSegmentPath(
+        string commandId,
+        int expectedSegmentCount)
+    {
+        var editor = MakeSession(out _, out _);
+        PresentationAnimationCommandPlanner.TryPlan(commandId, out var plan).Should().BeTrue();
+
+        PresentationAnimationCommandPlanner.TryApply(editor, plan).Should().BeTrue();
+
+        var motion = editor.CurrentSlideAnimations.Should().ContainSingle().Subject.Motion;
+        motion.Should().NotBeNull();
+        motion!.Segments.Should().HaveCount(expectedSegmentCount);
+        motion.Segments[0].Kind.Should().Be(MotionPathSegmentKind.Move);
+        motion.Segments.Skip(1).Should().OnlyContain(segment => segment.Kind == MotionPathSegmentKind.Cubic);
+        motion.Segments[^1].X.Should().Be(0);
+        motion.Segments[^1].Y.Should().Be(0);
     }
 
     [Fact]
