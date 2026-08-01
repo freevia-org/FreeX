@@ -65,7 +65,7 @@ public sealed class LegalNoticesDialogVisualParityTests
                     LegalNoticesDialogMetrics.TextPadding,
                     LegalNoticesDialogMetrics.TextPadding,
                     LegalNoticesDialogMetrics.TextPadding));
-                text.FontSize.Should().Be(LegalNoticesDialogMetrics.TextFontSize);
+                text.FontSize.Should().Be(12.1);
                 text.LineHeight.Should().Be(LegalNoticesDialogMetrics.TextLineHeight);
                 text.FontFamily.Should().Be(new FontFamily("Consolas"));
                 ((ISolidColorBrush)text.Foreground!).Color.Should().Be(Colors.Black);
@@ -92,6 +92,7 @@ public sealed class LegalNoticesDialogVisualParityTests
             ]);
             var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
             var close = dialog.GetLogicalDescendants().OfType<Button>().Single();
+            close.Width.Should().Be(84);
             var textBoxes = dialog.GetLogicalDescendants().OfType<TextBox>().ToArray();
             try
             {
@@ -138,6 +139,52 @@ public sealed class LegalNoticesDialogVisualParityTests
                 AutomationProperties.GetAutomationId(close).Should().Be("LegalNoticesCloseButton");
                 close.IsDefault.Should().BeTrue();
                 close.IsCancel.Should().BeTrue();
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Legal_notices_keeps_selected_tab_and_scroll_offset_through_tab_lifecycle()
+    {
+        await Session.Dispatch(() =>
+        {
+            var notices = new[]
+            {
+                ("Legal Notices", string.Join("\n", Enumerable.Repeat("legal notice content that wraps and remains scrollable", 90))),
+                ("Privacy Notice", string.Join("\n", Enumerable.Repeat("privacy notice content that wraps and remains scrollable", 90))),
+                ("Third-Party Notices", string.Join("\n", Enumerable.Repeat("third-party notice content that wraps and remains scrollable", 90))),
+                ("Third-Party License Texts", string.Join("\n", Enumerable.Repeat("third-party license content that wraps and remains scrollable", 90))),
+            };
+            var dialog = new LegalNoticesDialog(notices);
+            var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
+            var textBoxes = dialog.GetLogicalDescendants().OfType<TextBox>().ToArray();
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+
+                var firstScroll = textBoxes[0].GetVisualDescendants().OfType<ScrollViewer>().Single();
+                firstScroll.Extent.Height.Should().BeGreaterThan(firstScroll.Viewport.Height);
+                firstScroll.Offset = new Vector(0, 36);
+                var retainedOffset = firstScroll.Offset.Y;
+
+                for (var index = 0; index < notices.Length; index++)
+                {
+                    tabs.SelectedIndex = index;
+                    dialog.UpdateLayout();
+                    tabs.SelectedItem.Should().BeSameAs(tabs.Items[index]);
+                    ((TabItem)tabs.Items[index]!).Content.Should().BeSameAs(textBoxes[index]);
+                }
+
+                tabs.SelectedIndex = 0;
+                dialog.UpdateLayout();
+                firstScroll.Offset.Y.Should().Be(retainedOffset);
+                textBoxes.Should().OnlyContain(text => text.IsReadOnly && text.AcceptsReturn && text.AcceptsTab);
             }
             finally
             {

@@ -2,10 +2,13 @@ using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 
 namespace Free.Shared.Shell.Avalonia;
 
@@ -15,6 +18,7 @@ namespace Free.Shared.Shell.Avalonia;
 /// </summary>
 public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 {
+    private const double TextFontSizeCompensation = 12.1;
     private static readonly Regex NonAutomationIdCharacter =
         new("[^A-Za-z0-9]+", RegexOptions.Compiled);
 
@@ -49,9 +53,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         Opened += (_, _) =>
         {
             foreach (var textBox in _noticeTextBoxes)
-                AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
-                    textBox,
-                    LegalNoticesDialogMetrics.TextPadding);
+                ApplyReadOnlyDocumentLayout(textBox);
             AvaloniaCompactDialogChrome.ApplyLegalNoticesDefaultButtonChrome(_closeButton);
             FocusInitialKeyboardTarget();
         };
@@ -91,6 +93,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             new AvaloniaCompactDialogChromeStyle(FontFamily.Default),
             minWidth: 84,
             isDefault: true);
+        close.Width = 84;
         AutomationProperties.SetAutomationId(close, "LegalNoticesCloseButton");
         AutomationProperties.SetHelpText(close, helpText);
         close.Click += (_, _) => Close();
@@ -116,7 +119,17 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabControl,
             AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = LegalNoticesDialogMetrics.TabControlHeight },
-            contentPaneMargin: new Thickness(0, 1, 0, 0));
+            contentPaneMargin: new Thickness(0, -2, 0, 1));
+        // WPF's tab header has a two-pixel leading inset while its body remains aligned
+        // to the dialog content edge. Keep that compensation local to this authority pair.
+        _tabControl.Styles.Add(new Style(s => s
+            .OfType<TabControl>()
+            .Template()
+            .OfType<ItemsPresenter>()
+            .Name("PART_ItemsPresenter"))
+        {
+            Setters = { new Setter(Layoutable.MarginProperty, new Thickness(2, 0, 0, 0)) },
+        });
         root.Children.Add(_tabControl);
 
         return root;
@@ -139,9 +152,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             MinHeight = LegalNoticesDialogMetrics.TextMinHeight,
             Foreground = Brushes.Black,
         };
-        AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
-            textBox,
-            LegalNoticesDialogMetrics.TextPadding);
+        ApplyReadOnlyDocumentLayout(textBox);
         AutomationProperties.SetName(textBox, notice.Title);
         AutomationProperties.SetAutomationId(
             textBox,
@@ -166,6 +177,16 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             tabItem,
             "Choose a legal notice section to read and copy.");
         return tabItem;
+    }
+
+    private static void ApplyReadOnlyDocumentLayout(TextBox textBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
+            textBox,
+            LegalNoticesDialogMetrics.TextPadding);
+        // Avalonia's Consolas metrics are fractionally narrower than WPF's at the shared
+        // 12px size. Keep the authority line height while matching its paragraph wraps.
+        textBox.FontSize = TextFontSizeCompensation;
     }
 
     private static string CreateAutomationIdSegment(string text)
