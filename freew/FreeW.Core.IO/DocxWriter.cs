@@ -1439,26 +1439,42 @@ public static class DocxWriter
             subDocuments, imagesByGroupChild, chartsByGroupChild, smartArtsByGroupChild);
 
         var body = new XElement(W + "body");
-        void AddContentControlGroups(XElement parent, int start, int end)
+        static IReadOnlyList<BlockContentControl> ContentControlChain(Block block)
+        {
+            var chain = new List<BlockContentControl>();
+            for (var control = block.BlockContentControl; control is not null; control = control.Parent)
+                chain.Add(control);
+            chain.Reverse();
+            return chain;
+        }
+
+        void AddContentControlGroups(XElement parent, int start, int end, int depth = 0)
         {
             for (var index = start; index < end;)
             {
-                var control = document.Blocks[index].BlockContentControl;
-                if (control is null)
+                var chain = ContentControlChain(document.Blocks[index]);
+                if (depth >= chain.Count)
                 {
                     parent.Add(BuildBlock(document.Blocks[index], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
                     index++;
                     continue;
                 }
 
-                var content = new XElement(W + "sdtContent");
-                while (index < end && ReferenceEquals(document.Blocks[index].BlockContentControl, control))
+                var control = chain[depth];
+                var groupEnd = index + 1;
+                while (groupEnd < end)
                 {
-                    content.Add(BuildBlock(document.Blocks[index], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
-                    index++;
+                    var candidateChain = ContentControlChain(document.Blocks[groupEnd]);
+                    if (depth >= candidateChain.Count || !ReferenceEquals(candidateChain[depth], control))
+                        break;
+                    groupEnd++;
                 }
 
+                var content = new XElement(W + "sdtContent");
+                AddContentControlGroups(content, index, groupEnd, depth + 1);
+
                 parent.Add(new XElement(W + "sdt", BuildBlockSdtProperties(control), content));
+                index = groupEnd;
             }
         }
 
@@ -1496,7 +1512,9 @@ public static class DocxWriter
             : null;
         var webExtensions = BuildPreservedWebExtensions(document.Preserved.WebExtensions, preservedDrawingRelIds);
         var hasModernContentControlMetadata = document.Blocks.Any(block =>
-                block.BlockContentControl?.WordMetadata is { Appearance: not null } or { Color: not null })
+                ContentControlChain(block).Any(control =>
+                    control.Kind is BlockContentControlKind.RepeatingSection or BlockContentControlKind.RepeatingSectionItem
+                    || control.WordMetadata is { Appearance: not null } or { Color: not null }))
             || EnumerateStoryParagraphs(document).SelectMany(paragraph => paragraph.Runs).Any(run =>
                 run.Control?.WordMetadata is { Appearance: not null } or { Color: not null });
 
@@ -2682,6 +2700,17 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "richText"));
         else if (control.Kind == BlockContentControlKind.PlainText)
             sdtPr.Add(new XElement(W + "text"));
+        else if (control.Kind == BlockContentControlKind.RepeatingSection)
+        {
+            var repeatingSection = new XElement(W15 + "repeatingSection");
+            if (control.RepeatingSectionTitle is { Length: > 0 } title)
+                repeatingSection.Add(new XElement(W15 + "sectionTitle", new XAttribute(W + "val", title)));
+            if (control.DoNotAllowInsertDeleteSection)
+                repeatingSection.Add(new XElement(W15 + "doNotAllowInsertDeleteSection"));
+            sdtPr.Add(repeatingSection);
+        }
+        else if (control.Kind == BlockContentControlKind.RepeatingSectionItem)
+            sdtPr.Add(new XElement(W15 + "repeatingSectionItem"));
 
         return sdtPr;
     }
