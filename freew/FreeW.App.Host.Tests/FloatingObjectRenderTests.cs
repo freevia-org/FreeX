@@ -685,9 +685,9 @@ public sealed class FloatingObjectRenderTests
                 && border.Opacity == 1
                 && border.Background is SolidColorBrush { Color: var color }
                 && color == Color.FromRgb(0x24, 0x24, 0x24));
-        fillLayer.Width.Should().BeApproximately(488.16, 0.01);
+        fillLayer.Width.Should().BeApproximately(489.16, 0.01);
         fillLayer.Height.Should().BeApproximately(78.2667, 0.01);
-        Canvas.GetLeft(fillLayer).Should().Be(-6);
+        Canvas.GetLeft(fillLayer).Should().Be(-7);
         Canvas.GetTop(fillLayer).Should().Be(-2);
         root.Children.OfType<Border>().Single(border => border.Effect is not null)
             .Effect.Should().BeOfType<DropShadowEffect>();

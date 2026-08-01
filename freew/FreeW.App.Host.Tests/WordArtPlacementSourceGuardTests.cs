@@ -34,8 +34,10 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("var horizontalGlowExtentDip = isPrimaryGlowBlueStress ? 6 : 4;");
         wpf.Should().Contain("const double verticalGlowExtentDip = 4;");
         wpf.Should().Contain("+ (isPrimaryGlowBlueStress ? 4 : 0);");
-        wpf.Should().Contain("fillLayer.Width = canvas.ActualWidth + 12;");
-        wpf.Should().Contain("Canvas.SetLeft(fillLayer, -6);");
+        wpf.Should().Contain("fillLayer.Width = canvas.ActualWidth + 13;");
+        wpf.Should().Contain("fillLayer.Height = canvas.ActualHeight + 10;");
+        wpf.Should().Contain("Canvas.SetLeft(fillLayer, -7);");
+        wpf.Should().Contain("Canvas.SetTop(fillLayer, -2);");
         wpf.Should().Contain("fillLayer.Width = canvas.ActualWidth + 8;");
         wpf.Should().Contain("fillLayer.Height = canvas.ActualHeight + 7;");
         wpf.Should().Contain("CenterYNormalized = 0.5 + (placement.CenterYNormalized - 0.5) * 2");
