@@ -2680,13 +2680,18 @@ public static class DocxWriter
         if (control.Kind == BlockContentControlKind.Bibliography && string.IsNullOrWhiteSpace(gallery))
             gallery = BlockContentControl.BibliographyGallery;
 
-        var hasDocPart = control.Kind is BlockContentControlKind.Bibliography
-            or BlockContentControlKind.DocumentPart
+        if (control.Kind == BlockContentControlKind.DocumentPart)
+            sdtPr.Add(BuildDocPartList(
+                gallery,
+                control.DocPartCategory,
+                control.DocPartUnique));
+
+        var hasDocPartObject = control.Kind is BlockContentControlKind.Bibliography
             or BlockContentControlKind.BuildingBlockGallery
             || !string.IsNullOrWhiteSpace(gallery)
             || !string.IsNullOrWhiteSpace(control.DocPartCategory)
             || control.DocPartUnique;
-        if (hasDocPart)
+        if (control.Kind != BlockContentControlKind.DocumentPart && hasDocPartObject)
             sdtPr.Add(BuildDocPartObject(
                 gallery,
                 control.DocPartCategory,
@@ -2698,6 +2703,8 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "text"));
         else if (control.Kind == BlockContentControlKind.Group)
             sdtPr.Add(new XElement(W + "group"));
+        else if (control.Kind == BlockContentControlKind.Citation)
+            sdtPr.Add(new XElement(W + "citation"));
         else if (control.Kind == BlockContentControlKind.RepeatingSection)
         {
             var repeatingSection = new XElement(W15 + "repeatingSection");
@@ -2714,8 +2721,14 @@ public static class DocxWriter
     }
 
     private static XElement BuildDocPartObject(string? gallery, string? category, bool unique)
+        => BuildDocPart(W + "docPartObj", gallery, category, unique);
+
+    private static XElement BuildDocPartList(string? gallery, string? category, bool unique)
+        => BuildDocPart(W + "docPartList", gallery, category, unique);
+
+    private static XElement BuildDocPart(XName elementName, string? gallery, string? category, bool unique)
     {
-        var docPart = new XElement(W + "docPartObj");
+        var docPart = new XElement(elementName);
         if (!string.IsNullOrWhiteSpace(gallery))
             docPart.Add(new XElement(W + "docPartGallery", new XAttribute(W + "val", gallery)));
         if (!string.IsNullOrWhiteSpace(category))
@@ -2731,8 +2744,9 @@ public static class DocxWriter
     /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
     /// w:date carrying the w:dateFormat for a date picker; a w:dropDownList / w:comboBox carrying a
     /// w:listItem (w:displayText/w:value) per choice for a list control; an empty w:picture for a
-    /// picture control; w:docPartObj for a building-block gallery; or w:group for a Group control. This
-    /// is the minimal valid shape FreeW's own reader recovers (see <see cref="DocxReader"/>).
+    /// picture control; w:docPartList for a document-part list; w:docPartObj for a building-block
+    /// gallery; w:group for a Group control; or w:citation for a Citation control. This is the minimal
+    /// valid shape FreeW's own reader recovers (see <see cref="DocxReader"/>).
     /// </summary>
     private static XElement BuildSdtProperties(ContentControl control)
     {
@@ -2767,6 +2781,12 @@ public static class DocxWriter
             case ContentControlKind.Picture:
                 sdtPr.Add(new XElement(W + "picture"));
                 break;
+            case ContentControlKind.DocumentPart:
+                sdtPr.Add(BuildDocPartList(
+                    control.DocPartGallery,
+                    control.DocPartCategory,
+                    control.DocPartUnique));
+                break;
             case ContentControlKind.BuildingBlockGallery:
                 sdtPr.Add(BuildDocPartObject(
                     control.DocPartGallery,
@@ -2775,6 +2795,9 @@ public static class DocxWriter
                 break;
             case ContentControlKind.Group:
                 sdtPr.Add(new XElement(W + "group"));
+                break;
+            case ContentControlKind.Citation:
+                sdtPr.Add(new XElement(W + "citation"));
                 break;
             default:
                 sdtPr.Add(new XElement(W + "text"));
@@ -3029,7 +3052,8 @@ public static class DocxWriter
             // the sdt itself still routes through the revision wrapper so a control can sit inside a
             // tracked change. Content controls are not also hyperlinks/comments in practice.
             var control = runs[i].Control;
-            if (control is not null)
+            if (control is not null
+                && (control.Kind != ContentControlKind.Citation || runs[i].ComplexField is null))
             {
                 var head = runs[i];
                 var content = new XElement(W + "sdtContent");
@@ -3081,10 +3105,17 @@ public static class DocxWriter
                 {
                     // Word stores a CITATION field inside a citation content control. Without this wrapper,
                     // Word may treat adjacent citation fields as one malformed field and hide later results.
+                    // Imported explicit Citation controls retain their common SDT metadata; newly-created
+                    // fields receive only a generated Word content-control identity.
+                    var citationProperties = fieldRun.Control is { Kind: ContentControlKind.Citation } citationControl
+                        ? BuildSdtProperties(citationControl)
+                        : BuildSdtProperties(new ContentControl(
+                            ContentControlKind.Citation,
+                            WordMetadata: new ContentControlWordMetadata(
+                                Id: drawings.Ids.NextContentControlId().ToString(
+                                    System.Globalization.CultureInfo.InvariantCulture))));
                     var citationSdt = new XElement(W + "sdt",
-                        new XElement(W + "sdtPr",
-                            new XAttribute(W + "id", drawings.Ids.NextContentControlId()),
-                            new XElement(W + "citation")),
+                        citationProperties,
                         new XElement(W + "sdtContent", fieldElements));
                     Content(fieldRun, citationSdt);
                 }

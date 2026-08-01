@@ -40,6 +40,41 @@ public sealed class AvaloniaInlineTableLayoutPlannerTests
     }
 
     [Theory]
+    [InlineData(TextVerticalType.Vertical)]
+    [InlineData(TextVerticalType.Vertical270)]
+    public void RotatedCellTextUsesCellHeightAsItsFlowWidth(TextVerticalType verticalType)
+    {
+        AvaloniaInlineTableLayoutPlanner.IsRotatedText(verticalType).Should().BeTrue();
+
+        var plan = AvaloniaInlineTableLayoutPlanner.PlanRotatedText(
+            verticalType,
+            new Rect(10, 20, 100, 80),
+            new Size(48, 12),
+            flowTop: 30);
+
+        plan.LayoutWidthDip.Should().Be(80);
+        plan.Transform.M11.Should().BeApproximately(0, 0.0001);
+        plan.Transform.M22.Should().BeApproximately(0, 0.0001);
+        Math.Abs(plan.Transform.M12).Should().BeApproximately(1, 0.0001);
+        Math.Abs(plan.Transform.M21).Should().BeApproximately(1, 0.0001);
+    }
+
+    [Fact]
+    public void VerticalAndVertical270KeepTheirFlowAtTheRequestedTop()
+    {
+        var area = new Rect(10, 20, 100, 80);
+        var vertical = AvaloniaInlineTableLayoutPlanner.PlanRotatedText(
+            TextVerticalType.Vertical, area, new Size(48, 12), flowTop: 30);
+        var vertical270 = AvaloniaInlineTableLayoutPlanner.PlanRotatedText(
+            TextVerticalType.Vertical270, area, new Size(48, 12), flowTop: 30);
+
+        vertical.Origin.X.Should().Be(30);
+        vertical270.Origin.X.Should().Be(42);
+        vertical.Origin.Y.Should().Be(54);
+        vertical270.Origin.Y.Should().Be(54);
+    }
+
+    [Theory]
     [InlineData(null, 0)]
     [InlineData(TableRowHorizontalAlignment.Left, 0)]
     [InlineData(TableRowHorizontalAlignment.Center, 30)]

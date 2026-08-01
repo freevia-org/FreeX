@@ -122,6 +122,62 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void Papyrus_UsesMeasuredRailsCrossCadenceAndIsolatedCornerOrnaments()
+    {
+        PageBorderArtVisualPlanner.TryBuildPapyrusFrame(92, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().Equal(
+            new PageBorderArtFillRectangle(32, 39, 752, 17, 0, 0, 0),
+            new PageBorderArtFillRectangle(32, 1000, 752, 17, 0, 0, 0),
+            new PageBorderArtFillRectangle(39, 32, 17, 992, 0, 0, 0),
+            new PageBorderArtFillRectangle(760, 32, 17, 992, 0, 0, 0),
+            new PageBorderArtFillRectangle(64, 43, 688, 9, 0xFF, 0xFF, 0xFF),
+            new PageBorderArtFillRectangle(64, 1004, 688, 9, 0xFF, 0xFF, 0xFF),
+            new PageBorderArtFillRectangle(43, 64, 9, 928, 0xFF, 0xFF, 0xFF),
+            new PageBorderArtFillRectangle(764, 64, 9, 928, 0xFF, 0xFF, 0xFF));
+        plan.Polygons.Should().HaveCount(208);
+        plan.Polygons[0].Red.Should().Be(0x7F);
+        plan.Polygons[0].Points.Should().HaveCount(10);
+        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(68, 47.5));
+        plan.Polygons[0].Points[5].Should().Be(new PageBorderArtPoint(92, 47.5));
+        plan.Polygons[1].Red.Should().Be(0);
+        plan.Polygons[1].Points.Should().HaveCount(6);
+        plan.Polygons[200].Points.Should().HaveCount(20);
+        plan.Polygons[201].Points.Should().Equal(
+            new PageBorderArtPoint(48, 41),
+            new PageBorderArtPoint(55, 48),
+            new PageBorderArtPoint(48, 55),
+            new PageBorderArtPoint(41, 48));
+    }
+
+    [Fact]
+    public void Vine_UsesBlackRailsDistributedLeafCellsAndIsolatedFlowerCorners()
+    {
+        PageBorderArtVisualPlanner.TryBuildVineFrame(47, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().Equal(
+            new PageBorderArtFillRectangle(32, 32, 752, 32, 0, 0, 0),
+            new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
+            new PageBorderArtFillRectangle(32, 32, 32, 992, 0, 0, 0),
+            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
+        plan.Polygons.Should().HaveCount(284);
+        plan.Polygons[0].Points.Take(4).Should().Equal(
+            new PageBorderArtPoint(64, 56),
+            new PageBorderArtPoint(71, 56),
+            new PageBorderArtPoint(77, 53),
+            new PageBorderArtPoint(83, 47));
+        plan.Polygons[0].Red.Should().Be(0xFF);
+        plan.Polygons[264].Points.Should().Equal(
+            new PageBorderArtPoint(48, 48),
+            new PageBorderArtPoint(43, 42),
+            new PageBorderArtPoint(48, 34),
+            new PageBorderArtPoint(53, 42));
+        plan.Polygons[268].Red.Should().Be(0xB2);
+    }
+
+    [Fact]
     public void TinyFrame_IsRecognizedButProducesNoMotifs()
     {
         PageBorderArtVisualPlanner.TryBuildApplesFrame(1, 3, 40, 40, 20, out var motifs)
