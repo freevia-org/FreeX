@@ -126,6 +126,7 @@ public sealed class InsertSlideCommand : IPresentationCommand
 {
     private readonly int _index;
     private readonly Slide _slide;
+    private List<SectionSnapshot>? _beforeSections;
 
     public InsertSlideCommand(int index, Slide slide)
     {
@@ -138,10 +139,86 @@ public sealed class InsertSlideCommand : IPresentationCommand
     public void Apply(Presentation p)
     {
         var idx = Math.Clamp(_index, 0, p.Slides.Count);
+
+        if (_beforeSections is null)
+        {
+            _beforeSections = p.Sections
+                .Select(section => new SectionSnapshot(
+                    section.Id,
+                    section.Name,
+                    section.SlideIds.ToArray()))
+                .ToList();
+        }
+
         p.Slides.Insert(idx, _slide);
+        AddSlideToNeighborSection(p, idx, _slide.Id);
     }
 
-    public void Revert(Presentation p) => p.Slides.Remove(_slide);
+    public void Revert(Presentation p)
+    {
+        p.Slides.Remove(_slide);
+        RestoreSections(p, _beforeSections);
+    }
+
+    private static void AddSlideToNeighborSection(
+        Presentation p,
+        int insertedIndex,
+        string insertedSlideId)
+    {
+        if (p.Slides.Count <= 1)
+            return;
+
+        if (insertedIndex > 0)
+        {
+            var previousSlideId = p.Slides[insertedIndex - 1].Id;
+            foreach (var section in p.Sections)
+            {
+                var neighborIndex = section.SlideIds.FindIndex(id =>
+                    string.Equals(id, previousSlideId, StringComparison.Ordinal));
+                if (neighborIndex < 0)
+                    continue;
+
+                section.SlideIds.Insert(neighborIndex + 1, insertedSlideId);
+                return;
+            }
+        }
+        else
+        {
+            var nextSlideId = p.Slides[1].Id;
+            foreach (var section in p.Sections)
+            {
+                var neighborIndex = section.SlideIds.FindIndex(id =>
+                    string.Equals(id, nextSlideId, StringComparison.Ordinal));
+                if (neighborIndex < 0)
+                    continue;
+
+                section.SlideIds.Insert(neighborIndex, insertedSlideId);
+                return;
+            }
+        }
+    }
+
+    private static void RestoreSections(
+        Presentation p,
+        IReadOnlyList<SectionSnapshot>? snapshots)
+    {
+        if (snapshots is null)
+            return;
+
+        p.Sections.Clear();
+        foreach (var snapshot in snapshots)
+        {
+            var section = new PresentationSection
+            {
+                Id = snapshot.Id,
+                Name = snapshot.Name,
+            };
+            section.SlideIds.AddRange(snapshot.SlideIds);
+            p.Sections.Add(section);
+        }
+    }
+
+    private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 }
 
 /// <summary>
