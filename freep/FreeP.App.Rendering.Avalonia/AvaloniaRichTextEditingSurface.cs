@@ -1193,6 +1193,10 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         {
             var textArea = AvaloniaInlineTableLayoutPlanner.GetTextArea(cell, cellBounds);
             var plan = InCanvasRichTextVisualPlanner.Create(body);
+            bool rotatedText = AvaloniaInlineTableLayoutPlanner.IsRotatedText(body.VerticalType);
+            double layoutWidth = rotatedText
+                ? Math.Max(1, textArea.Height)
+                : Math.Max(1, textArea.Width);
             var layouts = new List<(
                 InCanvasRichTextVisualParagraph Paragraph,
                 TextLayout Layout,
@@ -1204,13 +1208,15 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 var inlineImages = _owner.CreateInlineImages(paragraph);
                 var layout = _owner.CreateLayout(
                     paragraph,
-                    Math.Max(1, textArea.Width),
+                    layoutWidth,
                     inlineImages: inlineImages,
                     inlineOleObjects: CreateInlineOleObjects(paragraph),
                     inlineTables: CreateInlineTables(paragraph, textArea.Width),
                     wrapOverride: plan.Wrap);
                 layouts.Add((paragraph, layout, inlineImages));
-                contentHeight += paragraph.SpaceBeforeDip + layout.Height + paragraph.SpaceAfterDip;
+                contentHeight += paragraph.SpaceBeforeDip
+                    + (rotatedText ? GetTextLayoutWidth(layout) : layout.Height)
+                    + paragraph.SpaceAfterDip;
             }
 
             var contentOrigin = AvaloniaInlineTableLayoutPlanner.GetTextOrigin(
@@ -1227,8 +1233,22 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     if (y >= textArea.Bottom)
                         break;
 
-                    layout.Draw(drawingContext, new Point(textArea.X, y));
-                    y += layout.Height + paragraph.SpaceAfterDip;
+                    if (rotatedText)
+                    {
+                        var rotated = AvaloniaInlineTableLayoutPlanner.PlanRotatedText(
+                            body.VerticalType,
+                            textArea,
+                            new Size(GetTextLayoutWidth(layout), layout.Height),
+                            y);
+                        using var transformScope = drawingContext.PushTransform(rotated.Transform);
+                        layout.Draw(drawingContext, rotated.Origin);
+                        y += GetTextLayoutWidth(layout) + paragraph.SpaceAfterDip;
+                    }
+                    else
+                    {
+                        layout.Draw(drawingContext, new Point(textArea.X, y));
+                        y += layout.Height + paragraph.SpaceAfterDip;
+                    }
                 }
             }
 
@@ -1238,6 +1258,11 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     image.Bitmap.Dispose();
             }
         }
+
+        private static double GetTextLayoutWidth(TextLayout layout) =>
+            layout.TextLines.Count == 0
+                ? 0
+                : layout.TextLines.Max(line => line.WidthIncludingTrailingWhitespace);
     }
 
     private sealed record InlineTextSourceRun(
