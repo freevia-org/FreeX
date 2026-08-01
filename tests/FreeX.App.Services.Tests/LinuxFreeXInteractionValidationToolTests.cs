@@ -199,6 +199,8 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("inner-selection=column-header-drag-I:K");
         probe.Should().Contain("inner-collapse-screen-changed=$inner_collapsed");
         probe.Should().Contain("outer-expand-screen-changed=$outer_expanded");
+        probe.Should().Contain("inner_collapsed_y=\"$(cell_center_y 10)\"");
+        probe.Should().Contain("outer_collapsed_y=\"$(cell_center_y 9)\"");
         probe.Should().Contain("outline-nested-rows-inner-collapsed.png");
         probe.Should().Contain("outline-nested-columns-outer-expanded.png");
         probe.Should().Contain("NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14");

@@ -2574,28 +2574,30 @@ probe_outline_nested_rows_physical() {
     if $outer_command && $inner_command && outline_green_score "$output/outline-nested-rows-grouped.png" "$(cell_y 9)" "$((cell_height * 6))"; then
         grouped_score=true
 
-        # Level 2: collapse rows 3:4, then use the now-visible row-5 summary slot to expand it.
+        # Level 2: collapse rows 11:12. Summary row 13 then occupies visible row slot 11,
+        # whose zero-based calibrated offset is 10.
         focus_app
         xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-rows-inner-collapsed.png"
         screen_changed "$output/outline-nested-rows-grouped.png" "$output/outline-nested-rows-inner-collapsed.png" 300 && inner_collapsed=true
 
-        inner_collapsed_y="$(cell_center_y 2)"
+        inner_collapsed_y="$(cell_center_y 10)"
         focus_app
         xdotool_mousemove_sync "$inner_toggle_x" "$inner_collapsed_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-rows-inner-expanded.png"
         screen_changed "$output/outline-nested-rows-inner-collapsed.png" "$output/outline-nested-rows-inner-expanded.png" 300 && inner_expanded=true
 
-        # Level 1: collapse rows 2:6, then expand from the visible row-7 summary slot.
+        # Level 1: collapse rows 10:14. Summary row 15 then occupies visible row slot 10,
+        # whose zero-based calibrated offset is 9.
         focus_app
         xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
         sleep "$settle_seconds"
         capture "outline-nested-rows-outer-collapsed.png"
         screen_changed "$output/outline-nested-rows-inner-expanded.png" "$output/outline-nested-rows-outer-collapsed.png" 300 && outer_collapsed=true
 
-        outer_collapsed_y="$(cell_center_y 1)"
+        outer_collapsed_y="$(cell_center_y 9)"
         focus_app
         xdotool_mousemove_sync "$outer_toggle_x" "$outer_collapsed_y" click 1
         sleep "$settle_seconds"
