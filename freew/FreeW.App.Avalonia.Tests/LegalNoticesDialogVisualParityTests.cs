@@ -19,7 +19,7 @@ public sealed class LegalNoticesDialogVisualParityTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
-    [Fact]
+    [Fact(Timeout = 15_000)]
     public async Task Legal_notices_matches_WPF_metrics_for_all_tabs_and_focus_targets()
     {
         await Session.Dispatch(() =>
@@ -69,6 +69,8 @@ public sealed class LegalNoticesDialogVisualParityTests
                 .SelectMany(presenter => presenter.GetVisualDescendants().OfType<AccessText>())
                 .Should().OnlyContain(accessText =>
                     accessText.Foreground.Should().BeAssignableTo<ISolidColorBrush>().Subject.Color == Colors.Black);
+            ((TextBox)tabItems[0].Content!).Padding.Top
+                .Should().BeGreaterThan(LegalNoticesDialogMetrics.TextPadding);
 
             foreach (var tab in tabItems)
             {
@@ -77,13 +79,12 @@ public sealed class LegalNoticesDialogVisualParityTests
                 text.Focusable.Should().BeTrue();
                 text.AcceptsReturn.Should().BeTrue();
                 text.AcceptsTab.Should().BeTrue();
-                text.Padding.Should().Be(new Thickness(
-                    LegalNoticesDialogMetrics.TextPadding + 6,
-                    LegalNoticesDialogMetrics.TextPadding,
-                    LegalNoticesDialogMetrics.TextPadding,
-                    LegalNoticesDialogMetrics.TextPadding));
+                text.Padding.Left.Should().Be(LegalNoticesDialogMetrics.TextPadding + 6);
+                text.Padding.Top.Should().BeGreaterThanOrEqualTo(LegalNoticesDialogMetrics.TextPadding);
+                text.Padding.Right.Should().Be(LegalNoticesDialogMetrics.TextPadding);
+                text.Padding.Bottom.Should().Be(LegalNoticesDialogMetrics.TextPadding);
                 text.FontSize.Should().Be(12.1);
-                text.LineHeight.Should().Be(LegalNoticesDialogMetrics.TextLineHeight);
+                double.IsNaN(text.LineHeight).Should().BeTrue();
                 text.FontFamily.Should().Be(new FontFamily("Consolas"));
                 text.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
                 text.HorizontalContentAlignment.Should().Be(global::Avalonia.Layout.HorizontalAlignment.Left);
@@ -126,6 +127,9 @@ public sealed class LegalNoticesDialogVisualParityTests
                 var first = textBoxes[0];
                 var scroll = first.GetVisualDescendants().OfType<ScrollViewer>().Single();
                 scroll.Extent.Height.Should().BeGreaterThan(scroll.Viewport.Height);
+                first.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
+                first.Padding.Top.Should().Be(LegalNoticesDialogMetrics.TextPadding);
+                first.LineHeight.Should().Be(LegalNoticesDialogMetrics.TextLineHeight);
                 scroll.GetVisualDescendants().OfType<ScrollBar>()
                     .Single(bar => bar.Orientation == Orientation.Vertical)
                     .Bounds.Width.Should().Be(18);
@@ -176,6 +180,40 @@ public sealed class LegalNoticesDialogVisualParityTests
                     dialog.Close();
             }
         }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(436, 228, 104)]
+    [InlineData(436, 436, 0)]
+    [InlineData(436, 900, 0)]
+    [InlineData(double.NaN, 228, 0)]
+    public void Legal_notices_short_document_inset_is_bounded_and_measure_independent(
+        double viewportHeight,
+        double documentHeight,
+        double expectedInset)
+    {
+        AvaloniaCompactDialogChrome.CalculateReadOnlyDocumentInset(viewportHeight, documentHeight)
+            .Should().Be(expectedInset);
+    }
+
+    [Theory]
+    [InlineData(436, 14, 16, 16, false)]
+    [InlineData(436, 26, 16, 16, false)]
+    [InlineData(436, 27, 16, 16, true)]
+    [InlineData(436, 80, 16, 16, true)]
+    public void Legal_notices_overflow_line_height_is_planned_from_fixed_metrics(
+        double viewportHeight,
+        int lineCount,
+        double overflowLineHeight,
+        double verticalPadding,
+        bool expected)
+    {
+        AvaloniaCompactDialogChrome.RequiresReadOnlyDocumentOverflowLineHeight(
+                viewportHeight,
+                lineCount,
+                overflowLineHeight,
+                verticalPadding)
+            .Should().Be(expected);
     }
 
     [Fact]

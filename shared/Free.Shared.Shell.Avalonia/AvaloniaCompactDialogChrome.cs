@@ -426,6 +426,35 @@ public static class AvaloniaCompactDialogChrome
         Dispatcher.UIThread.Post(ApplyWpfComboGlyph, DispatcherPriority.Render);
     }
 
+    public static double CalculateReadOnlyDocumentInset(double viewportHeight, double documentHeight)
+    {
+        if (!double.IsFinite(viewportHeight) ||
+            !double.IsFinite(documentHeight) ||
+            viewportHeight <= 0 ||
+            documentHeight <= 0)
+        {
+            return 0;
+        }
+
+        return Math.Max(0, Math.Floor((viewportHeight - documentHeight) / 2));
+    }
+
+    public static bool RequiresReadOnlyDocumentOverflowLineHeight(
+        double viewportHeight,
+        int lineCount,
+        double overflowLineHeight,
+        double verticalPadding)
+    {
+        return double.IsFinite(viewportHeight) &&
+               double.IsFinite(overflowLineHeight) &&
+               double.IsFinite(verticalPadding) &&
+               viewportHeight > 0 &&
+               lineCount > 0 &&
+               overflowLineHeight > 0 &&
+               verticalPadding >= 0 &&
+               (lineCount * overflowLineHeight) + verticalPadding > viewportHeight;
+    }
+
     public static void ApplyCheckBox(CheckBox checkBox, AvaloniaCompactDialogChromeStyle style)
     {
         ArgumentNullException.ThrowIfNull(checkBox);
