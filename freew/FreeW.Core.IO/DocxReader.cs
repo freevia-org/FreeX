@@ -3352,6 +3352,16 @@ public static class DocxReader
             paragraph.Runs.Add(breakRun);
         }
 
+        // A manual column break is distinct from a page break: in a multi-column section it advances to
+        // the next column, while in a one-column section the next column begins on the following page.
+        if (r.Elements(W + "br").Any(b => b.Attribute(W + "type")?.Value == "column"))
+        {
+            var breakRun = Run.ColumnBreak();
+            breakRun.Formatting = ReadRunFormatting(r.Element(W + "rPr"));
+            ApplyRevision(breakRun);
+            paragraph.Runs.Add(breakRun);
+        }
+
         // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
         var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
             + string.Concat(r.Elements(W + "delText").Select(t => t.Value));

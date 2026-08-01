@@ -887,6 +887,12 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     public bool IsPageBreak { get; set; }
 
     /// <summary>
+    /// When true, this run is a manual column break (<c>w:br w:type="column"</c>). It carries no text
+    /// and advances following content to the next text column, or to the next page in a one-column section.
+    /// </summary>
+    public bool IsColumnBreak { get; set; }
+
+    /// <summary>
     /// Tracked-change (revision) mark on this run. <see cref="RevisionKind.None"/> is an ordinary run;
     /// <see cref="RevisionKind.Inserted"/> is a tracked insertion (serialises wrapped in w:ins, rendered
     /// underlined in the revision colour); <see cref="RevisionKind.Deleted"/> is a tracked deletion (the
@@ -940,6 +946,9 @@ public sealed class Run(string text, RunFormatting? formatting = null)
 
     /// <summary>Creates a manual page-break run (<c>w:br w:type="page"</c>).</summary>
     public static Run PageBreak() => new(string.Empty) { IsPageBreak = true };
+
+    /// <summary>Creates a manual column-break run (<c>w:br w:type="column"</c>).</summary>
+    public static Run ColumnBreak() => new(string.Empty) { IsColumnBreak = true };
 
     /// <summary>Creates a page-number field run (renders as the current page number).</summary>
     public static Run PageNumberField(RunFormatting? formatting = null) =>

@@ -3245,6 +3245,17 @@ public static class DocxWriter
             return br;
         }
 
+        // A manual column break serialises independently from a page break.
+        if (run.IsColumnBreak)
+        {
+            var br = new XElement(W + "r");
+            var brPr = BuildRunProperties(run.Formatting);
+            if (brPr is not null)
+                br.Add(brPr);
+            br.Add(new XElement(W + "br", new XAttribute(W + "type", "column")));
+            return br;
+        }
+
         return BuildTextRun(run, drawings, hyperlinks, preservedNumbering, restartOverrides);
     }
 

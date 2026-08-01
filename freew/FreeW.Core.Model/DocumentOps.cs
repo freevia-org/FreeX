@@ -108,16 +108,11 @@ public static class DocumentOps
 
     /// <summary>
     /// Creates a column-break paragraph. Word represents a column break as a <c>w:br w:type="column"</c>
-    /// run inside a paragraph; FreeW models it as a paragraph with
-    /// <see cref="ParagraphFormatting.PageBreakBefore"/> as the closest approximation (column-break
-    /// semantics are rendering-only and do not affect the model data beyond forcing a break). The paragraph
-    /// carries a comment-style marker in its StyleId so callers can detect it if needed.
+    /// run inside a paragraph. The break-only paragraph keeps that source semantic distinct from a page
+    /// break so multi-column layout advances to the next column and DOCX save emits the authored token.
     /// </summary>
     public static Paragraph CreateColumnBreak() =>
-        new()
-        {
-            Formatting = ParagraphFormatting.Default with { PageBreakBefore = true }
-        };
+        new() { Runs = { Run.ColumnBreak() } };
 
     /// <summary>
     /// Builds the cover-page blocks for <paramref name="document"/> using the given <paramref name="preset"/>:

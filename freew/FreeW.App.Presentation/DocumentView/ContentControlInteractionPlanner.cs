@@ -202,6 +202,7 @@ public static class ContentControlInteractionPlanner
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
         IsPageBreak = source.IsPageBreak,
+        IsColumnBreak = source.IsColumnBreak,
         Revision = source.Revision,
         Control = control,
         RevisionAuthor = source.RevisionAuthor,

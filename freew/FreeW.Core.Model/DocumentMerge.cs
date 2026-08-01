@@ -150,6 +150,7 @@ public static class DocumentMerge
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
         IsPageBreak = source.IsPageBreak,
+        IsColumnBreak = source.IsColumnBreak,
         Revision = source.Revision,
         Control = source.Control, // immutable record — safe to share
         Citation = source.Citation, // immutable — safe to share

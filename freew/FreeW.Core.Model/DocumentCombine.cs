@@ -289,6 +289,8 @@ public static class DocumentCombine
         EndnoteId = source.EndnoteId,
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
+        IsPageBreak = source.IsPageBreak,
+        IsColumnBreak = source.IsColumnBreak,
         Revision = source.Revision,
         RevisionAuthor = source.RevisionAuthor,
         RevisionDateXml = source.RevisionDateXml,

@@ -34,6 +34,18 @@ public class PageBreakRoundTripTests
         return doc;
     }
 
+    private static TextDocument ColumnBreakDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var p = new Paragraph();
+        p.Runs.Add(new Run("before"));
+        p.Runs.Add(Run.ColumnBreak());
+        p.Runs.Add(new Run("after"));
+        doc.Blocks.Add(p);
+        return doc;
+    }
+
     [Fact]
     public void PageBreakRun_SurvivesRoundTrip()
     {
@@ -56,5 +68,30 @@ public class PageBreakRoundTripTests
 
         var br = xml.Descendants(W + "br").FirstOrDefault(b => b.Attribute(W + "type")?.Value == "page");
         Assert.NotNull(br);
+    }
+
+    [Fact]
+    public void ColumnBreakRun_SurvivesRoundTripWithoutBecomingPageBreak()
+    {
+        var paragraph = RoundTrip(ColumnBreakDocument()).Blocks.OfType<Paragraph>().First();
+
+        var kinds = paragraph.Runs.Select(r => r.IsColumnBreak ? "column" : r.Text).ToList();
+        Assert.Equal(new[] { "before", "column", "after" }, kinds);
+        Assert.DoesNotContain(paragraph.Runs, run => run.IsPageBreak);
+    }
+
+    [Fact]
+    public void ColumnBreak_EmitsBrTypeColumn()
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(ColumnBreakDocument(), stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        var xml = XDocument.Load(entry);
+
+        Assert.Single(xml.Descendants(W + "br"),
+            element => element.Attribute(W + "type")?.Value == "column");
+        Assert.DoesNotContain(xml.Descendants(W + "br"),
+            element => element.Attribute(W + "type")?.Value == "page");
     }
 }

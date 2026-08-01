@@ -22,6 +22,17 @@ public sealed class PageBreakRenderTests
         return doc;
     }
 
+    private static TextDocument ColumnBreakDoc()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var p = new Paragraph();
+        p.Runs.Add(Run.ColumnBreak());
+        p.Runs.Add(new Run("in the next column"));
+        doc.Blocks.Add(p);
+        return doc;
+    }
+
     [StaFact]
     public void PageBreakParagraph_SetsBreakPageBefore()
     {
@@ -61,5 +72,28 @@ public sealed class PageBreakRenderTests
         var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
         Assert.True(paragraph.BreakPageBefore);
         Assert.Equal(0, paragraph.BorderThickness.Top);
+    }
+
+    [StaFact]
+    public void ColumnBreakParagraph_UsesNativeColumnBreakWithoutForcingPageBreak()
+    {
+        var view = new DocumentView();
+        view.LoadModel(ColumnBreakDoc());
+
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        Assert.True(paragraph.BreakColumnBefore);
+        Assert.False(paragraph.BreakPageBefore);
+    }
+
+    [StaFact]
+    public void ColumnBreakRun_SurvivesCommit()
+    {
+        var view = new DocumentView();
+        view.LoadModel(ColumnBreakDoc());
+        view.CommitToModel();
+
+        var paragraph = view.Model.Blocks.OfType<Paragraph>().First();
+        Assert.Contains(paragraph.Runs, run => run.IsColumnBreak);
+        Assert.DoesNotContain(paragraph.Runs, run => run.IsPageBreak);
     }
 }

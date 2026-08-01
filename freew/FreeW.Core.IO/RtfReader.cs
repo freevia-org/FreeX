@@ -412,6 +412,7 @@ public static class RtfReader
                 case "line": AppendChar('\n'); break;
                 case "tab": AppendChar('\t'); break;
                 case "page": _currentRuns.Add(Run.PageBreak()); break;
+                case "column": _currentRuns.Add(Run.ColumnBreak()); break;
 
                 // ---- tables ----
                 case "intbl": _state.InTable = true; break;

@@ -17,6 +17,7 @@ public sealed class RevisionEditPlannerTests
             CommentId = 9,
             IsCommentReference = true,
             IsPageBreak = true,
+            IsColumnBreak = true,
             Revision = RevisionKind.Inserted,
             RevisionAuthor = "Alice",
             RevisionDateXml = "2026-07-06T12:00:00Z",
@@ -36,6 +37,7 @@ public sealed class RevisionEditPlannerTests
         clone.CommentId.Should().Be(source.CommentId);
         clone.IsCommentReference.Should().Be(source.IsCommentReference);
         clone.IsPageBreak.Should().Be(source.IsPageBreak);
+        clone.IsColumnBreak.Should().Be(source.IsColumnBreak);
         clone.Revision.Should().Be(source.Revision);
         clone.RevisionAuthor.Should().Be(source.RevisionAuthor);
         clone.RevisionDateXml.Should().Be(source.RevisionDateXml);

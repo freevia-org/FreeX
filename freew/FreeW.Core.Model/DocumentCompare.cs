@@ -830,6 +830,8 @@ public static class DocumentCompare
         EndnoteId = source.EndnoteId,
         CommentId = source.CommentId,
         IsCommentReference = source.IsCommentReference,
+        IsPageBreak = source.IsPageBreak,
+        IsColumnBreak = source.IsColumnBreak,
         Control = source.Control,
         Citation = source.Citation,
         CrossReference = source.CrossReference,
