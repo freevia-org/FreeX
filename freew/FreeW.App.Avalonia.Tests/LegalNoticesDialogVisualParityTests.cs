@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -54,6 +55,21 @@ public sealed class LegalNoticesDialogVisualParityTests
                 "Third-Party Notices",
                 "Third-Party License Texts");
 
+            dialog.Show();
+            dialog.UpdateLayout();
+            dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(tabItems[0].Content);
+            var headerPresenters = tabItems
+                .SelectMany(tab => tab.GetVisualDescendants().OfType<ContentPresenter>())
+                .Where(presenter => presenter.Name == "PART_ContentPresenter")
+                .ToArray();
+            headerPresenters.Should().HaveCount(5);
+            headerPresenters.Should().OnlyContain(presenter =>
+                presenter.Foreground.Should().BeAssignableTo<ISolidColorBrush>().Subject.Color == Colors.Black);
+            headerPresenters
+                .SelectMany(presenter => presenter.GetVisualDescendants().OfType<AccessText>())
+                .Should().OnlyContain(accessText =>
+                    accessText.Foreground.Should().BeAssignableTo<ISolidColorBrush>().Subject.Color == Colors.Black);
+
             foreach (var tab in tabItems)
             {
                 var text = tab.Content.Should().BeOfType<TextBox>().Subject;
@@ -76,8 +92,14 @@ public sealed class LegalNoticesDialogVisualParityTests
                 AutomationProperties.GetAutomationId(text).Should().StartWith("LegalNotices");
             }
 
-            tabs.SelectedIndex = 4;
-            tabs.SelectedIndex.Should().Be(4);
+            for (var index = 0; index < tabItems.Length; index++)
+            {
+                tabs.SelectedIndex = index;
+                tabs.SelectedItem.Should().BeSameAs(tabItems[index]);
+            }
+            var close = dialog.GetLogicalDescendants().OfType<Button>().Single();
+            close.IsDefault.Should().BeTrue();
+            close.IsCancel.Should().BeTrue();
             dialog.Close();
         }, CancellationToken.None);
     }

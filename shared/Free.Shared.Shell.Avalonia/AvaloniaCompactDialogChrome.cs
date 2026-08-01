@@ -853,6 +853,18 @@ public static class AvaloniaCompactDialogChrome
             presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedContentControl.Header)) { Source = tab });
             presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(HeaderedContentControl.HeaderTemplate)) { Source = tab });
             presenter.Bind(ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = tab });
+            presenter.Bind(ContentPresenter.ForegroundProperty, new Binding(nameof(TemplatedControl.Foreground)) { Source = tab });
+            presenter.Bind(ContentPresenter.FontFamilyProperty, new Binding(nameof(TemplatedControl.FontFamily)) { Source = tab });
+            presenter.Bind(ContentPresenter.FontSizeProperty, new Binding(nameof(TemplatedControl.FontSize)) { Source = tab });
+            presenter.Styles.Add(new Style(s => s.OfType<AccessText>())
+            {
+                Setters =
+                {
+                    new Setter(TextBlock.ForegroundProperty, new Binding(nameof(ContentPresenter.Foreground)) { Source = presenter }),
+                    new Setter(TextBlock.FontFamilyProperty, new Binding(nameof(ContentPresenter.FontFamily)) { Source = presenter }),
+                    new Setter(TextBlock.FontSizeProperty, new Binding(nameof(ContentPresenter.FontSize)) { Source = presenter }),
+                },
+            });
 
             var root = new Border { Name = "PART_LayoutRoot" };
             root.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tab });
