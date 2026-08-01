@@ -1535,6 +1535,18 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
             DrawSoftwareShorebirdTrack(canvas, motif);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildBatsFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var batMotifs))
+    {
+        foreach (var motif in batMotifs)
+            DrawSoftwareBat(canvas, motif);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
             border.ArtId,
             border.WidthPt,
@@ -1609,6 +1621,26 @@ static void DrawSoftwareShorebirdTrack(SKCanvas canvas, PageBorderShorebirdTrack
             (float)segment.Y2Dip,
             paint);
     }
+}
+
+static void DrawSoftwareBat(SKCanvas canvas, PageBorderBatMotif motif)
+{
+    var points = PageBorderArtVisualPlanner.BuildBatPolygon(motif);
+    if (points.Count == 0)
+        return;
+
+    using var path = new SKPath();
+    path.MoveTo((float)points[0].XDip, (float)points[0].YDip);
+    foreach (var point in points.Skip(1))
+        path.LineTo((float)point.XDip, (float)point.YDip);
+    path.Close();
+    using var paint = new SKPaint
+    {
+        Color = SKColors.Black,
+        IsAntialias = true,
+        Style = SKPaintStyle.Fill,
+    };
+    canvas.DrawPath(path, paint);
 }
 
 static void DrawSoftwareDecorativeArch(SKCanvas canvas, PageBorderDecorativeArchPlan plan)

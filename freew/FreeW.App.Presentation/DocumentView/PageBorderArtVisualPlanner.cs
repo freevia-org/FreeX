@@ -16,6 +16,15 @@ public sealed record PageBorderShorebirdTrackMotif(
     double SizeDip,
     int QuarterTurns);
 
+public sealed record PageBorderBatMotif(
+    double Xdip,
+    double Ydip,
+    double SizeDip);
+
+public sealed record PageBorderArtPoint(
+    double XDip,
+    double YDip);
+
 public sealed record PageBorderArtLineSegment(
     double X1Dip,
     double Y1Dip,
@@ -55,6 +64,7 @@ public static class PageBorderArtVisualPlanner
     public const int ShadowedSquaresArtId = 57;
     public const int ShorebirdTracksArtId = 83;
     public const int DecorativeArchArtId = 89;
+    public const int BatsArtId = 37;
     public const byte AppleFillRed = 0xB5;
     public const byte AppleStemRed = 0x66;
     public const byte AppleHighlightRed = 0xD8;
@@ -174,6 +184,62 @@ public static class PageBorderArtVisualPlanner
                 motif.CenterXDip + end.X,
                 motif.CenterYDip + end.Y);
         }).ToList();
+    }
+
+    public static bool TryBuildBatsFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out IReadOnlyList<PageBorderBatMotif> motifs)
+    {
+        if (artId != BatsArtId)
+        {
+            motifs = [];
+            return false;
+        }
+
+        motifs = BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt)
+            .Select(placement => new PageBorderBatMotif(placement.Xdip, placement.Ydip, placement.SizeDip))
+            .ToList();
+        return true;
+    }
+
+    public static IReadOnlyList<PageBorderArtPoint> BuildBatPolygon(PageBorderBatMotif motif)
+    {
+        var scale = motif.SizeDip / 32.0;
+        var local = new (double X, double Y)[]
+        {
+            (4, 7),
+            (3, 12),
+            (4, 15),
+            (6, 18),
+            (9, 22),
+            (12, 24),
+            (15, 24),
+            (16, 22),
+            (18, 24),
+            (21, 22),
+            (24, 21),
+            (26, 18),
+            (28, 14),
+            (25, 14),
+            (22, 16),
+            (20, 18),
+            (18, 17),
+            (16, 18),
+            (14, 17),
+            (12, 18),
+            (10, 17),
+            (8, 15),
+            (7, 12),
+        };
+        return local
+            .Select(point => new PageBorderArtPoint(
+                motif.Xdip + point.X * scale,
+                motif.Ydip + point.Y * scale))
+            .ToList();
     }
 
     public static bool TryBuildDecorativeArchFrame(

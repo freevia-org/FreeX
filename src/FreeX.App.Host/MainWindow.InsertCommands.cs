@@ -236,12 +236,20 @@ public partial class MainWindow
         _ = OpenStartupFileAsync(openablePath);
     }
 
+    // Excel opens the ACTIVE cell's hyperlink, not the selection's normalized top-left. The two
+    // differ whenever the selection was made upward/leftward (e.g. dragging D4 -> A1 pins the
+    // active cell at D4 while SelectedRange.Start normalizes to A1). Read the true active/anchor
+    // cell (SheetGrid.ActiveCell, mirrored from _selectionAnchor) and fall back to Start only when
+    // it is unset, matching the shared WorkbookSession members
+    // (CanOpenSelectedHyperlink/TryGetSelectedHyperlinkPlan/OpenSelectedHyperlink), the Avalonia
+    // shell's OpenSelectedHyperlinkAsync, and the ribbon-toggle-state precedent in
+    // MainWindow.WorkbookUiState.cs (R112-model-active-cell-vs-selection-1-1 sibling fix).
     private bool TryOpenSelectedHyperlink()
     {
         if (SheetGrid.SelectedRange is not { } selectedRange)
             return false;
 
-        return TryOpenHyperlink(selectedRange.Start);
+        return TryOpenHyperlink(SheetGrid.ActiveCell ?? selectedRange.Start);
     }
 
     // O26: hyperlink 'Place in This Document' targets can be a bare defined name (no '!' /

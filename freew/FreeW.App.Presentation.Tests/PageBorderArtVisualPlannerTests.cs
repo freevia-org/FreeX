@@ -85,6 +85,22 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void Bats_UsesWordCadenceAndMeasuredSharedSilhouette()
+    {
+        PageBorderArtVisualPlanner.TryBuildBatsFrame(37, 3, 816, 1056, 32, out var motifs)
+            .Should().BeTrue();
+
+        motifs.Should().HaveCount(102);
+        motifs[0].Should().Be(new PageBorderBatMotif(32, 32, 32));
+        motifs[22].Should().Be(new PageBorderBatMotif(752, 32, 32));
+        motifs[45].Should().Be(new PageBorderBatMotif(752, 992, 32));
+        PageBorderArtVisualPlanner.BuildBatPolygon(motifs[0]).Take(3).Should().Equal(
+            new PageBorderArtPoint(36, 39),
+            new PageBorderArtPoint(35, 44),
+            new PageBorderArtPoint(36, 47));
+    }
+
+    [Fact]
     public void TinyFrame_IsRecognizedButProducesNoMotifs()
     {
         PageBorderArtVisualPlanner.TryBuildApplesFrame(1, 3, 40, 40, 20, out var motifs)
