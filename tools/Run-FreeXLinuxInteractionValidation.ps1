@@ -1211,7 +1211,7 @@ try {
             "grid-selection-border-copy-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
-        @("outline-group-physical")
+        @("outline-group-physical", "outline-columns-group-physical")
     } else {
         @(
         "inline-edit-f2-escape",
@@ -1231,6 +1231,7 @@ try {
         "clipboard-cut-paste-roundtrip",
         "window-new-arrange-switch-physical",
         "outline-group-physical",
+        "outline-columns-group-physical",
         "dialog-format-cells-keyboard",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
@@ -1314,7 +1315,7 @@ try {
             "grid-selection-border-copy-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
-        @("outline-group-physical")
+        @("outline-group-physical", "outline-columns-group-physical")
     } else {
         @(
         "worksheet-context-copy-physical",
@@ -1323,6 +1324,7 @@ try {
         "clipboard-cut-paste-roundtrip",
         "window-new-arrange-switch-physical",
         "outline-group-physical",
+        "outline-columns-group-physical",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
         "backstage-print-ctrl-shift-f12-cancel",

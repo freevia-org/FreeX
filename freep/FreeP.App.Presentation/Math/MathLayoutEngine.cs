@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace FreeP.App.Compositor.MathLayout;
 
@@ -205,7 +206,16 @@ public static class MathLayoutEngine
         double fontSizePt,
         double? paragraphWidthDip)
     {
-        var contentBox = LayoutNode(paragraph.Content, fontFamily, fontSizePt);
+        var content = paragraphWidthDip is > 0
+            ? WrapBinaryOperators(
+                paragraph.Content,
+                paragraphWidthDip.Value,
+                paragraph.BinaryBreak,
+                paragraph.BinarySubtraction,
+                fontFamily,
+                fontSizePt)
+            : paragraph.Content;
+        var contentBox = LayoutNode(content, fontFamily, fontSizePt);
         var width = paragraphWidthDip.HasValue && paragraphWidthDip.Value > contentBox.Metrics.Width
             ? paragraphWidthDip.Value
             : contentBox.Metrics.Width;
@@ -225,6 +235,143 @@ public static class MathLayoutEngine
         container.Metrics.Height = contentBox.Metrics.Height;
         container.Metrics.Ascent = contentBox.Metrics.Ascent;
         return container;
+    }
+
+    private static MathNode WrapBinaryOperators(
+        MathNode content,
+        double availableWidth,
+        MathNode.MathParagraphBinaryBreak binaryBreak,
+        MathNode.MathParagraphBinarySubtraction binarySubtraction,
+        string fontFamily,
+        double fontSizePt)
+    {
+        if (content is not MathNode.Row row || row.Children.Count < 2)
+            return content;
+
+        var naturalLayout = LayoutRow(row.Children, fontFamily, fontSizePt);
+        if (naturalLayout.Metrics.Width <= availableWidth)
+            return content;
+
+        var rows = new List<MathNode>();
+        var current = new List<MathNode>();
+        foreach (var child in row.Children)
+        {
+            current.Add(child);
+            var currentLayout = LayoutRow(current, fontFamily, fontSizePt);
+            if (currentLayout.Metrics.Width <= availableWidth)
+                continue;
+
+            var operatorIndex = FindLastBinaryOperator(current);
+            if (operatorIndex <= 0)
+                continue;
+
+            var left = new List<MathNode>();
+            var right = new List<MathNode>();
+            switch (binaryBreak)
+            {
+                case MathNode.MathParagraphBinaryBreak.Before:
+                    AddRange(left, current, 0, operatorIndex);
+                    AddRange(right, current, operatorIndex, current.Count - operatorIndex);
+                    break;
+
+                case MathNode.MathParagraphBinaryBreak.After:
+                    AddRange(left, current, 0, operatorIndex + 1);
+                    AddRange(right, current, operatorIndex + 1, current.Count - operatorIndex - 1);
+                    break;
+
+                case MathNode.MathParagraphBinaryBreak.Repeat:
+                    AddRange(left, current, 0, operatorIndex);
+                    left.Add(CreateRepeatedOperator(
+                        current[operatorIndex],
+                        binarySubtraction,
+                        beforeBreak: true));
+                    AddRange(right, current, operatorIndex + 1, current.Count - operatorIndex - 1);
+                    right.Insert(0, CreateRepeatedOperator(
+                        current[operatorIndex],
+                        binarySubtraction,
+                        beforeBreak: false));
+                    break;
+            }
+
+            rows.Add(CreateParagraphRow(left));
+            current = right;
+        }
+
+        if (rows.Count == 0)
+            return content;
+
+        rows.Add(CreateParagraphRow(current));
+        return new MathNode.EqArray(rows);
+    }
+
+    private static int FindLastBinaryOperator(IReadOnlyList<MathNode> nodes)
+    {
+        for (var i = nodes.Count - 1; i >= 0; i--)
+        {
+            if (TryGetBinaryOperatorText(nodes[i], out _))
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static bool TryGetBinaryOperatorText(MathNode node, out string text)
+    {
+        switch (node)
+        {
+            case MathNode.Run run when IsBinaryOperatorText(run.Text):
+                text = run.Text.Trim();
+                return true;
+            case MathNode.Unknown unknown when IsBinaryOperatorText(unknown.FallbackText):
+                text = unknown.FallbackText.Trim();
+                return true;
+            case MathNode.Box box when box.OperatorEmulator:
+                return TryGetBinaryOperatorText(box.Base, out text);
+            case MathNode.Phantom phantom when phantom.TransparentSpacing:
+                return TryGetBinaryOperatorText(phantom.Base, out text);
+            default:
+                text = string.Empty;
+                return false;
+        }
+    }
+
+    private static bool IsBinaryOperatorText(string text) =>
+        text.Trim() is "+" or "-" or "\u2212" or "\u00b1" or "\u00d7" or "\u00f7" or "*" or "/";
+
+    private static MathNode CreateRepeatedOperator(
+        MathNode source,
+        MathNode.MathParagraphBinarySubtraction binarySubtraction,
+        bool beforeBreak)
+    {
+        if (!TryGetBinaryOperatorText(source, out var sourceText))
+            return source;
+
+        var text = sourceText;
+        if (IsSubtractionText(sourceText))
+        {
+            text = binarySubtraction switch
+            {
+                MathNode.MathParagraphBinarySubtraction.PlusMinus when beforeBreak => "+",
+                MathNode.MathParagraphBinarySubtraction.MinusPlus when !beforeBreak => "+",
+                _ => sourceText
+            };
+        }
+
+        if (source is MathNode.Run run)
+            return new MathNode.Run(text, run.IsItalic, run.IsBold, run.Alphabet, run.IsLiteral);
+
+        return new MathNode.Run(text, isItalic: false);
+    }
+
+    private static bool IsSubtractionText(string text) => text is "-" or "\u2212";
+
+    private static MathNode CreateParagraphRow(IReadOnlyList<MathNode> nodes) =>
+        nodes.Count == 1 ? nodes[0] : new MathNode.Row(nodes.ToArray());
+
+    private static void AddRange(List<MathNode> destination, IReadOnlyList<MathNode> source, int start, int count)
+    {
+        for (var i = 0; i < count; i++)
+            destination.Add(source[start + i]);
     }
 
     // ── Em conversion ────────────────────────────────────────────────────

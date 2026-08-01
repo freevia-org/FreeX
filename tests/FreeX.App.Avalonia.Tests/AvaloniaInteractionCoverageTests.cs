@@ -222,6 +222,14 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("FREEX_X11_PROBE_SELECTOR", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"sheet-tabs\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"name-box-dropdown-parity\"", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_outline_column_group_physical", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-columns-group-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-columns-group-physical", runner, StringComparison.Ordinal);
+        Assert.Contains("column-header-drag-B:D", probe, StringComparison.Ordinal);
+        Assert.Contains("xdotool mousedown 1", probe, StringComparison.Ordinal);
+        Assert.Contains("group-gesture=column-header-right-click,End,Up,Up,Up,Enter", probe, StringComparison.Ordinal);
+        Assert.Contains("outline_column_green_score", probe, StringComparison.Ordinal);
+        Assert.Contains("copy_cell_formula_by_keyboard", probe, StringComparison.Ordinal);
         Assert.Contains("name-box-dropdown-parity-native-crop", probe, StringComparison.Ordinal);
         Assert.Contains("Assert-NameBoxDropdownParityNativeContract", runner, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"formula-3d-point\"", probe, StringComparison.Ordinal);

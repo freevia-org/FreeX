@@ -413,6 +413,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtFunnelProcessCommand { get; } = new("Ribbon_Command_SmartArtFunnelProcess_Label", "Ribbon_Command_SmartArtFunnelProcess_KeyTip");
     public static RibbonText SmartArtVerticalProcessCommand { get; } = new("Ribbon_Command_SmartArtVerticalProcess_Label", "Ribbon_Command_SmartArtVerticalProcess_KeyTip");
     public static RibbonText SmartArtVerticalBoxListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBoxList_Label", "Ribbon_Command_SmartArtVerticalBoxList_KeyTip");
+    public static RibbonText SmartArtVerticalBlockListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBlockList_Label", "Ribbon_Command_SmartArtVerticalBlockList_KeyTip");
     public static RibbonText SmartArtVerticalChevronListCommand { get; } = new("Ribbon_Command_SmartArtVerticalChevronList_Label", "Ribbon_Command_SmartArtVerticalChevronList_KeyTip");
     public static RibbonText SmartArtVerticalArrowListCommand { get; } = new("Ribbon_Command_SmartArtVerticalArrowList_Label", "Ribbon_Command_SmartArtVerticalArrowList_KeyTip");
     public static RibbonText SmartArtVerticalBulletListCommand { get; } = new("Ribbon_Command_SmartArtVerticalBulletList_Label", "Ribbon_Command_SmartArtVerticalBulletList_KeyTip");

@@ -81,6 +81,7 @@ public enum SmartArtLayoutPreset
     FunnelProcess,
     VerticalProcess,
     VerticalBoxList,
+    VerticalBlockList,
     VerticalChevronList,
     VerticalArrowList,
     VerticalBulletList,
@@ -223,6 +224,7 @@ public static class SmartArtAuthoringPlanner
     public const string FunnelProcessLayoutCommandId = "freep.smartart.layout.funnel-process";
     public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
+    public const string VerticalBlockListLayoutCommandId = "freep.smartart.layout.vertical-block-list";
     public const string VerticalChevronListLayoutCommandId = "freep.smartart.layout.vertical-chevron-list";
     public const string VerticalArrowListLayoutCommandId = "freep.smartart.layout.vertical-arrow-list";
     public const string VerticalBulletListLayoutCommandId = "freep.smartart.layout.vertical-bullet-list";
@@ -538,6 +540,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalBoxList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
+            SmartArtLayoutPreset.VerticalBlockList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalChevronList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalChevronList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalArrowList =>

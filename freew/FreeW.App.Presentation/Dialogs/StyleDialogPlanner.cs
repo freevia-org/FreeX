@@ -38,6 +38,19 @@ public sealed record StyleDefinitionResult(
 
 public sealed record StyleDialogRow(string Id, string Display, bool IsBuiltIn);
 
+/// <summary>
+/// Shared geometry for the compact New/Modify Style dialog. Keeping these values in the
+/// presentation layer makes the WPF and Avalonia shells consume the same layout contract while
+/// retaining their native control implementations.
+/// </summary>
+public static class StyleDialogMetrics
+{
+    public const double DialogMargin = 16;
+    public const double FieldBottomMargin = 10;
+    public const double NameTextBoxHeight = 20;
+    public const double ActionRowTopMargin = 12;
+}
+
 public abstract record ManageStyleAction
 {
     public sealed record Apply(string StyleId) : ManageStyleAction;

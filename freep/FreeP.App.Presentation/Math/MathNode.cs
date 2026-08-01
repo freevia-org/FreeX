@@ -610,6 +610,28 @@ public abstract class MathNode
     }
 
     /// <summary>
+    /// Placement of a binary operator when a math paragraph wraps at that
+    /// operator (m:brkBin). The default is Before, matching Office Math.
+    /// </summary>
+    public enum MathParagraphBinaryBreak
+    {
+        Before,
+        After,
+        Repeat
+    }
+
+    /// <summary>
+    /// Sign pair used when a subtraction operator is repeated across a math
+    /// paragraph break (m:brkBinSub). The default is MinusMinus.
+    /// </summary>
+    public enum MathParagraphBinarySubtraction
+    {
+        MinusMinus,
+        PlusMinus,
+        MinusPlus
+    }
+
+    /// <summary>
     /// <c>m:oMathPara</c> wrapper carrying paragraph-level equation alignment metadata.
     /// Alignment is applied by shared layout only when an available paragraph width is supplied.
     /// </summary>
@@ -617,11 +639,19 @@ public abstract class MathNode
     {
         public MathNode Content { get; }
         public MathParagraphJustification Justification { get; }
+        public MathParagraphBinaryBreak BinaryBreak { get; }
+        public MathParagraphBinarySubtraction BinarySubtraction { get; }
 
-        public MathParagraph(MathNode content, MathParagraphJustification justification)
+        public MathParagraph(
+            MathNode content,
+            MathParagraphJustification justification,
+            MathParagraphBinaryBreak binaryBreak = MathParagraphBinaryBreak.Before,
+            MathParagraphBinarySubtraction binarySubtraction = MathParagraphBinarySubtraction.MinusMinus)
         {
             Content = content;
             Justification = justification;
+            BinaryBreak = binaryBreak;
+            BinarySubtraction = binarySubtraction;
         }
     }
 

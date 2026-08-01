@@ -1375,4 +1375,50 @@ public sealed class OmmlParserTests
         Assert.Equal(MathNode.MathParagraphJustification.Center, paragraph.Justification);
         Assert.Equal("x", Assert.IsType<MathNode.Run>(paragraph.Content).Text);
     }
+
+    [Theory]
+    [InlineData("before", MathNode.MathParagraphBinaryBreak.Before)]
+    [InlineData("after", MathNode.MathParagraphBinaryBreak.After)]
+    [InlineData("repeat", MathNode.MathParagraphBinaryBreak.Repeat)]
+    [InlineData("bogus", MathNode.MathParagraphBinaryBreak.Before)]
+    public void OMathPara_WithBinaryBreakPolicy_PreservesSharedMetadata(
+        string val,
+        MathNode.MathParagraphBinaryBreak expected)
+    {
+        var node = ParseParagraph(
+            $"<m:oMathParaPr><m:brkBin m:val=\"{val}\"/></m:oMathParaPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(expected, paragraph.BinaryBreak);
+    }
+
+    [Theory]
+    [InlineData("--", MathNode.MathParagraphBinarySubtraction.MinusMinus)]
+    [InlineData("+-", MathNode.MathParagraphBinarySubtraction.PlusMinus)]
+    [InlineData("-+", MathNode.MathParagraphBinarySubtraction.MinusPlus)]
+    [InlineData("bogus", MathNode.MathParagraphBinarySubtraction.MinusMinus)]
+    public void OMathPara_WithBinarySubtractionPolicy_PreservesSharedMetadata(
+        string val,
+        MathNode.MathParagraphBinarySubtraction expected)
+    {
+        var node = ParseParagraph(
+            $"<m:oMathParaPr><m:brkBinSub m:val=\"{val}\"/></m:oMathParaPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(expected, paragraph.BinarySubtraction);
+    }
+
+    [Fact]
+    public void OMathPara_WithStandardMathPropertiesContainer_ReadsBinaryBreakPolicies()
+    {
+        var node = ParseParagraph(
+            "<m:mathPr><m:brkBin m:val=\"repeat\"/><m:brkBinSub m:val=\"-+\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(MathNode.MathParagraphBinaryBreak.Repeat, paragraph.BinaryBreak);
+        Assert.Equal(MathNode.MathParagraphBinarySubtraction.MinusPlus, paragraph.BinarySubtraction);
+    }
 }

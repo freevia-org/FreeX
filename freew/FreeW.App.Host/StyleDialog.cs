@@ -59,7 +59,14 @@ internal static class StyleDialog
             ShowInTaskbar = false,
         };
 
-        var name = new TextBox { MinWidth = 280, Text = fixedName ?? string.Empty };
+        var name = new TextBox
+        {
+            MinWidth = 280,
+            Height = StyleDialogMetrics.NameTextBoxHeight,
+            MinHeight = StyleDialogMetrics.NameTextBoxHeight,
+            MaxHeight = StyleDialogMetrics.NameTextBoxHeight,
+            Text = fixedName ?? string.Empty,
+        };
         if (isModify)
             name.IsReadOnly = true;
 
@@ -133,9 +140,12 @@ internal static class StyleDialog
 
         // Reuse the shared OK/Cancel button row (accelerators, automation names, shell strings; Cancel is
         // IsCancel so Esc/Cancel closes). Single source of truth shared with FreeX's dialogs.
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: 72,
+            rowMargin: new Thickness(0, StyleDialogMetrics.ActionRowTopMargin, 0, 0));
 
-        var panel = new StackPanel { Margin = new Thickness(16) };
+        var panel = new StackPanel { Margin = new Thickness(StyleDialogMetrics.DialogMargin) };
         AddRow(panel, "Name:", name);
         AddRow(panel, "Style based on:", basedOn);
         AddRow(panel, "Style for following paragraph:", nextStyle);
@@ -165,7 +175,7 @@ internal static class StyleDialog
             Margin = new Thickness(0, 0, 0, 2),
         });
         if (field is FrameworkElement fe)
-            fe.Margin = new Thickness(0, 0, 0, 10);
+            fe.Margin = new Thickness(0, 0, 0, StyleDialogMetrics.FieldBottomMargin);
         panel.Children.Add(field);
     }
 }
