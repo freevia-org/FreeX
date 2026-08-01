@@ -280,6 +280,23 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void AddChartSeries_BubbleSeedsCoordinatesAndUndoRemovesThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Bubble;
+
+        bus.Execute(new AddChartSeriesCommand(0, id, "New Bubble Series"));
+
+        chart.Series[^1].Values.Should().HaveCount(3);
+        chart.Series[^1].XValues.Should().Equal(1.0, 2.0, 3.0);
+        chart.Series[^1].BubbleSizes.Should().Equal(1.0, 1.0, 1.0);
+
+        bus.Undo();
+        chart.Series.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void AddChartSeries_Revert_RemovesSeries()
     {
         var (p, bus, id) = MakeChartPresentation();
@@ -391,6 +408,58 @@ public sealed class ChartDataCommandTests
     // ════════════════════════════════════════════════════════════════════════════════
 
     [Fact]
+    public void AddChartCategory_BubbleMaintainsCoordinatesAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Bubble;
+        foreach (var series in chart.Series)
+        {
+            series.XValues.AddRange([1.0, 2.0, 3.0]);
+            series.BubbleSizes.AddRange([4.0, 5.0, 6.0]);
+        }
+
+        bus.Execute(new AddChartCategoryCommand(0, id, "Q4"));
+
+        chart.Categories.Should().EndWith("Q4");
+        chart.Series.Should().AllSatisfy(series =>
+        {
+            series.Values.Should().HaveCount(4);
+            series.XValues.Should().Equal(1.0, 2.0, 3.0, 4.0);
+            series.BubbleSizes.Should().Equal(4.0, 5.0, 6.0, 1.0);
+        });
+
+        bus.Undo();
+        chart.Categories.Should().HaveCount(3);
+        chart.Series.Should().AllSatisfy(series =>
+        {
+            series.XValues.Should().Equal(1.0, 2.0, 3.0);
+            series.BubbleSizes.Should().Equal(4.0, 5.0, 6.0);
+        });
+    }
+
+    [Fact]
+    public void RemoveChartCategory_ScatterRemovesCoordinatesAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.Scatter;
+        foreach (var series in chart.Series)
+            series.XValues.AddRange([10.0, 20.0, 30.0]);
+
+        bus.Execute(new RemoveChartCategoryCommand(0, id, categoryIndex: 1));
+
+        chart.Categories.Should().Equal("Q1", "Q3");
+        chart.Series.Should().AllSatisfy(series =>
+            series.XValues.Should().Equal(10.0, 30.0));
+
+        bus.Undo();
+        chart.Categories.Should().Equal("Q1", "Q2", "Q3");
+        chart.Series.Should().AllSatisfy(series =>
+            series.XValues.Should().Equal(10.0, 20.0, 30.0));
+    }
+
+    [Fact]
     public void ReplaceChartData_Apply_ReplacesAllData()
     {
         var (p, bus, id) = MakeChartPresentation();
@@ -423,6 +492,20 @@ public sealed class ChartDataCommandTests
         chart.Series.Should().HaveCount(2);
         chart.Series[0].Name.Should().Be("Sales");
         chart.Series[0].Values[0].Should().Be(100.0);
+    }
+
+    [Fact]
+    public void SetChartCellValue_Revert_RestoresMissingPointAsGap()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.Series[0].Values[1] = null;
+
+        bus.Execute(new SetChartCellValueCommand(0, id, 0, 1, 250.0));
+        chart.Series[0].Values[1].Should().Be(250.0);
+
+        bus.Undo();
+        chart.Series[0].Values[1].Should().BeNull("undo must preserve an authored chart gap");
     }
 
     [Fact]
