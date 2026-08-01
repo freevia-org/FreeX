@@ -90,6 +90,11 @@ public static class OmmlParser
             .Select(ParseRow)
             .ToArray();
 
+        var paragraphProperties = paragraph.Element(M + "oMathParaPr");
+        // ECMA-376 defines brkBin/brkBinSub under m:mathPr. Some authored
+        // payloads place them beside jc in oMathParaPr, so accept both forms.
+        var mathProperties = paragraph.Element(M + "mathPr");
+
         var content = oMathNodes.Length switch
         {
             0 => ParseRow(paragraph),
@@ -99,7 +104,9 @@ public static class OmmlParser
 
         return new MathNode.MathParagraph(
             content,
-            ParseMathParagraphJustification(paragraph.Element(M + "oMathParaPr")));
+            ParseMathParagraphJustification(paragraphProperties),
+            ParseMathParagraphBinaryBreak(paragraphProperties, mathProperties),
+            ParseMathParagraphBinarySubtraction(paragraphProperties, mathProperties));
     }
 
     private static MathNode.MathParagraphJustification ParseMathParagraphJustification(XElement? paragraphProperties)
@@ -111,6 +118,36 @@ public static class OmmlParser
             "right" => MathNode.MathParagraphJustification.Right,
             "centerGroup" or "center-group" => MathNode.MathParagraphJustification.CenterGroup,
             _ => MathNode.MathParagraphJustification.Center
+        };
+    }
+
+    private static MathNode.MathParagraphBinaryBreak ParseMathParagraphBinaryBreak(
+        XElement? paragraphProperties,
+        XElement? mathProperties)
+    {
+        var val = ReadVal(
+            paragraphProperties?.Element(M + "brkBin")
+            ?? mathProperties?.Element(M + "brkBin"));
+        return val switch
+        {
+            "after" => MathNode.MathParagraphBinaryBreak.After,
+            "repeat" => MathNode.MathParagraphBinaryBreak.Repeat,
+            _ => MathNode.MathParagraphBinaryBreak.Before
+        };
+    }
+
+    private static MathNode.MathParagraphBinarySubtraction ParseMathParagraphBinarySubtraction(
+        XElement? paragraphProperties,
+        XElement? mathProperties)
+    {
+        var val = ReadVal(
+            paragraphProperties?.Element(M + "brkBinSub")
+            ?? mathProperties?.Element(M + "brkBinSub"));
+        return val switch
+        {
+            "+-" or "plusMinus" => MathNode.MathParagraphBinarySubtraction.PlusMinus,
+            "-+" or "minusPlus" => MathNode.MathParagraphBinarySubtraction.MinusPlus,
+            _ => MathNode.MathParagraphBinarySubtraction.MinusMinus
         };
     }
 

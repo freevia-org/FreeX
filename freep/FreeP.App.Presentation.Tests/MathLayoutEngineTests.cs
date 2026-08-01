@@ -2190,6 +2190,62 @@ public sealed class MathLayoutEngineTests
             "bounded centerGroup support uses the same centered renderer-neutral coordinates as centered equation paragraphs");
     }
 
+    [Theory]
+    [InlineData("before")]
+    [InlineData("after")]
+    public void OmmlParagraphBinaryBreak_WrapsAtOperatorThroughSharedRenderPlan(
+        string breakValue)
+    {
+        var node = ParseOmmlParagraph(
+            $"<m:oMathParaPr><m:brkBin m:val=\"{breakValue}\"/></m:oMathParaPr>" +
+            "<m:oMath><m:r><m:t>a</m:t></m:r><m:r><m:t>+</m:t></m:r><m:r><m:t>b</m:t></m:r></m:oMath>");
+
+        var glyphs = MathBoxRenderPlanner.Plan(
+                MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 30),
+                10,
+                20,
+                SrgbColor.Black,
+                "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal("a", "+", "b");
+        if (breakValue == "before")
+        {
+            glyphs[1].Y.Should().BeGreaterThan(glyphs[0].Y,
+                "before places the binary operator at the start of the wrapped line");
+            glyphs[2].Y.Should().Be(glyphs[1].Y);
+        }
+        else
+        {
+            glyphs[1].Y.Should().Be(glyphs[0].Y,
+                "after keeps the binary operator at the end of the first line");
+            glyphs[2].Y.Should().BeGreaterThan(glyphs[1].Y);
+        }
+    }
+
+    [Fact]
+    public void OmmlParagraphBinaryBreak_RepeatUsesConfiguredSubtractionSigns()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:oMathParaPr><m:brkBin m:val=\"repeat\"/><m:brkBinSub m:val=\"+-\"/></m:oMathParaPr>" +
+            "<m:oMath><m:r><m:t>a</m:t></m:r><m:r><m:t>-</m:t></m:r><m:r><m:t>b</m:t></m:r></m:oMath>");
+
+        var glyphs = MathBoxRenderPlanner.Plan(
+                MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 30),
+                10,
+                20,
+                SrgbColor.Black,
+                "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal("a", "+", "-", "b");
+        glyphs[1].Y.Should().Be(glyphs[0].Y,
+            "repeat keeps the configured plus sign at the end of the first line");
+        glyphs[2].Y.Should().BeGreaterThan(glyphs[1].Y);
+    }
+
     [Fact]
     public void Func_FunctionName_RenderPlanIsUprightAndArgumentStaysItalic()
     {
