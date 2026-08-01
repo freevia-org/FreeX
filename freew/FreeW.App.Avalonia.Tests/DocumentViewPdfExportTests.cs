@@ -49,78 +49,6 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
-    public Task BuildPdfContent_IncludesPageBorderBeforeBodyAndMatchesPageChromeGeometry() =>
-        Session.Dispatch(() =>
-        {
-            var document = TextDocument.CreateEmpty();
-            document.Blocks.Clear();
-            document.Page.WidthPt = 240;
-            document.Page.HeightPt = 180;
-            document.Page.PageBorder = new PageBorder("#C00000", 2.25)
-            {
-                SpacePt = 24,
-                LineStyle = BorderLineStyle.Double,
-            };
-            var paragraph = new Paragraph();
-            paragraph.Runs.Add(new Run("Body after page border"));
-            document.Blocks.Add(paragraph);
-
-            var view = new DocumentView();
-            view.LoadDocument(document);
-
-            var ops = view.BuildPdfContent().Pages.Single().Ops.ToList();
-            var borders = ops.OfType<PdfStrokeRect>().Where(op => op.Color == new PdfColor(0xC0, 0x00, 0x00)).ToList();
-
-            borders.Should().HaveCount(2);
-            borders[0].X.Should().BeApproximately(25.125, 0.001);
-            borders[0].Y.Should().BeApproximately(25.125, 0.001);
-            borders[0].Width.Should().BeApproximately(189.75, 0.001);
-            borders[0].Height.Should().BeApproximately(129.75, 0.001);
-            borders[0].LineWidth.Should().BeApproximately(2.25, 0.001);
-            borders[1].X.Should().BeGreaterThan(borders[0].X);
-            borders[1].Y.Should().BeGreaterThan(borders[0].Y);
-            borders[1].Width.Should().BeLessThan(borders[0].Width);
-            borders[1].Height.Should().BeLessThan(borders[0].Height);
-            ops.IndexOf(borders[0]).Should().Be(0);
-            var firstBodyOperation = ops.FindIndex(op => op is not PdfStrokeRect);
-            if (firstBodyOperation >= 0)
-                ops.IndexOf(borders[0]).Should().BeLessThan(firstBodyOperation);
-        }, CancellationToken.None);
-
-    [Fact]
-    public Task BuildPdfContent_UsesTextRelativeDashedPageBorderGeometry() =>
-        Session.Dispatch(() =>
-        {
-            var document = TextDocument.CreateEmpty();
-            document.Blocks.Clear();
-            document.Page.WidthPt = 300;
-            document.Page.HeightPt = 200;
-            document.Page.MarginLeftPt = 18;
-            document.Page.MarginRightPt = 24;
-            document.Page.MarginBottomPt = 20;
-            document.Page.HeaderDistancePt = 30;
-            document.Page.PageBorder = new PageBorder("#0070C0", 1.5)
-            {
-                OffsetFrom = PageBorderOffsetFrom.Text,
-                SpacePt = 12,
-                LineStyle = BorderLineStyle.Dashed,
-            };
-
-            var view = new DocumentView();
-            view.LoadDocument(document);
-
-            var border = view.BuildPdfContent().Pages.Single().Ops.OfType<PdfStrokeRect>().Single();
-
-            border.X.Should().BeApproximately(5.25, 0.001);
-            border.Y.Should().BeApproximately(6.5, 0.001);
-            border.Width.Should().BeApproximately(283.5, 0.001);
-            border.Height.Should().BeApproximately(175.5, 0.001);
-            border.LineWidth.Should().BeApproximately(1.5, 0.001);
-            border.Dash.Should().NotBeNull();
-            border.Dash!.Segments.Should().Equal(3 / (96.0 / 72.0), 2 / (96.0 / 72.0));
-        }, CancellationToken.None);
-
-    [Fact]
     public Task BuildPdfContent_IncludesTableSurfacesBeforeCellText() =>
         Session.Dispatch(() =>
         {
@@ -204,6 +132,510 @@ public sealed class DocumentViewPdfExportTests
                     (op.Y + op.Height).Should().BeLessThanOrEqualTo(page.HeightPoints + 0.01);
                 }
             }
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesParagraphShadingAndSelectiveDashedBordersBeforeText() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("Shaded bordered paragraph")
+            {
+                Formatting = ParagraphFormatting.Default with
+                {
+                    ShadingColorHex = "#D9EAD3",
+                    Border = new ParagraphBorder("#C00000", 1.5)
+                    {
+                        LineStyle = BorderLineStyle.Dashed,
+                        Right = false,
+                    },
+                    SpaceAfterPt = 0,
+                    SpaceAfterIsSet = true,
+                },
+            });
+            document.Blocks.Add(new Paragraph("Bottom rule")
+            {
+                Formatting = ParagraphFormatting.Default with
+                {
+                    Border = new ParagraphBorder("#0070C0", 1, BottomOnly: true)
+                    {
+                        LineStyle = BorderLineStyle.Dotted,
+                    },
+                    SpaceAfterPt = 0,
+                    SpaceAfterIsSet = true,
+                },
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var ops = pdf.Pages.Single().Ops.ToList();
+            var shading = ops.OfType<PdfFillRect>()
+                .Single(fill => fill.Color == new PdfColor(0xD9, 0xEA, 0xD3));
+            var dashed = ops.OfType<PdfPath>()
+                .Single(path => path.StrokeColor == new PdfColor(0xC0, 0x00, 0x00));
+            var bottomOnly = ops.OfType<PdfPath>()
+                .Single(path => path.StrokeColor == new PdfColor(0x00, 0x70, 0xC0));
+            var firstText = ops.OfType<PdfText>()
+                .Single(text => text.Text.Contains("Shaded bordered paragraph", StringComparison.Ordinal));
+
+            shading.Width.Should().BeGreaterThan(0);
+            shading.Height.Should().BeGreaterThan(0);
+            dashed.Contours.Should().HaveCount(3);
+            dashed.StrokeWidth.Should().Be(1.5);
+            dashed.StrokeDash.Should().NotBeNull();
+            dashed.StrokeDash!.Segments.Should().Equal(6, 4.5);
+            bottomOnly.Contours.Should().ContainSingle();
+            bottomOnly.StrokeWidth.Should().Be(1);
+            bottomOnly.StrokeDash.Should().NotBeNull();
+            bottomOnly.StrokeDash!.Segments.Should().Equal(1, 2);
+            ops.IndexOf(shading).Should().BeLessThan(ops.IndexOf(firstText));
+            ops.IndexOf(dashed).Should().BeLessThan(ops.IndexOf(firstText));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var greenPixels = 0;
+            for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red == 0xD9 && pixel.Green == 0xEA && pixel.Blue == 0xD3)
+                    greenPixels++;
+            }
+            greenPixels.Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_DoesNotEmitParagraphSurfacesWithoutAuthoredDecoration() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var ops = view.BuildPdfContent().Pages.SelectMany(page => page.Ops).ToArray();
+            ops.OfType<PdfFillRect>().Should().BeEmpty();
+            ops.OfType<PdfPath>().Should().BeEmpty();
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_RepeatsResolvedColumnRulesOnEveryPage() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            document.Page.ColumnCount = 3;
+            document.Page.ColumnSpacingPt = 12;
+            document.Page.ColumnsLineBetween = true;
+            for (var index = 0; index < 40; index++)
+            {
+                document.Blocks.Add(new Paragraph($"Column line {index + 1}")
+                {
+                    Formatting = ParagraphFormatting.Default with
+                    {
+                        SpaceAfterPt = 0,
+                        SpaceAfterIsSet = true,
+                    },
+                });
+            }
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            foreach (var page in pdf.Pages)
+            {
+                var rules = page.Ops.OfType<PdfLine>()
+                    .Where(line => line.Color == PdfColor.Black && Math.Abs(line.X1 - line.X2) < 0.001)
+                    .ToArray();
+                rules.Should().HaveCount(2);
+                rules.Select(rule => rule.X1).Should().BeInAscendingOrder();
+                rules.Should().OnlyContain(rule => rule.X1 > 18 && rule.X1 < 242);
+                rules.Should().OnlyContain(rule => Math.Abs(rule.Y1 - 18) < 0.001);
+                rules.Should().OnlyContain(rule => Math.Abs(rule.Y2 - 162) < 0.001);
+                rules.Should().OnlyContain(rule => Math.Abs(rule.LineWidth - 0.75) < 0.001);
+            }
+
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_DoesNotEmitColumnRulesWhenSeparatorIsDisabled() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.ColumnCount = 2;
+            document.Page.ColumnsLineBetween = false;
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfLine>()
+                .Should().NotContain(line => line.Color == PdfColor.Black && Math.Abs(line.X1 - line.X2) < 0.001);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesPageBorderOnEveryPageBeforeDocumentContent() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            document.Page.PageBorder = new PageBorder("#24536B", 1.5)
+            {
+                SpacePt = 12,
+                LineStyle = BorderLineStyle.Dashed,
+            };
+            for (var i = 0; i < 30; i++)
+                document.Blocks.Add(new Paragraph($"Bordered line {i + 1}"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            foreach (var page in pdf.Pages)
+            {
+                var border = page.Ops[0].Should().BeOfType<PdfStrokeRect>().Subject;
+                border.X.Should().BeApproximately(13.125, 0.001);
+                border.Y.Should().BeApproximately(13.125, 0.001);
+                border.Width.Should().BeApproximately(233.75, 0.001);
+                border.Height.Should().BeApproximately(153.75, 0.001);
+                border.Color.Should().Be(new PdfColor(0x24, 0x53, 0x6B));
+                border.LineWidth.Should().Be(1.5);
+                border.Dash.Should().NotBeNull();
+                border.Dash!.Segments.Should().Equal(4.5, 3.0);
+                border.Dash.Phase.Should().Be(0);
+            }
+
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).First());
+            var borderPixels = 0;
+            for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red == 0x24 && pixel.Green == 0x53 && pixel.Blue == 0x6B)
+                    borderPixels++;
+            }
+            borderPixels.Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_UsesTextOffsetAndDoublePageBorderGeometry() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.MarginLeftPt = 72;
+            document.Page.MarginRightPt = 54;
+            document.Page.MarginBottomPt = 60;
+            document.Page.HeaderDistancePt = 36;
+            document.Page.PageBorder = new PageBorder("#A020F0", 2)
+            {
+                OffsetFrom = PageBorderOffsetFrom.Text,
+                SpacePt = 6,
+                LineStyle = BorderLineStyle.Double,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var borders = view.BuildPdfContent().Pages.Single().Ops.OfType<PdfStrokeRect>().ToArray();
+
+            borders.Should().HaveCount(2);
+            borders[0].Should().Be(new PdfStrokeRect(65, 53, 500, 710, new PdfColor(0xA0, 0x20, 0xF0), 2));
+            borders[1].Should().Be(new PdfStrokeRect(68.125, 56.125, 493.75, 703.75, new PdfColor(0xA0, 0x20, 0xF0), 2));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfStrokeRect>()
+                .Should().BeEmpty();
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesTextWatermarkBehindPageBorderOnEveryPage() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.PageBorder = new PageBorder("#24536B", 1);
+            document.Page.WatermarkOptions = new WatermarkOptions("CONFIDENTIAL")
+            {
+                FontColorHex = "#7F8A99",
+                Layout = WatermarkLayout.Diagonal,
+                Opacity = 0.35,
+            };
+            for (var i = 0; i < 30; i++)
+                document.Blocks.Add(new Paragraph($"Watermarked line {i + 1}"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            foreach (var page in pdf.Pages)
+            {
+                var clip = page.Ops[0].Should().BeOfType<PdfClipGroup>().Subject;
+                clip.X.Should().Be(0);
+                clip.Y.Should().Be(0);
+                clip.Width.Should().Be(260);
+                clip.Height.Should().Be(180);
+                var rotation = clip.Ops.Single().Should().BeOfType<PdfRotationGroup>().Subject;
+                rotation.CenterX.Should().Be(130);
+                rotation.CenterY.Should().Be(90);
+                rotation.RotationDegrees.Should().Be(-45);
+                var opacity = rotation.Ops.Single().Should().BeOfType<PdfOpacityGroup>().Subject;
+                opacity.Opacity.Should().Be(0.35);
+                var text = opacity.Ops.Single().Should().BeOfType<PdfText>().Subject;
+                text.Text.Should().Be("CONFIDENTIAL");
+                text.Color.Should().Be(new PdfColor(0x7F, 0x8A, 0x99));
+                text.FontSize.Should().BeGreaterThan(0);
+                page.Ops[1].Should().BeOfType<PdfStrokeRect>();
+            }
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).First());
+            CountNonWhitePixels(bitmap).Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesPictureWatermarkGeometryRotationAndOpacity() =>
+        Session.Dispatch(() =>
+        {
+            var imageBytes = SolidPng(SKColors.Green);
+            using var sourceBitmap = SKBitmap.Decode(imageBytes);
+            sourceBitmap.Width.Should().Be(16);
+            sourceBitmap.Height.Should().Be(8);
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+            {
+                ImageBytes = imageBytes,
+                Layout = WatermarkLayout.Diagonal,
+                Opacity = 0.4,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var clip = pdf.Pages.Single().Ops[0]
+                .Should().BeOfType<PdfClipGroup>().Subject;
+            var image = clip.Ops.Single().Should().BeOfType<PdfImage>().Subject;
+
+            new[] { image.X, image.Y, image.Width, image.Height }
+                .Should().BeEquivalentTo([107.1, 296.55, 397.8, 198.9], options => options
+                    .Using<double>(context => context.Subject.Should().BeApproximately(context.Expectation, 0.01))
+                    .WhenTypeIs<double>());
+            image.RotationDegrees.Should().Be(-45);
+            image.Opacity.Should().Be(0.4);
+            image.ContentType.Should().Be("image/png");
+            image.ImageBytes.Should().NotBeEmpty();
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var rendered = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var greenPixels = 0;
+            for (var y = 0; y < rendered.Height; y++)
+            for (var x = 0; x < rendered.Width; x++)
+            {
+                var pixel = rendered.GetPixel(x, y);
+                if (pixel.Green > pixel.Red + 20 && pixel.Green > pixel.Blue + 20)
+                    greenPixels++;
+            }
+            greenPixels.Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_SuppressesImportedNativeVmlTextWatermark() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WatermarkOptions = new WatermarkOptions("STALE")
+            {
+                NativeVmlTextPathXml = "<v:textpath string=\"STALE\" />",
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfClipGroup>()
+                .Should().BeEmpty();
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesResolvedLineNumbersBeforeBodyText() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.LineNumberMode = LineNumberMode.Continuous;
+            document.Page.LineNumberStartAt = 3;
+            document.Page.LineNumberCountBy = 2;
+            document.Blocks.Add(new Paragraph("First"));
+            document.Blocks.Add(new Paragraph("Suppressed")
+            {
+                Formatting = ParagraphFormatting.Default with
+                {
+                    SuppressLineNumbers = true,
+                    SuppressLineNumbersIsSet = true,
+                },
+            });
+            document.Blocks.Add(new Paragraph("Third"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var ops = pdf.Pages.Single().Ops.ToList();
+            var lineNumbers = ops.OfType<PdfText>()
+                .Where(text => text.Color == new PdfColor(0x60, 0x60, 0x60))
+                .ToArray();
+
+            lineNumbers.Select(text => text.Text).Should().Equal("3", "5");
+            lineNumbers.Should().OnlyContain(text => text.FontSize == 8 && text.X < document.Page.MarginLeftPt);
+            ops.IndexOf(lineNumbers[0]).Should().BeLessThan(
+                ops.FindIndex(op => op is PdfText text && text.Text.Contains("First", StringComparison.Ordinal)));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var gutterRight = (int)Math.Ceiling(document.Page.MarginLeftPt * 96 / 72);
+            var gutterInk = 0;
+            for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < gutterRight; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red < 180 && pixel.Green < 180 && pixel.Blue < 180)
+                    gutterInk++;
+            }
+            gutterInk.Should().BeGreaterThan(3);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_RestartsLineNumbersOnEachPdfPage() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.LineNumberMode = LineNumberMode.RestartEachPage;
+            document.Page.LineNumberStartAt = 2;
+            document.Page.LineNumberCountBy = 1;
+            for (var index = 0; index < 30; index++)
+                document.Blocks.Add(new Paragraph($"Numbered line {index + 1}"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            foreach (var page in pdf.Pages)
+            {
+                page.Ops.OfType<PdfText>()
+                    .Where(text => text.Color == new PdfColor(0x60, 0x60, 0x60))
+                    .Select(text => text.Text)
+                    .First()
+                    .Should().Be("2");
+            }
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_DoesNotEmitLineNumbersWhenDisabled() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.LineNumberMode = LineNumberMode.None;
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfText>()
+                .Should().NotContain(text => text.Color == new PdfColor(0x60, 0x60, 0x60));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IncludesInlineChartWordArtAndSmartArtBeforeBodyText() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+
+            var chart = Chart.Create(
+                ChartKind.Column,
+                ["A", "B", "C"],
+                [10.0, 25.0, 15.0],
+                "Series 1",
+                "Inline PDF Chart");
+            chart.WidthPt = 220;
+            chart.HeightPt = 120;
+            var chartParagraph = new Paragraph();
+            chartParagraph.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            document.Blocks.Add(chartParagraph);
+
+            var wordArt = new WordArt("Inline PDF WordArt", WordArtStyle.FillBlue, 26);
+            var wordArtParagraph = new Paragraph();
+            wordArtParagraph.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wordArt });
+            document.Blocks.Add(wordArtParagraph);
+
+            var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Ship", "Review"]);
+            smartArt.WidthPt = 260;
+            smartArt.HeightPt = 110;
+            var smartArtParagraph = new Paragraph();
+            smartArtParagraph.Runs.Add(new Run(string.Empty, RunFormatting.Default) { SmartArt = smartArt });
+            document.Blocks.Add(smartArtParagraph);
+            document.Blocks.Add(new Paragraph("Tail body text"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var ops = pdf.Pages.SelectMany(page => page.Ops).ToList();
+            var flattened = FlattenPdfOps(ops).ToList();
+            var texts = flattened.OfType<PdfText>().ToArray();
+            var chartTitle = texts.Single(text => text.Text == "Inline PDF Chart");
+            var planText = texts.Single(text => text.Text == "Plan");
+            var shipText = texts.Single(text => text.Text == "Ship");
+            var reviewText = texts.Single(text => text.Text == "Review");
+            var tailText = texts.Single(text => text.Text.Contains("Tail body text", StringComparison.Ordinal));
+
+            string.Concat(texts.Select(text => text.Text)).Should().Contain("Inline PDF WordArt");
+            flattened.IndexOf(chartTitle).Should().BeLessThan(flattened.IndexOf(planText));
+            flattened.IndexOf(planText).Should().BeLessThan(flattened.IndexOf(shipText));
+            flattened.IndexOf(shipText).Should().BeLessThan(flattened.IndexOf(reviewText));
+            flattened.IndexOf(reviewText).Should().BeLessThan(flattened.IndexOf(tailText));
+            ops.OfType<PdfFillRect>().Should().Contain(fill => fill.Color == new PdfColor(0xF9, 0xF9, 0xF9));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var rendered = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            CountNonWhitePixels(rendered).Should().BeGreaterThan(500);
         }, CancellationToken.None);
 
     [Fact]
@@ -908,5 +1340,39 @@ public sealed class DocumentViewPdfExportTests
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    private static int CountNonWhitePixels(SKBitmap bitmap)
+    {
+        var count = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        for (var x = 0; x < bitmap.Width; x++)
+        {
+            var pixel = bitmap.GetPixel(x, y);
+            if (pixel.Red < 250 || pixel.Green < 250 || pixel.Blue < 250)
+                count++;
+        }
+
+        return count;
+    }
+
+    private static IEnumerable<PdfDrawOp> FlattenPdfOps(IEnumerable<PdfDrawOp> ops)
+    {
+        foreach (var op in ops)
+        {
+            yield return op;
+            IReadOnlyList<PdfDrawOp>? children = op switch
+            {
+                PdfRotationGroup rotation => rotation.Ops,
+                PdfClipGroup clip => clip.Ops,
+                PdfOpacityGroup opacity => opacity.Ops,
+                PdfEffectGroup effect => effect.Ops,
+                _ => null,
+            };
+            if (children is null)
+                continue;
+            foreach (var child in FlattenPdfOps(children))
+                yield return child;
+        }
     }
 }

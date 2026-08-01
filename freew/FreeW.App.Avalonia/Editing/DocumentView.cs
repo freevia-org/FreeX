@@ -18,6 +18,7 @@ using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
+using SkiaSharp;
 using TextAlignment = FreeW.Core.Model.TextAlignment;
 
 namespace FreeW.App.Avalonia.Editing;
@@ -3297,18 +3298,6 @@ public sealed class DocumentView : Control
         // Bucket glyphs by page index (continuous column split at page height).
         var pagesOps = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
 
-        // WPF's paginator includes page borders in the visual it rasterizes for PDF export. Keep the
-        // same page chrome in Avalonia's shared operation tree, before body surfaces and glyphs.
-        if (_doc.Page.PageBorder is { } pageBorder)
-        {
-            for (var pageIndex = 0; pageIndex < _pageCount; pageIndex++)
-            {
-                while (pagesOps.Count <= pageIndex)
-                    pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
-                pagesOps[pageIndex].AddRange(BuildPdfPageBorderOps(pageBorder, pageWidthPt, pageHeightPt));
-            }
-        }
-
         var runStartX = 0.0;
         var runY = 0.0;
         var runText = new StringBuilder();
@@ -3740,6 +3729,121 @@ public sealed class DocumentView : Control
                 floatingBehindOpsByPage[pageIndex]);
         }
 
+        // Inline charts, WordArt, and SmartArt are laid out into page-space rectangles by the same
+        // non-text flow pass as inline images. Reuse those resolved rectangles and shared visual
+        // plans, preserving the live chart -> WordArt -> SmartArt paint order before body glyphs.
+        var inlineDrawingOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+
+        void AddInlineDrawingOps(Rect rect, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> objectOps)
+        {
+            if (objectOps.Count == 0)
+                return;
+
+            var pageIndex = PageIndexFromPageSpaceY(rect.Top + 0.01);
+            if (pageIndex < 0)
+                return;
+            while (inlineDrawingOpsByPage.Count <= pageIndex)
+                inlineDrawingOpsByPage.Add([]);
+            inlineDrawingOpsByPage[pageIndex].AddRange(objectOps);
+        }
+
+        foreach (var chartData in _inlineCharts)
+        {
+            if (chartData.Model is not { } chart)
+                continue;
+            var pageIndex = PageIndexFromPageSpaceY(chartData.Rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+            var snapshot = BuildInlineDrawingSnapshot(
+                DocumentFloatingObjectKind.Chart,
+                chartData.Rect,
+                chartData.BlockIndex,
+                chartData.RunIndex,
+                chart.RotationAngle,
+                chart.FlipH,
+                chart.FlipV);
+            AddInlineDrawingOps(
+                chartData.Rect,
+                BuildPdfChartOps(
+                    chart,
+                    DrawingObjectVisualPlanner.BuildVisualPlan(chart, snapshot),
+                    chartData.Rect,
+                    _surfacePlan.PageTopDip(pageIndex),
+                    pageHeightPt));
+        }
+
+        foreach (var wordArtData in _inlineWordArts)
+        {
+            if (wordArtData.Model is not { } wordArt)
+                continue;
+            var pageIndex = PageIndexFromPageSpaceY(wordArtData.Rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+            var snapshot = BuildInlineDrawingSnapshot(
+                DocumentFloatingObjectKind.WordArt,
+                wordArtData.Rect,
+                wordArtData.BlockIndex,
+                wordArtData.RunIndex,
+                wordArt.RotationAngle,
+                wordArt.FlipH,
+                wordArt.FlipV);
+            AddInlineDrawingOps(
+                wordArtData.Rect,
+                BuildPdfWordArtOps(
+                    DrawingObjectVisualPlanner.BuildVisualPlan(wordArt, snapshot),
+                    wordArtData.Rect,
+                    _surfacePlan.PageTopDip(pageIndex),
+                    pageHeightPt));
+        }
+
+        foreach (var smartArtData in _inlineSmartArts)
+        {
+            if (smartArtData.IsWordSuppressedByDuplicateDrawingId
+                || smartArtData.Model is not { } smartArt)
+            {
+                continue;
+            }
+
+            var pageIndex = PageIndexFromPageSpaceY(smartArtData.Rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+            var snapshot = BuildInlineDrawingSnapshot(
+                DocumentFloatingObjectKind.SmartArt,
+                smartArtData.Rect,
+                smartArtData.BlockIndex,
+                smartArtData.RunIndex,
+                smartArt.RotationAngle,
+                smartArt.FlipH,
+                smartArt.FlipV);
+            AddInlineDrawingOps(
+                smartArtData.Rect,
+                BuildPdfSmartArtOps(
+                    DrawingObjectVisualPlanner.BuildVisualPlan(smartArt, snapshot),
+                    smartArtData.Rect,
+                    _surfacePlan.PageTopDip(pageIndex),
+                    pageHeightPt));
+        }
+
+        for (var pageIndex = 0; pageIndex < inlineDrawingOpsByPage.Count; pageIndex++)
+        {
+            if (inlineDrawingOpsByPage[pageIndex].Count == 0)
+                continue;
+
+            EnsurePage(pageIndex);
+            var tableCount = pageIndex < tableSurfaceCountsByPage.Count
+                ? tableSurfaceCountsByPage[pageIndex]
+                : 0;
+            var behindCount = pageIndex < floatingBehindOpsByPage.Count
+                ? floatingBehindOpsByPage[pageIndex].Count
+                : 0;
+            var imageCount = pageIndex < imageOpsByPage.Count
+                ? imageOpsByPage[pageIndex].Count
+                : 0;
+            pagesOps[pageIndex].InsertRange(
+                Math.Min(tableCount + behindCount + imageCount, pagesOps[pageIndex].Count),
+                inlineDrawingOpsByPage[pageIndex]);
+        }
+
         // The live Avalonia layout has already resolved page ownership, field text, wrapping, and
         // note bands. Carry those same text regions into the PDF model so export does not silently
         // lose document chrome that Print Preview visibly shows.
@@ -3795,6 +3899,59 @@ public sealed class DocumentView : Control
                 new Free.Shared.Pdf.PdfColor(0x70, 0x70, 0x70), 0.5));
         }
 
+        var columnRuleCountsByPage = new List<int>();
+        foreach (var (pageIndex, columnRuleOps) in BuildPdfColumnRuleOps(pageHeightPt))
+        {
+            EnsurePage(pageIndex);
+            var tableCount = pageIndex < tableSurfaceCountsByPage.Count
+                ? tableSurfaceCountsByPage[pageIndex]
+                : 0;
+            pagesOps[pageIndex].InsertRange(
+                Math.Min(tableCount, pagesOps[pageIndex].Count),
+                columnRuleOps);
+            while (columnRuleCountsByPage.Count <= pageIndex)
+                columnRuleCountsByPage.Add(0);
+            columnRuleCountsByPage[pageIndex] = columnRuleOps.Count;
+        }
+
+        foreach (var (pageIndex, lineNumberOps) in BuildPdfLineNumberOps(pageHeightPt))
+        {
+            EnsurePage(pageIndex);
+            var tableCount = pageIndex < tableSurfaceCountsByPage.Count
+                ? tableSurfaceCountsByPage[pageIndex]
+                : 0;
+            var columnRuleCount = pageIndex < columnRuleCountsByPage.Count
+                ? columnRuleCountsByPage[pageIndex]
+                : 0;
+            pagesOps[pageIndex].InsertRange(
+                Math.Min(tableCount + columnRuleCount, pagesOps[pageIndex].Count),
+                lineNumberOps);
+        }
+
+        foreach (var (pageIndex, decorationOps) in BuildPdfParagraphDecorationOps(pageHeightPt))
+        {
+            EnsurePage(pageIndex);
+            pagesOps[pageIndex].InsertRange(0, decorationOps);
+        }
+
+        if (_doc.Page.PageBorder is not null)
+        {
+            var borderedPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
+            EnsurePage(borderedPageCount - 1);
+            var borderOps = BuildPdfPageBorderOps(pageWidthPt, pageHeightPt);
+            for (var pageIndex = 0; pageIndex < borderedPageCount; pageIndex++)
+                pagesOps[pageIndex].InsertRange(0, borderOps);
+        }
+
+        var watermarkOps = BuildPdfWatermarkOps(pageWidthPt, pageHeightPt);
+        if (watermarkOps.Count > 0)
+        {
+            var watermarkedPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
+            EnsurePage(watermarkedPageCount - 1);
+            for (var pageIndex = 0; pageIndex < watermarkedPageCount; pageIndex++)
+                pagesOps[pageIndex].InsertRange(0, watermarkOps);
+        }
+
         if (pagesOps.Count == 0)
             pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
 
@@ -3808,16 +3965,20 @@ public sealed class DocumentView : Control
         return new Free.Shared.Pdf.PdfContentDocument(pages, properties);
     }
 
-    private static string FormatKey(RunFormatting fmt) =>
-        $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}";
-
     private IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> BuildPdfPageBorderOps(
-        PageBorder border,
         double pageWidthPt,
         double pageHeightPt)
     {
-        var widthPt = Math.Max(0.5, border.WidthPt);
-        var spacePt = Math.Max(0, border.SpacePt);
+        if (_doc.Page.PageBorder is not { } border)
+            return [];
+
+        var widthPt = Math.Max(0.5 / PxPerPoint, border.WidthPt);
+        var dash = border.LineStyle switch
+        {
+            BorderLineStyle.Dotted => new Free.Shared.Pdf.PdfDashPattern([widthPt, 2 * widthPt]),
+            BorderLineStyle.Dashed => new Free.Shared.Pdf.PdfDashPattern([3 * widthPt, 2 * widthPt]),
+            _ => null,
+        };
 
         double x;
         double y;
@@ -3825,61 +3986,356 @@ public sealed class DocumentView : Control
         double height;
         if (border.OffsetFrom == PageBorderOffsetFrom.Text)
         {
-            // Mirror DrawPageBorder's text-relative frame. WPF uses the same paginator page chrome,
-            // while the shared PDF operation is expressed in bottom-left point coordinates.
+            var spacePt = Math.Max(0, border.SpacePt);
             var headerDistancePt = _doc.Page.HeaderDistancePt > 0
                 ? _doc.Page.HeaderDistancePt
                 : 36;
             x = _doc.Page.MarginLeftPt - spacePt - widthPt / 2;
-            y = _doc.Page.MarginBottomPt - spacePt - widthPt;
-            width = pageWidthPt - _doc.Page.MarginLeftPt - _doc.Page.MarginRightPt
-                + 2 * spacePt + widthPt;
-            height = pageHeightPt - headerDistancePt - _doc.Page.MarginBottomPt
-                + 2 * spacePt + widthPt;
+            y = _doc.Page.MarginBottomPt - spacePt - widthPt / 2;
+            width = pageWidthPt
+                - _doc.Page.MarginLeftPt
+                - _doc.Page.MarginRightPt
+                + 2 * spacePt
+                + widthPt;
+            height = pageHeightPt
+                - headerDistancePt
+                - _doc.Page.MarginBottomPt
+                + 2 * spacePt
+                + widthPt;
         }
         else
         {
-            // DrawPageBorder centers its stroke on a frame inset by SpacePt plus 1.5 DIPs.
-            var insetPt = Math.Min(spacePt, Math.Min(pageWidthPt, pageHeightPt) / 4) + 1.5 / PxPerPoint;
-            x = insetPt;
-            y = insetPt;
-            width = pageWidthPt - 2 * insetPt;
-            height = pageHeightPt - 2 * insetPt;
+            var insetPt = Math.Min(
+                Math.Max(0, border.SpacePt),
+                Math.Min(pageWidthPt, pageHeightPt) / 4);
+            var compositorRegistrationPt = 1.5 / PxPerPoint;
+            x = insetPt + compositorRegistrationPt;
+            y = insetPt + compositorRegistrationPt;
+            width = pageWidthPt - 2 * x;
+            height = pageHeightPt - 2 * y;
         }
 
         if (width <= 0 || height <= 0)
             return [];
 
-        PdfDashPattern? dash = border.LineStyle switch
-        {
-            BorderLineStyle.Dotted => new PdfDashPattern([1 / PxPerPoint, 2 / PxPerPoint]),
-            BorderLineStyle.Dashed => new PdfDashPattern([3 / PxPerPoint, 2 / PxPerPoint]),
-            _ => null,
-        };
         var color = ParseColor(border.ColorHex);
-        var operations = new List<Free.Shared.Pdf.PdfDrawOp>
+        var ops = new List<Free.Shared.Pdf.PdfDrawOp>
         {
             new Free.Shared.Pdf.PdfStrokeRect(x, y, width, height, color, widthPt, dash),
         };
-
         if (border.LineStyle == BorderLineStyle.Double)
         {
-            var railInset = widthPt + 1.5 / PxPerPoint;
-            if (width > 2 * railInset && height > 2 * railInset)
+            var innerInsetPt = widthPt + 1.5 / PxPerPoint;
+            var innerWidth = width - 2 * innerInsetPt;
+            var innerHeight = height - 2 * innerInsetPt;
+            if (innerWidth > 0 && innerHeight > 0)
             {
-                operations.Add(new Free.Shared.Pdf.PdfStrokeRect(
-                    x + railInset,
-                    y + railInset,
-                    width - 2 * railInset,
-                    height - 2 * railInset,
+                ops.Add(new Free.Shared.Pdf.PdfStrokeRect(
+                    x + innerInsetPt,
+                    y + innerInsetPt,
+                    innerWidth,
+                    innerHeight,
                     color,
-                    widthPt,
-                    dash));
+                    widthPt));
             }
         }
 
-        return operations;
+        return ops;
     }
+
+    private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfLineNumberOps(
+        double pageHeightPt)
+    {
+        var byPage = new Dictionary<int, List<Free.Shared.Pdf.PdfDrawOp>>();
+        var fontSizePt = LineNumberFormatting.FontSizePt ?? 8;
+        var color = ParseColor(LineNumberFormatting.ColorHex);
+        foreach (var item in BuildLineNumberRenderItems())
+        {
+            var number = item.Number.ToString(CultureInfo.InvariantCulture);
+            var formatted = Build(number, LineNumberFormatting);
+            var xDip = item.GutterRight - formatted.WidthIncludingTrailingWhitespace;
+            var yDip = item.Y + Math.Max(0, (item.LineHeight - formatted.Height) / 2);
+            var pageTopDip = _surfacePlan.PageTopDip(item.PageIndex);
+            var xPt = (xDip - _pageLeft) / PxPerPoint;
+            var yPt = pageHeightPt - ((yDip - pageTopDip) / PxPerPoint + fontSizePt);
+            if (!byPage.TryGetValue(item.PageIndex, out var ops))
+            {
+                ops = [];
+                byPage[item.PageIndex] = ops;
+            }
+
+            ops.Add(new Free.Shared.Pdf.PdfText(
+                xPt,
+                yPt,
+                fontSizePt,
+                Free.Shared.Pdf.PdfFontFace.Regular,
+                color,
+                number));
+        }
+
+        return byPage.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>)pair.Value);
+    }
+
+    private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfColumnRuleOps(
+        double pageHeightPt)
+    {
+        if (_viewMode != DocumentViewMode.PrintLayout
+            || _colCount <= 1
+            || !_colLineBetween)
+        {
+            return new Dictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>>();
+        }
+
+        var byPage = new Dictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>>();
+        var yBottom = _marginBottomDip / PxPerPoint;
+        var yTop = pageHeightPt - _marginTopDip / PxPerPoint;
+        for (var pageIndex = 0; pageIndex < _pageCount; pageIndex++)
+        {
+            var ops = new List<Free.Shared.Pdf.PdfDrawOp>(_colCount - 1);
+            for (var columnIndex = 0; columnIndex < _colCount - 1; columnIndex++)
+            {
+                var gapCenterDip = _contentLeft
+                    + (columnIndex + 1) * (_colWidth + _colGap)
+                    - _colGap / 2;
+                var pixelCenteredDip = Math.Floor(gapCenterDip) - 0.5;
+                var x = (pixelCenteredDip - _pageLeft) / PxPerPoint;
+                ops.Add(new Free.Shared.Pdf.PdfLine(
+                    x,
+                    yBottom,
+                    x,
+                    yTop,
+                    Free.Shared.Pdf.PdfColor.Black,
+                    1 / PxPerPoint));
+            }
+
+            byPage[pageIndex] = ops;
+        }
+
+        return byPage;
+    }
+
+    private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfParagraphDecorationOps(
+        double pageHeightPt)
+    {
+        var byPage = new Dictionary<int, List<Free.Shared.Pdf.PdfDrawOp>>();
+        foreach (var (rect, shadingHex, border) in _paragraphDecorations)
+        {
+            var pageIndex = PageIndexFromPageSpaceY(rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+
+            var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
+            var pageBottomDip = pageTopDip + _pageHeightPx;
+            var clipped = rect.Intersect(new Rect(_pageLeft, pageTopDip, _pageWidth, _pageHeightPx));
+            if (clipped.Width <= 0 || clipped.Height <= 0)
+                continue;
+
+            if (!byPage.TryGetValue(pageIndex, out var ops))
+            {
+                ops = [];
+                byPage[pageIndex] = ops;
+            }
+
+            var x = (clipped.Left - _pageLeft) / PxPerPoint;
+            var y = pageHeightPt - (clipped.Bottom - pageTopDip) / PxPerPoint;
+            var width = clipped.Width / PxPerPoint;
+            var height = clipped.Height / PxPerPoint;
+            if (!string.IsNullOrWhiteSpace(shadingHex))
+            {
+                ops.Add(new Free.Shared.Pdf.PdfFillRect(
+                    x,
+                    y,
+                    width,
+                    height,
+                    ParseColor(shadingHex)));
+            }
+
+            if (border is null)
+                continue;
+
+            var contours = new List<Free.Shared.Pdf.PdfPathContour>();
+
+            void AddEdge(double x1, double y1, double x2, double y2) =>
+                contours.Add(new Free.Shared.Pdf.PdfPathContour(
+                    new Free.Shared.Pdf.PdfPathPoint(x1, y1),
+                    [Free.Shared.Pdf.PdfPathSegment.LineTo(new Free.Shared.Pdf.PdfPathPoint(x2, y2))],
+                    Closed: false));
+
+            var left = x;
+            var right = x + width;
+            var bottom = y;
+            var top = y + height;
+            if (border.Top
+                && !border.BottomOnly
+                && rect.Top >= pageTopDip - 0.01
+                && rect.Top <= pageBottomDip + 0.01)
+                AddEdge(left, top, right, top);
+            if ((border.Bottom || border.BottomOnly)
+                && rect.Bottom >= pageTopDip - 0.01
+                && rect.Bottom <= pageBottomDip + 0.01)
+            {
+                AddEdge(left, bottom, right, bottom);
+            }
+            if (border.Left && !border.BottomOnly)
+                AddEdge(left, bottom, left, top);
+            if (border.Right && !border.BottomOnly)
+                AddEdge(right, bottom, right, top);
+            if (contours.Count == 0)
+                continue;
+
+            var widthPt = Math.Max(0.5 / PxPerPoint, border.WidthPt);
+            var dash = border.LineStyle switch
+            {
+                BorderLineStyle.Dashed => new Free.Shared.Pdf.PdfDashPattern([4 * widthPt, 3 * widthPt]),
+                BorderLineStyle.Dotted => new Free.Shared.Pdf.PdfDashPattern([widthPt, 2 * widthPt]),
+                _ => null,
+            };
+            ops.Add(new Free.Shared.Pdf.PdfPath(
+                contours,
+                FillColor: null,
+                StrokeColor: ParseColor(border.ColorHex),
+                StrokeWidth: widthPt,
+                StrokeDash: dash));
+        }
+
+        return byPage.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>)pair.Value);
+    }
+
+    private IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> BuildPdfWatermarkOps(
+        double pageWidthPt,
+        double pageHeightPt)
+    {
+        if (_doc.Page.EffectiveWatermark is not { } watermark)
+            return [];
+
+        var pageWidthDip = pageWidthPt * PxPerPoint;
+        var pageHeightDip = pageHeightPt * PxPerPoint;
+        if (watermark.IsPicture)
+        {
+            using var bitmap = SKBitmap.Decode(watermark.ImageBytes!);
+            if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0)
+                return [];
+
+            var plan = WatermarkVisualPlanner.BuildPictureLayout(
+                watermark,
+                pageWidthDip,
+                pageHeightDip,
+                bitmap.Width,
+                bitmap.Height);
+            if (plan is null)
+                return [];
+
+            using var skiaImage = SKImage.FromBitmap(bitmap);
+            using var png = skiaImage.Encode(SKEncodedImageFormat.Png, 100);
+            var pdfImage = new Free.Shared.Pdf.PdfImage(
+                plan.XDip / PxPerPoint,
+                pageHeightPt - (plan.YDip + plan.HeightDip) / PxPerPoint,
+                plan.WidthDip / PxPerPoint,
+                plan.HeightDip / PxPerPoint,
+                png.ToArray(),
+                "image/png",
+                RotationDegrees: plan.RotationDegrees,
+                Opacity: plan.Opacity);
+            return
+            [
+                new Free.Shared.Pdf.PdfClipGroup(
+                    0,
+                    0,
+                    pageWidthPt,
+                    pageHeightPt,
+                    [pdfImage]),
+            ];
+        }
+
+        if (string.IsNullOrWhiteSpace(watermark.Text))
+            return [];
+
+        var textPlan = WatermarkVisualPlanner.BuildTextLayout(watermark, pageWidthDip, pageHeightDip);
+        if (textPlan is null)
+            return [];
+
+        var color = TryParseAvaloniaColor(watermark.FontColorHex, out var parsedColor)
+            ? parsedColor
+            : Color.FromRgb(0x80, 0x80, 0x80);
+        var brush = new SolidColorBrush(color);
+        var typeface = new Typeface(
+            watermark.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
+            FontStyle.Normal,
+            FontWeight.Normal);
+        var unitText = new FormattedText(
+            watermark.Text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            1,
+            brush);
+        var fontSizeDip = WatermarkVisualPlanner.ResolveTextPathFontSize(textPlan, unitText.Width);
+        var text = new FormattedText(
+            watermark.Text,
+            CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSizeDip,
+            brush);
+        var leftDip = textPlan.CenterXDip - text.Width / 2;
+        var topDip = textPlan.CenterYDip - text.Height / 2;
+        Free.Shared.Pdf.PdfDrawOp textOp = new Free.Shared.Pdf.PdfText(
+            leftDip / PxPerPoint,
+            pageHeightPt - (topDip + fontSizeDip) / PxPerPoint,
+            fontSizeDip / PxPerPoint,
+            Free.Shared.Pdf.PdfFontFace.Regular,
+            new Free.Shared.Pdf.PdfColor(color.R, color.G, color.B),
+            watermark.Text);
+
+        var opacity = Math.Clamp(watermark.Opacity, 0, 1);
+        if (opacity < 1)
+            textOp = new Free.Shared.Pdf.PdfOpacityGroup(opacity, [textOp]);
+        if (Math.Abs(textPlan.RotationDegrees) > 0.01)
+        {
+            textOp = new Free.Shared.Pdf.PdfRotationGroup(
+                textPlan.CenterXDip / PxPerPoint,
+                pageHeightPt - textPlan.CenterYDip / PxPerPoint,
+                textPlan.RotationDegrees,
+                [textOp]);
+        }
+
+        return
+        [
+            new Free.Shared.Pdf.PdfClipGroup(
+                0,
+                0,
+                pageWidthPt,
+                pageHeightPt,
+                [textOp]),
+        ];
+    }
+
+    private static string FormatKey(RunFormatting fmt) =>
+        $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}";
+
+    private static DocumentFloatingObjectSnapshot BuildInlineDrawingSnapshot(
+        DocumentFloatingObjectKind kind,
+        Rect rect,
+        int blockIndex,
+        int runIndex,
+        double rotationAngle,
+        bool flipH,
+        bool flipV) =>
+        new(
+            kind,
+            blockIndex,
+            runIndex,
+            ToPlannerRect(rect),
+            BehindText: false,
+            ZOrderIndex: 0,
+            ImageWrapping.Inline,
+            rotationAngle,
+            flipH,
+            flipV);
 
     private PdfImage? BuildPdfImage(
         Rect sourceRect,
@@ -8618,7 +9074,7 @@ public sealed class DocumentView : Control
             return;
 
         var pen = ParagraphBorderPen(border);
-        if (border.Top)
+        if (border.Top && !border.BottomOnly)
             context.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
         if (border.Bottom || border.BottomOnly)
             context.DrawLine(pen, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
@@ -21768,6 +22224,7 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
+        public Chart? Model;
         public ChartScene Scene = new(
             Kind: ChartKind.Column,
             GeometryKind: ChartVisualGeometryKind.Bars,
@@ -21798,6 +22255,7 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
+        public WordArt? Model;
         public string       Text        = string.Empty;
         public WordArtStyle Style;
         public double       FontSizePt  = 36;
@@ -21823,6 +22281,7 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
+        public SmartArt? Model;
         public SmartArtKind     Kind;
         public string           LayoutId = "list1";
         public SmartArtStyle    Style = SmartArtStyle.Default;
@@ -21912,6 +22371,7 @@ public sealed class DocumentView : Control
             ZOrder = 0,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
+            Model = wordArt,
             Text = plan.WordArt.Text,
             Style = plan.WordArt.Style,
             FontSizePt = plan.WordArt.FontSizeDip / PxPerPoint,
@@ -21944,6 +22404,7 @@ public sealed class DocumentView : Control
             ZOrder = zOrder,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
+            Model = smartArt,
             Kind = plan.Kind,
             LayoutId = plan.LayoutId,
             Style = plan.Style,
@@ -22116,6 +22577,7 @@ public sealed class DocumentView : Control
             Rect              = rect,
             BehindText        = behindText,
             ZOrder            = zOrder,
+            Model             = chart,
             Scene             = scene,
         };
     }
