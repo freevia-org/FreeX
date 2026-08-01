@@ -414,6 +414,30 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void RenderPagesToPng_UsesItalicAndBoldItalicTypefaces()
+    {
+        var faces = new[]
+        {
+            PdfFontFace.Regular,
+            PdfFontFace.Bold,
+            PdfFontFace.Italic,
+            PdfFontFace.BoldItalic,
+        };
+        var pages = faces
+            .Select(face => new PdfContentPage(
+                180,
+                70,
+                [new PdfText(12, 28, 30, face, PdfColor.Black, "Styled text")]))
+            .ToArray();
+
+        var pngs = SkiaPdfWriter.RenderPagesToPng(new PdfContentDocument(pages));
+
+        pngs.Should().HaveCount(4);
+        pngs[2].Should().NotEqual(pngs[0], "italic text must not use the upright regular face");
+        pngs[3].Should().NotEqual(pngs[1], "bold italic text must not use the upright bold face");
+    }
+
+    [Fact]
     public void Write_AcceptsLinearGradientShapeAndPathOps()
     {
         var gradient = new PdfLinearGradient(
