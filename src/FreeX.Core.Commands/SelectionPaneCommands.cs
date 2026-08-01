@@ -28,12 +28,12 @@ public sealed class SetSelectionPaneObjectVisibilityCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
         if (target is null)
             return SelectionPaneObjectAccess.ObjectNotFound();
+
+        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, target) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previous = target.IsVisible;
         target.IsVisible = _isVisible;
@@ -79,8 +79,6 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
 
         // R62-meta-1: a Chart now moves through the same DrawingObjectZOrder-backed path as every
         // other supported kind. Routing it through Move(sheet.Charts, ...) instead (the old
@@ -93,7 +91,11 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
                 SelectionPaneObjectKind.Picture or
                 SelectionPaneObjectKind.TextBox or
                 SelectionPaneObjectKind.Shape => MoveDrawingObject(sheet),
-            _ => new CommandOutcome(false, "Selection pane object kind is not supported.")
+            // R113-model-drawing-object-lock-1-1: the per-object Locked check lives inside
+            // MoveDrawingObject (it needs the resolved object); an unsupported kind has no object to
+            // consult, so it keeps the original sheet-only protection check ahead of its error.
+            _ => SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet)
+                ?? new CommandOutcome(false, "Selection pane object kind is not supported.")
         };
     }
 
@@ -151,6 +153,13 @@ public sealed class MoveSelectionPaneObjectCommand : IWorkbookCommand
 
     private CommandOutcome MoveDrawingObject(Sheet sheet)
     {
+        var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
+        if (target is null)
+            return SelectionPaneObjectAccess.ObjectNotFound();
+
+        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, target) is { } protectedOutcome)
+            return protectedOutcome;
+
         var entry = new DrawingObjectZOrderEntry(_kind, _objectId);
         if (!DrawingObjectZOrder.ContainsObject(sheet, entry))
             return SelectionPaneObjectAccess.ObjectNotFound();
@@ -235,12 +244,12 @@ public sealed class RenameSelectionPaneObjectCommand : IWorkbookCommand
             return new CommandOutcome(false, "Object name cannot be blank.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         var target = SelectionPaneObjectAccess.Find(sheet, _kind, _objectId);
         if (target is null)
             return SelectionPaneObjectAccess.ObjectNotFound();
+
+        if (SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(sheet, target) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousName = target.Name;
         target.Name = _newName;
@@ -270,6 +279,20 @@ internal static class SelectionPaneObjectAccess
     public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet) =>
         CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditObjects);
 
+    /// <summary>
+    /// R113-model-drawing-object-lock-1-1: object-aware companion to
+    /// <see cref="RejectIfEditObjectsBlocked(Sheet)"/>, mirroring the per-object overloads R111/R112
+    /// added to <see cref="PictureCommandGuards"/>, <see cref="ChartCommandGuards"/>,
+    /// <see cref="DrawingShapeCommandGuards"/> and <see cref="TextBoxCommandGuards"/>. The selection
+    /// pane commands operate on one already-resolved object, so they must honour that object's
+    /// author-set Locked flag: an unlocked object (<c>Locked == false</c>) stays showable/hideable,
+    /// re-orderable and renameable even while the sheet blocks "Edit objects", matching Excel's
+    /// Format Object &gt; Properties &gt; Locked checkbox. A locked object (the default) is rejected
+    /// exactly like the sheet-only overload.
+    /// </summary>
+    public static CommandOutcome? RejectIfEditObjectsBlocked(Sheet sheet, SelectionPaneObjectRef target) =>
+        target.Locked ? RejectIfEditObjectsBlocked(sheet) : null;
+
     public static CommandOutcome ObjectNotFound() =>
         new(false, ObjectNotFoundMessage);
 
@@ -283,7 +306,8 @@ internal static class SelectionPaneObjectAccess
                     () => chart.IsVisible,
                     value => chart.IsVisible = value,
                     () => chart.Name,
-                    value => chart.Name = value))
+                    value => chart.Name = value,
+                    () => chart.Locked))
                 .ToList(),
             SelectionPaneObjectKind.Picture => sheet.Pictures
                 .Select(picture => new SelectionPaneObjectRef(
@@ -292,7 +316,8 @@ internal static class SelectionPaneObjectAccess
                     () => picture.IsVisible,
                     value => picture.IsVisible = value,
                     () => picture.Name,
-                    value => picture.Name = value))
+                    value => picture.Name = value,
+                    () => picture.Locked))
                 .ToList(),
             SelectionPaneObjectKind.TextBox => sheet.TextBoxes
                 .Select(textBox => new SelectionPaneObjectRef(
@@ -301,7 +326,8 @@ internal static class SelectionPaneObjectAccess
                     () => textBox.IsVisible,
                     value => textBox.IsVisible = value,
                     () => textBox.Name,
-                    value => textBox.Name = value))
+                    value => textBox.Name = value,
+                    () => textBox.Locked))
                 .ToList(),
             SelectionPaneObjectKind.Shape => sheet.DrawingShapes
                 .Select(shape => new SelectionPaneObjectRef(
@@ -310,7 +336,8 @@ internal static class SelectionPaneObjectAccess
                     () => shape.IsVisible,
                     value => shape.IsVisible = value,
                     () => shape.Name,
-                    value => shape.Name = value))
+                    value => shape.Name = value,
+                    () => shape.Locked))
                 .ToList(),
             _ => []
         };
@@ -333,8 +360,16 @@ internal sealed record SelectionPaneObjectRef(
     Func<bool> GetVisibility,
     Action<bool> SetVisibility,
     Func<string?> GetName,
-    Action<string?> SetName)
+    Action<string?> SetName,
+    Func<bool> GetLocked)
 {
+    /// <summary>
+    /// R113-model-drawing-object-lock-1-1: the underlying model's per-object Locked flag, so the
+    /// selection pane commands can use
+    /// <see cref="SelectionPaneObjectAccess.RejectIfEditObjectsBlocked(Sheet, SelectionPaneObjectRef)"/>.
+    /// </summary>
+    public bool Locked => GetLocked();
+
     public bool IsVisible
     {
         get => GetVisibility();
