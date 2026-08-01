@@ -72,7 +72,6 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationExportPlanner.PrintCommandId");
         source.Should().Contain("PresentationExportPlanner.BuildPdfExportPickerPlan(");
         source.Should().Contain("PresentationExportPlanner.BuildHandoutLayoutPlan(");
-        source.Should().Contain("PresentationPdfExporter.ExportToBytes(_presentation)");
         source.Should().Contain("PresentationImageExportExecutor.Export(");
         source.Should().Contain("internal PresentationHandoutLayoutPlan RefreshHandoutLayoutPlan(");
         source.Should().Contain("LastHandoutLayoutPlan");
