@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freex.local/schemas/freep-native-picker-x11-wave90-v1.json",
+  "title": "FreeP Wave 90 physical Avalonia native picker validation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "baseline", "appSurface", "window", "fixtures", "packageStates", "screenshots", "summary", "results", "processExitCode", "contractValidation"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freep-native-picker-x11-wave90-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeP" },
+    "baseline": { "const": false },
+    "appSurface": { "const": "native-storage-provider-open-save-as" },
+    "window": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "pattern", "visible"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "pattern": { "const": "FreeP" },
+        "visible": { "const": true }
+      }
+    },
+    "fixtures": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "path", "fileName", "sha256", "packageKind"],
+        "properties": {
+          "id": { "type": "string", "enum": ["initial", "openSelected", "collision"] },
+          "path": { "type": "string", "pattern": "^/documents/[^/]+\\.pptx$" },
+          "fileName": { "type": "string", "pattern": "^[^/]+\\.pptx$" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "packageKind": { "const": "pptx-zip-package" }
+        }
+      }
+    },
+    "packageStates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["initial", "openSelected", "savePptx", "collisionBefore", "collisionAfter", "invalidTarget"],
+      "properties": {
+        "initial": { "$ref": "#/$defs/packageState" },
+        "openSelected": { "$ref": "#/$defs/packageState" },
+        "savePptx": { "$ref": "#/$defs/packageState" },
+        "collisionBefore": { "$ref": "#/$defs/packageState" },
+        "collisionAfter": { "$ref": "#/$defs/packageState" },
+        "invalidTarget": { "$ref": "#/$defs/missingPackageState" }
+      }
+    },
+    "screenshots": {
+      "type": "array", "minItems": 9,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "kind"],
+        "properties": { "name": { "type": "string", "minLength": 1 }, "kind": { "const": "screenshot" } }
+      }
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["passed", "failed", "total"],
+      "properties": { "passed": { "type": "integer", "minimum": 0 }, "failed": { "type": "integer", "minimum": 0 }, "total": { "const": 9 } }
+    },
+    "results": {
+      "type": "array", "minItems": 9, "maxItems": 9,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "category", "status", "evidenceLevel", "evidence", "note"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "category": { "const": "physical-x11-native-picker" },
+          "status": { "enum": ["passed", "failed"] },
+          "evidenceLevel": { "const": "physical-x11-input" },
+          "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+          "note": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "processExitCode": { "type": "integer" },
+    "contractValidation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "validator", "contractReference"],
+      "properties": {
+        "status": { "enum": ["pending", "passed"] },
+        "validator": { "const": "tools/Run-FreePNativePickerX11Validation.ps1" },
+        "contractReference": { "const": "tools/LinuxInteractiveDocker/freep-native-picker-x11-wave90-validation.schema.json" }
+      }
+    }
+  },
+  "$defs": {
+    "packageState": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "exists", "sha256", "packageKind", "containsPresentationXml", "slideCount"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "exists": { "const": true },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "packageKind": { "const": "pptx-zip-package" },
+        "containsPresentationXml": { "const": true },
+        "slideCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "missingPackageState": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "exists", "sha256", "packageKind", "containsPresentationXml", "slideCount"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "exists": { "const": false },
+        "sha256": { "const": "" },
+        "packageKind": { "const": "not-created" },
+        "containsPresentationXml": { "const": false },
+        "slideCount": { "const": 0 }
+      }
+    }
+  }
+}
