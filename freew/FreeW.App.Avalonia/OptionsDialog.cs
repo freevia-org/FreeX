@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
@@ -202,7 +203,12 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             AddReplacementRow(replacement.Replace, replacement.With);
 
         AddReplacementRow();
-        _replacements.Child = _replacementGrid;
+        _replacements.Child = new ScrollViewer
+        {
+            Content = _replacementGrid,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
         _replacements.BorderBrush = new SolidColorBrush(Color.FromRgb(171, 173, 179));
         _replacements.BorderThickness = new Thickness(1);
         _replacements.ClipToBounds = true;

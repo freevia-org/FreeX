@@ -36,7 +36,11 @@ public sealed class OptionsDialogVisualParityTests
 
                 var table = GetField<Border>(dialog, "_replacements");
                 table.Height.Should().Be(180);
+                var scroller = table.Child.Should().BeOfType<ScrollViewer>().Subject;
+                scroller.VerticalScrollBarVisibility.Should().Be(ScrollBarVisibility.Auto);
+                scroller.HorizontalScrollBarVisibility.Should().Be(ScrollBarVisibility.Disabled);
                 var grid = GetField<Grid>(dialog, "_replacementGrid");
+                scroller.Content.Should().BeSameAs(grid);
                 grid.ColumnDefinitions.Count.Should().Be(2);
                 grid.RowDefinitions.Count.Should().Be(3, "the WPF DataGrid has one populated row plus its blank add row");
                 dialog.ReplacementEditorsForTest.Should().HaveCount(2);
