@@ -49,6 +49,7 @@ public sealed class CommonDialogChromeParityTests
             dialog.Classes.Should().Contain(AvaloniaCompactDialogChrome.DialogWindowClass);
             dialog.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
             dialog.FontSize.Should().Be(12);
+            TextOptions.GetTextRenderingMode(dialog).Should().Be(TextRenderingMode.Antialias);
             dialog.Background.Should().Be(Brushes.White);
             ((ISolidColorBrush)dialog.Foreground!).Color.Should().Be(Color.FromRgb(0x1f, 0x1f, 0x1f));
             dialog.WindowStartupLocation.Should().Be(WindowStartupLocation.CenterOwner);
@@ -130,6 +131,41 @@ public sealed class CommonDialogChromeParityTests
                 dialog.Check.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
                 dialog.Check.FontSize.Should().Be(12);
                 ((ISolidColorBrush)dialog.Check.Foreground!).Color.Should().Be(Color.FromRgb(0x1f, 0x1f, 0x1f));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Shared_descendant_chrome_preserves_explicit_text_block_typography()
+    {
+        await Session.Dispatch(() =>
+        {
+            var family = new FontFamily("Consolas");
+            var foreground = new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
+            var dialog = new ChromeProbeDialog(new TextBlock
+            {
+                Text = "Hint",
+                FontFamily = family,
+                FontSize = 11,
+                Foreground = foreground,
+            });
+            try
+            {
+                dialog.Width = 300;
+                dialog.Height = 120;
+                dialog.Show();
+                dialog.Measure(new Size(300, 120));
+                dialog.Arrange(new Rect(0, 0, 300, 120));
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                dialog.LocalLabel.FontFamily.Should().Be(family);
+                dialog.LocalLabel.FontSize.Should().Be(11);
+                dialog.LocalLabel.Foreground.Should().Be(foreground);
             }
             finally
             {
@@ -304,15 +340,18 @@ public sealed class CommonDialogChromeParityTests
     {
         internal TextBlock Label { get; } = new() { Text = "Probe" };
         internal CheckBox Check { get; } = new() { Content = "Probe" };
+        internal TextBlock LocalLabel { get; } = new() { Text = "Local" };
 
-        public ChromeProbeDialog()
+        public ChromeProbeDialog(TextBlock? localLabel = null)
         {
+            LocalLabel = localLabel ?? new TextBlock { Text = "Local" };
             Content = new StackPanel
             {
                 Children =
                 {
                     Label,
                     Check,
+                    LocalLabel,
                 },
             };
         }

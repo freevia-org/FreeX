@@ -96,6 +96,9 @@ public static class AvaloniaCompactDialogChrome
         window.Foreground = style.ForegroundBrush ?? DialogForegroundBrush;
         window.FontFamily = style.FontFamily;
         window.FontSize = style.FontSize;
+        // WPF dialog captures use grayscale-compatible text edges. Avalonia's default subpixel
+        // mode leaves colored fringes in every label and document field, inflating pixel deltas.
+        TextOptions.SetTextRenderingMode(window, TextRenderingMode.Antialias);
         window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
         window.ShowInTaskbar = false;
         window.Opened += (_, _) => ApplyDescendantChrome(window, style);
@@ -112,9 +115,14 @@ public static class AvaloniaCompactDialogChrome
         {
             if (control is TextBlock textBlock)
             {
-                textBlock.FontFamily = style.FontFamily;
-                textBlock.FontSize = style.FontSize;
-                textBlock.Foreground = style.ForegroundBrush ?? DialogForegroundBrush;
+                // Match WPF implicit dialog styles: supply defaults to inherited labels, but do not
+                // overwrite local typography or color choices used by hierarchy, hints, and links.
+                if (!textBlock.IsSet(TextBlock.FontFamilyProperty))
+                    textBlock.FontFamily = style.FontFamily;
+                if (!textBlock.IsSet(TextBlock.FontSizeProperty))
+                    textBlock.FontSize = style.FontSize;
+                if (!textBlock.IsSet(TextBlock.ForegroundProperty))
+                    textBlock.Foreground = style.ForegroundBrush ?? DialogForegroundBrush;
             }
 
             switch (control)
