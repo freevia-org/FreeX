@@ -611,6 +611,7 @@ internal static class FreePRibbonText
     public static RibbonText AnimationMotionLoopCommand { get; } = new("Ribbon_Command_AnimationMotionLoop_Label", "Ribbon_Command_AnimationMotionLoop_KeyTip");
     public static RibbonText AnimationMotionSCommand { get; } = new("Ribbon_Command_AnimationMotionS_Label", "Ribbon_Command_AnimationMotionS_KeyTip");
     public static RibbonText AnimationMotionFigureEightCommand { get; } = new("Ribbon_Command_AnimationMotionFigureEight_Label", "Ribbon_Command_AnimationMotionFigureEight_KeyTip");
+    public static RibbonText AnimationMotionReverseCommand { get; } = new("Ribbon_Command_AnimationMotionReverse_Label", "Ribbon_Command_AnimationMotionReverse_KeyTip");
     public static RibbonText AnimationTimingGroup { get; } = new("Ribbon_Group_AnimationTiming_Label", "Ribbon_Group_AnimationTiming_KeyTip");
     public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label", "Ribbon_Command_AnimationTrigger_KeyTip");
     public static RibbonText AnimationDurationCommand { get; } = new("Ribbon_Command_AnimationDuration_Label", "Ribbon_Command_AnimationDuration_KeyTip");
