@@ -279,6 +279,30 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void MoveSlideCommand_SynchronizesSectionOrderAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(3);
+        var firstId = p.Slides[0].Id;
+        var secondId = p.Slides[1].Id;
+        var thirdId = p.Slides[2].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Intro" };
+        section.SlideIds.AddRange(new[] { firstId, secondId, thirdId });
+        p.Sections.Add(section);
+
+        bus.Execute(new MoveSlideCommand(0, 2));
+
+        p.Slides.Select(slide => slide.Id).Should().Equal(secondId, thirdId, firstId);
+        p.Sections[0].SlideIds.Should().Equal(secondId, thirdId, firstId);
+
+        bus.Undo();
+        p.Slides.Select(slide => slide.Id).Should().Equal(firstId, secondId, thirdId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, secondId, thirdId);
+
+        bus.Redo();
+        p.Sections[0].SlideIds.Should().Equal(secondId, thirdId, firstId);
+    }
+
+    [Fact]
     public void MoveSlideCommand_Revert_RestoresOriginalOrder()
     {
         var (p, bus) = Make(3);
