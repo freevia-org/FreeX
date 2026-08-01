@@ -819,6 +819,38 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedShadowedSquaresPageBorderMotifs() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.ShadowedSquaresArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
+            var strokes = pdf.Pages.Single().Ops.OfType<PdfStrokeRect>().ToArray();
+            fills.Should().HaveCount(102 * 6);
+            strokes.Should().BeEmpty();
+            fills[0].Should().Be(new PdfFillRect(24, 747, 21, 21, new PdfColor(0, 0, 0x80)));
+            fills[1].Should().Be(new PdfFillRect(28.5, 744, 19.5, 19.5, new PdfColor(255, 255, 255)));
+            fills[2].Should().Be(new PdfFillRect(27.75, 763.5, 21, 0.75, new PdfColor(0, 0, 0x80)));
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            bitmap.GetPixel(35, 35).Blue.Should().BeGreaterThan((byte)100);
+            bitmap.GetPixel(35, 35).Red.Should().BeLessThan((byte)30);
+            bitmap.GetPixel(48, 48).Should().Be(SKColors.White);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {

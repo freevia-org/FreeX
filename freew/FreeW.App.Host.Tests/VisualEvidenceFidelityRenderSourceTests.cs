@@ -328,6 +328,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         viewSource.Should().Contain("PageBorderArtWpfRenderer.TryDraw(");
         previewSource.Should().Contain("PageBorderArtWpfRenderer.TryDraw(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildApplesFrame(");
+        artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(");
     }
 
     [Fact]

@@ -4351,6 +4351,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfAppleBorderOps(appleMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var squareMotifs))
+        {
+            return BuildPdfShadowedSquareBorderOps(squareMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
 
         if (border.LineStyle == BorderLineStyle.Wave)
         {
@@ -4414,7 +4424,7 @@ public sealed class DocumentView : Control
         double originTopDip,
         double pageHeightPt)
     {
-        var ops = new List<PdfDrawOp>(motifs.Count * 3);
+        var ops = new List<PdfDrawOp>(motifs.Count * 6);
         var fill = new PdfColor(PageBorderArtVisualPlanner.AppleFillRed, 0, 0);
         var stem = new PdfColor(PageBorderArtVisualPlanner.AppleStemRed, 0, 0);
         var highlight = new PdfColor(
@@ -4456,6 +4466,43 @@ public sealed class DocumentView : Control
                 null,
                 highlight,
                 2.0 * motif.SizeDip / 32.0 / PxPerPoint));
+        }
+
+        return ops;
+    }
+
+    private static IReadOnlyList<PdfDrawOp> BuildPdfShadowedSquareBorderOps(
+        IReadOnlyList<PageBorderShadowedSquareMotif> motifs,
+        double originXDip,
+        double originTopDip,
+        double pageHeightPt)
+    {
+        var ops = new List<PdfDrawOp>(motifs.Count * 3);
+        var navy = new PdfColor(0, 0, PageBorderArtVisualPlanner.ShadowedSquareBlue);
+        foreach (var motif in motifs)
+        {
+            var shadowSizeDip = Math.Max(0, motif.SizeDip - 4.0);
+            var shadowX = (originXDip + motif.Xdip) / PxPerPoint;
+            var shadowY = pageHeightPt - (originTopDip + motif.Ydip + shadowSizeDip) / PxPerPoint;
+            var shadowSize = shadowSizeDip / PxPerPoint;
+            ops.Add(new PdfFillRect(shadowX, shadowY, shadowSize, shadowSize, navy));
+
+            var faceInsetDip = PageBorderArtVisualPlanner.ShadowedSquareFaceInsetDip;
+            var faceSizeDip = Math.Max(0, motif.SizeDip - 6.0);
+            var faceX = (originXDip + motif.Xdip + faceInsetDip) / PxPerPoint;
+            var faceY = pageHeightPt - (originTopDip + motif.Ydip + faceInsetDip + faceSizeDip) / PxPerPoint;
+            var faceSize = faceSizeDip / PxPerPoint;
+            ops.Add(new PdfFillRect(faceX, faceY, faceSize, faceSize, new PdfColor(255, 255, 255)));
+            var outlineInsetDip = PageBorderArtVisualPlanner.ShadowedSquareOutlineInsetDip;
+            var outlineSizeDip = Math.Max(0, motif.SizeDip - 4.0);
+            var outlineX = (originXDip + motif.Xdip + outlineInsetDip) / PxPerPoint;
+            var outlineY = pageHeightPt - (originTopDip + motif.Ydip + outlineInsetDip + outlineSizeDip) / PxPerPoint;
+            var outlineSize = outlineSizeDip / PxPerPoint;
+            var rail = 1.0 / PxPerPoint;
+            ops.Add(new PdfFillRect(outlineX, outlineY + outlineSize - rail, outlineSize, rail, navy));
+            ops.Add(new PdfFillRect(outlineX, outlineY, outlineSize, rail, navy));
+            ops.Add(new PdfFillRect(outlineX, outlineY, rail, outlineSize, navy));
+            ops.Add(new PdfFillRect(outlineX + outlineSize - rail, outlineY, rail, outlineSize, navy));
         }
 
         return ops;
@@ -9936,36 +9983,69 @@ public sealed class DocumentView : Control
         Rect frame,
         double edgeInsetDip)
     {
-        if (!PageBorderArtVisualPlanner.TryBuildApplesFrame(
+        if (PageBorderArtVisualPlanner.TryBuildApplesFrame(
                 border.ArtId,
                 border.WidthPt,
                 frame.Width,
                 frame.Height,
                 edgeInsetDip,
-                out var motifs))
+                out var appleMotifs))
         {
-            return false;
+            var fill = new SolidColorBrush(Color.FromRgb(PageBorderArtVisualPlanner.AppleFillRed, 0, 0));
+            var stem = new Pen(new SolidColorBrush(Color.FromRgb(PageBorderArtVisualPlanner.AppleStemRed, 0, 0)), 1.35)
+            {
+                LineCap = PenLineCap.Round,
+            };
+            var highlight = new Pen(new SolidColorBrush(Color.FromRgb(
+                PageBorderArtVisualPlanner.AppleHighlightRed,
+                PageBorderArtVisualPlanner.AppleHighlightGreen,
+                PageBorderArtVisualPlanner.AppleHighlightBlue)), 2.0)
+            {
+                LineCap = PenLineCap.Round,
+            };
+            foreach (var motif in appleMotifs)
+            {
+                var placed = motif with { Xdip = frame.X + motif.Xdip, Ydip = frame.Y + motif.Ydip };
+                DrawPageBorderApple(context, placed, fill, stem, highlight);
+            }
+
+            return true;
         }
 
-        var fill = new SolidColorBrush(Color.FromRgb(PageBorderArtVisualPlanner.AppleFillRed, 0, 0));
-        var stem = new Pen(new SolidColorBrush(Color.FromRgb(PageBorderArtVisualPlanner.AppleStemRed, 0, 0)), 1.35)
+        if (PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var squareMotifs))
         {
-            LineCap = PenLineCap.Round,
-        };
-        var highlight = new Pen(new SolidColorBrush(Color.FromRgb(
-            PageBorderArtVisualPlanner.AppleHighlightRed,
-            PageBorderArtVisualPlanner.AppleHighlightGreen,
-            PageBorderArtVisualPlanner.AppleHighlightBlue)), 2.0)
-        {
-            LineCap = PenLineCap.Round,
-        };
-        foreach (var motif in motifs)
-        {
-            var placed = motif with { Xdip = frame.X + motif.Xdip, Ydip = frame.Y + motif.Ydip };
-            DrawPageBorderApple(context, placed, fill, stem, highlight);
+            var navy = new SolidColorBrush(Color.FromRgb(0, 0, PageBorderArtVisualPlanner.ShadowedSquareBlue));
+            foreach (var motif in squareMotifs)
+            {
+                var x = frame.X + motif.Xdip;
+                var y = frame.Y + motif.Ydip;
+                var shadowSize = Math.Max(0, motif.SizeDip - 4.0);
+                context.FillRectangle(navy, new Rect(x, y, shadowSize, shadowSize));
+                var faceInset = PageBorderArtVisualPlanner.ShadowedSquareFaceInsetDip;
+                var faceSize = Math.Max(0, motif.SizeDip - 6.0);
+                var faceX = x + faceInset;
+                var faceY = y + faceInset;
+                context.FillRectangle(Brushes.White, new Rect(faceX, faceY, faceSize, faceSize));
+                var outlineInset = PageBorderArtVisualPlanner.ShadowedSquareOutlineInsetDip;
+                var outlineSize = Math.Max(0, motif.SizeDip - 4.0);
+                var outlineX = x + outlineInset;
+                var outlineY = y + outlineInset;
+                context.FillRectangle(navy, new Rect(outlineX, outlineY, outlineSize, 1));
+                context.FillRectangle(navy, new Rect(outlineX, outlineY + outlineSize - 1, outlineSize, 1));
+                context.FillRectangle(navy, new Rect(outlineX, outlineY, 1, outlineSize));
+                context.FillRectangle(navy, new Rect(outlineX + outlineSize - 1, outlineY, 1, outlineSize));
+            }
+
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     private static void DrawPageBorderApple(
