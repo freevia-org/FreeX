@@ -2534,6 +2534,18 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => Editor.TryMergeActiveTableCell()));
         r.Register(TableCellEditPlanner.SplitCellCommandId,
             new ActionRibbonCommand(() => Editor.TrySplitActiveTableCell()));
+        r.Register(TableCellEditPlanner.TableFirstRowCommandId,
+            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstRow)));
+        r.Register(TableCellEditPlanner.TableLastRowCommandId,
+            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.LastRow)));
+        r.Register(TableCellEditPlanner.TableFirstColCommandId,
+            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.FirstCol)));
+        r.Register(TableCellEditPlanner.TableLastColCommandId,
+            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.LastCol)));
+        r.Register(TableCellEditPlanner.TableBandRowCommandId,
+            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.BandRow)));
+        r.Register(TableCellEditPlanner.TableBandColCommandId,
+            new ActionRibbonCommand(() => Editor.ToggleSelectedTableStyleFlag(TableStyleFlagKind.BandCol)));
         r.Register("freep.bold", new ActionRibbonCommand(() =>
         {
             if (_textEditor?.TryApplyActiveShapeTextFormat(TableCellTextFormatKind.Bold) == true) return;

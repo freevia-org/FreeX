@@ -226,6 +226,18 @@
   <data name="Ribbon_Command_TableSplitCell_KeyTip" xml:space="preserve">
     <value>SC</value>
   </data>
+  <data name="Ribbon_Command_TableFirstRow_Label" xml:space="preserve"><value>Header Row</value></data>
+  <data name="Ribbon_Command_TableFirstRow_KeyTip" xml:space="preserve"><value>HR</value></data>
+  <data name="Ribbon_Command_TableLastRow_Label" xml:space="preserve"><value>Total Row</value></data>
+  <data name="Ribbon_Command_TableLastRow_KeyTip" xml:space="preserve"><value>TR</value></data>
+  <data name="Ribbon_Command_TableFirstCol_Label" xml:space="preserve"><value>First Column</value></data>
+  <data name="Ribbon_Command_TableFirstCol_KeyTip" xml:space="preserve"><value>FC</value></data>
+  <data name="Ribbon_Command_TableLastCol_Label" xml:space="preserve"><value>Last Column</value></data>
+  <data name="Ribbon_Command_TableLastCol_KeyTip" xml:space="preserve"><value>LC</value></data>
+  <data name="Ribbon_Command_TableBandRow_Label" xml:space="preserve"><value>Banded Rows</value></data>
+  <data name="Ribbon_Command_TableBandRow_KeyTip" xml:space="preserve"><value>BR</value></data>
+  <data name="Ribbon_Command_TableBandCol_Label" xml:space="preserve"><value>Banded Columns</value></data>
+  <data name="Ribbon_Command_TableBandCol_KeyTip" xml:space="preserve"><value>BC</value></data>
   <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>
