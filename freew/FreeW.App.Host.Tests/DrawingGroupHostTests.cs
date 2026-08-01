@@ -390,8 +390,13 @@ public sealed class DrawingGroupHostTests
     [StaFact]
     public void NestedGroupShape_FormattingRoutesTargetLeafAndUndoThroughWpfHost()
     {
-        var doc = NestedChildDoc(out var outer, out _, out var leaf);
+        var doc = NestedChildDoc(out var outer, out var inner, out var leaf);
         var sibling = (Shape)outer.Children[1];
+        var outerPosition = (
+            outer.Placement.HorizontalOffsetPt,
+            outer.Placement.VerticalOffsetPt,
+            outer.Placement.HorizontalAnchor,
+            outer.Placement.VerticalAnchor);
         leaf.FillColorHex = "#111111";
         sibling.FillColorHex = "#222222";
         var view = new DocumentView();
@@ -399,11 +404,21 @@ public sealed class DrawingGroupHostTests
         view.SelectFloatingObject(outer);
         view.SelectFloatingGroupChild(outer, [0, 1]);
 
+        view.GetSelectedShapePosition().Should().Be((58d, 30d,
+            HorizontalAnchor.Column, VerticalAnchor.Paragraph, true));
+        view.SetSelectedShapePosition(75, 41, HorizontalAnchor.Page, VerticalAnchor.Page);
+        view.SetSelectedShapeSize(80, 50);
         view.SetSelectedShapeKind(ShapeKind.RoundedRectangle);
         view.SetSelectedShapeAltText(" Nested leaf ");
         view.SetSelectedShapeFill("#ABCDEF");
         view.SetSelectedShapeOutline("#123456", 2, "dash");
 
+        inner.ChildOffsets[1].Should().Be((75, 41));
+        (outer.Placement.HorizontalOffsetPt,
+            outer.Placement.VerticalOffsetPt,
+            outer.Placement.HorizontalAnchor,
+            outer.Placement.VerticalAnchor).Should().Be(outerPosition);
+        (leaf.WidthPt, leaf.HeightPt).Should().Be((80, 50));
         leaf.Kind.Should().Be(ShapeKind.RoundedRectangle);
         leaf.AltText.Should().Be("Nested leaf");
         leaf.FillColorHex.Should().Be("#ABCDEF");
@@ -420,6 +435,14 @@ public sealed class DrawingGroupHostTests
         leaf.AltText.Should().BeNull();
         view.Undo();
         leaf.Kind.Should().Be(ShapeKind.Ellipse);
+        view.Undo();
+        (leaf.WidthPt, leaf.HeightPt).Should().Be((44, 28));
+        view.Undo();
+        inner.ChildOffsets[1].Should().Be((58, 30));
+        (outer.Placement.HorizontalOffsetPt,
+            outer.Placement.VerticalOffsetPt,
+            outer.Placement.HorizontalAnchor,
+            outer.Placement.VerticalAnchor).Should().Be(outerPosition);
     }
 
     [StaFact]

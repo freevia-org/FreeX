@@ -135,7 +135,8 @@ public static class SlideShowPlaybackFramePlanner
             return Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
         }
 
-        var totalDurationMs = plans.Max(plan => Math.Max(0, plan.DelayMs) + Math.Max(0, plan.DurationMs));
+        var totalDurationMs = plans.Max(plan =>
+            Math.Max(0, plan.DelayMs) + ResolvePlaybackDuration(plan));
         var elapsedTimes = new[]
         {
             ("start", 0),
@@ -227,9 +228,10 @@ public static class SlideShowPlaybackFramePlanner
         var safeElapsedMs = Math.Max(0, elapsedMs);
         var durationMs = Math.Max(SlideShowPlaybackPlanner.MinShapeAnimationDurationMs, plan.DurationMs);
         var localElapsedMs = safeElapsedMs - Math.Max(0, plan.DelayMs);
-        var progress = Math.Clamp(localElapsedMs / (double)durationMs, 0, 1);
         var isBeforeStart = localElapsedMs < 0;
-        var isComplete = localElapsedMs >= durationMs;
+        var playbackDurationMs = ResolvePlaybackDuration(plan);
+        var isComplete = !plan.RepeatIndefinitely && localElapsedMs >= playbackDurationMs;
+        var progress = ResolvePlaybackProgress(plan, localElapsedMs, durationMs, isComplete);
         var opacity = ResolveOpacity(plan, progress, isBeforeStart);
         var (scaleX, scaleY) = ResolveScaleAxes(plan, progress);
         var scale = scaleX;
@@ -276,6 +278,37 @@ public static class SlideShowPlaybackFramePlanner
             HorizontalScale = horizontalScale,
             ClipFromCenter = clipKind == SlideShowAnimationClipKind.Split && plan.SplitFromCenter
         };
+    }
+
+    private static int ResolvePlaybackDuration(SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var durationMs = Math.Max(SlideShowPlaybackPlanner.MinShapeAnimationDurationMs, plan.DurationMs);
+        if (plan.RepeatIndefinitely)
+            return durationMs;
+
+        var repeatCount = Math.Max(1, plan.RepeatCount ?? 1);
+        return checked(durationMs * repeatCount);
+    }
+
+    private static double ResolvePlaybackProgress(
+        SlideShowShapeAnimationPlaybackPlan plan,
+        int localElapsedMs,
+        int durationMs,
+        bool isComplete)
+    {
+        if (localElapsedMs < 0)
+            return 0;
+
+        if (isComplete)
+        {
+            var repeatCount = Math.Max(1, plan.RepeatCount ?? 1);
+            return plan.AutoReverse && repeatCount % 2 == 0 ? 0 : 1;
+        }
+
+        var passIndex = localElapsedMs / durationMs;
+        var passElapsedMs = localElapsedMs % durationMs;
+        var progress = passElapsedMs / (double)durationMs;
+        return plan.AutoReverse && passIndex % 2 == 1 ? 1 - progress : progress;
     }
 
     private static double ResolveOpacity(SlideShowShapeAnimationPlaybackPlan plan, double progress, bool isBeforeStart)

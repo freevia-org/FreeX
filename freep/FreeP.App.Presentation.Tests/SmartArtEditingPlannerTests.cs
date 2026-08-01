@@ -35,6 +35,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.FunnelProcess, "funnelProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, "verticalProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, "verticalBoxList", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.VerticalBlockList, "verticalBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalChevronList, "verticalChevronList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalArrowList, "verticalArrowList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, "verticalBulletList", SmartArtFamily.Hierarchy)]

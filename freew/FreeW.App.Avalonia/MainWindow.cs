@@ -918,17 +918,22 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenShapePositionDialogAsync()
     {
-        if (_editor.SelectedFloatingShape() is not { Placement: { } placement })
+        if (_editor.GetSelectedShapePosition() is not { } position)
             return;
         var result = await ImagePositionDialog.ShowAsync(
             this,
-            placement.HorizontalOffsetPt,
-            placement.VerticalOffsetPt,
-            placement.HorizontalAnchor,
-            placement.VerticalAnchor,
-            "Shape Position");
+            position.HorizontalOffsetPt,
+            position.VerticalOffsetPt,
+            position.HorizontalAnchor,
+            position.VerticalAnchor,
+            position.IsGroupLocal ? "Shape Position in Group" : "Shape Position",
+            position.IsGroupLocal);
         if (result is not null)
-            _editor.SetFloatingPosition(result.HorizontalOffset, result.VerticalOffset, result.HorizontalAnchor, result.VerticalAnchor);
+            _editor.SetSelectedShapePosition(
+                result.HorizontalOffset,
+                result.VerticalOffset,
+                result.HorizontalAnchor,
+                result.VerticalAnchor);
         _editor.Focus();
     }
 
@@ -938,7 +943,7 @@ public sealed partial class MainWindow : Window
             return;
         var result = await ImageSizeDialog.ShowAsync(this, shape.WidthPt, shape.HeightPt, "Shape Size");
         if (result is not null)
-            _editor.SetFloatingSize(result.Width, result.Height);
+            _editor.SetSelectedShapeSize(result.Width, result.Height);
         _editor.Focus();
     }
 

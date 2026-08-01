@@ -73,6 +73,15 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
         avaloniaEditor.Should().Contain("nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath");
         avaloniaMain.Should().Contain("selectedShape is null && selectedWordArt is null");
         avaloniaMain.Should().NotContain("SelectedFloatingInfo?.Kind is not (\"Shape\" or \"WordArt\")");
+        wpfEditor.Should().Contain("nested.BlockIndex, nested.RunIndex, nested.ChildPath, widthPt, heightPt");
+        avaloniaEditor.Should().Contain("public void SetSelectedShapeSize(double widthPt, double heightPt)");
+        avaloniaMain.Should().Contain("_editor.SetSelectedShapeSize(result.Width, result.Height)");
+        wpfEditor.Should().Contain("public void SetSelectedShapePosition(double horizontalOffsetPt, double verticalOffsetPt,");
+        wpfEditor.Should().Contain("nested.BlockIndex, nested.RunIndex, nested.ChildPath,");
+        avaloniaEditor.Should().Contain("public void SetSelectedShapePosition(double hOffsetPt, double vOffsetPt,");
+        avaloniaMain.Should().Contain("_editor.GetSelectedShapePosition()");
+        avaloniaMain.Should().Contain("_editor.SetSelectedShapePosition(");
+        avaloniaMain.Should().Contain("position.IsGroupLocal");
     }
 
     private static string ReadSource(params string[] relativePath)
