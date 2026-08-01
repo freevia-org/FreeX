@@ -37,7 +37,8 @@ public sealed record PdfTextOverlay(
 
 /// <summary>
 /// A clickable link region in the page's top-left, y-down coordinate space (points), targeting an
-/// external URI. (Internal cross-page destinations remain app-specific and are not modeled here.)
+/// external URI. Shared raster and draw-op pages both use this geometry contract. Internal
+/// cross-page destinations remain app-specific and are not modeled here.
 /// </summary>
 public sealed record PdfLinkOverlay(
     double X,

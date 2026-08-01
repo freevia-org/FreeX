@@ -80,6 +80,25 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsExternalLinkAnnotationWithClippedTopLeftGeometry()
+    {
+        var page = new PdfContentPage(
+            100,
+            80,
+            [new PdfText(10, 60, 10, PdfFontFace.Regular, PdfColor.Black, "Link")],
+            [new PdfLinkOverlay(-5, 10, 45, 20, "https://example.com/a(b)", "Open link")]);
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument([page])));
+
+        pdf.Should().Contain("/Annots [");
+        pdf.Should().Contain("/Type /Annot /Subtype /Link");
+        pdf.Should().Contain("/Rect [0 50 40 70]");
+        pdf.Should().Contain("/Border [0 0 0]");
+        pdf.Should().Contain("/Contents (Open link)");
+        pdf.Should().Contain("/A << /S /URI /URI (https://example.com/a\\(b\\)) >>");
+    }
+
+    [Fact]
     public void Write_EmitsPdfLineAsMoveThenLineStroke()
     {
         // PdfLine should emit a PDF path: m (moveto), l (lineto), S (stroke).

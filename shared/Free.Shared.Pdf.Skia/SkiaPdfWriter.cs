@@ -114,6 +114,7 @@ public static class SkiaPdfWriter
                 var canvas = pdf.BeginPage((float)page.WidthPoints, (float)page.HeightPoints);
                 canvas.Clear(SKColors.White);
                 RenderPage(canvas, page, regular, bold, textRenderer);
+                AddLinkAnnotations(canvas, page);
                 pdf.EndPage();
                 pageCount++;
             }
@@ -122,6 +123,38 @@ public static class SkiaPdfWriter
         }
 
         return pageCount;
+    }
+
+    private static void AddLinkAnnotations(SKCanvas canvas, PdfContentPage page)
+    {
+        if (page.LinkOverlays is not { Count: > 0 })
+            return;
+
+        foreach (var overlay in page.LinkOverlays)
+        {
+            if (!double.IsFinite(overlay.X)
+                || !double.IsFinite(overlay.Y)
+                || !double.IsFinite(overlay.Width)
+                || !double.IsFinite(overlay.Height)
+                || overlay.Width <= 0
+                || overlay.Height <= 0)
+                continue;
+
+            var uri = overlay.Uri?.Trim();
+            if (string.IsNullOrEmpty(uri))
+                continue;
+
+            var left = Math.Clamp(overlay.X, 0, page.WidthPoints);
+            var right = Math.Clamp(overlay.X + overlay.Width, 0, page.WidthPoints);
+            var top = Math.Clamp(overlay.Y, 0, page.HeightPoints);
+            var bottom = Math.Clamp(overlay.Y + overlay.Height, 0, page.HeightPoints);
+            if (right <= left || bottom <= top)
+                continue;
+
+            canvas.DrawUrlAnnotation(
+                new SKRect((float)left, (float)top, (float)right, (float)bottom),
+                uri);
+        }
     }
 
     private static SKDocumentPdfMetadata BuildMetadata(PdfDocumentProperties? properties)

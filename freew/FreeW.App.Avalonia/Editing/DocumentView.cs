@@ -3297,6 +3297,7 @@ public sealed class DocumentView : Control
 
         // Bucket glyphs by page index (continuous column split at page height).
         var pagesOps = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+        var pageLinkOverlays = new List<List<Free.Shared.Pdf.PdfLinkOverlay>>();
 
         var runStartX = 0.0;
         var runEndX = 0.0;
@@ -3304,6 +3305,7 @@ public sealed class DocumentView : Control
         var runLineHeight = 0.0;
         var runText = new StringBuilder();
         RunFormatting? runFmt = null;
+        LinkInfo? runLink = null;
         var runPageIndex = -1;
 
         void Flush()
@@ -3312,6 +3314,7 @@ public sealed class DocumentView : Control
             {
                 runText.Clear();
                 runFmt = null;
+                runLink = null;
                 return;
             }
 
@@ -3435,8 +3438,23 @@ public sealed class DocumentView : Control
                     decorationLineWidthPt));
             }
 
+            if (runLink is { IsExternal: true } link && !string.IsNullOrWhiteSpace(link.Url))
+            {
+                while (pageLinkOverlays.Count <= runPageIndex)
+                    pageLinkOverlays.Add(new List<Free.Shared.Pdf.PdfLinkOverlay>());
+
+                pageLinkOverlays[runPageIndex].Add(new Free.Shared.Pdf.PdfLinkOverlay(
+                    Math.Max(0, xPt),
+                    Math.Max(0, yWithinPagePx / PxPerPoint),
+                    Math.Max(1, runEndX - runStartX) / PxPerPoint,
+                    Math.Max(1, runLineHeight) / PxPerPoint,
+                    link.Url!,
+                    link.Tooltip));
+            }
+
             runText.Clear();
             runFmt = null;
+            runLink = null;
         }
 
         // Glyphs are now in page-space Y (discrete multi-page layout).
@@ -3459,6 +3477,7 @@ public sealed class DocumentView : Control
                 && runPageIndex == pageIndex
                 && Math.Abs(g.Y - runY) < 0.5
                 && FormatKey(pdfFmt) == FormatKey(runFmt)
+                && Nullable.Equals(g.Link, runLink)
                 && g.X >= runStartX; // left-to-right on the line
 
             if (!sameRun)
@@ -3469,6 +3488,7 @@ public sealed class DocumentView : Control
                 runY = g.Y;
                 runLineHeight = 0;
                 runFmt = pdfFmt;
+                runLink = g.Link;
                 runPageIndex = pageIndex;
             }
 
@@ -4095,7 +4115,13 @@ public sealed class DocumentView : Control
             pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
 
         var pages = pagesOps
-            .Select(ops => new Free.Shared.Pdf.PdfContentPage(pageWidthPt, pageHeightPt, ops))
+            .Select((ops, pageIndex) => new Free.Shared.Pdf.PdfContentPage(
+                pageWidthPt,
+                pageHeightPt,
+                ops,
+                pageIndex < pageLinkOverlays.Count && pageLinkOverlays[pageIndex].Count > 0
+                    ? pageLinkOverlays[pageIndex]
+                    : null))
             .ToList();
         var properties = new Free.Shared.Pdf.PdfDocumentProperties(
             Title: string.IsNullOrWhiteSpace(_doc.Properties.Title) ? null : _doc.Properties.Title,

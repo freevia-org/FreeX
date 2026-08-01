@@ -61,7 +61,11 @@ public static class PortablePdfWriter
         var opacityResources = BuildOpacityResources(document);
         var patternResources = BuildPatternResources(document);
         var pages = document.Pages
-            .Select(page => (Content: RenderContentStream(page.Ops, imageResources.ByOp, opacityResources.ByOpacity, patternResources), page.WidthPoints, page.HeightPoints))
+            .Select(page => (
+                Content: RenderContentStream(page.Ops, imageResources.ByOp, opacityResources.ByOpacity, patternResources),
+                Width: page.WidthPoints,
+                Height: page.HeightPoints,
+                Links: BuildLinkAnnotations(page)))
             .ToArray();
         WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, patternResources.Resources, headerComment);
     }
@@ -223,7 +227,7 @@ public static class PortablePdfWriter
 
     private static void WritePdf(
         Stream stream,
-        IReadOnlyList<(string Content, double Width, double Height)> pages,
+        IReadOnlyList<(string Content, double Width, double Height, IReadOnlyList<PdfLinkAnnotation> Links)> pages,
         IReadOnlyList<(string ResourceName, string BaseFont)> fontResources,
         IReadOnlyList<PdfImageResource> imageResources,
         IReadOnlyList<PdfOpacityResource> opacityResources,
@@ -234,6 +238,15 @@ public static class PortablePdfWriter
         var firstPageObjectId = 3 + fontResources.Count + imageResources.Count + opacityResources.Count + patternResources.Count;
         var pageObjectIds = Enumerable.Range(0, pages.Count)
             .Select(index => firstPageObjectId + (index * 2))
+            .ToArray();
+        var nextAnnotationObjectId = firstPageObjectId + (pages.Count * 2);
+        var annotationObjectIdsByPage = pages
+            .Select(page =>
+            {
+                var ids = Enumerable.Range(nextAnnotationObjectId, page.Links.Count).ToArray();
+                nextAnnotationObjectId += page.Links.Count;
+                return ids;
+            })
             .ToArray();
 
         objects.Add(PdfObject.Ascii("<< /Type /Catalog /Pages 2 0 R >>"));
@@ -274,13 +287,27 @@ public static class PortablePdfWriter
         {
             var pageObjectId = pageObjectIds[index];
             var contentObjectId = pageObjectId + 1;
+            var annotations = annotationObjectIdsByPage[index].Length == 0
+                ? string.Empty
+                : $" /Annots [{string.Join(" ", annotationObjectIdsByPage[index].Select(id => $"{id} 0 R"))}]";
             objects.Add(PdfObject.Ascii(
-                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >>{xObjectResources}{extGStateResources}{patternResourceDictionaryText} >> /Contents {contentObjectId} 0 R >>"));
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >>{xObjectResources}{extGStateResources}{patternResourceDictionaryText} >> /Contents {contentObjectId} 0 R{annotations} >>"));
 
             var pageStream = pages[index].Content.EndsWith("\n", StringComparison.Ordinal)
                 ? pages[index].Content
                 : pages[index].Content + "\n";
             objects.Add(PdfObject.Ascii($"<< /Length {PdfEncoding.GetByteCount(pageStream)} >>\nstream\n{pageStream}endstream"));
+        }
+
+        foreach (var page in pages)
+        foreach (var link in page.Links)
+        {
+            objects.Add(PdfObject.Ascii(
+                $"<< /Type /Annot /Subtype /Link " +
+                $"/Rect [{FormatNumber(link.Left)} {FormatNumber(link.Bottom)} {FormatNumber(link.Right)} {FormatNumber(link.Top)}] " +
+                $"/H /I /F 4 /Border [0 0 0] " +
+                $"/Contents {EncodeTextOperand(link.Tooltip ?? link.Uri)} " +
+                $"/A << /S /URI /URI {EncodeTextOperand(link.Uri)} >> >>"));
         }
 
         WriteAscii(stream, $"%PDF-1.7\n% {headerComment}\n");
@@ -302,6 +329,39 @@ public static class PortablePdfWriter
         WriteAscii(
             stream,
             $"trailer\n<< /Size {objects.Count + 1} /Root 1 0 R >>\nstartxref\n{xrefOffset.ToString(CultureInfo.InvariantCulture)}\n%%EOF\n");
+    }
+
+    private static IReadOnlyList<PdfLinkAnnotation> BuildLinkAnnotations(PdfContentPage page)
+    {
+        if (page.LinkOverlays is not { Count: > 0 })
+            return [];
+
+        var links = new List<PdfLinkAnnotation>(page.LinkOverlays.Count);
+        foreach (var overlay in page.LinkOverlays)
+        {
+            if (!double.IsFinite(overlay.X)
+                || !double.IsFinite(overlay.Y)
+                || !double.IsFinite(overlay.Width)
+                || !double.IsFinite(overlay.Height)
+                || overlay.Width <= 0
+                || overlay.Height <= 0)
+                continue;
+
+            var uri = overlay.Uri?.Trim();
+            if (string.IsNullOrEmpty(uri))
+                continue;
+
+            var left = Math.Clamp(overlay.X, 0, page.WidthPoints);
+            var right = Math.Clamp(overlay.X + overlay.Width, 0, page.WidthPoints);
+            var top = Math.Clamp(page.HeightPoints - overlay.Y, 0, page.HeightPoints);
+            var bottom = Math.Clamp(page.HeightPoints - (overlay.Y + overlay.Height), 0, page.HeightPoints);
+            if (right <= left || top <= bottom)
+                continue;
+
+            links.Add(new PdfLinkAnnotation(left, bottom, right, top, uri, overlay.Tooltip));
+        }
+
+        return links;
     }
 
     private static IReadOnlyList<(string ResourceName, string BaseFont)> BuildFontResources(PdfContentDocument document)
@@ -2096,6 +2156,14 @@ public static class PortablePdfWriter
         byte[] Data);
 
     private sealed record PdfOpacityResource(string ResourceName, double Opacity);
+
+    private sealed record PdfLinkAnnotation(
+        double Left,
+        double Bottom,
+        double Right,
+        double Top,
+        string Uri,
+        string? Tooltip);
 
     private sealed record PdfPatternResource(
         string ResourceName,

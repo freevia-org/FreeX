@@ -7,7 +7,8 @@ namespace Free.Shared.Pdf;
 public sealed record PdfContentPage(
     double WidthPoints,
     double HeightPoints,
-    IReadOnlyList<PdfDrawOp> Ops);
+    IReadOnlyList<PdfDrawOp> Ops,
+    IReadOnlyList<PdfLinkOverlay>? LinkOverlays = null);
 
 /// <summary>
 /// App-agnostic, fully laid-out document handed to a draw-op PDF backend (the portable WinAnsi

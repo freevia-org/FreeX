@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Free.Shared.Pdf.Skia;
 using SkiaSharp;
+using System.Text;
 
 namespace Free.Shared.Pdf.Tests;
 
@@ -45,6 +46,22 @@ public sealed class SkiaPdfWriterTests
 
         pageCount.Should().Be(1);
         stream.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Write_EmitsExternalLinkAnnotation()
+    {
+        var page = new PdfContentPage(
+            100,
+            80,
+            [new PdfText(10, 60, 10, PdfFontFace.Regular, PdfColor.Black, "Link")],
+            [new PdfLinkOverlay(10, 10, 40, 20, "https://example.com")]);
+
+        var bytes = SkiaPdfWriter.WriteToBytes(new PdfContentDocument([page]));
+        var pdf = Encoding.Latin1.GetString(bytes);
+
+        pdf.Should().Contain("/Subtype /Link");
+        pdf.Should().Contain("/URI (https://example.com)");
     }
 
     [Theory]
