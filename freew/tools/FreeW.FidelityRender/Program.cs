@@ -1547,6 +1547,17 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
             DrawSoftwareBat(canvas, motif);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildVineFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var vinePlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, vinePlan);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildPapyrusFrame(
             border.ArtId,
             border.WidthPt,
