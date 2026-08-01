@@ -722,43 +722,6 @@ public abstract class DrawOp
         public ChartStrokePlan? PlotAreaOutline { get; init; }
     }
 
-    // ── Math draw op (Theme 27) ───────────────────────────────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Draw an OMML math equation as a laid-out <see cref="MathBox"/> tree.
-    /// The compositor builds this op when a <see cref="Run"/> carries a
-    /// <see cref="FreeP.Core.Model.MathRunInfo"/>; the raw XML round-trip is NOT
-    /// involved here — it is preserved separately by the IO layer.
-    /// </summary>
-    public sealed class Math : DrawOp
-    {
-        /// <summary>
-        /// Position of the top-left corner of the math expression in DIP (slide coordinates).
-        /// </summary>
-        public double X { get; init; }
-
-        /// <summary>Y position in DIP (slide coordinates).</summary>
-        public double Y { get; init; }
-
-        /// <summary>
-        /// The resolved base font size (in points) used by the layout engine so renderers
-        /// can re-use it when drawing glyph boxes that carry relative sizes.
-        /// (All glyph FontSizePt values are already final in the MathBox tree.)
-        /// </summary>
-        public double BaseFontSizePt { get; init; }
-
-        /// <summary>Resolved text color for drawing all math glyphs.</summary>
-        public SrgbColor Color { get; init; }
-
-        /// <summary>Laid-out math box tree produced by <see cref="MathLayoutEngine"/>.</summary>
-        public MathBox.Container Layout { get; init; } = new();
-
-        /// <summary>
-        /// Plain-text fallback / accessibility string (all m:t values concatenated).
-        /// Not used for rendering but useful for find/replace and screen readers.
-        /// </summary>
-        public string FallbackText { get; init; } = string.Empty;
-    }
 }
 
 /// <summary>

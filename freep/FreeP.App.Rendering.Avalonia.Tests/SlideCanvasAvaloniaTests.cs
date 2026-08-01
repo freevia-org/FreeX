@@ -825,6 +825,88 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task SlideCanvas_MultiTransformPreview_ResizesAndRotatesRealMathShape_AndClears()
+    {
+        byte[]? baseline = null;
+        byte[]? transformed = null;
+        byte[]? cleared = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                var body = new TextBody { Wrap = false };
+                body.Paragraphs.Add(new Paragraph
+                {
+                    Runs =
+                    {
+                        new Run
+                        {
+                            Text = "x+1",
+                            FontFamily = "Cambria Math",
+                            FontSizePt = 24,
+                            Math = new MathRunInfo
+                            {
+                                RawXml = "<m:oMath xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\"><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r><m:r><m:t>1</m:t></m:r></m:oMath>"
+                            }
+                        }
+                    }
+                });
+                presence.Slides[0].Shapes.Add(new SlideShape
+                {
+                    Id = 31,
+                    Kind = SlideShapeKind.AutoShape,
+                    AutoShapeKind = DrawingShapeKind.Rectangle,
+                    OffsetXEmu = 120 * 9525L,
+                    OffsetYEmu = 120 * 9525L,
+                    ExtentCxEmu = 180 * 9525L,
+                    ExtentCyEmu = 90 * 9525L,
+                    TextBody = body,
+                });
+            });
+            var canvas = new SlideCanvas
+            {
+                Presentation = presentation,
+                Slide = presentation.Slides[0],
+            };
+
+            baseline = RenderPixels(canvas, 960, 540);
+            var plan = new CanvasMultiTransformPlan(
+                [new CanvasShapeTransform(31, 300 * 9525L, 180 * 9525L, 300 * 9525L, 150 * 9525L, 35)],
+                [new CanvasShapeTransformPreview(31, new SlideScreenRect(300, 180, 300, 150), 35)],
+                new SlideScreenRect(300, 180, 300, 150),
+                35);
+            var sourceShape = SlideCompositor.Compose(presentation, presentation.Slides[0])
+                .OfType<DrawOp.Shape>()
+                .Single(shape => shape.ShapeId == 31);
+            var sourceMath = sourceShape.Text!.Paragraphs.Single().Runs.Single().MathLayout;
+            sourceMath.Should().NotBeNull("the compositor must resolve the real OMML run into the shape text layout");
+            var previewShape = CanvasTransformPreviewComposer.Compose([sourceShape], plan)[31]
+                .Should().BeOfType<DrawOp.Shape>().Subject;
+            previewShape.BoundsDip.Should().Be(new LayoutRect(300, 180, 300, 150));
+            previewShape.RotationDeg.Should().Be(35);
+            previewShape.Text!.Paragraphs.Single().Runs.Single().MathLayout.Should().BeSameAs(sourceMath);
+
+            canvas.UpdateTransformPreview(plan);
+            transformed = RenderPixels(canvas, 960, 540, refresh: false);
+
+            canvas.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
+            cleared = RenderPixels(canvas, 960, 540, refresh: false);
+        });
+
+        baseline.Should().NotBeNullOrEmpty();
+        transformed.Should().NotBeNullOrEmpty();
+        cleared.Should().NotBeNullOrEmpty();
+        CountPixelDifferences(baseline!, transformed!, 960, 80, 80, 460, 380)
+            .Should().BeGreaterThan(0, "the real math shape must move, resize, and rotate during preview");
+        CountPixelDifferences(baseline!, transformed!, 960, 150, 90, 520, 350)
+            .Should().BeGreaterThan(0, "the transformed math glyphs must be visible in the preview frame");
+        CountPixelDifferences(baseline!, cleared!, 960, 0, 0, 960, 540)
+            .Should().Be(0, "clearing the transient math preview should restore the composed slide");
+    }
+
+    [Fact]
     public async Task InCanvasTextEditor_FormatActiveShapeOverlay_UsesSharedPlanAndPreservesMixedRunsOnCommit()
     {
         SlideShape? shape = null;

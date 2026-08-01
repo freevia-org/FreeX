@@ -90,6 +90,63 @@ public sealed class CanvasTransformPreviewComposerTests
     }
 
     [Fact]
+    public void Compose_RealOmmlShapeClone_TransformsFrameAndPreservesResolvedMathLayout()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var body = new TextBody { Wrap = false };
+        body.Paragraphs.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run
+                {
+                    Text = "x+1",
+                    FontFamily = "Cambria Math",
+                    FontSizePt = 24,
+                    Math = new MathRunInfo
+                    {
+                        RawXml = "<m:oMath xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\"><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r><m:r><m:t>1</m:t></m:r></m:oMath>"
+                    }
+                }
+            }
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 31,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 100 * 9525L,
+            OffsetYEmu = 80 * 9525L,
+            ExtentCxEmu = 180 * 9525L,
+            ExtentCyEmu = 90 * 9525L,
+            RotationDeg = 7,
+            TextBody = body,
+        });
+
+        var source = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .Single(shape => shape.ShapeId == 31);
+        var sourceRun = source.Text!.Paragraphs.Single().Runs.Single();
+        sourceRun.IsMathRun.Should().BeTrue();
+        sourceRun.MathLayout!.Metrics.Width.Should().BeGreaterThan(0);
+        sourceRun.MathLayout.Metrics.Height.Should().BeGreaterThan(0);
+
+        var plan = Plan(31, 320, 210, 300, 150, 35);
+        var preview = CanvasTransformPreviewComposer.Compose([source], plan)[31]
+            .Should().BeOfType<DrawOp.Shape>().Subject;
+
+        preview.BoundsDip.Should().Be(new LayoutRect(320, 210, 300, 150));
+        preview.RotationDeg.Should().Be(35);
+        preview.Text.Should().BeSameAs(source.Text);
+        preview.Text.Paragraphs.Single().Runs.Single().MathLayout.Should()
+            .BeSameAs(sourceRun.MathLayout);
+        preview.Geometry.Contours.Single().Start.Should().Be(new LayoutPoint(320, 210));
+        preview.Geometry.Contours.Single().Segments[^1].End.Should().Be(new LayoutPoint(320, 360));
+    }
+
+    [Fact]
     public void Compose_UsesShapeIdAndSkipsUnsupportedOps()
     {
         var source = new DrawOp.Shape
