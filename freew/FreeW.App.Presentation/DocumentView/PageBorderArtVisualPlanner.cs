@@ -71,6 +71,7 @@ public sealed record PageBorderArtFilledShapePlan(
 public static class PageBorderArtVisualPlanner
 {
     public const int ApplesArtId = 1;
+    public const int MapleMuffinsArtId = 2;
     public const int ShadowedSquaresArtId = 57;
     public const int ShorebirdTracksArtId = 83;
     public const int DecorativeArchArtId = 89;
@@ -130,6 +131,27 @@ public static class PageBorderArtVisualPlanner
         motifs = BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt)
             .Select(placement => new PageBorderShadowedSquareMotif(placement.Xdip, placement.Ydip, placement.SizeDip))
             .ToList();
+        return true;
+    }
+
+    public static bool TryBuildMapleMuffinsFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != MapleMuffinsArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var polygons = new List<PageBorderArtPolygon>();
+        foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
+            AddMapleMuffin(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
+        plan = new PageBorderArtFilledShapePlan([], polygons);
         return true;
     }
 
@@ -681,6 +703,38 @@ public static class PageBorderArtVisualPlanner
             AddWhitePolygon(polygons, Point,
                 (4, 19), (0, 14), (4, 10), (10, 13), (10, 17));
         }
+    }
+
+    private static void AddMapleMuffin(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
+            polygons.Add(new PageBorderArtPolygon(
+                points.Select(point => Point(point.X, point.Y)).ToList(),
+                red,
+                green,
+                blue));
+
+        Add(0, 0, 0,
+            (5, 13), (3, 12), (2, 9), (3, 6), (6, 4), (11, 4), (12, 2), (20, 2),
+            (21, 4), (26, 4), (29, 6), (30, 9), (29, 12), (27, 13), (26, 17), (6, 17));
+        Add(0xFF, 0x80, 0,
+            (5, 12), (4, 10), (4, 7), (7, 5), (12, 5), (13, 4), (19, 4), (20, 5),
+            (25, 5), (28, 7), (28, 10), (26, 11), (22, 10), (19, 11), (16, 10),
+            (13, 11), (9, 10), (6, 11));
+        Add(0xBF, 0x40, 0,
+            (6, 12), (10, 11), (13, 12), (16, 11), (19, 12), (22, 11), (26, 12),
+            (25, 15), (7, 15));
+        Add(0, 0, 0, (8, 14), (24, 14), (22, 31), (10, 31));
+        Add(0xFF, 0x80, 0, (10, 15), (22, 15), (20, 29), (12, 29));
+        Add(0xBF, 0x40, 0, (11, 16), (13, 16), (14, 28), (12, 28));
+        Add(0xBF, 0x40, 0, (15, 16), (17, 16), (18, 28), (15, 28));
+        Add(0xBF, 0x40, 0, (19, 16), (21, 16), (20, 28), (18, 28));
     }
 
     private static void AddVineCorner(

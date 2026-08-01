@@ -4381,6 +4381,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfBatBorderOps(batMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var muffinPlan))
+        {
+            return BuildPdfFilledShapeBorderOps(muffinPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -10289,6 +10299,18 @@ public sealed class DocumentView : Control
                 context.DrawGeometry(Brushes.Black, null, geometry);
             }
 
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var muffinPlan))
+        {
+            DrawFilledShapePlan(context, frame, muffinPlan);
             return true;
         }
 

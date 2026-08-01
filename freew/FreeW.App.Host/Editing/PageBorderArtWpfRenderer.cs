@@ -116,6 +116,18 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var muffinPlan))
+        {
+            DrawFilledShapePlan(context, frame, muffinPlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
