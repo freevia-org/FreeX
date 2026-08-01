@@ -607,6 +607,10 @@ internal static class FreePRibbonText
     public static RibbonText AnimationMotionArcLeftCommand { get; } = new("Ribbon_Command_AnimationMotionArcLeft_Label", "Ribbon_Command_AnimationMotionArcLeft_KeyTip");
     public static RibbonText AnimationMotionArcUpCommand { get; } = new("Ribbon_Command_AnimationMotionArcUp_Label", "Ribbon_Command_AnimationMotionArcUp_KeyTip");
     public static RibbonText AnimationMotionArcDownCommand { get; } = new("Ribbon_Command_AnimationMotionArcDown_Label", "Ribbon_Command_AnimationMotionArcDown_KeyTip");
+    public static RibbonText AnimationMotionCircleCommand { get; } = new("Ribbon_Command_AnimationMotionCircle_Label", "Ribbon_Command_AnimationMotionCircle_KeyTip");
+    public static RibbonText AnimationMotionLoopCommand { get; } = new("Ribbon_Command_AnimationMotionLoop_Label", "Ribbon_Command_AnimationMotionLoop_KeyTip");
+    public static RibbonText AnimationMotionSCommand { get; } = new("Ribbon_Command_AnimationMotionS_Label", "Ribbon_Command_AnimationMotionS_KeyTip");
+    public static RibbonText AnimationMotionFigureEightCommand { get; } = new("Ribbon_Command_AnimationMotionFigureEight_Label", "Ribbon_Command_AnimationMotionFigureEight_KeyTip");
     public static RibbonText AnimationTimingGroup { get; } = new("Ribbon_Group_AnimationTiming_Label", "Ribbon_Group_AnimationTiming_KeyTip");
     public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label", "Ribbon_Command_AnimationTrigger_KeyTip");
     public static RibbonText AnimationDurationCommand { get; } = new("Ribbon_Command_AnimationDuration_Label", "Ribbon_Command_AnimationDuration_KeyTip");

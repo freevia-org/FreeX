@@ -105,7 +105,8 @@ public static class DocumentMerge
         Table t => CloneTable(t),
         AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName)
         {
-            BlockContentControl = altChunk.BlockContentControl
+            BlockContentControl = altChunk.BlockContentControl,
+            BlockCustomXml = altChunk.BlockCustomXml
         },
         _ => block
     };
@@ -115,6 +116,7 @@ public static class DocumentMerge
         var clone = new Paragraph
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
@@ -278,6 +280,7 @@ public static class DocumentMerge
         var clone = new Table
         {
             BlockContentControl = source.BlockContentControl,
+            BlockCustomXml = source.BlockCustomXml,
             Formatting = source.Formatting,
             TableStyleId = source.TableStyleId,
             Borders = source.Borders,
@@ -1002,7 +1005,8 @@ public static class DocumentMerge
                 continue;
             mutableBlocks[index] = new AltChunkBlock(partName)
             {
-                BlockContentControl = altChunk.BlockContentControl
+                BlockContentControl = altChunk.BlockContentControl,
+                BlockCustomXml = altChunk.BlockCustomXml
             };
         }
     }

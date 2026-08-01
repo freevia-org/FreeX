@@ -1418,24 +1418,53 @@ public static class DocxWriter
             imagesByGroupChild, chartsByGroupChild, smartArtsByGroupChild);
 
         var body = new XElement(W + "body");
+        void AddContentControlGroups(XElement parent, int start, int end)
+        {
+            for (var index = start; index < end;)
+            {
+                var control = document.Blocks[index].BlockContentControl;
+                if (control is null)
+                {
+                    parent.Add(BuildBlock(document.Blocks[index], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
+                    index++;
+                    continue;
+                }
+
+                var content = new XElement(W + "sdtContent");
+                while (index < end && ReferenceEquals(document.Blocks[index].BlockContentControl, control))
+                {
+                    content.Add(BuildBlock(document.Blocks[index], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
+                    index++;
+                }
+
+                parent.Add(new XElement(W + "sdt", BuildBlockSdtProperties(control), content));
+            }
+        }
+
         for (var i = 0; i < document.Blocks.Count;)
         {
-            var control = document.Blocks[i].BlockContentControl;
-            if (control is null)
+            var customXml = document.Blocks[i].BlockCustomXml;
+            var end = i + 1;
+            while (end < document.Blocks.Count && ReferenceEquals(document.Blocks[end].BlockCustomXml, customXml))
+                end++;
+
+            if (customXml is null)
             {
-                body.Add(BuildBlock(document.Blocks[i], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
-                i++;
-                continue;
+                AddContentControlGroups(body, i, end);
+            }
+            else
+            {
+                var wrapper = new XElement(W + "customXml",
+                    string.IsNullOrEmpty(customXml.Element) ? null : new XAttribute(W + "element", customXml.Element),
+                    string.IsNullOrEmpty(customXml.Uri) ? null : new XAttribute(W + "uri", customXml.Uri),
+                    string.IsNullOrEmpty(customXml.PropertiesXml)
+                        ? null
+                        : XElement.Parse(customXml.PropertiesXml, LoadOptions.PreserveWhitespace));
+                AddContentControlGroups(wrapper, i, end);
+                body.Add(wrapper);
             }
 
-            var content = new XElement(W + "sdtContent");
-            while (i < document.Blocks.Count && ReferenceEquals(document.Blocks[i].BlockContentControl, control))
-            {
-                content.Add(BuildBlock(document.Blocks[i], drawings, hyperlinks, partsBySection, preservedNumbering, restartOverrides));
-                i++;
-            }
-
-            body.Add(new XElement(W + "sdt", BuildBlockSdtProperties(control), content));
+            i = end;
         }
         body.Add(BuildSectionProperties(document.Page, finalSectionParts));
 
@@ -3564,9 +3593,38 @@ public static class DocxWriter
             // A tracked deletion stores its text in w:delText (so Word renders it as deleted content);
             // all other runs use the ordinary w:t element.
             var textElement = run.Revision == RevisionKind.Deleted ? "delText" : "t";
-            r.Add(new XElement(W + textElement, new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(run.Text)));
+            r.Add(BuildRunTextContent(run.Text, textElement));
         }
         return r;
+    }
+
+    private static IEnumerable<XElement> BuildRunTextContent(string text, string textElement)
+    {
+        if (text.Length == 0)
+        {
+            yield return new XElement(
+                W + textElement,
+                new XAttribute(XNamespace.Xml + "space", "preserve"),
+                string.Empty);
+            yield break;
+        }
+
+        var start = 0;
+        for (var index = 0; index <= text.Length; index++)
+        {
+            if (index < text.Length && text[index] != Hyphenator.SoftHyphen)
+                continue;
+
+            if (index > start)
+                yield return new XElement(
+                    W + textElement,
+                    new XAttribute(XNamespace.Xml + "space", "preserve"),
+                    SanitizeXmlText(text[start..index]));
+
+            if (index < text.Length)
+                yield return new XElement(W + "softHyphen");
+            start = index + 1;
+        }
     }
 
     /// <summary>

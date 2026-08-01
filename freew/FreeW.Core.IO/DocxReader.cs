@@ -1688,7 +1688,8 @@ public static class DocxReader
         ref Paragraph? prevPara,
         ref bool prevAfterAuto,
         ContentControl? inheritedControl = null,
-        BlockContentControl? inheritedBlockContentControl = null)
+        BlockContentControl? inheritedBlockContentControl = null,
+        BlockCustomXml? inheritedBlockCustomXml = null)
     {
         if (element.Name == W + "p")
         {
@@ -1703,6 +1704,7 @@ public static class DocxReader
                 inheritedControl: inheritedControl,
                 startOverrides: startOverrides);
             para.BlockContentControl = inheritedBlockContentControl;
+            para.BlockCustomXml = inheritedBlockCustomXml;
             document.Blocks.Add(para);
             var sp = element.Element(W + "pPr")?.Element(W + "spacing");
             var beforeAuto = sp?.Attribute(W + "beforeAutospacing")?.Value is "1" or "true" or "on";
@@ -1718,6 +1720,7 @@ public static class DocxReader
         {
             var table = ReadTable(element, archive, imageRelationships, hyperlinkRelationships, numbering, startOverrides, document, inheritedControl);
             table.BlockContentControl = inheritedBlockContentControl;
+            table.BlockCustomXml = inheritedBlockCustomXml;
             document.Blocks.Add(table);
             prevPara = null;
             prevAfterAuto = false;
@@ -1732,6 +1735,7 @@ public static class DocxReader
                     foreach (var importedBlock in importedBlocks)
                     {
                         importedBlock.BlockContentControl = inheritedBlockContentControl;
+                        importedBlock.BlockCustomXml = inheritedBlockCustomXml;
                         document.Blocks.Add(importedBlock);
                     }
                 }
@@ -1739,7 +1743,8 @@ public static class DocxReader
                 {
                     var altChunk = new AltChunkBlock(partName)
                     {
-                        BlockContentControl = inheritedBlockContentControl
+                        BlockContentControl = inheritedBlockContentControl,
+                        BlockCustomXml = inheritedBlockCustomXml
                     };
                     document.Blocks.Add(altChunk);
                 }
@@ -1764,7 +1769,32 @@ public static class DocxReader
                     ref prevPara,
                     ref prevAfterAuto,
                     inheritedControl,
-                    blockControl);
+                    blockControl,
+                    inheritedBlockCustomXml);
+            }
+        }
+        else if (element.Name == W + "customXml")
+        {
+            var blockCustomXml = new BlockCustomXml(
+                element.Attribute(W + "element")?.Value,
+                element.Attribute(W + "uri")?.Value,
+                element.Element(W + "customXmlPr")?.ToString(SaveOptions.DisableFormatting));
+            foreach (var child in element.Elements().Where(child => child.Name != W + "customXmlPr"))
+            {
+                AddBodyBlock(
+                    child,
+                    document,
+                    archive,
+                    imageRelationships,
+                    hyperlinkRelationships,
+                    altChunkRelationships,
+                    numbering,
+                    startOverrides,
+                    ref prevPara,
+                    ref prevAfterAuto,
+                    inheritedControl,
+                    inheritedBlockContentControl,
+                    blockCustomXml);
             }
         }
     }
@@ -3448,11 +3478,10 @@ public static class DocxReader
             paragraph.Runs.Add(breakRun);
         }
 
-        // A tracked deletion stores its text in w:delText; ordinary/inserted runs use w:t.
-        var text = string.Concat(r.Elements(W + "t").Select(t => t.Value))
-            + string.Concat(r.Elements(W + "delText").Select(t => t.Value));
-        if (r.Elements(W + "tab").Any())
-            text += "\t";
+        // Preserve the authored child order: Word stores a manual break opportunity as w:softHyphen
+        // between adjacent w:t/w:delText fragments. Reconstruct it as U+00AD in the model so later text
+        // edits can keep the break at its exact character position. Tabs are likewise read in place.
+        var text = ReadRunTextContent(r);
         if (text.Length == 0)
             return;
         var rPr = r.Element(W + "rPr");
@@ -3460,6 +3489,21 @@ public static class DocxReader
         ApplyRevision(textRun);
         ApplyFormatRevision(textRun, rPr);
         paragraph.Runs.Add(textRun);
+    }
+
+    private static string ReadRunTextContent(XElement run)
+    {
+        var text = new StringBuilder();
+        foreach (var child in run.Elements())
+        {
+            if (child.Name == W + "t" || child.Name == W + "delText")
+                text.Append(child.Value);
+            else if (child.Name == W + "softHyphen")
+                text.Append(Hyphenator.SoftHyphen);
+            else if (child.Name == W + "tab")
+                text.Append('\t');
+        }
+        return text.ToString();
     }
 
     private static void ResolveAlternateContent(XElement run)
