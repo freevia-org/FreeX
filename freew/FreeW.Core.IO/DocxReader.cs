@@ -51,9 +51,15 @@ public static class DocxReader
             // explicit package size read below still overrides this import fallback.
             DefaultRun = RunFormatting.Default with { FontFamily = "Calibri", FontSizePt = 12 }
         };
-        OpcDocumentProperties.ReadCoreProperties(
-            archive,
-            document.Properties,
+        var corePropertiesXml = LoadPart(archive, OpcPackageProperties.CorePropertiesZipEntry);
+        if (corePropertiesXml?.Root is { } corePropertiesRoot
+            && corePropertiesRoot.Elements().Any(element =>
+                !OpcDocumentProperties.ModeledCorePropertyElementNames.Contains(element.Name)))
+        {
+            document.Preserved.OriginalCoreProperties = new XElement(corePropertiesRoot);
+        }
+        document.Properties.ApplyCoreProperties(
+            OpcDocumentProperties.ReadCoreProperties(corePropertiesXml),
             emptyStringsAsNull: true);
         ReadCustomProperties(archive, document);
         ReadStyles(archive, document);

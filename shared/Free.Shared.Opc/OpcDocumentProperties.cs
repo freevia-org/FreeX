@@ -35,6 +35,22 @@ public static class OpcDocumentProperties
         "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties";
     public static readonly XNamespace XmlSchemaInstanceNamespace = "http://www.w3.org/2001/XMLSchema-instance";
 
+    public static readonly IReadOnlySet<XName> ModeledCorePropertyElementNames = new HashSet<XName>
+    {
+        DublinCoreNamespace + "title",
+        DublinCoreNamespace + "creator",
+        DublinCoreNamespace + "subject",
+        CorePropertiesNamespace + "keywords",
+        DublinCoreNamespace + "description",
+        CorePropertiesNamespace + "lastModifiedBy",
+        DublinCoreTermsNamespace + "created",
+        DublinCoreTermsNamespace + "modified",
+        CorePropertiesNamespace + "category",
+        CorePropertiesNamespace + "contentStatus",
+        DublinCoreNamespace + "language",
+        CorePropertiesNamespace + "version",
+    };
+
     public static readonly IReadOnlyList<XName> WorkbookStableCorePropertyElementNames =
     [
         DublinCoreNamespace + "subject",

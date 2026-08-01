@@ -118,6 +118,12 @@ public readonly record struct PreservedNumbering(int NumId, int Ilvl);
 public sealed class PreservedParts
 {
     /// <summary>
+    /// The original package-level <c>docProps/core.xml</c> root captured on read. The writer rebuilds
+    /// FreeW's modeled fields and merges unmodeled source properties back into that result.
+    /// </summary>
+    public XElement? OriginalCoreProperties { get; set; }
+
+    /// <summary>
     /// The original <c>word/settings.xml</c> root element (<c>w:settings</c>) captured on read, used as the
     /// base the writer overlays FreeW's modelled toggles onto. Null when the source package had no settings
     /// part (an authored-from-scratch document), in which case the writer emits a fresh minimal part as before.
@@ -164,7 +170,7 @@ public sealed class PreservedParts
     public Dictionary<string, string> ContentTypeDefaults { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>True when nothing is preserved — the authored-from-scratch case.</summary>
-    public bool IsEmpty => OriginalSettings is null && OriginalNumbering is null && OriginalCustomProperties is null
+    public bool IsEmpty => OriginalCoreProperties is null && OriginalSettings is null && OriginalNumbering is null && OriginalCustomProperties is null
         && WebExtensions is null && Parts.Count == 0;
 
     /// <summary>
@@ -175,6 +181,7 @@ public sealed class PreservedParts
     {
         ArgumentNullException.ThrowIfNull(source);
 
+        OriginalCoreProperties = source.OriginalCoreProperties is null ? null : new XElement(source.OriginalCoreProperties);
         OriginalSettings = source.OriginalSettings is null ? null : new XElement(source.OriginalSettings);
         OriginalNumbering = source.OriginalNumbering is null ? null : new XElement(source.OriginalNumbering);
         OriginalCustomProperties = source.OriginalCustomProperties is null ? null : new XElement(source.OriginalCustomProperties);

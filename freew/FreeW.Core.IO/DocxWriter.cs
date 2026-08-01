@@ -245,9 +245,7 @@ public static class DocxWriter
         WritePart(
             archive,
             OpcPackageProperties.CorePropertiesZipEntry,
-            OpcDocumentProperties.BuildCorePropertiesDocument(
-                document.Properties,
-                includeDcmiTypeNamespace: true));
+            BuildCoreProperties(document));
         if (hasCustomProps)
             WritePart(archive, OpcPackageProperties.CustomPropertiesZipEntry, BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
@@ -357,6 +355,26 @@ public static class DocxWriter
         // round-trips. Authored-from-scratch documents have none, so nothing extra is written.
         foreach (var part in preservedParts)
             WriteBinaryPart(archive, part.PartName.TrimStart('/'), part.Bytes);
+    }
+
+    private static XDocument BuildCoreProperties(TextDocument document)
+    {
+        var result = OpcDocumentProperties.BuildCorePropertiesDocument(
+            document.Properties,
+            includeDcmiTypeNamespace: true);
+        if (document.Preserved.OriginalCoreProperties is not { } sourceRoot
+            || result.Root is not { } targetRoot)
+        {
+            return result;
+        }
+
+        var unmodeledNames = sourceRoot.Elements()
+            .Select(element => element.Name)
+            .Where(name => !OpcDocumentProperties.ModeledCorePropertyElementNames.Contains(name))
+            .Distinct()
+            .ToArray();
+        OpcDocumentProperties.PreservePropertyElements(sourceRoot, targetRoot, unmodeledNames);
+        return result;
     }
 
     /// <summary>An inline image paired with its embedded/link relationship ids, media file name and drawing id.</summary>
