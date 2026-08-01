@@ -6354,6 +6354,21 @@ public sealed class DocumentView : Control
         return blockPageAssignments;
     }
 
+    private int[] ComputeBlockSectionAssignments()
+    {
+        var sections = _doc.Sections;
+        var assignments = new int[_doc.Blocks.Count];
+        var sectionIndex = 0;
+        for (var blockIndex = 0; blockIndex < _doc.Blocks.Count; blockIndex++)
+        {
+            assignments[blockIndex] = Math.Min(sectionIndex, sections.Count - 1);
+            if (_doc.Blocks[blockIndex] is Paragraph { SectionBreak: not null })
+                sectionIndex++;
+        }
+
+        return assignments;
+    }
+
     /// <summary>Maps the shared planner slot kind to Avalonia's edit-target slot enum.</summary>
     private static HfSlot ToHfSlot(HeaderFooterSlotKind slot) => slot switch
     {
@@ -10160,9 +10175,12 @@ public sealed class DocumentView : Control
 
     private IReadOnlyList<LineNumberRenderItem> BuildLineNumberRenderItems()
     {
-        if (_viewMode != DocumentViewMode.PrintLayout || _doc.Page.LineNumberMode == LineNumberMode.None)
+        var sections = _doc.Sections;
+        if (_viewMode != DocumentViewMode.PrintLayout
+            || sections.All(section => section.Page.LineNumberMode == LineNumberMode.None))
             return [];
 
+        var blockSectionAssignments = ComputeBlockSectionAssignments();
         var sourceLines = _placed
             .Where(placed => !placed.IsCell
                 && placed.Block >= 0
@@ -10172,6 +10190,7 @@ public sealed class DocumentView : Control
             {
                 PageIndex = PageIndexFromPageSpaceY(placed.Y),
                 ColumnIndex = ColumnIndexFor(placed.X),
+                SectionIndex = blockSectionAssignments[placed.Block],
                 Y = Math.Round(placed.Y * 16),
             })
             .OrderBy(group => group.Key.PageIndex)
@@ -10185,6 +10204,7 @@ public sealed class DocumentView : Control
                 return new LineNumberSourcePlacement(
                     group.Key.PageIndex,
                     group.Key.ColumnIndex,
+                    group.Key.SectionIndex,
                     placed.Y,
                     placed.LineHeight,
                     formatting.SuppressLineNumbers);
@@ -10192,10 +10212,14 @@ public sealed class DocumentView : Control
             .ToList();
 
         var plans = LineNumberVisualPlanner.Build(
-            _doc.Page.LineNumberMode,
-            _doc.Page.LineNumberStartAt,
-            _doc.Page.LineNumberCountBy,
-            sourceLines.Select(line => new LineNumberVisualSourceLine(line.PageIndex, line.SuppressNumber)).ToList());
+            sourceLines.Select(line => new LineNumberVisualSourceLine(
+                line.PageIndex,
+                line.SuppressNumber,
+                line.SectionIndex)).ToList(),
+            sections.Select(section => new LineNumberVisualSectionSettings(
+                section.Page.LineNumberMode,
+                section.Page.LineNumberStartAt,
+                section.Page.LineNumberCountBy)).ToList());
 
         var results = new List<LineNumberRenderItem>(plans.Count);
         for (var index = 0; index < plans.Count; index++)
@@ -22361,6 +22385,7 @@ public sealed class DocumentView : Control
     private readonly record struct LineNumberSourcePlacement(
         int PageIndex,
         int ColumnIndex,
+        int SectionIndex,
         double Y,
         double LineHeight,
         bool SuppressNumber);

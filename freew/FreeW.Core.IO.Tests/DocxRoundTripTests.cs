@@ -707,6 +707,34 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void LineNumbers_RestartEachSection_RoundTripsExactRestartToken()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("numbered lines"));
+        doc.Page.LineNumberMode = LineNumberMode.RestartEachSection;
+        doc.Page.LineNumberStartAt = 4;
+        doc.Page.LineNumberCountBy = 2;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open()))
+        {
+            var documentXml = reader.ReadToEnd();
+            documentXml.Should().Contain("w:restart=\"newSection\"");
+            documentXml.Should().Contain("w:start=\"4\"");
+        }
+
+        stream.Position = 0;
+        var page = DocxReader.Read(stream).Page;
+        page.LineNumberMode.Should().Be(LineNumberMode.RestartEachSection);
+        page.LineNumberStartAt.Should().Be(4);
+        page.LineNumberCountBy.Should().Be(2);
+    }
+
+    [Fact]
     public void DefaultPage_HasNoLineNumbering()
     {
         var doc = new TextDocument();

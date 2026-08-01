@@ -143,6 +143,7 @@ public static class PageLayoutCommandPlanner
         {
             LineNumberMode.None => LineNumberMode.Continuous,
             LineNumberMode.Continuous => LineNumberMode.RestartEachPage,
+            LineNumberMode.RestartEachPage => LineNumberMode.RestartEachSection,
             _ => LineNumberMode.None
         };
     }

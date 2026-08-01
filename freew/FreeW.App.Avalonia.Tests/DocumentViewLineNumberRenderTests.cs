@@ -51,6 +51,41 @@ public sealed class DocumentViewLineNumberRenderTests
         renderedItems.Select(item => item.GutterRight).Should().OnlyContain(x => x > 0);
     }
 
+    [Fact]
+    public async Task Print_layout_draw_plan_restarts_at_a_continuous_section_boundary()
+    {
+        DocumentView.LineNumberRenderItem[]? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var firstSectionPage = new PageSettings
+            {
+                LineNumberMode = LineNumberMode.RestartEachSection,
+                LineNumberStartAt = 4,
+            };
+            document.Page.LineNumberMode = LineNumberMode.RestartEachSection;
+            document.Page.LineNumberStartAt = 9;
+            document.Blocks.Add(new Paragraph("First section")
+            {
+                SectionBreak = new Section(firstSectionPage, SectionBreakKind.Continuous),
+            });
+            document.Blocks.Add(new Paragraph("Second section"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(816, 1056));
+            items = view.GetLineNumberRenderItemsForTest().ToArray();
+        });
+
+        if (!ran)
+            return;
+
+        var renderedItems = items!;
+        renderedItems.Select(item => item.Number).Should().Equal(4, 9);
+        renderedItems.Select(item => item.PageIndex).Should().OnlyContain(pageIndex => pageIndex == 0);
+    }
+
     private static async Task<bool> OnUiThread(Action action)
     {
         try

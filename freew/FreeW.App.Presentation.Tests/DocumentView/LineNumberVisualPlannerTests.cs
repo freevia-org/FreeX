@@ -46,4 +46,42 @@ public sealed class LineNumberVisualPlannerTests
             (1, 7, true),
             (1, 8, false));
     }
+
+    [Fact]
+    public void Restart_each_section_uses_each_sections_start_and_interval_on_the_same_page()
+    {
+        var items = LineNumberVisualPlanner.Build(
+            [
+                new LineNumberVisualSourceLine(0, SuppressNumber: false, SectionIndex: 0),
+                new LineNumberVisualSourceLine(0, SuppressNumber: false, SectionIndex: 0),
+                new LineNumberVisualSourceLine(0, SuppressNumber: false, SectionIndex: 1),
+                new LineNumberVisualSourceLine(0, SuppressNumber: false, SectionIndex: 1),
+            ],
+            [
+                new LineNumberVisualSectionSettings(LineNumberMode.RestartEachSection, StartAt: 4, CountBy: 2),
+                new LineNumberVisualSectionSettings(LineNumberMode.RestartEachSection, StartAt: 9, CountBy: 1),
+            ]);
+
+        items.Select(item => (item.Number, item.IsVisible)).Should().Equal(
+            (4, true),
+            (5, false),
+            (9, true),
+            (10, true));
+    }
+
+    [Fact]
+    public void Continuous_mode_carries_sequence_across_section_boundary()
+    {
+        var items = LineNumberVisualPlanner.Build(
+            [
+                new LineNumberVisualSourceLine(0, SuppressNumber: false, SectionIndex: 0),
+                new LineNumberVisualSourceLine(0, SuppressNumber: false, SectionIndex: 1),
+            ],
+            [
+                new LineNumberVisualSectionSettings(LineNumberMode.Continuous, StartAt: 3, CountBy: 1),
+                new LineNumberVisualSectionSettings(LineNumberMode.Continuous, StartAt: 1, CountBy: 1),
+            ]);
+
+        items.Select(item => item.Number).Should().Equal(3, 4);
+    }
 }

@@ -7379,7 +7379,7 @@ public static class DocxWriter
             BuildPageBorders(page.PageBorder),
             // Line numbering (w:lnNumType): emitted only when enabled. Schema order places it after
             // pgBorders and before cols. @w:countBy is the numbering interval; @w:restart is
-            // "continuous" (across pages) or "newPage" (restart each page).
+            // "continuous" (across pages), "newPage" or "newSection".
             BuildLineNumbering(page),
             // Page numbering (w:pgNumType): emitted only when a section overrides Word's default
             // decimal/continue behaviour. Schema order places it after lnNumType and before cols.
@@ -7517,14 +7517,19 @@ public static class DocxWriter
     /// <summary>
     /// Builds the w:lnNumType element (line numbering in the page margin), or null when line numbering
     /// is off (<see cref="LineNumberMode.None"/>). @w:countBy is the interval (every Nth line numbered),
-    /// @w:restart maps the mode to "continuous" (across pages) or "newPage" (restart per page).
+    /// @w:restart maps the mode to "continuous", "newPage" or "newSection".
     /// </summary>
     private static XElement? BuildLineNumbering(PageSettings page)
     {
         if (page.LineNumberMode == LineNumberMode.None)
             return null;
 
-        var restart = page.LineNumberMode == LineNumberMode.RestartEachPage ? "newPage" : "continuous";
+        var restart = page.LineNumberMode switch
+        {
+            LineNumberMode.RestartEachPage => "newPage",
+            LineNumberMode.RestartEachSection => "newSection",
+            _ => "continuous",
+        };
         return new XElement(W + "lnNumType",
             new XAttribute(W + "countBy", Math.Max(1, page.LineNumberCountBy)),
             new XAttribute(W + "restart", restart),

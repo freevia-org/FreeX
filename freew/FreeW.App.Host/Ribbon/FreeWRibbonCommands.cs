@@ -1669,6 +1669,8 @@ internal static class FreeWRibbonCommands
             page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.Continuous));
         PageSetting("freew.line-numbers-restart-page", page => page.LineNumberMode = LineNumberMode.RestartEachPage,
             page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.RestartEachPage));
+        PageSetting("freew.line-numbers-restart-section", page => page.LineNumberMode = LineNumberMode.RestartEachSection,
+            page => PageLayoutCommandPlanner.IsLineNumberModeChecked(page, LineNumberMode.RestartEachSection));
         // Line Numbering Options…: dedicated dialog (Start At / Count By / Restart mode), not Page Setup.
         registry.Register("freew.line-numbers-options", new LineNumberOptionsCommand(editor));
 

@@ -465,6 +465,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.line-numbers-none", new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.None, page => page.LineNumberMode == LineNumberMode.None));
         r.Register("freew.line-numbers-continuous", new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.Continuous, page => page.LineNumberMode == LineNumberMode.Continuous));
         r.Register("freew.line-numbers-restart-page", new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.RestartEachPage, page => page.LineNumberMode == LineNumberMode.RestartEachPage));
+        r.Register("freew.line-numbers-restart-section", new PageSettingCommand(editor, page => page.LineNumberMode = LineNumberMode.RestartEachSection, page => page.LineNumberMode == LineNumberMode.RestartEachSection));
         r.Register("freew.line-numbers-options", new ActionRibbonCommand(callbacks.OpenLineNumberOptionsDialog ?? (() => { })));
         r.Register("freew.hyphenation", new PageSettingCommand(editor, PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation));
         r.Register("freew.hyphenation-none", new PageSettingCommand(editor, page => page.AutoHyphenation = false, page => !page.AutoHyphenation));
