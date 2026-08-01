@@ -85,33 +85,49 @@ public static class PortablePdfWriter
         PdfDrawOp op,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
         IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
-        PatternResourceSet patternResources)
+        PatternResourceSet patternResources,
+        PdfColor? colorOverride = null)
     {
         switch (op)
         {
             case PdfFillRect fill:
-                AppendFilledRectangle(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Color);
+                AppendFilledRectangle(content, fill.X, fill.Y, fill.Width, fill.Height, colorOverride ?? fill.Color);
                 break;
             case PdfFillRectPattern fill:
-                AppendFilledRectanglePattern(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Pattern, patternResources);
+                if (colorOverride is { } patternColor)
+                    AppendFilledRectangle(content, fill.X, fill.Y, fill.Width, fill.Height, patternColor);
+                else
+                    AppendFilledRectanglePattern(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Pattern, patternResources);
                 break;
             case PdfFillRectLinearGradient fill:
-                AppendFilledRectangleLinearGradient(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Gradient, patternResources, fill.FallbackColor);
+                if (colorOverride is { } gradientColor)
+                    AppendFilledRectangle(content, fill.X, fill.Y, fill.Width, fill.Height, gradientColor);
+                else
+                    AppendFilledRectangleLinearGradient(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Gradient, patternResources, fill.FallbackColor);
                 break;
             case PdfStrokeRect stroke:
-                AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth, stroke.Dash);
+                AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, colorOverride ?? stroke.Color, stroke.LineWidth, stroke.Dash);
                 break;
             case PdfStrokeRectLinearGradient stroke:
-                AppendStrokedRectangleLinearGradient(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Gradient, patternResources, stroke.FallbackColor, stroke.LineWidth, stroke.Dash);
+                if (colorOverride is { } gradientStrokeColor)
+                    AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, gradientStrokeColor, stroke.LineWidth, stroke.Dash);
+                else
+                    AppendStrokedRectangleLinearGradient(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Gradient, patternResources, stroke.FallbackColor, stroke.LineWidth, stroke.Dash);
                 break;
             case PdfFillEllipse fillEllipse:
-                AppendFilledEllipse(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Color);
+                AppendFilledEllipse(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, colorOverride ?? fillEllipse.Color);
                 break;
             case PdfFillEllipsePattern fillEllipse:
-                AppendFilledEllipsePattern(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Pattern, patternResources);
+                if (colorOverride is { } ellipsePatternColor)
+                    AppendFilledEllipse(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, ellipsePatternColor);
+                else
+                    AppendFilledEllipsePattern(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Pattern, patternResources);
                 break;
             case PdfFillEllipseLinearGradient fillEllipse:
-                AppendFilledEllipseLinearGradient(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Gradient, patternResources, fillEllipse.FallbackColor);
+                if (colorOverride is { } ellipseGradientColor)
+                    AppendFilledEllipse(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, ellipseGradientColor);
+                else
+                    AppendFilledEllipseLinearGradient(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Gradient, patternResources, fillEllipse.FallbackColor);
                 break;
             case PdfStrokeEllipse strokeEllipse:
                 AppendStrokedEllipse(
@@ -120,31 +136,27 @@ public static class PortablePdfWriter
                     strokeEllipse.Y,
                     strokeEllipse.Width,
                     strokeEllipse.Height,
-                    strokeEllipse.Color,
+                    colorOverride ?? strokeEllipse.Color,
                     strokeEllipse.LineWidth,
                     strokeEllipse.Dash);
                 break;
             case PdfStrokeEllipseLinearGradient strokeEllipse:
-                AppendStrokedEllipseLinearGradient(
-                    content,
-                    strokeEllipse.X,
-                    strokeEllipse.Y,
-                    strokeEllipse.Width,
-                    strokeEllipse.Height,
-                    strokeEllipse.Gradient,
-                    patternResources,
-                    strokeEllipse.FallbackColor,
-                    strokeEllipse.LineWidth,
-                    strokeEllipse.Dash);
+                if (colorOverride is { } ellipseStrokeColor)
+                    AppendStrokedEllipse(content, strokeEllipse.X, strokeEllipse.Y, strokeEllipse.Width, strokeEllipse.Height, ellipseStrokeColor, strokeEllipse.LineWidth, strokeEllipse.Dash);
+                else
+                    AppendStrokedEllipseLinearGradient(content, strokeEllipse.X, strokeEllipse.Y, strokeEllipse.Width, strokeEllipse.Height, strokeEllipse.Gradient, patternResources, strokeEllipse.FallbackColor, strokeEllipse.LineWidth, strokeEllipse.Dash);
                 break;
             case PdfText text:
-                AppendText(content, text.X, text.Y, text.FontSize, FontResource(text.Face), text.Color, text.Text);
+                AppendText(content, text.X, text.Y, text.FontSize, FontResource(text.Face), colorOverride ?? text.Color, text.Text);
                 break;
             case PdfLine line:
-                AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, line.Color, line.LineWidth);
+                AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, colorOverride ?? line.Color, line.LineWidth);
                 break;
             case PdfLineLinearGradient line:
-                AppendLineLinearGradient(content, line.X1, line.Y1, line.X2, line.Y2, line.Gradient, patternResources, line.FallbackColor, line.LineWidth);
+                if (colorOverride is { } lineColor)
+                    AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, lineColor, line.LineWidth);
+                else
+                    AppendLineLinearGradient(content, line.X1, line.Y1, line.X2, line.Y2, line.Gradient, patternResources, line.FallbackColor, line.LineWidth);
                 break;
             case PdfFilledTriangle triangle:
                 AppendFilledTriangle(
@@ -155,26 +167,37 @@ public static class PortablePdfWriter
                     triangle.Y2,
                     triangle.X3,
                     triangle.Y3,
-                    triangle.Color);
+                    colorOverride ?? triangle.Color);
                 break;
             case PdfPath path:
-                AppendPath(content, path);
+                AppendPath(content, colorOverride is { } pathColor
+                    ? path with { FillColor = path.FillColor is not null ? pathColor : null, StrokeColor = path.StrokeColor is not null ? pathColor : null }
+                    : path);
                 break;
             case PdfPathPattern path:
-                AppendPathPattern(content, path, patternResources);
+                if (colorOverride is { } pathPatternColor)
+                    AppendPath(content, new PdfPath(path.Contours, pathPatternColor, path.StrokeColor is not null ? pathPatternColor : null, path.StrokeWidth, path.StrokeDash));
+                else
+                    AppendPathPattern(content, path, patternResources);
                 break;
             case PdfPathLinearGradient path:
-                AppendPathLinearGradient(content, path, patternResources);
+                if (colorOverride is { } pathGradientColor)
+                    AppendPath(content, new PdfPath(path.Contours, path.FillFallbackColor is not null ? pathGradientColor : null, path.StrokeFallbackColor is not null ? pathGradientColor : null, path.StrokeWidth, path.StrokeDash));
+                else
+                    AppendPathLinearGradient(content, path, patternResources);
                 break;
             case PdfRotationGroup group:
-                AppendRotationGroup(content, group, imageResources, opacityResources, patternResources);
+                AppendRotationGroup(content, group, imageResources, opacityResources, patternResources, colorOverride);
                 break;
             case PdfClipGroup group:
-                AppendClipGroup(content, group, imageResources, opacityResources, patternResources);
+                AppendClipGroup(content, group, imageResources, opacityResources, patternResources, colorOverride);
                 break;
             case PdfOpacityGroup group:
                 opacityResources.TryGetValue(PdfRenderGeometry.NormalizeOpacity(group.Opacity), out var groupOpacityResource);
-                AppendOpacityGroup(content, group, groupOpacityResource?.ResourceName, imageResources, opacityResources, patternResources);
+                AppendOpacityGroup(content, group, groupOpacityResource?.ResourceName, imageResources, opacityResources, patternResources, colorOverride);
+                break;
+            case PdfEffectGroup group:
+                AppendEffectGroup(content, group, imageResources, opacityResources, patternResources);
                 break;
             case PdfImage image when imageResources.TryGetValue(image, out var resource):
                 opacityResources.TryGetValue(PdfRenderGeometry.NormalizeOpacity(image.Opacity), out var imageOpacityResource);
@@ -416,6 +439,12 @@ public static class PortablePdfWriter
             foreach (var child in opacityGroup.Ops.SelectMany(EnumerateOps))
                 yield return child;
         }
+
+        if (op is PdfEffectGroup effectGroup)
+        {
+            foreach (var child in effectGroup.Ops.SelectMany(EnumerateOps))
+                yield return child;
+        }
     }
 
     private static IEnumerable<double> EnumerateOpacities(PdfDrawOp op)
@@ -427,6 +456,24 @@ public static class PortablePdfWriter
                 break;
             case PdfOpacityGroup group:
                 yield return PdfRenderGeometry.NormalizeOpacity(group.Opacity);
+                break;
+            case PdfEffectGroup group:
+                yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity);
+                switch (group.Kind)
+                {
+                    case PdfEffectKind.Glow:
+                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.18);
+                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.26);
+                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.34);
+                        break;
+                    case PdfEffectKind.SoftEdge:
+                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.12);
+                        break;
+                    case PdfEffectKind.Bevel:
+                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.72);
+                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.52);
+                        break;
+                }
                 break;
         }
     }
@@ -986,7 +1033,8 @@ public static class PortablePdfWriter
         PdfRotationGroup group,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
         IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
-        PatternResourceSet patternResources)
+        PatternResourceSet patternResources,
+        PdfColor? colorOverride = null)
     {
         if (group.Ops.Count == 0)
             return;
@@ -1001,7 +1049,7 @@ public static class PortablePdfWriter
             group.FlipV);
 
         foreach (var op in group.Ops)
-            AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
+            AppendDrawOp(content, op, imageResources, opacityResources, patternResources, colorOverride);
 
         content.AppendLine("Q");
     }
@@ -1012,7 +1060,8 @@ public static class PortablePdfWriter
         string? opacityResourceName,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
         IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
-        PatternResourceSet patternResources)
+        PatternResourceSet patternResources,
+        PdfColor? colorOverride = null)
     {
         if (group.Ops.Count == 0)
             return;
@@ -1021,7 +1070,7 @@ public static class PortablePdfWriter
         AppendOpacityState(content, opacityResourceName);
 
         foreach (var op in group.Ops)
-            AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
+            AppendDrawOp(content, op, imageResources, opacityResources, patternResources, colorOverride);
 
         content.AppendLine("Q");
     }
@@ -1031,7 +1080,8 @@ public static class PortablePdfWriter
         PdfClipGroup group,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
         IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
-        PatternResourceSet patternResources)
+        PatternResourceSet patternResources,
+        PdfColor? colorOverride = null)
     {
         if (group.Ops.Count == 0 || group.Width <= 0 || group.Height <= 0)
             return;
@@ -1039,7 +1089,129 @@ public static class PortablePdfWriter
         content.AppendLine("q");
         content.AppendLine($"{FormatNumber(group.X)} {FormatNumber(group.Y)} {FormatNumber(group.Width)} {FormatNumber(group.Height)} re W n");
         foreach (var op in group.Ops)
-            AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
+            AppendDrawOp(content, op, imageResources, opacityResources, patternResources, colorOverride);
+        content.AppendLine("Q");
+    }
+
+    private static void AppendEffectGroup(
+        StringBuilder content,
+        PdfEffectGroup group,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        PatternResourceSet patternResources)
+    {
+        if (group.Ops.Count == 0)
+            return;
+
+        var parameters = group.Parameters;
+        var opacity = PdfRenderGeometry.NormalizeOpacity(parameters.Opacity);
+        switch (group.Kind)
+        {
+            case PdfEffectKind.Shadow:
+                AppendEffectPass(content, group.Ops, parameters.Color, opacity,
+                    parameters.OffsetX, parameters.OffsetY, parameters.Radius * 0.18,
+                    imageResources, opacityResources, patternResources);
+                break;
+
+            case PdfEffectKind.Glow:
+            {
+                var radius = Math.Max(1, parameters.Radius);
+                for (var index = 3; index >= 1; index--)
+                {
+                    var spread = radius * index / 3;
+                    AppendEffectPass(content, group.Ops, parameters.Color, opacity * (0.18 + 0.08 * (3 - index)),
+                        0, 0, spread, imageResources, opacityResources, patternResources);
+                }
+                break;
+            }
+
+            case PdfEffectKind.SoftEdge:
+            {
+                var radius = Math.Max(1, parameters.Radius);
+                for (var index = 3; index >= 1; index--)
+                {
+                    var spread = radius * index / 3;
+                    AppendEffectPass(content, group.Ops, parameters.Color, opacity * 0.12,
+                        0, 0, spread, imageResources, opacityResources, patternResources);
+                }
+                break;
+            }
+
+            case PdfEffectKind.Reflection:
+                AppendEffectReflection(content, group, opacity, imageResources, opacityResources, patternResources);
+                break;
+
+            case PdfEffectKind.Bevel:
+                AppendEffectPass(content, group.Ops, parameters.Color, opacity * 0.72,
+                    -Math.Max(0.5, parameters.Radius * 0.12), Math.Max(0.5, parameters.Radius * 0.12), 0,
+                    imageResources, opacityResources, patternResources);
+                if (parameters.SecondaryColor is { } secondary)
+                {
+                    AppendEffectPass(content, group.Ops, secondary, opacity * 0.52,
+                        Math.Max(0.5, parameters.Radius * 0.12), -Math.Max(0.5, parameters.Radius * 0.12), 0,
+                        imageResources, opacityResources, patternResources);
+                }
+                break;
+        }
+    }
+
+    private static void AppendEffectPass(
+        StringBuilder content,
+        IReadOnlyList<PdfDrawOp> ops,
+        PdfColor? color,
+        double opacity,
+        double offsetX,
+        double offsetY,
+        double spread,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        PatternResourceSet patternResources)
+    {
+        var resourceName = opacityResources.TryGetValue(PdfRenderGeometry.NormalizeOpacity(opacity), out var resource)
+            ? resource.ResourceName
+            : null;
+        content.AppendLine("q");
+        AppendOpacityState(content, resourceName);
+        if (offsetX != 0 || offsetY != 0)
+            content.AppendLine($"1 0 0 1 {FormatNumber(offsetX)} {FormatNumber(offsetY)} cm");
+
+        // PDF has no portable vector blur primitive. Multiple translated, recolored silhouettes
+        // retain the effect as visible paint in the dependency-free backend.
+        var passes = spread > 0 ? 3 : 1;
+        for (var index = 0; index < passes; index++)
+        {
+            var distance = spread * (index + 1) / passes;
+            if (distance != 0)
+                content.AppendLine($"1 0 0 1 {FormatNumber(distance * 0.35)} {FormatNumber(distance * 0.2)} cm");
+            foreach (var op in ops)
+                AppendDrawOp(content, op, imageResources, opacityResources, patternResources, color);
+        }
+        content.AppendLine("Q");
+    }
+
+    private static void AppendEffectReflection(
+        StringBuilder content,
+        PdfEffectGroup group,
+        double opacity,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        PatternResourceSet patternResources)
+    {
+        var resourceName = opacityResources.TryGetValue(opacity, out var resource)
+            ? resource.ResourceName
+            : null;
+        content.AppendLine("q");
+        AppendOpacityState(content, resourceName);
+        var axisAngle = (group.Parameters.ReflectionDirectionDegrees - 90) * Math.PI / 180d;
+        var cos = Math.Cos(axisAngle * 2);
+        var sin = Math.Sin(axisAngle * 2);
+        var centerX = group.BoundsX + group.BoundsWidth / 2;
+        var centerY = group.BoundsY - group.Parameters.ReflectionGap / 2;
+        var e = centerX - cos * centerX - sin * centerY;
+        var f = centerY - sin * centerX + cos * centerY;
+        content.AppendLine($"{FormatNumber(cos)} {FormatNumber(sin)} {FormatNumber(sin)} {FormatNumber(-cos)} {FormatNumber(e)} {FormatNumber(f)} cm");
+        foreach (var op in group.Ops)
+            AppendDrawOp(content, op, imageResources, opacityResources, patternResources, group.Parameters.Color);
         content.AppendLine("Q");
     }
 

@@ -416,7 +416,12 @@ public sealed record DrawingObjectEffectsPlan(
     bool HasSoftEdge,
     double SoftEdgeRadiusDip,
     bool HasReflection,
-    bool HasBevel)
+    bool HasBevel,
+    double ReflectionOpacity = 0.38,
+    double ReflectionDistanceDip = 4,
+    double ReflectionDirectionDegrees = 90,
+    double BevelWidthDip = 3,
+    double BevelHeightDip = 3)
 {
     public static DrawingObjectEffectsPlan None { get; } = new(
         HasShadow: false,
@@ -972,7 +977,12 @@ public static class DrawingObjectVisualPlanner
             effects.HasSoftEdge,
             EmuToDip(effects.SoftEdgeRad),
             effects.HasReflection,
-            effects.HasBevel);
+            effects.HasBevel,
+            Math.Clamp(effects.ReflectionStartAlpha / 100000.0, 0, 1),
+            EmuToDip(effects.ReflectionDist),
+            effects.ReflectionDir / 60000.0,
+            EmuToDip(effects.BevelW),
+            EmuToDip(effects.BevelH));
     }
 
     private static DrawingObjectWordArtPlan BuildWordArtPlan(WordArt wordArt)

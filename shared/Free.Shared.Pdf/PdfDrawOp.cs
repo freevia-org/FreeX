@@ -329,6 +329,45 @@ public sealed record PdfClipGroup(
 /// </summary>
 public sealed record PdfOpacityGroup(double Opacity, IReadOnlyList<PdfDrawOp> Ops) : PdfDrawOp;
 
+/// <summary>Visual effect families shared by the vector PDF backends.</summary>
+public enum PdfEffectKind
+{
+    Shadow,
+    Glow,
+    SoftEdge,
+    Reflection,
+    Bevel,
+}
+
+/// <summary>
+/// Parameters for a rendered object effect. Bounds are in PDF user space and are used by
+/// reflection to mirror the child operations around the object's lower edge. A null color means
+/// that the child operation colors are retained; this is used for reflections and soft edges.
+/// </summary>
+public sealed record PdfEffectParameters(
+    PdfColor? Color,
+    double Opacity,
+    double Radius,
+    double OffsetX = 0,
+    double OffsetY = 0,
+    double ReflectionGap = 0,
+    double ReflectionDirectionDegrees = 90,
+    PdfColor? SecondaryColor = null);
+
+/// <summary>
+/// Renders a composable vector layer from the child operations. This is intentionally an
+/// operation, rather than an export marker: portable PDF emits translated/recolored passes and
+/// Skia renders the same passes with its raster compositor where available.
+/// </summary>
+public sealed record PdfEffectGroup(
+    PdfEffectKind Kind,
+    double BoundsX,
+    double BoundsY,
+    double BoundsWidth,
+    double BoundsHeight,
+    PdfEffectParameters Parameters,
+    IReadOnlyList<PdfDrawOp> Ops) : PdfDrawOp;
+
 /// <summary>
 /// Optional clipping geometry applied to an image before it is painted.
 /// </summary>

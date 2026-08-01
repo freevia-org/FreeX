@@ -109,6 +109,42 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void RenderPagesToPng_PaintsEffectLayersOutsideSourceBounds()
+    {
+        var source = new PdfDrawOp[]
+        {
+            new PdfFillRect(40, 50, 30, 20, new PdfColor(0x20, 0x80, 0xC0)),
+        };
+        var page = new PdfContentPage(120, 100, new PdfDrawOp[]
+        {
+            new PdfEffectGroup(PdfEffectKind.Shadow, 40, 50, 30, 20,
+                new PdfEffectParameters(new PdfColor(0, 0, 0), 0.75, 6, 8, -5), source),
+            new PdfEffectGroup(PdfEffectKind.Glow, 40, 50, 30, 20,
+                new PdfEffectParameters(new PdfColor(0xFF, 0x80, 0), 0.75, 8), source),
+            new PdfEffectGroup(PdfEffectKind.Reflection, 40, 50, 30, 20,
+                new PdfEffectParameters(null, 0.5, 0, ReflectionGap: 5), source),
+            new PdfEffectGroup(PdfEffectKind.Bevel, 40, 50, 30, 20,
+                new PdfEffectParameters(new PdfColor(0xE0, 0xE8, 0xFF), 0.8, 4,
+                    SecondaryColor: new PdfColor(0x40, 0x40, 0x40)), source),
+            source[0],
+        });
+
+        using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(
+            new PdfContentDocument([page])).Single());
+        var outsidePixels = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        for (var x = 0; x < bitmap.Width; x++)
+        {
+            var outsideSource = x < 48 || x >= 94 || y >= 68;
+            var pixel = bitmap.GetPixel(x, y);
+            if (outsideSource && pixel != SKColors.White)
+                outsidePixels++;
+        }
+
+        outsidePixels.Should().BeGreaterThan(40);
+    }
+
+    [Fact]
     public void Write_AcceptsClipGroupsAroundNestedTransforms()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

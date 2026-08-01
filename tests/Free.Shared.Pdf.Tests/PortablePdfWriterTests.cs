@@ -485,6 +485,35 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_RendersComposableEffectGroupsWithPaintAndReflectionTransform()
+    {
+        var source = new PdfDrawOp[] { new PdfFillRect(30, 40, 24, 16, new PdfColor(0x11, 0x22, 0x33)) };
+        var effects = new PdfDrawOp[]
+        {
+            new PdfEffectGroup(PdfEffectKind.Shadow, 30, 40, 24, 16,
+                new PdfEffectParameters(new PdfColor(0x20, 0x20, 0x20), 0.5, 4, 3, -3), source),
+            new PdfEffectGroup(PdfEffectKind.Glow, 30, 40, 24, 16,
+                new PdfEffectParameters(new PdfColor(0x44, 0x72, 0xC4), 0.6, 5), source),
+            new PdfEffectGroup(PdfEffectKind.SoftEdge, 30, 40, 24, 16,
+                new PdfEffectParameters(null, 0.34, 3), source),
+            new PdfEffectGroup(PdfEffectKind.Reflection, 30, 40, 24, 16,
+                new PdfEffectParameters(null, 0.38, 0, ReflectionGap: 4), source),
+            new PdfEffectGroup(PdfEffectKind.Bevel, 30, 40, 24, 16,
+                new PdfEffectParameters(new PdfColor(0xE0, 0xE8, 0xFF), 0.82, 3,
+                    SecondaryColor: new PdfColor(0x5C, 0x6B, 0x85)), source),
+        };
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(
+            new PdfContentDocument([new PdfContentPage(100, 100, effects)]))).Replace("\r\n", "\n");
+
+        pdf.Should().Contain("0.125 rg");
+        pdf.Should().Contain("0.267 0.447 0.769 rg");
+        pdf.Should().Contain("0.878 0.91 1 rg");
+        pdf.Should().Contain("1 0 0 -1");
+        pdf.Should().Contain("0.361 0.42 0.522 rg");
+    }
+
+    [Fact]
     public void Write_AppliesPngImageColorEffectsBeforeEmbedding()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

@@ -168,7 +168,8 @@ public static class SkiaPdfWriter
         SKPaint fillPaint,
         SKPaint strokePaint,
         SKPaint textPaint,
-        FallbackTextRenderer textRenderer)
+        FallbackTextRenderer textRenderer,
+        PdfColor? colorOverride = null)
     {
         switch (op)
         {
@@ -176,7 +177,7 @@ public static class SkiaPdfWriter
             {
                 // PDF y-up rect (x,y = bottom-left) -> Skia y-down rect.
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fill.Y, fill.Height);
-                fillPaint.Color = ToSkColor(fill.Color);
+                fillPaint.Color = ToSkColor(colorOverride ?? fill.Color);
                 canvas.DrawRect(new SKRect((float)fill.X, top, (float)(fill.X + fill.Width), top + (float)fill.Height), fillPaint);
                 break;
             }
@@ -184,7 +185,9 @@ public static class SkiaPdfWriter
             case PdfFillRectLinearGradient fill:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fill.Y, fill.Height);
-                ApplyLinearGradient(fillPaint, fill.Gradient, pageHeight, fill.FallbackColor);
+                fillPaint.Color = ToSkColor(colorOverride ?? fill.FallbackColor);
+                if (colorOverride is null)
+                    ApplyLinearGradient(fillPaint, fill.Gradient, pageHeight, fill.FallbackColor);
                 canvas.DrawRect(new SKRect((float)fill.X, top, (float)(fill.X + fill.Width), top + (float)fill.Height), fillPaint);
                 fillPaint.Shader = null;
                 break;
@@ -193,6 +196,7 @@ public static class SkiaPdfWriter
             case PdfFillRectPattern fill:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fill.Y, fill.Height);
+                fillPaint.Color = ToSkColor(colorOverride ?? fill.Pattern.Foreground);
                 DrawPattern(canvas, fillPaint, fill.Pattern, () => canvas.DrawRect(new SKRect(
                     (float)fill.X,
                     top,
@@ -204,7 +208,7 @@ public static class SkiaPdfWriter
             case PdfStrokeRect stroke:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, stroke.Y, stroke.Height);
-                strokePaint.Color = ToSkColor(stroke.Color);
+                strokePaint.Color = ToSkColor(colorOverride ?? stroke.Color);
                 strokePaint.StrokeWidth = (float)stroke.LineWidth;
                 using var strokeDash = CreateDashEffect(stroke.Dash);
                 strokePaint.PathEffect = strokeDash;
@@ -216,7 +220,9 @@ public static class SkiaPdfWriter
             case PdfStrokeRectLinearGradient stroke:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, stroke.Y, stroke.Height);
-                ApplyLinearGradient(strokePaint, stroke.Gradient, pageHeight, stroke.FallbackColor);
+                strokePaint.Color = ToSkColor(colorOverride ?? stroke.FallbackColor);
+                if (colorOverride is null)
+                    ApplyLinearGradient(strokePaint, stroke.Gradient, pageHeight, stroke.FallbackColor);
                 strokePaint.StrokeWidth = (float)stroke.LineWidth;
                 using var gradientStrokeDash = CreateDashEffect(stroke.Dash);
                 strokePaint.PathEffect = gradientStrokeDash;
@@ -229,7 +235,7 @@ public static class SkiaPdfWriter
             case PdfFillEllipse fillEllipse:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fillEllipse.Y, fillEllipse.Height);
-                fillPaint.Color = ToSkColor(fillEllipse.Color);
+                fillPaint.Color = ToSkColor(colorOverride ?? fillEllipse.Color);
                 canvas.DrawOval(new SKRect(
                     (float)fillEllipse.X,
                     top,
@@ -241,7 +247,9 @@ public static class SkiaPdfWriter
             case PdfFillEllipseLinearGradient fillEllipse:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fillEllipse.Y, fillEllipse.Height);
-                ApplyLinearGradient(fillPaint, fillEllipse.Gradient, pageHeight, fillEllipse.FallbackColor);
+                fillPaint.Color = ToSkColor(colorOverride ?? fillEllipse.FallbackColor);
+                if (colorOverride is null)
+                    ApplyLinearGradient(fillPaint, fillEllipse.Gradient, pageHeight, fillEllipse.FallbackColor);
                 canvas.DrawOval(new SKRect(
                     (float)fillEllipse.X,
                     top,
@@ -254,6 +262,7 @@ public static class SkiaPdfWriter
             case PdfFillEllipsePattern fillEllipse:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, fillEllipse.Y, fillEllipse.Height);
+                fillPaint.Color = ToSkColor(colorOverride ?? fillEllipse.Pattern.Foreground);
                 DrawPattern(canvas, fillPaint, fillEllipse.Pattern, () => canvas.DrawOval(new SKRect(
                     (float)fillEllipse.X,
                     top,
@@ -265,7 +274,7 @@ public static class SkiaPdfWriter
             case PdfStrokeEllipse strokeEllipse:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, strokeEllipse.Y, strokeEllipse.Height);
-                strokePaint.Color = ToSkColor(strokeEllipse.Color);
+                strokePaint.Color = ToSkColor(colorOverride ?? strokeEllipse.Color);
                 strokePaint.StrokeWidth = (float)strokeEllipse.LineWidth;
                 using var ellipseStrokeDash = CreateDashEffect(strokeEllipse.Dash);
                 strokePaint.PathEffect = ellipseStrokeDash;
@@ -281,7 +290,9 @@ public static class SkiaPdfWriter
             case PdfStrokeEllipseLinearGradient strokeEllipse:
             {
                 var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, strokeEllipse.Y, strokeEllipse.Height);
-                ApplyLinearGradient(strokePaint, strokeEllipse.Gradient, pageHeight, strokeEllipse.FallbackColor);
+                strokePaint.Color = ToSkColor(colorOverride ?? strokeEllipse.FallbackColor);
+                if (colorOverride is null)
+                    ApplyLinearGradient(strokePaint, strokeEllipse.Gradient, pageHeight, strokeEllipse.FallbackColor);
                 strokePaint.StrokeWidth = (float)strokeEllipse.LineWidth;
                 using var gradientEllipseStrokeDash = CreateDashEffect(strokeEllipse.Dash);
                 strokePaint.PathEffect = gradientEllipseStrokeDash;
@@ -302,7 +313,7 @@ public static class SkiaPdfWriter
 
                 // PDF text origin is the baseline (y-up). Skia DrawText baseline is y-down.
                 var baseline = (float)PdfRenderGeometry.ToCanvasY(pageHeight, text.Y);
-                textPaint.Color = ToSkColor(text.Color);
+                textPaint.Color = ToSkColor(colorOverride ?? text.Color);
                 var typeface = text.Face == PdfFontFace.Bold ? bold : regular;
                 textRenderer.DrawText(canvas, text.Text, (float)text.X, baseline, typeface, (float)text.FontSize, textPaint);
                 break;
@@ -311,7 +322,7 @@ public static class SkiaPdfWriter
             case PdfLine line:
             {
                 // PDF coordinates are y-up; flip y for Skia's y-down canvas.
-                strokePaint.Color = ToSkColor(line.Color);
+                strokePaint.Color = ToSkColor(colorOverride ?? line.Color);
                 strokePaint.StrokeWidth = (float)line.LineWidth;
                 canvas.DrawLine(
                     (float)line.X1, (float)PdfRenderGeometry.ToCanvasY(pageHeight, line.Y1),
@@ -322,7 +333,9 @@ public static class SkiaPdfWriter
 
             case PdfLineLinearGradient line:
             {
-                ApplyLinearGradient(strokePaint, line.Gradient, pageHeight, line.FallbackColor);
+                strokePaint.Color = ToSkColor(colorOverride ?? line.FallbackColor);
+                if (colorOverride is null)
+                    ApplyLinearGradient(strokePaint, line.Gradient, pageHeight, line.FallbackColor);
                 strokePaint.StrokeWidth = (float)line.LineWidth;
                 canvas.DrawLine(
                     (float)line.X1, (float)PdfRenderGeometry.ToCanvasY(pageHeight, line.Y1),
@@ -334,7 +347,7 @@ public static class SkiaPdfWriter
 
             case PdfFilledTriangle triangle:
             {
-                fillPaint.Color = ToSkColor(triangle.Color);
+                fillPaint.Color = ToSkColor(colorOverride ?? triangle.Color);
                 using var path = new SKPath();
                 path.MoveTo((float)triangle.X1, (float)PdfRenderGeometry.ToCanvasY(pageHeight, triangle.Y1));
                 path.LineTo((float)triangle.X2, (float)PdfRenderGeometry.ToCanvasY(pageHeight, triangle.Y2));
@@ -349,13 +362,13 @@ public static class SkiaPdfWriter
                 using var skPath = ToSkPath(pdfPath, pageHeight);
                 if (pdfPath.FillColor is { } fill)
                 {
-                    fillPaint.Color = ToSkColor(fill);
+                    fillPaint.Color = ToSkColor(colorOverride ?? fill);
                     canvas.DrawPath(skPath, fillPaint);
                 }
 
                 if (pdfPath.StrokeColor is { } stroke)
                 {
-                    strokePaint.Color = ToSkColor(stroke);
+                    strokePaint.Color = ToSkColor(colorOverride ?? stroke);
                     strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
                     using var pathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
                     strokePaint.PathEffect = pathStrokeDash;
@@ -369,10 +382,11 @@ public static class SkiaPdfWriter
             case PdfPathPattern pdfPath:
             {
                 using var skPath = ToSkPath(pdfPath.Contours, pageHeight);
+                fillPaint.Color = ToSkColor(colorOverride ?? pdfPath.Pattern.Foreground);
                 DrawPattern(canvas, fillPaint, pdfPath.Pattern, () => canvas.DrawPath(skPath, fillPaint));
                 if (pdfPath.StrokeColor is { } stroke)
                 {
-                    strokePaint.Color = ToSkColor(stroke);
+                    strokePaint.Color = ToSkColor(colorOverride ?? stroke);
                     strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
                     using var patternPathStrokeDash = CreateDashEffect(pdfPath.StrokeDash);
                     strokePaint.PathEffect = patternPathStrokeDash;
@@ -388,7 +402,7 @@ public static class SkiaPdfWriter
                 using var skPath = ToSkPath(pdfPath.Contours, pageHeight);
                 if (pdfPath.FillFallbackColor is { } fillFallback)
                 {
-                    if (pdfPath.FillGradient is { } fillGradient)
+                    if (colorOverride is null && pdfPath.FillGradient is { } fillGradient)
                         ApplyLinearGradient(fillPaint, fillGradient, pageHeight, fillFallback);
                     else
                         fillPaint.Color = ToSkColor(fillFallback);
@@ -398,7 +412,7 @@ public static class SkiaPdfWriter
 
                 if (pdfPath.StrokeFallbackColor is { } strokeFallback)
                 {
-                    if (pdfPath.StrokeGradient is { } strokeGradient)
+                    if (colorOverride is null && pdfPath.StrokeGradient is { } strokeGradient)
                         ApplyLinearGradient(strokePaint, strokeGradient, pageHeight, strokeFallback);
                     else
                         strokePaint.Color = ToSkColor(strokeFallback);
@@ -426,7 +440,7 @@ public static class SkiaPdfWriter
                 canvas.RotateDegrees((float)group.RotationDegrees);
                 canvas.Translate(-centerX, -centerY);
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
                 canvas.Restore();
                 break;
             }
@@ -444,7 +458,7 @@ public static class SkiaPdfWriter
                     (float)(group.X + group.Width),
                     top + (float)group.Height));
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
                 canvas.Restore();
                 break;
             }
@@ -460,10 +474,14 @@ public static class SkiaPdfWriter
                 };
                 canvas.SaveLayer(layerPaint);
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
                 canvas.Restore();
                 break;
             }
+
+            case PdfEffectGroup group:
+                RenderEffectGroup(canvas, group, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                break;
 
             case PdfImage image:
             {
@@ -515,6 +533,116 @@ public static class SkiaPdfWriter
             canvas.DrawImage(skImage, sourceRect, destRect, imagePaint);
         else
             canvas.DrawImage(skImage, destRect, imagePaint);
+    }
+
+    private static void RenderEffectGroup(
+        SKCanvas canvas,
+        PdfEffectGroup group,
+        float pageHeight,
+        SKTypeface regular,
+        SKTypeface bold,
+        SKPaint fillPaint,
+        SKPaint strokePaint,
+        SKPaint textPaint,
+        FallbackTextRenderer textRenderer)
+    {
+        if (group.Ops.Count == 0)
+            return;
+
+        var parameters = group.Parameters;
+        var opacity = PdfRenderGeometry.NormalizeOpacity(parameters.Opacity);
+        switch (group.Kind)
+        {
+            case PdfEffectKind.Shadow:
+                RenderEffectPass(canvas, group.Ops, parameters.Color, opacity,
+                    parameters.OffsetX, parameters.OffsetY, parameters.Radius * 0.18,
+                    pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                break;
+            case PdfEffectKind.Glow:
+                for (var index = 3; index >= 1; index--)
+                {
+                    var spread = Math.Max(1, parameters.Radius) * index / 3;
+                    RenderEffectPass(canvas, group.Ops, parameters.Color,
+                        opacity * (0.18 + 0.08 * (3 - index)), 0, 0, spread,
+                        pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                }
+                break;
+            case PdfEffectKind.SoftEdge:
+                for (var index = 3; index >= 1; index--)
+                {
+                    var spread = Math.Max(1, parameters.Radius) * index / 3;
+                    RenderEffectPass(canvas, group.Ops, parameters.Color, opacity * 0.12,
+                        0, 0, spread, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                }
+                break;
+            case PdfEffectKind.Reflection:
+            {
+                canvas.Save();
+                var centerX = (float)group.BoundsX + (float)group.BoundsWidth / 2;
+                var centerY = (float)(pageHeight - group.BoundsY + parameters.ReflectionGap / 2);
+                var axisAngle = (float)(parameters.ReflectionDirectionDegrees - 90);
+                canvas.Translate(centerX, centerY);
+                canvas.RotateDegrees(axisAngle);
+                canvas.Scale(1, -1);
+                canvas.RotateDegrees(-axisAngle);
+                canvas.Translate(-centerX, -centerY);
+                using var reflectionLayer = new SKPaint
+                {
+                    Color = new SKColor(255, 255, 255, ToAlphaByte(opacity)),
+                };
+                canvas.SaveLayer(reflectionLayer);
+                foreach (var op in group.Ops)
+                    RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, parameters.Color);
+                canvas.Restore();
+                canvas.Restore();
+                break;
+            }
+            case PdfEffectKind.Bevel:
+                RenderEffectPass(canvas, group.Ops, parameters.Color, opacity * 0.72,
+                    -Math.Max(0.5, parameters.Radius * 0.12), parameters.Radius * 0.12, 0,
+                    pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                if (parameters.SecondaryColor is { } secondary)
+                {
+                    RenderEffectPass(canvas, group.Ops, secondary, opacity * 0.52,
+                        Math.Max(0.5, parameters.Radius * 0.12), -parameters.Radius * 0.12, 0,
+                        pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                }
+                break;
+        }
+    }
+
+    private static void RenderEffectPass(
+        SKCanvas canvas,
+        IReadOnlyList<PdfDrawOp> ops,
+        PdfColor? color,
+        double opacity,
+        double offsetX,
+        double offsetY,
+        double spread,
+        float pageHeight,
+        SKTypeface regular,
+        SKTypeface bold,
+        SKPaint fillPaint,
+        SKPaint strokePaint,
+        SKPaint textPaint,
+        FallbackTextRenderer textRenderer)
+    {
+        using var layerPaint = new SKPaint
+        {
+            Color = new SKColor(255, 255, 255, ToAlphaByte(opacity)),
+        };
+        canvas.SaveLayer(layerPaint);
+        canvas.Translate((float)offsetX, (float)-offsetY);
+        var passes = spread > 0 ? 3 : 1;
+        for (var index = 0; index < passes; index++)
+        {
+            var distance = spread * (index + 1) / passes;
+            if (distance != 0)
+                canvas.Translate((float)(distance * 0.35), (float)(-distance * 0.2));
+            foreach (var op in ops)
+                RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, color);
+        }
+        canvas.Restore();
     }
 
     internal static SKImage? ApplyColorEffects(SKImage image, PdfImageColorEffects effects)

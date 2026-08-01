@@ -4526,7 +4526,6 @@ public sealed class DocumentView : Control
 
         var frame = PdfRect(sourceRect, 0, 0, sourceRect.Width, sourceRect.Height, pageTopDip, pageHeightPt);
         var ops = new List<PdfDrawOp>();
-        AddPdfWordArtEffects(ops, plan.Effects, frame);
         var fill = ResolvePdfShapeFillFallback(wordArt.Fill);
         var pattern = BuildPdfShapePattern(wordArt.Fill);
         var gradient = BuildPdfShapeGradient(wordArt.Fill, frame.X, frame.Y, frame.Width, frame.Height);
@@ -4536,6 +4535,8 @@ public sealed class DocumentView : Control
             ops.Add(new PdfFillRectPattern(frame.X, frame.Y, frame.Width, frame.Height, pattern));
         else if (fill is { } solidFill)
             ops.Add(new PdfFillRect(frame.X, frame.Y, frame.Width, frame.Height, solidFill));
+
+        var glyphOps = new List<PdfDrawOp>();
 
         var fontSizeDip = Math.Max(8, wordArt.FontSizeDip);
         var glyphWidths = wordArt.Text.Select(character =>
@@ -4565,7 +4566,7 @@ public sealed class DocumentView : Control
             {
                 var placement = placements[index];
                 AddPdfWordArtGlyph(
-                    ops,
+                    glyphOps,
                     wordArt.Text[index].ToString(),
                     glyphWidths[index],
                     fontSizeDip,
@@ -4586,7 +4587,7 @@ public sealed class DocumentView : Control
             foreach (var (character, width) in wordArt.Text.Zip(glyphWidths))
             {
                 AddPdfWordArtGlyph(
-                    ops,
+                    glyphOps,
                     character.ToString(),
                     width,
                     fontSizeDip,
@@ -4603,41 +4604,100 @@ public sealed class DocumentView : Control
             }
         }
 
+        ops.AddRange(WrapPdfEffectOps(glyphOps, plan.Effects, frame));
         return WrapPdfVisualOps(ops, plan, frame);
     }
 
-    private static void AddPdfWordArtEffects(
-        List<PdfDrawOp> ops,
+    private static IReadOnlyList<PdfDrawOp> WrapPdfEffectOps(
+        IReadOnlyList<PdfDrawOp> source,
         DrawingObjectEffectsPlan effects,
         PdfRectValue frame)
     {
-        if (effects.HasGlow && effects.GlowOpacity > 0)
-        {
-            var spread = Math.Max(1, effects.GlowRadiusDip / 1.3333333333333333);
-            ops.Add(new PdfOpacityGroup(
-                effects.GlowOpacity * 0.35,
-                [new PdfFillRect(
-                    frame.X - spread,
-                    frame.Y - spread,
-                    frame.Width + spread * 2,
-                    frame.Height + spread * 2,
-                    ParseColor(effects.GlowColorHex))]));
-        }
+        if (source.Count == 0 || !effects.HasAny)
+            return source;
 
+        var result = new List<PdfDrawOp>();
         if (effects.HasShadow && effects.ShadowOpacity > 0)
         {
             var radians = effects.ShadowDirectionDegrees * Math.PI / 180.0;
-            var distance = effects.ShadowDistanceDip / 1.3333333333333333;
-            var blur = Math.Max(1, effects.ShadowBlurDip / 1.3333333333333333 * 0.2);
-            ops.Add(new PdfOpacityGroup(
-                effects.ShadowOpacity * 0.45,
-                [new PdfFillRect(
-                    frame.X + Math.Cos(radians) * distance - blur,
-                    frame.Y - Math.Sin(radians) * distance - blur,
-                    frame.Width + blur * 2,
-                    frame.Height + blur * 2,
-                    ParseColor(effects.ShadowColorHex))]));
+            var distance = effects.ShadowDistanceDip / PxPerPoint;
+            result.Add(new PdfEffectGroup(
+                PdfEffectKind.Shadow,
+                frame.X,
+                frame.Y,
+                frame.Width,
+                frame.Height,
+                new PdfEffectParameters(
+                    ParseColor(effects.ShadowColorHex),
+                    effects.ShadowOpacity,
+                    effects.ShadowBlurDip / PxPerPoint,
+                    Math.Cos(radians) * distance,
+                    -Math.Sin(radians) * distance),
+                source));
         }
+
+        if (effects.HasGlow && effects.GlowOpacity > 0)
+        {
+            result.Add(new PdfEffectGroup(
+                PdfEffectKind.Glow,
+                frame.X,
+                frame.Y,
+                frame.Width,
+                frame.Height,
+                new PdfEffectParameters(
+                    ParseColor(effects.GlowColorHex),
+                    effects.GlowOpacity,
+                    effects.GlowRadiusDip / PxPerPoint),
+                source));
+        }
+
+        if (effects.HasSoftEdge)
+        {
+            result.Add(new PdfEffectGroup(
+                PdfEffectKind.SoftEdge,
+                frame.X,
+                frame.Y,
+                frame.Width,
+                frame.Height,
+                new PdfEffectParameters(null, 0.34, effects.SoftEdgeRadiusDip / PxPerPoint),
+                source));
+        }
+
+        if (effects.HasReflection && effects.ReflectionOpacity > 0)
+        {
+            result.Add(new PdfEffectGroup(
+                PdfEffectKind.Reflection,
+                frame.X,
+                frame.Y,
+                frame.Width,
+                frame.Height,
+                new PdfEffectParameters(
+                    null,
+                    effects.ReflectionOpacity,
+                    0,
+                    ReflectionGap: effects.ReflectionDistanceDip / PxPerPoint,
+                    ReflectionDirectionDegrees: effects.ReflectionDirectionDegrees),
+                source));
+        }
+
+        if (effects.HasBevel)
+        {
+            result.Add(new PdfEffectGroup(
+                PdfEffectKind.Bevel,
+                frame.X,
+                frame.Y,
+                frame.Width,
+                frame.Height,
+                new PdfEffectParameters(
+                    ParseColor("#E0E8FF"),
+                    0.82,
+                    Math.Max(effects.BevelWidthDip, effects.BevelHeightDip) / PxPerPoint,
+                    SecondaryColor: ParseColor("#5C6B85")),
+                source));
+        }
+
+        result.AddRange(source);
+        return result;
     }
 
     private void AddPdfWordArtGlyph(
@@ -4724,6 +4784,9 @@ public sealed class DocumentView : Control
         AddPdfShapeTextOps(ops, plan, snapshot, sourceRect, pageTopDip, pageHeightPt);
         if (ops.Count == 0)
             return [];
+
+        var frame = new PdfRectValue(xPt, yPt, widthPt, heightPt);
+        ops = WrapPdfEffectOps(ops, plan.Effects, frame).ToList();
 
         if (Math.Abs(plan.RotationAngle) > 0.001 || plan.FlipH || plan.FlipV)
         {

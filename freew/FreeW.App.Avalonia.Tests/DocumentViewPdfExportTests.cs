@@ -359,6 +359,99 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_ExportsShapeAndWordArtEffectsThroughSharedGroups() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 300;
+            document.Page.HeightPt = 220;
+
+            var shape = Shape.TextBoxWith("Effects", 96, 48, "#4472C4");
+            shape.Effects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowColorHex = "202020",
+                ShadowAlpha = 55000,
+                ShadowBlurRad = 76200,
+                ShadowDist = 38100,
+                ShadowDir = 2700000,
+                HasGlow = true,
+                GlowColorHex = "FF8000",
+                GlowAlpha = 65000,
+                GlowRad = 63500,
+                HasSoftEdge = true,
+                SoftEdgeRad = 38100,
+                HasReflection = true,
+                ReflectionStartAlpha = 45000,
+                ReflectionDist = 19050,
+                ReflectionDir = 5400000,
+                HasBevel = true,
+                BevelW = 38100,
+                BevelH = 50800,
+            };
+            shape.Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 24,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 32,
+            };
+
+            var groupedWordArt = new WordArt("Glow", WordArtStyle.GlowGold, 28);
+            var group = new DrawingGroup { WidthPt = 160, HeightPt = 80 };
+            group.Children.Add(groupedWordArt);
+            group.ChildOffsets.Add((12, 12));
+
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromShape(shape));
+            paragraph.Runs.Add(Run.FromDrawingGroup(group));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(900, 1200));
+
+            static IEnumerable<PdfDrawOp> Descendants(IEnumerable<PdfDrawOp> ops)
+            {
+                foreach (var op in ops)
+                {
+                    yield return op;
+                    switch (op)
+                    {
+                        case PdfRotationGroup rotation:
+                            foreach (var child in Descendants(rotation.Ops))
+                                yield return child;
+                            break;
+                        case PdfClipGroup clip:
+                            foreach (var child in Descendants(clip.Ops))
+                                yield return child;
+                            break;
+                        case PdfEffectGroup effect:
+                            foreach (var child in Descendants(effect.Ops))
+                                yield return child;
+                            break;
+                    }
+                }
+            }
+
+            var operations = Descendants(view.BuildPdfContent().Pages.SelectMany(page => page.Ops)).ToArray();
+            operations.OfType<PdfEffectGroup>().Select(effect => effect.Kind)
+                .Should().Contain([PdfEffectKind.Shadow, PdfEffectKind.Glow, PdfEffectKind.SoftEdge,
+                    PdfEffectKind.Reflection, PdfEffectKind.Bevel]);
+            operations.OfType<PdfEffectGroup>().Should().Contain(effect => effect.Parameters.Opacity > 0);
+            operations.OfType<PdfText>().Select(text => text.Text).Should().Contain(text => text.Contains("Effects", StringComparison.Ordinal));
+            string.Concat(operations.OfType<PdfText>().Select(text => text.Text))
+                .Should().Contain("Glow");
+
+            var content = view.BuildPdfContent();
+            PortablePdfWriter.WriteToBytes(content).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            SkiaPdfWriter.WriteToBytes(content).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            SkiaPdfWriter.RenderPagesToPng(content).Single().Length.Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_PreservesFloatingShapeFlipsAndDashStyle() =>
         Session.Dispatch(() =>
         {
