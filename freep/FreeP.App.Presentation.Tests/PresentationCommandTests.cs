@@ -86,6 +86,31 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void InsertSlideCommand_InheritsNeighborSectionAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(3);
+        var firstId = p.Slides[0].Id;
+        var secondId = p.Slides[1].Id;
+        var thirdId = p.Slides[2].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Intro" };
+        section.SlideIds.AddRange(new[] { firstId, secondId, thirdId });
+        p.Sections.Add(section);
+
+        var inserted = new Slide { Title = "Inserted" };
+        bus.Execute(new InsertSlideCommand(1, inserted));
+
+        p.Sections[0].SlideIds.Should().Equal(firstId, inserted.Id, secondId, thirdId);
+
+        bus.Undo();
+        p.Slides.Select(slide => slide.Id).Should().Equal(firstId, secondId, thirdId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, secondId, thirdId);
+
+        bus.Redo();
+        p.Slides[1].Should().BeSameAs(inserted);
+        p.Sections[0].SlideIds.Should().Equal(firstId, inserted.Id, secondId, thirdId);
+    }
+
+    [Fact]
     public void AddSlideCommand_Apply_AppendsSlide()
     {
         var (p, bus) = Make();
@@ -177,6 +202,32 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DuplicateSlideCommand_InheritsSectionMembershipAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(2);
+        var sourceId = p.Slides[0].Id;
+        var followingId = p.Slides[1].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Intro" };
+        section.SlideIds.AddRange(new[] { sourceId, followingId });
+        p.Sections.Add(section);
+
+        bus.Execute(new DuplicateSlideCommand(0));
+
+        var firstDuplicateId = p.Slides[1].Id;
+        p.Sections[0].SlideIds.Should().Equal(sourceId, firstDuplicateId, followingId);
+
+        bus.Undo();
+        p.Slides.Select(slide => slide.Id).Should().Equal(sourceId, followingId);
+        p.Sections[0].SlideIds.Should().Equal(sourceId, followingId);
+
+        bus.Redo();
+
+        var redoDuplicateId = p.Slides[1].Id;
+        redoDuplicateId.Should().NotBe(firstDuplicateId);
+        p.Sections[0].SlideIds.Should().Equal(sourceId, redoDuplicateId, followingId);
+    }
+
+    [Fact]
     public void DuplicateSlideCommand_DeepClone_PreservesTransitionSplitOrientation()
     {
         var (p, bus) = Make(1);
@@ -225,6 +276,30 @@ public sealed class PresentationCommandTests
         bus.Execute(new MoveSlideCommand(0, 2));
         // After removal of A, list is [B,C]; insert at 2 => [B,C,A]
         p.Slides[2].Should().BeSameAs(first);
+    }
+
+    [Fact]
+    public void MoveSlideCommand_SynchronizesSectionOrderAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(3);
+        var firstId = p.Slides[0].Id;
+        var secondId = p.Slides[1].Id;
+        var thirdId = p.Slides[2].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Intro" };
+        section.SlideIds.AddRange(new[] { firstId, secondId, thirdId });
+        p.Sections.Add(section);
+
+        bus.Execute(new MoveSlideCommand(0, 2));
+
+        p.Slides.Select(slide => slide.Id).Should().Equal(secondId, thirdId, firstId);
+        p.Sections[0].SlideIds.Should().Equal(secondId, thirdId, firstId);
+
+        bus.Undo();
+        p.Slides.Select(slide => slide.Id).Should().Equal(firstId, secondId, thirdId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, secondId, thirdId);
+
+        bus.Redo();
+        p.Sections[0].SlideIds.Should().Equal(secondId, thirdId, firstId);
     }
 
     [Fact]
