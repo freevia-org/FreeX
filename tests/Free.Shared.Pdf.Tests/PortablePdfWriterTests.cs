@@ -514,6 +514,88 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_BevelEmitsSeparateDirectionalBandsWithinDeclaredBounds()
+    {
+        var group = new PdfEffectGroup(
+            PdfEffectKind.Bevel,
+            10,
+            20,
+            40,
+            30,
+            new PdfEffectParameters(
+                new PdfColor(0xE0, 0xE8, 0xFF),
+                0.8,
+                1,
+                SecondaryColor: new PdfColor(0x40, 0x40, 0x40),
+                BevelWidth: 4,
+                BevelHeight: 6),
+            [new PdfFillRect(10, 20, 40, 30, new PdfColor(0x20, 0x60, 0xA0))]);
+        var bands = PdfRenderGeometry.GetBevelBands(group);
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(
+            new PdfContentDocument([new PdfContentPage(80, 80, [group])])))
+            .Replace("\r\n", "\n");
+
+        bands.Should().HaveCount(8);
+        bands[0].Points.Should().Equal(
+            new PdfPathPoint(10, 50),
+            new PdfPathPoint(50, 50),
+            new PdfPathPoint(50, 47),
+            new PdfPathPoint(10, 47));
+        bands[1].Points.Should().Equal(
+            new PdfPathPoint(10, 47),
+            new PdfPathPoint(50, 47),
+            new PdfPathPoint(50, 44),
+            new PdfPathPoint(10, 44));
+        bands[0].IsHighlight.Should().BeTrue();
+        bands[2].IsHighlight.Should().BeFalse();
+        bands[4].IsHighlight.Should().BeFalse();
+        bands[6].IsHighlight.Should().BeTrue();
+
+        pdf.Split("h W n", StringSplitOptions.None).Should().HaveCount(9);
+        pdf.Should().Contain("10 20 40 30 re W n");
+        pdf.Should().Contain("1 0 0 1 0 6 cm");
+        pdf.Should().Contain("1 0 0 1 4 0 cm");
+        pdf.Should().Contain("1 0 0 1 0 -6 cm");
+        pdf.Should().Contain("1 0 0 1 -4 0 cm");
+        pdf.Should().Contain("0.878 0.91 1 rg");
+        pdf.Should().Contain("0.251 0.251 0.251 rg");
+        pdf.Should().Contain("<< /Type /ExtGState /ca 0.576 /CA 0.576 >>");
+        pdf.Should().Contain("<< /Type /ExtGState /ca 0.352 /CA 0.352 >>");
+    }
+
+    [Fact]
+    public void Write_BevelBandsComposeWithNestedRotationAndClipGroups()
+    {
+        var bevel = new PdfEffectGroup(
+            PdfEffectKind.Bevel,
+            10,
+            15,
+            40,
+            30,
+            new PdfEffectParameters(
+                new PdfColor(0xFF, 0xFF, 0xFF),
+                0.7,
+                3,
+                SecondaryColor: new PdfColor(0x20, 0x20, 0x20)),
+            [new PdfFillRect(10, 15, 40, 30, PdfColor.Black)]);
+        var page = new PdfContentPage(100, 80,
+        [
+            new PdfRotationGroup(
+                20,
+                20,
+                90,
+                [new PdfClipGroup(0, 0, 80, 70, [bevel])]),
+        ]);
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(
+            new PdfContentDocument([page]))).Replace("\r\n", "\n");
+
+        pdf.Should().Contain("q\n0 -1 1 0 0 40 cm\nq\n0 0 80 70 re W n\nq");
+        pdf.Should().Contain("10 15 40 30 re W n");
+        pdf.Split("h W n", StringSplitOptions.None).Should().HaveCount(9);
+    }
+
+    [Fact]
     public void Write_BlurFallbackUsesSymmetricWeightedStamps()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

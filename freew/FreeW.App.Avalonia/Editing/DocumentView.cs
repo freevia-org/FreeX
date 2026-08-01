@@ -4700,7 +4700,9 @@ public sealed class DocumentView : Control
                     ParseColor("#E0E8FF"),
                     0.82,
                     Math.Max(effects.BevelWidthDip, effects.BevelHeightDip) / PxPerPoint,
-                    SecondaryColor: ParseColor("#5C6B85")),
+                    SecondaryColor: ParseColor("#5C6B85"),
+                    BevelWidth: effects.BevelWidthDip / PxPerPoint,
+                    BevelHeight: effects.BevelHeightDip / PxPerPoint),
                 source));
         }
 

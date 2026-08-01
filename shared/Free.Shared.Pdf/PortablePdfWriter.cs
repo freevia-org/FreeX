@@ -501,8 +501,9 @@ public static class PortablePdfWriter
                             yield return ReflectionPassOpacity(group, index);
                         break;
                     case PdfEffectKind.Bevel:
-                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.72);
-                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.52);
+                        foreach (var band in PdfRenderGeometry.GetBevelBands(group))
+                            yield return PdfRenderGeometry.NormalizeOpacity(
+                                group.Parameters.Opacity * band.OpacityScale);
                         break;
                 }
                 break;
@@ -1185,16 +1186,40 @@ public static class PortablePdfWriter
                 break;
 
             case PdfEffectKind.Bevel:
-                AppendEffectPass(content, group.Ops, parameters.Color, opacity * 0.72,
-                    -Math.Max(0.5, parameters.Radius * 0.12), Math.Max(0.5, parameters.Radius * 0.12), 0,
-                    imageResources, opacityResources, patternResources);
-                if (parameters.SecondaryColor is { } secondary)
-                {
-                    AppendEffectPass(content, group.Ops, secondary, opacity * 0.52,
-                        Math.Max(0.5, parameters.Radius * 0.12), -Math.Max(0.5, parameters.Radius * 0.12), 0,
-                        imageResources, opacityResources, patternResources);
-                }
+                AppendEffectBevel(content, group, opacity, imageResources, opacityResources, patternResources);
                 break;
+        }
+    }
+
+    private static void AppendEffectBevel(
+        StringBuilder content,
+        PdfEffectGroup group,
+        double opacity,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        PatternResourceSet patternResources)
+    {
+        var shadowColor = group.Parameters.SecondaryColor ?? group.Parameters.Color;
+        foreach (var band in PdfRenderGeometry.GetBevelBands(group))
+        {
+            var bandOpacity = PdfRenderGeometry.NormalizeOpacity(opacity * band.OpacityScale);
+            var resourceName = opacityResources.TryGetValue(bandOpacity, out var resource)
+                ? resource.ResourceName
+                : null;
+            content.AppendLine("q");
+            AppendOpacityState(content, resourceName);
+            content.AppendLine(
+                $"{FormatNumber(group.BoundsX)} {FormatNumber(group.BoundsY)} {FormatNumber(group.BoundsWidth)} {FormatNumber(group.BoundsHeight)} re W n");
+            content.AppendLine($"{FormatNumber(band.Points[0].X)} {FormatNumber(band.Points[0].Y)} m");
+            for (var index = 1; index < band.Points.Count; index++)
+                content.AppendLine($"{FormatNumber(band.Points[index].X)} {FormatNumber(band.Points[index].Y)} l");
+            content.AppendLine("h W n");
+            if (band.OffsetX != 0 || band.OffsetY != 0)
+                content.AppendLine($"1 0 0 1 {FormatNumber(band.OffsetX)} {FormatNumber(band.OffsetY)} cm");
+            var color = band.IsHighlight ? group.Parameters.Color : shadowColor;
+            foreach (var op in group.Ops)
+                AppendDrawOp(content, op, imageResources, opacityResources, patternResources, color);
+            content.AppendLine("Q");
         }
     }
 

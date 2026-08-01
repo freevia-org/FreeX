@@ -144,6 +144,91 @@ public static class PdfRenderGeometry
     public static double NormalizeOpacity(double opacity) =>
         Math.Round(Math.Clamp(double.IsFinite(opacity) ? opacity : 1.0, 0.0, 1.0), 3);
 
+    /// <summary>
+    /// Builds the two deterministic bands on each face of a bevel. The returned polygons are in
+    /// PDF user space and are deliberately clipped to the effect bounds by each writer. A light
+    /// direction of 135 degrees is the conventional upper-left Office bevel direction in PDF
+    /// coordinates (x right, y up).
+    /// </summary>
+    public static IReadOnlyList<PdfBevelBand> GetBevelBands(PdfEffectGroup group)
+    {
+        if (!IsFinite(group.BoundsX) ||
+            !IsFinite(group.BoundsY) ||
+            !IsFinite(group.BoundsWidth) ||
+            !IsFinite(group.BoundsHeight) ||
+            group.BoundsWidth <= 0 ||
+            group.BoundsHeight <= 0)
+            return [];
+        var width = group.BoundsWidth;
+        var height = group.BoundsHeight;
+
+        var fallback = Math.Max(0, double.IsFinite(group.Parameters.Radius) ? group.Parameters.Radius : 0);
+        var bevelWidth = NormalizeBevelDimension(group.Parameters.BevelWidth, fallback, width);
+        var bevelHeight = NormalizeBevelDimension(group.Parameters.BevelHeight, fallback, height);
+        if (bevelWidth <= 0 || bevelHeight <= 0)
+            return [];
+
+        var direction = double.IsFinite(group.Parameters.BevelLightDirectionDegrees)
+            ? group.Parameters.BevelLightDirectionDegrees * Math.PI / 180d
+            : 135 * Math.PI / 180d;
+        var lightX = Math.Cos(direction);
+        var lightY = Math.Sin(direction);
+        var bands = new List<PdfBevelBand>(8);
+        AddBevelEdgeBands(
+            bands,
+            [
+                new PdfPathPoint(group.BoundsX, group.BoundsY + height),
+                new PdfPathPoint(group.BoundsX + width, group.BoundsY + height),
+            ],
+            [
+                new PdfPathPoint(group.BoundsX, group.BoundsY + height - bevelHeight),
+                new PdfPathPoint(group.BoundsX + width, group.BoundsY + height - bevelHeight),
+            ],
+            lightY >= 0,
+            0,
+            bevelHeight);
+        AddBevelEdgeBands(
+            bands,
+            [
+                new PdfPathPoint(group.BoundsX + width, group.BoundsY),
+                new PdfPathPoint(group.BoundsX + width, group.BoundsY + height),
+            ],
+            [
+                new PdfPathPoint(group.BoundsX + width - bevelWidth, group.BoundsY),
+                new PdfPathPoint(group.BoundsX + width - bevelWidth, group.BoundsY + height),
+            ],
+            lightX >= 0,
+            bevelWidth,
+            0);
+        AddBevelEdgeBands(
+            bands,
+            [
+                new PdfPathPoint(group.BoundsX, group.BoundsY),
+                new PdfPathPoint(group.BoundsX + width, group.BoundsY),
+            ],
+            [
+                new PdfPathPoint(group.BoundsX, group.BoundsY + bevelHeight),
+                new PdfPathPoint(group.BoundsX + width, group.BoundsY + bevelHeight),
+            ],
+            lightY < 0,
+            0,
+            -bevelHeight);
+        AddBevelEdgeBands(
+            bands,
+            [
+                new PdfPathPoint(group.BoundsX, group.BoundsY),
+                new PdfPathPoint(group.BoundsX, group.BoundsY + height),
+            ],
+            [
+                new PdfPathPoint(group.BoundsX + bevelWidth, group.BoundsY),
+                new PdfPathPoint(group.BoundsX + bevelWidth, group.BoundsY + height),
+            ],
+            lightX < 0,
+            -bevelWidth,
+            0);
+        return bands;
+    }
+
     public static bool IsSupportedImageContentType(string? contentType)
     {
         var normalized = contentType?.Split(';', 2)[0].Trim();
@@ -159,6 +244,45 @@ public static class PdfRenderGeometry
     private static bool IsFinite(double value) =>
         !double.IsNaN(value) && !double.IsInfinity(value);
 
+    private static double NormalizeBevelDimension(double value, double fallback, double bound) =>
+        Math.Min(bound / 2, Math.Max(0, IsFinite(value) && value > 0 ? value : fallback));
+
+    private static void AddBevelEdgeBands(
+        List<PdfBevelBand> bands,
+        IReadOnlyList<PdfPathPoint> outer,
+        IReadOnlyList<PdfPathPoint> inner,
+        bool highlight,
+        double offsetX,
+        double offsetY)
+    {
+        var first = outer[0];
+        var second = outer[1];
+        var innerFirst = inner[0];
+        var innerSecond = inner[1];
+        var firstMid = new PdfPathPoint(
+            first.X + (innerFirst.X - first.X) * 0.5,
+            first.Y + (innerFirst.Y - first.Y) * 0.5);
+        var secondMid = new PdfPathPoint(
+            second.X + (innerSecond.X - second.X) * 0.5,
+            second.Y + (innerSecond.Y - second.Y) * 0.5);
+
+        AddBand([first, second, secondMid, firstMid], highlight, 0, offsetX, offsetY);
+        AddBand([firstMid, secondMid, innerSecond, innerFirst], highlight, 1, offsetX, offsetY);
+
+        void AddBand(
+            PdfPathPoint[] points,
+            bool isHighlight,
+            int index,
+            double bandOffsetX,
+            double bandOffsetY) =>
+            bands.Add(new PdfBevelBand(
+                points,
+                bandOffsetX,
+                bandOffsetY,
+                isHighlight,
+                index == 0 ? 0.72 : 0.44));
+    }
+
     private static double DistanceSquared(double x1, double y1, double x2, double y2)
     {
         var dx = x2 - x1;
@@ -171,3 +295,10 @@ public static class PdfRenderGeometry
 }
 
 public readonly record struct PdfImagePixelRect(int X, int Y, int Width, int Height);
+
+public sealed record PdfBevelBand(
+    IReadOnlyList<PdfPathPoint> Points,
+    double OffsetX,
+    double OffsetY,
+    bool IsHighlight,
+    double OpacityScale);

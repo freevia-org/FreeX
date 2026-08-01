@@ -450,6 +450,10 @@ public sealed class DocumentViewPdfExportTests
                 .Should().Contain([PdfEffectKind.Shadow, PdfEffectKind.Glow, PdfEffectKind.SoftEdge,
                     PdfEffectKind.Reflection, PdfEffectKind.Bevel]);
             operations.OfType<PdfEffectGroup>().Should().Contain(effect => effect.Parameters.Opacity > 0);
+            var bevel = operations.OfType<PdfEffectGroup>().Single(effect => effect.Kind == PdfEffectKind.Bevel);
+            bevel.Parameters.BevelWidth.Should().BeApproximately(3, 0.001);
+            bevel.Parameters.BevelHeight.Should().BeApproximately(4, 0.001);
+            PdfRenderGeometry.GetBevelBands(bevel).Should().HaveCount(8);
             var reflection = operations.OfType<PdfEffectGroup>().Single(effect => effect.Kind == PdfEffectKind.Reflection);
             reflection.Parameters.Radius.Should().BeApproximately(2, 0.001);
             reflection.Parameters.ReflectionEndOpacity.Should().BeApproximately(0.05, 0.001);

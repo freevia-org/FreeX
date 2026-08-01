@@ -360,7 +360,10 @@ public sealed record PdfEffectParameters(
     double ReflectionScaleX = 1,
     double ReflectionScaleY = -1,
     double ReflectionSkewXDegrees = 0,
-    double ReflectionSkewYDegrees = 0);
+    double ReflectionSkewYDegrees = 0,
+    double BevelWidth = 0,
+    double BevelHeight = 0,
+    double BevelLightDirectionDegrees = 135);
 
 /// <summary>
 /// Renders a composable vector layer from the child operations. This is intentionally an

@@ -647,16 +647,64 @@ public static class SkiaPdfWriter
                 break;
             }
             case PdfEffectKind.Bevel:
-                RenderEffectPass(canvas, group.Ops, parameters.Color, opacity * 0.72,
-                    -Math.Max(0.5, parameters.Radius * 0.12), parameters.Radius * 0.12, 0,
-                    pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
-                if (parameters.SecondaryColor is { } secondary)
-                {
-                    RenderEffectPass(canvas, group.Ops, secondary, opacity * 0.52,
-                        Math.Max(0.5, parameters.Radius * 0.12), -parameters.Radius * 0.12, 0,
-                        pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
-                }
+                RenderEffectBevel(canvas, group, opacity, pageHeight, regular, bold,
+                    fillPaint, strokePaint, textPaint, textRenderer);
                 break;
+        }
+    }
+
+    private static void RenderEffectBevel(
+        SKCanvas canvas,
+        PdfEffectGroup group,
+        double opacity,
+        float pageHeight,
+        SKTypeface regular,
+        SKTypeface bold,
+        SKPaint fillPaint,
+        SKPaint strokePaint,
+        SKPaint textPaint,
+        FallbackTextRenderer textRenderer)
+    {
+        var shadowColor = group.Parameters.SecondaryColor ?? group.Parameters.Color;
+        var boundsTop = (float)PdfRenderGeometry.ToCanvasTop(
+            pageHeight, group.BoundsY, group.BoundsHeight);
+        var bounds = new SKRect(
+            (float)group.BoundsX,
+            boundsTop,
+            (float)(group.BoundsX + group.BoundsWidth),
+            boundsTop + (float)group.BoundsHeight);
+
+        foreach (var band in PdfRenderGeometry.GetBevelBands(group))
+        {
+            using var layerPaint = new SKPaint
+            {
+                Color = new SKColor(255, 255, 255,
+                    ToAlphaByte(opacity * band.OpacityScale)),
+            };
+            using var path = new SKPath();
+            path.MoveTo(
+                (float)band.Points[0].X,
+                (float)PdfRenderGeometry.ToCanvasY(pageHeight, band.Points[0].Y));
+            for (var index = 1; index < band.Points.Count; index++)
+            {
+                path.LineTo(
+                    (float)band.Points[index].X,
+                    (float)PdfRenderGeometry.ToCanvasY(pageHeight, band.Points[index].Y));
+            }
+            path.Close();
+
+            canvas.Save();
+            canvas.ClipRect(bounds);
+            canvas.ClipPath(path);
+            canvas.SaveLayer(layerPaint);
+            if (band.OffsetX != 0 || band.OffsetY != 0)
+                canvas.Translate((float)band.OffsetX, (float)-band.OffsetY);
+            var color = band.IsHighlight ? group.Parameters.Color : shadowColor;
+            foreach (var op in group.Ops)
+                RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint,
+                    textPaint, textRenderer, color);
+            canvas.Restore();
+            canvas.Restore();
         }
     }
 

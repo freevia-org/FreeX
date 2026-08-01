@@ -145,6 +145,44 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void RenderPagesToPng_BevelIsVisibleAndBoundedToDirectionalBands()
+    {
+        var group = new PdfEffectGroup(
+            PdfEffectKind.Bevel,
+            30,
+            30,
+            40,
+            30,
+            new PdfEffectParameters(
+                new PdfColor(0xFF, 0x20, 0x20),
+                1,
+                1,
+                SecondaryColor: new PdfColor(0x20, 0x20, 0xFF),
+                BevelWidth: 4,
+                BevelHeight: 6),
+            [new PdfFillRect(30, 30, 40, 30, new PdfColor(0x40, 0x40, 0x40))]);
+        using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(
+            new PdfContentDocument([new PdfContentPage(120, 100, [group])])).Single());
+
+        var insidePixels = 0;
+        var outsidePixels = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        for (var x = 0; x < bitmap.Width; x++)
+        {
+            var pixel = bitmap.GetPixel(x, y);
+            var colored = pixel != SKColors.White;
+            var inside = x >= 40 && x < 94 && y >= 53 && y < 94;
+            if (colored && inside)
+                insidePixels++;
+            else if (colored && !inside)
+                outsidePixels++;
+        }
+
+        insidePixels.Should().BeGreaterThan(100);
+        outsidePixels.Should().Be(0);
+    }
+
+    [Fact]
     public void ReflectionSkew_ConvertsOfficeDegreesToSkiaFactors()
     {
         const double degrees = 9;
