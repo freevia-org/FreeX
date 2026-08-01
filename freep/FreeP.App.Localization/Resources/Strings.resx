@@ -2488,6 +2488,18 @@
   <data name="Ribbon_Command_AnimationMotionArcLeft_KeyTip" xml:space="preserve">
     <value>AL</value>
   </data>
+  <data name="Ribbon_Command_AnimationMotionArcUp_Label" xml:space="preserve">
+    <value>Arc Up</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcUp_KeyTip" xml:space="preserve">
+    <value>AU</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcDown_Label" xml:space="preserve">
+    <value>Arc Down</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcDown_KeyTip" xml:space="preserve">
+    <value>AD</value>
+  </data>
   <data name="Ribbon_Group_AnimationTiming_Label" xml:space="preserve">
     <value>Timing</value>
   </data>
