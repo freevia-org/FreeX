@@ -112,6 +112,49 @@ internal static class XlsxWorksheetFormControlPreserver
     }
 
     /// <summary>
+    /// R112-io-formcontrol-vml-anchor-comment-reorder-1: re-applies the Form Control VML anchor
+    /// sync AFTER <see cref="XlsxLegacyCommentPreserver.Preserve"/> has run. On a worksheet that has
+    /// BOTH a legacy Form Control and at least one cell Note, both shapes live in the same single
+    /// shared <c>legacyDrawing</c> VML part. <see cref="Preserve"/> (called earlier, before the
+    /// comment preserver) patches that part's control shape's ClientData Anchor in place via
+    /// <see cref="SyncFormControlVmlAnchors"/> to reflect a row/column shift, but
+    /// XlsxLegacyCommentPreserver.Preserve unconditionally rebuilds the WHOLE VML document from the
+    /// pristine SOURCE archive's copy of the part whenever the sheet has any Notes -- discarding the
+    /// anchor patch this preserver already wrote into the target moments earlier (its rebuild keeps
+    /// every non-Note shape, i.e. the control's shape, verbatim from that pristine snapshot). Calling
+    /// <see cref="SyncFormControlVmlAnchors"/> again here, last, re-applies the anchor patch on top of
+    /// whatever the comment preserver just wrote, so the sync always wins regardless of preserver
+    /// order. Deliberately re-runs ONLY the anchor sync -- not <see cref="WriteControlStateToCtrlProps"/>
+    /// or the controls-block injection, both of which already ran (and are idempotent-unsafe to
+    /// duplicate: injection guards on "already present" but ctrlProp writes are pointless busywork)
+    /// during the earlier <see cref="Preserve"/> call.
+    /// </summary>
+    public static void ReapplyVmlAnchorsAfterCommentReconciliation(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext? context,
+        Workbook? workbook)
+    {
+        if (context is null || workbook is null)
+            return;
+
+        foreach (var (sheetName, sourceWorksheetPath) in context.SourceSheets)
+        {
+            if (!XlsxRenamedSourceSheetResolver.TryResolveCurrentSheet(
+                    context, sheetName, sourceWorksheetPath, out var currentSheetName, out _))
+            {
+                continue;
+            }
+
+            var sheet = workbook.GetSheet(currentSheetName);
+            if (sheet is null)
+                continue;
+
+            SyncFormControlVmlAnchors(sourceArchive, targetArchive, context, sourceWorksheetPath, sheet);
+        }
+    }
+
+    /// <summary>
     /// Rewrites each control's <c>checked</c>/<c>val</c>/<c>sel</c>/<c>fmlaLink</c>/<c>fmlaRange</c>
     /// <c>formControlPr</c> attributes (in the TARGET archive's already-copied ctrlProp part — see
     /// <see cref="XlsxPackageMetadataMerger.CopyUnknownPackageParts"/>) from the corresponding

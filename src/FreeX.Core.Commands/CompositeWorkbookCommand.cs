@@ -22,6 +22,14 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand
     {
         _applied.Clear();
         var affectedCells = new List<CellAddress>();
+        // Starts true so a composite wrapping zero child commands (e.g. an AutoFit Row
+        // Height/Column Width whose sizing planner found nothing to size, R112-composite-
+        // empty-noop-1) reports IsNoOp itself, matching "nothing happened". Also stays true
+        // when every child that DID run was itself a no-op, so a grouped-sheet composite whose
+        // members are each an empty/no-op sub-composite correctly bubbles IsNoOp up instead of
+        // reporting a real edit. A single non-no-op child flips this false for the whole
+        // composite, same as today.
+        var allNoOp = true;
 
         foreach (var command in _commands)
         {
@@ -48,9 +56,11 @@ public sealed class CompositeWorkbookCommand : IWorkbookCommand
             _applied.Add(command);
             if (outcome.AffectedCells is not null)
                 affectedCells.AddRange(outcome.AffectedCells);
+            if (!outcome.IsNoOp)
+                allNoOp = false;
         }
 
-        return new CommandOutcome(true, AffectedCells: affectedCells);
+        return new CommandOutcome(true, AffectedCells: affectedCells, IsNoOp: allNoOp);
     }
 
     public void Revert(ICommandContext ctx)

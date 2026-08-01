@@ -15226,8 +15226,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         return result;
     }
 
+    // Excel opens the ACTIVE cell's hyperlink, not the selection's normalized top-left. The two
+    // differ whenever the selection was made upward/leftward (anchor at a corner other than the
+    // top-left). R112-app-services-hyperlink-active-cell fixed the shared WorkbookSession members
+    // (CanOpenSelectedHyperlink/TryGetSelectedHyperlinkPlan/OpenSelectedHyperlink); this is the
+    // Avalonia shell's matching call site.
     private async Task OpenSelectedHyperlinkAsync()
-        => await OpenHyperlinkAsync(_session.SelectedRange.Start);
+        => await OpenHyperlinkAsync(_session.ActiveCell);
 
     private async Task OpenHyperlinkAsync(CellAddress address)
     {

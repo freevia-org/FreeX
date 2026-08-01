@@ -125,6 +125,84 @@ public sealed class PortablePdfPageContentPlannerTests
         plan.StatusText.Should().Be("Portable PDF page 99 is not present in the export plan.");
     }
 
+    [Fact]
+    public void R112_NarrowNumericColumn_AppliesWidthOverflowIndicator()
+    {
+        // Column A is narrowed to exactly 2.0 character units (19px -> 2 estimated characters),
+        // matching ViewportService.GetColumnWidthPixels/EstimateCharacterWidth's own conversion.
+        // A currency-formatted 42 renders as "$42.00" (6 characters) -- too wide for the 2-character
+        // column -- so Excel (and the sibling grid/print paths) show the '##' overflow indicator
+        // instead of the raw digits.
+        var workbook = new Workbook("Budget");
+        var currencyStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00" });
+        var sheet = workbook.AddSheet("Summary");
+        sheet.ColumnWidths[1] = 2.0;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
+        sheet.GetCell(1, 1)!.StyleId = currencyStyle;
+
+        var exportPlan = CreateExportPlan(
+            workbook,
+            sheet,
+            GridRange.Parse("A1:A1", sheet.Id),
+            new WorkbookExportPrintPageCapacity(RowsPerPage: 10, ColumnsPerPage: 10));
+
+        var plan = PortablePdfPageContentPlanner.CreatePlan(workbook, exportPlan.PageRequests.Single());
+
+        plan.Cells.Should().ContainSingle()
+            .Which.DisplayText.Should().Be("##");
+    }
+
+    [Fact]
+    public void R112_NarrowNumericColumnWithShrinkToFit_DoesNotApplyWidthOverflowIndicator()
+    {
+        // Sibling/no-regression: Excel never shows the '#' overflow indicator when the cell's own
+        // Format Cells > Alignment > Shrink to Fit is on (the font shrinks instead) -- mirroring
+        // ViewportService.GetDisplayText and PageContentRenderModelBuilder.FormatCellText's identical
+        // suppressWidthOverflowIndicator: style.ShrinkToFit wiring.
+        var workbook = new Workbook("Budget");
+        var currencyStyle = workbook.RegisterStyle(new CellStyle { NumberFormat = "$#,##0.00", ShrinkToFit = true });
+        var sheet = workbook.AddSheet("Summary");
+        sheet.ColumnWidths[1] = 2.0;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(42));
+        sheet.GetCell(1, 1)!.StyleId = currencyStyle;
+
+        var exportPlan = CreateExportPlan(
+            workbook,
+            sheet,
+            GridRange.Parse("A1:A1", sheet.Id),
+            new WorkbookExportPrintPageCapacity(RowsPerPage: 10, ColumnsPerPage: 10));
+
+        var plan = PortablePdfPageContentPlanner.CreatePlan(workbook, exportPlan.PageRequests.Single());
+
+        plan.Cells.Should().ContainSingle()
+            .Which.DisplayText.Should().Be("$42.00");
+    }
+
+    [Fact]
+    public void R112_NarrowTextColumn_NeverAppliesWidthOverflowIndicator()
+    {
+        // No-regression: the '#' overflow indicator is scoped strictly to numeric/date-time values
+        // (NumberFormatter.FormatWithColor). A text value in the same narrow column keeps overflowing
+        // visually into the neighbor cell exactly as before -- WorkbookPdfContentBuilder's draw path
+        // deliberately lets a too-wide right-aligned/left-aligned text value bleed, which is correct
+        // Excel behavior for text (unlike numbers/dates).
+        var workbook = new Workbook("Budget");
+        var sheet = workbook.AddSheet("Summary");
+        sheet.ColumnWidths[1] = 2.0;
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("HelloWorld"));
+
+        var exportPlan = CreateExportPlan(
+            workbook,
+            sheet,
+            GridRange.Parse("A1:A1", sheet.Id),
+            new WorkbookExportPrintPageCapacity(RowsPerPage: 10, ColumnsPerPage: 10));
+
+        var plan = PortablePdfPageContentPlanner.CreatePlan(workbook, exportPlan.PageRequests.Single());
+
+        plan.Cells.Should().ContainSingle()
+            .Which.DisplayText.Should().Be("HelloWorld");
+    }
+
     private static PortablePdfExportPlan CreateExportPlan(
         Workbook workbook,
         Sheet sheet,

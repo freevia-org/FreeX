@@ -1938,7 +1938,43 @@ public sealed partial class FormulaEvaluator
     private ScalarValue EvaluateIndexAsReference(FunctionCallNode node, IEvalContext context)
     {
         if (node.Arguments.Count is < 2 or > 3) return ErrorValue.Value;
-        if (!TryAsRangeRef(node.Arguments[0], out var range)) return ErrorValue.Value;
+        if (!TryAsRangeRef(node.Arguments[0], out var range))
+        {
+            // TryAsRangeRef only understands the literal RangeRefNode/FullColumnRangeRefNode/
+            // FullRowRangeRefNode shapes a token can directly parse to. A bare single-cell
+            // reference (CellRefNode, e.g. A1) and a defined name (NamedRangeNode) are ALSO valid
+            // INDEX reference-source shapes in Excel -- INDEX(A1,1) returns a reference to A1
+            // itself and INDEX(MyName,1) returns a reference into the named range, both usable
+            // anywhere a reference is expected (OFFSET's base argument, CELL("address",...)'s
+            // reference argument, etc.). Resolve these two shapes here directly, mirroring
+            // EvaluateOffsetReference's own base-argument switch (case CellRefNode / case
+            // NamedRangeNode above) for its OWN first argument.
+            switch (node.Arguments[0])
+            {
+                case CellRefNode cellRef:
+                    if (cellRef.SheetName is not null && !context.SheetExists(cellRef.SheetName))
+                        return ErrorValue.Ref;
+                    range = new RangeRefNode(cellRef, cellRef, cellRef.SheetName);
+                    break;
+                case NamedRangeNode namedRange:
+                    var namedReference = ResolveNamedRangeNodeAsReference(namedRange, context);
+                    if (namedReference is ErrorValue namedError) return namedError;
+                    var resolved = (RangeValue)namedReference;
+                    var startCellRef = new CellRefNode(
+                        FreeX.Core.Model.CellAddress.NumberToColumnName(resolved.StartCol),
+                        resolved.StartRow,
+                        SheetName: resolved.SheetName);
+                    var endCellRef = new CellRefNode(
+                        FreeX.Core.Model.CellAddress.NumberToColumnName(resolved.StartCol + (uint)resolved.ColCount - 1),
+                        resolved.StartRow + (uint)resolved.RowCount - 1,
+                        SheetName: resolved.SheetName);
+                    range = new RangeRefNode(startCellRef, endCellRef, resolved.SheetName);
+                    break;
+                default:
+                    return ErrorValue.Value;
+            }
+        }
+
         if (range.SheetName is not null && !context.SheetExists(range.SheetName)) return ErrorValue.Ref;
 
         var rowValue = EvaluateNode(node.Arguments[1], context);

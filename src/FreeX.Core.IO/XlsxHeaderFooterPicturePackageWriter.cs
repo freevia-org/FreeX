@@ -59,7 +59,121 @@ internal static class XlsxHeaderFooterPicturePackageWriter
         return unchanged;
     }
 
-    public static void Save(Stream xlsxStream, Workbook workbook, IReadOnlySet<string>? sheetsToPreserve = null)
+    /// <summary>
+    /// Scans the SOURCE package for the "xl/drawings/freexHeaderFooterN.vml" index each sheet in
+    /// <paramref name="sheetsToPreserve"/> is currently referenced by (via its worksheet's
+    /// legacyDrawingHF relationship), so <see cref="Save"/> can steer its own sequential index
+    /// allocator away from those numbers.
+    /// </summary>
+    /// <remarks>
+    /// R112-io-hf-vml-path-collision: <see cref="Save"/> only ever numbers the sheets it is ABOUT
+    /// TO rewrite (skipping every preserved sheet before incrementing its counter -- see the
+    /// `continue` in that method), so the index it hands to <see cref="WriteSheetPictures"/> is a
+    /// save-local sequence over the CHANGED sheets only, not a stable identity. A preserved sheet's
+    /// existing legacyDrawingHF relationship still points at whatever "freexHeaderFooterN.vml" path
+    /// it was assigned on an EARLIER save (via <see cref="XlsxWorksheetVmlReferencePreserver"/>,
+    /// which copies that exact source part into the freshly generated package under the SAME path
+    /// later in the save pipeline). If a changed sheet's freshly restarted counter lands on that
+    /// same N, <see cref="WriteSheetPictures"/> unconditionally deletes/recreates that path (see its
+    /// own doc comment) before the preserved sheet's copy is even written, so the preserved sheet's
+    /// relationship silently ends up pointing at the OTHER sheet's picture. Reserving every
+    /// preserved sheet's real on-disk index up front closes that hole without needing to touch the
+    /// preservation pass itself.
+    /// </remarks>
+    public static IReadOnlySet<int> GetPreservedVmlIndices(
+        Stream xlsxStream,
+        Workbook workbook,
+        IReadOnlySet<string> sheetsToPreserve)
+    {
+        var reserved = new HashSet<int>();
+        if (sheetsToPreserve.Count == 0)
+            return reserved;
+
+        using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Read, leaveOpen: true);
+        var workbookEntry = archive.GetEntry("xl/workbook.xml");
+        var relsEntry = archive.GetEntry("xl/_rels/workbook.xml.rels");
+        if (workbookEntry is null || relsEntry is null)
+            return reserved;
+
+        var workbookXml = XlsxPackageXmlEditor.LoadXml(workbookEntry);
+        var relsXml = XlsxPackageXmlEditor.LoadXml(relsEntry);
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+
+        var relTargets = XlsxRelationshipReader.ReadTargets(
+            relsXml,
+            packageRelNs,
+            XlsxPackagePath.NormalizeWorkbookTarget);
+
+        foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
+        {
+            var name = sheetElement.Attribute("name")?.Value;
+            var relId = sheetElement.Attribute(relNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(relId) || !sheetsToPreserve.Contains(name))
+                continue;
+            if (!relTargets.TryGetValue(relId, out var worksheetPath))
+                continue;
+
+            var worksheetEntry = archive.GetEntry(worksheetPath);
+            if (worksheetEntry is null)
+                continue;
+
+            var worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            var vmlPath = TryResolveLegacyDrawingHfVmlPath(archive, worksheetPath, worksheetXml, workbookNs, relNs, packageRelNs);
+            if (vmlPath is not null && ParseFreexHeaderFooterVmlIndex(vmlPath) is { } vmlIndex)
+                reserved.Add(vmlIndex);
+        }
+
+        return reserved;
+    }
+
+    private static string? TryResolveLegacyDrawingHfVmlPath(
+        ZipArchive archive,
+        string worksheetPath,
+        XDocument worksheetXml,
+        XNamespace workbookNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var relId = worksheetXml.Root?.Element(workbookNs + "legacyDrawingHF")?.Attribute(relNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(relId))
+            return null;
+
+        var worksheetRelsEntry = archive.GetEntry(XlsxPackagePath.GetRelationshipPartPath(worksheetPath));
+        if (worksheetRelsEntry is null)
+            return null;
+
+        var worksheetRelsXml = XlsxPackageXmlEditor.LoadXml(worksheetRelsEntry);
+        var target = worksheetRelsXml.Root?
+            .Elements(packageRelNs + "Relationship")
+            .FirstOrDefault(element => string.Equals(element.Attribute("Id")?.Value, relId, StringComparison.Ordinal))
+            ?.Attribute("Target")?.Value;
+
+        return string.IsNullOrWhiteSpace(target) ? null : XlsxPackagePath.ResolveRelationshipTarget(worksheetPath, target);
+    }
+
+    private static int? ParseFreexHeaderFooterVmlIndex(string vmlPath)
+    {
+        const string prefix = "xl/drawings/freexHeaderFooter";
+        const string suffix = ".vml";
+        if (vmlPath.Length <= prefix.Length + suffix.Length ||
+            !vmlPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+            !vmlPath.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var digits = vmlPath.Substring(prefix.Length, vmlPath.Length - prefix.Length - suffix.Length);
+        return int.TryParse(digits, out var value) ? value : null;
+    }
+
+    public static void Save(
+        Stream xlsxStream,
+        Workbook workbook,
+        IReadOnlySet<string>? sheetsToPreserve = null,
+        IReadOnlySet<int>? reservedVmlIndices = null)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -79,7 +193,14 @@ internal static class XlsxHeaderFooterPicturePackageWriter
             packageRelNs,
             XlsxPackagePath.NormalizeWorkbookTarget);
         var sheetsByName = workbook.Sheets.ToDictionary(sheet => sheet.Name, StringComparer.OrdinalIgnoreCase);
-        var index = 1;
+
+        // R112-io-hf-vml-path-collision: seed the allocator with every index a PRESERVED sheet's
+        // legacyDrawingHF relationship already claims (see GetPreservedVmlIndices) so a sheet being
+        // rewritten this save never restarts the counter onto a number an untouched sheet's marker
+        // still points at. Candidates are also removed from availability as they're handed out, so
+        // two sheets rewritten in the SAME call never collide with each other either.
+        var usedIndices = reservedVmlIndices is { Count: > 0 } ? new HashSet<int>(reservedVmlIndices) : [];
+        var nextCandidate = 1;
 
         foreach (var sheetElement in workbookXml.Root?.Element(workbookNs + "sheets")?.Elements(workbookNs + "sheet") ?? [])
         {
@@ -94,7 +215,12 @@ internal static class XlsxHeaderFooterPicturePackageWriter
             if (!relTargets.TryGetValue(relId, out var worksheetPath))
                 continue;
 
-            WriteSheetPictures(archive, worksheetPath, sheet, index++);
+            while (usedIndices.Contains(nextCandidate))
+                nextCandidate++;
+            usedIndices.Add(nextCandidate);
+
+            WriteSheetPictures(archive, worksheetPath, sheet, nextCandidate);
+            nextCandidate++;
         }
     }
 

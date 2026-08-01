@@ -136,6 +136,18 @@ public static class ChartTypeSupport
 
     public static int GetDataSeriesCount(ChartModel chart)
     {
+        // R112-charttypesupport-embedded-fallback-1: a chart preserved through the named-range
+        // embedded-cache fallback (XlsxChartPartReader.*'s numCache/strCache readers) carries a
+        // synthetic 1x1 placeholder DataRange -- its real series data lives in
+        // EmbeddedSeriesData, one entry per series. Deriving purely from DataRange's row/column
+        // span (as below) is UNCONDITIONALLY 0 or 1 for that placeholder regardless of how many
+        // series/points the chart actually has, which made XlsxChartXmlWriter.IsSupportedXlsxChart
+        // (GetDataSeriesCount(chart) > 0 && GetDataPointCount(chart) > 0) drop the whole chart on
+        // the very next save, and starved every other DataRange-derived consumer (vary-colors,
+        // combo-line eligibility, quick-format/quick-command enablement, etc.) of a real count.
+        if (chart.EmbeddedSeriesData is { Count: > 0 } embeddedSeries)
+            return embeddedSeries.Count;
+
         // One series per "strip": a column of DataRange by default, a row when SeriesInRows.
         var (seriesSpan, _) = GetOrientedSpans(chart);
         if (chart.Type == ChartType.Bubble)
@@ -149,6 +161,14 @@ public static class ChartTypeSupport
 
     public static int GetDataPointCount(ChartModel chart)
     {
+        // See GetDataSeriesCount above: same synthetic-1x1-placeholder problem, so consult
+        // EmbeddedSeriesData first. A series' point count is the larger of its cached Values and
+        // Categories lists (categories can be populated even when a value is blank/missing), and
+        // the chart-level count is the max across all series so a ragged embedded cache still
+        // reports the longest series' extent (matching how the renderer sizes its category axis).
+        if (chart.EmbeddedSeriesData is { Count: > 0 } embeddedPoints)
+            return embeddedPoints.Max(s => Math.Max(s.Values.Count, s.Categories.Count));
+
         var (_, pointSpan) = GetOrientedSpans(chart);
         var skipped = chart.FirstRowIsHeader ? 1u : 0u;
         return pointSpan + 1 <= skipped

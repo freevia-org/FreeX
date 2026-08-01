@@ -24,17 +24,22 @@ public sealed class MoveChartCommand : IWorkbookCommand
         var source = ctx.Workbook.GetSheet(_sourceSheetId);
         if (source is null)
             return CommandGuards.RejectSourceSheetNotFound();
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(source) is { } sourceProtectedOutcome)
-            return sourceProtectedOutcome;
 
         var target = ctx.Workbook.GetSheet(_targetSheetId);
         if (target is null)
             return CommandGuards.RejectTargetSheetNotFound();
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(target) is { } targetProtectedOutcome)
-            return targetProtectedOutcome;
 
         if (!ChartCommandGuards.TryFindChart(source, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-chart Locked override so an
+        // author-unlocked chart stays movable even while the source or target sheet blocks
+        // "Edit objects".
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(source, chart) is { } sourceProtectedOutcome)
+            return sourceProtectedOutcome;
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(target, chart) is { } targetProtectedOutcome)
+            return targetProtectedOutcome;
+
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
         if (_sourceSheetId == _targetSheetId)
@@ -93,11 +98,15 @@ public sealed class MoveChartToNewSheetCommand : IWorkbookCommand
         var source = ctx.Workbook.GetSheet(_sourceSheetId);
         if (source is null)
             return CommandGuards.RejectSourceSheetNotFound();
-        if (ChartCommandGuards.RejectIfEditObjectsBlocked(source) is { } sourceProtectedOutcome)
-            return sourceProtectedOutcome;
 
         if (!ChartCommandGuards.TryFindChart(source, _chartId, out var chart))
             return ChartCommandGuards.ChartNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-chart Locked override so an
+        // author-unlocked chart stays movable to a new sheet even while the source sheet blocks
+        // "Edit objects".
+        if (ChartCommandGuards.RejectIfEditObjectsBlocked(source, chart) is { } sourceProtectedOutcome)
+            return sourceProtectedOutcome;
         if (chart.IsPivotChart)
             return ChartCommandGuards.SelectedChartIsPivotChart();
 

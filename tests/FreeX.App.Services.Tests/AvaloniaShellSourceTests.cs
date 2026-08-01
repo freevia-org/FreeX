@@ -3804,7 +3804,10 @@ public sealed class AvaloniaShellSourceTests
         launcherSource.Should().Contain("\"http\", \"https\", \"mailto\", \"ftp\"");
 
         sessionSource.Should().Contain("public bool CanOpenSelectedHyperlink");
-        sessionSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _)");
+        // R112-model-active-cell-vs-selection-1-1 sibling fix: resolves against ActiveCell, not
+        // SelectedRange.Start -- Excel opens the ACTIVE cell's hyperlink, which differs from the
+        // selection's normalized top-left whenever the selection was made upward/leftward.
+        sessionSource.Should().Contain("HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, ActiveCell, CurrentFilePath, out _)");
         sessionSource.Should().Contain("public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan)");
         sessionSource.Should().Contain("public bool TryGetHyperlinkPlan(CellAddress address, out HyperlinkNavigationPlan? plan)");
         sessionSource.Should().Contain("public WorkbookNavigationResult OpenSelectedHyperlink()");

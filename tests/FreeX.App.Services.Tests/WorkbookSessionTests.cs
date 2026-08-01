@@ -1,4 +1,6 @@
 using FluentAssertions;
+using Free.Shared.Ribbon;
+using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
@@ -356,6 +358,127 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void R112_SelectedRangeStartProperties_ReadActiveCellNotNormalizedTopLeftAfterUpLeftGesture()
+    {
+        // Reproduces the reported gap: click C5 (giving it a distinctive style), then drag/shift-extend
+        // up-left to A1, selecting A1:C5. GridRange always normalizes Start to the top-left corner (A1
+        // here), but Excel's Home-tab toggles/state must reflect the ACTIVE cell -- the anchor C5, which
+        // SelectAnchoredRange pins ActiveCell to -- not the range's normalized Start. Before the fix every
+        // SelectedRangeStart* property read GetCellStyle(SelectedRange.Start) (A1's plain default style),
+        // so all the assertions below failed; they must read GetCellStyle(ActiveCell) (C5's style) instead.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var c5 = new CellAddress(sheet.Id, 5, 3);
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var fontColor = new CellColor(200, 50, 50);
+        var fillColor = new CellColor(10, 20, 30);
+        var c5Style = new CellStyle
+        {
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = false,
+            DoubleUnderline = false,
+            WrapText = true,
+            Locked = false,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            IndentLevel = 3,
+            FontSize = 18,
+            TextRotation = 45,
+            FontColor = fontColor,
+            FillColor = fillColor,
+            NumberFormat = "0.00%",
+        };
+        sheet.SetStyleOnly(c5.Row, c5.Col, workbook.RegisterStyle(c5Style));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectAnchoredRange(c5, a1);
+
+        session.SelectedRange.Should().Be(new GridRange(c5, a1));   // normalized to A1:C5
+        session.ActiveCell.Should().Be(c5);                         // the true anchor, not A1
+
+        session.IsSelectedRangeStartBold.Should().BeTrue("C5 (the active cell) is bold");
+        session.IsSelectedRangeStartItalic.Should().BeTrue("C5 (the active cell) is italic");
+        session.IsSelectedRangeStartUnderline.Should().BeTrue("C5 (the active cell) is underlined");
+        session.IsSelectedRangeStartStrikethrough.Should().BeFalse();
+        session.IsSelectedRangeStartDoubleUnderline.Should().BeFalse();
+        session.IsSelectedRangeStartWrapText.Should().BeTrue("C5 (the active cell) wraps text");
+        session.IsSelectedRangeStartLocked.Should().BeFalse("C5 (the active cell) is unlocked");
+        session.SelectedRangeStartHorizontalAlignment.Should().Be(HorizontalAlignment.Right);
+        session.SelectedRangeStartVerticalAlignment.Should().Be(VerticalAlignment.Top);
+        session.SelectedRangeStartIndentLevel.Should().Be(3);
+        session.SelectedRangeStartFontSize.Should().Be(18);
+        session.SelectedRangeStartTextRotation.Should().Be(45);
+        session.SelectedRangeStartFontColor.Should().Be(fontColor);
+        session.SelectedRangeStartFillColor.Should().Be(fillColor);
+        session.SelectedRangeStartStyle.Bold.Should().BeTrue("Format Cells seeds from the active cell too");
+        session.SelectedRangeStartNumberFormat.Should().Be("0.00%");
+    }
+
+    [Fact]
+    public void R112_ToggleFormatCommand_FlipsWholeSelectionBasedOnActiveCellStateAfterUpLeftGesture()
+    {
+        // WorkbookToggleFormatCommand.Execute computes `next = !_read(session)` and applies that to the
+        // WHOLE selection -- so a wrong read doesn't just mis-render a checkmark, it flips the direction
+        // of the formatting applied to every selected cell. Click C5 (bold), shift-extend up to A1: Excel
+        // treats the range as "already bold" (matching the active cell C5) and Bold should UN-bold the
+        // whole A1:C5 range. Before the fix, the command read A1's un-bold Start and instead BOLDED the
+        // whole range -- the opposite of what the user asked for.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var c5 = new CellAddress(sheet.Id, 5, 3);
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(c5);
+        session.SetSelectedRangeBold(true);   // C5 is now bold; A1 was never touched (stays un-bold)
+
+        session.SelectAnchoredRange(c5, a1);
+        var bold = WorkbookFormatRibbonCommands.Bold(() => session);
+
+        bold.GetState().IsChecked.Should().BeTrue("the active cell C5 is bold, so the toggle shows pressed");
+
+        bold.Execute(RibbonCommandContext.Empty);
+
+        GetStyle(workbook, sheet, c5).Bold.Should().BeFalse("toggling off must un-bold the active cell");
+        GetStyle(workbook, sheet, a1).Bold.Should().BeFalse("A1 stays un-bold, as it always was");
+    }
+
+    [Fact]
+    public void R112_SelectedRangeStartProperties_StillReadStartWhenGestureRanDownRight()
+    {
+        // No-regression sibling: when the drag runs the "normal" direction (down/right), ActiveCell and
+        // the normalized SelectedRange.Start are the SAME cell, so the fix must not change behavior here.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var a1 = new CellAddress(sheet.Id, 1, 1);
+        var c5 = new CellAddress(sheet.Id, 5, 3);
+        var a1Style = new CellStyle { Bold = true, WrapText = true, NumberFormat = "0%" };
+        sheet.SetStyleOnly(a1.Row, a1.Col, workbook.RegisterStyle(a1Style));
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectAnchoredRange(a1, c5);   // click A1, drag down-right to C5 -- the ordinary case
+
+        session.SelectedRange.Start.Should().Be(a1);
+        session.ActiveCell.Should().Be(a1);
+        session.IsSelectedRangeStartBold.Should().BeTrue();
+        session.IsSelectedRangeStartWrapText.Should().BeTrue();
+        session.SelectedRangeStartNumberFormat.Should().Be("0%");
+    }
+
+    [Fact]
     public void SelectRanges_WithExplicitActiveCell_PinsActiveCellWhileKeepingTheFullRectangle()
     {
         // Excel's Ctrl+. corner-cycling walks the active cell around the four corners of a selection
@@ -616,6 +739,106 @@ public sealed class WorkbookSessionTests
         session.SelectedRange.Should().Be(new GridRange(source, source));
         session.ActiveCell.Should().Be(source);
         session.IsDirty.Should().BeFalse();
+    }
+
+    // R112-model-active-cell-vs-selection-1-1 sibling fix: CanOpenSelectedHyperlink /
+    // TryGetSelectedHyperlinkPlan / OpenSelectedHyperlink must resolve against ActiveCell, not
+    // SelectedRange.Start. An upward/leftward selection (drag from D4 up-left to A1) pins ActiveCell
+    // at D4 while SelectedRange normalizes to A1..D4 with Start == A1 -- the two addresses differ,
+    // which is the only fixture shape that can actually distinguish correct (ActiveCell) from the
+    // pre-fix defect (SelectedRange.Start).
+    [Fact]
+    public void CanOpenSelectedHyperlink_UsesActiveCellNotNormalizedSelectionStart_ForUpwardLeftwardSelection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var anchor = new CellAddress(sheet.Id, 4, 4); // D4: the true active cell of the drag.
+        var topLeft = new CellAddress(sheet.Id, 1, 1); // A1: SelectedRange.Start after normalization.
+        sheet.Hyperlinks[anchor] = "https://example.test/active-cell";
+        sheet.HyperlinkMetadata[anchor] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        // Drag from D4 up-left to A1: ActiveCell stays pinned at the anchor (D4) while the
+        // normalized SelectedRange.Start collapses to A1 -- confirm the fixture actually diverges
+        // before asserting anything else.
+        session.SelectAnchoredRange(anchor, topLeft);
+        session.ActiveCell.Should().Be(anchor);
+        session.SelectedRange.Start.Should().Be(topLeft);
+        session.SelectedRange.Start.Should().NotBe(session.ActiveCell);
+
+        session.CanOpenSelectedHyperlink.Should().BeTrue();
+        session.TryGetSelectedHyperlinkPlan(out var plan).Should().BeTrue();
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.External,
+            "https://example.test/active-cell",
+            null));
+
+        var result = session.OpenSelectedHyperlink();
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Be("External hyperlinks are not supported on this platform.");
+    }
+
+    [Fact]
+    public void CanOpenSelectedHyperlink_ReturnsFalse_WhenOnlyNormalizedSelectionStartHasHyperlink_ForUpwardLeftwardSelection()
+    {
+        // Sibling/inverse of the test above: put the hyperlink on the normalized top-left (A1)
+        // instead of the active cell (D4). If the code were still reading SelectedRange.Start this
+        // would incorrectly report a hyperlink; the fixed code correctly reports none, since the
+        // active cell (D4) has nothing.
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var anchor = new CellAddress(sheet.Id, 4, 4);
+        var topLeft = new CellAddress(sheet.Id, 1, 1);
+        sheet.Hyperlinks[topLeft] = "https://example.test/normalized-start-only";
+        sheet.HyperlinkMetadata[topLeft] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        session.SelectAnchoredRange(anchor, topLeft);
+
+        session.CanOpenSelectedHyperlink.Should().BeFalse();
+        session.TryGetSelectedHyperlinkPlan(out var plan).Should().BeFalse();
+        plan.Should().BeNull();
+    }
+
+    // No-regression sibling: a normal downward/rightward selection has ActiveCell == the anchor ==
+    // SelectedRange.Start already, so this must keep opening the right hyperlink post-fix too.
+    [Fact]
+    public void OpenSelectedHyperlink_StillNavigatesForDownwardRightwardSelection()
+    {
+        var workbook = CreateWorkbook();
+        var dataSheet = workbook.AddSheet("Data Sheet");
+        var sheet = workbook.Sheets.First();
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        var cursor = new CellAddress(sheet.Id, 4, 4);
+        var expectedRange = new GridRange(
+            new CellAddress(dataSheet.Id, 2, 2),
+            new CellAddress(dataSheet.Id, 4, 3));
+        sheet.Hyperlinks[anchor] = " 'Data Sheet'!B2:C4 ";
+        sheet.HyperlinkMetadata[anchor] = new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectAnchoredRange(anchor, cursor);
+        session.ActiveCell.Should().Be(anchor);
+        session.SelectedRange.Start.Should().Be(anchor);
+
+        session.CanOpenSelectedHyperlink.Should().BeTrue();
+        var result = session.OpenSelectedHyperlink();
+
+        result.Success.Should().BeTrue();
+        result.SelectedRange.Should().Be(expectedRange);
+        session.ActiveSheet.Id.Should().Be(dataSheet.Id);
     }
 
     [Fact]

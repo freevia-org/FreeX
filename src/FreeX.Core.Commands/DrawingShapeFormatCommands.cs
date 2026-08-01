@@ -44,11 +44,13 @@ public sealed class SetDrawingShapeColorsCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
             return DrawingShapeCommandGuards.DrawingShapeNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-shape Locked override so an
+        // author-unlocked shape's colors stay editable even while the sheet blocks "Edit objects".
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousFillColor = shape.FillColor;
         _previousOutlineColor = shape.OutlineColor;
@@ -138,11 +140,13 @@ public sealed class SetDrawingShapeGradientCommand : IWorkbookCommand
             return new CommandOutcome(false, "Drawing shape gradient direction is not supported.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
             return DrawingShapeCommandGuards.DrawingShapeNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-shape Locked override so an
+        // author-unlocked shape's gradient stays editable even while the sheet blocks "Edit objects".
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
+            return protectedOutcome;
         if (shape.Kind == DrawingShapeKind.Line)
             return new CommandOutcome(false, "Line shapes do not support gradient fills.");
 
@@ -210,11 +214,13 @@ public sealed class SetDrawingShapeEffectCommand : IWorkbookCommand
             return new CommandOutcome(false, "Drawing shape effect preset is not supported.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
             return DrawingShapeCommandGuards.DrawingShapeNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-shape Locked override so an
+        // author-unlocked shape's effects stay editable even while the sheet blocks "Edit objects".
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousHasShadowEffect = shape.HasShadowEffect;
         _previousEffectPreset = shape.EffectPreset;

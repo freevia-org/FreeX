@@ -18,8 +18,18 @@ internal static class XlsxHeaderFooterPictureReaderWriter
     public static IReadOnlySet<string> FindSheetsWithUnchangedSourcePictures(Stream xlsxStream, Workbook workbook) =>
         XlsxHeaderFooterPicturePackageWriter.FindSheetsWithUnchangedSourcePictures(xlsxStream, workbook);
 
-    public static void Save(Stream xlsxStream, Workbook workbook, IReadOnlySet<string>? sheetsToPreserve = null) =>
-        XlsxHeaderFooterPicturePackageWriter.Save(xlsxStream, workbook, sheetsToPreserve);
+    public static IReadOnlySet<int> GetPreservedVmlIndices(
+        Stream xlsxStream,
+        Workbook workbook,
+        IReadOnlySet<string> sheetsToPreserve) =>
+        XlsxHeaderFooterPicturePackageWriter.GetPreservedVmlIndices(xlsxStream, workbook, sheetsToPreserve);
+
+    public static void Save(
+        Stream xlsxStream,
+        Workbook workbook,
+        IReadOnlySet<string>? sheetsToPreserve = null,
+        IReadOnlySet<int>? reservedVmlIndices = null) =>
+        XlsxHeaderFooterPicturePackageWriter.Save(xlsxStream, workbook, sheetsToPreserve, reservedVmlIndices);
 
     public static void RemoveClearedPictures(Stream xlsxStream, Workbook workbook) =>
         XlsxHeaderFooterPicturePackageWriter.RemoveClearedPictures(xlsxStream, workbook);

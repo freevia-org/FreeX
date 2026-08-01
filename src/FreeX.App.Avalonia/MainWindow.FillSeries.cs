@@ -82,6 +82,10 @@ public sealed partial class MainWindow
         ApplyDataOpsTextBoxChrome(stopBox);
         AutomationProperties.SetAutomationId(stopBox, "FillSeriesStopValueBox");
 
+        var trendBox = new CheckBox { Content = UiText.Get("FillSeries_Trend") };
+        ApplyDataOpsCheckBoxChrome(trendBox);
+        AutomationProperties.SetAutomationId(trendBox, "FillSeriesTrendCheckBox");
+
         var warningText = new TextBlock
         {
             Foreground = Brush(180, 30, 30),
@@ -101,11 +105,28 @@ public sealed partial class MainWindow
             yearButton.IsEnabled = isDateSeries;
         }
 
+        void UpdateTrendAvailability()
+        {
+            var isTrendEligible = FillSeriesPlanner.IsTrendEnabled(SelectedType());
+            trendBox.IsEnabled = isTrendEligible;
+            if (!isTrendEligible)
+                trendBox.IsChecked = false;
+
+            // Excel's Step value plays no part in Trend mode -- the box is disabled while Trend is checked.
+            stepBox.IsEnabled = !(isTrendEligible && trendBox.IsChecked == true);
+        }
+
         linearButton.IsCheckedChanged += (_, _) => UpdateDateUnitAvailability();
         growthButton.IsCheckedChanged += (_, _) => UpdateDateUnitAvailability();
         dateButton.IsCheckedChanged += (_, _) => UpdateDateUnitAvailability();
         autoFillButton.IsCheckedChanged += (_, _) => UpdateDateUnitAvailability();
+        linearButton.IsCheckedChanged += (_, _) => UpdateTrendAvailability();
+        growthButton.IsCheckedChanged += (_, _) => UpdateTrendAvailability();
+        dateButton.IsCheckedChanged += (_, _) => UpdateTrendAvailability();
+        autoFillButton.IsCheckedChanged += (_, _) => UpdateTrendAvailability();
+        trendBox.IsCheckedChanged += (_, _) => UpdateTrendAvailability();
         UpdateDateUnitAvailability();
+        UpdateTrendAvailability();
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 72 };
         ApplyDataOpsButtonChrome(okButton, isDefault: true);
@@ -137,12 +158,14 @@ public sealed partial class MainWindow
             warningText.IsVisible = false;
 
             var seriesIn = rowsButton.IsChecked == true ? FillSeriesDirection.Rows : FillSeriesDirection.Columns;
+            var trend = trendBox.IsEnabled && trendBox.IsChecked == true;
             if (!FillSeriesPlanner.TryCreateOptions(
                     seriesIn,
                     SelectedType(),
                     SelectedDateUnit(),
                     stepBox.Text,
                     stopBox.Text,
+                    trend,
                     out var options,
                     out var inputError))
             {
@@ -205,6 +228,7 @@ public sealed partial class MainWindow
                             FillSeriesRow(dayButton, weekdayButton, monthButton, yearButton),
                             FillSeriesLabeledBox(UiText.Get("FillSeries_StepValueLabel"), stepBox),
                             FillSeriesLabeledBox(UiText.Get("FillSeries_StopValueLabel"), stopBox),
+                            trendBox,
                             warningText,
                         },
                     },

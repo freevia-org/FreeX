@@ -124,6 +124,70 @@ public sealed class CompositeWorkbookCommandTests
     }
 
     [Fact]
+    public void R112_Apply_EmptyCommandList_ReportsIsNoOp()
+    {
+        // Regression for R112-med-3: an AutoFit Row Height/Column Width whose sizing planner found
+        // nothing to size (MainWindow.CellsCommands.cs falls back to `new
+        // CompositeWorkbookCommand(label, [])`) must report IsNoOp so CommandBus/TryExecuteCommand
+        // treat it as "nothing happened" rather than pushing a phantom undo entry and dirtying the
+        // workbook for a genuine no-op.
+        var wb = new Workbook("test");
+        var ctx = new TestCommandContext(wb);
+        var command = new CompositeWorkbookCommand("Auto Row Height", []);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.IsNoOp.Should().BeTrue();
+    }
+
+    [Fact]
+    public void R112_Apply_AllChildrenReportIsNoOp_CompositeReportsIsNoOp()
+    {
+        // A grouped-sheet composite (TryExecuteGroupedSheetCommand) wraps one CompositeWorkbookCommand
+        // per grouped sheet; if every one of those per-sheet children is itself an empty/no-op
+        // composite, the outer composite must still bubble IsNoOp up rather than reporting a real edit.
+        var wb = new Workbook("test");
+        wb.AddSheet("Sheet1");
+        wb.AddSheet("Sheet2");
+        var ctx = new TestCommandContext(wb);
+        var command = new CompositeWorkbookCommand(
+            "Auto Row Height",
+            [
+                new CompositeWorkbookCommand("Auto Row Height", []),
+                new CompositeWorkbookCommand("Auto Row Height", [])
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.IsNoOp.Should().BeTrue();
+    }
+
+    [Fact]
+    public void R112_Apply_OneRealChildAmongNoOps_CompositeReportsNotIsNoOp()
+    {
+        // Sibling no-regression: as soon as ANY child performs a real edit, the composite as a whole
+        // must NOT report IsNoOp, exactly as before this fix -- only the all-empty/all-no-op case
+        // changes.
+        var wb = new Workbook("test");
+        var sheet1 = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var command = new CompositeWorkbookCommand(
+            "Grouped Edit",
+            [
+                new CompositeWorkbookCommand("Auto Row Height", []),
+                EditCellsCommand.ForValue(sheet1.Id, new CellAddress(sheet1.Id, 1, 1), new TextValue("A"))
+            ]);
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.IsNoOp.Should().BeFalse();
+        sheet1.GetValue(new CellAddress(sheet1.Id, 1, 1)).Should().Be(new TextValue("A"));
+    }
+
+    [Fact]
     public void Apply_CanInsertTextBoxesAndShapesAcrossGroupedSheetsAsOneUndoableUnit()
     {
         var wb = new Workbook("test");

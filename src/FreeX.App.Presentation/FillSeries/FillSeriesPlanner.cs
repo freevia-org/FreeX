@@ -81,6 +81,13 @@ public static class FillSeriesPlanner
     public static bool IsDateUnitEnabled(FillSeriesType type) =>
         type == FillSeriesType.Date;
 
+    /// <summary>
+    /// Whether the Fill ▸ Series "Trend" checkbox (see <see cref="FillSeriesOptions.Trend"/>) is enabled
+    /// for the given series type -- matching Excel, which only offers Trend for Linear and Growth.
+    /// </summary>
+    public static bool IsTrendEnabled(FillSeriesType type) =>
+        type is FillSeriesType.Linear or FillSeriesType.Growth;
+
     public static FillSeriesInputFocusTarget FocusTargetFor(FillSeriesInputError error) =>
         error == FillSeriesInputError.InvalidStop
             ? FillSeriesInputFocusTarget.StopValue
@@ -119,9 +126,26 @@ public static class FillSeriesPlanner
         string? stepText,
         string? stopText,
         out FillSeriesOptions options,
+        out FillSeriesInputError error) =>
+        TryCreateOptions(seriesIn, type, dateUnit, stepText, stopText, trend: false, out options, out error);
+
+    /// <summary>
+    /// Parses and validates the dialog inputs into <see cref="FillSeriesOptions"/>, including the Fill ▸
+    /// Series "Trend" checkbox (see <see cref="FillSeriesOptions.Trend"/> and <see cref="IsTrendEnabled"/>).
+    /// The stop value is optional (blank leaves it open); a present-but-unparseable stop or an unparseable
+    /// step is rejected.
+    /// </summary>
+    public static bool TryCreateOptions(
+        FillSeriesDirection seriesIn,
+        FillSeriesType type,
+        FillSeriesDateUnit dateUnit,
+        string? stepText,
+        string? stopText,
+        bool trend,
+        out FillSeriesOptions options,
         out FillSeriesInputError error)
     {
-        options = new FillSeriesOptions(1, seriesIn, type, dateUnit);
+        options = new FillSeriesOptions(1, seriesIn, type, dateUnit, Trend: trend);
         error = FillSeriesInputError.None;
 
         if (!TryParseStep(stepText, out var step))
@@ -142,7 +166,7 @@ public static class FillSeriesPlanner
             stopValue = parsedStop;
         }
 
-        options = new FillSeriesOptions(step, seriesIn, type, dateUnit, stopValue);
+        options = new FillSeriesOptions(step, seriesIn, type, dateUnit, stopValue, trend);
         return true;
     }
 
@@ -158,11 +182,28 @@ public static class FillSeriesPlanner
         string? stopText,
         CultureInfo culture,
         out FillSeriesOptions options,
+        out FillSeriesInputError error) =>
+        TryCreateOptions(seriesIn, type, dateUnit, stepText, stopText, trend: false, culture, out options, out error);
+
+    /// <summary>
+    /// Parses and validates dialog inputs (including the Trend checkbox) with one explicit culture. Use
+    /// this when a shell must preserve current-culture-only decimal handling instead of the
+    /// invariant-first portable default.
+    /// </summary>
+    public static bool TryCreateOptions(
+        FillSeriesDirection seriesIn,
+        FillSeriesType type,
+        FillSeriesDateUnit dateUnit,
+        string? stepText,
+        string? stopText,
+        bool trend,
+        CultureInfo culture,
+        out FillSeriesOptions options,
         out FillSeriesInputError error)
     {
         ArgumentNullException.ThrowIfNull(culture);
 
-        options = new FillSeriesOptions(1, seriesIn, type, dateUnit);
+        options = new FillSeriesOptions(1, seriesIn, type, dateUnit, Trend: trend);
         error = FillSeriesInputError.None;
 
         if (!TryParseStep(stepText, culture, out var step))
@@ -183,7 +224,7 @@ public static class FillSeriesPlanner
             stopValue = parsedStop;
         }
 
-        options = new FillSeriesOptions(step, seriesIn, type, dateUnit, stopValue);
+        options = new FillSeriesOptions(step, seriesIn, type, dateUnit, stopValue, trend);
         return true;
     }
 

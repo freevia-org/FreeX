@@ -20,7 +20,12 @@ public sealed class BringDrawingShapeForwardCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-shape Locked override so an
+        // author-unlocked shape stays reorderable even while the sheet blocks "Edit objects".
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
 
         var outcome = DrawingShapeCommandGuards.TryMoveZOrder(sheet, _shapeId, direction: 1, out _previousOrder, out _hadExplicitOrder);
@@ -57,7 +62,12 @@ public sealed class SendDrawingShapeBackwardCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
+        if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
+            return DrawingShapeCommandGuards.DrawingShapeNotFound();
+
+        // R112-model-drawing-object-lock-1-1: layer in the per-shape Locked override so an
+        // author-unlocked shape stays reorderable even while the sheet blocks "Edit objects".
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
             return protectedOutcome;
 
         var outcome = DrawingShapeCommandGuards.TryMoveZOrder(sheet, _shapeId, direction: -1, out _previousOrder, out _hadExplicitOrder);

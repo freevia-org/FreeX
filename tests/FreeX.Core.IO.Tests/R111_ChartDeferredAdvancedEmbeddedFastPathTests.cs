@@ -141,6 +141,14 @@ public sealed class R111_ChartDeferredAdvancedEmbeddedFastPathTests
     // True chartEx <cx:series>/<cx:dataId>/<cx:data> shape (dataId + numDim/strDim with a real
     // cx:lvl/cx:pt cache) — the OTHER series shape TryReadDeferredAdvancedChart serves, distinct
     // from the classic <c:ser> shape above. Exercises the new TryReadChartExEmbeddedSeriesData path.
+    //
+    // R112-io-chartex-numdim-size-1: the numDim below uses type="size" because that is what this
+    // codebase's own writer (ToChartExNumericDimensionType in XlsxChartXmlWriter.ChartEx.cs) emits
+    // for a Treemap series — NOT type="val", which the original r111 version of this fixture used.
+    // That mismatch masked a real bug (the reader only ever matched type="val") because a
+    // hand-authored fixture encoded what the reader already assumed instead of what the writer (and
+    // real Excel) actually produce; see R112_ChartExTreemapSunburstNumDimSizeTests for full
+    // writer-round-tripped coverage of both numDim @type branches.
     // ---------------------------------------------------------------------------------------------
 
     [Fact]
@@ -159,7 +167,7 @@ public sealed class R111_ChartDeferredAdvancedEmbeddedFastPathTests
                       <cx:pt idx="1">South</cx:pt>
                     </cx:lvl>
                   </cx:strDim>
-                  <cx:numDim type="val">
+                  <cx:numDim type="size">
                     <cx:f>'Sheet1'!rngValues</cx:f>
                     <cx:lvl ptCount="2">
                       <cx:pt idx="0">12</cx:pt>

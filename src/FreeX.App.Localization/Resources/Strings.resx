@@ -1263,6 +1263,9 @@
   <data name="FillSeries_Failed" xml:space="preserve">
     <value>Fill Series failed.</value>
   </data>
+  <data name="FillSeries_Trend" xml:space="preserve">
+    <value>Trend</value>
+  </data>
   <!-- Table Design: Table Name dialog -->
   <data name="TableName_Title" xml:space="preserve">
     <value>Table Name</value>
@@ -17817,6 +17820,9 @@ Options: {1}</value>
   </data>
   <data name="FillSeriesStep_StopValueLabel" xml:space="preserve">
     <value>S_top value:</value>
+  </data>
+  <data name="FillSeriesStep_Trend" xml:space="preserve">
+    <value>Tre_nd</value>
   </data>
   <data name="ScenarioManager_EnterAnOptionalCommentForTheScenario" xml:space="preserve">
     <value>Enter an optional comment for the scenario.</value>
