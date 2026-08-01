@@ -32,6 +32,7 @@ $wpfPaths = @(
     "freew\FreeW.App.Host\CustomParagraphSpacingDialog.cs",
     "freew\FreeW.App.Host\DropCapOptionsDialog.cs",
     "freew\FreeW.App.Host\HyphenationOptionsDialog.cs",
+    "freew\FreeW.App.Host\ManualHyphenationDialog.cs",
     "freew\FreeW.App.Host\LineNumberOptionsDialog.cs",
     "freew\FreeW.Ribbon.Definitions\FreeWRibbon.cs"
 )
@@ -48,6 +49,8 @@ $wpfSource = Read-SourceSet $wpfPaths
 $avaloniaSource = Read-SourceSet $avaloniaPaths
 $pairedTests = @(
     "freew/FreeW.App.Presentation.Tests/PageLayoutCommandPlannerTests.cs",
+    "freew/FreeW.App.Presentation.Tests/ManualHyphenationPlannerTests.cs",
+    "freew/FreeW.Core.Model.Tests/ApplyManualHyphenationCommandTests.cs",
     "freew/FreeW.App.Host.Tests/PageLayoutDialogParityTests.cs",
     "freew/FreeW.App.Avalonia.Tests/PageLayoutDialogParityTests.cs"
 )
@@ -128,13 +131,13 @@ $contracts = @(
     [ordered]@{
         id = "layout.hyphenation"
         routes = @("freew.hyphenation", "freew.hyphenation-none", "freew.hyphenation-auto", "freew.hyphenation-manual", "freew.hyphenation-options")
-        surface = "Checked None/Automatic modes, bounded manual pass, and owner-modal options"
-        lifecycle = "Mode routes apply immediately; options OK applies once; Cancel, Escape, and close do not mutate."
-        validation = "HyphenationOptionsDialogPlanner validates zone and consecutive-limit values."
-        resultApplication = "Backed settings apply through one undoable page-settings command; manual mode reports candidate count."
-        sharedPolicy = "HyphenationOptionsDialogPlanner; PageLayoutCommandPlanner"
-        wpfTokens = @("HyphenationOptionsDialog.Prompt", 'PageSetting("freew.hyphenation"', "CountHyphenationCandidates")
-        avaloniaTokens = @("class HyphenationOptionsDialog", '"freew.hyphenation-options"', "RunManualHyphenation")
+        surface = "Checked None/Automatic modes, owner-modal per-word manual review, and owner-modal options"
+        lifecycle = "Mode routes apply immediately; manual review presents Yes/No/Cancel for each candidate; options OK applies once; Cancel, Escape, and close preserve already accepted manual choices without changing automatic mode."
+        validation = "HyphenationOptionsDialogPlanner validates zone and consecutive-limit values; ManualHyphenationPlanner owns candidate order and valid break positions."
+        resultApplication = "Backed settings apply through one undoable page-settings command; accepted manual breaks apply as one undoable U+00AD body-text command."
+        sharedPolicy = "HyphenationOptionsDialogPlanner; ManualHyphenationPlanner; ApplyManualHyphenationCommand"
+        wpfTokens = @("HyphenationOptionsDialog.Prompt", 'PageSetting("freew.hyphenation"', "ManualHyphenationPlanner.CreateSession", "ApplyManualHyphenation(session.Edits)")
+        avaloniaTokens = @("class HyphenationOptionsDialog", '"freew.hyphenation-options"', "class ManualHyphenationDialog", "ManualHyphenationPlanner.CreateSession", "ApplyManualHyphenation(session.Edits)")
         tests = $pairedTests
     },
     [ordered]@{
@@ -188,12 +191,6 @@ $remainingLimitations = @(
         kind = "native-rendering"
         parityGap = $false
         exactWork = "OS window chrome, native font shaping, focus rectangles, and message presentation remain toolkit/platform rendered and are not expected to be pixel-identical."
-    },
-    [ordered]@{
-        id = "manual-hyphenation-per-break-confirmation"
-        kind = "shared-product-limitation"
-        parityGap = $false
-        exactWork = "Both hosts use the WPF-authoritative bounded candidate pass and status message; neither host implements Word's interactive per-break confirmation UI."
     }
 )
 
@@ -202,7 +199,7 @@ $summary = [ordered]@{
     behaviorAligned = @($workflows | Where-Object status -eq "behavior-aligned").Count
     functionalParityGaps = 0
     remainingVisualOrNativeLimitations = 2
-    sharedNonParityLimitations = 1
+    sharedNonParityLimitations = 0
 }
 $document = [ordered]@{
     schemaVersion = 1
