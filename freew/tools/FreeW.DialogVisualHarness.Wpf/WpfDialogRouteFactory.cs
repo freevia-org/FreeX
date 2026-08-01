@@ -74,6 +74,8 @@ internal static class WpfDialogRouteFactory
             return CreateBackstage(routeId);
         if (routeId == "screen-clip-overlay")
             return CreateScreenClipOverlay(owner);
+        if (routeId == "bookmark-manager")
+            return CreateBookmarkManager(state, owner);
         if (!DialogTypes.TryGetValue(routeId, out var typeName)) return null;
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType($"FreeW.App.Host.{typeName}", false)
@@ -98,6 +100,23 @@ internal static class WpfDialogRouteFactory
             }
         }
         throw new InvalidOperationException($"No constructible WPF adapter for {typeName}: {last?.GetType().Name}: {last?.Message}", last);
+    }
+
+    private static Window CreateBookmarkManager(string state, Window owner)
+    {
+        var editor = new DocumentView();
+        if (!state.Equals("initial", StringComparison.OrdinalIgnoreCase))
+        {
+            editor.Model.Blocks.Clear();
+            editor.Model.Blocks.Add(new Paragraph("First target") { BookmarkNames = { "FirstTarget" } });
+            editor.Model.Blocks.Add(new Paragraph("Second target") { BookmarkNames = { "SecondTarget" } });
+            editor.Rerender();
+        }
+
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.BookmarkManagerDialog", true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(candidate => candidate.GetParameters().Length == 2);
+        return (Window)constructor.Invoke([owner, editor]);
     }
 
     public static bool IsStaticPromptRoute(string routeId) => routeId is

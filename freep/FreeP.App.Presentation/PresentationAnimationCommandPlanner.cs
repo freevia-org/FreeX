@@ -12,6 +12,7 @@ public enum PresentationAnimationCommandIntentKind
     SetDelay,
     MoveEarlier,
     MoveLater,
+    ReverseMotionPath,
     TogglePane,
 }
 
@@ -101,6 +102,7 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.motion.loop", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.Loop),
             new PresentationAnimationCommandPlan("freep.anim.motion.s", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.S),
             new PresentationAnimationCommandPlan("freep.anim.motion.figure-eight", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.FigureEight),
+            new PresentationAnimationCommandPlan("freep.anim.motion.reverse", PresentationAnimationCommandIntentKind.ReverseMotionPath),
             new PresentationAnimationCommandPlan("freep.anim.none", PresentationAnimationCommandIntentKind.RemoveSelectedShapeAnimations),
             new PresentationAnimationCommandPlan("freep.anim.trigger", PresentationAnimationCommandIntentKind.SetTrigger),
             new PresentationAnimationCommandPlan("freep.anim.duration", PresentationAnimationCommandIntentKind.SetDuration),
@@ -207,6 +209,20 @@ public static class PresentationAnimationCommandPlanner
 
             case PresentationAnimationCommandIntentKind.MoveLater:
                 return MoveSelectedShapeAnimation(editor, offset: 1);
+
+            case PresentationAnimationCommandIntentKind.ReverseMotionPath:
+                return TryApplyToSelectedShapeAnimation(editor, animation =>
+                {
+                    if (animation.Kind != AnimationKind.Motion
+                        || animation.Motion is not { Segments.Count: > 1 })
+                    {
+                        return null;
+                    }
+
+                    var updated = CloneAnimation(animation);
+                    updated.Motion = MotionPath.ReversedClone(animation.Motion);
+                    return updated;
+                });
 
             case PresentationAnimationCommandIntentKind.TogglePane:
                 if (onAnimationPane is null)

@@ -81,6 +81,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalBulletListLayout(data.LayoutUniqueId))
             return LayoutVerticalBulletList(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsVerticalBlockListLayout(data.LayoutUniqueId))
+            return LayoutVerticalBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1110,6 +1113,51 @@ public static class SmartArtLayoutEngine
             var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, leftX, curY, boxW, boxH));
             curY += boxH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Vertical Block List geometry: a flat ordered stack of independently editable
+    /// rectangular blocks. Preserve authored hierarchy levels as bounded left insets;
+    /// unlike the generic list path, this layout intentionally uses block rectangles
+    /// and does not imply a rounded-card or connector treatment.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutVerticalBlockList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var visibleNodes = nodes
+            .Where(node => !string.IsNullOrWhiteSpace(node.Text))
+            .ToList();
+        if (visibleNodes.Count == 0)
+            return [];
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = Math.Max((long)(fcy * GapFrac * 0.8), 1L);
+        long levelStep = Math.Max((long)(fcx * 0.035), 1L);
+        long availableH = Math.Max(
+            fcy - 2 * outerPadY - (visibleNodes.Count - 1) * gapY,
+            1L);
+        long boxH = Math.Max(availableH / visibleNodes.Count, 1L);
+        var shapes = new List<SlideShape>(visibleNodes.Count);
+        long currentY = fy + outerPadY;
+
+        for (int i = 0; i < visibleNodes.Count; i++)
+        {
+            var node = visibleNodes[i];
+            long indent = Math.Min(Math.Max(node.Level, 0), 4) * levelStep;
+            long x = fx + outerPadX + indent;
+            long width = Math.Max(fcx - 2 * outerPadX - indent, 1L);
+            var style = stylePlan.GetNodeStyle(i, node.Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                (uint)(240 + i), node.Text, style,
+                x, currentY, width, boxH,
+                NodeFontSizePt, DrawingShapeKind.Rectangle));
+            currentY += boxH + gapY;
         }
 
         return shapes;
@@ -3353,6 +3401,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "verticalbulletlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsVerticalBlockListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "verticalblocklist", StringComparison.Ordinal);
     }
 
     private static bool IsHorizontalBulletListLayout(string uniqueId)

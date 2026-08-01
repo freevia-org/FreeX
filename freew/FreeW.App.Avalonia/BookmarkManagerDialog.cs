@@ -1,10 +1,14 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
+using Avalonia.Threading;
 using FreeW.App.Avalonia.Editing;
 using FreeW.Core.Model;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeW.App.Avalonia;
 
@@ -20,24 +24,31 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
     {
         _editor = editor;
         Title = "Bookmark Manager";
-        Width = 390;
+        AutomationProperties.SetAutomationId(this, "BookmarkManagerDialog");
+        Width = 380;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
         ShowInTaskbar = false;
-        _list = new ListBox { MinWidth = 310, MinHeight = 180 };
+        _list = new ListBox { MinWidth = 300, MinHeight = 180, Focusable = true, IsTabStop = true };
+        AutomationProperties.SetAutomationId(_list, "BookmarkManagerList");
+        _list.FocusAdorner = null;
         _list.SelectionChanged += (_, _) => UpdateButtons();
         _list.DoubleTapped += (_, _) => GoTo();
-        _status = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)), Margin = new Thickness(0, 8, 0, 0) };
+        _status = new TextBlock { Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), Margin = new Thickness(0, 8, 0, 0) };
+        AutomationProperties.SetAutomationId(_status, "BookmarkManagerStatus");
         _goTo = Button("Go To", GoTo);
         _delete = Button("Delete", Delete);
         var close = Button("Close", Close);
+        AutomationProperties.SetAutomationId(_goTo, "BookmarkManagerGoToButton");
+        AutomationProperties.SetAutomationId(_delete, "BookmarkManagerDeleteButton");
+        AutomationProperties.SetAutomationId(close, "BookmarkManagerCloseButton");
         close.IsCancel = true;
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 6,
+            Spacing = 0,
             Margin = new Thickness(0, 10, 0, 0),
             Children = { _goTo, _delete, close },
         };
@@ -46,11 +57,32 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
             Margin = new Thickness(14),
             Children =
             {
-                new TextBlock { Text = "Bookmarks:", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 4) },
+                Heading(),
                 _list,
                 buttons,
                 _status,
             },
+        };
+        Opened += (_, _) =>
+        {
+            AvaloniaCompactDialogChrome.ApplyDescendantChrome(
+                this,
+                AvaloniaCompactDialogChrome.WindowsStyle with { ButtonPadding = new Thickness(6, 3) });
+            var inputBorder = new SolidColorBrush(Color.FromRgb(0xAB, 0xAD, 0xB3));
+            var buttonBorder = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8));
+            _list.BorderBrush = inputBorder;
+            _list.BorderThickness = new Thickness(1);
+            Styles.Add(new Style(selector => selector.OfType<Button>().Class(":disabled"))
+            {
+                Setters =
+                {
+                    new Setter(global::Avalonia.Controls.Button.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xE8))),
+                    new Setter(global::Avalonia.Controls.Button.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xA0, 0xA0, 0xA0))),
+                    new Setter(global::Avalonia.Controls.Button.BorderBrushProperty, buttonBorder),
+                    new Setter(global::Avalonia.Controls.Button.OpacityProperty, 1d),
+                },
+            });
+            Dispatcher.UIThread.Post(() => _list.Focus(NavigationMethod.Tab), DispatcherPriority.Input);
         };
         KeyDown += (_, args) =>
         {
@@ -69,8 +101,18 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
     internal void DeleteForTest() => Delete();
     internal void GoToForTest() => GoTo();
 
+    internal string StatusTextForTest => _status.Text ?? string.Empty;
+
+    private TextBlock Heading()
+    {
+        var heading = new TextBlock { Text = "Bookmarks:", FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
+        AutomationProperties.SetAutomationId(heading, "BookmarkManagerHeading");
+        return heading;
+    }
+
     private void RefreshList(string? preserveName = null)
     {
+        preserveName ??= (_list.SelectedItem as Item)?.Name;
         var items = Bookmarks.List(_editor.Document).Select(location => new Item(location.Name, location.BlockIndex)).ToArray();
         _list.ItemsSource = items;
         if (items.Length == 0)
@@ -113,7 +155,13 @@ internal sealed class BookmarkManagerDialog : FreeWDialogWindow
 
     private static Button Button(string text, Action click)
     {
-        var button = new Button { Content = text, MinWidth = 78 };
+        var button = new Button
+        {
+            Content = text,
+            MinWidth = 84,
+            Margin = new Thickness(6, 0, 0, 0),
+            Padding = new Thickness(6, 3),
+        };
         button.Click += (_, _) => click();
         return button;
     }

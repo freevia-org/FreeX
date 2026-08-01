@@ -27,6 +27,20 @@ public sealed class R68_DrawingAnchorHugeIndexTests
         return workbook.AddSheet("Sheet1");
     }
 
+    private static Task<T> RunOnDedicatedThread<T>(Func<T> work) =>
+        Task.Factory.StartNew(
+            work,
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
+
+    private static Task RunOnDedicatedThread(Action work) =>
+        Task.Factory.StartNew(
+            work,
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
+
     private static XlsxDrawingAnchor BuildTwoCellAnchor(uint fromCol, uint toCol, uint fromRow, uint toRow) =>
         new(
             Kind: ChartDrawingAnchorKind.TwoCell,
@@ -52,7 +66,7 @@ public sealed class R68_DrawingAnchorHugeIndexTests
         // only the huge-index ceiling clamp added here prevents the multi-billion-iteration loop.
         var anchor = BuildTwoCellAnchor(fromCol: 5, toCol: 3_000_000_000u, fromRow: 0, toRow: 3);
 
-        var work = Task.Run(() => XlsxDrawingAnchorApplier.GetAnchorSize(anchor, sheet));
+        var work = RunOnDedicatedThread(() => XlsxDrawingAnchorApplier.GetAnchorSize(anchor, sheet));
         var completed = await Task.WhenAny(work, Task.Delay(TimeSpan.FromSeconds(10))) == work;
 
         completed.Should().BeTrue(
@@ -74,7 +88,7 @@ public sealed class R68_DrawingAnchorHugeIndexTests
 
         var anchor = BuildTwoCellAnchor(fromCol: 0, toCol: 3, fromRow: 5, toRow: 2_000_000_000u);
 
-        var work = Task.Run(() => XlsxDrawingAnchorApplier.GetAnchorSize(anchor, sheet));
+        var work = RunOnDedicatedThread(() => XlsxDrawingAnchorApplier.GetAnchorSize(anchor, sheet));
         var completed = await Task.WhenAny(work, Task.Delay(TimeSpan.FromSeconds(10))) == work;
 
         completed.Should().BeTrue(
@@ -95,7 +109,7 @@ public sealed class R68_DrawingAnchorHugeIndexTests
         var anchor = BuildTwoCellAnchor(fromCol: 5, toCol: 3_000_000_000u, fromRow: 0, toRow: 3);
         var chart = new ChartModel();
 
-        var work = Task.Run(() => XlsxDrawingAnchorApplier.ApplyToChart(chart, anchor, sheet));
+        var work = RunOnDedicatedThread(() => XlsxDrawingAnchorApplier.ApplyToChart(chart, anchor, sheet));
         var completed = await Task.WhenAny(work, Task.Delay(TimeSpan.FromSeconds(10))) == work;
 
         completed.Should().BeTrue(

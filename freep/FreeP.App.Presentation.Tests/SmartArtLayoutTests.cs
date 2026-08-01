@@ -139,6 +139,28 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void VerticalBlockList_UsesLiveRectangularStackAndPreservesAuthoredIndent()
+    {
+        var data = MakeData(SmartArtFamily.List, "Overview", "Detail", "Next");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBlockList";
+        data.IsLiveLayoutSupported = true;
+        data.Nodes[1].Level = 1;
+        data.Nodes[2].Level = 0;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("verticalBlockList is a supported shared list layout");
+        var blocks = shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle).ToList();
+        blocks.Should().HaveCount(3, "one editable rectangular block per authored node");
+        blocks.Select(shape => shape.PlainText).Should().Equal("Overview", "Detail", "Next");
+        blocks.Select(shape => shape.OffsetYEmu).Should().BeInAscendingOrder();
+        blocks[1].OffsetXEmu.Should().BeGreaterThan(blocks[0].OffsetXEmu,
+            "nested authored list levels retain a bounded left inset");
+        blocks[1].ExtentCxEmu.Should().BeLessThan(blocks[0].ExtentCxEmu,
+            "nested blocks consume the same bounded inset from their available width");
+    }
+
+    [Fact]
     public void Process_BoxesAreLeftToRight_Increasing_X()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");

@@ -106,6 +106,9 @@ internal static class AvaloniaDialogRouteFactory
         if (routeId.StartsWith("backstage-", StringComparison.OrdinalIgnoreCase))
             return CreateBackstage(routeId);
 
+        if (routeId == "bookmark-manager")
+            return CreateBookmarkManager(state);
+
         if (routeId == "notes-pane")
             return CreateNotesPane();
         if (routeId == "cups-print")
@@ -127,6 +130,24 @@ internal static class AvaloniaDialogRouteFactory
         if (!DialogTypes.TryGetValue(routeId, out var typeName))
             return null;
         return CreateType(typeName, state);
+    }
+
+    private static Window CreateBookmarkManager(string state)
+    {
+        var editor = new DocumentView();
+        if (!state.Equals("initial", StringComparison.OrdinalIgnoreCase))
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("First target") { BookmarkNames = { "FirstTarget" } });
+            document.Blocks.Add(new Paragraph("Second target") { BookmarkNames = { "SecondTarget" } });
+            editor.LoadDocument(document);
+        }
+
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.BookmarkManagerDialog", true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(candidate => candidate.GetParameters().Length == 1);
+        return (Window)constructor.Invoke([editor]);
     }
 
     private static Window CreateKnown(string routeId, string state)

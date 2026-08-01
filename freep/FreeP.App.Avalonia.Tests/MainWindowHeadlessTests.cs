@@ -3506,6 +3506,35 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_motion_reverse_reverses_the_selected_path()
+    {
+        MotionPath? motion = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = window.Editor.InsertDefaultRectangle();
+            window.Editor.Select(shape.Id);
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.motion.right", out var addCommand).Should().BeTrue();
+            registry.TryGet("freep.anim.motion.reverse", out var reverseCommand).Should().BeTrue();
+
+            addCommand!.Execute(RibbonCommandContext.Empty);
+            reverseCommand!.Execute(RibbonCommandContext.Empty);
+            motion = window.Editor.CurrentSlideAnimations.Single().Motion;
+        });
+
+        if (!ran) return;
+        motion.Should().NotBeNull();
+        motion!.Segments[0].Kind.Should().Be(MotionPathSegmentKind.Move);
+        motion.Segments[0].X.Should().Be(0.5);
+        motion.Segments[0].Y.Should().Be(0);
+        motion.Segments[1].Kind.Should().Be(MotionPathSegmentKind.Line);
+        motion.Segments[1].X.Should().Be(0);
+        motion.Segments[1].Y.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Animation_pane_renders_shared_timeline_rows_and_action_state()
     {
         AnimationPaneTimelinePlan? panePlan = null;
@@ -6399,6 +6428,36 @@ public sealed class MainWindowHeadlessTests
             .Should().Equal("Title", "North", "East", "South");
         liveShapes[0].BoundsDip.Width.Should().BeGreaterThan(liveShapes[1].BoundsDip.Width);
         liveShapes[1].BoundsDip.Y.Should().BeGreaterThan(liveShapes[0].BoundsDip.Y);
+    }
+
+    [Fact]
+    public async Task SmartArt_vertical_block_list_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.List,
+                "urn:microsoft.com/office/officeart/2005/8/layout/verticalBlockList",
+                ["Overview", "Detail", "Next"]);
+            window.Editor.CurrentSlide!.Shapes.Clear();
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.Text is not null)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(3,
+            "Avalonia consumes the same shared vertical block list plan as WPF");
+        liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Overview", "Detail", "Next");
+        liveShapes.Select(op => op.BoundsDip.Y).Should().BeInAscendingOrder();
+        liveShapes.Should().OnlyContain(op => op.BoundsDip.Width > 0 && op.BoundsDip.Height > 0);
     }
 
     [Fact]

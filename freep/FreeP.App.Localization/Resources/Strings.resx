@@ -2542,6 +2542,12 @@
   <data name="Ribbon_Command_AnimationMotionFigureEight_KeyTip" xml:space="preserve">
     <value>FE</value>
   </data>
+  <data name="Ribbon_Command_AnimationMotionReverse_Label" xml:space="preserve">
+    <value>Reverse Path</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionReverse_KeyTip" xml:space="preserve">
+    <value>RP</value>
+  </data>
   <data name="Ribbon_Group_AnimationTiming_Label" xml:space="preserve">
     <value>Timing</value>
   </data>
