@@ -3145,6 +3145,8 @@ public static class DocxReader
             ? BlockContentControlKind.RepeatingSection
             : sdtPr?.Element(W15 + "repeatingSectionItem") is not null
                 ? BlockContentControlKind.RepeatingSectionItem
+                : sdtPr?.Element(W + "group") is not null
+                    ? BlockContentControlKind.Group
                 : gallery is not null
                     && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
                         ? BlockContentControlKind.Bibliography
@@ -3229,6 +3231,10 @@ public static class DocxReader
             return new ContentControl(ContentControlKind.Picture, normTag, normAlias,
                 LockMode: lockMode, WordMetadata: wordMetadata);
 
+        if (sdtPr?.Element(W + "group") is not null)
+            return new ContentControl(ContentControlKind.Group, normTag, normAlias,
+                LockMode: lockMode, WordMetadata: wordMetadata);
+
         if (sdtPr?.Element(W + "richText") is not null)
             return new ContentControl(ContentControlKind.RichText, normTag, normAlias,
                 LockMode: lockMode, WordMetadata: wordMetadata);
@@ -3257,7 +3263,8 @@ public static class DocxReader
             ShowingPlaceholder: sdtPr.Element(W + "showingPlcHdr") is not null,
             Temporary: sdtPr.Element(W + "temporary") is not null,
             Appearance: sdtPr.Element(W15 + "appearance")?.Attribute(W15 + "val")?.Value,
-            Color: sdtPr.Element(W15 + "color")?.Attribute(W15 + "val")?.Value);
+            Color: sdtPr.Element(W15 + "color")?.Attribute(W + "val")?.Value
+                ?? sdtPr.Element(W15 + "color")?.Attribute(W15 + "val")?.Value);
 
         return metadata == new ContentControlWordMetadata() ? null : metadata;
     }

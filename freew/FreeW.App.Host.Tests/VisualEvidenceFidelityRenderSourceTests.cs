@@ -331,8 +331,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildBatsFrame(");
+        artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(");
         renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildBatsFrame(");
+        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");
     }
 
     [Fact]

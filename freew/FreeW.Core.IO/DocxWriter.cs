@@ -2696,6 +2696,8 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "richText"));
         else if (control.Kind == BlockContentControlKind.PlainText)
             sdtPr.Add(new XElement(W + "text"));
+        else if (control.Kind == BlockContentControlKind.Group)
+            sdtPr.Add(new XElement(W + "group"));
         else if (control.Kind == BlockContentControlKind.RepeatingSection)
         {
             var repeatingSection = new XElement(W15 + "repeatingSection");
@@ -2729,8 +2731,8 @@ public static class DocxWriter
     /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
     /// w:date carrying the w:dateFormat for a date picker; a w:dropDownList / w:comboBox carrying a
     /// w:listItem (w:displayText/w:value) per choice for a list control; an empty w:picture for a
-    /// picture control; or w:docPartObj for a building-block gallery. This is the minimal valid shape
-    /// FreeW's own reader recovers (see <see cref="DocxReader"/>).
+    /// picture control; w:docPartObj for a building-block gallery; or w:group for a Group control. This
+    /// is the minimal valid shape FreeW's own reader recovers (see <see cref="DocxReader"/>).
     /// </summary>
     private static XElement BuildSdtProperties(ContentControl control)
     {
@@ -2771,6 +2773,9 @@ public static class DocxWriter
                     control.DocPartCategory,
                     control.DocPartUnique));
                 break;
+            case ContentControlKind.Group:
+                sdtPr.Add(new XElement(W + "group"));
+                break;
             default:
                 sdtPr.Add(new XElement(W + "text"));
                 break;
@@ -2804,7 +2809,7 @@ public static class DocxWriter
         if (metadata.Id is { Length: > 0 } id)
             sdtPr.Add(new XElement(W + "id", new XAttribute(W + "val", id)));
         if (metadata.Color is { Length: > 0 } color)
-            sdtPr.Add(new XElement(W15 + "color", new XAttribute(W15 + "val", color)));
+            sdtPr.Add(new XElement(W15 + "color", new XAttribute(W + "val", color)));
         if (metadata.Appearance is { Length: > 0 } appearance)
             sdtPr.Add(new XElement(W15 + "appearance", new XAttribute(W15 + "val", appearance)));
     }
