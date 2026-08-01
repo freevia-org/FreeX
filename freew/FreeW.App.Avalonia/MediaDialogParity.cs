@@ -110,7 +110,8 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         double verticalOffset,
         HorizontalAnchor horizontalAnchor,
         VerticalAnchor verticalAnchor,
-        string title)
+        string title,
+        bool isGroupLocal)
     {
         Title = title;
         Width = 360;
@@ -129,6 +130,8 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         _verticalAnchor = Chrome.Combo(
             ImagePositionDialogPlanner.VerticalAnchorItems.Select(item => item.Label),
             state.VerticalAnchorIndex);
+        _horizontalAnchor.IsEnabled = !isGroupLocal;
+        _verticalAnchor.IsEnabled = !isGroupLocal;
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, Chrome.Style, new Thickness(0, 6, 0, 0));
 
         var grid = Chrome.CreateGrid(7);
@@ -153,8 +156,15 @@ internal sealed class ImagePositionDialog : FreeWDialogWindow
         double verticalOffset,
         HorizontalAnchor horizontalAnchor,
         VerticalAnchor verticalAnchor,
-        string title = "Picture Position") =>
-        new ImagePositionDialog(horizontalOffset, verticalOffset, horizontalAnchor, verticalAnchor, title)
+        string title = "Picture Position",
+        bool isGroupLocal = false) =>
+        new ImagePositionDialog(
+            horizontalOffset,
+            verticalOffset,
+            horizontalAnchor,
+            verticalAnchor,
+            title,
+            isGroupLocal)
             .ShowDialog<ImagePositionDialogResult?>(owner);
 
     private void Accept()

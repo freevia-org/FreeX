@@ -9045,17 +9045,20 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var shape = editor.SelectedShape();
-            if (shape is null)
+            var position = editor.GetSelectedShapePosition();
+            if (position is null)
             {
                 DialogMessageHelper.ShowInfo(Window.GetWindow(editor), "Select a shape first.", "Position");
                 return;
             }
-            var hOff = shape.Placement?.HorizontalOffsetPt ?? 0;
-            var vOff = shape.Placement?.VerticalOffsetPt ?? 0;
-            var hAnchor = shape.Placement?.HorizontalAnchor ?? HorizontalAnchor.Column;
-            var vAnchor = shape.Placement?.VerticalAnchor ?? VerticalAnchor.Paragraph;
-            var result = ImagePositionDialog.Prompt(Window.GetWindow(editor), hOff, vOff, hAnchor, vAnchor);
+            var result = ImagePositionDialog.Prompt(
+                Window.GetWindow(editor),
+                position.Value.HorizontalOffsetPt,
+                position.Value.VerticalOffsetPt,
+                position.Value.HorizontalAnchor,
+                position.Value.VerticalAnchor,
+                position.Value.IsGroupLocal ? "Shape Position in Group" : "Shape Position",
+                position.Value.IsGroupLocal);
             if (result is { } r)
                 editor.SetSelectedShapePosition(r.HOffset, r.VOffset, r.HAnchor, r.VAnchor);
         }

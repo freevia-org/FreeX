@@ -13332,6 +13332,57 @@ public sealed class DocumentView : Control
         RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
     }
 
+    /// <summary>Return the selected direct shape position or nested shape's group-local offset.</summary>
+    public (double HorizontalOffsetPt, double VerticalOffsetPt,
+        HorizontalAnchor HorizontalAnchor, VerticalAnchor VerticalAnchor, bool IsGroupLocal)?
+        GetSelectedShapePosition()
+    {
+        if (_selectedFloatingGroupChild is { Kind: "Shape", ChildPath.Count: > 0 } selectedChild
+            && TryGetRun(selectedChild.BlockIndex, selectedChild.RunIndex, out var groupRun)
+            && groupRun.DrawingGroup is { } rootGroup
+            && DrawingGroupChildPathResolver.TryGetChild(
+                rootGroup,
+                selectedChild.ChildPath,
+                out var owningGroup,
+                out var nestedChild)
+            && nestedChild is Shape)
+        {
+            var childIndex = selectedChild.ChildPath[^1];
+            var offset = childIndex < owningGroup.ChildOffsets.Count
+                ? owningGroup.ChildOffsets[childIndex]
+                : (X: 0d, Y: 0d);
+            return (offset.X, offset.Y,
+                HorizontalAnchor.Column, VerticalAnchor.Paragraph, true);
+        }
+
+        if (SelectedFloatingShapeLocation() is not { Shape: { } shape })
+            return null;
+        var placement = shape.Placement;
+        return (
+            placement?.HorizontalOffsetPt ?? 0,
+            placement?.VerticalOffsetPt ?? 0,
+            placement?.HorizontalAnchor ?? HorizontalAnchor.Column,
+            placement?.VerticalAnchor ?? VerticalAnchor.Paragraph,
+            false);
+    }
+
+    /// <summary>Set the selected direct shape position or nested shape's group-local offset.</summary>
+    public void SetSelectedShapePosition(double hOffsetPt, double vOffsetPt,
+        HorizontalAnchor hAnchor, VerticalAnchor vAnchor)
+    {
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetDrawingGroupChildPositionCommand(
+                nested.BlockIndex, nested.RunIndex, nested.ChildPath, hOffsetPt, vOffsetPt));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
+
+        if (SelectedFloatingShapeLocation() is not null)
+            SetFloatingPosition(hOffsetPt, vOffsetPt, hAnchor, vAnchor);
+    }
+
     /// <summary>
     /// Set the size (widthPt, heightPt) of the selected floating object. Undoable.
     /// No-op when nothing is selected.

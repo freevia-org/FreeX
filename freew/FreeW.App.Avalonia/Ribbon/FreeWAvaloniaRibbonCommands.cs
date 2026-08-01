@@ -1844,12 +1844,17 @@ internal static class FreeWAvaloniaRibbonCommands
                 return;
             }
 
-            editor.SetFloatingPosition(hOffset, vOffset, hAnchor, vAnchor);
+            if (requiredKind == "Shape")
+                editor.SetSelectedShapePosition(hOffset, vOffset, hAnchor, vAnchor);
+            else
+                editor.SetFloatingPosition(hOffset, vOffset, hAnchor, vAnchor);
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
 
-        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind;
+        private bool IsEnabled() => requiredKind == "Shape"
+            ? editor.SelectedFloatingShape() is not null
+            : editor.SelectedFloatingInfo?.Kind == requiredKind;
 
         private static bool TryParsePosition(
             string? value,
@@ -1891,16 +1896,29 @@ internal static class FreeWAvaloniaRibbonCommands
             if (!IsEnabled())
                 return;
 
-            editor.SetFloatingPosition(
-                preset.HorizontalOffsetPt,
-                preset.VerticalOffsetPt,
-                preset.HorizontalAnchor,
-                preset.VerticalAnchor);
+            if (requiredKind == "Shape")
+            {
+                editor.SetSelectedShapePosition(
+                    preset.HorizontalOffsetPt,
+                    preset.VerticalOffsetPt,
+                    preset.HorizontalAnchor,
+                    preset.VerticalAnchor);
+            }
+            else
+            {
+                editor.SetFloatingPosition(
+                    preset.HorizontalOffsetPt,
+                    preset.VerticalOffsetPt,
+                    preset.HorizontalAnchor,
+                    preset.VerticalAnchor);
+            }
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: IsEnabled());
 
-        private bool IsEnabled() => editor.SelectedFloatingInfo?.Kind == requiredKind;
+        private bool IsEnabled() => requiredKind == "Shape"
+            ? editor.SelectedFloatingShape() is not null
+            : editor.SelectedFloatingInfo?.Kind == requiredKind;
     }
 
     private sealed class FloatingObjectSizeCommand(

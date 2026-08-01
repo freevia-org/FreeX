@@ -939,7 +939,19 @@ public sealed class DocumentViewFloatingShapeTests
             inner.ChildOffsets.Add((0, 0));
             inner.Children.Add(leaf);
             inner.ChildOffsets.Add((30, 18));
-            var outer = new DrawingGroup { WidthPt = 180, HeightPt = 100 };
+            var outer = new DrawingGroup
+            {
+                WidthPt = 180,
+                HeightPt = 100,
+                Placement = new FloatingPlacement
+                {
+                    HorizontalOffsetPt = 72,
+                    VerticalOffsetPt = 36,
+                    HorizontalAnchor = HorizontalAnchor.Margin,
+                    VerticalAnchor = VerticalAnchor.Page,
+                    Wrapping = ImageWrapping.Square
+                }
+            };
             outer.Children.Add(inner);
             outer.ChildOffsets.Add((10, 8));
             outer.Children.Add(sibling);
@@ -954,12 +966,21 @@ public sealed class DocumentViewFloatingShapeTests
             view.SelectFloatingGroupChildForTest(leafRect.Center).Should().BeTrue();
 
             var selectedSize = view.GetSelectedFloatingSize();
+            var selectedPosition = view.GetSelectedShapePosition();
+            view.SetSelectedShapePosition(46, 29, HorizontalAnchor.Page, VerticalAnchor.Page);
             view.SetSelectedShapeSize(80, 50);
             view.SetSelectedShapeKind(ShapeKind.RoundedRectangle);
             view.SetSelectedFloatingAltText(" Nested leaf ");
             view.SetSelectedShapeFill("#ABCDEF");
             view.SetSelectedShapeOutline("#123456", 2, "dash");
             var applied = selectedSize == (42d, 24d)
+                && selectedPosition == (30d, 18d,
+                    HorizontalAnchor.Column, VerticalAnchor.Paragraph, true)
+                && inner.ChildOffsets[1] == (46d, 29d)
+                && outer.Placement.HorizontalOffsetPt == 72
+                && outer.Placement.VerticalOffsetPt == 36
+                && outer.Placement.HorizontalAnchor == HorizontalAnchor.Margin
+                && outer.Placement.VerticalAnchor == VerticalAnchor.Page
                 && leaf.WidthPt == 80
                 && leaf.HeightPt == 50
                 && leaf.Kind == ShapeKind.RoundedRectangle
@@ -979,8 +1000,13 @@ public sealed class DocumentViewFloatingShapeTests
             view.Undo();
             var kindUndone = leaf.Kind == ShapeKind.Ellipse;
             view.Undo();
+            var sizeUndone = leaf.WidthPt == 42 && leaf.HeightPt == 24;
+            view.Undo();
             verified = applied && outlineUndone && fillUndone && altTextUndone && kindUndone
-                && leaf.WidthPt == 42 && leaf.HeightPt == 24;
+                && sizeUndone
+                && inner.ChildOffsets[1] == (30d, 18d)
+                && outer.Placement.HorizontalOffsetPt == 72
+                && outer.Placement.VerticalOffsetPt == 36;
         });
         if (!ran) return;
         verified.Should().BeTrue();

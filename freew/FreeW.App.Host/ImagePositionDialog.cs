@@ -15,10 +15,17 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _hAnchorBox, _vAnchorBox;
     private (double HOffset, double VOffset, HorizontalAnchor HAnchor, VerticalAnchor VAnchor)? _result;
 
-    private ImagePositionDialog(Window? owner, double hOffPt, double vOffPt, HorizontalAnchor hAnchor, VerticalAnchor vAnchor)
+    private ImagePositionDialog(
+        Window? owner,
+        double hOffPt,
+        double vOffPt,
+        HorizontalAnchor hAnchor,
+        VerticalAnchor vAnchor,
+        string title,
+        bool isGroupLocal)
     {
         Owner = owner;
-        Title = "Picture Position";
+        Title = title;
         Width = 320;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -37,6 +44,8 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _hAnchorBox = Combo(ImagePositionDialogPlanner.HorizontalAnchorItems, state.HorizontalAnchorIndex);
         _vAnchorBox = Combo(ImagePositionDialogPlanner.VerticalAnchorItems, state.VerticalAnchorIndex);
+        _hAnchorBox.IsEnabled = !isGroupLocal;
+        _vAnchorBox.IsEnabled = !isGroupLocal;
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -97,9 +106,16 @@ internal sealed class ImagePositionDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     /// <summary>Show the position dialog. Returns offsets + anchors, or null if cancelled.</summary>
     public static (double HOffset, double VOffset, HorizontalAnchor HAnchor, VerticalAnchor VAnchor)? Prompt(
-        Window? owner, double hOffPt, double vOffPt, HorizontalAnchor hAnchor, VerticalAnchor vAnchor)
+        Window? owner,
+        double hOffPt,
+        double vOffPt,
+        HorizontalAnchor hAnchor,
+        VerticalAnchor vAnchor,
+        string title = "Picture Position",
+        bool isGroupLocal = false)
     {
-        var dialog = new ImagePositionDialog(owner, hOffPt, vOffPt, hAnchor, vAnchor);
+        var dialog = new ImagePositionDialog(
+            owner, hOffPt, vOffPt, hAnchor, vAnchor, title, isGroupLocal);
         dialog.ShowDialog();
         return dialog._result;
     }

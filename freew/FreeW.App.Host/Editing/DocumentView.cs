@@ -2704,15 +2704,56 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    /// <summary>Return the selected direct shape position or nested shape's group-local offset.</summary>
+    public (double HorizontalOffsetPt, double VerticalOffsetPt,
+        HorizontalAnchor HorizontalAnchor, VerticalAnchor VerticalAnchor, bool IsGroupLocal)?
+        GetSelectedShapePosition()
+    {
+        if (_selectedFloatingGroupChild is { ChildPath.Count: > 0 } selectedChild
+            && DrawingGroupChildPathResolver.TryGetChild(
+                selectedChild.RootGroup,
+                selectedChild.ChildPath,
+                out var owningGroup,
+                out var nestedChild)
+            && nestedChild is Shape)
+        {
+            var childIndex = selectedChild.ChildPath[^1];
+            var offset = childIndex < owningGroup.ChildOffsets.Count
+                ? owningGroup.ChildOffsets[childIndex]
+                : (X: 0d, Y: 0d);
+            return (offset.X, offset.Y,
+                HorizontalAnchor.Column, VerticalAnchor.Paragraph, true);
+        }
+
+        var shape = SelectedShapeLocation().Shape;
+        if (shape is null)
+            return null;
+        var placement = shape.Placement;
+        return (
+            placement?.HorizontalOffsetPt ?? 0,
+            placement?.VerticalOffsetPt ?? 0,
+            placement?.HorizontalAnchor ?? HorizontalAnchor.Column,
+            placement?.VerticalAnchor ?? VerticalAnchor.Paragraph,
+            false);
+    }
+
     /// <summary>
-    /// Set the floating position offsets and anchors for the currently selected shape. Undoable.
-    /// No-op without a shape selection. Mirrors <see cref="SetSelectedImagePosition"/> for shapes.
+    /// Set the floating position of a direct shape or the group-local offset of a nested shape. Undoable.
+    /// No-op without a shape selection. Mirrors <see cref="SetSelectedImagePosition"/> for direct shapes.
     /// </summary>
     public void SetSelectedShapePosition(double horizontalOffsetPt, double verticalOffsetPt,
         HorizontalAnchor horizontalAnchor = HorizontalAnchor.Column,
         VerticalAnchor verticalAnchor = VerticalAnchor.Paragraph)
     {
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetDrawingGroupChildPositionCommand(
+                nested.BlockIndex, nested.RunIndex, nested.ChildPath,
+                horizontalOffsetPt, verticalOffsetPt));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
         _commands.Execute(new SetShapePositionCommand(
