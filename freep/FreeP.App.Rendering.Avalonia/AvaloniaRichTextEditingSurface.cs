@@ -356,7 +356,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         IBrush? foregroundOverride = null,
         IReadOnlyList<InlineImageLayout>? inlineImages = null,
         IReadOnlyList<InlineOleLayout>? inlineOleObjects = null,
-        IReadOnlyList<InlineTableLayout>? inlineTables = null)
+        IReadOnlyList<InlineTableLayout>? inlineTables = null,
+        bool? wrapOverride = null)
     {
         var seed = paragraph.Runs.FirstOrDefault();
         var defaultTypeface = CreateTypeface(seed);
@@ -388,6 +389,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     inlineTables?.FirstOrDefault(table => table.Start == run.Start)))
                 .ToArray();
             var source = new InlineImageTextSource(
+                this,
                 paragraph.Text,
                 sourceRuns);
             var paragraphProperties = new GenericTextParagraphProperties(
@@ -400,7 +402,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     defaultFontSize,
                     null,
                     foregroundOverride ?? DefaultForeground),
-                _plan.Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
+                (wrapOverride ?? _plan.Wrap) ? TextWrapping.Wrap : TextWrapping.NoWrap,
                 lineHeight: 0,
                 indent: 0,
                 letterSpacing: 0);
@@ -419,7 +421,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             defaultFontSize,
             foregroundOverride ?? DefaultForeground,
             ToAvaloniaAlignment(paragraph.Alignment),
-            _plan.Wrap ? TextWrapping.Wrap : TextWrapping.NoWrap,
+            (wrapOverride ?? _plan.Wrap) ? TextWrapping.Wrap : TextWrapping.NoWrap,
             TextTrimming.None,
             textDecorations: null,
             paragraph.RightToLeft ? FlowDirection.RightToLeft : FlowDirection.LeftToRight,
@@ -777,13 +779,16 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
     private sealed class InlineImageTextSource : ITextSource
     {
+        private readonly AvaloniaRichTextEditingSurface _owner;
         private readonly string _text;
         private readonly IReadOnlyList<InlineTextSourceRun> _runs;
 
         internal InlineImageTextSource(
+            AvaloniaRichTextEditingSurface owner,
             string text,
             IReadOnlyList<InlineTextSourceRun> runs)
         {
+            _owner = owner;
             _text = text;
             _runs = runs;
         }
@@ -823,6 +828,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             if (run.InlineTable is { } table && offset == 0)
             {
                 return new InlineTableTextRun(
+                    _owner,
                     table,
                     new Size(table.WidthDip, table.HeightDip),
                     run.Properties);
@@ -898,15 +904,18 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
 
     private sealed class InlineTableTextRun : DrawableTextRun
     {
+        private readonly AvaloniaRichTextEditingSurface _owner;
         private readonly InlineTableLayout _table;
         private readonly Size _size;
         private readonly TextRunProperties _properties;
 
         internal InlineTableTextRun(
+            AvaloniaRichTextEditingSurface owner,
             InlineTableLayout table,
             Size size,
             TextRunProperties properties)
         {
+            _owner = owner;
             _table = table;
             _size = size;
             _properties = properties;
@@ -959,38 +968,64 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                     var rect = new Rect(x, y, width, heights[rowIndex]);
                     drawingContext.DrawRectangle(fill, new Pen(Brushes.Gray, 0.5), rect);
                     if (cell?.TextBody is { } body)
-                    {
-                        var text = InCanvasTextEditPlanner.ExtractPlainText(body);
-                        if (text.Length > 0)
-                        {
-                            var textArea = AvaloniaInlineTableLayoutPlanner.GetTextArea(cell, rect);
-                            var layout = new TextLayout(
-                                text,
-                                new Typeface(new FontFamily(InCanvasRichTextEditorDefaults.FallbackFontFamily)),
-                                Math.Max(9, InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt * PtToDip),
-                                Brushes.Black,
-                                TextAlignment.Left,
-                                TextWrapping.Wrap,
-                                TextTrimming.None,
-                                null,
-                                FlowDirection.LeftToRight,
-                                textArea.Width,
-                                textArea.Height,
-                                lineHeight: double.NaN,
-                                letterSpacing: 0,
-                                maxLines: 0,
-                                fontFeatures: null,
-                                textStyleOverrides: null);
-                            var textOrigin = AvaloniaInlineTableLayoutPlanner.GetTextOrigin(
-                                cell,
-                                textArea,
-                                layout.Height);
-                            layout.Draw(drawingContext, textOrigin);
-                        }
-                    }
+                        DrawCellBody(drawingContext, cell, rect, body);
                     x += width + spacing;
                 }
                 y += heights[rowIndex];
+            }
+        }
+
+        private void DrawCellBody(
+            DrawingContext drawingContext,
+            TableCell cell,
+            Rect cellBounds,
+            TextBody body)
+        {
+            var textArea = AvaloniaInlineTableLayoutPlanner.GetTextArea(cell, cellBounds);
+            var plan = InCanvasRichTextVisualPlanner.Create(body);
+            var layouts = new List<(
+                InCanvasRichTextVisualParagraph Paragraph,
+                TextLayout Layout,
+                IReadOnlyList<InlineImageLayout> InlineImages)>();
+            double contentHeight = 0;
+
+            foreach (var paragraph in plan.Paragraphs)
+            {
+                var inlineImages = _owner.CreateInlineImages(paragraph);
+                var layout = _owner.CreateLayout(
+                    paragraph,
+                    Math.Max(1, textArea.Width),
+                    inlineImages: inlineImages,
+                    inlineOleObjects: CreateInlineOleObjects(paragraph),
+                    inlineTables: CreateInlineTables(paragraph, textArea.Width),
+                    wrapOverride: plan.Wrap);
+                layouts.Add((paragraph, layout, inlineImages));
+                contentHeight += paragraph.SpaceBeforeDip + layout.Height + paragraph.SpaceAfterDip;
+            }
+
+            var contentOrigin = AvaloniaInlineTableLayoutPlanner.GetTextOrigin(
+                cell,
+                textArea,
+                contentHeight);
+            double y = contentOrigin.Y;
+
+            using (drawingContext.PushClip(textArea))
+            {
+                foreach (var (paragraph, layout, _) in layouts)
+                {
+                    y += paragraph.SpaceBeforeDip;
+                    if (y >= textArea.Bottom)
+                        break;
+
+                    layout.Draw(drawingContext, new Point(textArea.X, y));
+                    y += layout.Height + paragraph.SpaceAfterDip;
+                }
+            }
+
+            foreach (var (_, _, inlineImages) in layouts)
+            {
+                foreach (var image in inlineImages)
+                    image.Bitmap.Dispose();
             }
         }
     }
