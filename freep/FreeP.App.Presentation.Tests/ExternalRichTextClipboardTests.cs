@@ -758,6 +758,7 @@ public sealed class ExternalRichTextClipboardTests
 \trbrdrr\brdrs\brdrw20\brdrcf1
 \trbrdrt\brdrs\brdrw20\brdrcf1
 \trbrdrb\brdrs\brdrw20\brdrcf1
+\trbrdrv\brdrs\brdrw40\brdrcf1
 \cellx2000\cellx4000
 \intbl Outer\cell
 \trowd\itap2\nesttableprops\trbrdrt\brdrs\brdrw20\brdrcf1\cellx1000\cellx2000
@@ -778,7 +779,8 @@ public sealed class ExternalRichTextClipboardTests
         var left = cells[0].Borders!;
         var right = cells[1].Borders!;
         ((ShapeOutline.Visible)left.Left!).WidthPt.Should().Be(1);
-        left.Right.Should().BeNull();
+        ((ShapeOutline.Visible)left.Right!).WidthPt.Should().Be(2);
+        ((ShapeOutline.Visible)right.Left!).WidthPt.Should().Be(2);
         ((ShapeOutline.Visible)right.Right!).WidthPt.Should().Be(1);
         ((ShapeOutline.Visible)left.Top!).WidthPt.Should().Be(1);
         ((ShapeOutline.Visible)right.Bottom!).WidthPt.Should().Be(1);
@@ -790,6 +792,8 @@ public sealed class ExternalRichTextClipboardTests
             .Single(run => run.InlineTable is not null)
             .InlineTable!.Table.Rows.Single().Cells;
         ((ShapeOutline.Visible)reopenedCells[0].Borders!.Left!).WidthPt.Should().Be(1);
+        ((ShapeOutline.Visible)reopenedCells[0].Borders!.Right!).WidthPt.Should().Be(2);
+        ((ShapeOutline.Visible)reopenedCells[1].Borders!.Left!).WidthPt.Should().Be(2);
         ((ShapeOutline.Visible)reopenedCells[1].Borders!.Right!).Color.Resolved
             .Should().Be(SrgbColor.FromRgb(0xFF0000));
     }

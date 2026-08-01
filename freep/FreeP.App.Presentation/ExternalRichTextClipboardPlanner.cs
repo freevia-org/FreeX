@@ -214,6 +214,7 @@ public static class ExternalRichTextClipboardPlanner
             public TableShape Table { get; } = new();
             public TableRow? CurrentRow { get; set; }
             public CellStyleDraft RowBorders { get; } = new();
+            public CellStyleDraft RowInsideVerticalBorders { get; } = new();
             public double? RowInsetLeftPt { get; set; }
             public double? RowInsetRightPt { get; set; }
             public double? RowInsetTopPt { get; set; }
@@ -324,6 +325,7 @@ public static class ExternalRichTextClipboardPlanner
         private readonly List<TableCaptureContext> _tableCaptures = new();
         private readonly List<TableCaptureContext> _rootTableCaptures = new();
         private bool _rowBorderPending;
+        private CellStyleDraft? _activeRowBorderStyle;
         private bool _nestedTableSeen;
         private bool _suppressCaptureForNextAppend;
         private bool _suppressCaptureForNextParagraphBreak;
@@ -1086,6 +1088,7 @@ public static class ExternalRichTextClipboardPlanner
                 case "trbrdrr": BeginRowBorder(TableCellBorderSide.Right); break;
                 case "trbrdrt": BeginRowBorder(TableCellBorderSide.Top); break;
                 case "trbrdrb": BeginRowBorder(TableCellBorderSide.Bottom); break;
+                case "trbrdrv": BeginRowInteriorBorder(); break;
                 case "trpaddl":
                     if (CurrentTableCapture() is { } leftCapture && parameter is { } leftPadding)
                         leftCapture.RowInsetLeftPt = ToCellInsetPoints(leftPadding);
@@ -1573,47 +1576,64 @@ public static class ExternalRichTextClipboardPlanner
             if (CurrentTableCapture() is not { } capture)
             {
                 _rowBorderPending = false;
+                _activeRowBorderStyle = null;
                 return;
             }
 
-            capture.RowBorders.BeginBorder(side);
+            _activeRowBorderStyle = capture.RowBorders;
+            _activeRowBorderStyle.BeginBorder(side);
+            _rowBorderPending = true;
+        }
+
+        private void BeginRowInteriorBorder()
+        {
+            if (CurrentTableCapture() is not { } capture)
+            {
+                _rowBorderPending = false;
+                _activeRowBorderStyle = null;
+                return;
+            }
+
+            _activeRowBorderStyle = capture.RowInsideVerticalBorders;
+            _activeRowBorderStyle.BeginBorder(TableCellBorderSide.Right);
             _rowBorderPending = true;
         }
 
         private void BeginCellBorder(TableCellBorderSide side)
         {
             _rowBorderPending = false;
+            _activeRowBorderStyle = null;
             _pendingCellStyle.BeginBorder(side);
         }
 
         private void SetBorderSolid()
         {
-            if (_rowBorderPending && CurrentTableCapture() is { } capture)
-                capture.RowBorders.SetSolid();
+            if (_rowBorderPending && _activeRowBorderStyle is { } rowStyle)
+                rowStyle.SetSolid();
             else
                 _pendingCellStyle.SetSolid();
         }
 
         private void SetBorderNone()
         {
-            if (_rowBorderPending && CurrentTableCapture() is { } capture)
-                capture.RowBorders.SetNone();
+            if (_rowBorderPending && _activeRowBorderStyle is { } rowStyle)
+                rowStyle.SetNone();
             else
                 _pendingCellStyle.SetNone();
         }
 
         private void SetBorderWidth(double widthPt)
         {
-            if (_rowBorderPending && CurrentTableCapture() is { } capture)
-                capture.RowBorders.SetWidth(widthPt);
+            if (_rowBorderPending && _activeRowBorderStyle is { } rowStyle)
+                rowStyle.SetWidth(widthPt);
             else
                 _pendingCellStyle.SetWidth(widthPt);
         }
 
         private void SetBorderColor(int rgb)
         {
-            if (_rowBorderPending && CurrentTableCapture() is { } capture)
-                capture.RowBorders.SetColor(rgb);
+            if (_rowBorderPending && _activeRowBorderStyle is { } rowStyle)
+                rowStyle.SetColor(rgb);
             else
                 _pendingCellStyle.SetColor(rgb);
         }
@@ -1650,11 +1670,13 @@ public static class ExternalRichTextClipboardPlanner
                 capture.RowInsetTopPt = null;
                 capture.RowInsetBottomPt = null;
                 capture.RowBorders.Reset();
+                capture.RowInsideVerticalBorders.Reset();
                 capture.CurrentCellIndex = 0;
                 capture.RightEdgesTwips.Clear();
                 capture.CellStyles.Clear();
                 capture.RowCompleted = false;
                 _rowBorderPending = false;
+                _activeRowBorderStyle = null;
             }
         }
 
@@ -1682,11 +1704,15 @@ public static class ExternalRichTextClipboardPlanner
                 EnsureCapturedCell(capture);
             ApplyCapturedRowBorders(capture.CurrentRow, capture.RowBorders.Snapshot());
             capture.Table.Rows.Add(capture.CurrentRow);
+            ApplyCapturedInteriorVerticalBorders(
+                capture.CurrentRow,
+                capture.RowInsideVerticalBorders.Snapshot());
             CaptureTableWidths(capture);
             capture.CurrentRow = null;
             capture.CurrentCellIndex = 0;
             capture.RowCompleted = true;
             _rowBorderPending = false;
+            _activeRowBorderStyle = null;
         }
 
         private void AppendCapturedText(string text)
@@ -1941,6 +1967,20 @@ public static class ExternalRichTextClipboardPlanner
             {
                 SetRowBorder(cell, TableCellBorderSide.Top, style.Top);
                 SetRowBorder(cell, TableCellBorderSide.Bottom, style.Bottom);
+            }
+        }
+
+        private static void ApplyCapturedInteriorVerticalBorders(
+            TableRow row,
+            InCanvasRichClipboardTableCellStyle style)
+        {
+            if (row.Cells.Count < 2 || style.Right is null)
+                return;
+
+            for (int i = 0; i < row.Cells.Count - 1; i++)
+            {
+                SetRowBorder(row.Cells[i], TableCellBorderSide.Right, style.Right);
+                SetRowBorder(row.Cells[i + 1], TableCellBorderSide.Left, style.Right);
             }
         }
 
