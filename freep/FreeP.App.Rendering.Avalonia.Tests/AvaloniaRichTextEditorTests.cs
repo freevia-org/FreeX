@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
@@ -7,6 +8,8 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -85,6 +88,110 @@ public sealed class AvaloniaRichTextEditorTests
             run.InlineOleObject!.EmbeddedBytes.Should().Equal(0x01, 0x02, 0x03);
             run.InlineOleObject.FileName.Should().Be("Embedded.xlsx");
             run.InlineOleObject.ClassName.Should().Be("Excel.Sheet.12");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task InlineTableRun_RendersNestedCellBodyRecursively()
+    {
+        await Session.Dispatch(() =>
+        {
+            var nested = new TableShape();
+            nested.ColumnWidthsEmu.Add(457200);
+            nested.Rows.Add(new TableRow
+            {
+                HeightEmu = 228600,
+                Cells =
+                {
+                    new TableCell
+                    {
+                        Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xE84A4A))),
+                        TextBody = new TextBody
+                        {
+                            Paragraphs =
+                            {
+                                new Paragraph
+                                {
+                                    Runs =
+                                    {
+                                        new Run { Text = "Nested", Bold = true },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+            var outer = new TableShape();
+            outer.ColumnWidthsEmu.Add(914400);
+            outer.Rows.Add(new TableRow
+            {
+                HeightEmu = 685800,
+                Cells =
+                {
+                    new TableCell
+                    {
+                        TextBody = new TextBody
+                        {
+                            Paragraphs =
+                            {
+                                new Paragraph
+                                {
+                                    Runs =
+                                    {
+                                        new Run
+                                        {
+                                            Text = "\uFFFC",
+                                            InlineTable = new InlineTableInfo { Table = nested },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs =
+                        {
+                            new Run
+                            {
+                                Text = "\uFFFC",
+                                InlineTable = new InlineTableInfo { Table = outer },
+                            },
+                        },
+                    },
+                },
+            }, backgroundAlpha: 0xCC)
+            {
+                Width = 140,
+                Height = 90,
+            };
+            var window = Show(editor, 140, 90);
+            try
+            {
+                byte[] pixels = RenderPixels(editor, 140, 90);
+                int nestedAreaFill = CountRedPixels(
+                    pixels,
+                    width: 140,
+                    left: 6,
+                    top: 2,
+                    right: 58,
+                    bottom: 28);
+
+                nestedAreaFill.Should().BeGreaterThan(500);
+            }
+            finally
+            {
+                window.Close();
+            }
         }, CancellationToken.None);
     }
 
@@ -1445,6 +1552,73 @@ public sealed class AvaloniaRichTextEditorTests
         window.Measure(new Size(width, height));
         window.Arrange(new Rect(0, 0, width, height));
         return window;
+    }
+
+    private static byte[] RenderPixels(Control control, int width, int height)
+    {
+        control.Measure(new Size(width, height));
+        control.Arrange(new Rect(0, 0, width, height));
+        using var bitmap = new RenderTargetBitmap(new PixelSize(width, height));
+        bitmap.Render(control);
+        var pixels = new byte[width * height * 4];
+        var handle = GCHandle.Alloc(pixels, GCHandleType.Pinned);
+        try
+        {
+            using var target = new PinnedFramebuffer(
+                handle.AddrOfPinnedObject(),
+                new PixelSize(width, height),
+                width * 4);
+            bitmap.CopyPixels(target);
+        }
+        finally
+        {
+            handle.Free();
+        }
+
+        return pixels;
+    }
+
+    private static int CountRedPixels(
+        byte[] pixels,
+        int width,
+        int left,
+        int top,
+        int right,
+        int bottom)
+    {
+        int count = 0;
+        for (int y = top; y < bottom; y++)
+        {
+            for (int x = left; x < right; x++)
+            {
+                int offset = (y * width + x) * 4;
+                if (pixels[offset] < 100
+                    && pixels[offset + 1] < 130
+                    && pixels[offset + 2] > 180
+                    && pixels[offset + 3] > 0)
+                    count++;
+            }
+        }
+
+        return count;
+    }
+
+    private sealed class PinnedFramebuffer : ILockedFramebuffer
+    {
+        public PinnedFramebuffer(IntPtr address, PixelSize size, int rowBytes)
+        {
+            Address = address;
+            Size = size;
+            RowBytes = rowBytes;
+        }
+
+        public IntPtr Address { get; }
+        public PixelSize Size { get; }
+        public int RowBytes { get; }
+        public Vector Dpi => new(96, 96);
+        public PixelFormat Format => PixelFormat.Bgra8888;
+        public AlphaFormat AlphaFormat => AlphaFormat.Premul;
+        public void Dispose() { }
     }
 
     private static void Press(
