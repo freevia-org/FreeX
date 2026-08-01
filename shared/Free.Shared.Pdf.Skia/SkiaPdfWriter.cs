@@ -51,12 +51,7 @@ public static class SkiaPdfWriter
         if (dpi is < 36 or > 600)
             throw new ArgumentOutOfRangeException(nameof(dpi));
 
-        using var regular = SKTypeface.FromFamilyName(
-            null, SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            ?? SKTypeface.Default;
-        using var bold = SKTypeface.FromFamilyName(
-            null, SKFontStyleWeight.Bold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            ?? regular;
+        using var typefaces = PdfTypefaceSet.Create();
         using var textRenderer = new FallbackTextRenderer();
         var scale = dpi / 72f;
         var pages = new List<byte[]>(document.Pages.Count);
@@ -68,7 +63,7 @@ public static class SkiaPdfWriter
             using var canvas = new SKCanvas(bitmap);
             canvas.Clear(SKColors.White);
             canvas.Scale(scale, scale);
-            RenderPage(canvas, page, regular, bold, textRenderer);
+            RenderPage(canvas, page, typefaces, textRenderer);
             canvas.Flush();
             using var image = SKImage.FromBitmap(bitmap);
             using var encoded = image.Encode(SKEncodedImageFormat.Png, 100);
@@ -97,12 +92,7 @@ public static class SkiaPdfWriter
             stream.SetLength(0);
         }
 
-        using var regular = SKTypeface.FromFamilyName(
-            null, SKFontStyleWeight.Normal, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            ?? SKTypeface.Default;
-        using var bold = SKTypeface.FromFamilyName(
-            null, SKFontStyleWeight.Bold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright)
-            ?? regular;
+        using var typefaces = PdfTypefaceSet.Create();
 
         var pageCount = 0;
         using var textRenderer = new FallbackTextRenderer();
@@ -113,7 +103,7 @@ public static class SkiaPdfWriter
             {
                 var canvas = pdf.BeginPage((float)page.WidthPoints, (float)page.HeightPoints);
                 canvas.Clear(SKColors.White);
-                RenderPage(canvas, page, regular, bold, textRenderer);
+                RenderPage(canvas, page, typefaces, textRenderer);
                 AddLinkAnnotations(canvas, page);
                 pdf.EndPage();
                 pageCount++;
@@ -179,8 +169,7 @@ public static class SkiaPdfWriter
     private static void RenderPage(
         SKCanvas canvas,
         PdfContentPage page,
-        SKTypeface regular,
-        SKTypeface bold,
+        PdfTypefaceSet typefaces,
         FallbackTextRenderer textRenderer)
     {
         var pageHeight = (float)page.HeightPoints;
@@ -189,15 +178,14 @@ public static class SkiaPdfWriter
         using var textPaint = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill };
 
         foreach (var op in page.Ops)
-            RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+            RenderDrawOp(canvas, op, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer);
     }
 
     private static void RenderDrawOp(
         SKCanvas canvas,
         PdfDrawOp op,
         float pageHeight,
-        SKTypeface regular,
-        SKTypeface bold,
+        PdfTypefaceSet typefaces,
         SKPaint fillPaint,
         SKPaint strokePaint,
         SKPaint textPaint,
@@ -365,7 +353,7 @@ public static class SkiaPdfWriter
                 // PDF text origin is the baseline (y-up). Skia DrawText baseline is y-down.
                 var baseline = (float)PdfRenderGeometry.ToCanvasY(pageHeight, text.Y);
                 textPaint.Color = ToSkColor(colorOverride ?? text.Color);
-                var typeface = text.Face == PdfFontFace.Bold ? bold : regular;
+                var typeface = typefaces.For(text.FontFamily, text.Face);
                 textRenderer.DrawText(canvas, text.Text, (float)text.X, baseline, typeface, (float)text.FontSize, textPaint);
                 break;
             }
@@ -521,7 +509,7 @@ public static class SkiaPdfWriter
                 canvas.RotateDegrees((float)group.RotationDegrees);
                 canvas.Translate(-centerX, -centerY);
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
+                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
                 canvas.Restore();
                 break;
             }
@@ -539,7 +527,7 @@ public static class SkiaPdfWriter
                     (float)(group.X + group.Width),
                     top + (float)group.Height));
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
+                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
                 canvas.Restore();
                 break;
             }
@@ -555,13 +543,13 @@ public static class SkiaPdfWriter
                 };
                 canvas.SaveLayer(layerPaint);
                 foreach (var child in group.Ops)
-                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
+                    RenderDrawOp(canvas, child, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, colorOverride);
                 canvas.Restore();
                 break;
             }
 
             case PdfEffectGroup group:
-                RenderEffectGroup(canvas, group, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                RenderEffectGroup(canvas, group, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer);
                 break;
 
             case PdfImage image:
@@ -620,8 +608,7 @@ public static class SkiaPdfWriter
         SKCanvas canvas,
         PdfEffectGroup group,
         float pageHeight,
-        SKTypeface regular,
-        SKTypeface bold,
+        PdfTypefaceSet typefaces,
         SKPaint fillPaint,
         SKPaint strokePaint,
         SKPaint textPaint,
@@ -637,17 +624,17 @@ public static class SkiaPdfWriter
             case PdfEffectKind.Shadow:
                 RenderEffectPass(canvas, group.Ops, parameters.Color, opacity,
                     parameters.OffsetX, parameters.OffsetY, parameters.Radius * 0.5,
-                    pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                    pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer);
                 break;
             case PdfEffectKind.Glow:
                 RenderEffectPass(canvas, group.Ops, parameters.Color, opacity * 0.72,
                     0, 0, Math.Max(1, parameters.Radius) * 0.5,
-                    pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                    pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer);
                 break;
             case PdfEffectKind.SoftEdge:
                 RenderEffectPass(canvas, group.Ops, parameters.Color, opacity * 0.34,
                     0, 0, Math.Max(1, parameters.Radius) * 0.5,
-                    pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                    pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer);
                 break;
             case PdfEffectKind.Reflection:
             {
@@ -673,14 +660,14 @@ public static class SkiaPdfWriter
                 };
                 canvas.SaveLayer(reflectionLayer);
                 foreach (var op in group.Ops)
-                    RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, parameters.Color);
+                    RenderDrawOp(canvas, op, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, parameters.Color);
                 ApplyReflectionFade(canvas, group, pageHeight, opacity);
                 canvas.Restore();
                 canvas.Restore();
                 break;
             }
             case PdfEffectKind.Bevel:
-                RenderEffectBevel(canvas, group, opacity, pageHeight, regular, bold,
+                RenderEffectBevel(canvas, group, opacity, pageHeight, typefaces,
                     fillPaint, strokePaint, textPaint, textRenderer);
                 break;
         }
@@ -691,8 +678,7 @@ public static class SkiaPdfWriter
         PdfEffectGroup group,
         double opacity,
         float pageHeight,
-        SKTypeface regular,
-        SKTypeface bold,
+        PdfTypefaceSet typefaces,
         SKPaint fillPaint,
         SKPaint strokePaint,
         SKPaint textPaint,
@@ -734,7 +720,7 @@ public static class SkiaPdfWriter
                 canvas.Translate((float)band.OffsetX, (float)-band.OffsetY);
             var color = band.IsHighlight ? group.Parameters.Color : shadowColor;
             foreach (var op in group.Ops)
-                RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint,
+                RenderDrawOp(canvas, op, pageHeight, typefaces, fillPaint, strokePaint,
                     textPaint, textRenderer, color);
             canvas.Restore();
             canvas.Restore();
@@ -750,8 +736,7 @@ public static class SkiaPdfWriter
         double offsetY,
         double blurRadius,
         float pageHeight,
-        SKTypeface regular,
-        SKTypeface bold,
+        PdfTypefaceSet typefaces,
         SKPaint fillPaint,
         SKPaint strokePaint,
         SKPaint textPaint,
@@ -768,7 +753,7 @@ public static class SkiaPdfWriter
         canvas.SaveLayer(layerPaint);
         canvas.Translate((float)offsetX, (float)-offsetY);
         foreach (var op in ops)
-            RenderDrawOp(canvas, op, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer, color);
+            RenderDrawOp(canvas, op, pageHeight, typefaces, fillPaint, strokePaint, textPaint, textRenderer, color);
         canvas.Restore();
     }
 
@@ -1056,6 +1041,57 @@ public static class SkiaPdfWriter
 
     private static byte ToAlphaByte(double opacity) =>
         (byte)Math.Clamp(Math.Round((double.IsFinite(opacity) ? opacity : 1.0) * 255.0), 0, 255);
+
+    private sealed class PdfTypefaceSet : IDisposable
+    {
+        private readonly Dictionary<(string Family, PdfFontFace Face), SKTypeface> _cache = new();
+
+        private PdfTypefaceSet()
+        {
+        }
+
+        public static PdfTypefaceSet Create() => new();
+
+        public SKTypeface For(string? fontFamily, PdfFontFace face)
+        {
+            var family = string.IsNullOrWhiteSpace(fontFamily) ? string.Empty : fontFamily.Trim();
+            var key = (family, face);
+            if (_cache.TryGetValue(key, out var cached))
+                return cached;
+
+            var (weight, slant) = face switch
+            {
+                PdfFontFace.Bold => (SKFontStyleWeight.Bold, SKFontStyleSlant.Upright),
+                PdfFontFace.Italic => (SKFontStyleWeight.Normal, SKFontStyleSlant.Italic),
+                PdfFontFace.BoldItalic => (SKFontStyleWeight.Bold, SKFontStyleSlant.Italic),
+                _ => (SKFontStyleWeight.Normal, SKFontStyleSlant.Upright),
+            };
+            var typeface = SKTypeface.FromFamilyName(
+                    family.Length == 0 ? null : family,
+                    weight,
+                    SKFontStyleWidth.Normal,
+                    slant)
+                ?? SKTypeface.FromFamilyName(
+                    null,
+                    weight,
+                    SKFontStyleWidth.Normal,
+                    slant)
+                ?? SKTypeface.Default;
+            _cache[key] = typeface;
+            return typeface;
+        }
+
+        public void Dispose()
+        {
+            foreach (var typeface in _cache.Values.Distinct())
+            {
+                if (ReferenceEquals(typeface, SKTypeface.Default))
+                    continue;
+                typeface.Dispose();
+            }
+            _cache.Clear();
+        }
+    }
 
     /// <summary>
     /// Draws text with per-codepoint font fallback: characters the base typeface cannot render
