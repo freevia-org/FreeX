@@ -6338,6 +6338,36 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_vertical_block_list_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.List,
+                "urn:microsoft.com/office/officeart/2005/8/layout/verticalBlockList",
+                ["Overview", "Detail", "Next"]);
+            window.Editor.CurrentSlide!.Shapes.Clear();
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.Text is not null)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(3,
+            "Avalonia consumes the same shared vertical block list plan as WPF");
+        liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Overview", "Detail", "Next");
+        liveShapes.Select(op => op.BoundsDip.Y).Should().BeInAscendingOrder();
+        liveShapes.Should().OnlyContain(op => op.BoundsDip.Width > 0 && op.BoundsDip.Height > 0);
+    }
+
+    [Fact]
     public async Task SmartArt_table_hierarchy_shape_composes_shared_cells_without_connectors()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];

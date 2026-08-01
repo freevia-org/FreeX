@@ -3283,6 +3283,35 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesVerticalBlockListAsLiveLayoutAndWpfConsumesSharedPlan()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalBlockList",
+            nodes: [("R", "Overview"), ("C", "Detail"), ("N", "Next")],
+            parOfConnections: [("R", "C"), ("C", "N")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "verticalBlockList is admitted to the shared list live-layout planner");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Children.Should().ContainSingle();
+
+        var liveShapes = SlideCompositor.Compose(pres, pres.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Where(op => op.Text is not null)
+            .ToList();
+        liveShapes.Should().HaveCount(3,
+            "WPF composes the authored vertical block list from shared live shapes");
+        liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Overview", "Detail", "Next");
+        liveShapes.Should().OnlyContain(op => op.BoundsDip.Width > 0 && op.BoundsDip.Height > 0);
+    }
+
+    [Fact]
     public void Reader_ParsesStackedVennAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
