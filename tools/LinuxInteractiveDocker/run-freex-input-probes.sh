@@ -2348,6 +2348,17 @@ outline_column_green_score() {
     awk -v score="$score" 'BEGIN { exit !(score > 0.005) }'
 }
 
+outline_nested_column_green_score() {
+    local screenshot="$1" top="$2" height="$3" width score
+    width=$((cell_width * 14))
+    score="$(convert "$screenshot" \
+        -crop "${width}x${height}+${a1_x}+${top}" \
+        -alpha off \
+        -fx '((g-r)>0.08 && (g-b)>0.08) ? 1 : 0' \
+        -format '%[fx:mean]' info: 2>/dev/null || true)"
+    awk -v score="$score" 'BEGIN { exit !(score > 0.005) }'
+}
+
 probe_outline_group_physical() {
     local row2_value="" row3_value="" row4_value=""
     local grouped_score=false collapse_changed=false expand_changed=false expanded_score=false
@@ -2509,6 +2520,228 @@ probe_outline_column_group_physical() {
         record "outline-columns-group-physical" "failed" \
             "outline-columns-selected.png; outline-columns-grouped.png; outline-columns-group-postcondition.txt" \
             "The real-input column Group/Outline workflow did not prove every required state: group-command=$group_command, grouped-outline-green=$grouped_score, collapse-screen-changed=$collapse_changed, expand-screen-changed=$expand_changed, expanded-outline-green=$expanded_score, values-restored=$values_restored." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
+probe_outline_nested_rows_physical() {
+    local inner_collapsed=false inner_expanded=false outer_collapsed=false outer_expanded=false
+    local grouped_score=false expanded_score=false values_restored=false outer_command=false inner_command=false
+    local inner_toggle_x outer_toggle_x inner_toggle_y inner_collapsed_y outer_toggle_y outer_collapsed_y
+    local row2_value="" row3_value="" row4_value="" row5_value="" row6_value=""
+    local artifacts="outline-nested-rows-grouped.png;outline-nested-rows-inner-collapsed.png;outline-nested-rows-inner-expanded.png;outline-nested-rows-outer-collapsed.png;outline-nested-rows-outer-expanded.png;outline-nested-rows-postcondition.txt"
+
+    # Build a level-1 outer group first, then a level-2 subgroup inside it. The five values make
+    # every detail row independently observable after both collapse/expand cycles.
+    if ! set_cell_text_without_save 1 9 B10 NestedRow10 ||
+       ! set_cell_text_without_save 1 10 B11 NestedRow11 ||
+       ! set_cell_text_without_save 1 11 B12 NestedRow12 ||
+       ! set_cell_text_without_save 1 12 B13 NestedRow13 ||
+       ! set_cell_text_without_save 1 13 B14 NestedRow14; then
+        write_artifact "outline-nested-rows-postcondition.txt" "seeded=false\n"
+        record "outline-nested-rows-group-physical" "failed" "outline-nested-rows-postcondition.txt" \
+            "Could not seed the nested row-group fixture through real X11 inline editing." "$artifacts"
+        return
+    fi
+
+    if select_cell 1 9 B10; then
+        send_key shift+space
+        for _ in $(seq 1 4); do send_key shift+Down; done
+        send_key alt+a
+        send_key g
+        send_key g
+        sleep "$settle_seconds"
+        outer_command=true
+
+        # The same production selection/ribbon path creates the inner level-2 group while the
+        # outer group remains expanded.
+        if select_cell 1 10 B11; then
+            send_key shift+space
+            send_key shift+Down
+            send_key alt+a
+            send_key g
+            send_key g
+            sleep "$settle_seconds"
+            inner_command=true
+        fi
+    fi
+
+    capture "outline-nested-rows-grouped.png"
+    inner_toggle_x=$((a1_x - 16))
+    outer_toggle_x=$((a1_x - 30))
+    inner_toggle_y="$(cell_center_y 12)"
+    outer_toggle_y="$(cell_center_y 14)"
+    if $outer_command && $inner_command && outline_green_score "$output/outline-nested-rows-grouped.png" "$(cell_y 9)" "$((cell_height * 6))"; then
+        grouped_score=true
+
+        # Level 2: collapse rows 3:4, then use the now-visible row-5 summary slot to expand it.
+        focus_app
+        xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-rows-inner-collapsed.png"
+        screen_changed "$output/outline-nested-rows-grouped.png" "$output/outline-nested-rows-inner-collapsed.png" 300 && inner_collapsed=true
+
+        inner_collapsed_y="$(cell_center_y 2)"
+        focus_app
+        xdotool_mousemove_sync "$inner_toggle_x" "$inner_collapsed_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-rows-inner-expanded.png"
+        screen_changed "$output/outline-nested-rows-inner-collapsed.png" "$output/outline-nested-rows-inner-expanded.png" 300 && inner_expanded=true
+
+        # Level 1: collapse rows 2:6, then expand from the visible row-7 summary slot.
+        focus_app
+        xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-rows-outer-collapsed.png"
+        screen_changed "$output/outline-nested-rows-inner-expanded.png" "$output/outline-nested-rows-outer-collapsed.png" 300 && outer_collapsed=true
+
+        outer_collapsed_y="$(cell_center_y 1)"
+        focus_app
+        xdotool_mousemove_sync "$outer_toggle_x" "$outer_collapsed_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-rows-outer-expanded.png"
+        screen_changed "$output/outline-nested-rows-outer-collapsed.png" "$output/outline-nested-rows-outer-expanded.png" 300 && outer_expanded=true
+        outline_green_score "$output/outline-nested-rows-outer-expanded.png" "$(cell_y 9)" "$((cell_height * 6))" && expanded_score=true
+    fi
+
+    row2_value="$(copy_cell_formula 1 9 B10 || true)"
+    row3_value="$(copy_cell_formula 1 10 B11 || true)"
+    row4_value="$(copy_cell_formula 1 11 B12 || true)"
+    row5_value="$(copy_cell_formula 1 12 B13 || true)"
+    row6_value="$(copy_cell_formula 1 13 B14 || true)"
+    if [[ "$row2_value" == "NestedRow10" && "$row3_value" == "NestedRow11" &&
+          "$row4_value" == "NestedRow12" && "$row5_value" == "NestedRow13" &&
+          "$row6_value" == "NestedRow14" ]]; then
+        values_restored=true
+    fi
+
+    write_artifact "outline-nested-rows-postcondition.txt" \
+        "seeded=true\nouter-selection=rows-10:14\ninner-selection=rows-11:12\nouter-group-command=$outer_command\ninner-group-command=$inner_command\noutline-green=$grouped_score\ninner-collapse-screen-changed=$inner_collapsed\ninner-expand-screen-changed=$inner_expanded\nouter-collapse-screen-changed=$outer_collapsed\nouter-expand-screen-changed=$outer_expanded\nexpanded-outline-green=$expanded_score\nrestored-values=$row2_value,$row3_value,$row4_value,$row5_value,$row6_value\nvalues-restored=$values_restored\n"
+    if $outer_command && $inner_command && $grouped_score && $inner_collapsed && $inner_expanded && $outer_collapsed && $outer_expanded && $expanded_score && $values_restored; then
+        record "outline-nested-rows-group-physical" "passed" \
+            "outline-nested-rows-grouped.png; outline-nested-rows-inner-collapsed.png; outline-nested-rows-inner-expanded.png; outline-nested-rows-outer-collapsed.png; outline-nested-rows-outer-expanded.png; rows=10:14/inner=11:12; values=NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14" \
+            "Real X11 Group input created nested row levels; the rendered level-2 and level-1 +/- controls independently collapsed and expanded their groups, and all five values read back exactly." "$artifacts"
+    else
+        record "outline-nested-rows-group-physical" "failed" \
+            "outline-nested-rows-grouped.png; outline-nested-rows-inner-collapsed.png; outline-nested-rows-inner-expanded.png; outline-nested-rows-outer-collapsed.png; outline-nested-rows-outer-expanded.png; outline-nested-rows-postcondition.txt" \
+            "Nested row Group/Outline did not prove every required state: outer-command=$outer_command, inner-command=$inner_command, outline-green=$grouped_score, inner-collapse=$inner_collapsed, inner-expand=$inner_expanded, outer-collapse=$outer_collapsed, outer-expand=$outer_expanded, expanded-outline-green=$expanded_score, values-restored=$values_restored." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
+probe_outline_nested_columns_physical() {
+    local inner_collapsed=false inner_expanded=false outer_collapsed=false outer_expanded=false
+    local grouped_score=false expanded_score=false values_restored=false outer_command=false inner_command=false
+    local column_header_y inner_toggle_x outer_toggle_x inner_toggle_y outer_toggle_y inner_collapsed_x outer_collapsed_x
+    local outline_top outline_height
+    local column2_value="" column3_value="" column4_value="" column5_value="" column6_value=""
+    local artifacts="outline-nested-columns-grouped.png;outline-nested-columns-inner-collapsed.png;outline-nested-columns-inner-expanded.png;outline-nested-columns-outer-collapsed.png;outline-nested-columns-outer-expanded.png;outline-nested-columns-postcondition.txt"
+
+    if ! set_cell_text_without_save 7 1 H2 NestedColumnH ||
+       ! set_cell_text_without_save 8 1 I2 NestedColumnI ||
+       ! set_cell_text_without_save 9 1 J2 NestedColumnJ ||
+       ! set_cell_text_without_save 10 1 K2 NestedColumnK ||
+       ! set_cell_text_without_save 11 1 L2 NestedColumnL; then
+        write_artifact "outline-nested-columns-postcondition.txt" "seeded=false\n"
+        record "outline-nested-columns-group-physical" "failed" "outline-nested-columns-postcondition.txt" \
+            "Could not seed the nested column-group fixture through real X11 inline editing." "$artifacts"
+        return
+    fi
+
+    column_header_y="$((a1_y - cell_height / 2))"
+    if select_cell 7 1 H2; then
+        focus_app
+        xdotool_mousemove_sync "$(cell_center_x 7)" "$column_header_y"
+        xdotool mousedown 1
+        sleep "$settle_seconds"
+        xdotool_mousemove_sync "$(cell_center_x 11)" "$column_header_y"
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        xdotool_mousemove_sync "$(cell_center_x 7)" "$column_header_y" click 3
+        sleep "$settle_seconds"
+        send_active_key End Up Up Up Return
+        sleep "$settle_seconds"
+        outer_command=true
+
+        if select_cell 8 1 I2; then
+            focus_app
+            xdotool_mousemove_sync "$(cell_center_x 8)" "$column_header_y"
+            xdotool mousedown 1
+            sleep "$settle_seconds"
+            xdotool_mousemove_sync "$(cell_center_x 10)" "$column_header_y"
+            xdotool mouseup 1
+            sleep "$settle_seconds"
+            xdotool_mousemove_sync "$(cell_center_x 8)" "$column_header_y" click 3
+            sleep "$settle_seconds"
+            send_active_key End Up Up Up Return
+            sleep "$settle_seconds"
+            inner_command=true
+        fi
+    fi
+
+    capture "outline-nested-columns-grouped.png"
+    outline_top="$((a1_y - cell_height - 14))"
+    outline_height=40
+    inner_toggle_y="$((outline_top + 27))"
+    outer_toggle_y="$((outline_top + 13))"
+    inner_toggle_x="$(cell_center_x 11)"
+    outer_toggle_x="$(cell_center_x 12)"
+    if $outer_command && $inner_command && outline_nested_column_green_score "$output/outline-nested-columns-grouped.png" "$outline_top" "$outline_height"; then
+        grouped_score=true
+
+        # Inner I:K: the level-2 toggle is over its L summary column, which moves to the ninth
+        # visible column slot after I:K are hidden.
+        focus_app
+        xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-columns-inner-collapsed.png"
+        screen_changed "$output/outline-nested-columns-grouped.png" "$output/outline-nested-columns-inner-collapsed.png" 300 && inner_collapsed=true
+
+        inner_collapsed_x="$(cell_center_x 8)"
+        focus_app
+        xdotool_mousemove_sync "$inner_collapsed_x" "$inner_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-columns-inner-expanded.png"
+        screen_changed "$output/outline-nested-columns-inner-collapsed.png" "$output/outline-nested-columns-inner-expanded.png" 300 && inner_expanded=true
+
+        # Outer H:L: the level-1 toggle is over M, which moves to the eighth visible data slot after
+        # H:L are hidden.
+        focus_app
+        xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-columns-outer-collapsed.png"
+        screen_changed "$output/outline-nested-columns-inner-expanded.png" "$output/outline-nested-columns-outer-collapsed.png" 300 && outer_collapsed=true
+
+        outer_collapsed_x="$(cell_center_x 7)"
+        focus_app
+        xdotool_mousemove_sync "$outer_collapsed_x" "$outer_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-columns-outer-expanded.png"
+        screen_changed "$output/outline-nested-columns-outer-collapsed.png" "$output/outline-nested-columns-outer-expanded.png" 300 && outer_expanded=true
+        outline_nested_column_green_score "$output/outline-nested-columns-outer-expanded.png" "$outline_top" "$outline_height" && expanded_score=true
+    fi
+
+    column2_value="$(copy_cell_formula_by_keyboard 7 1 || true)"
+    column3_value="$(copy_cell_formula_by_keyboard 8 1 || true)"
+    column4_value="$(copy_cell_formula_by_keyboard 9 1 || true)"
+    column5_value="$(copy_cell_formula_by_keyboard 10 1 || true)"
+    column6_value="$(copy_cell_formula_by_keyboard 11 1 || true)"
+    if [[ "$column2_value" == "NestedColumnH" && "$column3_value" == "NestedColumnI" &&
+          "$column4_value" == "NestedColumnJ" && "$column5_value" == "NestedColumnK" &&
+          "$column6_value" == "NestedColumnL" ]]; then
+        values_restored=true
+    fi
+
+    write_artifact "outline-nested-columns-postcondition.txt" \
+        "seeded=true\nouter-selection=column-header-drag-H:L\ninner-selection=column-header-drag-I:K\nouter-group-command=$outer_command\ninner-group-command=$inner_command\noutline-green=$grouped_score\ninner-collapse-screen-changed=$inner_collapsed\ninner-expand-screen-changed=$inner_expanded\nouter-collapse-screen-changed=$outer_collapsed\nouter-expand-screen-changed=$outer_expanded\nexpanded-outline-green=$expanded_score\nrestored-values=$column2_value,$column3_value,$column4_value,$column5_value,$column6_value\nvalues-restored=$values_restored\n"
+    if $outer_command && $inner_command && $grouped_score && $inner_collapsed && $inner_expanded && $outer_collapsed && $outer_expanded && $expanded_score && $values_restored; then
+        record "outline-nested-columns-group-physical" "passed" \
+            "outline-nested-columns-grouped.png; outline-nested-columns-inner-collapsed.png; outline-nested-columns-inner-expanded.png; outline-nested-columns-outer-collapsed.png; outline-nested-columns-outer-expanded.png; columns=H:L/inner=I:K; values=NestedColumnH,NestedColumnI,NestedColumnJ,NestedColumnK,NestedColumnL" \
+            "Real X11 Group input created nested column levels; the rendered level-2 and level-1 +/- controls independently collapsed and expanded their groups, and all five values read back exactly." "$artifacts"
+    else
+        record "outline-nested-columns-group-physical" "failed" \
+            "outline-nested-columns-grouped.png; outline-nested-columns-inner-collapsed.png; outline-nested-columns-inner-expanded.png; outline-nested-columns-outer-collapsed.png; outline-nested-columns-outer-expanded.png; outline-nested-columns-postcondition.txt" \
+            "Nested column Group/Outline did not prove every required state: outer-command=$outer_command, inner-command=$inner_command, outline-green=$grouped_score, inner-collapse=$inner_collapsed, inner-expand=$inner_expanded, outer-collapse=$outer_collapsed, outer-expand=$outer_expanded, expanded-outline-green=$expanded_score, values-restored=$values_restored." "$artifacts"
     fi
     send_key Escape || true
 }
@@ -3587,6 +3820,21 @@ if [[ "$probe_selector" == "outline-group" ]]; then
     exit 0
 fi
 
+if [[ "$probe_selector" == "outline-nested-group" ]]; then
+    # Focused Wave98 lane for nested row and column outline levels. Each axis returns expanded
+    # before its exact-value postcondition is read back.
+    probe_outline_nested_rows_physical
+    probe_outline_nested_columns_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused nested Group/Outline probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
 if [[ "$probe_selector" != "all" ]]; then
     calibration_reason="Unknown FREEX_X11_PROBE_SELECTOR '$probe_selector'."
     record "x11-probe-selector" "failed" "x11-input-results.json" "$calibration_reason"
@@ -3891,6 +4139,8 @@ probe_sheet_tabs
 probe_window_management
 probe_outline_group_physical
 probe_outline_column_group_physical
+probe_outline_nested_rows_physical
+probe_outline_nested_columns_physical
 
 # Real shortcut-to-dialog path, followed by paced focus traversal and Escape cancellation.
 send_key ctrl+1

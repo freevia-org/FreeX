@@ -181,4 +181,30 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         runner.Split("\"outline-group-physical\"").Should().HaveCountGreaterThanOrEqualTo(4,
             "the focused selector and default all lane must both require the physical outline result and artifacts");
     }
+
+    [Fact]
+    public void NestedOutlinePhysicalLaneRequiresBothAxesAndIndependentLevelToggles()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        runner.Should().Contain("\"outline-nested-group\"");
+        runner.Should().Contain("outline-nested-rows-group-physical");
+        runner.Should().Contain("outline-nested-columns-group-physical");
+        probe.Should().Contain("probe_outline_nested_rows_physical()");
+        probe.Should().Contain("probe_outline_nested_columns_physical()");
+        probe.Should().Contain("inner-selection=rows-11:12");
+        probe.Should().Contain("inner-selection=column-header-drag-I:K");
+        probe.Should().Contain("inner-collapse-screen-changed=$inner_collapsed");
+        probe.Should().Contain("outer-expand-screen-changed=$outer_expanded");
+        probe.Should().Contain("outline-nested-rows-inner-collapsed.png");
+        probe.Should().Contain("outline-nested-columns-outer-expanded.png");
+        probe.Should().Contain("NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14");
+        probe.Should().Contain("NestedColumnH,NestedColumnI,NestedColumnJ,NestedColumnK,NestedColumnL");
+        probe.Should().Contain("outline-nested-group\" ]]; then");
+        runner.Split("\"outline-nested-rows-group-physical\"").Should().HaveCountGreaterThanOrEqualTo(4,
+            "the focused selector and default all lane must both require nested row evidence");
+    }
 }

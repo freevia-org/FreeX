@@ -230,6 +230,15 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("group-gesture=column-header-right-click,End,Up,Up,Up,Enter", probe, StringComparison.Ordinal);
         Assert.Contains("outline_column_green_score", probe, StringComparison.Ordinal);
         Assert.Contains("copy_cell_formula_by_keyboard", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_outline_nested_rows_physical", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_outline_nested_columns_physical", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-nested-group", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-nested-rows-group-physical", runner, StringComparison.Ordinal);
+        Assert.Contains("outline-nested-columns-group-physical", runner, StringComparison.Ordinal);
+        Assert.Contains("inner-collapse-screen-changed", probe, StringComparison.Ordinal);
+        Assert.Contains("outer-expand-screen-changed", probe, StringComparison.Ordinal);
+        Assert.Contains("NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14", probe, StringComparison.Ordinal);
+        Assert.Contains("NestedColumnH,NestedColumnI,NestedColumnJ,NestedColumnK,NestedColumnL", probe, StringComparison.Ordinal);
         Assert.Contains("name-box-dropdown-parity-native-crop", probe, StringComparison.Ordinal);
         Assert.Contains("Assert-NameBoxDropdownParityNativeContract", runner, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"formula-3d-point\"", probe, StringComparison.Ordinal);

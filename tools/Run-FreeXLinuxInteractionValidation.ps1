@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group")]
+    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group", "outline-nested-group")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -1212,6 +1212,8 @@ try {
         )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
         @("outline-group-physical", "outline-columns-group-physical")
+    } elseif ($PhysicalProbeSelector -eq "outline-nested-group") {
+        @("outline-nested-rows-group-physical", "outline-nested-columns-group-physical")
     } else {
         @(
         "inline-edit-f2-escape",
@@ -1232,6 +1234,8 @@ try {
         "window-new-arrange-switch-physical",
         "outline-group-physical",
         "outline-columns-group-physical",
+        "outline-nested-rows-group-physical",
+        "outline-nested-columns-group-physical",
         "dialog-format-cells-keyboard",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
@@ -1316,6 +1320,8 @@ try {
         )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
         @("outline-group-physical", "outline-columns-group-physical")
+    } elseif ($PhysicalProbeSelector -eq "outline-nested-group") {
+        @("outline-nested-rows-group-physical", "outline-nested-columns-group-physical")
     } else {
         @(
         "worksheet-context-copy-physical",
@@ -1325,6 +1331,8 @@ try {
         "window-new-arrange-switch-physical",
         "outline-group-physical",
         "outline-columns-group-physical",
+        "outline-nested-rows-group-physical",
+        "outline-nested-columns-group-physical",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
         "backstage-print-ctrl-shift-f12-cancel",
