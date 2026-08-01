@@ -36,6 +36,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
                 sheet.SetCell(anchor, new NumberValue(99));
 
                 var objectId = AddObject(sheet, kind, anchor);
+                var sourcePosition = ObjectPosition(sheet, kind, objectId);
                 window.SelectDrawingObjectForTest(kind, objectId, anchor);
 
                 await window.RaiseKeyDownForTest(new KeyEventArgs
@@ -57,6 +58,12 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
                 sheet.GetCell(anchor)!.Value.Should().Be(new NumberValue(99));
                 window.SelectedDrawingObjectKindForTest.Should().Be(kind);
                 window.SelectedDrawingObjectIdForTest.Should().NotBe(objectId);
+                var pastedPosition = ObjectPosition(
+                    sheet,
+                    kind,
+                    window.SelectedDrawingObjectIdForTest!.Value);
+                pastedPosition.X.Should().BeApproximately(sourcePosition.X + 12, 0.001);
+                pastedPosition.Y.Should().BeApproximately(sourcePosition.Y + 12, 0.001);
             }
             finally
             {
@@ -83,6 +90,7 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
                 var destinationAnchor = new CellAddress(sourceSheet.Id, 12, 12);
                 sourceSheet.SetCell(sourceAnchor, new NumberValue(99));
                 var objectId = AddObject(sourceSheet, kind, sourceAnchor);
+                var sourcePosition = ObjectPosition(sourceSheet, kind, objectId);
                 window.SelectDrawingObjectForTest(kind, objectId, sourceAnchor);
 
                 await window.RaiseKeyDownForTest(new KeyEventArgs
@@ -101,6 +109,12 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
 
                 CountObjects(sourceSheet, kind).Should().Be(1);
                 ObjectIds(sourceSheet, kind).Should().NotContain(objectId);
+                var movedPosition = ObjectPosition(
+                    sourceSheet,
+                    kind,
+                    window.SelectedDrawingObjectIdForTest!.Value);
+                movedPosition.X.Should().BeApproximately(sourcePosition.X, 0.001);
+                movedPosition.Y.Should().BeApproximately(sourcePosition.Y, 0.001);
                 window.Session.CanUndo.Should().BeTrue();
                 window.Session.UndoLastEdit().Success.Should().BeTrue();
                 ObjectIds(sourceSheet, kind).Should().Equal([objectId], "Undo must restore the original object");
@@ -242,6 +256,190 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
         }, CancellationToken.None);
     }
 
+    [Theory]
+    [InlineData(SelectionPaneObjectKind.Chart)]
+    [InlineData(SelectionPaneObjectKind.Shape)]
+    [InlineData(SelectionPaneObjectKind.Picture)]
+    [InlineData(SelectionPaneObjectKind.TextBox)]
+    public async Task CopyToProtectedDestination_RejectsCreationForEveryObjectKind(
+        SelectionPaneObjectKind kind)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var destinationSheet = window.Session.Workbook.AddSheet("ProtectedCopyDestination");
+                var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
+                var objectId = AddObject(sourceSheet, kind, sourceAnchor);
+                window.Session.ExecuteReviewCommand(new ProtectSheetCommand(
+                    destinationSheet.Id,
+                    password: null,
+                    permissions: [SheetProtectionPermission.SelectLockedCells]));
+
+                var result = window.Session.ExecuteReviewCommand(
+                    new DuplicateDrawingObjectCommand(
+                        sourceSheet.Id,
+                        destinationSheet.Id,
+                        kind,
+                        objectId));
+
+                result.Success.Should().BeFalse();
+                CountObjects(sourceSheet, kind).Should().Be(1);
+                CountObjects(destinationSheet, kind).Should().Be(0);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(SelectionPaneObjectKind.Chart)]
+    [InlineData(SelectionPaneObjectKind.Shape)]
+    [InlineData(SelectionPaneObjectKind.Picture)]
+    [InlineData(SelectionPaneObjectKind.TextBox)]
+    public async Task SameSheetCut_UsesSourceObjectProtection(
+        SelectionPaneObjectKind kind)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sheet = window.Session.ActiveSheet;
+                var anchor = new CellAddress(sheet.Id, 2, 2);
+                var objectId = AddObject(sheet, kind, anchor);
+                SetObjectLocked(sheet, kind, objectId, locked: false);
+                var sourcePosition = ObjectPosition(sheet, kind, objectId);
+                window.Session.ExecuteReviewCommand(new ProtectSheetCommand(
+                    sheet.Id,
+                    password: null,
+                    permissions: [SheetProtectionPermission.SelectLockedCells]));
+
+                var result = window.Session.ExecuteReviewCommand(
+                    new DuplicateDrawingObjectCommand(
+                        sheet.Id,
+                        sheet.Id,
+                        kind,
+                        objectId,
+                        removeSource: true));
+
+                result.Success.Should().BeTrue();
+                CountObjects(sheet, kind).Should().Be(1);
+                var movedId = ObjectIds(sheet, kind).Single();
+                movedId.Should().NotBe(objectId);
+                var movedPosition = ObjectPosition(sheet, kind, movedId);
+                movedPosition.X.Should().BeApproximately(sourcePosition.X, 0.001);
+                movedPosition.Y.Should().BeApproximately(sourcePosition.Y, 0.001);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(SelectionPaneObjectKind.Chart, true, false, false)]
+    [InlineData(SelectionPaneObjectKind.Shape, true, false, false)]
+    [InlineData(SelectionPaneObjectKind.Picture, true, false, false)]
+    [InlineData(SelectionPaneObjectKind.TextBox, true, false, false)]
+    [InlineData(SelectionPaneObjectKind.Chart, false, true, true)]
+    [InlineData(SelectionPaneObjectKind.Shape, false, true, true)]
+    [InlineData(SelectionPaneObjectKind.Picture, false, true, true)]
+    [InlineData(SelectionPaneObjectKind.TextBox, false, true, true)]
+    public async Task CrossSheetCut_RequiresSourceRemovalAndDestinationCreationPermission(
+        SelectionPaneObjectKind kind,
+        bool protectSource,
+        bool protectDestination,
+        bool sourceObjectUnlocked)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var destinationSheet = window.Session.Workbook.AddSheet("GuardDestination");
+                var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
+                var objectId = AddObject(sourceSheet, kind, sourceAnchor);
+                SetObjectLocked(sourceSheet, kind, objectId, !sourceObjectUnlocked);
+
+                if (protectSource)
+                    window.Session.ExecuteReviewCommand(new ProtectSheetCommand(
+                        sourceSheet.Id,
+                        password: null,
+                        permissions: [SheetProtectionPermission.SelectLockedCells]));
+                if (protectDestination)
+                    window.Session.ExecuteReviewCommand(new ProtectSheetCommand(
+                        destinationSheet.Id,
+                        password: null,
+                        permissions: [SheetProtectionPermission.SelectLockedCells]));
+
+                var result = window.Session.ExecuteReviewCommand(
+                    new DuplicateDrawingObjectCommand(
+                        sourceSheet.Id,
+                        destinationSheet.Id,
+                        kind,
+                        objectId,
+                        removeSource: true));
+
+                result.Success.Should().BeFalse();
+                CountObjects(sourceSheet, kind).Should().Be(1);
+                CountObjects(destinationSheet, kind).Should().Be(0);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData(SelectionPaneObjectKind.Chart)]
+    [InlineData(SelectionPaneObjectKind.Shape)]
+    [InlineData(SelectionPaneObjectKind.Picture)]
+    [InlineData(SelectionPaneObjectKind.TextBox)]
+    public async Task CrossSheetCut_AllowsUnlockedObjectOnProtectedSource(
+        SelectionPaneObjectKind kind)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                var sourceSheet = window.Session.ActiveSheet;
+                var destinationSheet = window.Session.Workbook.AddSheet("UnlockedSourceDestination");
+                var sourceAnchor = new CellAddress(sourceSheet.Id, 2, 2);
+                var objectId = AddObject(sourceSheet, kind, sourceAnchor);
+                SetObjectLocked(sourceSheet, kind, objectId, locked: false);
+                window.Session.ExecuteReviewCommand(new ProtectSheetCommand(
+                    sourceSheet.Id,
+                    password: null,
+                    permissions: [SheetProtectionPermission.SelectLockedCells]));
+
+                var result = window.Session.ExecuteReviewCommand(
+                    new DuplicateDrawingObjectCommand(
+                        sourceSheet.Id,
+                        destinationSheet.Id,
+                        kind,
+                        objectId,
+                        removeSource: true));
+
+                result.Success.Should().BeTrue();
+                CountObjects(sourceSheet, kind).Should().Be(0);
+                CountObjects(destinationSheet, kind).Should().Be(1);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     [Fact]
     public async Task DrawingObjectContextMenu_CutAndPaste_UsesObjectClipboardRoute()
     {
@@ -281,19 +479,40 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
                     Title = "Sales",
                     Type = ChartType.Column,
                     DataRange = new GridRange(anchor, new CellAddress(sheet.Id, 4, 3)),
+                    Left = 123,
+                    Top = 234,
                 };
                 sheet.Charts.Add(chart);
                 return chart.Id;
             case SelectionPaneObjectKind.Shape:
-                var shape = new DrawingShapeModel { Name = "SalesShape", Anchor = anchor };
+                var shape = new DrawingShapeModel
+                {
+                    Name = "SalesShape",
+                    Anchor = anchor,
+                    AnchorOffsetX = 17,
+                    AnchorOffsetY = 29,
+                };
                 sheet.DrawingShapes.Add(shape);
                 return shape.Id;
             case SelectionPaneObjectKind.Picture:
-                var picture = new PictureModel { Name = "SalesPicture", Anchor = anchor };
+                var picture = new PictureModel
+                {
+                    Name = "SalesPicture",
+                    Anchor = anchor,
+                    AnchorOffsetX = 31,
+                    AnchorOffsetY = 43,
+                };
                 sheet.Pictures.Add(picture);
                 return picture.Id;
             case SelectionPaneObjectKind.TextBox:
-                var textBox = new TextBoxModel { Name = "SalesTextBox", Anchor = anchor, Text = "Sales" };
+                var textBox = new TextBoxModel
+                {
+                    Name = "SalesTextBox",
+                    Anchor = anchor,
+                    Text = "Sales",
+                    AnchorOffsetX = 47,
+                    AnchorOffsetY = 59,
+                };
                 sheet.TextBoxes.Add(textBox);
                 return textBox.Id;
             default:
@@ -309,6 +528,47 @@ public sealed class R91_AvaloniaObjectClipboardCopyPasteTests
         SelectionPaneObjectKind.TextBox => sheet.TextBoxes.Count,
         _ => 0,
     };
+
+    private static (double X, double Y) ObjectPosition(
+        Sheet sheet,
+        SelectionPaneObjectKind kind,
+        Guid objectId) => kind switch
+    {
+        SelectionPaneObjectKind.Chart when sheet.Charts.Find(item => item.Id == objectId) is { } chart =>
+            (chart.Left, chart.Top),
+        SelectionPaneObjectKind.Shape when sheet.DrawingShapes.Find(item => item.Id == objectId) is { } shape =>
+            (shape.AnchorOffsetX, shape.AnchorOffsetY),
+        SelectionPaneObjectKind.Picture when sheet.Pictures.Find(item => item.Id == objectId) is { } picture =>
+            (picture.AnchorOffsetX, picture.AnchorOffsetY),
+        SelectionPaneObjectKind.TextBox when sheet.TextBoxes.Find(item => item.Id == objectId) is { } textBox =>
+            (textBox.AnchorOffsetX, textBox.AnchorOffsetY),
+        _ => throw new InvalidOperationException($"Object {objectId} was not found."),
+    };
+
+    private static void SetObjectLocked(
+        Sheet sheet,
+        SelectionPaneObjectKind kind,
+        Guid objectId,
+        bool locked)
+    {
+        switch (kind)
+        {
+            case SelectionPaneObjectKind.Chart:
+                sheet.Charts.Find(item => item.Id == objectId)!.Locked = locked;
+                break;
+            case SelectionPaneObjectKind.Shape:
+                sheet.DrawingShapes.Find(item => item.Id == objectId)!.Locked = locked;
+                break;
+            case SelectionPaneObjectKind.Picture:
+                sheet.Pictures.Find(item => item.Id == objectId)!.Locked = locked;
+                break;
+            case SelectionPaneObjectKind.TextBox:
+                sheet.TextBoxes.Find(item => item.Id == objectId)!.Locked = locked;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, null);
+        }
+    }
 
     private static IEnumerable<Guid> ObjectIds(Sheet sheet, SelectionPaneObjectKind kind) => kind switch
     {

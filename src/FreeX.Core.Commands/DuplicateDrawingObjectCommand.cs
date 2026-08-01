@@ -42,9 +42,9 @@ public sealed class DuplicateDrawingObjectCommand : IWorkbookCommand
     public Guid? NewObjectId => _clonedChart?.Id ?? _clonedShape?.Id ?? _clonedPicture?.Id ?? _clonedTextBox?.Id;
 
     /// <param name="offsetX">
-    /// Pixel offset applied to the duplicate's position relative to the source, matching Excel's
-    /// small cascade offset on Ctrl+V of an object (avoids the paste landing exactly on top of the
-    /// source and looking like nothing happened when source and destination sheet are the same).
+    /// Pixel offset applied to a copied duplicate's position relative to the source, matching
+    /// Excel's small cascade offset on Ctrl+V of an object. Moves ignore this value and preserve
+    /// the source coordinates because this command has no separate destination-position contract.
     /// </param>
     public DuplicateDrawingObjectCommand(
         SheetId sourceSheetId,
@@ -59,9 +59,11 @@ public sealed class DuplicateDrawingObjectCommand : IWorkbookCommand
         _destinationSheetId = destinationSheetId;
         _kind = kind;
         _sourceObjectId = sourceObjectId;
-        _offsetX = offsetX;
-        _offsetY = offsetY;
         _removeSource = removeSource;
+        // Copy uses Excel's visible cascade. Cut is a move, so it must preserve the source
+        // coordinates unless a caller supplies a separate destination-position contract.
+        _offsetX = removeSource ? 0 : offsetX;
+        _offsetY = removeSource ? 0 : offsetY;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -76,9 +78,11 @@ public sealed class DuplicateDrawingObjectCommand : IWorkbookCommand
                 var sourceChart = sourceSheet.Charts.Find(c => c.Id == _sourceObjectId);
                 if (sourceChart is null)
                     return new CommandOutcome(false, "The copied chart no longer exists.");
-                if ((_removeSource
-                        ? ChartCommandGuards.RejectIfEditObjectsBlocked(destinationSheet, sourceChart)
-                        : ChartCommandGuards.RejectIfEditObjectsBlocked(destinationSheet)) is { } protectedOutcome)
+                if (RejectIfTransferBlocked(
+                        sourceSheet,
+                        destinationSheet,
+                        sourceChart,
+                        ChartCommandGuards.RejectIfEditObjectsBlocked) is { } protectedOutcome)
                     return protectedOutcome;
 
                 // Ctrl+C/Ctrl+V of a selected chart object duplicates the object itself, not the
@@ -106,9 +110,11 @@ public sealed class DuplicateDrawingObjectCommand : IWorkbookCommand
                 var sourceShape = sourceSheet.DrawingShapes.Find(s => s.Id == _sourceObjectId);
                 if (sourceShape is null)
                     return new CommandOutcome(false, "The copied shape no longer exists.");
-                if ((_removeSource
-                        ? DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(destinationSheet, sourceShape)
-                        : DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(destinationSheet)) is { } protectedOutcome)
+                if (RejectIfTransferBlocked(
+                        sourceSheet,
+                        destinationSheet,
+                        sourceShape,
+                        DrawingShapeCommandGuards.RejectIfEditObjectsBlocked) is { } protectedOutcome)
                     return protectedOutcome;
 
                 _clonedShape = DuplicateSheetDrawingCloner.CloneDrawingShape(sourceShape, _destinationSheetId);
@@ -130,9 +136,11 @@ public sealed class DuplicateDrawingObjectCommand : IWorkbookCommand
                 var sourcePicture = sourceSheet.Pictures.Find(p => p.Id == _sourceObjectId);
                 if (sourcePicture is null)
                     return new CommandOutcome(false, "The copied picture no longer exists.");
-                if ((_removeSource
-                        ? PictureCommandGuards.RejectIfEditObjectsBlocked(destinationSheet, sourcePicture)
-                        : PictureCommandGuards.RejectIfEditObjectsBlocked(destinationSheet)) is { } protectedOutcome)
+                if (RejectIfTransferBlocked(
+                        sourceSheet,
+                        destinationSheet,
+                        sourcePicture,
+                        PictureCommandGuards.RejectIfEditObjectsBlocked) is { } protectedOutcome)
                     return protectedOutcome;
 
                 _clonedPicture = DuplicateSheetDrawingCloner.ClonePicture(
@@ -155,9 +163,11 @@ public sealed class DuplicateDrawingObjectCommand : IWorkbookCommand
                 var sourceTextBox = sourceSheet.TextBoxes.Find(t => t.Id == _sourceObjectId);
                 if (sourceTextBox is null)
                     return new CommandOutcome(false, "The copied text box no longer exists.");
-                if ((_removeSource
-                        ? TextBoxCommandGuards.RejectIfEditObjectsBlocked(destinationSheet, sourceTextBox)
-                        : TextBoxCommandGuards.RejectIfEditObjectsBlocked(destinationSheet)) is { } protectedOutcome)
+                if (RejectIfTransferBlocked(
+                        sourceSheet,
+                        destinationSheet,
+                        sourceTextBox,
+                        TextBoxCommandGuards.RejectIfEditObjectsBlocked) is { } protectedOutcome)
                     return protectedOutcome;
 
                 _clonedTextBox = DuplicateSheetDrawingCloner.CloneTextBox(sourceTextBox, _destinationSheetId);
@@ -177,6 +187,29 @@ public sealed class DuplicateDrawingObjectCommand : IWorkbookCommand
             default:
                 return new CommandOutcome(false, "Copying this object type is not supported yet.");
         }
+    }
+
+    private CommandOutcome? RejectIfTransferBlocked<T>(
+        Sheet sourceSheet,
+        Sheet destinationSheet,
+        T sourceObject,
+        Func<Sheet, T, CommandOutcome?> objectGuard)
+    {
+        if (!_removeSource)
+            return CommandGuards.RejectIfProtectedWithoutPermission(
+                destinationSheet,
+                SheetProtectionPermission.EditObjects);
+
+        // A same-sheet move only needs the source object's lock-aware permission check. For a
+        // cross-sheet move, removal and creation are independent protected operations and both
+        // must pass before any clone or source removal occurs.
+        if (sourceSheet.Id == destinationSheet.Id)
+            return objectGuard(sourceSheet, sourceObject);
+
+        return objectGuard(sourceSheet, sourceObject) ??
+            CommandGuards.RejectIfProtectedWithoutPermission(
+                destinationSheet,
+                SheetProtectionPermission.EditObjects);
     }
 
     public void Revert(ICommandContext ctx)
