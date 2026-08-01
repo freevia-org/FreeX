@@ -1171,6 +1171,10 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// </summary>
     public static Run GroupControl(string text, string? tag = null, string? alias = null) =>
         new(text) { Control = new ContentControl(ContentControlKind.Group, tag, alias) };
+
+    /// <summary>Creates an inline Citation content control backed by w:sdtPr/w:citation.</summary>
+    public static Run CitationControl(string text, string? tag = null, string? alias = null) =>
+        new(text) { Control = new ContentControl(ContentControlKind.Citation, tag, alias) };
 }
 
 /// <summary>A formatted fragment in the base or phonetic text of a Word ruby annotation.</summary>
@@ -1226,8 +1230,8 @@ public enum RubyAlignment
 /// can only pick from; <see cref="ComboBox"/> is a combo box (w:sdtPr/w:comboBox + w:listItem entries)
 /// that additionally allows free text; <see cref="Picture"/> is a picture control (w:sdtPr/w:picture)
 /// whose run carries an <see cref="InlineImage"/>; <see cref="BuildingBlockGallery"/> is a
-/// building-block gallery control (w:sdtPr/w:docPartObj); and <see cref="Group"/> is a Group control
-/// (w:sdtPr/w:group).
+/// building-block gallery control (w:sdtPr/w:docPartObj); <see cref="Group"/> is a Group control
+/// (w:sdtPr/w:group); and <see cref="Citation"/> is a citation control (w:sdtPr/w:citation).
 /// </summary>
 public enum ContentControlKind
 {
@@ -1239,7 +1243,8 @@ public enum ContentControlKind
     ComboBox,
     Picture,
     BuildingBlockGallery,
-    Group
+    Group,
+    Citation
 }
 
 /// <summary>Word content-control locking from w:sdtPr/w:lock.</summary>
@@ -1944,7 +1949,8 @@ public enum BlockContentControlKind
     RepeatingSection,
     RepeatingSectionItem,
     BuildingBlockGallery,
-    Group
+    Group,
+    Citation
 }
 
 /// <summary>
@@ -1999,6 +2005,10 @@ public sealed record BlockContentControl(
     /// <summary>Creates a body-level Group content control (w:sdtPr/w:group).</summary>
     public static BlockContentControl GroupRegion(string? tag = null, string? alias = null) =>
         new(BlockContentControlKind.Group, Tag: tag, Alias: alias);
+
+    /// <summary>Creates a body-level Citation content control (w:sdtPr/w:citation).</summary>
+    public static BlockContentControl CitationRegion(string? tag = null, string? alias = null) =>
+        new(BlockContentControlKind.Citation, Tag: tag, Alias: alias);
 
     /// <summary>Creates a Word 2013 repeating-section content control (w15:repeatingSection).</summary>
     public static BlockContentControl RepeatingSection(
