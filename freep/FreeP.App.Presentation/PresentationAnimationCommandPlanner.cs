@@ -25,6 +25,10 @@ public enum PresentationMotionPathPreset
     ArcLeft,
     ArcUp,
     ArcDown,
+    Circle,
+    Loop,
+    S,
+    FigureEight,
 }
 
 public sealed record PresentationAnimationCommandPlan(
@@ -93,6 +97,10 @@ public static class PresentationAnimationCommandPlanner
             new PresentationAnimationCommandPlan("freep.anim.motion.arc-left", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.ArcLeft),
             new PresentationAnimationCommandPlan("freep.anim.motion.arc-up", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.ArcUp),
             new PresentationAnimationCommandPlan("freep.anim.motion.arc-down", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.ArcDown),
+            new PresentationAnimationCommandPlan("freep.anim.motion.circle", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.Circle),
+            new PresentationAnimationCommandPlan("freep.anim.motion.loop", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.Loop),
+            new PresentationAnimationCommandPlan("freep.anim.motion.s", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.S),
+            new PresentationAnimationCommandPlan("freep.anim.motion.figure-eight", PresentationAnimationCommandIntentKind.AddMotionPath, AnimationKind.Motion, MotionPathPreset: PresentationMotionPathPreset.FigureEight),
             new PresentationAnimationCommandPlan("freep.anim.none", PresentationAnimationCommandIntentKind.RemoveSelectedShapeAnimations),
             new PresentationAnimationCommandPlan("freep.anim.trigger", PresentationAnimationCommandIntentKind.SetTrigger),
             new PresentationAnimationCommandPlan("freep.anim.duration", PresentationAnimationCommandIntentKind.SetDuration),
@@ -253,6 +261,29 @@ public static class PresentationAnimationCommandPlanner
                 break;
             case PresentationMotionPathPreset.ArcDown:
                 motion.Segments.Add(MotionPathSegment.CubicTo(0.25, 0.15, 0.25, 0.35, 0, 0.5));
+                break;
+            case PresentationMotionPathPreset.Circle:
+                // Four cubic quarters around a radius-.5 loop, starting and ending at the origin.
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.276, 0, 0.5, -0.224, 0.5, -0.5));
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.5, -0.776, 0.276, -1, 0, -1));
+                motion.Segments.Add(MotionPathSegment.CubicTo(-0.276, -1, -0.5, -0.776, -0.5, -0.5));
+                motion.Segments.Add(MotionPathSegment.CubicTo(-0.5, -0.224, -0.276, 0, 0, 0));
+                break;
+            case PresentationMotionPathPreset.Loop:
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.7, 0, 0.8, -0.6, 0.25, -0.6));
+                motion.Segments.Add(MotionPathSegment.CubicTo(-0.3, -0.6, -0.4, 0, 0, 0));
+                break;
+            case PresentationMotionPathPreset.S:
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.2, -0.3, 0.8, -0.3, 1, -0.5));
+                motion.Segments.Add(MotionPathSegment.CubicTo(1.2, -0.7, 1.2, -1, 0.8, -1));
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.4, -1, 0.2, -0.7, 0, -0.5));
+                motion.Segments.Add(MotionPathSegment.CubicTo(-0.2, -0.3, -0.2, -0.1, 0, 0));
+                break;
+            case PresentationMotionPathPreset.FigureEight:
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.6, -0.5, 0.6, -1, 0, -1));
+                motion.Segments.Add(MotionPathSegment.CubicTo(-0.6, -1, -0.6, -0.5, 0, 0));
+                motion.Segments.Add(MotionPathSegment.CubicTo(0.6, 0.5, 0.6, 1, 0, 1));
+                motion.Segments.Add(MotionPathSegment.CubicTo(-0.6, 1, -0.6, 0.5, 0, 0));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(preset), preset, null);

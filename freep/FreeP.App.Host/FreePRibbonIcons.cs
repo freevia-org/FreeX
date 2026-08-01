@@ -223,6 +223,10 @@ internal static class FreePRibbonIcons
             ["freep.anim.motion.arc-left"]  = RibbonCommandIconKind.Effects,
             ["freep.anim.motion.arc-up"]    = RibbonCommandIconKind.Effects,
             ["freep.anim.motion.arc-down"]  = RibbonCommandIconKind.Effects,
+            ["freep.anim.motion.circle"]    = RibbonCommandIconKind.Effects,
+            ["freep.anim.motion.loop"]      = RibbonCommandIconKind.Effects,
+            ["freep.anim.motion.s"]         = RibbonCommandIconKind.Effects,
+            ["freep.anim.motion.figure-eight"] = RibbonCommandIconKind.Effects,
 
             // Wave 4C: Animation none / timing / pane
             ["freep.anim.none"]         = RibbonCommandIconKind.Clear,
