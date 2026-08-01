@@ -24,6 +24,8 @@ public sealed class R90_CrossWorkbookFormulaPointModeAvaloniaTests
                 source.Session.Workbook.Name = "Source.xlsx";
                 owner.Session.ActiveSheet.Name = "Owner";
                 source.Session.ActiveSheet.Name = "Input Data";
+                owner.Show();
+                source.Show();
                 var formulaCell = new CellAddress(owner.Session.ActiveSheet.Id, 8, 7);
                 var firstRange = Range(source.Session.ActiveSheet.Id, 2, 2, 2, 2);
                 var secondRange = Range(source.Session.ActiveSheet.Id, 4, 3, 4, 3);
@@ -65,6 +67,8 @@ public sealed class R90_CrossWorkbookFormulaPointModeAvaloniaTests
             {
                 owner.Session.Workbook.Name = "Owner.xlsx";
                 source.Session.Workbook.Name = "Source.xlsx";
+                owner.Show();
+                source.Show();
                 var formulaCell = new CellAddress(owner.Session.ActiveSheet.Id, 8, 7);
                 var sourceRange = Range(source.Session.ActiveSheet.Id, 3, 3, 4, 4);
 

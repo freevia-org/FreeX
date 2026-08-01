@@ -16,7 +16,10 @@ internal sealed class AvaloniaWorkbookWindowRegistry
     internal IReadOnlyList<MainWindow> Windows => _windows;
 
     internal IReadOnlyList<IFormulaPointModeWorkbookWindow> FormulaPointModeWindows =>
-        _windows.Cast<IFormulaPointModeWorkbookWindow>().ToArray();
+        _windows
+            .Where(static window => window.IsVisible)
+            .Cast<IFormulaPointModeWorkbookWindow>()
+            .ToArray();
 
     internal IReadOnlyList<MainWindow> VisibleWindows =>
         _windows.Where(static window => window.IsVisible).ToArray();
