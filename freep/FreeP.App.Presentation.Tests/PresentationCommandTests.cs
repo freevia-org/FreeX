@@ -177,6 +177,32 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DuplicateSlideCommand_InheritsSectionMembershipAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(2);
+        var sourceId = p.Slides[0].Id;
+        var followingId = p.Slides[1].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Intro" };
+        section.SlideIds.AddRange(new[] { sourceId, followingId });
+        p.Sections.Add(section);
+
+        bus.Execute(new DuplicateSlideCommand(0));
+
+        var firstDuplicateId = p.Slides[1].Id;
+        p.Sections[0].SlideIds.Should().Equal(sourceId, firstDuplicateId, followingId);
+
+        bus.Undo();
+        p.Slides.Select(slide => slide.Id).Should().Equal(sourceId, followingId);
+        p.Sections[0].SlideIds.Should().Equal(sourceId, followingId);
+
+        bus.Redo();
+
+        var redoDuplicateId = p.Slides[1].Id;
+        redoDuplicateId.Should().NotBe(firstDuplicateId);
+        p.Sections[0].SlideIds.Should().Equal(sourceId, redoDuplicateId, followingId);
+    }
+
+    [Fact]
     public void DuplicateSlideCommand_DeepClone_PreservesTransitionSplitOrientation()
     {
         var (p, bus) = Make(1);
