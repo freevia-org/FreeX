@@ -226,6 +226,7 @@ public static class DocxWriter
             .Concat(commentImages)
             .Concat(footnoteImages)
             .Concat(endnoteImages)
+            .Where(p => p.HasEmbeddedPayload)
             .Select(p => InlineImage.ExtensionFor(p.Image.Format))
             .Distinct()
             .OrderBy(ext => ext, StringComparer.Ordinal)
@@ -282,7 +283,8 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/" + part.FileName + ".rels", BuildHeaderFooterRels(part));
                 foreach (var image in part.Images)
-                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+                    if (image.HasEmbeddedPayload)
+                        WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
         }
         if (hasFootnotes)
@@ -292,7 +294,8 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/footnotes.xml.rels", BuildNoteRels(footnoteImages, footnotePreservedDrawings, footnoteHyperlinks));
                 foreach (var image in footnoteImages)
-                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+                    if (image.HasEmbeddedPayload)
+                        WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
         }
         if (hasEndnotes)
@@ -302,7 +305,8 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/endnotes.xml.rels", BuildNoteRels(endnoteImages, endnotePreservedDrawings, endnoteHyperlinks));
                 foreach (var image in endnoteImages)
-                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+                    if (image.HasEmbeddedPayload)
+                        WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
         }
         if (hasComments)
@@ -317,11 +321,13 @@ public static class DocxWriter
             {
                 WritePart(archive, "word/_rels/comments.xml.rels", BuildCommentsRels(commentImages, commentPreservedDrawings, commentHyperlinks));
                 foreach (var image in commentImages)
-                    WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+                    if (image.HasEmbeddedPayload)
+                        WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
             }
         }
         foreach (var image in images)
-            WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
+            if (image.HasEmbeddedPayload)
+                WriteBinaryPart(archive, "word/media/" + image.FileName, image.Image.Bytes);
         foreach (var chart in charts)
         {
             WritePart(archive, "word/charts/" + chart.FileName, BuildChartSpace(chart));
@@ -352,8 +358,17 @@ public static class DocxWriter
             WriteBinaryPart(archive, part.PartName.TrimStart('/'), part.Bytes);
     }
 
-    /// <summary>An inline image paired with the relationship id, media file name and a unique drawing id.</summary>
-    private sealed record ImagePart(InlineImage Image, string RelationshipId, string FileName, uint DrawingId);
+    /// <summary>An inline image paired with its embedded/link relationship ids, media file name and drawing id.</summary>
+    private sealed record ImagePart(InlineImage Image, string RelationshipId, string FileName, uint DrawingId)
+    {
+        public bool HasEmbeddedPayload => Image.Bytes.Length > 0 || string.IsNullOrWhiteSpace(Image.LinkedImageTarget);
+
+        public string? LinkRelationshipId => string.IsNullOrWhiteSpace(Image.LinkedImageTarget)
+            ? null
+            : RelationshipId.StartsWith("rId", StringComparison.Ordinal)
+                ? "rIdLinked" + RelationshipId[3..]
+                : RelationshipId + "Linked";
+    }
 
     /// <summary>
     /// An inline chart paired with the document relationship id, chart part file name (relative to
@@ -1233,7 +1248,12 @@ public static class DocxWriter
             relationships.Add(Relationship(CommentsExtendedRelationshipId, CommentsExtendedRelType, "commentsExtended.xml"));
         }
         foreach (var image in images)
-            relationships.Add(Relationship(image.RelationshipId, ImageRel, "media/" + image.FileName));
+        {
+            if (image.HasEmbeddedPayload)
+                relationships.Add(Relationship(image.RelationshipId, ImageRel, "media/" + image.FileName));
+            if (image.LinkRelationshipId is { } linkRelationshipId)
+                relationships.Add(Relationship(linkRelationshipId, ImageRel, image.Image.LinkedImageTarget!, external: true));
+        }
         foreach (var chart in charts)
             relationships.Add(Relationship(chart.RelationshipId, ChartRelType, "charts/" + chart.FileName));
         // The embedded OLE payload relationship (the icon's image relationship is emitted in the images loop).
@@ -2080,10 +2100,19 @@ public static class DocxWriter
     {
         var relationships = OpcRelationships.CreateRoot();
         foreach (var image in commentImages)
-            relationships.Add(OpcRelationships.CreateRelationship(
-                image.RelationshipId,
-                ImageRel,
-                "media/" + image.FileName));
+        {
+            if (image.HasEmbeddedPayload)
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    image.RelationshipId,
+                    ImageRel,
+                    "media/" + image.FileName));
+            if (image.LinkRelationshipId is { } linkRelationshipId)
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    linkRelationshipId,
+                    ImageRel,
+                    image.Image.LinkedImageTarget!,
+                    external: true));
+        }
         foreach (var drawing in preservedDrawings)
             relationships.Add(OpcRelationships.CreateRelationship(
                 drawing.RelationshipId,
@@ -3786,7 +3815,11 @@ public static class DocxWriter
         //   BlackWhite → a:grayscl + a:lum @contrast=100000
         //   ColorTemperature → freew:colorTemp attribute on a:blip (extension)
         var FreeWExt = XNamespace.Get("http://schemas.freew.app/2024/ext");
-        var blip = new XElement(A + "blip", new XAttribute(R + "embed", part.RelationshipId));
+        var blip = new XElement(A + "blip");
+        if (part.HasEmbeddedPayload)
+            blip.Add(new XAttribute(R + "embed", part.RelationshipId));
+        if (part.LinkRelationshipId is { } linkRelationshipId)
+            blip.Add(new XAttribute(R + "link", linkRelationshipId));
 
         // Recolor — emitted before other blip children so processors see it first.
         switch (image.RecolorMode)
@@ -7270,10 +7303,19 @@ public static class DocxWriter
     {
         var relationships = OpcRelationships.CreateRoot();
         foreach (var image in part.Images)
-            relationships.Add(OpcRelationships.CreateRelationship(
-                image.RelationshipId,
-                ImageRel,
-                "media/" + image.FileName));
+        {
+            if (image.HasEmbeddedPayload)
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    image.RelationshipId,
+                    ImageRel,
+                    "media/" + image.FileName));
+            if (image.LinkRelationshipId is { } linkRelationshipId)
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    linkRelationshipId,
+                    ImageRel,
+                    image.Image.LinkedImageTarget!,
+                    external: true));
+        }
         foreach (var drawing in part.PreservedDrawings)
             relationships.Add(OpcRelationships.CreateRelationship(
                 drawing.RelationshipId,
@@ -7303,10 +7345,19 @@ public static class DocxWriter
     {
         var relationships = OpcRelationships.CreateRoot();
         foreach (var image in images)
-            relationships.Add(OpcRelationships.CreateRelationship(
-                image.RelationshipId,
-                ImageRel,
-                "media/" + image.FileName));
+        {
+            if (image.HasEmbeddedPayload)
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    image.RelationshipId,
+                    ImageRel,
+                    "media/" + image.FileName));
+            if (image.LinkRelationshipId is { } linkRelationshipId)
+                relationships.Add(OpcRelationships.CreateRelationship(
+                    linkRelationshipId,
+                    ImageRel,
+                    image.Image.LinkedImageTarget!,
+                    external: true));
+        }
         foreach (var drawing in preservedDrawings)
             relationships.Add(OpcRelationships.CreateRelationship(
                 drawing.RelationshipId,

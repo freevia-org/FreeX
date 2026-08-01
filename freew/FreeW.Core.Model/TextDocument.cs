@@ -168,6 +168,14 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     public byte[] PngBytes => Bytes;
 
     /// <summary>
+    /// Exact external target of a linked DrawingML picture (<c>a:blip/@r:link</c>), or null for an
+    /// ordinary embedded picture. Word may author a link by itself or alongside an embedded preview;
+    /// <see cref="Bytes"/> carries that preview when present. The DOCX reader/writer preserves the target
+    /// verbatim and never resolves or fetches it.
+    /// </summary>
+    public string? LinkedImageTarget { get; set; }
+
+    /// <summary>
     /// Creates an independent image model carrying the same source bytes and every placement, crop,
     /// adjustment, effect, and accessibility property. The media bytes are immutable document content and may
     /// be shared; the mutable image object itself is not shared, so commands such as resize or crop on an
