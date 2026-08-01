@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Free.Shared.Shell;
@@ -191,9 +192,49 @@ public class BackstageViewTests
             var items = tabs.Items.Cast<TabItem>().ToArray();
 
             items.Select(item => item.Header).Should().Equal("Documents", "Folders");
-            items.Select(item => item.Content).Should().OnlyContain(content => content == null);
+            items.Select(item => item.Content).Should().OnlyContain(content => content is StackPanel);
+            items.Select(item => (StackPanel)item.Content!).Should().OnlyContain(panel => panel.Spacing == 0);
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BackstageView_SaveAs_actions_keep_direct_WPF_action_content()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            view.TryActivateEntry("Save As").Should().BeTrue();
+
+            FindControl<TextBox>(view, "SaveAsSuggestedFileName").Height.Should().Be(18);
+            FindControl<ComboBox>(view, "SaveAsSelectedExtension").Height.Should().Be(22);
+
+            var actionButtons = view.GetLogicalDescendants()
+                .OfType<Button>()
+                .Where(button => (AutomationProperties.GetAutomationId(button) ?? string.Empty)
+                    .StartsWith("BackstageAction_", StringComparison.Ordinal))
+                .ToArray();
+
+            actionButtons.Should().NotBeEmpty();
+            actionButtons.Should().OnlyContain(button => button.Content is StackPanel);
+            actionButtons.Should().OnlyContain(button => button.HorizontalAlignment == HorizontalAlignment.Stretch);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BackstageView_Print_actions_use_WPF_outer_description_rows()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            view.TryActivateEntry("Print").Should().BeTrue();
+
+            var print = FindControl<Button>(view, "PrintAction_Print");
+            print.Content.Should().Be("Print");
+            print.Parent.Should().BeOfType<StackPanel>();
+            ((StackPanel)print.Parent!).Children.OfType<TextBlock>()
+                .Should().Contain(block => (block.Text ?? string.Empty).Contains("Create PDF", StringComparison.Ordinal));
         }, CancellationToken.None);
     }
 
@@ -226,7 +267,7 @@ public class BackstageViewTests
 
             view.GetLogicalDescendants()
                 .OfType<ScrollViewer>()
-                .Any(scroll => scroll.Content is StackPanel panel && panel.Spacing == 16)
+                .Any(scroll => scroll.Content is StackPanel panel && panel.Spacing == 0)
                 .Should().BeTrue();
         }, CancellationToken.None);
     }
@@ -298,6 +339,7 @@ public class BackstageViewTests
         source.Should().Contain("BuildOpenSurface(");
         source.Should().Contain("surface.Search.AutomationName");
         source.Should().Contain("surface.Tabs.DocumentsTabLabel");
+        source.Should().Contain("ApplyClassicTabChrome(");
         source.Should().Contain("_callbacks.OpenFolder(folder)");
         source.Should().Contain("BuildActionGroupContent(surface)");
         source.Should().Contain("BuildSurfaceActionRow(action)");

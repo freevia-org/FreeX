@@ -219,24 +219,30 @@ internal sealed class BackstageView : Window
         AutomationProperties.SetAutomationId(searchBox, "OpenSearchBox");
         content.Children.Add(searchBox);
 
-        var documentsPanel = new StackPanel { Spacing = 4 };
-        var foldersPanel = new StackPanel { Spacing = 4 };
+        var documentsPanel = new StackPanel();
+        var foldersPanel = new StackPanel();
         var tabs = new TabControl
         {
             Width = 640,
             Margin = new Thickness(0, 0, 0, 14),
             Items =
             {
-                new TabItem { Header = surface.Tabs.DocumentsTabLabel },
-                new TabItem { Header = surface.Tabs.FoldersTabLabel },
+                new TabItem { Header = surface.Tabs.DocumentsTabLabel, Content = documentsPanel },
+                new TabItem { Header = surface.Tabs.FoldersTabLabel, Content = foldersPanel },
             },
         };
-        var tabContent = new global::Avalonia.Controls.ContentControl { Content = documentsPanel };
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            tabs,
+            new AvaloniaCompactDialogChromeStyle(BackstageFontFamily)
+            {
+                ControlHeight = 24,
+                TabHeight = 24,
+                FontSize = 12,
+            });
         content.Children.Add(tabs);
-        content.Children.Add(tabContent);
 
-        var placesPanel = new StackPanel { Spacing = 4 };
-        var recoveryPanel = new StackPanel { Spacing = 4 };
+        var placesPanel = new StackPanel();
+        var recoveryPanel = new StackPanel();
         content.Children.Add(placesPanel);
         content.Children.Add(recoveryPanel);
 
@@ -247,12 +253,10 @@ internal sealed class BackstageView : Window
             if (tabs.SelectedIndex == 1)
             {
                 PopulateOpenRows(foldersPanel, refreshed.Plan.FolderRows, refreshed.Tabs.EmptyFoldersText);
-                tabContent.Content = foldersPanel;
             }
             else
             {
                 foldersPanel.Children.Clear();
-                tabContent.Content = documentsPanel;
             }
             PopulateOpenGroup(placesPanel, refreshed.Tabs.PlacesHeading, refreshed.Plan.PlaceRows);
             PopulateOpenGroup(recoveryPanel, refreshed.Tabs.RecoveryHeading, refreshed.Plan.RecoveryRows);
@@ -307,7 +311,7 @@ internal sealed class BackstageView : Window
                 },
             directPrintCapability: printCapability);
 
-        var content = new StackPanel { Spacing = 16 };
+        var content = new StackPanel();
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
 
         // Document settings grid
@@ -343,7 +347,7 @@ internal sealed class BackstageView : Window
 
     private static Control BuildPrintEvidenceSection(IReadOnlyList<BackstagePrintEvidenceRow> evidence)
     {
-        var panel = new StackPanel { Spacing = 6 };
+        var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
         panel.Children.Add(BuildSectionHeader(BackstageViewTextResources.EvidenceSection));
 
         foreach (var row in evidence)
@@ -357,7 +361,7 @@ internal sealed class BackstageView : Window
             var note = AvaloniaBackstageChrome.CreateNote(
                 $"{PrintEvidenceKindLabel(row.Kind)} - {PrintEvidenceStatusLabel(row.Status)}\n{row.Description}\n{BackstageViewTextResources.EvidenceScenariosLabel}: {scenarios}\n{BackstageViewTextResources.EvidenceRequirementsLabel}: {requirements}",
                 BackstageChromeStyle,
-                margin: new Thickness(0, 0, 0, 4));
+                margin: new Thickness(0, 0, 0, 8));
             AutomationProperties.SetAutomationId(note, $"PrintEvidence_{row.Kind}");
             panel.Children.Add(note);
         }
@@ -615,6 +619,7 @@ internal sealed class BackstageView : Window
             fontSize: 14,
             automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}");
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        button.HorizontalAlignment = HorizontalAlignment.Stretch;
         button.Margin = new Thickness(0, 0, 0, 10);
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
@@ -700,21 +705,14 @@ internal sealed class BackstageView : Window
 
     private static Control BuildSurfaceActionRow(BackstageSurfaceActionRow action)
     {
+        var stack = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         var button = CreateLinkButton(
             action.Label,
             action.Invoke ?? (() => { }),
             fontSize: 13,
             automationId: action.AutomationId,
             isEnabled: action.IsEnabled);
-        button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        button.Margin = new Thickness(0, 0, 0, 10);
-        var stack = new StackPanel();
-        stack.Children.Add(new TextBlock
-        {
-            Text = action.Label,
-            Foreground = LinkBrush,
-            FontSize = 13,
-        });
+        stack.Children.Add(button);
         if (!string.IsNullOrWhiteSpace(action.Description))
         {
             stack.Children.Add(new TextBlock
@@ -726,8 +724,7 @@ internal sealed class BackstageView : Window
                 Margin = new Thickness(0, 2, 0, 0),
             });
         }
-        button.Content = stack;
-        return button;
+        return stack;
     }
 
     private IReadOnlyList<BackstageFieldRow> BuildInfoDocumentStatistics()
@@ -964,6 +961,8 @@ internal sealed class BackstageView : Window
         {
             Text = plan.SuggestedFileName,
             MinWidth = 380,
+            Height = 18,
+            Padding = new Thickness(1, 0),
             Margin = new Thickness(0, 2, 0, 8),
         };
         AutomationProperties.SetAutomationId(fileNameBox, "SaveAsSuggestedFileName");
@@ -979,8 +978,11 @@ internal sealed class BackstageView : Window
             ItemsSource = plan.FileTypes.Select(choice => choice.Label).ToArray(),
             SelectedIndex = selectedIndex,
             MinWidth = 380,
+            Height = 22,
+            Padding = new Thickness(4, 0),
             Margin = new Thickness(0, 2, 0, 12),
             HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalContentAlignment = VerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(typeCombo, "SaveAsSelectedExtension");
         typeCombo.SelectionChanged += (_, _) =>
