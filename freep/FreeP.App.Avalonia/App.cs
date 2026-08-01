@@ -37,7 +37,11 @@ public sealed class App : Application
             this,
             new SisterAvaloniaAppBootstrapSpec<MainWindow>(
                 StartupArguments,
-                args => new MainWindow(args, loadRecentFilesStore: null, options: options),
+                args => new MainWindow(
+                    args,
+                    loadRecentFilesStore: null,
+                    options: options,
+                    enableStartupDirtyTrace: StartupDirtyTraceOptions is not null),
                 mainWindow =>
                 {
                     if (StartupDirtyTraceOptions is { } startupDirtyTraceOptions)

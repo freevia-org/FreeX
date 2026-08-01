@@ -64,6 +64,7 @@ public sealed class StartupDocumentAttachmentTests
 
                     window.Editor.InsertSlide();
                     window.IsDirty.Should().BeTrue();
+                    window.StartupDirtyTraceForTests.Should().BeEmpty();
                 },
                 CancellationToken.None);
         }
