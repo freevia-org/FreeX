@@ -1547,11 +1547,17 @@ public sealed class DocumentViewRoundTripTests
         firstSurface.Margin.Left.Should().BeApproximately(spacingDip / 2, 0.01);
         internalSurface.Margin.Left.Should().BeApproximately(-spacingDip, 0.01);
         lastSurface.Margin.Right.Should().BeApproximately(spacingDip, 0.01);
-        CellContentStack(spacedCell).RenderTransform.Should().BeOfType<System.Windows.Media.TranslateTransform>()
-            .Which.Y.Should().BeApproximately(
-                (sourceTable.Rows[3].Cells[0].Margins ?? sourceTable.DefaultCellMargins!).TopPt * (96.0 / 72.0),
-                0.01,
-                "the resolved per-cell top margin registers content without changing exact row measurement");
+        var resolvedMargins = sourceTable.Rows[3].Cells[0].Margins ?? sourceTable.DefaultCellMargins!;
+        var contentTransform = CellContentStack(spacedCell).RenderTransform
+            .Should().BeOfType<System.Windows.Media.TranslateTransform>().Subject;
+        contentTransform.X.Should().BeApproximately(
+            Math.Max(0, resolvedMargins.LeftPt * (96.0 / 72.0) - 6.0),
+            0.01,
+            "the resolved left margin contributes only the inset not already owned by WPF's cell hosts");
+        contentTransform.Y.Should().BeApproximately(
+            resolvedMargins.TopPt * (96.0 / 72.0),
+            0.01,
+            "the resolved per-cell top margin registers content without changing exact row measurement");
         RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");
         RenderedRowText(pageRows[0][2]).Should().Contain("Segment 2");
