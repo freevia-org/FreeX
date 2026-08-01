@@ -18,6 +18,12 @@ public static class PageBorderArtWpfRenderer
         0,
         0,
         PageBorderArtVisualPlanner.ShadowedSquareBlue);
+    private static readonly Pen ShorebirdTrackPen = FrozenPen(
+        0,
+        0,
+        0,
+        PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip,
+        roundCaps: false);
 
     public static bool TryDraw(
         DrawingContext context,
@@ -48,6 +54,32 @@ public static class PageBorderArtWpfRenderer
         {
             foreach (var motif in squareMotifs)
                 DrawShadowedSquare(context, motif with { Xdip = frame.X + motif.Xdip, Ydip = frame.Y + motif.Ydip });
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var trackMotifs))
+        {
+            foreach (var motif in trackMotifs)
+            {
+                var placed = motif with
+                {
+                    CenterXDip = frame.X + motif.CenterXDip,
+                    CenterYDip = frame.Y + motif.CenterYDip,
+                };
+                foreach (var segment in PageBorderArtVisualPlanner.BuildShorebirdTrackSegments(placed))
+                {
+                    context.DrawLine(
+                        ShorebirdTrackPen,
+                        new Point(segment.X1Dip, segment.Y1Dip),
+                        new Point(segment.X2Dip, segment.Y2Dip));
+                }
+            }
             return true;
         }
 
@@ -153,13 +185,19 @@ public static class PageBorderArtWpfRenderer
         return brush;
     }
 
-    private static Pen FrozenPen(byte red, byte green, byte blue, double thickness)
+    private static Pen FrozenPen(
+        byte red,
+        byte green,
+        byte blue,
+        double thickness,
+        bool roundCaps = true)
     {
-        var pen = new Pen(FrozenBrush(red, green, blue), thickness)
+        var pen = new Pen(FrozenBrush(red, green, blue), thickness);
+        if (roundCaps)
         {
-            StartLineCap = PenLineCap.Round,
-            EndLineCap = PenLineCap.Round,
-        };
+            pen.StartLineCap = PenLineCap.Round;
+            pen.EndLineCap = PenLineCap.Round;
+        }
         pen.Freeze();
         return pen;
     }
