@@ -2107,6 +2107,39 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Ribbon_table_merge_and_split_commands_route_to_editor()
+    {
+        var foundMerge = false;
+        var foundSplit = false;
+        int? mergedSpan = null;
+        int? splitSpan = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var registry = window.BuildCommandRegistry();
+            foundMerge = registry.TryGet(TableCellEditPlanner.MergeCellsCommandId, out var merge);
+            foundSplit = registry.TryGet(TableCellEditPlanner.SplitCellCommandId, out var split);
+            foundMerge.Should().BeTrue("Merge Cells must be registered");
+            foundSplit.Should().BeTrue("Split Cell must be registered");
+
+            var shape = window.Editor.InsertTable(1, 2);
+            window.Editor.Select(shape.Id);
+            window.Editor.SetActiveTableCell(0, 0);
+            merge!.Execute(RibbonCommandContext.Empty);
+            mergedSpan = shape.Table!.Rows[0].Cells[0].GridSpan;
+            split!.Execute(RibbonCommandContext.Empty);
+            splitSpan = shape.Table.Rows[0].Cells[0].GridSpan;
+        });
+
+        if (!ran) return;
+        foundMerge.Should().BeTrue("Merge Cells must be registered");
+        foundSplit.Should().BeTrue("Split Cell must be registered");
+        mergedSpan.Should().Be(2);
+        splitSpan.Should().Be(1);
+    }
+
+    [Fact]
     public async Task Ribbon_font_size_and_color_commands_route_to_editor()
     {
         var foundSize = false;

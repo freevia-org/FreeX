@@ -214,6 +214,18 @@
   <data name="Ribbon_Command_TableRowHeight_KeyTip" xml:space="preserve">
     <value>RH</value>
   </data>
+  <data name="Ribbon_Command_TableMergeCells_Label" xml:space="preserve">
+    <value>Merge Cells</value>
+  </data>
+  <data name="Ribbon_Command_TableMergeCells_KeyTip" xml:space="preserve">
+    <value>MC</value>
+  </data>
+  <data name="Ribbon_Command_TableSplitCell_Label" xml:space="preserve">
+    <value>Split Cell</value>
+  </data>
+  <data name="Ribbon_Command_TableSplitCell_KeyTip" xml:space="preserve">
+    <value>SC</value>
+  </data>
   <data name="Ribbon_Command_Bullets_KeyTip" xml:space="preserve">
     <value>U</value>
   </data>

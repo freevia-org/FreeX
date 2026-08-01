@@ -1021,6 +1021,17 @@ public sealed class MergeTableCellsCommand : IPresentationCommand
 
     public string Label => "Merge Cells";
 
+    public bool HasEffect(Presentation p)
+    {
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        return table is not null
+            && _r1 >= 0
+            && _c1 >= 0
+            && _r2 < table.Rows.Count
+            && _c2 < table.ColumnWidthsEmu.Count
+            && (_r1 != _r2 || _c1 != _c2);
+    }
+
     public void Apply(Presentation p)
     {
         var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);

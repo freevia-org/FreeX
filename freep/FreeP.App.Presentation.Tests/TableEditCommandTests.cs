@@ -1281,6 +1281,28 @@ public sealed class TableEditCommandTests
         shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(1);
     }
 
+    [Fact]
+    public void EditingSession_TryMergeActiveTableCell_UsesAdjacentCellAndIsUndoable()
+    {
+        var sess = MakeSession(out var shape, 1, 2);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryMergeActiveTableCell().Should().BeTrue();
+        shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(2);
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+    }
+
+    [Fact]
+    public void EditingSession_TrySplitActiveTableCell_RejectsUnmergedCell()
+    {
+        var sess = MakeSession(out _, 1, 1);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TrySplitActiveTableCell().Should().BeFalse();
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // GetSelectedTable
     // ════════════════════════════════════════════════════════════════════════════

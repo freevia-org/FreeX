@@ -2968,6 +2968,35 @@ public sealed class EditingSession
     public void MergeSelectedCells(int r1, int c1, int r2, int c2)
         => MergeTableCells(r1, c1, r2, c2);
 
+    /// <summary>Merge the active cell with its right neighbor, or the cell below at a row edge.</summary>
+    public bool TryMergeActiveTableCell()
+    {
+        if (ActiveTableCell is not { } active)
+            return false;
+
+        var (shapeId, table) = RequireSelectedTable();
+        if (shapeId == 0 || table is null || active.Row < 0 || active.Row >= table.Rows.Count)
+            return false;
+
+        int rightColumn = active.Col + 1 < table.ColumnWidthsEmu.Count ? active.Col + 1 : active.Col;
+        int belowRow = rightColumn == active.Col ? active.Row + 1 : active.Row;
+        if (rightColumn == active.Col && belowRow >= table.Rows.Count)
+            return false;
+
+        var command = new MergeTableCellsCommand(
+            _currentSlideIndex,
+            shapeId,
+            active.Row,
+            active.Col,
+            belowRow,
+            rightColumn);
+        if (!command.HasEffect(Presentation))
+            return false;
+
+        Bus.Execute(command);
+        return true;
+    }
+
     /// <summary>Splits the merged cell at (<paramref name="row"/>, <paramref name="col"/>). Undoable.
     /// A no-op on an unmerged cell records no undo entry (the bus skips no-effect commands).</summary>
     public void SplitTableCell(int row, int col)
@@ -2978,6 +3007,28 @@ public sealed class EditingSession
     {
         if (ActiveTableCell is null) return;
         SplitTableCell(ActiveTableCell.Value.Row, ActiveTableCell.Value.Col);
+    }
+
+    /// <summary>Split the active merged cell and report whether the command changed the table.</summary>
+    public bool TrySplitActiveTableCell()
+    {
+        if (ActiveTableCell is not { } active)
+            return false;
+
+        var (shapeId, _) = RequireSelectedTable();
+        if (shapeId == 0)
+            return false;
+
+        var command = new SplitTableCellCommand(
+            _currentSlideIndex,
+            shapeId,
+            active.Row,
+            active.Col);
+        if (!command.HasEffect(Presentation))
+            return false;
+
+        Bus.Execute(command);
+        return true;
     }
 
     // ── Table helpers ─────────────────────────────────────────────────────────────

@@ -438,6 +438,9 @@ public static class TableCellListPresetCatalog
 
 public static class TableCellEditPlanner
 {
+    public const string MergeCellsCommandId = "freep.table.merge-cells";
+    public const string SplitCellCommandId = "freep.table.split-cell";
+
     private const int MaxParagraphLevel = 8;
     private const long ParagraphIndentStepEmu = DrawingMlCoordinateUnits.EmuPerInch / 2;
     private const long ParagraphHangingIndentEmu = -DrawingMlCoordinateUnits.EmuPerInch / 4;

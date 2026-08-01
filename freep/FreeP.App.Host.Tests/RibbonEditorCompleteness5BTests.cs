@@ -1150,6 +1150,35 @@ public class RibbonEditorCompleteness5BTests
         Assert.NotEqual(685800, shape.Table.Rows[0].HeightEmu);
     }
 
+    [Fact]
+    public void Cmd_TableMergeCells_WithActiveTableCell_UsesSharedCommand()
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(1, 2);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+
+        Exec(MakeRegistry(ed), TableCellEditPlanner.MergeCellsCommandId);
+
+        Assert.Equal(2, shape.Table!.Rows[0].Cells[0].GridSpan);
+        ed.Undo();
+        Assert.Equal(1, shape.Table.Rows[0].Cells[0].GridSpan);
+    }
+
+    [Fact]
+    public void Cmd_TableSplitCell_WithActiveTableCell_UsesSharedCommand()
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(1, 2);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        Assert.True(ed.TryMergeActiveTableCell());
+
+        Exec(MakeRegistry(ed), TableCellEditPlanner.SplitCellCommandId);
+
+        Assert.Equal(1, shape.Table!.Rows[0].Cells[0].GridSpan);
+    }
+
     [Theory]
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]
