@@ -125,7 +125,9 @@ internal static class FreePRenderer
         var visual = new DrawingVisual();
         using (var drawingContext = visual.RenderOpen())
         {
-            canvas.RenderToDrawingContext(drawingContext, width, height);
+            // Match PowerPoint COM Slide.Export: fill the requested export
+            // surface even when it differs from the deck's native aspect ratio.
+            canvas.RenderToDrawingContext(drawingContext, width, height, preserveAspectRatio: false);
         }
 
         // Off-screen rasterisation at 96 DPI (device-independent pixels = physical pixels at 96 DPI).
