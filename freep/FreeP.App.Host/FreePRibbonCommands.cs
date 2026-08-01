@@ -632,6 +632,17 @@ internal static class FreePRibbonCommands
                 editor.SetTextColumnCountOnSelection(count);
             }));
 
+        registry.Register("freep.text-column-spacing",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TextColumnSpacingOptionParser.TryParse(selection, out var spacingEmu))
+                    return;
+
+                editor.SetTextColumnSpacingOnSelection(spacingEmu);
+            }));
+
         registry.Register("freep.table-cell-fill",
             new ContextRibbonCommand(ctx =>
             {

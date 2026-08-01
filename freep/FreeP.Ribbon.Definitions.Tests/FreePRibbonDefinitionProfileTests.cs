@@ -636,6 +636,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var wpfTextAutoFit = RequiredCombo(wpf, "freep.text-autofit");
         var wpfTextDirection = RequiredCombo(wpf, "freep.text-direction");
         var wpfTextColumns = RequiredCombo(wpf, "freep.text-columns");
+        var wpfTextColumnSpacing = RequiredCombo(wpf, "freep.text-column-spacing");
         var size = RequiredCombo(avalonia, "freep.font-size");
         var color = RequiredCombo(avalonia, "freep.font-color");
         var fill = RequiredCombo(avalonia, "freep.table-cell-fill");
@@ -646,6 +647,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var textAutoFit = RequiredCombo(avalonia, "freep.text-autofit");
         var textDirection = RequiredCombo(avalonia, "freep.text-direction");
         var textColumns = RequiredCombo(avalonia, "freep.text-columns");
+        var textColumnSpacing = RequiredCombo(avalonia, "freep.text-column-spacing");
 
         wpfCommandIds.Should().ContainInOrder(
             "freep.font-family",
@@ -691,6 +693,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         wpfTextAutoFit.Items.Should().Equal(FreePRibbonDefinitionData.TextAutoFitOptions);
         wpfTextDirection.Items.Should().Equal(FreePRibbonDefinitionData.TextVerticalTypeOptions);
         wpfTextColumns.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnCountOptions);
+        wpfTextColumnSpacing.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnSpacingOptions);
         size.Items.Should().Equal(FreePRibbonDefinitionData.FontSizes);
         color.Items.Should().Equal(FreePRibbonDefinitionData.FontColors);
         fill.Items.Should().Equal(FreePRibbonDefinitionData.TableCellFillColors);
@@ -701,6 +704,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         textAutoFit.Items.Should().Equal(FreePRibbonDefinitionData.TextAutoFitOptions);
         textDirection.Items.Should().Equal(FreePRibbonDefinitionData.TextVerticalTypeOptions);
         textColumns.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnCountOptions);
+        textColumnSpacing.Items.Should().Equal(FreePRibbonDefinitionData.TextColumnSpacingOptions);
     }
 
     [Fact]

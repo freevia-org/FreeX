@@ -178,6 +178,12 @@
   <data name="Ribbon_Command_TextColumns_KeyTip" xml:space="preserve">
     <value>TC</value>
   </data>
+  <data name="Ribbon_Command_TextColumnSpacing_Label" xml:space="preserve">
+    <value>Column Spacing</value>
+  </data>
+  <data name="Ribbon_Command_TextColumnSpacing_KeyTip" xml:space="preserve">
+    <value>CS</value>
+  </data>
   <data name="Ribbon_Command_TableCellFill_Label" xml:space="preserve">
     <value>Table Cell Fill</value>
   </data>
