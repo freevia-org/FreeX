@@ -4703,8 +4703,8 @@ public static class DocxReader
     /// from o:OLEObject/@ProgID, and — when the v:shape carries a v:imagedata — loads the icon media part
     /// into the object's presentation image. Returns null when the run carries no embedded object.
     ///
-    /// SIMPLIFICATION (Y2): only embedded objects (Type other than "Link") are recovered; a linked object
-    /// (no embedded .bin relationship) yields null. The icon's size becomes the object's size when present.
+    /// A linked object retains its external relationship target without opening or activating that source.
+    /// The icon's size becomes the object's size when present.
     /// </summary>
     private static EmbeddedObject? ReadEmbeddedObject(XElement run, ZipArchive archive, IReadOnlyDictionary<string, string> relationships)
     {
@@ -4713,20 +4713,23 @@ public static class DocxReader
         if (ole is null)
             return null;
 
-        // A linked object references its data externally (Type="Link") rather than via an embedded part.
-        if (string.Equals(ole.Attribute("Type")?.Value, "Link", StringComparison.OrdinalIgnoreCase))
-            return null;
-
         var relationshipId = ole.Attribute(R + "id")?.Value;
         if (relationshipId is null || !relationships.TryGetValue(relationshipId, out var partPath))
             return null;
 
-        var payload = LoadMedia(archive, partPath);
-        if (payload is null)
-            return null;
-
         var progId = ole.Attribute("ProgID")?.Value ?? string.Empty;
-        var embedded = new EmbeddedObject(payload, progId);
+        EmbeddedObject embedded;
+        if (string.Equals(ole.Attribute("Type")?.Value, "Link", StringComparison.OrdinalIgnoreCase))
+        {
+            embedded = EmbeddedObject.CreateLinked(partPath, progId);
+        }
+        else
+        {
+            var payload = LoadMedia(archive, partPath);
+            if (payload is null)
+                return null;
+            embedded = new EmbeddedObject(payload, progId);
+        }
 
         // The VML v:shape supplies the on-page icon (v:imagedata r:id → media part) and the size (CSS @style).
         var shape = obj!.Element(V + "shape");

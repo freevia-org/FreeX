@@ -58,6 +58,38 @@ public class EmbeddedObjectTests
     }
 
     [Fact]
+    public void CreateLinked_StoresExternalTargetWithoutPayload()
+    {
+        var icon = new InlineImage(IconBytes, 120, 80);
+
+        var obj = EmbeddedObject.CreateLinked("file:///C:/Data/Book.xlsx", "Excel.Sheet.12", icon);
+
+        obj.IsLinked.Should().BeTrue();
+        obj.LinkedTarget.Should().Be("file:///C:/Data/Book.xlsx");
+        obj.Payload.Should().BeEmpty();
+        obj.Icon.Should().BeSameAs(icon);
+        obj.WidthPt.Should().Be(120);
+        obj.HeightPt.Should().Be(80);
+    }
+
+    [Fact]
+    public void Clone_LinkedObjectRetainsTargetAndCopiesPresentation()
+    {
+        var source = EmbeddedObject.CreateLinked(
+            "file:///C:/Data/Book.xlsx",
+            "Excel.Sheet.12",
+            new InlineImage(IconBytes, 120, 80));
+
+        var clone = source.Clone();
+
+        clone.Should().NotBeSameAs(source);
+        clone.LinkedTarget.Should().Be(source.LinkedTarget);
+        clone.IsLinked.Should().BeTrue();
+        clone.Icon.Should().NotBeSameAs(source.Icon);
+        clone.Icon!.PngBytes.Should().Equal(source.Icon!.PngBytes);
+    }
+
+    [Fact]
     public void FromEmbeddedObject_BuildsRunCarryingTheObjectAndNoText()
     {
         var obj = new EmbeddedObject(Payload, "Excel.Sheet.12");
