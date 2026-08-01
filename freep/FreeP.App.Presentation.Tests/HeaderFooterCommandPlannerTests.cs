@@ -55,6 +55,37 @@ public sealed class HeaderFooterCommandPlannerTests
     }
 
     [Fact]
+    public void TryApply_PreservesSlideIdentityAcrossApplyUndoAndRedo()
+    {
+        var editor = MakeEditor();
+        var slide = editor.Presentation.Slides[0];
+        slide.Id = "slide-target-7";
+        slide.NumericId = 207;
+
+        HeaderFooterCommandPlanner.TryApply(
+            editor,
+            new HeaderFooterApplyOptions(
+                ShowDateTime: false,
+                ShowFooter: true,
+                ShowSlideNumber: false,
+                FooterText: "Stable target",
+                HeaderFooterApplyScope.CurrentSlide),
+            out _).Should().BeTrue();
+
+        editor.Presentation.Slides[0].Id.Should().Be("slide-target-7");
+        editor.Presentation.Slides[0].NumericId.Should().Be(207);
+
+        editor.Undo();
+        editor.Presentation.Slides[0].Id.Should().Be("slide-target-7");
+        editor.Presentation.Slides[0].NumericId.Should().Be(207);
+
+        editor.Redo();
+        editor.Presentation.Slides[0].Id.Should().Be("slide-target-7");
+        editor.Presentation.Slides[0].NumericId.Should().Be(207);
+        FooterText(editor.Presentation.Slides[0]).Should().Be("Stable target");
+    }
+
+    [Fact]
     public void TryApply_CurrentSlide_CreatesMissingDateFooterAndSlideNumberPlaceholders()
     {
         var editor = MakeEditor();
