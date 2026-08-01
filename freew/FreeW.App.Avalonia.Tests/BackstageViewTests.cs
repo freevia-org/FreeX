@@ -200,8 +200,8 @@ public class BackstageViewTests
                 panel.Spacing == 0 && panel.Width == 638 && panel.HorizontalAlignment == HorizontalAlignment.Left);
             tabs.HorizontalContentAlignment.Should().Be(HorizontalAlignment.Left);
             tabs.VerticalContentAlignment.Should().Be(VerticalAlignment.Top);
-            tabs.Measure(new Size(640, 480));
-            tabs.Arrange(new Rect(0, 0, 640, 480));
+            tabs.Measure(new Size(523, 480));
+            tabs.Arrange(new Rect(0, 0, 523, 480));
             var selectedContentHost = tabs.GetVisualDescendants()
                 .OfType<ContentPresenter>()
                 .Single(presenter => presenter.Name == "PART_SelectedContentHost");
@@ -222,6 +222,28 @@ public class BackstageViewTests
             search.Padding.Should().Be(new Thickness(8, 3));
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BackstageView_Open_attached_tab_body_reapplies_flush_WPF_margin()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            view.TryActivateEntry("Open").Should().BeTrue();
+            view.Show();
+            view.Measure(new Size(560, 563));
+            view.Arrange(new Rect(0, 0, 560, 563));
+            view.UpdateLayout();
+
+            var tabs = view.GetLogicalDescendants().OfType<TabControl>().Single();
+            var selectedContentHost = tabs.GetVisualDescendants()
+                .OfType<ContentPresenter>()
+                .Single(presenter => presenter.Name == "PART_SelectedContentHost");
+            selectedContentHost.Margin.Should().Be(new Thickness(0));
+            selectedContentHost.HorizontalAlignment.Should().Be(HorizontalAlignment.Stretch);
+            view.Close();
         }, CancellationToken.None);
     }
 

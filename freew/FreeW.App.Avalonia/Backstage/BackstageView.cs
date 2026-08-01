@@ -8,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
@@ -258,7 +259,8 @@ internal sealed class BackstageView : Window
                 ControlHeight = 24,
                 TabHeight = 24,
                 FontSize = 12,
-            });
+            },
+            contentPaneMargin: new Thickness(0));
         tabs.Styles.Add(new Style(selector =>
             selector.OfType<ItemsPresenter>().Name("PART_ItemsPresenter"))
         {
@@ -273,10 +275,28 @@ internal sealed class BackstageView : Window
         {
             Setters =
             {
+                new Setter(Layoutable.MarginProperty, new Thickness(0)),
                 new Setter(ContentPresenter.HorizontalContentAlignmentProperty, HorizontalAlignment.Left),
                 new Setter(ContentPresenter.VerticalContentAlignmentProperty, VerticalAlignment.Top),
             },
         });
+
+        void NormalizeSelectedContentHost()
+        {
+            tabs.ApplyTemplate();
+            var selectedPane = tabs.GetVisualDescendants()
+                .OfType<ContentPresenter>()
+                .FirstOrDefault(presenter => presenter.Name == "PART_SelectedContentHost");
+            if (selectedPane is null)
+                return;
+
+            selectedPane.Margin = new Thickness(0);
+            selectedPane.HorizontalAlignment = HorizontalAlignment.Stretch;
+            selectedPane.Padding = new Thickness(0);
+        }
+
+        tabs.AttachedToVisualTree += (_, _) => NormalizeSelectedContentHost();
+        NormalizeSelectedContentHost();
         content.Children.Add(tabs);
 
         var placesPanel = new StackPanel();
