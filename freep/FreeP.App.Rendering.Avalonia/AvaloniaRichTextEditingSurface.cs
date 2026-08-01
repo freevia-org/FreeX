@@ -950,6 +950,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                         var text = InCanvasTextEditPlanner.ExtractPlainText(body);
                         if (text.Length > 0)
                         {
+                            var textArea = AvaloniaInlineTableLayoutPlanner.GetTextArea(cell, rect);
                             var layout = new TextLayout(
                                 text,
                                 new Typeface(new FontFamily(InCanvasRichTextEditorDefaults.FallbackFontFamily)),
@@ -960,14 +961,18 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                                 TextTrimming.None,
                                 null,
                                 FlowDirection.LeftToRight,
-                                Math.Max(1, width - 4),
-                                Math.Max(1, heights[rowIndex] - 4),
+                                textArea.Width,
+                                textArea.Height,
                                 lineHeight: double.NaN,
                                 letterSpacing: 0,
                                 maxLines: 0,
                                 fontFeatures: null,
                                 textStyleOverrides: null);
-                            layout.Draw(drawingContext, new Point(x + 2, y + 2));
+                            var textOrigin = AvaloniaInlineTableLayoutPlanner.GetTextOrigin(
+                                cell,
+                                textArea,
+                                layout.Height);
+                            layout.Draw(drawingContext, textOrigin);
                         }
                     }
                     x += width;

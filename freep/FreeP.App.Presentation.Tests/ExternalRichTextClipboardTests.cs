@@ -606,7 +606,7 @@ public sealed class ExternalRichTextClipboardTests
 \trowd\itap1\trrh-480\trpaddl120\trpaddr240\trpaddt60\trpaddb80
 \clpadl300\cellx2000\cellx4000
 \intbl Outer A\cell
-\trowd\itap2\nesttableprops\trrh720\cellx1000\cellx2000
+\trowd\itap2\nesttableprops\trrh720\clpadl40\clpadr80\clpadt100\clpadb140\cellx1000\cellx2000
 \intbl Inner B\nestcell
 \intbl Inner C\nestcell
 \nestrow
@@ -646,6 +646,12 @@ public sealed class ExternalRichTextClipboardTests
         innerRun.InlineTable.Table.Rows[0].Cells.Select(cell =>
                 cell.TextBody!.Paragraphs[0].Runs[0].Text)
             .Should().Equal("Inner B", "Inner C");
+        var innerCells = innerRun.InlineTable.Table.Rows[0].Cells;
+        innerCells[0].InsetLeftPt.Should().Be(2);
+        innerCells[0].InsetRightPt.Should().Be(4);
+        innerCells[0].InsetTopPt.Should().Be(5);
+        innerCells[0].InsetBottomPt.Should().Be(7);
+        innerCells[1].InsetLeftPt.Should().BeNull();
         payload.PlainText.Should().Contain("\uFFFC");
         payload.PlainText.Should().Contain("Before and after");
 
@@ -668,6 +674,14 @@ public sealed class ExternalRichTextClipboardTests
         reopenedOuterCells[0].InsetLeftPt.Should().Be(15);
         reopenedOuterCells[1].InsetLeftPt.Should().Be(6);
         reopenedOuterCells[1].InsetRightPt.Should().Be(12);
+        var reopenedInnerCells = reopenedOuterCells[1].TextBody!
+            .Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].Cells;
+        reopenedInnerCells[0].InsetLeftPt.Should().Be(2);
+        reopenedInnerCells[0].InsetRightPt.Should().Be(4);
+        reopenedInnerCells[0].InsetTopPt.Should().Be(5);
+        reopenedInnerCells[0].InsetBottomPt.Should().Be(7);
     }
 
     [Fact]
