@@ -1474,6 +1474,12 @@
   <data name="Ribbon_Command_SmartArtVerticalBoxList_KeyTip" xml:space="preserve">
     <value>V</value>
   </data>
+  <data name="Ribbon_Command_SmartArtVerticalBlockList_Label" xml:space="preserve">
+    <value>Vertical Block List</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtVerticalBlockList_KeyTip" xml:space="preserve">
+    <value>VBL</value>
+  </data>
   <data name="Ribbon_Command_SmartArtVerticalChevronList_Label" xml:space="preserve">
     <value>Vertical Chevron List</value>
   </data>

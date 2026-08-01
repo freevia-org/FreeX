@@ -1013,6 +1013,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.FunnelProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.VerticalBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalArrowList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
