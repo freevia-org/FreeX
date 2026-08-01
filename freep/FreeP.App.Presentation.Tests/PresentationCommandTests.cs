@@ -86,6 +86,31 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void InsertSlideCommand_InheritsNeighborSectionAcrossUndoAndRedo()
+    {
+        var (p, bus) = Make(3);
+        var firstId = p.Slides[0].Id;
+        var secondId = p.Slides[1].Id;
+        var thirdId = p.Slides[2].Id;
+        var section = new PresentationSection { Id = "section-1", Name = "Intro" };
+        section.SlideIds.AddRange(new[] { firstId, secondId, thirdId });
+        p.Sections.Add(section);
+
+        var inserted = new Slide { Title = "Inserted" };
+        bus.Execute(new InsertSlideCommand(1, inserted));
+
+        p.Sections[0].SlideIds.Should().Equal(firstId, inserted.Id, secondId, thirdId);
+
+        bus.Undo();
+        p.Slides.Select(slide => slide.Id).Should().Equal(firstId, secondId, thirdId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, secondId, thirdId);
+
+        bus.Redo();
+        p.Slides[1].Should().BeSameAs(inserted);
+        p.Sections[0].SlideIds.Should().Equal(firstId, inserted.Id, secondId, thirdId);
+    }
+
+    [Fact]
     public void AddSlideCommand_Apply_AppendsSlide()
     {
         var (p, bus) = Make();
