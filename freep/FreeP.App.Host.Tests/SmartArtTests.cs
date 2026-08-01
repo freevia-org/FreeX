@@ -1159,6 +1159,19 @@ public sealed class SmartArtTests : IDisposable
         reread.QuickStyle.Should().NotBeNull();
         reread.QuickStyle!.UniqueId.Should().Be(result.StyleUniqueId);
         reread.QuickStyle.Title.Should().Be(expectedTitle);
+        reread.QuickStyle.Category.Should().Be(
+            preset is SmartArtQuickStylePreset.Polished
+                or SmartArtQuickStylePreset.Inset
+                or SmartArtQuickStylePreset.Cartoon
+                or SmartArtQuickStylePreset.Powder
+                or SmartArtQuickStylePreset.BrickScene
+                or SmartArtQuickStylePreset.FlatScene
+                or SmartArtQuickStylePreset.MetallicScene
+                or SmartArtQuickStylePreset.SunsetScene
+                or SmartArtQuickStylePreset.BirdsEyeScene
+                ? "3D"
+                : "simple");
+        reread.QuickStyle.StyleLabels.Should().Contain("node0");
     }
 
     // ── Compositor ───────────────────────────────────────────────────────────────

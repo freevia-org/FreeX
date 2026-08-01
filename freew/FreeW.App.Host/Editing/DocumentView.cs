@@ -9201,15 +9201,41 @@ public sealed class DocumentView : RichTextBox
                 // Bottom use a Grid+StackPanel wrapper. Exact-height clamping is not enforceable in WPF
                 // FlowDocument (content may overflow the MinHeight), which is a known residual WPF limit.
                 var vAlign = modelCell.VerticalAlignment;
+                var paginatedContentMargins = isPaginationSegment && table.CellSpacingPt is > 0
+                    ? modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default
+                    : null;
                 if (hasPlannedCellBorders)
                 {
-                    wpfCell.Blocks.Add(new BlockUIContainer(BuildCellContentHost(
+                    var cellContentHost = BuildCellContentHost(
                         modelCell,
                         document,
                         vAlign,
                         rowHeightPx,
                         cellBorderPlan,
-                        preservedNumberingMarkers)));
+                        paginatedContentMargins,
+                        preservedNumberingMarkers);
+                    if (isPaginationSegment
+                        && table.CellSpacingPt is > 0
+                        && wpfCell.Background is { } spacedCellBackground)
+                    {
+                        var spacingDip = table.CellSpacingPt.Value * PxPerPoint;
+                        var surfaceMargin = new Thickness(
+                            cellIndex == 0 ? spacingDip / 2 : -spacingDip,
+                            0,
+                            cellIndex == modelRow.Cells.Count - 1 ? spacingDip : 0,
+                            0);
+                        var fillSurface = new Border
+                        {
+                            Background = spacedCellBackground,
+                            IsHitTestVisible = false,
+                            Margin = surfaceMargin
+                        };
+                        System.Windows.Controls.Panel.SetZIndex(fillSurface, -1);
+                        cellContentHost.Children.Insert(0, fillSurface);
+                        cellContentHost.Children.OfType<TableCellBorderChrome>().Single().Margin = surfaceMargin;
+                        wpfCell.Background = null;
+                    }
+                    wpfCell.Blocks.Add(new BlockUIContainer(cellContentHost));
                 }
                 else if (rowHeightPx is not null)
                 {
@@ -9221,6 +9247,7 @@ public sealed class DocumentView : RichTextBox
                         vAlign,
                         rowHeightPx,
                         cellBorderPlan,
+                        paginatedContentMargins,
                         preservedNumberingMarkers)));
                 }
                 else if (modelCell.TextDirection != CellTextDirection.Horizontal)
@@ -9386,6 +9413,7 @@ public sealed class DocumentView : RichTextBox
         TableCellVerticalAlignment verticalAlignment,
         double? minHeightPx,
         TableCellBorderVisualPlan borderPlan,
+        TableCellMargins? contentMargins,
         IReadOnlyDictionary<ModelParagraph, PreservedNumberingMarkerPlan> preservedNumberingMarkers)
     {
         var grid = new System.Windows.Controls.Grid();
@@ -9394,6 +9422,9 @@ public sealed class DocumentView : RichTextBox
 
         var stack = new System.Windows.Controls.StackPanel
         {
+            RenderTransform = contentMargins is { } margins
+                ? new TranslateTransform(0, margins.TopPt * PxPerPoint)
+                : Transform.Identity,
             VerticalAlignment = verticalAlignment switch
             {
                 TableCellVerticalAlignment.Center => VerticalAlignment.Center,

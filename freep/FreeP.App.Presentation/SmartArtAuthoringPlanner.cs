@@ -440,11 +440,45 @@ public static class SmartArtAuthoringPlanner
             SmartArtQuickStylePreset.BirdsEyeScene => "Bird's Eye Scene",
             _ => preset.ToString(),
         };
+        var category = preset is SmartArtQuickStylePreset.Polished
+            or SmartArtQuickStylePreset.Inset
+            or SmartArtQuickStylePreset.Cartoon
+            or SmartArtQuickStylePreset.Powder
+            or SmartArtQuickStylePreset.BrickScene
+            or SmartArtQuickStylePreset.FlatScene
+            or SmartArtQuickStylePreset.MetallicScene
+            or SmartArtQuickStylePreset.SunsetScene
+            or SmartArtQuickStylePreset.BirdsEyeScene
+            ? "3D"
+            : "simple";
         var titleElement = styleDefinition.Elements(Diagram + "title").FirstOrDefault();
         if (titleElement is null)
             styleDefinition.AddFirst(new XElement(Diagram + "title", new XAttribute("val", title)));
         else
             titleElement.SetAttributeValue("val", title);
+
+        var categoryList = styleDefinition.Elements(Diagram + "catLst").FirstOrDefault();
+        if (categoryList is null)
+        {
+            categoryList = new XElement(
+                Diagram + "catLst",
+                new XElement(Diagram + "cat", new XAttribute("type", category), new XAttribute("pri", "1000")));
+            if (titleElement is null)
+                styleDefinition.Add(categoryList);
+            else
+                titleElement.AddAfterSelf(categoryList);
+        }
+        else
+        {
+            categoryList.RemoveNodes();
+            categoryList.Add(new XElement(
+                Diagram + "cat",
+                new XAttribute("type", category),
+                new XAttribute("pri", "1000")));
+        }
+
+        if (!styleDefinition.Elements(Diagram + "styleLbl").Any())
+            styleDefinition.Add(new XElement(Diagram + "styleLbl", new XAttribute("name", "node0")));
 
         part.Bytes = Serialize(document);
         EnsureDataRelationship(smartArt);
@@ -452,6 +486,14 @@ public static class SmartArtAuthoringPlanner
         smartArt.QuickStyle ??= new SmartArtQuickStyleMetadata();
         smartArt.QuickStyle.UniqueId = styleId;
         smartArt.QuickStyle.Title = title;
+        smartArt.QuickStyle.Category = category;
+        smartArt.QuickStyle.StyleLabels.Clear();
+        foreach (var label in styleDefinition.Elements(Diagram + "styleLbl"))
+        {
+            var name = label.Attribute("name")?.Value;
+            if (!string.IsNullOrWhiteSpace(name))
+                smartArt.QuickStyle.StyleLabels.Add(name);
+        }
 
         return new SmartArtQuickStyleApplyResult(
             true,
