@@ -4361,6 +4361,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfShadowedSquareBorderOps(squareMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var trackMotifs))
+        {
+            return BuildPdfShorebirdTrackBorderOps(trackMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
 
         if (border.LineStyle == BorderLineStyle.Wave)
         {
@@ -4503,6 +4513,28 @@ public sealed class DocumentView : Control
             ops.Add(new PdfFillRect(outlineX, outlineY, outlineSize, rail, navy));
             ops.Add(new PdfFillRect(outlineX, outlineY, rail, outlineSize, navy));
             ops.Add(new PdfFillRect(outlineX + outlineSize - rail, outlineY, rail, outlineSize, navy));
+        }
+
+        return ops;
+    }
+
+    private static IReadOnlyList<PdfDrawOp> BuildPdfShorebirdTrackBorderOps(
+        IReadOnlyList<PageBorderShorebirdTrackMotif> motifs,
+        double originXDip,
+        double originTopDip,
+        double pageHeightPt)
+    {
+        var ops = new List<PdfDrawOp>(motifs.Count * 4);
+        foreach (var motif in motifs)
+        foreach (var segment in PageBorderArtVisualPlanner.BuildShorebirdTrackSegments(motif))
+        {
+            ops.Add(new PdfLine(
+                (originXDip + segment.X1Dip) / PxPerPoint,
+                pageHeightPt - (originTopDip + segment.Y1Dip) / PxPerPoint,
+                (originXDip + segment.X2Dip) / PxPerPoint,
+                pageHeightPt - (originTopDip + segment.Y2Dip) / PxPerPoint,
+                PdfColor.Black,
+                PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip / PxPerPoint));
         }
 
         return ops;
@@ -10040,6 +10072,34 @@ public sealed class DocumentView : Control
                 context.FillRectangle(navy, new Rect(outlineX, outlineY + outlineSize - 1, outlineSize, 1));
                 context.FillRectangle(navy, new Rect(outlineX, outlineY, 1, outlineSize));
                 context.FillRectangle(navy, new Rect(outlineX + outlineSize - 1, outlineY, 1, outlineSize));
+            }
+
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var trackMotifs))
+        {
+            var pen = new Pen(Brushes.Black, PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip);
+            foreach (var motif in trackMotifs)
+            {
+                var placed = motif with
+                {
+                    CenterXDip = frame.X + motif.CenterXDip,
+                    CenterYDip = frame.Y + motif.CenterYDip,
+                };
+                foreach (var segment in PageBorderArtVisualPlanner.BuildShorebirdTrackSegments(placed))
+                {
+                    context.DrawLine(
+                        pen,
+                        new Point(segment.X1Dip, segment.Y1Dip),
+                        new Point(segment.X2Dip, segment.Y2Dip));
+                }
             }
 
             return true;

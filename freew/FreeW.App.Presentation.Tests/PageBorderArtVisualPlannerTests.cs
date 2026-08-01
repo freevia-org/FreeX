@@ -44,6 +44,26 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void ShorebirdTracks_UsesMeasuredAlternatingFootprintCadenceAndSharedSegments()
+    {
+        PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(83, 3, 816, 1056, 32, out var motifs)
+            .Should().BeTrue();
+
+        motifs.Should().HaveCount(72);
+        motifs[0].Should().Be(new PageBorderShorebirdTrackMotif(88, 54.5, 32, 0));
+        motifs[15].CenterXDip.Should().BeApproximately(731.2, 0.0001);
+        motifs[16].Should().Be(new PageBorderShorebirdTrackMotif(88, 1001.5, 32, 2));
+        motifs[32].Should().Be(new PageBorderShorebirdTrackMotif(54.5, 86, 32, 3));
+        motifs[52].Should().Be(new PageBorderShorebirdTrackMotif(761.5, 86, 32, 1));
+
+        PageBorderArtVisualPlanner.BuildShorebirdTrackSegments(motifs[0]).Should().Equal(
+            new PageBorderArtLineSegment(72, 54.5, 81, 54.5),
+            new PageBorderArtLineSegment(88, 54.5, 104, 54.5),
+            new PageBorderArtLineSegment(88, 54.5, 99, 46.5),
+            new PageBorderArtLineSegment(88, 54.5, 99, 62.5));
+    }
+
+    [Fact]
     public void TinyFrame_IsRecognizedButProducesNoMotifs()
     {
         PageBorderArtVisualPlanner.TryBuildApplesFrame(1, 3, 40, 40, 20, out var motifs)

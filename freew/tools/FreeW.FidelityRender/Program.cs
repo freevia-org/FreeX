@@ -1523,6 +1523,18 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
             DrawSoftwareShadowedSquare(canvas, motif);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var trackMotifs))
+    {
+        foreach (var motif in trackMotifs)
+            DrawSoftwareShorebirdTrack(canvas, motif);
+        return;
+    }
 
     using var borderPaint = new SKPaint
     {
@@ -1565,6 +1577,27 @@ static void DrawSoftwareShadowedSquare(SKCanvas canvas, PageBorderShadowedSquare
     canvas.DrawRect(outlineX, outlineY + outlineSize - 1, outlineX + outlineSize, outlineY + outlineSize, fill);
     canvas.DrawRect(outlineX, outlineY, outlineX + 1, outlineY + outlineSize, fill);
     canvas.DrawRect(outlineX + outlineSize - 1, outlineY, outlineX + outlineSize, outlineY + outlineSize, fill);
+}
+
+static void DrawSoftwareShorebirdTrack(SKCanvas canvas, PageBorderShorebirdTrackMotif motif)
+{
+    using var paint = new SKPaint
+    {
+        Color = SKColors.Black,
+        IsAntialias = true,
+        Style = SKPaintStyle.Stroke,
+        StrokeWidth = (float)PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip,
+        StrokeCap = SKStrokeCap.Butt,
+    };
+    foreach (var segment in PageBorderArtVisualPlanner.BuildShorebirdTrackSegments(motif))
+    {
+        canvas.DrawLine(
+            (float)segment.X1Dip,
+            (float)segment.Y1Dip,
+            (float)segment.X2Dip,
+            (float)segment.Y2Dip,
+            paint);
+    }
 }
 
 static void DrawSoftwareApple(SKCanvas canvas, PageBorderAppleMotif motif)

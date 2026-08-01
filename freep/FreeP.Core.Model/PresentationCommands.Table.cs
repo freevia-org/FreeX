@@ -62,6 +62,76 @@ public sealed class SetTableHeaderRowCommand : IPresentationCommand
     }
 }
 
+/// <summary>Changes one table-design emphasis flag and supports undo/redo.</summary>
+public sealed class SetTableStyleFlagCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly TableStyleFlagKind _kind;
+    private readonly bool _newValue;
+    private bool _oldValue;
+
+    public SetTableStyleFlagCommand(
+        int slideIndex,
+        uint shapeId,
+        TableStyleFlagKind kind,
+        bool newValue)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _kind = kind;
+        _newValue = newValue;
+    }
+
+    public string Label => $"{(_newValue ? "Set" : "Clear")} {_kind}";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        return table is not null && GetValue(table.Flags) != _newValue;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null) return;
+        _oldValue = GetValue(table.Flags);
+        SetValue(table.Flags, _newValue);
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var table = PresentationModelCloneHelper.FindTable(presentation, _slideIndex, _shapeId);
+        if (table is null) return;
+        SetValue(table.Flags, _oldValue);
+    }
+
+    private bool GetValue(TableStyleFlags flags) => _kind switch
+    {
+        TableStyleFlagKind.FirstRow => flags.FirstRow,
+        TableStyleFlagKind.LastRow => flags.LastRow,
+        TableStyleFlagKind.FirstCol => flags.FirstCol,
+        TableStyleFlagKind.LastCol => flags.LastCol,
+        TableStyleFlagKind.BandRow => flags.BandRow,
+        TableStyleFlagKind.BandCol => flags.BandCol,
+        _ => throw new ArgumentOutOfRangeException(),
+    };
+
+    private void SetValue(TableStyleFlags flags, bool value)
+    {
+        switch (_kind)
+        {
+            case TableStyleFlagKind.FirstRow: flags.FirstRow = value; break;
+            case TableStyleFlagKind.LastRow: flags.LastRow = value; break;
+            case TableStyleFlagKind.FirstCol: flags.FirstCol = value; break;
+            case TableStyleFlagKind.LastCol: flags.LastCol = value; break;
+            case TableStyleFlagKind.BandRow: flags.BandRow = value; break;
+            case TableStyleFlagKind.BandCol: flags.BandCol = value; break;
+            default: throw new ArgumentOutOfRangeException();
+        }
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════════
 // 1. SetTableCellTextCommand
 // ════════════════════════════════════════════════════════════════════════════════
@@ -1020,6 +1090,17 @@ public sealed class MergeTableCellsCommand : IPresentationCommand
     }
 
     public string Label => "Merge Cells";
+
+    public bool HasEffect(Presentation p)
+    {
+        var table = PresentationModelCloneHelper.FindTable(p, _slideIndex, _shapeId);
+        return table is not null
+            && _r1 >= 0
+            && _c1 >= 0
+            && _r2 < table.Rows.Count
+            && _c2 < table.ColumnWidthsEmu.Count
+            && (_r1 != _r2 || _c1 != _c2);
+    }
 
     public void Apply(Presentation p)
     {

@@ -698,6 +698,23 @@ internal static class FreePRibbonCommands
 
         // ── Wave 4C: Transitions tab ─────────────────────────────────────────────
 
+        registry.Register(TableCellEditPlanner.MergeCellsCommandId,
+            new ActionRibbonCommand(() => editor.TryMergeActiveTableCell()));
+        registry.Register(TableCellEditPlanner.SplitCellCommandId,
+            new ActionRibbonCommand(() => editor.TrySplitActiveTableCell()));
+        RegisterTableStyleFlagCommand(registry, editor,
+            TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow);
+        RegisterTableStyleFlagCommand(registry, editor,
+            TableCellEditPlanner.TableLastRowCommandId, TableStyleFlagKind.LastRow);
+        RegisterTableStyleFlagCommand(registry, editor,
+            TableCellEditPlanner.TableFirstColCommandId, TableStyleFlagKind.FirstCol);
+        RegisterTableStyleFlagCommand(registry, editor,
+            TableCellEditPlanner.TableLastColCommandId, TableStyleFlagKind.LastCol);
+        RegisterTableStyleFlagCommand(registry, editor,
+            TableCellEditPlanner.TableBandRowCommandId, TableStyleFlagKind.BandRow);
+        RegisterTableStyleFlagCommand(registry, editor,
+            TableCellEditPlanner.TableBandColCommandId, TableStyleFlagKind.BandCol);
+
         RegisterTransitionCommands(registry, stateStore, editor, onTransitionSound);
 
         // ── Wave 4C: Slide Show buttons ──────────────────────────────────────────
@@ -931,6 +948,16 @@ internal static class FreePRibbonCommands
         RegisterViewZoomCommands(registry, getViewZoomState, applyViewZoomState);
 
         return registry;
+    }
+
+    private static void RegisterTableStyleFlagCommand(
+        RibbonCommandRegistry registry,
+        EditingSession editor,
+        string commandId,
+        TableStyleFlagKind kind)
+    {
+        registry.Register(commandId,
+            new ActionRibbonCommand(() => editor.ToggleSelectedTableStyleFlag(kind)));
     }
 
     private static bool ApplyTableCellListPreset(EditingSession editor, string? presetId) =>

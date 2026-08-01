@@ -1150,6 +1150,69 @@ public class RibbonEditorCompleteness5BTests
         Assert.NotEqual(685800, shape.Table.Rows[0].HeightEmu);
     }
 
+    [Fact]
+    public void Cmd_TableMergeCells_WithActiveTableCell_UsesSharedCommand()
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(1, 2);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+
+        Exec(MakeRegistry(ed), TableCellEditPlanner.MergeCellsCommandId);
+
+        Assert.Equal(2, shape.Table!.Rows[0].Cells[0].GridSpan);
+        ed.Undo();
+        Assert.Equal(1, shape.Table.Rows[0].Cells[0].GridSpan);
+    }
+
+    [Fact]
+    public void Cmd_TableSplitCell_WithActiveTableCell_UsesSharedCommand()
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(1, 2);
+        ed.Select(shape.Id);
+        ed.SetActiveTableCell(0, 0);
+        Assert.True(ed.TryMergeActiveTableCell());
+
+        Exec(MakeRegistry(ed), TableCellEditPlanner.SplitCellCommandId);
+
+        Assert.Equal(1, shape.Table!.Rows[0].Cells[0].GridSpan);
+    }
+
+    [Theory]
+    [InlineData(TableCellEditPlanner.TableFirstRowCommandId, TableStyleFlagKind.FirstRow)]
+    [InlineData(TableCellEditPlanner.TableLastRowCommandId, TableStyleFlagKind.LastRow)]
+    [InlineData(TableCellEditPlanner.TableFirstColCommandId, TableStyleFlagKind.FirstCol)]
+    [InlineData(TableCellEditPlanner.TableLastColCommandId, TableStyleFlagKind.LastCol)]
+    [InlineData(TableCellEditPlanner.TableBandRowCommandId, TableStyleFlagKind.BandRow)]
+    [InlineData(TableCellEditPlanner.TableBandColCommandId, TableStyleFlagKind.BandCol)]
+    public void Cmd_TableStyleFlag_WithSelectedTable_TogglesAndUndoes(
+        string commandId,
+        TableStyleFlagKind kind)
+    {
+        var (ed, _) = MakeSession();
+        var shape = ed.InsertTable(2, 2);
+        ed.Select(shape.Id);
+        var before = GetTableStyleFlag(shape.Table!.Flags, kind);
+
+        Exec(MakeRegistry(ed), commandId);
+
+        Assert.Equal(!before, GetTableStyleFlag(shape.Table.Flags, kind));
+        ed.Undo();
+        Assert.Equal(before, GetTableStyleFlag(shape.Table.Flags, kind));
+    }
+
+    private static bool GetTableStyleFlag(TableStyleFlags flags, TableStyleFlagKind kind) => kind switch
+    {
+        TableStyleFlagKind.FirstRow => flags.FirstRow,
+        TableStyleFlagKind.LastRow => flags.LastRow,
+        TableStyleFlagKind.FirstCol => flags.FirstCol,
+        TableStyleFlagKind.LastCol => flags.LastCol,
+        TableStyleFlagKind.BandRow => flags.BandRow,
+        TableStyleFlagKind.BandCol => flags.BandCol,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
     [Theory]
     [InlineData("freep.bold", TableCellTextFormatKind.Bold)]
     [InlineData("freep.italic", TableCellTextFormatKind.Italic)]

@@ -265,6 +265,36 @@ public sealed class TableEditCommandTests
         shape.Table.Flags.FirstRow.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(TableStyleFlagKind.FirstRow)]
+    [InlineData(TableStyleFlagKind.LastRow)]
+    [InlineData(TableStyleFlagKind.FirstCol)]
+    [InlineData(TableStyleFlagKind.LastCol)]
+    [InlineData(TableStyleFlagKind.BandRow)]
+    [InlineData(TableStyleFlagKind.BandCol)]
+    public void SetTableStyleFlagCommand_ApplyAndUndo_RestoresEachDesignFlag(TableStyleFlagKind kind)
+    {
+        var (_, bus, shape) = MakeTable();
+        var before = GetTableStyleFlag(shape.Table!.Flags, kind);
+
+        bus.Execute(new SetTableStyleFlagCommand(0, shape.Id, kind, !before));
+
+        GetTableStyleFlag(shape.Table.Flags, kind).Should().Be(!before);
+        bus.Undo();
+        GetTableStyleFlag(shape.Table.Flags, kind).Should().Be(before);
+    }
+
+    private static bool GetTableStyleFlag(TableStyleFlags flags, TableStyleFlagKind kind) => kind switch
+    {
+        TableStyleFlagKind.FirstRow => flags.FirstRow,
+        TableStyleFlagKind.LastRow => flags.LastRow,
+        TableStyleFlagKind.FirstCol => flags.FirstCol,
+        TableStyleFlagKind.LastCol => flags.LastCol,
+        TableStyleFlagKind.BandRow => flags.BandRow,
+        TableStyleFlagKind.BandCol => flags.BandCol,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
+    };
+
     [Fact]
     public void SetTableCellText_Revert_RestoresPreviousText()
     {
@@ -1279,6 +1309,28 @@ public sealed class TableEditCommandTests
         sess.SetActiveTableCell(0, 0);
         sess.SplitSelectedCell();
         shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(1);
+    }
+
+    [Fact]
+    public void EditingSession_TryMergeActiveTableCell_UsesAdjacentCellAndIsUndoable()
+    {
+        var sess = MakeSession(out var shape, 1, 2);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TryMergeActiveTableCell().Should().BeTrue();
+        shape.Table!.Rows[0].Cells[0].GridSpan.Should().Be(2);
+
+        sess.Undo();
+        shape.Table.Rows[0].Cells[0].GridSpan.Should().Be(1);
+    }
+
+    [Fact]
+    public void EditingSession_TrySplitActiveTableCell_RejectsUnmergedCell()
+    {
+        var sess = MakeSession(out _, 1, 1);
+        sess.SetActiveTableCell(0, 0);
+
+        sess.TrySplitActiveTableCell().Should().BeFalse();
     }
 
     // ════════════════════════════════════════════════════════════════════════════
