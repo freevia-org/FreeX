@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group", "outline-nested-group", "outline-nested-save-reopen")]
+    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -53,6 +53,7 @@ $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
 $native3dFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave66Native3DFixture.ps1"
+$nestedOutlineFilterFixtureGenerator = Join-Path $PSScriptRoot "LinuxInteractiveDocker/New-FreeXWave100NestedOutlineFilterFixture.ps1"
 $native3dSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-native-3d-formula-validation.schema.json"
 $nameBoxObjectsSchemaPath = Join-Path $PSScriptRoot "LinuxInteractiveDocker/freex-name-box-dropdown-objects-validation.schema.json"
 $pivotDetailsFixturePath = Join-Path $repoRoot "tests/FreeX.App.Avalonia.Tests/Fixtures/FreeX_wave50_pivot_fields.xlsx"
@@ -1098,6 +1099,16 @@ try {
         ([IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx")) {
         throw "outline-nested-save-reopen requires an .xlsx PhysicalDocumentPath."
     }
+    if ($PhysicalProbeSelector -eq "outline-nested-filter-save-reopen") {
+        if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
+            $PhysicalDocumentPath = Join-Path $reportDirectory "fixtures/freex-wave100-nested-outline-filter.xlsx"
+            & $nestedOutlineFilterFixtureGenerator -OutputPath $PhysicalDocumentPath
+        }
+        if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
+            [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
+            throw "outline-nested-filter-save-reopen requires an existing .xlsx PhysicalDocumentPath."
+        }
+    }
     if ($PhysicalProbeSelector -eq "pivot-table-details-double-click") {
         if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
             $PhysicalDocumentPath = $pivotDetailsFixturePath
@@ -1239,6 +1250,8 @@ try {
             "outline-nested-columns-group-physical",
             "outline-nested-save-reopen-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "outline-nested-filter-save-reopen") {
+        @("outline-nested-filter-save-reopen-physical")
     } else {
         @(
         "inline-edit-f2-escape",
@@ -1353,6 +1366,8 @@ try {
             "outline-nested-columns-group-physical",
             "outline-nested-save-reopen-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "outline-nested-filter-save-reopen") {
+        @("outline-nested-filter-save-reopen-physical")
     } else {
         @(
         "worksheet-context-copy-physical",

@@ -2984,6 +2984,221 @@ PY
     fi
 }
 
+probe_outline_nested_filter_save_reopen_physical() {
+    local artifacts="outline-nested-filter-initial.png;outline-nested-filter-before-flyout.png;outline-nested-filter-flyout-open.png;outline-nested-filter-all-values.png;outline-nested-filter-flyout-reopen.png;outline-nested-filter-applied.png;outline-nested-filter-inner-collapsed.png;outline-nested-filter-inner-expanded.png;outline-nested-filter-outer-collapsed.png;outline-nested-filter-outer-expanded.png;outline-nested-filter-reopened.png;outline-nested-filter-postcondition.txt"
+    local filter_open=false filter_reopen=false filter_flyout_passed=false
+    local initial_values="" all_values="" filtered_values=""
+    local inner_collapsed_values="" inner_expanded_values="" outer_collapsed_values="" outer_expanded_values="" reopened_values=""
+    local inner_collapsed=false inner_expanded=false outer_collapsed=false outer_expanded=false controls_visible=false
+    local save_clean=false dialog_open=false dialog_closed=false reopen_values_passed=false package_passed=false
+    local package_signature="" save_clean_after_reopen=false
+    local inner_toggle_x=0 outer_toggle_x=0 inner_toggle_y=0 outer_toggle_y=0
+    local inner_collapsed_y=0 outer_collapsed_y=0 before_windows=0 after_windows=0
+
+    inspect_saved_package() {
+        package_signature="$(python3 - "$document_path" <<'PY'
+import sys
+import zipfile
+import xml.etree.ElementTree as ET
+
+main = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+expected_outline = {"2": "1", "3": "2", "4": "2", "5": "1", "6": "1"}
+expected_values = {
+    "A1": "Region", "B1": "Value", "A2": "Keep", "B2": "Outer2",
+    "A3": "Drop", "B3": "InnerDrop3", "A4": "Keep", "B4": "InnerKeep4",
+    "A5": "Keep", "B5": "InnerAnchor5", "A6": "Drop", "B6": "OuterDrop6",
+    "A7": "Keep", "B7": "OuterSummary7",
+}
+
+def text_for_cell(cell, shared):
+    kind = cell.attrib.get("t", "")
+    if kind == "inlineStr":
+        return "".join(node.text or "" for node in cell.findall(".//" + main + "t"))
+    value = cell.find(main + "v")
+    raw = "" if value is None else (value.text or "")
+    if kind == "s" and raw.isdigit() and int(raw) < len(shared):
+        return shared[int(raw)]
+    return raw
+
+with zipfile.ZipFile(sys.argv[1]) as package:
+    shared = []
+    if "xl/sharedStrings.xml" in package.namelist():
+        shared_root = ET.fromstring(package.read("xl/sharedStrings.xml"))
+        shared = ["".join(node.text or "" for node in item.findall(".//" + main + "t")) for item in shared_root.findall(main + "si")]
+    worksheet = ET.fromstring(package.read("xl/worksheets/sheet1.xml"))
+    rows = {}
+    values = {}
+    hidden = []
+    collapsed = []
+    for row in worksheet.findall(".//" + main + "row"):
+        number = row.attrib.get("r", "")
+        if number in expected_outline or number == "7":
+            rows[number] = row.attrib.get("outlineLevel", "0")
+            if row.attrib.get("hidden", "0") in {"1", "true"}:
+                hidden.append(number)
+            if row.attrib.get("collapsed", "0") in {"1", "true"}:
+                collapsed.append(number)
+        for cell in row.findall(main + "c"):
+            reference = cell.attrib.get("r", "")
+            if reference in expected_values:
+                values[reference] = text_for_cell(cell, shared)
+    auto_filter = worksheet.find(main + "autoFilter")
+    filter_ref = "" if auto_filter is None else auto_filter.attrib.get("ref", "")
+    filter_values = []
+    if auto_filter is not None:
+        for node in auto_filter.findall(main + "filterColumn"):
+            if node.attrib.get("colId") == "0":
+                filters = node.find(main + "filters")
+                if filters is not None:
+                    filter_values = [item.attrib.get("val", "") for item in filters.findall(main + "filter")]
+    rows = {key: rows.get(key, "0") for key in expected_outline}
+    hidden.sort(key=int)
+    collapsed.sort(key=int)
+    filter_values.sort()
+    if rows != expected_outline or hidden != ["3", "6"] or collapsed or filter_ref != "A1:B7" or filter_values != ["Keep"] or values != expected_values:
+        raise SystemExit(1)
+    print("outline=2:1,3:2,4:2,5:1,6:1|hidden=3,6|collapsed=|filter-ref=A1:B7|filter-values=Keep|values=A1=Region,B1=Value,A2=Keep,B2=Outer2,A3=Drop,B3=InnerDrop3,A4=Keep,B4=InnerKeep4,A5=Keep,B5=InnerAnchor5,A6=Drop,B6=OuterDrop6,A7=Keep,B7=OuterSummary7")
+PY
+)" || package_signature=""
+        if [[ "$package_signature" == "outline=2:1,3:2,4:2,5:1,6:1|hidden=3,6|collapsed=|filter-ref=A1:B7|filter-values=Keep|values=A1=Region,B1=Value,A2=Keep,B2=Outer2,A3=Drop,B3=InnerDrop3,A4=Keep,B4=InnerKeep4,A5=Keep,B5=InnerAnchor5,A6=Drop,B6=OuterDrop6,A7=Keep,B7=OuterSummary7" ]]; then
+            package_passed=true
+        fi
+    }
+
+    if [[ "${document_path,,}" != *.xlsx ]]; then
+        write_artifact "outline-nested-filter-postcondition.txt" "requires-xlsx=true\ndocument-path=$document_path\n"
+        record "outline-nested-filter-save-reopen-physical" "failed" "outline-nested-filter-postcondition.txt" \
+            "The combined filter/outline lane requires an XLSX document path." "$artifacts"
+        return
+    fi
+
+    capture "outline-nested-filter-initial.png"
+    initial_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+
+    # The fixture starts with Keep selected. Include Drop through the production flyout, then
+    # reopen that same flyout and remove Drop again before exercising the outline gestures.
+    capture "outline-nested-filter-before-flyout.png"
+    open_autofilter_menu 0
+    capture "outline-nested-filter-flyout-open.png"
+    if screen_changed "$output/outline-nested-filter-before-flyout.png" "$output/outline-nested-filter-flyout-open.png" 300; then
+        filter_open=true
+        click_autofilter_control 29 348
+        click_autofilter_control 246 395
+        sleep "$settle_seconds"
+        all_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B3 || true),$(copy_cell_formula 1 3 B4 || true),$(copy_cell_formula 1 4 B5 || true),$(copy_cell_formula 1 5 B6 || true),$(copy_cell_formula 1 6 B7 || true)"
+        capture "outline-nested-filter-all-values.png"
+
+        open_autofilter_menu 0
+        capture "outline-nested-filter-flyout-reopen.png"
+        if screen_changed "$output/outline-nested-filter-all-values.png" "$output/outline-nested-filter-flyout-reopen.png" 300; then
+            filter_reopen=true
+            click_autofilter_control 29 348
+            click_autofilter_control 246 395
+            sleep "$settle_seconds"
+            filtered_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+            capture "outline-nested-filter-applied.png"
+        fi
+    fi
+    if $filter_open && $filter_reopen &&
+       [[ "$initial_values" == "Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" ]] &&
+       [[ "$all_values" == "Outer2,InnerDrop3,InnerKeep4,InnerAnchor5,OuterDrop6,OuterSummary7" ]] &&
+       [[ "$filtered_values" == "Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" ]]; then
+        filter_flyout_passed=true
+    fi
+
+    inner_toggle_x=$((window_x + 27))
+    outer_toggle_x=$((window_x + 13))
+    inner_toggle_y="$(cell_center_y 3)"
+    outer_toggle_y="$(cell_center_y 4)"
+    if outline_toggle_visible "$output/outline-nested-filter-applied.png" "$inner_toggle_x" "$inner_toggle_y" &&
+       outline_toggle_visible "$output/outline-nested-filter-applied.png" "$outer_toggle_x" "$outer_toggle_y"; then
+        controls_visible=true
+
+        focus_app
+        xdotool_mousemove_sync "$inner_toggle_x" "$inner_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-filter-inner-collapsed.png"
+        inner_collapsed_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B5 || true),$(copy_cell_formula 1 3 B7 || true)"
+        [[ "$inner_collapsed_values" == "Outer2,InnerAnchor5,OuterSummary7" ]] && inner_collapsed=true
+
+        inner_collapsed_y="$(cell_center_y 2)"
+        focus_app
+        xdotool_mousemove_sync "$inner_toggle_x" "$inner_collapsed_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-filter-inner-expanded.png"
+        inner_expanded_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+        [[ "$inner_expanded_values" == "Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" ]] && inner_expanded=true
+
+        focus_app
+        xdotool_mousemove_sync "$outer_toggle_x" "$outer_toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-filter-outer-collapsed.png"
+        outer_collapsed_values="$(copy_cell_formula 1 1 B7 || true)"
+        [[ "$outer_collapsed_values" == "OuterSummary7" ]] && outer_collapsed=true
+
+        outer_collapsed_y="$(cell_center_y 1)"
+        focus_app
+        xdotool_mousemove_sync "$outer_toggle_x" "$outer_collapsed_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-nested-filter-outer-expanded.png"
+        outer_expanded_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+        [[ "$outer_expanded_values" == "Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" ]] && outer_expanded=true
+    fi
+
+    send_key ctrl+s
+    wait_for_document_clean && save_clean=true
+    inspect_saved_package
+
+    before_windows="$(visible_window_count)"
+    send_key ctrl+F12
+    for _ in $(seq 1 12); do
+        after_windows="$(visible_window_count)"
+        if (( after_windows > before_windows )); then
+            dialog_open=true
+            break
+        fi
+        sleep 0.2
+    done
+    if $dialog_open; then
+        xdotool key --clearmodifiers --delay "$input_delay_ms" ctrl+l
+        xdotool type --clearmodifiers --delay "$type_delay_ms" "$document_path"
+        xdotool key --clearmodifiers Return
+        sleep "$settle_seconds"
+        xdotool key --clearmodifiers Return
+        for _ in $(seq 1 16); do
+            after_windows="$(visible_window_count)"
+            if (( after_windows <= before_windows )); then
+                dialog_closed=true
+                break
+            fi
+            sleep 0.25
+        done
+    fi
+    if $dialog_closed; then
+        capture "outline-nested-filter-reopened.png"
+        reopened_values="$(copy_cell_formula 1 1 B2 || true),$(copy_cell_formula 1 2 B4 || true),$(copy_cell_formula 1 3 B5 || true),$(copy_cell_formula 1 4 B7 || true)"
+        [[ "$reopened_values" == "Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" ]] && reopen_values_passed=true
+        send_key ctrl+s
+        wait_for_document_clean && save_clean_after_reopen=true
+        inspect_saved_package
+    fi
+
+    write_artifact "outline-nested-filter-postcondition.txt" \
+        "fixture=freex-wave100-nested-outline-filter.xlsx\ninitial-filtered-values=$initial_values\nall-values-after-first-flyout=$all_values\nfiltered-values-after-second-flyout=$filtered_values\nfilter-flyout-open=$filter_open\nfilter-flyout-reopen=$filter_reopen\nfilter-flyout-passed=$filter_flyout_passed\ninner-collapsed-values=$inner_collapsed_values\ninner-collapse=$inner_collapsed\ninner-expanded-values=$inner_expanded_values\ninner-expand=$inner_expanded\nouter-collapsed-values=$outer_collapsed_values\nouter-collapse=$outer_collapsed\nouter-expanded-values=$outer_expanded_values\nouter-expand=$outer_expanded\ncontrols-visible=$controls_visible\nsave-clean=$save_clean\npackage-signature=$package_signature\npackage-passed=$package_passed\ndialog-open=$dialog_open\ndialog-closed=$dialog_closed\nreopened-values=$reopened_values\nreopened-values-passed=$reopen_values_passed\nsave-clean-after-reopen=$save_clean_after_reopen\n"
+    if $filter_flyout_passed && $controls_visible && $inner_collapsed && $inner_expanded &&
+       $outer_collapsed && $outer_expanded && $save_clean && $package_passed &&
+       $dialog_closed && $reopen_values_passed && $save_clean_after_reopen; then
+        record "outline-nested-filter-save-reopen-physical" "passed" \
+            "$artifacts; package=$package_signature; filtered-hidden=3,6; restored=Outer2,InnerKeep4,InnerAnchor5,OuterSummary7" \
+            "The real Avalonia filter flyout was operated twice, nested and outer outline toggles were physically collapsed/expanded, filtered rows stayed absent while outline-owned rows restored, and the saved package plus production reopen retained exact values, filter, and outline state." "$artifacts"
+    else
+        record "outline-nested-filter-save-reopen-physical" "failed" \
+            "$artifacts" \
+            "Combined filter/outline retention was not fully proven: filter=$filter_flyout_passed controls=$controls_visible inner=$inner_collapsed/$inner_expanded outer=$outer_collapsed/$outer_expanded save=$save_clean package=$package_passed reopen=$dialog_closed/$reopen_values_passed/$save_clean_after_reopen package='$package_signature'." "$artifacts"
+    fi
+    dismiss_active_popups
+}
+
 probe_formula_bar_point_mode_multi_area_edit() {
     local committed_formula="" committed_display="" normalized_formula=""
     local formula_passed=false result_passed=false selection_passed=false
@@ -4081,6 +4296,19 @@ if [[ "$probe_selector" == "outline-nested-save-reopen" ]]; then
     probe_outline_nested_save_reopen_physical
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the nested outline save/reopen probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ "$probe_selector" == "outline-nested-filter-save-reopen" ]]; then
+    # Focused Wave100 lane for the real AutoFilter checklist plus nested row-outline state.
+    probe_outline_nested_filter_save_reopen_physical
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the combined filter/outline probe."
     fi
     write_manifest
     if (( $(printf '%s\n' "${results[@]}" | grep -c '\"status\":\"failed\"' || true) > 0 )); then

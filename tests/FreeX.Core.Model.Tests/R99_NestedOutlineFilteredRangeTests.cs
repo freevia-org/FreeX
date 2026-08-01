@@ -78,4 +78,85 @@ public sealed class R99_NestedOutlineFilteredRangeTests
             [12] = 1
         });
     }
+
+    [Fact]
+    public void ToggleNestedAndOuterGroups_PreservesFilterHiddenRowsAndRestoresGroupRows()
+    {
+        var workbook = new Workbook("NestedOutlineFilterToggle");
+        var sheet = workbook.AddSheet("Sheet1");
+        for (uint row = 1; row <= 8; row++)
+        {
+            sheet.SetCell(
+                new CellAddress(sheet.Id, row, 1),
+                new TextValue(row is 3 or 6 ? "Drop" : "Keep"));
+        }
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 8, 1));
+        var context = new TestCommandContext(workbook);
+        sheet.AutoFilter = new WorksheetAutoFilterModel(range.ToString(), null);
+
+        new FilterCommand(sheet.Id, range, filterColOffset: 0, ["Keep"])
+            .Apply(context)
+            .Success
+            .Should()
+            .BeTrue();
+        new GroupRowsCommand(sheet.Id, 2, 7, 1, preserveExistingHierarchy: true)
+            .Apply(context)
+            .Success
+            .Should()
+            .BeTrue();
+        new GroupRowsCommand(sheet.Id, 3, 4, 2, preserveExistingHierarchy: true)
+            .Apply(context)
+            .Success
+            .Should()
+            .BeTrue();
+
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+        sheet.GroupHiddenRows.Should().BeEmpty();
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 3, 4, 2, collapsed: true)
+            .Apply(context)
+            .Success
+            .Should()
+            .BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([3u, 4u]);
+        sheet.IsRowEffectivelyHidden(3).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(4).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(5).Should().BeFalse();
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 3, 4, 2, collapsed: false)
+            .Apply(context)
+            .Success
+            .Should()
+            .BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+        sheet.GroupHiddenRows.Should().BeEmpty();
+        sheet.IsRowEffectivelyHidden(3).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(4).Should().BeFalse();
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 7, 1, collapsed: true)
+            .Apply(context)
+            .Success
+            .Should()
+            .BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([2u, 3u, 4u, 5u, 6u, 7u]);
+
+        new SetRowOutlineGroupCollapsedCommand(sheet.Id, 2, 7, 1, collapsed: false)
+            .Apply(context)
+            .Success
+            .Should()
+            .BeTrue();
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+        sheet.GroupHiddenRows.Should().BeEmpty();
+        sheet.IsRowEffectivelyHidden(2).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(3).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(4).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(5).Should().BeFalse();
+        sheet.IsRowEffectivelyHidden(6).Should().BeTrue();
+        sheet.IsRowEffectivelyHidden(7).Should().BeFalse();
+    }
 }
