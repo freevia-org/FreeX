@@ -4371,6 +4371,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfShorebirdTrackBorderOps(trackMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildBatsFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var batMotifs))
+        {
+            return BuildPdfBatBorderOps(batMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
         if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -4545,6 +4555,36 @@ public sealed class DocumentView : Control
                 pageHeightPt - (originTopDip + segment.Y2Dip) / PxPerPoint,
                 PdfColor.Black,
                 PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip / PxPerPoint));
+        }
+
+        return ops;
+    }
+
+    private static IReadOnlyList<PdfDrawOp> BuildPdfBatBorderOps(
+        IReadOnlyList<PageBorderBatMotif> motifs,
+        double originXDip,
+        double originTopDip,
+        double pageHeightPt)
+    {
+        var ops = new List<PdfDrawOp>(motifs.Count);
+        foreach (var motif in motifs)
+        {
+            var points = PageBorderArtVisualPlanner.BuildBatPolygon(motif)
+                .Select(point => new PdfPathPoint(
+                    (originXDip + point.XDip) / PxPerPoint,
+                    pageHeightPt - (originTopDip + point.YDip) / PxPerPoint))
+                .ToArray();
+            if (points.Length == 0)
+                continue;
+
+            ops.Add(new PdfPath(
+                [new PdfPathContour(
+                    points[0],
+                    points.Skip(1).Select(PdfPathSegment.LineTo).ToArray(),
+                    true)],
+                PdfColor.Black,
+                null,
+                0));
         }
 
         return ops;
@@ -10147,6 +10187,38 @@ public sealed class DocumentView : Control
                         new Point(segment.X1Dip, segment.Y1Dip),
                         new Point(segment.X2Dip, segment.Y2Dip));
                 }
+            }
+
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildBatsFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var batMotifs))
+        {
+            foreach (var motif in batMotifs)
+            {
+                var points = PageBorderArtVisualPlanner.BuildBatPolygon(motif with
+                {
+                    Xdip = frame.X + motif.Xdip,
+                    Ydip = frame.Y + motif.Ydip,
+                });
+                if (points.Count == 0)
+                    continue;
+
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(new Point(points[0].XDip, points[0].YDip), true);
+                    foreach (var point in points.Skip(1))
+                        path.LineTo(new Point(point.XDip, point.YDip));
+                    path.EndFigure(true);
+                }
+                context.DrawGeometry(Brushes.Black, null, geometry);
             }
 
             return true;

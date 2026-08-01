@@ -83,6 +83,39 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildBatsFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var batMotifs))
+        {
+            foreach (var motif in batMotifs)
+            {
+                var points = PageBorderArtVisualPlanner.BuildBatPolygon(motif with
+                {
+                    Xdip = frame.X + motif.Xdip,
+                    Ydip = frame.Y + motif.Ydip,
+                });
+                if (points.Count == 0)
+                    continue;
+
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(new Point(points[0].XDip, points[0].YDip), true, true);
+                    path.PolyLineTo(
+                        points.Skip(1).Select(point => new Point(point.XDip, point.YDip)).ToList(),
+                        true,
+                        false);
+                }
+                geometry.Freeze();
+                context.DrawGeometry(Brushes.Black, null, geometry);
+            }
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
                 border.ArtId,
                 border.WidthPt,
