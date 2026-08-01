@@ -86,6 +86,13 @@ static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityC
     var hasNativeFrame = scenario.RouteId != "screen-clip-overlay";
     var clientWidth = hasNativeFrame ? width - WpfNonClientWidth : width;
     var clientHeight = hasNativeFrame ? height - WpfNonClientHeight : height;
+    if (scenario.RouteId == "multilevel-list")
+    {
+        // The WPF RenderTargetBitmap retains one additional right-edge client pixel
+        // for this static prompt. Preserve that authority width without changing the
+        // shared native-frame compensation used by other routes.
+        clientWidth++;
+    }
     dialog.Width = clientWidth;
     dialog.Height = clientHeight;
     dialog.SizeToContent = SizeToContent.Manual;

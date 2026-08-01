@@ -15,8 +15,21 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle Chrome = new(AvaloniaCompactDialogChrome.WindowsUiFontFamily)
     {
         ControlHeight = 20,
+        TextBoxHeight = 18,
+        ComboBoxHeight = 22,
         ButtonHeight = 20,
+        ComboBoxBackgroundBrush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+            GradientStops =
+            [
+                new global::Avalonia.Media.GradientStop(Color.FromRgb(240, 240, 240), 0),
+                new global::Avalonia.Media.GradientStop(Color.FromRgb(229, 229, 229), 1),
+            ],
+        },
     };
+    private static readonly IBrush ComboBorderBrush = new SolidColorBrush(Color.FromRgb(172, 172, 172));
     private readonly ComboBox _levels;
     private readonly TextBox _level0Start;
     private readonly TextBox _level1Start;
@@ -61,14 +74,32 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         AddField(panel, "Level 1 number style:", _level0Format);
         AddField(panel, "Level 2 number style:", _level1Format);
         AddField(panel, "Level 3 number style:", _level2Format);
-        panel.Children.Add(AvaloniaCompactDialogChrome.CreateOkCancelRow(
+        var actionRow = AvaloniaCompactDialogChrome.CreateOkCancelRow(
             Accept,
             () => Close(null),
             buttonWidth: 72,
-            margin: new Thickness(0, 12, 0, 0),
-            style: Chrome));
+            margin: new Thickness(0, 11, 0, 0),
+            style: Chrome);
+        panel.Children.Add(actionRow);
         Content = panel;
-        Opened += (_, _) => _levels.Focus();
+        Opened += (_, _) =>
+        {
+            // FreeWDialogWindow installs the shared default chrome before this route can
+            // provide its WPF-sized control metrics. Reapply the route style after that
+            // inherited hook so the rendered templates keep the authority dimensions.
+            AvaloniaCompactDialogChrome.ApplyDescendantChrome(this, Chrome);
+            // TextBox templates can be attached after the inherited visual walk. Keep the
+            // route-owned controls at the authority height once their templates exist.
+            ApplyComboBoxAuthorityChrome(_levels);
+            AvaloniaCompactDialogChrome.ApplyTextBox(_level0Start, Chrome);
+            AvaloniaCompactDialogChrome.ApplyTextBox(_level1Start, Chrome);
+            ApplyComboBoxAuthorityChrome(_level0Format);
+            ApplyComboBoxAuthorityChrome(_level1Format);
+            ApplyComboBoxAuthorityChrome(_level2Format);
+            foreach (var button in actionRow.Children.OfType<Button>())
+                AvaloniaCompactDialogChrome.ApplyButton(button, Chrome, button.MinWidth, button.IsDefault);
+            _levels.Focus();
+        };
         KeyDown += (_, args) =>
         {
             if (args.Key != Key.Escape) return;
@@ -131,9 +162,9 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
         });
         control.HorizontalAlignment = HorizontalAlignment.Stretch;
         // Avalonia's text line metrics are taller than WPF's default TextBlock line box;
-        // this compact host margin preserves the WPF row rhythm and keeps the fixed
-        // authority-sized action row inside the client bounds.
-        control.Margin = new Thickness(0, 0, 0, 4);
+        // Keep WPF's twelve-pixel label-to-label rhythm after Avalonia's compact
+        // templates render the authority-specific control heights.
+        control.Margin = new Thickness(0, 0, 0, 8);
         panel.Children.Add(control);
     }
 
@@ -145,8 +176,14 @@ internal sealed class MultilevelListDialog : FreeWDialogWindow
             SelectedIndex = selectedIndex,
             MinWidth = minWidth,
         };
-        AvaloniaCompactDialogChrome.ApplyComboBox(combo, Chrome);
+        ApplyComboBoxAuthorityChrome(combo);
         return combo;
+    }
+
+    private static void ApplyComboBoxAuthorityChrome(ComboBox combo)
+    {
+        AvaloniaCompactDialogChrome.ApplyComboBox(combo, Chrome);
+        combo.BorderBrush = ComboBorderBrush;
     }
 
     private static TextBox TextBox(string text, double minWidth)

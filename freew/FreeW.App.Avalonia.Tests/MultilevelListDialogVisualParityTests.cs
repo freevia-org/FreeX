@@ -22,6 +22,8 @@ public sealed class MultilevelListDialogVisualParityTests
         await Session.Dispatch(() =>
         {
             var dialog = new MultilevelListDialog(MultiLevelListFormat.DecimalNumberFormats);
+            dialog.Show();
+            dialog.UpdateLayout();
             var controls = dialog.GetLogicalDescendants().OfType<Control>().ToArray();
             var combos = controls.OfType<ComboBox>().ToArray();
             var textBoxes = controls.OfType<TextBox>().ToArray();
@@ -35,12 +37,12 @@ public sealed class MultilevelListDialogVisualParityTests
             combos.Skip(1).Should().OnlyContain(combo => combo.MinWidth == 130);
             textBoxes.Should().HaveCount(2);
             textBoxes.Should().OnlyContain(textBox => textBox.MinWidth == 60);
-            combos.Should().OnlyContain(combo => combo.Margin == new Thickness(0, 0, 0, 4));
-            textBoxes.Should().OnlyContain(textBox => textBox.Margin == new Thickness(0, 0, 0, 4));
+            combos.Should().OnlyContain(combo => combo.Margin == new Thickness(0, 0, 0, 8));
+            textBoxes.Should().OnlyContain(textBox => textBox.Margin == new Thickness(0, 0, 0, 8));
             combos.Should().OnlyContain(combo => combo.HorizontalAlignment == HorizontalAlignment.Stretch);
             textBoxes.Should().OnlyContain(textBox => textBox.HorizontalAlignment == HorizontalAlignment.Stretch);
-            combos.Should().OnlyContain(combo => combo.Height == 20);
-            textBoxes.Should().OnlyContain(textBox => textBox.Height == 20);
+            combos.Should().OnlyContain(combo => combo.Height == 22);
+            textBoxes.Should().OnlyContain(textBox => textBox.Height == 18);
             buttons.Select(button => button.Content?.ToString()).Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
             buttons.Single(button => button.IsDefault).Content.Should().Be(ShellStrings.Current.Ok);
             buttons.Single(button => button.IsCancel).Content.Should().Be(ShellStrings.Current.Cancel);
@@ -49,7 +51,11 @@ public sealed class MultilevelListDialogVisualParityTests
                     ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok),
                     ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Cancel));
             actionRow.Spacing.Should().Be(8);
-            actionRow.Margin.Should().Be(new Thickness(0, 12, 0, 0));
+            actionRow.Margin.Should().Be(new Thickness(0, 11, 0, 0));
+            combos.Select(combo => combo.Bounds.Height).Should().Equal(22, 22, 22, 22);
+            textBoxes.Select(textBox => textBox.Bounds.Height).Should().Equal(18, 18);
+            buttons.Select(button => button.Bounds.Height).Should().Equal(20, 20);
+            dialog.Close();
         }, CancellationToken.None);
     }
 
@@ -92,5 +98,7 @@ public sealed class MultilevelListDialogVisualParityTests
 
         source.Should().Contain(
             "scenario.RouteId is \"font\" or \"paragraph\" or \"multilevel-list\" or \"paste-special\" or \"style\" or \"manage-styles\"");
+        source.Should().Contain("if (scenario.RouteId == \"multilevel-list\")");
+        source.Should().Contain("clientWidth++");
     }
 }
