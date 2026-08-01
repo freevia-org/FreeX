@@ -470,6 +470,7 @@ public static class FreeWRibbon
                         m.Item("freew.line-numbers-none", "None", "N");
                         m.Item("freew.line-numbers-continuous", "Continuous", "C");
                         m.Item("freew.line-numbers-restart-page", "Restart Each Page", "P");
+                        m.Item("freew.line-numbers-restart-section", "Restart Each Section", "S");
                         m.Item("freew.line-numbers-options", "Line Numbering Options...", "O");
                     });
                     // Hyphenation dropdown (Word's Layout > Page Setup > Hyphenation): None / Automatic /

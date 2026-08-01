@@ -135,7 +135,14 @@ internal static class PrintLayout
 
     private static bool NeedsSectionAwareRendering(TextDocument document) =>
         document.Sections.Any(section =>
-            !section.HeadersFooters.IsEmpty || PageGeometryDiffers(section.Page, document.Page));
+            !section.HeadersFooters.IsEmpty
+            || PageGeometryDiffers(section.Page, document.Page)
+            || LineNumberingDiffers(section.Page, document.Page));
+
+    private static bool LineNumberingDiffers(PageSettings left, PageSettings right) =>
+        left.LineNumberMode != right.LineNumberMode
+        || left.LineNumberStartAt != right.LineNumberStartAt
+        || left.LineNumberCountBy != right.LineNumberCountBy;
 
     private static bool PageGeometryDiffers(PageSettings left, PageSettings right) =>
         left.WidthPt != right.WidthPt

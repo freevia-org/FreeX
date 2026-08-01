@@ -2062,6 +2062,52 @@ public sealed class SetShapeTextColumnCountCommand : IPresentationCommand
     }
 }
 
+/// <summary>Changes the DrawingML text-frame column spacing of one shape.</summary>
+public sealed class SetShapeTextColumnSpacingCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly long _newSpacingEmu;
+    private long _oldSpacingEmu;
+
+    public SetShapeTextColumnSpacingCommand(int slideIndex, uint shapeId, long newSpacingEmu)
+    {
+        if (newSpacingEmu < 0)
+            throw new ArgumentOutOfRangeException(nameof(newSpacingEmu), "Text column spacing cannot be negative.");
+
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newSpacingEmu = newSpacingEmu;
+    }
+
+    public string Label => "Set Text Column Spacing";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        return shape?.TextBody is { } body && body.ColumnSpacingEmu != _newSpacingEmu;
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.TextBody is not { } body)
+            return;
+
+        _oldSpacingEmu = body.ColumnSpacingEmu;
+        body.ColumnSpacingEmu = _newSpacingEmu;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var shape = ShapeHelper.Find(presentation, _slideIndex, _shapeId);
+        if (shape?.TextBody is not { } body)
+            return;
+
+        body.ColumnSpacingEmu = _oldSpacingEmu;
+    }
+}
+
 /// <summary>
 /// Base for run-format toggle commands that operate over a single run identified by
 /// (slideIndex, shapeId, paragraphIndex, runIndex).

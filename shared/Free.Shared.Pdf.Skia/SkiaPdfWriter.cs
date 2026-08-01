@@ -104,6 +104,7 @@ public static class SkiaPdfWriter
                 var canvas = pdf.BeginPage((float)page.WidthPoints, (float)page.HeightPoints);
                 canvas.Clear(SKColors.White);
                 RenderPage(canvas, page, typefaces, textRenderer);
+                AddNamedDestinations(canvas, page);
                 AddLinkAnnotations(canvas, page);
                 pdf.EndPage();
                 pageCount++;
@@ -113,6 +114,27 @@ public static class SkiaPdfWriter
         }
 
         return pageCount;
+    }
+
+    private static void AddNamedDestinations(SKCanvas canvas, PdfContentPage page)
+    {
+        if (page.NamedDestinations is not { Count: > 0 })
+            return;
+
+        foreach (var destination in page.NamedDestinations)
+        {
+            var name = destination.Name?.Trim();
+            if (string.IsNullOrEmpty(name)
+                || !double.IsFinite(destination.X)
+                || !double.IsFinite(destination.Y))
+                continue;
+
+            canvas.DrawNamedDestinationAnnotation(
+                new SKPoint(
+                    (float)Math.Clamp(destination.X, 0, page.WidthPoints),
+                    (float)Math.Clamp(destination.Y, 0, page.HeightPoints)),
+                name);
+        }
     }
 
     private static void AddLinkAnnotations(SKCanvas canvas, PdfContentPage page)
@@ -131,7 +153,8 @@ public static class SkiaPdfWriter
                 continue;
 
             var uri = overlay.Uri?.Trim();
-            if (string.IsNullOrEmpty(uri))
+            var destinationName = overlay.DestinationName?.Trim();
+            if (string.IsNullOrEmpty(uri) && string.IsNullOrEmpty(destinationName))
                 continue;
 
             var left = Math.Clamp(overlay.X, 0, page.WidthPoints);
@@ -141,9 +164,11 @@ public static class SkiaPdfWriter
             if (right <= left || bottom <= top)
                 continue;
 
-            canvas.DrawUrlAnnotation(
-                new SKRect((float)left, (float)top, (float)right, (float)bottom),
-                uri);
+            var rect = new SKRect((float)left, (float)top, (float)right, (float)bottom);
+            if (!string.IsNullOrEmpty(uri))
+                canvas.DrawUrlAnnotation(rect, uri);
+            else
+                canvas.DrawLinkDestinationAnnotation(rect, destinationName!);
         }
     }
 

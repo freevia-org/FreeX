@@ -1019,6 +1019,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.BlockCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.NonDirectionalCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.List2, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.StackedList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, SmartArtFamily.List)]

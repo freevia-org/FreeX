@@ -8,7 +8,10 @@ public sealed class PageLayoutOptionsDialogPlannerTests
     [Fact]
     public void LineNumbering_BuildInitialState_UsesLabelsIndexMappingAndDefaults()
     {
-        LineNumberOptionsDialogPlanner.ModeLabels.Should().Equal("Continuous", "Restart Each Page");
+        LineNumberOptionsDialogPlanner.ModeLabels.Should().Equal(
+            "Continuous",
+            "Restart Each Page",
+            "Restart Each Section");
 
         var state = LineNumberOptionsDialogPlanner.BuildInitialState(
             5,
@@ -20,7 +23,9 @@ public sealed class PageLayoutOptionsDialogPlannerTests
         state.CountByText.Should().Be("2");
         state.ModeIndex.Should().Be(1);
         LineNumberOptionsDialogPlanner.ModeIndexFor(LineNumberMode.Continuous).Should().Be(0);
+        LineNumberOptionsDialogPlanner.ModeIndexFor(LineNumberMode.RestartEachSection).Should().Be(2);
         LineNumberOptionsDialogPlanner.ModeIndexFor(LineNumberMode.None).Should().Be(0);
+        LineNumberOptionsDialogPlanner.ModeForIndex(2).Should().Be(LineNumberMode.RestartEachSection);
         LineNumberOptionsDialogPlanner.ModeForIndex(-1).Should().Be(LineNumberMode.Continuous);
         LineNumberOptionsDialogPlanner.ModeForIndex(99).Should().Be(LineNumberMode.Continuous);
     }

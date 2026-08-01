@@ -37,13 +37,23 @@ public sealed record PdfTextOverlay(
 
 /// <summary>
 /// A clickable link region in the page's top-left, y-down coordinate space (points), targeting an
-/// external URI. Shared raster and draw-op pages both use this geometry contract. Internal
-/// cross-page destinations remain app-specific and are not modeled here.
+/// external URI or a named destination. Shared raster and draw-op pages both use this geometry
+/// contract. Writers that support internal navigation resolve <see cref="DestinationName"/> against
+/// the document's named destinations.
 /// </summary>
 public sealed record PdfLinkOverlay(
     double X,
     double Y,
     double Width,
     double Height,
-    string Uri,
-    string? Tooltip = null);
+    string? Uri,
+    string? Tooltip = null,
+    string? DestinationName = null);
+
+/// <summary>
+/// A named PDF navigation target in a page's top-left, y-down coordinate space (points).
+/// </summary>
+public sealed record PdfNamedDestination(
+    string Name,
+    double X,
+    double Y);

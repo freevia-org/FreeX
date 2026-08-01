@@ -51,9 +51,15 @@ public static class DocxReader
             // explicit package size read below still overrides this import fallback.
             DefaultRun = RunFormatting.Default with { FontFamily = "Calibri", FontSizePt = 12 }
         };
-        OpcDocumentProperties.ReadCoreProperties(
-            archive,
-            document.Properties,
+        var corePropertiesXml = LoadPart(archive, OpcPackageProperties.CorePropertiesZipEntry);
+        if (corePropertiesXml?.Root is { } corePropertiesRoot
+            && corePropertiesRoot.Elements().Any(element =>
+                !OpcDocumentProperties.ModeledCorePropertyElementNames.Contains(element.Name)))
+        {
+            document.Preserved.OriginalCoreProperties = new XElement(corePropertiesRoot);
+        }
+        document.Properties.ApplyCoreProperties(
+            OpcDocumentProperties.ReadCoreProperties(corePropertiesXml),
             emptyStringsAsNull: true);
         ReadCustomProperties(archive, document);
         ReadStyles(archive, document);
@@ -6006,17 +6012,20 @@ public static class DocxReader
 
     /// <summary>
     /// Reads line numbering (w:lnNumType) into <paramref name="page"/>. Absent leaves the default
-    /// (<see cref="LineNumberMode.None"/>). @w:restart="newPage" maps to RestartEachPage; anything else
-    /// (including the default "continuous") maps to Continuous. @w:countBy sets the interval (min 1).
+    /// (<see cref="LineNumberMode.None"/>). @w:restart maps newPage/newSection to their corresponding
+    /// restart modes; anything else (including the default "continuous") maps to Continuous.
     /// </summary>
     private static void ReadLineNumbering(XElement? lnNumType, PageSettings page)
     {
         if (lnNumType is null)
             return;
 
-        page.LineNumberMode = lnNumType.Attribute(W + "restart")?.Value == "newPage"
-            ? LineNumberMode.RestartEachPage
-            : LineNumberMode.Continuous;
+        page.LineNumberMode = lnNumType.Attribute(W + "restart")?.Value switch
+        {
+            "newPage" => LineNumberMode.RestartEachPage,
+            "newSection" => LineNumberMode.RestartEachSection,
+            _ => LineNumberMode.Continuous,
+        };
 
         if (int.TryParse(lnNumType.Attribute(W + "countBy")?.Value, out var countBy) && countBy >= 1)
             page.LineNumberCountBy = countBy;

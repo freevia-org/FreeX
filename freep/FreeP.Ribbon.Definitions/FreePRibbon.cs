@@ -219,6 +219,13 @@ public static class FreePRibbon
             KeyTip = FreePRibbonText.TextColumnsKeyTip,
             Width = 96
         });
+        group.ComboBox("freep.text-column-spacing", FreePRibbonText.TextColumnSpacingLabel, control => control with
+        {
+            Items = FreePRibbonDefinitionData.TextColumnSpacingOptions,
+            Icon = new RibbonCommandIcon(RibbonCommandIconKind.TextColumns),
+            KeyTip = FreePRibbonText.TextColumnSpacingKeyTip,
+            Width = 112
+        });
         group.ComboBox("freep.table-cell-fill", FreePRibbonText.TableCellFillLabel, control => control with
         {
             Items = FreePRibbonDefinitionData.TableCellFillColors,
@@ -868,6 +875,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.BasicListLayoutCommandId,
                 FreePRibbonText.SmartArtBasicListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtBasicListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.List2LayoutCommandId,
+                FreePRibbonText.SmartArtList2Command.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtList2Command.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
                 FreePRibbonText.SmartArtStackedListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtStackedListCommand.KeyTip);

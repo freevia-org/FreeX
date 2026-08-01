@@ -6113,6 +6113,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.BlockCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicListLayoutCommandId,
+                SmartArtAuthoringPlanner.List2LayoutCommandId,
                 SmartArtAuthoringPlanner.BasicMatrixLayoutCommandId,
                 SmartArtAuthoringPlanner.TitledMatrixLayoutCommandId,
                 SmartArtAuthoringPlanner.GridMatrixLayoutCommandId,

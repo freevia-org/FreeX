@@ -707,6 +707,34 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void LineNumbers_RestartEachSection_RoundTripsExactRestartToken()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("numbered lines"));
+        doc.Page.LineNumberMode = LineNumberMode.RestartEachSection;
+        doc.Page.LineNumberStartAt = 4;
+        doc.Page.LineNumberCountBy = 2;
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        using (var reader = new StreamReader(zip.GetEntry("word/document.xml")!.Open()))
+        {
+            var documentXml = reader.ReadToEnd();
+            documentXml.Should().Contain("w:restart=\"newSection\"");
+            documentXml.Should().Contain("w:start=\"4\"");
+        }
+
+        stream.Position = 0;
+        var page = DocxReader.Read(stream).Page;
+        page.LineNumberMode.Should().Be(LineNumberMode.RestartEachSection);
+        page.LineNumberStartAt.Should().Be(4);
+        page.LineNumberCountBy.Should().Be(2);
+    }
+
+    [Fact]
     public void DefaultPage_HasNoLineNumbering()
     {
         var doc = new TextDocument();
@@ -1512,6 +1540,85 @@ public class DocxRoundTripTests
         properties.ContentStatus.Should().Be("Draft");
         properties.Language.Should().Be("en-GB");
         properties.Version.Should().Be("1.0");
+    }
+
+    [Fact]
+    public void CoreProperties_PreserveUnmodeledWordPropertiesAcrossEditedAndSecondSave()
+    {
+        XNamespace cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+        XNamespace dc = "http://purl.org/dc/elements/1.1/";
+
+        var sourceDocument = new TextDocument();
+        sourceDocument.Blocks.Add(new Paragraph("Body"));
+        sourceDocument.Properties.Title = "Original title";
+
+        using var sourceStream = new MemoryStream();
+        DocxWriter.Write(sourceDocument, sourceStream);
+        using (var archive = new ZipArchive(sourceStream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = archive.GetEntry("docProps/core.xml")!;
+            XDocument core;
+            using (var reader = entry.Open())
+                core = XDocument.Load(reader);
+
+            core.Root!.Add(
+                new XElement(cp + "lastPrinted", "2026-07-31T21:14:15Z"),
+                new XElement(cp + "revision", "42"),
+                new XElement(dc + "identifier", "urn:freew:source:17"),
+                new XElement(cp + "contentType", "application/vnd.example.review"));
+            entry.Delete();
+            var replacement = archive.CreateEntry("docProps/core.xml");
+            using var writer = replacement.Open();
+            core.Save(writer);
+        }
+
+        var sourceBytes = sourceStream.ToArray();
+        var loaded = DocxReader.Read(new MemoryStream(sourceBytes));
+        loaded.Properties.Title = "Edited title";
+
+        static byte[] Save(TextDocument document)
+        {
+            using var stream = new MemoryStream();
+            DocxWriter.Write(document, stream);
+            return stream.ToArray();
+        }
+
+        static XDocument ReadCore(byte[] package)
+        {
+            using var stream = new MemoryStream(package);
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+            using var entry = archive.GetEntry("docProps/core.xml")!.Open();
+            return XDocument.Load(entry);
+        }
+
+        var firstSaveBytes = Save(loaded);
+        var firstSave = ReadCore(firstSaveBytes);
+        firstSave.Root!.Element(dc + "title")!.Value.Should().Be("Edited title");
+
+        var unmodeledNames = new[]
+        {
+            cp + "lastPrinted",
+            cp + "revision",
+            dc + "identifier",
+            cp + "contentType",
+        };
+        var sourceCore = ReadCore(sourceBytes);
+        foreach (var name in unmodeledNames)
+        {
+            var expected = sourceCore.Root!.Elements(name).Should().ContainSingle().Subject;
+            var actual = firstSave.Root!.Elements(name).Should().ContainSingle().Subject;
+            XNode.DeepEquals(actual, expected).Should().BeTrue($"{name} must retain its exact source value");
+        }
+
+        var reopened = DocxReader.Read(new MemoryStream(firstSaveBytes));
+        var secondSave = ReadCore(Save(reopened));
+        secondSave.Root!.Element(dc + "title")!.Value.Should().Be("Edited title");
+        foreach (var name in unmodeledNames)
+        {
+            var first = firstSave.Root!.Elements(name).Should().ContainSingle().Subject;
+            var second = secondSave.Root!.Elements(name).Should().ContainSingle().Subject;
+            XNode.DeepEquals(second, first).Should().BeTrue($"{name} must remain stable on a second save");
+        }
     }
 
     [Fact]

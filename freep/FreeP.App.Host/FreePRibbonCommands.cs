@@ -302,6 +302,8 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicBlockList)));
         registry.Register(SmartArtAuthoringPlanner.BasicListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.BasicList)));
+        registry.Register(SmartArtAuthoringPlanner.List2LayoutCommandId,
+            new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.List2)));
         registry.Register(SmartArtAuthoringPlanner.StackedListLayoutCommandId,
             new ActionRibbonCommand(() => onSmartArtLayoutPreset?.Invoke(SmartArtLayoutPreset.StackedList)));
         registry.Register(SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,
@@ -630,6 +632,17 @@ internal static class FreePRibbonCommands
                     return;
 
                 editor.SetTextColumnCountOnSelection(count);
+            }));
+
+        registry.Register("freep.text-column-spacing",
+            new ContextRibbonCommand(ctx =>
+            {
+                if (!ctx.Parameters.TryGetValue(RibbonCommandContext.SelectedValueKey, out var value) ||
+                    value is not string selection ||
+                    !TextColumnSpacingOptionParser.TryParse(selection, out var spacingEmu))
+                    return;
+
+                editor.SetTextColumnSpacingOnSelection(spacingEmu);
             }));
 
         registry.Register("freep.table-cell-fill",

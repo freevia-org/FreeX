@@ -55,6 +55,8 @@ internal static class FreePRibbonText
     public static string TextDirectionKeyTip => Get("Ribbon_Command_TextDirection_KeyTip");
     public static string TextColumnsLabel => Get("Ribbon_Command_TextColumns_Label");
     public static string TextColumnsKeyTip => Get("Ribbon_Command_TextColumns_KeyTip");
+    public static string TextColumnSpacingLabel => Get("Ribbon_Command_TextColumnSpacing_Label");
+    public static string TextColumnSpacingKeyTip => Get("Ribbon_Command_TextColumnSpacing_KeyTip");
     public static string TableCellFillLabel => Get("Ribbon_Command_TableCellFill_Label");
     public static string TableCellFillKeyTip => Get("Ribbon_Command_TableCellFill_KeyTip");
     public static string TableCellAnchorLabel => Get("Ribbon_Command_TableCellAnchor_Label");
@@ -424,6 +426,7 @@ internal static class FreePRibbonText
     public static RibbonText SmartArtBlockCycleCommand { get; } = new("Ribbon_Command_SmartArtBlockCycle_Label", "Ribbon_Command_SmartArtBlockCycle_KeyTip");
     public static RibbonText SmartArtNonDirectionalCycleCommand { get; } = new("Ribbon_Command_SmartArtNonDirectionalCycle_Label", "Ribbon_Command_SmartArtNonDirectionalCycle_KeyTip");
     public static RibbonText SmartArtBasicListCommand { get; } = new("Ribbon_Command_SmartArtBasicList_Label", "Ribbon_Command_SmartArtBasicList_KeyTip");
+    public static RibbonText SmartArtList2Command { get; } = new("Ribbon_Command_SmartArtList2_Label", "Ribbon_Command_SmartArtList2_KeyTip");
     public static RibbonText SmartArtBasicBlockListCommand { get; } = new("Ribbon_Command_SmartArtBasicBlockList_Label", "Ribbon_Command_SmartArtBasicBlockList_KeyTip");
     public static RibbonText SmartArtStackedListCommand { get; } = new("Ribbon_Command_SmartArtStackedList_Label", "Ribbon_Command_SmartArtStackedList_KeyTip");
     public static RibbonText SmartArtDescendingBlockListCommand { get; } = new("Ribbon_Command_SmartArtDescendingBlockList_Label", "Ribbon_Command_SmartArtDescendingBlockList_KeyTip");

@@ -231,6 +231,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.BlockCycleLayoutCommandId] = SmartArtLayoutPreset.BlockCycle,
             [SmartArtAuthoringPlanner.NonDirectionalCycleLayoutCommandId] = SmartArtLayoutPreset.NonDirectionalCycle,
             [SmartArtAuthoringPlanner.BasicListLayoutCommandId] = SmartArtLayoutPreset.BasicList,
+            [SmartArtAuthoringPlanner.List2LayoutCommandId] = SmartArtLayoutPreset.List2,
             [SmartArtAuthoringPlanner.BasicRadialLayoutCommandId] = SmartArtLayoutPreset.BasicRadial,
             [SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId] = SmartArtLayoutPreset.InvertedPyramid,
             [SmartArtAuthoringPlanner.RadialListLayoutCommandId] = SmartArtLayoutPreset.RadialList,
@@ -988,6 +989,22 @@ public class RibbonEditorCompleteness5BTests
         Assert.Equal(3, shape.TextBody!.ColumnCount);
         ed.Undo();
         Assert.Equal(1, shape.TextBody.ColumnCount);
+    }
+
+    [Fact]
+    public void Cmd_TextColumnSpacing_WithSelectedValue_RoutesToShapeAndUndo()
+    {
+        var (ed, pres) = MakeSession();
+        ed.InsertDefaultTextBox();
+        var shape = pres.Slides[0].Shapes.Last();
+        ed.Select(shape.Id);
+        var reg = MakeRegistry(ed);
+
+        Exec(reg, "freep.text-column-spacing", RibbonCommandContext.ForSelectedValue("12 pt"));
+
+        Assert.Equal(152_400, shape.TextBody!.ColumnSpacingEmu);
+        ed.Undo();
+        Assert.Equal(0, shape.TextBody.ColumnSpacingEmu);
     }
 
     [Fact]

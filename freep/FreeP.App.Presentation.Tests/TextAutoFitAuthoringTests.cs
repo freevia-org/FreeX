@@ -41,4 +41,23 @@ public sealed class TextAutoFitAuthoringTests
     {
         TextColumnCountOptionParser.TryParse(option, out _).Should().BeFalse();
     }
+
+    [Theory]
+    [InlineData("0 pt", 0L)]
+    [InlineData("4 pt", 50_800L)]
+    [InlineData("12", 152_400L)]
+    public void TextColumnSpacingParser_MapsPointChoices(string option, long expectedEmu)
+    {
+        TextColumnSpacingOptionParser.TryParse(option, out var actual).Should().BeTrue();
+        actual.Should().Be(expectedEmu);
+    }
+
+    [Theory]
+    [InlineData("-1 pt")]
+    [InlineData("145 pt")]
+    [InlineData("automatic")]
+    public void TextColumnSpacingParser_RejectsInvalidChoices(string option)
+    {
+        TextColumnSpacingOptionParser.TryParse(option, out _).Should().BeFalse();
+    }
 }

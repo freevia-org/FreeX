@@ -65,7 +65,8 @@ public static class PortablePdfWriter
                 Content: RenderContentStream(page.Ops, imageResources.ByOp, opacityResources.ByOpacity, patternResources),
                 Width: page.WidthPoints,
                 Height: page.HeightPoints,
-                Links: BuildLinkAnnotations(page)))
+                Links: BuildLinkAnnotations(page),
+                Destinations: BuildNamedDestinations(page)))
             .ToArray();
         WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, patternResources.Resources, headerComment);
     }
@@ -227,7 +228,7 @@ public static class PortablePdfWriter
 
     private static void WritePdf(
         Stream stream,
-        IReadOnlyList<(string Content, double Width, double Height, IReadOnlyList<PdfLinkAnnotation> Links)> pages,
+        IReadOnlyList<(string Content, double Width, double Height, IReadOnlyList<PdfLinkAnnotation> Links, IReadOnlyList<PdfNamedDestination> Destinations)> pages,
         IReadOnlyList<(string ResourceName, string BaseFont)> fontResources,
         IReadOnlyList<PdfImageResource> imageResources,
         IReadOnlyList<PdfOpacityResource> opacityResources,
@@ -239,12 +240,32 @@ public static class PortablePdfWriter
         var pageObjectIds = Enumerable.Range(0, pages.Count)
             .Select(index => firstPageObjectId + (index * 2))
             .ToArray();
-        var nextAnnotationObjectId = firstPageObjectId + (pages.Count * 2);
-        var annotationObjectIdsByPage = pages
-            .Select(page =>
+        var destinations = new Dictionary<string, PdfResolvedDestination>(StringComparer.Ordinal);
+        for (var pageIndex = 0; pageIndex < pages.Count; pageIndex++)
+        {
+            foreach (var destination in pages[pageIndex].Destinations)
             {
-                var ids = Enumerable.Range(nextAnnotationObjectId, page.Links.Count).ToArray();
-                nextAnnotationObjectId += page.Links.Count;
+                if (!destinations.ContainsKey(destination.Name))
+                {
+                    destinations[destination.Name] = new PdfResolvedDestination(
+                        pageObjectIds[pageIndex],
+                        destination.X,
+                        pages[pageIndex].Height - destination.Y);
+                }
+            }
+        }
+        var validLinksByPage = pages
+            .Select(page => page.Links
+                .Where(link => !string.IsNullOrWhiteSpace(link.Uri)
+                    || (link.DestinationName is { Length: > 0 } name && destinations.ContainsKey(name)))
+                .ToArray())
+            .ToArray();
+        var nextAnnotationObjectId = firstPageObjectId + (pages.Count * 2);
+        var annotationObjectIdsByPage = validLinksByPage
+            .Select(links =>
+            {
+                var ids = Enumerable.Range(nextAnnotationObjectId, links.Length).ToArray();
+                nextAnnotationObjectId += links.Length;
                 return ids;
             })
             .ToArray();
@@ -299,15 +320,20 @@ public static class PortablePdfWriter
             objects.Add(PdfObject.Ascii($"<< /Length {PdfEncoding.GetByteCount(pageStream)} >>\nstream\n{pageStream}endstream"));
         }
 
-        foreach (var page in pages)
-        foreach (var link in page.Links)
+        foreach (var links in validLinksByPage)
+        foreach (var link in links)
         {
+            var target = !string.IsNullOrWhiteSpace(link.Uri)
+                ? $"/A << /S /URI /URI {EncodeTextOperand(link.Uri!)} >>"
+                : destinations.TryGetValue(link.DestinationName!, out var destination)
+                    ? $"/Dest [{destination.PageObjectId} 0 R /XYZ {FormatNumber(destination.X)} {FormatNumber(destination.Top)} null]"
+                    : string.Empty;
             objects.Add(PdfObject.Ascii(
                 $"<< /Type /Annot /Subtype /Link " +
                 $"/Rect [{FormatNumber(link.Left)} {FormatNumber(link.Bottom)} {FormatNumber(link.Right)} {FormatNumber(link.Top)}] " +
                 $"/H /I /F 4 /Border [0 0 0] " +
-                $"/Contents {EncodeTextOperand(link.Tooltip ?? link.Uri)} " +
-                $"/A << /S /URI /URI {EncodeTextOperand(link.Uri)} >> >>"));
+                $"/Contents {EncodeTextOperand(link.Tooltip ?? link.Uri ?? link.DestinationName ?? string.Empty)} " +
+                $"{target} >>"));
         }
 
         WriteAscii(stream, $"%PDF-1.7\n% {headerComment}\n");
@@ -348,7 +374,8 @@ public static class PortablePdfWriter
                 continue;
 
             var uri = overlay.Uri?.Trim();
-            if (string.IsNullOrEmpty(uri))
+            var destinationName = overlay.DestinationName?.Trim();
+            if (string.IsNullOrEmpty(uri) && string.IsNullOrEmpty(destinationName))
                 continue;
 
             var left = Math.Clamp(overlay.X, 0, page.WidthPoints);
@@ -358,10 +385,28 @@ public static class PortablePdfWriter
             if (right <= left || top <= bottom)
                 continue;
 
-            links.Add(new PdfLinkAnnotation(left, bottom, right, top, uri, overlay.Tooltip));
+            links.Add(new PdfLinkAnnotation(left, bottom, right, top, uri, overlay.Tooltip, destinationName));
         }
 
         return links;
+    }
+
+    private static IReadOnlyList<PdfNamedDestination> BuildNamedDestinations(PdfContentPage page)
+    {
+        if (page.NamedDestinations is not { Count: > 0 })
+            return [];
+
+        return page.NamedDestinations
+            .Where(destination => !string.IsNullOrWhiteSpace(destination.Name)
+                && double.IsFinite(destination.X)
+                && double.IsFinite(destination.Y))
+            .Select(destination => destination with
+            {
+                Name = destination.Name.Trim(),
+                X = Math.Clamp(destination.X, 0, page.WidthPoints),
+                Y = Math.Clamp(destination.Y, 0, page.HeightPoints),
+            })
+            .ToArray();
     }
 
     private static IReadOnlyList<(string ResourceName, string BaseFont)> BuildFontResources(PdfContentDocument document)
@@ -2162,8 +2207,11 @@ public static class PortablePdfWriter
         double Bottom,
         double Right,
         double Top,
-        string Uri,
-        string? Tooltip);
+        string? Uri,
+        string? Tooltip,
+        string? DestinationName);
+
+    private sealed record PdfResolvedDestination(int PageObjectId, double X, double Top);
 
     private sealed record PdfPatternResource(
         string ResourceName,

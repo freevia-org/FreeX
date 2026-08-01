@@ -17052,12 +17052,10 @@ public sealed class DocumentView : RichTextBox
             base.OnRender(drawingContext);
 
             var page = _view._model.Page;
-            if (page.LineNumberMode == LineNumberMode.None || _view.Document is not { } doc)
+            var sections = _view._model.Sections;
+            if (sections.All(section => section.Page.LineNumberMode == LineNumberMode.None)
+                || _view.Document is not { } doc)
                 return;
-
-            var countBy = Math.Max(1, page.LineNumberCountBy);
-            var startAt = Math.Max(1, page.LineNumberStartAt);
-            var restartEachPage = page.LineNumberMode == LineNumberMode.RestartEachPage;
 
             // Page geometry used to (a) place numbers in the left margin and (b) approximate page resets.
             var (_, contentHeight) = PageLayout.ContentAreaDip(page);
@@ -17074,7 +17072,10 @@ public sealed class DocumentView : RichTextBox
             drawingContext.PushClip(new RectangleGeometry(bounds));
             try
             {
+                var laidOutLines = new List<(Rect Rect, LineNumberVisualSourceLine Source)>();
                 var line = doc.ContentStart;
+                System.Windows.Documents.Paragraph? previousParagraph = null;
+                var sectionIndex = 0;
                 for (var lineIndex = 0; lineIndex < MaxLines; lineIndex++)
                 {
                     Rect rect;
@@ -17088,29 +17089,23 @@ public sealed class DocumentView : RichTextBox
                         return;
                     }
 
-                    // The 1-based number for this line: continuous counts from the top; RestartEachPage
-                    // resets per approximate printed page (which page this line's Y falls in).
-                    int lineNumber;
-                    if (restartEachPage && contentHeight > 0)
+                    var paragraph = line.Paragraph;
+                    if (!ReferenceEquals(paragraph, previousParagraph))
                     {
-                        var pageIndex = (int)Math.Floor((rect.Top - topY) / contentHeight);
-                        var pageTop = topY + pageIndex * contentHeight;
-                        var withinPage = (int)Math.Round((rect.Top - pageTop) / Math.Max(1, rect.Height));
-                        lineNumber = startAt + withinPage;
-                    }
-                    else
-                    {
-                        lineNumber = startAt + lineIndex;
+                        if (previousParagraph?.Tag is ParagraphTag { SectionBreak: not null })
+                            sectionIndex++;
+                        previousParagraph = paragraph;
                     }
 
-                    // Word suppresses the glyph for marked paragraphs but the lines still increment the
-                    // document sequence, so calculate lineNumber before this visibility check.
-                    var suppressNumber = line.Paragraph?.Tag is ParagraphTag { SuppressLineNumbers: true };
-                    if ((lineNumber - startAt) % countBy == 0 && !suppressNumber && !rect.IsEmpty
-                        && rect.Bottom >= bounds.Top && rect.Top <= bounds.Bottom)
-                    {
-                        DrawNumber(drawingContext, lineNumber, rect, gutterRight, pixelsPerDip);
-                    }
+                    var pageIndex = contentHeight > 0
+                        ? Math.Max(0, (int)Math.Floor((rect.Top - topY) / contentHeight))
+                        : 0;
+                    laidOutLines.Add((
+                        rect,
+                        new LineNumberVisualSourceLine(
+                            pageIndex,
+                            paragraph?.Tag is ParagraphTag { SuppressLineNumbers: true },
+                            Math.Min(sectionIndex, sections.Count - 1))));
 
                     var next = line.GetLineStartPosition(1);
                     if (next is null || next.CompareTo(line) <= 0)
@@ -17121,6 +17116,21 @@ public sealed class DocumentView : RichTextBox
                     // global count, but there's nothing more to paint on screen).
                     if (rect.Top > bounds.Bottom)
                         break;
+                }
+
+                var plans = LineNumberVisualPlanner.Build(
+                    laidOutLines.Select(item => item.Source).ToList(),
+                    sections.Select(section => new LineNumberVisualSectionSettings(
+                        section.Page.LineNumberMode,
+                        section.Page.LineNumberStartAt,
+                        section.Page.LineNumberCountBy)).ToList());
+                for (var index = 0; index < plans.Count; index++)
+                {
+                    var plan = plans[index];
+                    var rect = laidOutLines[index].Rect;
+                    if (plan.IsVisible && !rect.IsEmpty
+                        && rect.Bottom >= bounds.Top && rect.Top <= bounds.Bottom)
+                        DrawNumber(drawingContext, plan.Number, rect, gutterRight, pixelsPerDip);
                 }
             }
             finally

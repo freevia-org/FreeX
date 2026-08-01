@@ -245,9 +245,7 @@ public static class DocxWriter
         WritePart(
             archive,
             OpcPackageProperties.CorePropertiesZipEntry,
-            OpcDocumentProperties.BuildCorePropertiesDocument(
-                document.Properties,
-                includeDcmiTypeNamespace: true));
+            BuildCoreProperties(document));
         if (hasCustomProps)
             WritePart(archive, OpcPackageProperties.CustomPropertiesZipEntry, BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
@@ -357,6 +355,26 @@ public static class DocxWriter
         // round-trips. Authored-from-scratch documents have none, so nothing extra is written.
         foreach (var part in preservedParts)
             WriteBinaryPart(archive, part.PartName.TrimStart('/'), part.Bytes);
+    }
+
+    private static XDocument BuildCoreProperties(TextDocument document)
+    {
+        var result = OpcDocumentProperties.BuildCorePropertiesDocument(
+            document.Properties,
+            includeDcmiTypeNamespace: true);
+        if (document.Preserved.OriginalCoreProperties is not { } sourceRoot
+            || result.Root is not { } targetRoot)
+        {
+            return result;
+        }
+
+        var unmodeledNames = sourceRoot.Elements()
+            .Select(element => element.Name)
+            .Where(name => !OpcDocumentProperties.ModeledCorePropertyElementNames.Contains(name))
+            .Distinct()
+            .ToArray();
+        OpcDocumentProperties.PreservePropertyElements(sourceRoot, targetRoot, unmodeledNames);
+        return result;
     }
 
     /// <summary>An inline image paired with its embedded/link relationship ids, media file name and drawing id.</summary>
@@ -7361,7 +7379,7 @@ public static class DocxWriter
             BuildPageBorders(page.PageBorder),
             // Line numbering (w:lnNumType): emitted only when enabled. Schema order places it after
             // pgBorders and before cols. @w:countBy is the numbering interval; @w:restart is
-            // "continuous" (across pages) or "newPage" (restart each page).
+            // "continuous" (across pages), "newPage" or "newSection".
             BuildLineNumbering(page),
             // Page numbering (w:pgNumType): emitted only when a section overrides Word's default
             // decimal/continue behaviour. Schema order places it after lnNumType and before cols.
@@ -7499,14 +7517,19 @@ public static class DocxWriter
     /// <summary>
     /// Builds the w:lnNumType element (line numbering in the page margin), or null when line numbering
     /// is off (<see cref="LineNumberMode.None"/>). @w:countBy is the interval (every Nth line numbered),
-    /// @w:restart maps the mode to "continuous" (across pages) or "newPage" (restart per page).
+    /// @w:restart maps the mode to "continuous", "newPage" or "newSection".
     /// </summary>
     private static XElement? BuildLineNumbering(PageSettings page)
     {
         if (page.LineNumberMode == LineNumberMode.None)
             return null;
 
-        var restart = page.LineNumberMode == LineNumberMode.RestartEachPage ? "newPage" : "continuous";
+        var restart = page.LineNumberMode switch
+        {
+            LineNumberMode.RestartEachPage => "newPage",
+            LineNumberMode.RestartEachSection => "newSection",
+            _ => "continuous",
+        };
         return new XElement(W + "lnNumType",
             new XAttribute(W + "countBy", Math.Max(1, page.LineNumberCountBy)),
             new XAttribute(W + "restart", restart),

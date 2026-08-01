@@ -59,6 +59,21 @@ public sealed class PageLayoutCommandPlannerTests
     }
 
     [Fact]
+    public void Line_number_quick_action_cycles_through_each_section_mode()
+    {
+        var page = new PageSettings();
+
+        PageLayoutCommandPlanner.CycleLineNumberMode(page);
+        page.LineNumberMode.Should().Be(LineNumberMode.Continuous);
+        PageLayoutCommandPlanner.CycleLineNumberMode(page);
+        page.LineNumberMode.Should().Be(LineNumberMode.RestartEachPage);
+        PageLayoutCommandPlanner.CycleLineNumberMode(page);
+        page.LineNumberMode.Should().Be(LineNumberMode.RestartEachSection);
+        PageLayoutCommandPlanner.CycleLineNumberMode(page);
+        page.LineNumberMode.Should().Be(LineNumberMode.None);
+    }
+
+    [Fact]
     public void Drop_cap_result_clamps_WPF_authoritative_values()
     {
         var result = DropCapOptionsDialogPlanner.BuildResult(

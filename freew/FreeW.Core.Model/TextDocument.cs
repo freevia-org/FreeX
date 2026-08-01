@@ -2686,13 +2686,15 @@ public enum PageBorderOffsetFrom
 /// How (and whether) lines are numbered in the page margin (w:sectPr/w:lnNumType).
 /// <see cref="None"/> emits no w:lnNumType (the default — existing documents are unaffected);
 /// <see cref="Continuous"/> numbers lines continuously across pages (w:restart="continuous");
-/// <see cref="RestartEachPage"/> restarts numbering at 1 on every page (w:restart="newPage").
+/// <see cref="RestartEachPage"/> restarts numbering at 1 on every page (w:restart="newPage");
+/// <see cref="RestartEachSection"/> restarts numbering at each section boundary (w:restart="newSection").
 /// </summary>
 public enum LineNumberMode
 {
     None,
     Continuous,
-    RestartEachPage
+    RestartEachPage,
+    RestartEachSection
 }
 
 /// <summary>
