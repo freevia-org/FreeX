@@ -5089,6 +5089,19 @@ public sealed partial class MainWindow : Window
         RefreshPaneAccessibilityMetadata();
     }
 
+    private void RefreshVisibleReviewCommentsPane()
+    {
+        if (_reviewCommentsPaneHost is null || _reviewCommentsPanePanel is null
+            || (!_reviewCommentsPaneRequested && !_reviewCommentsPaneHost.IsVisible))
+        {
+            return;
+        }
+
+        // The shared session refreshes the plan, while this host owns the realized
+        // controls. Keep an already-open pane attached to the active slide.
+        _reviewWorkflowSession.ShowReviewCommentsPane();
+    }
+
     internal PresentationCommentPanePlan ShowReviewCommentsPane()
     {
         _reviewCommentsPaneRequested = true;
@@ -8091,6 +8104,7 @@ public sealed partial class MainWindow : Window
         RefreshCanvas();
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();
+        RefreshVisibleReviewCommentsPane();
         RefreshVisibleAnimationPane();
         UpdateStatus();
     }
@@ -9019,6 +9033,7 @@ public sealed partial class MainWindow : Window
         RefreshCanvas();
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();
+        RefreshVisibleReviewCommentsPane();
         RefreshVisibleMediaCaptionPaneFromFields();
         RefreshVisibleAnimationPane();
         _selectionPane?.Refresh();

@@ -1484,6 +1484,52 @@ public sealed class MainWindowHeadlessTests
         idx.Should().Be(1, "SelectSlide(1) must move to the second slide");
     }
 
+    [Fact]
+    public async Task Open_comments_pane_rebinds_to_current_slide_after_selection_changes()
+    {
+        var firstRenderedCount = -1;
+        var secondRenderedCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "First reviewer",
+                Initials = "FR",
+                Text = "First slide comment",
+                Idx = 1,
+            });
+
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Comments.Add(new SlideComment
+            {
+                Author = "Second reviewer",
+                Initials = "SR",
+                Text = "Second slide comment one",
+                Idx = 2,
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Third reviewer",
+                Initials = "TR",
+                Text = "Second slide comment two",
+                Idx = 3,
+            });
+
+            window.Editor.SelectSlide(0);
+            window.ShowReviewCommentsPane();
+            firstRenderedCount = window.CommentsPaneItemsForAccessibilityTests.Count;
+
+            window.Editor.SelectSlide(1);
+            secondRenderedCount = window.CommentsPaneItemsForAccessibilityTests.Count;
+        });
+
+        if (!ran) return;
+        firstRenderedCount.Should().Be(1);
+        secondRenderedCount.Should().Be(2,
+            "an open comments pane must render the newly selected slide rather than retain the previous slide's cards");
+    }
+
     // ── Undo / Redo ─────────────────────────────────────────────────────────────
 
     [Fact]
