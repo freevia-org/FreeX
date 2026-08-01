@@ -11,22 +11,35 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
     {
         var runner = ReadRepoFile("tools", "Run-FreeXTextBoxInlineEditPhysicalLinuxValidation.ps1");
         var dockerfile = ReadRepoFile("tools", "LinuxInteractiveDocker", "Dockerfile");
+        var validator = ReadRepoFile(
+            "tools", "LinuxInteractiveDocker", "validate-freex-textbox-inline-edit-physical.py");
 
         runner.Should().Contain("Run-LinuxInteractiveDocker.ps1");
         runner.Should().Contain("FREEX_TEXTBOX_INLINE_PHYSICAL_RESULT=/work/freex-textbox-inline-physical.json");
         runner.Should().Contain("docker cp $probePath");
         runner.Should().Contain("docker cp $schemaPath \"${container}:/work/freex-textbox-inline-edit-physical.schema.json\"");
+        runner.Should().Contain("docker cp $validatorPath \"${container}:/work/validate-freex-textbox-inline-edit-physical.py\"");
         runner.Should().Contain("docker exec --env DISPLAY=:99");
-        runner.Should().Contain("docker exec $container python3 -c $schemaValidationCode");
-        runner.Should().Contain("from jsonschema import validate");
+        runner.Should().Contain(
+            "docker exec $container python3 /work/validate-freex-textbox-inline-edit-physical.py " +
+            "/work/freex-textbox-inline-edit-physical.schema.json " +
+            "/work/freex-textbox-inline-edit-physical/results.json");
         runner.Should().Contain("/work/freex-textbox-inline-edit-physical.schema.json");
         runner.Should().Contain("/work/freex-textbox-inline-edit-physical/results.json");
-        runner.Should().Contain("validate(instance=manifest, schema=schema)");
+        runner.Should().NotContain("python3 -c");
+        runner.Should().NotContain("$schemaValidationCode");
         runner.Should().Contain("$runnerPath -Action Stop -App FreeX -Port $Port");
         runner.Should().NotContain("build-server shutdown");
         dockerfile.Should().Contain("python3-jsonschema");
+        validator.Should().Contain("from jsonschema import validate");
+        validator.Should().Contain("schema = load_json(Path(arguments[1]))");
+        validator.Should().Contain("manifest = load_json(Path(arguments[2]))");
+        validator.Should().Contain("validate(instance=manifest, schema=schema)");
+        validator.Should().Contain("raise SystemExit(main(sys.argv))");
 
-        runner.IndexOf("validate(instance=manifest, schema=schema)", StringComparison.Ordinal)
+        runner.IndexOf(
+                "docker exec $container python3 /work/validate-freex-textbox-inline-edit-physical.py",
+                StringComparison.Ordinal)
             .Should().BeLessThan(runner.IndexOf(
                 "docker cp \"${container}:/work/freex-textbox-inline-edit-physical/results.json\"",
                 StringComparison.Ordinal));

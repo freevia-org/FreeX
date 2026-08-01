@@ -18,6 +18,7 @@ $sessionMetadata = Join-Path $resolvedOutput "session.json"
 $fixturePath = Join-Path $resolvedOutput "freex-wave93-textbox-fixture.xlsx"
 $probePath = Join-Path $repoRoot "tools/LinuxInteractiveDocker/run-freex-textbox-inline-edit-physical.sh"
 $schemaPath = Join-Path $repoRoot "tools/LinuxInteractiveDocker/freex-textbox-inline-edit-physical.schema.json"
+$validatorPath = Join-Path $repoRoot "tools/LinuxInteractiveDocker/validate-freex-textbox-inline-edit-physical.py"
 $runnerPath = Join-Path $repoRoot "tools/Run-LinuxInteractiveDocker.ps1"
 New-Item -ItemType Directory -Path $resolvedOutput -Force | Out-Null
 & (Join-Path $repoRoot "tools/LinuxInteractiveDocker/New-FreeXWave93TextBoxFixture.ps1") -OutputPath $fixturePath
@@ -39,22 +40,12 @@ try {
     $container = [string]$session.containerName
     & docker cp $probePath "${container}:/work/freex-textbox-inline-edit-physical.sh"
     & docker cp $schemaPath "${container}:/work/freex-textbox-inline-edit-physical.schema.json"
+    & docker cp $validatorPath "${container}:/work/validate-freex-textbox-inline-edit-physical.py"
     & docker exec $container chmod 0755 /work/freex-textbox-inline-edit-physical.sh
     & docker exec --env DISPLAY=:99 --env FREEX_TEXTBOX_DOCUMENT=/documents/$(Split-Path -Leaf $fixturePath) $container /work/freex-textbox-inline-edit-physical.sh /work/freex-textbox-inline-edit-physical
     if ($LASTEXITCODE -ne 0) { throw "The FreeX TextBox inline-edit physical probe failed." }
 
-    $schemaValidationCode = @'
-import json
-from jsonschema import validate
-
-with open("/work/freex-textbox-inline-edit-physical.schema.json", encoding="utf-8") as schema_file:
-    schema = json.load(schema_file)
-with open("/work/freex-textbox-inline-edit-physical/results.json", encoding="utf-8") as manifest_file:
-    manifest = json.load(manifest_file)
-validate(instance=manifest, schema=schema)
-print("FreeX TextBox inline-edit manifest JSON Schema validation passed")
-'@
-    & docker exec $container python3 -c $schemaValidationCode
+    & docker exec $container python3 /work/validate-freex-textbox-inline-edit-physical.py /work/freex-textbox-inline-edit-physical.schema.json /work/freex-textbox-inline-edit-physical/results.json
     if ($LASTEXITCODE -ne 0) { throw "The FreeX TextBox inline-edit physical manifest failed JSON Schema validation." }
 
     & docker cp "${container}:/work/freex-textbox-inline-edit-physical/results.json" (Join-Path $resolvedOutput "results.json")
