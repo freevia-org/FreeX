@@ -89,6 +89,50 @@ public sealed class ChartErrorBarsTests
         reopenedOptions.Trendline!.Forward.Should().Be(1.5);
         reopenedOptions.Trendline.Backward.Should().Be(0.5);
     }
+
+    [Fact]
+    public void ScatterTrendline_PackageRoundTripPreservesAuthoredSeriesSettings()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Scatter };
+        var series = new ChartSeries
+        {
+            Name = "Revenue",
+            Trendline = new ChartTrendline
+            {
+                Type = ChartTrendlineType.Polynomial,
+                PolynomialOrder = 3,
+                DisplayEquation = true,
+            },
+        };
+        series.XValues.AddRange(new double?[] { 1, 2, 3, 4 });
+        series.Values.AddRange(new double?[] { 10, 12, 14, 15 });
+        chart.Series.Add(series);
+
+        var presentation = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "Scatter trendline",
+            Kind = SlideShapeKind.Chart,
+            ExtentCxEmu = 5_000_000,
+            ExtentCyEmu = 3_000_000,
+            Chart = chart,
+        });
+        presentation.Slides.Add(slide);
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        var trendline = reopened.Series[0].Trendline;
+
+        trendline.Should().NotBeNull();
+        trendline!.Type.Should().Be(ChartTrendlineType.Polynomial);
+        trendline.PolynomialOrder.Should().Be(3);
+        trendline.DisplayEquation.Should().BeTrue();
+    }
+
     [Fact]
     public void SeriesOptionsPlanner_RoundTripsErrorBarOptionsInWorkingCopy()
     {
