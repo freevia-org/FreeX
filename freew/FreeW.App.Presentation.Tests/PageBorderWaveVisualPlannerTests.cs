@@ -40,4 +40,14 @@ public sealed class PageBorderWaveVisualPlannerTests
     {
         PageBorderVisibilityPlanner.ShouldRender(display, pageIndex).Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData(PageBorderZOrder.Front, PageBorderRenderLayer.InFrontOfText)]
+    [InlineData(PageBorderZOrder.Behind, PageBorderRenderLayer.BehindText)]
+    public void VisibilityPlanner_MapsWordZOrderToPhysicalLayer(
+        PageBorderZOrder zOrder,
+        PageBorderRenderLayer expected)
+    {
+        PageBorderVisibilityPlanner.LayerFor(zOrder).Should().Be(expected);
+    }
 }

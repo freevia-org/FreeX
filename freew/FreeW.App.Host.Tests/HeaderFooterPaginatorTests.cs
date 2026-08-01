@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Documents;
+using System.Windows.Media;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.Core.IO;
@@ -16,6 +17,26 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class HeaderFooterPaginatorTests
 {
+    [StaTheory]
+    [InlineData(PageBorderZOrder.Front, 0)]
+    [InlineData(PageBorderZOrder.Behind, 1)]
+    public void PageBorderZOrder_PlacesBodyOnExpectedSideOfBorder(
+        PageBorderZOrder zOrder,
+        int expectedBodyIndex)
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Page.PageBorder = new PageBorder("#24536B", 1.5) { ZOrder = zOrder };
+        var inner = new SinglePagePaginator(new Size(320, 480));
+        var paginator = new HeaderFooterPaginator(inner, model, model.Page);
+
+        var page = paginator.GetPage(0);
+
+        var container = Assert.IsType<ContainerVisual>(page.Visual);
+        var children = container.Children.Cast<Visual>().ToList();
+        Assert.Equal(2, children.Count);
+        Assert.Same(inner.BodyVisual, children[expectedBodyIndex]);
+    }
+
     /// <summary>
     /// When the page margins meet or exceed the page width, the header/footer content width is &lt;= 0.
     /// The overlay used to set <c>FormattedText.MaxTextWidth = PositiveInfinity</c> in that case, which
@@ -236,5 +257,30 @@ public sealed class HeaderFooterPaginatorTests
         }
 
         throw new FileNotFoundException("Could not locate repository file.", Path.Combine(parts));
+    }
+
+    private sealed class SinglePagePaginator : DocumentPaginator
+    {
+        public SinglePagePaginator(Size pageSize)
+        {
+            PageSize = pageSize;
+            using var drawing = BodyVisual.RenderOpen();
+            drawing.DrawRectangle(Brushes.White, null, new Rect(new Point(), pageSize));
+        }
+
+        public DrawingVisual BodyVisual { get; } = new();
+        public override bool IsPageCountValid => true;
+        public override int PageCount => 1;
+        public override Size PageSize { get; set; }
+        public override IDocumentPaginatorSource Source => null!;
+
+        public override DocumentPage GetPage(int pageNumber) =>
+            pageNumber == 0
+                ? new DocumentPage(
+                    BodyVisual,
+                    PageSize,
+                    new Rect(new Point(), PageSize),
+                    new Rect(new Point(), PageSize))
+                : DocumentPage.Missing;
     }
 }

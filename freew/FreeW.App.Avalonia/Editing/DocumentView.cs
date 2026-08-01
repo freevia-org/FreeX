@@ -4228,10 +4228,16 @@ public sealed class DocumentView : Control
             var borderedPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
             EnsurePage(borderedPageCount - 1);
             var borderOps = BuildPdfPageBorderOps(pageWidthPt, pageHeightPt);
+            var borderLayer = PageBorderVisibilityPlanner.LayerFor(pageBorder.ZOrder);
             for (var pageIndex = 0; pageIndex < borderedPageCount; pageIndex++)
             {
-                if (PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, pageIndex))
+                if (!PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, pageIndex))
+                    continue;
+
+                if (borderLayer == PageBorderRenderLayer.BehindText)
                     pagesOps[pageIndex].InsertRange(0, borderOps);
+                else
+                    pagesOps[pageIndex].AddRange(borderOps);
             }
         }
 
@@ -10000,11 +10006,12 @@ public sealed class DocumentView : Control
                 context.FillRectangle(PageShadowBrush, shadowRect);
                 context.FillRectangle(pageFill, pageRect);
                 context.DrawRectangle(null, PageBorderPen, pageRect);
-                // AV-DESIGN: layering matches Word — page color, then watermark, then the page border on
-                // top (a solid pgBorders line must not be occluded by the faint watermark behind it).
+                // The page background owns color and watermark. The authored border is painted later by
+                // its explicit behind-text or in-front-of-text compositor pass.
                 DrawWatermark(context, pageRect);
-                DrawPageBorder(context, pageRect, pi);
             }
+
+            DrawPageBordersForLayer(context, PageBorderRenderLayer.BehindText);
         }
         else
         {
@@ -10288,6 +10295,8 @@ public sealed class DocumentView : Control
             DrawHeaderFooterEditRegion(context);
         }
 
+        DrawPageBordersForLayer(context, PageBorderRenderLayer.InFrontOfText);
+
         // AV-FLSEL: draw selection outline + 8 resize handles over the selected floating object.
         if (_selectedFloatingGroupChild is { } selChild)
         {
@@ -10323,6 +10332,24 @@ public sealed class DocumentView : Control
             context.FillRectangle(Brushes.Black, hfRect);
         else if (IsFocused && NormalizedSelection() is null && _hfCaret is null && TryGetCaretRect(out var caretRect))
             context.FillRectangle(Brushes.Black, caretRect);
+    }
+
+    private void DrawPageBordersForLayer(DrawingContext context, PageBorderRenderLayer layer)
+    {
+        if (_viewMode != DocumentViewMode.PrintLayout
+            || _doc.Page.PageBorder is not { } border
+            || PageBorderVisibilityPlanner.LayerFor(border.ZOrder) != layer)
+            return;
+
+        for (var pageIndex = 0; pageIndex < _pageCount; pageIndex++)
+        {
+            var pageRect = new Rect(
+                _pageLeft,
+                _surfacePlan.PageTopDip(pageIndex),
+                _pageWidth,
+                _pageHeightPx);
+            DrawPageBorder(context, pageRect, pageIndex);
+        }
     }
 
     // ── AV-HFEDIT: render the active header/footer edit region outline + label + caret ──────────────
