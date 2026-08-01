@@ -84,6 +84,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalBlockListLayout(data.LayoutUniqueId))
             return LayoutVerticalBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsTrapezoidListLayout(data.LayoutUniqueId))
+            return LayoutTrapezoidList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1133,6 +1136,50 @@ public static class SmartArtLayoutEngine
             var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, leftX, curY, boxW, boxH));
             curY += boxH + gapY;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Trapezoid List keeps the native list ordering and vertical rhythm while
+    /// giving each authored node its editable trapezoid geometry. This route is
+    /// intentionally separate from the generic List fallback so the layout ID
+    /// remains visible in both live rendering and subsequent shape edits.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutTrapezoidList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>(n);
+        if (n == 0)
+            return shapes;
+
+        long outerPadX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long outerPadY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long gapY = Math.Max((long)(fcy * GapFrac), 1L);
+        long boxW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availableH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long boxH = Math.Max(availableH / n, 1L);
+        long currentY = fy + outerPadY;
+
+        for (int i = 0; i < n; i++)
+        {
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                (uint)(230 + i),
+                nodes[i].Text,
+                nodeStyle,
+                fx + outerPadX,
+                currentY,
+                boxW,
+                boxH,
+                NodeFontSizePt,
+                DrawingShapeKind.Trapezoid,
+                25000));
+            currentY += boxH + gapY;
         }
 
         return shapes;
@@ -3539,6 +3586,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "verticalblocklist", StringComparison.Ordinal);
+    }
+
+    private static bool IsTrapezoidListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "trapezoidlist", StringComparison.Ordinal);
     }
 
     private static bool IsHorizontalBulletListLayout(string uniqueId)
