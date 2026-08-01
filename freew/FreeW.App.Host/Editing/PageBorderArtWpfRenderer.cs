@@ -116,6 +116,18 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildVineFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var vinePlan))
+        {
+            DrawFilledShapePlan(context, frame, vinePlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildPapyrusFrame(
                 border.ArtId,
                 border.WidthPt,

@@ -3129,7 +3129,9 @@ public static class DocxReader
     {
         var tag = sdtPr?.Element(W + "tag")?.Attribute(W + "val")?.Value;
         var alias = sdtPr?.Element(W + "alias")?.Attribute(W + "val")?.Value;
-        var docPart = sdtPr?.Element(W + "docPartObj");
+        var docPartList = sdtPr?.Element(W + "docPartList");
+        var docPartObject = sdtPr?.Element(W + "docPartObj");
+        var docPart = docPartList ?? docPartObject;
         var gallery = docPart?.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value;
         var category = docPart?.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
         var hasDocPartUnique = ReadOnOffElement(docPart?.Element(W + "docPartUnique"));
@@ -3145,14 +3147,16 @@ public static class DocxReader
                     ? BlockContentControlKind.Group
                     : sdtPr?.Element(W + "citation") is not null
                         ? BlockContentControlKind.Citation
-                        : gallery is not null
-                          && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
-                            ? BlockContentControlKind.Bibliography
-                            : docPart is not null
-                                ? BlockContentControlKind.BuildingBlockGallery
-                                : sdtPr?.Element(W + "text") is not null
-                                    ? BlockContentControlKind.PlainText
-                                    : BlockContentControlKind.RichText;
+                        : docPartList is not null
+                            ? BlockContentControlKind.DocumentPart
+                            : gallery is not null
+                              && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
+                                ? BlockContentControlKind.Bibliography
+                                : docPartObject is not null
+                                    ? BlockContentControlKind.BuildingBlockGallery
+                                    : sdtPr?.Element(W + "text") is not null
+                                        ? BlockContentControlKind.PlainText
+                                        : BlockContentControlKind.RichText;
 
         return new BlockContentControl(
             kind,
@@ -3177,6 +3181,22 @@ public static class DocxReader
         var normAlias = string.IsNullOrEmpty(alias) ? null : alias;
         var lockMode = ReadContentControlLock(sdtPr);
         var wordMetadata = ReadContentControlWordMetadata(sdtPr);
+
+        var docPartList = sdtPr?.Element(W + "docPartList");
+        if (docPartList is not null)
+        {
+            var gallery = docPartList.Element(W + "docPartGallery")?.Attribute(W + "val")?.Value;
+            var category = docPartList.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value;
+            return new ContentControl(
+                ContentControlKind.DocumentPart,
+                normTag,
+                normAlias,
+                LockMode: lockMode,
+                WordMetadata: wordMetadata,
+                DocPartGallery: string.IsNullOrEmpty(gallery) ? null : gallery,
+                DocPartCategory: string.IsNullOrEmpty(category) ? null : category,
+                DocPartUnique: ReadOnOffElement(docPartList.Element(W + "docPartUnique")));
+        }
 
         var docPart = sdtPr?.Element(W + "docPartObj");
         if (docPart is not null)

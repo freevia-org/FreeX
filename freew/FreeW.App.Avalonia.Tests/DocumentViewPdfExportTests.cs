@@ -1042,6 +1042,45 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedVinePageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.VineArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            fills.Should().HaveCount(4);
+            paths.Should().HaveCount(284);
+            fills[0].Should().Be(new PdfFillRect(24, 744, 564, 24, PdfColor.Black));
+            paths[0].FillColor.Should().Be(new PdfColor(255, 255, 255));
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(48, 750));
+            paths[268].FillColor.Should().Be(new PdfColor(0xB2, 0xB2, 0xB2));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var railInk = 0;
+            for (var y = 32; y < 64; y++)
+            for (var x = 96; x < 160; x++)
+            {
+                if (bitmap.GetPixel(x, y).Red < 245)
+                    railInk++;
+            }
+            railInk.Should().BeGreaterThan(700);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {

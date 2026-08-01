@@ -152,6 +152,32 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void Vine_UsesBlackRailsDistributedLeafCellsAndIsolatedFlowerCorners()
+    {
+        PageBorderArtVisualPlanner.TryBuildVineFrame(47, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().Equal(
+            new PageBorderArtFillRectangle(32, 32, 752, 32, 0, 0, 0),
+            new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
+            new PageBorderArtFillRectangle(32, 32, 32, 992, 0, 0, 0),
+            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
+        plan.Polygons.Should().HaveCount(284);
+        plan.Polygons[0].Points.Take(4).Should().Equal(
+            new PageBorderArtPoint(64, 56),
+            new PageBorderArtPoint(71, 56),
+            new PageBorderArtPoint(77, 53),
+            new PageBorderArtPoint(83, 47));
+        plan.Polygons[0].Red.Should().Be(0xFF);
+        plan.Polygons[264].Points.Should().Equal(
+            new PageBorderArtPoint(48, 48),
+            new PageBorderArtPoint(43, 42),
+            new PageBorderArtPoint(48, 34),
+            new PageBorderArtPoint(53, 42));
+        plan.Polygons[268].Red.Should().Be(0xB2);
+    }
+
+    [Fact]
     public void TinyFrame_IsRecognizedButProducesNoMotifs()
     {
         PageBorderArtVisualPlanner.TryBuildApplesFrame(1, 3, 40, 40, 20, out var motifs)

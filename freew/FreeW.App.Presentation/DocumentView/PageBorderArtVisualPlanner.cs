@@ -76,6 +76,7 @@ public static class PageBorderArtVisualPlanner
     public const int DecorativeArchArtId = 89;
     public const int BatsArtId = 37;
     public const int PapyrusArtId = 92;
+    public const int VineArtId = 47;
     public const int WeavingRibbonArtId = 95;
     public const byte AppleFillRed = 0xB5;
     public const byte AppleStemRed = 0x66;
@@ -361,6 +362,55 @@ public static class PageBorderArtVisualPlanner
         return true;
     }
 
+    public static bool TryBuildVineFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != VineArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var frameWidth = Math.Max(0, frameWidthDip);
+        var frameHeight = Math.Max(0, frameHeightDip);
+        var inset = Math.Max(0, edgeInsetDip);
+        var size = ResolveMotifSize(modelWidthPt);
+        if (frameWidth < 2 * (inset + size) || frameHeight < 2 * (inset + size))
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return true;
+        }
+
+        var fills = new List<PageBorderArtFillRectangle>
+        {
+            new(inset, inset, frameWidth - 2 * inset, size, 0, 0, 0),
+            new(inset, frameHeight - inset - size, frameWidth - 2 * inset, size, 0, 0, 0),
+            new(inset, inset, size, frameHeight - 2 * inset, 0, 0, 0),
+            new(frameWidth - inset - size, inset, size, frameHeight - 2 * inset, 0, 0, 0),
+        };
+        var polygons = new List<PageBorderArtPolygon>();
+        var horizontalStart = inset + size;
+        var horizontalLength = frameWidth - 2 * horizontalStart;
+        var verticalStart = inset + size;
+        var verticalLength = frameHeight - 2 * verticalStart;
+        AddVineRail(polygons, horizontalStart, horizontalLength, inset, size, horizontal: true, reverseAcross: false);
+        AddVineRail(polygons, horizontalStart, horizontalLength, frameHeight - inset - size, size, horizontal: true, reverseAcross: false);
+        AddVineRail(polygons, verticalStart, verticalLength, inset, size, horizontal: false, reverseAcross: true);
+        AddVineRail(polygons, verticalStart, verticalLength, frameWidth - inset - size, size, horizontal: false, reverseAcross: true);
+        AddVineCorner(polygons, inset, inset, size);
+        AddVineCorner(polygons, frameWidth - inset - size, inset, size);
+        AddVineCorner(polygons, inset, frameHeight - inset - size, size);
+        AddVineCorner(polygons, frameWidth - inset - size, frameHeight - inset - size, size);
+
+        plan = new PageBorderArtFilledShapePlan(fills, polygons);
+        return true;
+    }
+
     public static bool TryBuildDecorativeArchFrame(
         int artId,
         double modelWidthPt,
@@ -594,6 +644,69 @@ public static class PageBorderArtVisualPlanner
             ],
             0x7F, 0x7F, 0x7F));
     }
+
+    private static void AddVineRail(
+        List<PageBorderArtPolygon> polygons,
+        double alongStart,
+        double alongLength,
+        double acrossStart,
+        double size,
+        bool horizontal,
+        bool reverseAcross)
+    {
+        var motifLength = size * 1.5;
+        var count = Math.Max(1, (int)Math.Floor((alongLength - 0.01) / motifLength));
+        var step = count > 1 ? (alongLength - motifLength) / (count - 1) : 0;
+        for (var index = 0; index < count; index++)
+        {
+            var motifStart = alongStart + index * step;
+            PageBorderArtPoint Point(double along, double across)
+            {
+                var scaledAlong = along * size / 32.0;
+                var scaledAcross = across * size / 32.0;
+                if (reverseAcross)
+                    scaledAcross = size - scaledAcross;
+                return horizontal
+                    ? new PageBorderArtPoint(motifStart + scaledAlong, acrossStart + scaledAcross)
+                    : new PageBorderArtPoint(acrossStart + scaledAcross, motifStart + scaledAlong);
+            }
+
+            AddWhitePolygon(polygons, Point,
+                (0, 24), (7, 24), (13, 21), (19, 15), (26, 12), (33, 12), (40, 15), (48, 15),
+                (48, 20), (40, 20), (33, 17), (27, 17), (22, 20), (16, 25), (8, 29), (0, 29));
+            AddWhitePolygon(polygons, Point,
+                (24, 11), (28, 5), (36, 4), (43, 8), (38, 13), (31, 14));
+            AddWhitePolygon(polygons, Point,
+                (20, 18), (27, 20), (34, 25), (31, 30), (23, 29), (18, 24));
+            AddWhitePolygon(polygons, Point,
+                (4, 19), (0, 14), (4, 10), (10, 13), (10, 17));
+        }
+    }
+
+    private static void AddVineCorner(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        AddWhitePolygon(polygons, Point, (16, 16), (11, 10), (16, 2), (21, 10));
+        AddWhitePolygon(polygons, Point, (16, 16), (22, 11), (30, 16), (22, 21));
+        AddWhitePolygon(polygons, Point, (16, 16), (21, 22), (16, 30), (11, 22));
+        AddWhitePolygon(polygons, Point, (16, 16), (10, 21), (2, 16), (10, 11));
+        polygons.Add(new PageBorderArtPolygon(
+            [Point(13, 13), Point(19, 13), Point(19, 19), Point(13, 19)],
+            0xB2, 0xB2, 0xB2));
+    }
+
+    private static void AddWhitePolygon(
+        List<PageBorderArtPolygon> polygons,
+        Func<double, double, PageBorderArtPoint> point,
+        params (double X, double Y)[] coordinates) =>
+        polygons.Add(new PageBorderArtPolygon(
+            coordinates.Select(coordinate => point(coordinate.X, coordinate.Y)).ToList(),
+            0xFF, 0xFF, 0xFF));
 
     private static void AddRibbonHorizontalStripes(
         List<PageBorderArtPolygon> polygons,
