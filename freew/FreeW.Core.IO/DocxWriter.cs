@@ -2680,13 +2680,18 @@ public static class DocxWriter
         if (control.Kind == BlockContentControlKind.Bibliography && string.IsNullOrWhiteSpace(gallery))
             gallery = BlockContentControl.BibliographyGallery;
 
-        var hasDocPart = control.Kind is BlockContentControlKind.Bibliography
-            or BlockContentControlKind.DocumentPart
+        if (control.Kind == BlockContentControlKind.DocumentPart)
+            sdtPr.Add(BuildDocPartList(
+                gallery,
+                control.DocPartCategory,
+                control.DocPartUnique));
+
+        var hasDocPartObject = control.Kind is BlockContentControlKind.Bibliography
             or BlockContentControlKind.BuildingBlockGallery
             || !string.IsNullOrWhiteSpace(gallery)
             || !string.IsNullOrWhiteSpace(control.DocPartCategory)
             || control.DocPartUnique;
-        if (hasDocPart)
+        if (control.Kind != BlockContentControlKind.DocumentPart && hasDocPartObject)
             sdtPr.Add(BuildDocPartObject(
                 gallery,
                 control.DocPartCategory,
@@ -2716,8 +2721,14 @@ public static class DocxWriter
     }
 
     private static XElement BuildDocPartObject(string? gallery, string? category, bool unique)
+        => BuildDocPart(W + "docPartObj", gallery, category, unique);
+
+    private static XElement BuildDocPartList(string? gallery, string? category, bool unique)
+        => BuildDocPart(W + "docPartList", gallery, category, unique);
+
+    private static XElement BuildDocPart(XName elementName, string? gallery, string? category, bool unique)
     {
-        var docPart = new XElement(W + "docPartObj");
+        var docPart = new XElement(elementName);
         if (!string.IsNullOrWhiteSpace(gallery))
             docPart.Add(new XElement(W + "docPartGallery", new XAttribute(W + "val", gallery)));
         if (!string.IsNullOrWhiteSpace(category))
@@ -2733,9 +2744,9 @@ public static class DocxWriter
     /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
     /// w:date carrying the w:dateFormat for a date picker; a w:dropDownList / w:comboBox carrying a
     /// w:listItem (w:displayText/w:value) per choice for a list control; an empty w:picture for a
-    /// picture control; w:docPartObj for a building-block gallery; w:group for a Group control; or
-    /// w:citation for a Citation control. This is the minimal valid shape FreeW's own reader recovers
-    /// (see <see cref="DocxReader"/>).
+    /// picture control; w:docPartList for a document-part list; w:docPartObj for a building-block
+    /// gallery; w:group for a Group control; or w:citation for a Citation control. This is the minimal
+    /// valid shape FreeW's own reader recovers (see <see cref="DocxReader"/>).
     /// </summary>
     private static XElement BuildSdtProperties(ContentControl control)
     {
@@ -2769,6 +2780,12 @@ public static class DocxWriter
                 break;
             case ContentControlKind.Picture:
                 sdtPr.Add(new XElement(W + "picture"));
+                break;
+            case ContentControlKind.DocumentPart:
+                sdtPr.Add(BuildDocPartList(
+                    control.DocPartGallery,
+                    control.DocPartCategory,
+                    control.DocPartUnique));
                 break;
             case ContentControlKind.BuildingBlockGallery:
                 sdtPr.Add(BuildDocPartObject(

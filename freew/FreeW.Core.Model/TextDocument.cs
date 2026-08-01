@@ -1166,6 +1166,31 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     }
 
     /// <summary>
+    /// Creates an inline document-part list content control backed by w:sdtPr/w:docPartList.
+    /// The gallery is required; category is optional and unique maps to the presence of w:docPartUnique.
+    /// </summary>
+    public static Run DocumentPartListControl(
+        string text,
+        string gallery,
+        string? category = null,
+        bool unique = false,
+        string? tag = null,
+        string? alias = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gallery);
+        return new Run(text)
+        {
+            Control = new ContentControl(
+                ContentControlKind.DocumentPart,
+                tag,
+                alias,
+                DocPartGallery: gallery,
+                DocPartCategory: category,
+                DocPartUnique: unique)
+        };
+    }
+
+    /// <summary>
     /// Creates an inline Group content control backed by w:sdtPr/w:group. Group controls protect their
     /// contained controls as one unit while retaining ordinary run-level ownership.
     /// </summary>
@@ -1229,9 +1254,10 @@ public enum RubyAlignment
 /// <see cref="DropDownList"/> is a drop-down list (w:sdtPr/w:dropDownList + w:listItem entries) the user
 /// can only pick from; <see cref="ComboBox"/> is a combo box (w:sdtPr/w:comboBox + w:listItem entries)
 /// that additionally allows free text; <see cref="Picture"/> is a picture control (w:sdtPr/w:picture)
-/// whose run carries an <see cref="InlineImage"/>; <see cref="BuildingBlockGallery"/> is a
-/// building-block gallery control (w:sdtPr/w:docPartObj); <see cref="Group"/> is a Group control
-/// (w:sdtPr/w:group); and <see cref="Citation"/> is a citation control (w:sdtPr/w:citation).
+/// whose run carries an <see cref="InlineImage"/>; <see cref="DocumentPart"/> is a document-part list
+/// (w:sdtPr/w:docPartList); <see cref="BuildingBlockGallery"/> is a building-block gallery control
+/// (w:sdtPr/w:docPartObj); <see cref="Group"/> is a Group control (w:sdtPr/w:group); and
+/// <see cref="Citation"/> is a citation control (w:sdtPr/w:citation).
 /// </summary>
 public enum ContentControlKind
 {
@@ -1242,6 +1268,7 @@ public enum ContentControlKind
     DropDownList,
     ComboBox,
     Picture,
+    DocumentPart,
     BuildingBlockGallery,
     Group,
     Citation
@@ -1291,7 +1318,7 @@ public sealed record ContentControlWordMetadata(
 /// Records the control <see cref="Kind"/>, an optional <see cref="Tag"/> (w:tag) and <see cref="Alias"/>
 /// (w:alias), and the kind-specific extras: <see cref="Checked"/> (checkbox state), <see cref="DateFormat"/>
 /// (a date picker's w:dateFormat string), and <see cref="ListItems"/> (the w:listItem choices of a
-/// drop-down list or combo box). Building-block gallery controls additionally retain
+/// drop-down list or combo box). Document-part lists and building-block gallery controls additionally retain
 /// <see cref="DocPartGallery"/>, <see cref="DocPartCategory"/>, and <see cref="DocPartUnique"/>.
 /// Modelled as an immutable record so it mirrors how other small marks
 /// (<see cref="PageBorder"/>, <see cref="TableFormatting"/>) are modelled and so consecutive runs can
@@ -1983,6 +2010,24 @@ public sealed record BlockContentControl(
             Alias: BibliographyAlias,
             DocPartGallery: BibliographyGallery,
             DocPartUnique: true);
+
+    /// <summary>Creates a body-level document-part list content control (w:docPartList).</summary>
+    public static BlockContentControl DocumentPartListRegion(
+        string gallery,
+        string? category = null,
+        bool unique = false,
+        string? tag = null,
+        string? alias = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(gallery);
+        return new BlockContentControl(
+            BlockContentControlKind.DocumentPart,
+            Tag: tag,
+            Alias: alias,
+            DocPartGallery: gallery,
+            DocPartCategory: category,
+            DocPartUnique: unique);
+    }
 
     /// <summary>Creates a body-level building-block gallery content control (w:docPartObj).</summary>
     public static BlockContentControl BuildingBlockGalleryRegion(

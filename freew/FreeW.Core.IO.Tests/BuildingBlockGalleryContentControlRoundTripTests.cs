@@ -119,6 +119,8 @@ public sealed class BuildingBlockGalleryContentControlRoundTripTests
         bool expectedUnique)
     {
         var docPart = properties.Elements(W + "docPartObj").Should().ContainSingle().Subject;
+        properties.Elements(W + "docPartList").Should().BeEmpty(
+            "building-block gallery objects must remain distinct from document-part lists");
         docPart.Element(W + "docPartGallery")!.Attribute(W + "val")!.Value
             .Should().Be(expectedGallery);
         docPart.Element(W + "docPartCategory")?.Attribute(W + "val")?.Value
