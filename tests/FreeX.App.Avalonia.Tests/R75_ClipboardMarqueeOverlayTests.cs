@@ -228,16 +228,19 @@ public sealed class R75_ClipboardMarqueeOverlayTests
     public void Escape_ClearsTheMarquee_WhenOneIsActive()
     {
         var source = MainWindowSource();
+        const string escapeClipboardGuard =
+            "if (e.Key == Key.Escape &&\n" +
+            "                (_clipboardMarqueeRange is not null || _internalObjectClipboard is not null))";
 
         source.Should().Contain(
-            "if (e.Key == Key.Escape && _clipboardMarqueeRange is not null)",
-            "Escape must specifically check for an active marquee, mirroring the WPF host's " +
-            "ClearClipboardVisualState-on-Escape behavior");
+            escapeClipboardGuard,
+            "Escape must check for either active clipboard visual state, preserving the WPF host's " +
+            "ClearClipboardVisualState-on-Escape behavior while also clearing copied drawing objects");
 
-        var guardIndex = source.IndexOf(
-            "if (e.Key == Key.Escape && _clipboardMarqueeRange is not null)", StringComparison.Ordinal);
-        var body = source.Substring(guardIndex, 220);
+        var guardIndex = source.IndexOf(escapeClipboardGuard, StringComparison.Ordinal);
+        var body = source.Substring(guardIndex, 300);
         body.Should().Contain("SetClipboardMarquee(null, isCut: false);");
+        body.Should().Contain("_internalObjectClipboard = null;");
     }
 
     [Fact]
