@@ -49,6 +49,78 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_IncludesPageBorderBeforeBodyAndMatchesPageChromeGeometry() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 240;
+            document.Page.HeightPt = 180;
+            document.Page.PageBorder = new PageBorder("#C00000", 2.25)
+            {
+                SpacePt = 24,
+                LineStyle = BorderLineStyle.Double,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Body after page border"));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var ops = view.BuildPdfContent().Pages.Single().Ops.ToList();
+            var borders = ops.OfType<PdfStrokeRect>().Where(op => op.Color == new PdfColor(0xC0, 0x00, 0x00)).ToList();
+
+            borders.Should().HaveCount(2);
+            borders[0].X.Should().BeApproximately(25.125, 0.001);
+            borders[0].Y.Should().BeApproximately(25.125, 0.001);
+            borders[0].Width.Should().BeApproximately(189.75, 0.001);
+            borders[0].Height.Should().BeApproximately(129.75, 0.001);
+            borders[0].LineWidth.Should().BeApproximately(2.25, 0.001);
+            borders[1].X.Should().BeGreaterThan(borders[0].X);
+            borders[1].Y.Should().BeGreaterThan(borders[0].Y);
+            borders[1].Width.Should().BeLessThan(borders[0].Width);
+            borders[1].Height.Should().BeLessThan(borders[0].Height);
+            ops.IndexOf(borders[0]).Should().Be(0);
+            var firstBodyOperation = ops.FindIndex(op => op is not PdfStrokeRect);
+            if (firstBodyOperation >= 0)
+                ops.IndexOf(borders[0]).Should().BeLessThan(firstBodyOperation);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_UsesTextRelativeDashedPageBorderGeometry() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 300;
+            document.Page.HeightPt = 200;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 24;
+            document.Page.MarginBottomPt = 20;
+            document.Page.HeaderDistancePt = 30;
+            document.Page.PageBorder = new PageBorder("#0070C0", 1.5)
+            {
+                OffsetFrom = PageBorderOffsetFrom.Text,
+                SpacePt = 12,
+                LineStyle = BorderLineStyle.Dashed,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var border = view.BuildPdfContent().Pages.Single().Ops.OfType<PdfStrokeRect>().Single();
+
+            border.X.Should().BeApproximately(5.25, 0.001);
+            border.Y.Should().BeApproximately(6.5, 0.001);
+            border.Width.Should().BeApproximately(283.5, 0.001);
+            border.Height.Should().BeApproximately(175.5, 0.001);
+            border.LineWidth.Should().BeApproximately(1.5, 0.001);
+            border.Dash.Should().NotBeNull();
+            border.Dash!.Segments.Should().Equal(3 / (96.0 / 72.0), 2 / (96.0 / 72.0));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesTableSurfacesBeforeCellText() =>
         Session.Dispatch(() =>
         {

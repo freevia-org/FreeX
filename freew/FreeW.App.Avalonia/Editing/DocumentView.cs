@@ -3297,6 +3297,18 @@ public sealed class DocumentView : Control
         // Bucket glyphs by page index (continuous column split at page height).
         var pagesOps = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
 
+        // WPF's paginator includes page borders in the visual it rasterizes for PDF export. Keep the
+        // same page chrome in Avalonia's shared operation tree, before body surfaces and glyphs.
+        if (_doc.Page.PageBorder is { } pageBorder)
+        {
+            for (var pageIndex = 0; pageIndex < _pageCount; pageIndex++)
+            {
+                while (pagesOps.Count <= pageIndex)
+                    pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
+                pagesOps[pageIndex].AddRange(BuildPdfPageBorderOps(pageBorder, pageWidthPt, pageHeightPt));
+            }
+        }
+
         var runStartX = 0.0;
         var runY = 0.0;
         var runText = new StringBuilder();
@@ -3798,6 +3810,76 @@ public sealed class DocumentView : Control
 
     private static string FormatKey(RunFormatting fmt) =>
         $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}";
+
+    private IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> BuildPdfPageBorderOps(
+        PageBorder border,
+        double pageWidthPt,
+        double pageHeightPt)
+    {
+        var widthPt = Math.Max(0.5, border.WidthPt);
+        var spacePt = Math.Max(0, border.SpacePt);
+
+        double x;
+        double y;
+        double width;
+        double height;
+        if (border.OffsetFrom == PageBorderOffsetFrom.Text)
+        {
+            // Mirror DrawPageBorder's text-relative frame. WPF uses the same paginator page chrome,
+            // while the shared PDF operation is expressed in bottom-left point coordinates.
+            var headerDistancePt = _doc.Page.HeaderDistancePt > 0
+                ? _doc.Page.HeaderDistancePt
+                : 36;
+            x = _doc.Page.MarginLeftPt - spacePt - widthPt / 2;
+            y = _doc.Page.MarginBottomPt - spacePt - widthPt;
+            width = pageWidthPt - _doc.Page.MarginLeftPt - _doc.Page.MarginRightPt
+                + 2 * spacePt + widthPt;
+            height = pageHeightPt - headerDistancePt - _doc.Page.MarginBottomPt
+                + 2 * spacePt + widthPt;
+        }
+        else
+        {
+            // DrawPageBorder centers its stroke on a frame inset by SpacePt plus 1.5 DIPs.
+            var insetPt = Math.Min(spacePt, Math.Min(pageWidthPt, pageHeightPt) / 4) + 1.5 / PxPerPoint;
+            x = insetPt;
+            y = insetPt;
+            width = pageWidthPt - 2 * insetPt;
+            height = pageHeightPt - 2 * insetPt;
+        }
+
+        if (width <= 0 || height <= 0)
+            return [];
+
+        PdfDashPattern? dash = border.LineStyle switch
+        {
+            BorderLineStyle.Dotted => new PdfDashPattern([1 / PxPerPoint, 2 / PxPerPoint]),
+            BorderLineStyle.Dashed => new PdfDashPattern([3 / PxPerPoint, 2 / PxPerPoint]),
+            _ => null,
+        };
+        var color = ParseColor(border.ColorHex);
+        var operations = new List<Free.Shared.Pdf.PdfDrawOp>
+        {
+            new Free.Shared.Pdf.PdfStrokeRect(x, y, width, height, color, widthPt, dash),
+        };
+
+        if (border.LineStyle == BorderLineStyle.Double)
+        {
+            var railInset = widthPt + 1.5 / PxPerPoint;
+            if (width > 2 * railInset && height > 2 * railInset)
+            {
+                operations.Add(new Free.Shared.Pdf.PdfStrokeRect(
+                    x + railInset,
+                    y + railInset,
+                    width - 2 * railInset,
+                    height - 2 * railInset,
+                    color,
+                    widthPt,
+                    dash));
+            }
+        }
+
+        return operations;
+    }
 
     private PdfImage? BuildPdfImage(
         Rect sourceRect,
