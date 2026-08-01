@@ -75,8 +75,8 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         _width = NumberBox(state.WidthText);
         _height = NumberBox(state.HeightText);
         _sectionStart = Combo(PageSetupDialogPlanner.SectionStartNames, state.SectionStartIndex);
-        _differentFirstPage = Check("Different first page", state.DifferentFirstPage);
-        _differentOddEven = Check("Different odd and even", state.DifferentOddEvenPages);
+        _differentFirstPage = Check("Different first page", state.DifferentFirstPage, new Thickness(0));
+        _differentOddEven = Check("Different odd and even", state.DifferentOddEvenPages, new Thickness(0, 4, 0, 0));
         _headerDistance = NumberBox(state.HeaderDistanceText);
         _footerDistance = NumberBox(state.FooterDistanceText);
         _verticalAlignment = Combo(PageSetupDialogPlanner.VerticalAlignmentNames, state.VerticalAlignmentIndex);
@@ -89,12 +89,12 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         {
             Margin = new Thickness(14, 14, 14, 0),
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            VerticalAlignment = VerticalAlignment.Stretch,
-            SelectedIndex = (int)initialTab
+            VerticalAlignment = VerticalAlignment.Stretch
         };
         tabs.Items.Add(new TabItem { Header = "Margins", Content = BuildMarginsTab() });
         tabs.Items.Add(new TabItem { Header = "Paper", Content = BuildPaperTab() });
         tabs.Items.Add(new TabItem { Header = "Layout", Content = BuildLayoutTab() });
+        tabs.SelectedIndex = (int)initialTab;
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             tabs,
             DialogChromeStyle,
@@ -107,7 +107,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         };
         Grid.SetRow(tabs, 0);
         Grid.SetRow(_status, 1);
-        var actions = PageLayoutDialogChrome.Actions(Accept, () => Close(null));
+        var actions = PageLayoutDialogChrome.Actions(Accept, () => Close(null), buttonWidth: 72);
         actions.Margin = new Thickness(14, 12, 14, 12);
         Grid.SetRow(actions, 2);
         // Keep the logical/visual child order aligned with the WPF authority: the action row
@@ -148,11 +148,14 @@ public sealed class PageSetupDialog : FreeWDialogWindow
     {
         var panel = TabPanel();
         panel.Children.Add(PageSetupRow("Section start:", _sectionStart));
-        panel.Children.Add(_differentFirstPage);
-        panel.Children.Add(_differentOddEven);
+        panel.Children.Add(PageSetupRow("Vertical alignment:", _verticalAlignment));
         panel.Children.Add(PageSetupRow("Header from edge (pt):", _headerDistance));
         panel.Children.Add(PageSetupRow("Footer from edge (pt):", _footerDistance));
-        panel.Children.Add(PageSetupRow("Vertical alignment:", _verticalAlignment));
+
+        var checks = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        checks.Children.Add(_differentFirstPage);
+        checks.Children.Add(_differentOddEven);
+        panel.Children.Add(checks);
 
         var launchers = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 10, 0, 0) };
         var lineNumbers = new Button { Content = "Line Numbers\u2026" };
@@ -262,28 +265,29 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         editor.Focus();
     }
 
-    private static StackPanel TabPanel() => new() { Margin = new Thickness(14), Spacing = 4 };
+    private static StackPanel TabPanel() => new() { Margin = new Thickness(14) };
 
     private static TextBox NumberBox(string value) => PageLayoutDialogChrome.NumberBox(value, 120, stretch: true);
 
     private static ComboBox Combo(IEnumerable<string> values, int selectedIndex)
     {
-        var combo = PageLayoutDialogChrome.Combo(values, selectedIndex, 170);
+        var combo = PageLayoutDialogChrome.Combo(values, selectedIndex, 180);
         combo.HorizontalAlignment = HorizontalAlignment.Stretch;
         return combo;
     }
 
     private static Control PageSetupRow(string label, Control field)
     {
-        var grid = new Grid { Margin = new Thickness(0, 4, 0, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(90)));
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         grid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
         var text = new TextBlock
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 0)
+            Margin = new Thickness(0, 4, 8, 4)
         };
+        field.Margin = new Thickness(0, 4, 0, 4);
         field.HorizontalAlignment = HorizontalAlignment.Stretch;
         Grid.SetColumn(field, 1);
         grid.Children.Add(text);
@@ -291,9 +295,9 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         return grid;
     }
 
-    private static CheckBox Check(string label, bool value)
+    private static CheckBox Check(string label, bool value, Thickness margin)
     {
-        var box = new CheckBox { Content = label, IsChecked = value, Margin = new Thickness(0, 5, 0, 0) };
+        var box = new CheckBox { Content = label, IsChecked = value, Margin = margin };
         AvaloniaCompactDialogChrome.ApplyCheckBox(box, DialogChromeStyle);
         return box;
     }
