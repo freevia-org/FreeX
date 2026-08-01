@@ -2712,8 +2712,8 @@ public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.
     /// <summary>
     /// The line style of every page-border edge (w:val). Defaults to <see cref="BorderLineStyle.Single"/>,
     /// matching what the writer previously emitted, so existing documents round-trip byte-unchanged.
-    /// When <see cref="ArtId"/> is non-zero this field is ignored (art borders use a fixed @w:val="apples"
-    /// placeholder so Word readers understand the element, but the visual is entirely driven by the art id).
+    /// When <see cref="ArtId"/> is non-zero this field is ignored because the mapped art token is written
+    /// directly to <c>w:val</c>.
     /// </summary>
     public BorderLineStyle LineStyle { get; init; } = BorderLineStyle.Single;
 
@@ -2722,6 +2722,18 @@ public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.
     /// to the corresponding WordprocessingML <c>w:val</c> art token on every page-border edge.
     /// </summary>
     public int ArtId { get; init; }
+
+    /// <summary>
+    /// Pages in the section that display this border (<c>w:pgBorders/@w:display</c>). All pages is Word's
+    /// default and is omitted from canonical output.
+    /// </summary>
+    public PageBorderDisplay Display { get; init; } = PageBorderDisplay.AllPages;
+
+    /// <summary>
+    /// Whether the border is composited in front of or behind document text
+    /// (<c>w:pgBorders/@w:zOrder</c>). Front is Word's default and is omitted from canonical output.
+    /// </summary>
+    public PageBorderZOrder ZOrder { get; init; } = PageBorderZOrder.Front;
 }
 
 /// <summary>Reference edge used by <c>w:pgBorders/@w:offsetFrom</c>.</summary>
@@ -2729,6 +2741,19 @@ public enum PageBorderOffsetFrom
 {
     Page,
     Text
+}
+
+public enum PageBorderDisplay
+{
+    AllPages,
+    FirstPage,
+    NotFirstPage
+}
+
+public enum PageBorderZOrder
+{
+    Front,
+    Behind
 }
 
 /// <summary>
