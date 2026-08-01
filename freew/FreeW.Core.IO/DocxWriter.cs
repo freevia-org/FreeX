@@ -8708,6 +8708,12 @@ public static class DocxWriter
 
         foreach (var style in document.Styles.Values)
         {
+            if (style.Type == StyleType.Table && style.PreservedTableStyleXml is { Length: > 0 } preservedTableStyleXml)
+            {
+                styles.Add(XElement.Parse(preservedTableStyleXml, LoadOptions.PreserveWhitespace));
+                continue;
+            }
+
             var element = new XElement(W + "style",
                 new XAttribute(W + "type", style.Type switch
                 {
@@ -8778,6 +8784,8 @@ public static class DocxWriter
         var usedTableStyleIds = CollectTableStyleIds(document.Blocks);
         foreach (var styleId in usedTableStyleIds)
         {
+            if (document.Styles.ContainsKey(styleId))
+                continue;
             var catalogEntry = DocumentTableStyle.FindById(styleId);
             if (catalogEntry is not null)
                 styles.Add(BuildTableStyleElement(catalogEntry));
