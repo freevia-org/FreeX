@@ -792,8 +792,7 @@ public sealed class OpcSharedHelperTests
         presentationSource.Should().Contain("public DocumentProperties Properties { get; } = new();");
 
         docxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(");
-        docxReaderSource.Should().Contain("document.Properties,");
-        docxReaderSource.Should().NotContain("document.Properties.ApplyCoreProperties(");
+        docxReaderSource.Should().Contain("document.Properties.ApplyCoreProperties(");
         docxWriterSource.Should().Contain("OpcDocumentProperties.BuildCorePropertiesDocument(");
         docxWriterSource.Should().NotContain("properties.ToCoreProperties()");
         pptxReaderSource.Should().Contain("OpcDocumentProperties.ReadCoreProperties(");

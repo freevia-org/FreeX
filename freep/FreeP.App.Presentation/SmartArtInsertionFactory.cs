@@ -262,6 +262,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.BlockCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/blockCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.NonDirectionalCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicList => ("urn:microsoft.com/office/officeart/2005/8/layout/list1", SmartArtFamily.List),
+            SmartArtLayoutPreset.List2 => ("urn:microsoft.com/office/officeart/2005/8/layout/list2", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/basicBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.StackedList => ("urn:microsoft.com/office/officeart/2005/8/layout/stackedList", SmartArtFamily.List),
             SmartArtLayoutPreset.DescendingBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/descendingBlockList", SmartArtFamily.List),
