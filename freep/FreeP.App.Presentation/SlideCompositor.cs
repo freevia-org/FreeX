@@ -1628,7 +1628,7 @@ public static class SlideCompositor
                 {
                     var containingProperties = presentation.DocumentMathProperties?.Overlay(run.Math.ContainingProperties)
                         ?? run.Math.ContainingProperties;
-                    var mathNode = FreeP.App.Compositor.MathLayout.OmmlParser.Parse(
+                    var mathNode = FreeP.App.Compositor.MathLayout.OmmlParser.ParsePowerPoint(
                         run.Math.RawXml,
                         resolvedText,
                         ToParserMathProperties(containingProperties));

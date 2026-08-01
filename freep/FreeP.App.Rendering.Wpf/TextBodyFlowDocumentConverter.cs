@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeP.App.Compositor;
@@ -555,11 +556,160 @@ internal static class TextBodyFlowDocumentConverter
                 Grid.SetColumn(textBox, Math.Min(columnIndex, columnCount - 1));
                 Grid.SetColumnSpan(textBox, Math.Min(Math.Max(1, cell.GridSpan), columnCount - columnIndex));
                 Grid.SetRowSpan(textBox, Math.Min(Math.Max(1, cell.RowSpan), table.Rows.Count - rowIndex));
+                textBox.PreviewKeyDown += (_, args) =>
+                    OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
                 grid.Children.Add(textBox);
                 columnIndex += Math.Max(1, cell.GridSpan);
             }
         }
         return grid;
+    }
+
+    private static void OnInlineTableCellPreviewKeyDown(
+        Grid grid,
+        InlineTableInfo info,
+        TextBox current,
+        KeyEventArgs args)
+    {
+        if (args.Key != Key.Tab)
+            return;
+
+        bool backwards = (args.KeyboardDevice.Modifiers & ModifierKeys.Shift) != 0;
+        var editorInfo = grid.Tag as InlineTableInfo ?? info;
+        if (TryNavigateInlineTableCell(grid, editorInfo, current, backwards))
+            args.Handled = true;
+    }
+
+    internal static bool TryNavigateInlineTableCell(
+        Grid grid,
+        InlineTableInfo info,
+        TextBox current,
+        bool backwards)
+    {
+        var cells = grid.Children.OfType<TextBox>()
+            .Where(child => child.Tag is InlineTableCellBinding)
+            .OrderBy(child => ((InlineTableCellBinding)child.Tag!).RowIndex)
+            .ThenBy(child => ((InlineTableCellBinding)child.Tag!).CellIndex)
+            .ToList();
+        int currentIndex = cells.IndexOf(current);
+        if (currentIndex < 0)
+            return false;
+
+        int nextIndex = currentIndex + (backwards ? -1 : 1);
+        if (nextIndex >= 0 && nextIndex < cells.Count)
+        {
+            cells[nextIndex].Focus();
+            return true;
+        }
+
+        if (backwards)
+        {
+            // Keep Shift+Tab inside the inline table at its first cell.
+            return true;
+        }
+
+        AppendInlineTableRow(grid, info);
+        int newRowIndex = info.Table.Rows.Count - 1;
+        grid.Children.OfType<TextBox>()
+            .Where(child => child.Tag is InlineTableCellBinding binding
+                && binding.RowIndex == newRowIndex
+                && binding.CellIndex == 0)
+            .FirstOrDefault()
+            ?.Focus();
+        return true;
+    }
+
+    private static void AppendInlineTableRow(Grid grid, InlineTableInfo info)
+    {
+        var table = info.Table;
+        int rowIndex = table.Rows.Count;
+        int columnCount = Math.Max(1, grid.ColumnDefinitions.Count);
+        var row = new ModelTableRow
+        {
+            HeightEmu = table.Rows.LastOrDefault()?.HeightEmu ?? 0,
+        };
+        for (int column = 0; column < columnCount; column++)
+            row.Cells.Add(new ModelTableCell { TextBody = new TextBody() });
+        table.Rows.Add(row);
+
+        double spacingDip = Math.Max(0, table.RichTextCellSpacingPt.GetValueOrDefault()) * PtToDip;
+        var widths = grid.ColumnDefinitions
+            .Select(definition => definition.Width.IsAbsolute
+                ? definition.Width.Value
+                : 72)
+            .ToArray();
+        double rowOffset = GetHorizontalOffset(row, widths, widths.Sum());
+        double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
+        var rowDefinition = new RowDefinition();
+        if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
+        {
+            rowDefinition.Height = GridLength.Auto;
+            rowDefinition.MinHeight = height;
+        }
+        else
+        {
+            rowDefinition.Height = new GridLength(height);
+        }
+        grid.RowDefinitions.Add(rowDefinition);
+
+        for (int column = 0; column < columnCount; column++)
+        {
+            var cell = row.Cells[column];
+            var textBox = CreateInlineTableCellTextBox(
+                cell,
+                rowIndex,
+                column,
+                spacingDip,
+                columnCount,
+                rowOffset);
+            Grid.SetRow(textBox, rowIndex);
+            Grid.SetColumn(textBox, column);
+            textBox.PreviewKeyDown += (_, args) =>
+                OnInlineTableCellPreviewKeyDown(grid, info, textBox, args);
+            grid.Children.Add(textBox);
+        }
+    }
+
+    private static TextBox CreateInlineTableCellTextBox(
+        ModelTableCell cell,
+        int rowIndex,
+        int columnIndex,
+        double spacingDip,
+        int columnCount,
+        double rowOffset)
+    {
+        var textBox = new TextBox
+        {
+            Text = cell.TextBody is null
+                ? string.Empty
+                : InCanvasTextEditPlanner.ExtractPlainText(cell.TextBody),
+            Tag = new InlineTableCellBinding(rowIndex, cell, columnIndex),
+            AcceptsReturn = true,
+            BorderThickness = new Thickness(0.5),
+            BorderBrush = Brushes.Gray,
+            Margin = columnIndex + Math.Max(1, cell.GridSpan) < columnCount
+                ? new Thickness(0, 0, spacingDip, 0)
+                : new Thickness(0),
+            Padding = new Thickness(
+                cell.InsetLeftPt.GetValueOrDefault() * PtToDip,
+                cell.InsetTopPt.GetValueOrDefault() * PtToDip,
+                cell.InsetRightPt.GetValueOrDefault() * PtToDip,
+                cell.InsetBottomPt.GetValueOrDefault() * PtToDip),
+            VerticalContentAlignment = cell.Anchor switch
+            {
+                TableCellAnchor.Middle => VerticalAlignment.Center,
+                TableCellAnchor.Bottom => VerticalAlignment.Bottom,
+                _ => VerticalAlignment.Top,
+            },
+            RenderTransform = rowOffset > 0
+                ? new TranslateTransform(rowOffset, 0)
+                : null,
+        };
+        if (cell.Fill is ShapeFill.Solid solid)
+            textBox.Background = new SolidColorBrush(
+                Color.FromArgb(solid.Color.Alpha, solid.Color.Resolved.R,
+                    solid.Color.Resolved.G, solid.Color.Resolved.B));
+        return textBox;
     }
 
     private static double GetHorizontalOffset(

@@ -310,9 +310,24 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         var previewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"));
 
         renderSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, edgeInset)");
-        viewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(ActualWidth, ActualHeight, inset)");
+        viewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(width, height, inset)");
         viewSource.Should().Contain("pb.LineStyle == BorderLineStyle.Wave");
         previewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(size.Width, size.Height, waveInset)");
+    }
+
+    [Fact]
+    public void WpfPageBorderConsumers_UseSharedDecorativeArtRenderer()
+    {
+        var renderSource = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+        var viewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var previewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"));
+        var artSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "PageBorderArtWpfRenderer.cs"));
+
+        renderSource.Should().Contain("PageBorderArtWpfRenderer.TryDraw(drawingContext, border, artFrame, artInset)");
+        renderSource.Should().Contain("DrawSoftwareApple(canvas, motif)");
+        viewSource.Should().Contain("PageBorderArtWpfRenderer.TryDraw(");
+        previewSource.Should().Contain("PageBorderArtWpfRenderer.TryDraw(");
+        artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildApplesFrame(");
     }
 
     [Fact]
@@ -322,11 +337,18 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         var viewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
         var previewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"));
 
-        renderSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pb.Display, i)");
+        renderSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, i)");
         renderSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(border.Display, pageIndex)");
         viewSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pb.Display, 0)");
         previewSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, pageNumber)");
         previewSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(border.Display, pageNumber)");
+        renderSource.Should().Contain("pageBorderLayer == PageBorderRenderLayer.BehindText");
+        renderSource.Should().Contain("pageBorderLayer == PageBorderRenderLayer.InFrontOfText");
+        renderSource.Should().Contain("DrawSoftwarePageBorder(canvas, frontBorder, width, height)");
+        viewSource.Should().Contain("private sealed class PageBorderAdorner : Adorner");
+        viewSource.Should().Contain("SyncPageBorderAdorner();");
+        previewSource.Should().Contain("PageBorderRenderLayer.BehindText");
+        previewSource.Should().Contain("PageBorderRenderLayer.InFrontOfText");
     }
 
     [Fact]

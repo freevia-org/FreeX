@@ -162,6 +162,10 @@ public sealed class DocumentView : RichTextBox
     // device pixels, so the live editor draws the shared pixel-aligned rule through this overlay.
     private ColumnRuleAdorner? _columnRuleAdorner;
 
+    // A front-of-text page border must be owned by the adorner layer; RichTextBox.OnRender and BorderBrush
+    // paint below the FlowDocument child visuals. Behind-text borders stay on the normal control layer.
+    private PageBorderAdorner? _pageBorderAdorner;
+
     // The live overlay drawing line numbers in the left margin when the document enables them
     // (w:lnNumType), or null when line numbering is off. Like the page-break overlay it is an
     // AdornerLayer overlay, never part of the FlowDocument content, and recomputed on relayout.
@@ -342,6 +346,7 @@ public sealed class DocumentView : RichTextBox
         ApplyPageChrome();
         SyncPageBreakAdorner();
         SyncColumnRuleAdorner();
+        SyncPageBorderAdorner();
         SyncLineNumberAdorner();
     }
 
@@ -5023,6 +5028,7 @@ public sealed class DocumentView : RichTextBox
         SyncFormattingMarksAdorner();
         SyncPageBreakAdorner();
         SyncColumnRuleAdorner();
+        SyncPageBorderAdorner();
         SyncLineNumberAdorner();
         SyncChangeBarAdorner();
         SyncPageGridlinesAdorner();
@@ -5250,29 +5256,61 @@ public sealed class DocumentView : RichTextBox
     {
         base.OnRender(drawingContext);
         if (!PrintLayoutEnabled
-            || _model.Page.PageBorder is not { LineStyle: BorderLineStyle.Wave } border
-            || !PageBorderVisibilityPlanner.ShouldRender(border.Display, 0))
+            || _model.Page.PageBorder is not { } border
+            || (border.LineStyle != BorderLineStyle.Wave && border.ArtId <= 0)
+            || !PageBorderVisibilityPlanner.ShouldRender(border.Display, 0)
+            || PageBorderVisibilityPlanner.LayerFor(border.ZOrder) != PageBorderRenderLayer.BehindText)
             return;
 
+        DrawLivePageBorder(drawingContext, border, ActualWidth, ActualHeight);
+    }
+
+    private static void DrawLivePageBorder(
+        DrawingContext drawingContext,
+        PageBorder border,
+        double width,
+        double height)
+    {
         var inset = Math.Min(
             PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
-            Math.Min(ActualWidth, ActualHeight) / 4);
-        var color = ParseColor(border.ColorHex, Colors.Black);
-        var waveColor = Color.FromArgb(
-            (byte)Math.Round(255 * PageBorderWaveVisualPlanner.StrokeOpacity),
-            color.R,
-            color.G,
-            color.B);
-        var pen = new Pen(
-            new SolidColorBrush(waveColor),
-            PageBorderWaveVisualPlanner.StrokeWidthDip);
-        foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(ActualWidth, ActualHeight, inset))
+            Math.Min(width, height) / 4);
+        if (PageBorderArtWpfRenderer.TryDraw(
+                drawingContext,
+                border,
+                new Rect(0, 0, width, height),
+                inset))
         {
-            drawingContext.DrawLine(
-                pen,
-                new Point(segment.X1Dip, segment.Y1Dip),
-                new Point(segment.X2Dip, segment.Y2Dip));
+            return;
         }
+
+        var color = ParseColor(border.ColorHex, Colors.Black);
+        if (border.LineStyle == BorderLineStyle.Wave)
+        {
+            var waveColor = Color.FromArgb(
+                (byte)Math.Round(255 * PageBorderWaveVisualPlanner.StrokeOpacity),
+                color.R,
+                color.G,
+                color.B);
+            var pen = new Pen(
+                new SolidColorBrush(waveColor),
+                PageBorderWaveVisualPlanner.StrokeWidthDip);
+            foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(width, height, inset))
+            {
+                drawingContext.DrawLine(
+                    pen,
+                    new Point(segment.X1Dip, segment.Y1Dip),
+                    new Point(segment.X2Dip, segment.Y2Dip));
+            }
+            return;
+        }
+
+        var thickness = Math.Max(1, border.WidthPt * PxPerPoint);
+        var linePen = new Pen(new SolidColorBrush(color), thickness);
+        var half = thickness / 2;
+        drawingContext.DrawRectangle(
+            null,
+            linePen,
+            new Rect(half, half, Math.Max(0, width - thickness), Math.Max(0, height - thickness)));
     }
 
     private void ApplyPageChrome()
@@ -5280,7 +5318,8 @@ public sealed class DocumentView : RichTextBox
         if (_model.Page.PageBorder is { } pb
             && PageBorderVisibilityPlanner.ShouldRender(pb.Display, 0))
         {
-            if (pb.LineStyle == BorderLineStyle.Wave)
+            var frontLayer = PageBorderVisibilityPlanner.LayerFor(pb.ZOrder) == PageBorderRenderLayer.InFrontOfText;
+            if (pb.ArtId > 0 || pb.LineStyle == BorderLineStyle.Wave || frontLayer)
             {
                 BorderBrush = null;
                 BorderThickness = new Thickness(0);
@@ -5414,6 +5453,45 @@ public sealed class DocumentView : RichTextBox
     {
         Loaded -= OnLoadedSyncColumnRules;
         SyncColumnRuleAdorner();
+    }
+
+    private void SyncPageBorderAdorner()
+    {
+        var enabled = PrintLayoutEnabled
+            && _model.Page.PageBorder is { } border
+            && PageBorderVisibilityPlanner.ShouldRender(border.Display, 0)
+            && PageBorderVisibilityPlanner.LayerFor(border.ZOrder) == PageBorderRenderLayer.InFrontOfText;
+        var layer = AdornerLayer.GetAdornerLayer(this);
+        if (layer is null)
+        {
+            if (enabled)
+            {
+                Loaded -= OnLoadedSyncPageBorder;
+                Loaded += OnLoadedSyncPageBorder;
+            }
+            return;
+        }
+
+        if (enabled)
+        {
+            if (_pageBorderAdorner is null)
+            {
+                _pageBorderAdorner = new PageBorderAdorner(this);
+                layer.Add(_pageBorderAdorner);
+            }
+            _pageBorderAdorner.InvalidateVisual();
+        }
+        else if (_pageBorderAdorner is not null)
+        {
+            layer.Remove(_pageBorderAdorner);
+            _pageBorderAdorner = null;
+        }
+    }
+
+    private void OnLoadedSyncPageBorder(object sender, RoutedEventArgs e)
+    {
+        Loaded -= OnLoadedSyncPageBorder;
+        SyncPageBorderAdorner();
     }
 
     // Test seam (FreeW.App.Host.Tests has InternalsVisibleTo). Returns the cached pagination result
@@ -17070,6 +17148,38 @@ public sealed class DocumentView : RichTextBox
             }
 
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Owns front-of-text page-border paint above the RichTextBox content while leaving selection and
+    /// editing chrome in the host's higher interaction layers.
+    /// </summary>
+    private sealed class PageBorderAdorner : Adorner
+    {
+        private readonly DocumentView _view;
+
+        public PageBorderAdorner(DocumentView view) : base(view)
+        {
+            _view = view;
+            IsHitTestVisible = false;
+            _view.LayoutUpdated += (_, _) => InvalidateVisual();
+        }
+
+        protected override void OnRender(DrawingContext drawingContext)
+        {
+            base.OnRender(drawingContext);
+            if (!_view.PrintLayoutEnabled
+                || _view._model.Page.PageBorder is not { } border
+                || !PageBorderVisibilityPlanner.ShouldRender(border.Display, 0)
+                || PageBorderVisibilityPlanner.LayerFor(border.ZOrder) != PageBorderRenderLayer.InFrontOfText)
+                return;
+
+            DrawLivePageBorder(
+                drawingContext,
+                border,
+                _view.RenderSize.Width,
+                _view.RenderSize.Height);
         }
     }
 

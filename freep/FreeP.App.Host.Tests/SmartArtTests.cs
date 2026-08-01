@@ -40,6 +40,15 @@ public sealed class SmartArtTests : IDisposable
             archive.GetEntry(entryPath)?.Delete();
     }
 
+    private static void ReplaceZipEntry(string path, string entryPath, string content)
+    {
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        archive.GetEntry(entryPath)?.Delete();
+        var entry = archive.CreateEntry(entryPath);
+        using var writer = new StreamWriter(entry.Open(), new UTF8Encoding(false));
+        writer.Write(content);
+    }
+
     /// <summary>
     /// Builds a minimal but self-consistent in-memory .pptx archive with one SmartArt shape.
     /// Writes it to disk and returns the path.
@@ -495,6 +504,61 @@ public sealed class SmartArtTests : IDisposable
             shape.TextBody!.Paragraphs[0].Runs[0].Color!.Resolved.Should().Be(SrgbColor.White,
                 "the cached drawing's dsp:style fontRef supplies its default text color");
         }
+    }
+
+    [Fact]
+    public void Reader_SmartArt_PreservesNativeDspConnectorFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(["Node"]);
+        var dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
+        var a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+        var drawing = $"""
+            <dsp:drawing xmlns:dsp="{dsp}" xmlns:a="{a}" xmlns:r="{r}">
+              <dsp:spTree>
+                <dsp:nvGrpSpPr><dsp:cNvPr id="1" name="SmartArt Cache" /><dsp:cNvGrpSpPr /></dsp:nvGrpSpPr>
+                <dsp:grpSpPr />
+                <dsp:cxnSp modelId="connector-1">
+                  <dsp:nvCxnSpPr>
+                    <dsp:cNvPr id="7" name="Native connector" />
+                    <dsp:cNvCxnSpPr>
+                      <a:stCxn id="3" idx="2" />
+                      <a:endCxn id="4" idx="0" />
+                    </dsp:cNvCxnSpPr>
+                    <dsp:nvPr />
+                  </dsp:nvCxnSpPr>
+                  <dsp:spPr>
+                    <a:xfrm flipV="1">
+                      <a:off x="100" y="200" />
+                      <a:ext cx="300" cy="400" />
+                    </a:xfrm>
+                    <a:prstGeom prst="line"><a:avLst /></a:prstGeom>
+                    <a:ln w="12700"><a:solidFill><a:srgbClr val="4472C4" /></a:solidFill></a:ln>
+                  </dsp:spPr>
+                </dsp:cxnSp>
+              </dsp:spTree>
+            </dsp:drawing>
+            """;
+        ReplaceZipEntry(pptxPath, "ppt/diagrams/drawing1.xml", drawing);
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        var connector = smartArt.FallbackShapes.Should().ContainSingle().Subject;
+
+        connector.Kind.Should().Be(SlideShapeKind.Connector);
+        connector.AutoShapeKind.Should().Be(DrawingShapeKind.Line);
+        connector.OffsetXEmu.Should().Be(100);
+        connector.OffsetYEmu.Should().Be(200);
+        connector.ExtentCxEmu.Should().Be(300);
+        connector.ExtentCyEmu.Should().Be(400);
+        connector.FlipV.Should().BeTrue();
+        connector.ConnectionStart.Should().NotBeNull();
+        connector.ConnectionStart!.ShapeId.Should().Be(3);
+        connector.ConnectionStart.SiteIndex.Should().Be(2);
+        connector.ConnectionEnd.Should().NotBeNull();
+        connector.ConnectionEnd!.ShapeId.Should().Be(4);
+        connector.ConnectionEnd.SiteIndex.Should().Be(0);
     }
 
     [Fact]

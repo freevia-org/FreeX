@@ -253,6 +253,88 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void WpfInlineTableEditor_TabMovesAcrossCellsAndAppendsMatchingRow()
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.AddRange([457200, 457200]);
+        table.Rows.Add(new ModelTableRow
+        {
+            HeightEmu = 304800,
+            Cells =
+            {
+                new ModelTableCell { TextBody = new TextBody() },
+                new ModelTableCell { TextBody = new TextBody() },
+            },
+        });
+        var info = new InlineTableInfo { Table = table };
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new ModelParagraph
+                {
+                    Runs = { new ModelRun { Text = "\uFFFC", InlineTable = info } },
+                },
+            },
+        };
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body);
+        var grid = document.Blocks.OfType<WpfParagraph>().Single().Inlines
+            .OfType<InlineUIContainer>().Single().Child.Should().BeOfType<Grid>().Subject;
+        var originalCells = grid.Children.OfType<TextBox>().ToList();
+        var editorInfo = grid.Tag.Should().BeOfType<InlineTableInfo>().Subject;
+
+        TextBodyFlowDocumentConverter.TryNavigateInlineTableCell(
+            grid, editorInfo, originalCells[0], backwards: false).Should().BeTrue();
+        editorInfo.Table.Rows.Should().HaveCount(1);
+
+        TextBodyFlowDocumentConverter.TryNavigateInlineTableCell(
+            grid, editorInfo, originalCells[1], backwards: false).Should().BeTrue();
+        editorInfo.Table.Rows.Should().HaveCount(2);
+        grid.RowDefinitions.Should().HaveCount(2);
+
+        var newRowCells = grid.Children.OfType<TextBox>().Skip(2).ToList();
+        newRowCells.Should().HaveCount(2);
+        newRowCells.Select(cell => cell.Text).Should().AllBeEquivalentTo(string.Empty);
+
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(document, body);
+        restored.Paragraphs[0].Runs.Single().InlineTable!.Table.Rows.Should().HaveCount(2);
+    }
+
+    [StaFact]
+    public void WpfInlineTableEditor_ShiftTabAtFirstCellStaysInsideTable()
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(457200);
+        table.Rows.Add(new ModelTableRow
+        {
+            Cells = { new ModelTableCell { TextBody = new TextBody() } },
+        });
+        var info = new InlineTableInfo { Table = table };
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new ModelParagraph
+                {
+                    Runs = { new ModelRun { Text = "\uFFFC", InlineTable = info } },
+                },
+            },
+        };
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body);
+        var grid = document.Blocks.OfType<WpfParagraph>().Single().Inlines
+            .OfType<InlineUIContainer>().Single().Child.Should().BeOfType<Grid>().Subject;
+        var cell = grid.Children.OfType<TextBox>().Single();
+        var editorInfo = grid.Tag.Should().BeOfType<InlineTableInfo>().Subject;
+
+        TextBodyFlowDocumentConverter.TryNavigateInlineTableCell(
+            grid, editorInfo, cell, backwards: true).Should().BeTrue();
+        editorInfo.Table.Rows.Should().HaveCount(1);
+        grid.Children.OfType<TextBox>().Should().ContainSingle();
+    }
+
+    [StaFact]
     public void WpfSplitFirstParagraph_UsesTextLineageForFollowingMetadata()
     {
         var original = DistinctParagraphBody();

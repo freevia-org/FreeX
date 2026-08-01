@@ -31,6 +31,30 @@ public sealed class OmmlParserTests
         return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
     }
 
+    [Fact]
+    public void PowerPointDefaults_UseCambriaMath_AndAuthoredFontStillWins()
+    {
+        var defaultNode = OmmlParser.ParsePowerPoint(
+            $"<m:oMath xmlns:m=\"{M}\"><m:r><m:t>x</m:t></m:r></m:oMath>",
+            "FALLBACK");
+        var defaultRoot = Assert.IsType<MathNode.MathRoot>(defaultNode);
+        Assert.Equal("Cambria Math", defaultRoot.Properties.MathFontFamily);
+
+        var documentNode = OmmlParser.ParsePowerPoint(
+            $"<m:oMath xmlns:m=\"{M}\"><m:r><m:t>x</m:t></m:r></m:oMath>",
+            "FALLBACK",
+            new MathNode.MathProperties(MathFontFamily: "Arial"));
+        var documentRoot = Assert.IsType<MathNode.MathRoot>(documentNode);
+        Assert.Equal("Arial", documentRoot.Properties.MathFontFamily);
+
+        var authoredNode = OmmlParser.ParsePowerPoint(
+            $"<m:oMath xmlns:m=\"{M}\"><m:mathPr><m:mathFont m:val=\"STIX Two Math\"/></m:mathPr>" +
+            "<m:r><m:t>x</m:t></m:r></m:oMath>",
+            "FALLBACK");
+        var authoredRoot = Assert.IsType<MathNode.MathRoot>(authoredNode);
+        Assert.Equal("STIX Two Math", authoredRoot.Properties.MathFontFamily);
+    }
+
     // ── HA1: m:nary limLoc default ────────────────────────────────────────
 
     [Fact]

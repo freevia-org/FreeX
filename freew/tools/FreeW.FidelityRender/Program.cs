@@ -653,6 +653,12 @@ static void RenderDocumentComposite(
 
         // Start the composite bitmap at this page's geometry (white background).
         var bmp = new RenderTargetBitmap(thisPixW, thisPixH, 96, 96, PixelFormats.Pbgra32);
+        var pageBorder = thisPageSettings.PageBorder;
+        var hasPageBorder = pageBorder is not null
+            && PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, i);
+        var pageBorderLayer = hasPageBorder
+            ? PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder)
+            : PageBorderRenderLayer.InFrontOfText;
 
         // ─ Layers 1 + 1b + 2: background + watermark + body ──────────────────────────────────────
         // We composite these into a DrawingVisual because the body paginator visual is already a
@@ -674,6 +680,14 @@ static void RenderDocumentComposite(
                 {
                     var wmBmp = RenderWatermarkPage(wm, pageColor, thisPixW, thisPixH);
                     dc.DrawImage(wmBmp, new Rect(0, 0, thisPixW, thisPixH));
+                }
+
+                if (hasPageBorder && pageBorderLayer == PageBorderRenderLayer.BehindText)
+                {
+                    DrawPageBorderVisual(
+                        dc, pageBorder!, thisPageSettings,
+                        thisMarginLeft, thisMarginRight, thisMarginBottom,
+                        thisPixW, thisPixH);
                 }
 
                 // Layer 2: body FlowDocument content (the paginator's Visual is already laid out).
@@ -698,66 +712,16 @@ static void RenderDocumentComposite(
         DrawTrackedRevisionChangeBars(bmp, doc, thisMarginLeft, thisMarginRight);
 
         // ─ Layer 3: page border (draw into a separate DrawingVisual, composite onto bmp) ─────────
-        if (thisPageSettings.PageBorder is { } pb
-            && PageBorderVisibilityPlanner.ShouldRender(pb.Display, i))
+        if (hasPageBorder && pageBorderLayer == PageBorderRenderLayer.InFrontOfText)
         {
+            var pb = pageBorder!;
             var borderVisual = new DrawingVisual();
             using (var dc = borderVisual.RenderOpen())
             {
-                var borderColor = ParseHexColor(pb.ColorHex, Colors.Black);
-                // Word measures page-relative frames from the page edge using w:space. Imported
-                // text-relative frames use the text/header references instead (see below).
-                double edgeInset = Math.Min(
-                    PageLayout.PointsToDip(pb.SpacePt),
-                    Math.Min(thisPixW, thisPixH) / 4.0);
-                var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint);
-                if (pb.OffsetFrom == PageBorderOffsetFrom.Text)
-                {
-                    var headerDistance = thisPageSettings.HeaderDistancePt > 0
-                        ? PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)
-                        : PageLayout.PointsToDip(36);
-                    var space = PageLayout.PointsToDip(pb.SpacePt);
-                    var outerFrame = new Rect(
-                        Math.Max(0, thisMarginLeft - space - borderWidth),
-                        Math.Max(0, headerDistance - space - borderWidth),
-                        Math.Max(0, thisPixW - thisMarginLeft - thisMarginRight + 2 * (space + borderWidth)),
-                        Math.Max(0, thisPixH - headerDistance - thisMarginBottom + 2 * (space + borderWidth)));
-
-                    if (pb.LineStyle == BorderLineStyle.Wave)
-                    {
-                        DrawWavePageBorderFrame(dc, borderColor, outerFrame, 0);
-                    }
-                    else if (pb.LineStyle == BorderLineStyle.Double)
-                    {
-                        var pen = new Pen(new SolidColorBrush(borderColor), borderWidth * 0.75);
-                        DrawTextRelativePageBorderFrame(dc, pen, outerFrame);
-                        DrawTextRelativePageBorderFrame(dc, pen, DeflatePageBorderFrame(outerFrame, borderWidth * 2.0));
-                    }
-                    else
-                    {
-                        DrawTextRelativePageBorderFrame(dc, new Pen(new SolidColorBrush(borderColor), borderWidth), outerFrame);
-                    }
-                }
-                else if (pb.LineStyle == BorderLineStyle.Double)
-                {
-                    // Word's double page frame uses two narrower strokes separated by one full
-                    // authored-width gap; a single thick WPF pen loses that visible geometry.
-                    var strokeWidth = borderWidth * 0.75;
-                    var pen = new Pen(new SolidColorBrush(borderColor), strokeWidth);
-                    DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);
-                    // Word's imported double frame starts the second stroke two authored widths
-                    // inward. A 4/3-width offset collapses its raster into the first stroke.
-                    DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * 2.0, thisPixW, thisPixH);
-                }
-                else if (pb.LineStyle == BorderLineStyle.Wave)
-                {
-                    DrawWavePageBorderFrame(dc, borderColor, new Rect(0, 0, thisPixW, thisPixH), edgeInset);
-                }
-                else
-                {
-                    var pen = new Pen(new SolidColorBrush(borderColor), borderWidth);
-                    DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);
-                }
+                DrawPageBorderVisual(
+                    dc, pb, thisPageSettings,
+                    thisMarginLeft, thisMarginRight, thisMarginBottom,
+                    thisPixW, thisPixH);
             }
             bmp.Render(borderVisual);
         }
@@ -1466,24 +1430,10 @@ static SKBitmap RenderSoftwarePageBitmap(
     DrawSoftwareWatermark(canvas, page, width, height);
 
     if (page.PageBorder is { } border
-        && PageBorderVisibilityPlanner.ShouldRender(border.Display, pageIndex))
+        && PageBorderVisibilityPlanner.ShouldRender(border.Display, pageIndex)
+        && PageBorderVisibilityPlanner.LayerFor(border.ZOrder) == PageBorderRenderLayer.BehindText)
     {
-        using var borderPaint = new SKPaint
-        {
-            Color = ParseSkiaColor(border.ColorHex, SKColors.Black),
-            IsAntialias = true,
-            StrokeWidth = (float)Math.Max(1, PageLayout.PointsToDip(border.WidthPt)),
-            IsStroke = true
-        };
-        var edgeInset = Math.Min(
-            (float)PageLayout.PointsToDip(24),
-            Math.Min(width, height) / 4f);
-        var inset = edgeInset + borderPaint.StrokeWidth / 2f;
-        canvas.DrawRect(new SKRect(
-            inset,
-            inset,
-            Math.Max(inset, width - inset),
-            Math.Max(inset, height - inset)), borderPaint);
+        DrawSoftwarePageBorder(canvas, border, width, height);
     }
 
     DrawSoftwareHeaderFooter(canvas, doc, pageIndex + 1, pageCount, width, height, contentLeft, contentRight, smallFont, mutedPaint);
@@ -1533,8 +1483,79 @@ static SKBitmap RenderSoftwarePageBitmap(
         }
     }
 
+    if (page.PageBorder is { } frontBorder
+        && PageBorderVisibilityPlanner.ShouldRender(frontBorder.Display, pageIndex)
+        && PageBorderVisibilityPlanner.LayerFor(frontBorder.ZOrder) == PageBorderRenderLayer.InFrontOfText)
+    {
+        DrawSoftwarePageBorder(canvas, frontBorder, width, height);
+    }
+
     canvas.Flush();
     return bitmap;
+}
+
+static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width, int height)
+{
+    var artInset = Math.Min(
+        (float)PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+        Math.Min(width, height) / 4f);
+    if (PageBorderArtVisualPlanner.TryBuildApplesFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var appleMotifs))
+    {
+        foreach (var motif in appleMotifs)
+            DrawSoftwareApple(canvas, motif);
+        return;
+    }
+
+    using var borderPaint = new SKPaint
+    {
+        Color = ParseSkiaColor(border.ColorHex, SKColors.Black),
+        IsAntialias = true,
+        StrokeWidth = (float)Math.Max(1, PageLayout.PointsToDip(border.WidthPt)),
+        IsStroke = true
+    };
+    var edgeInset = Math.Min(
+        (float)PageLayout.PointsToDip(24),
+        Math.Min(width, height) / 4f);
+    var inset = edgeInset + borderPaint.StrokeWidth / 2f;
+    canvas.DrawRect(new SKRect(
+        inset,
+        inset,
+        Math.Max(inset, width - inset),
+        Math.Max(inset, height - inset)), borderPaint);
+}
+
+static void DrawSoftwareApple(SKCanvas canvas, PageBorderAppleMotif motif)
+{
+    var x = (float)motif.Xdip;
+    var y = (float)motif.Ydip;
+    var size = (float)motif.SizeDip;
+    using var body = new SKPath();
+    body.MoveTo(x + size * .50f, y + size * .22f);
+    body.CubicTo(x + size * .35f, y + size * .04f, x + size * .04f, y + size * .10f, x + size * .03f, y + size * .51f);
+    body.CubicTo(x + size * .02f, y + size * .82f, x + size * .24f, y + size, x + size * .50f, y + size * .91f);
+    body.CubicTo(x + size * .76f, y + size, x + size * .98f, y + size * .82f, x + size * .97f, y + size * .51f);
+    body.CubicTo(x + size * .96f, y + size * .10f, x + size * .65f, y + size * .04f, x + size * .50f, y + size * .22f);
+    body.Close();
+    using var fill = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleFillRed, 0, 0), IsAntialias = true, Style = SKPaintStyle.Fill };
+    canvas.DrawPath(body, fill);
+
+    using var stem = new SKPath();
+    stem.MoveTo(x + size * .50f, y + size * .30f);
+    stem.CubicTo(x + size * .56f, y + size * .24f, x + size * .61f, y + size * .10f, x + size * .62f, y + size * .03f);
+    using var stemPaint = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleStemRed, 0, 0), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1.35f * size / 32f, StrokeCap = SKStrokeCap.Round };
+    canvas.DrawPath(stem, stemPaint);
+
+    using var highlight = new SKPath();
+    highlight.MoveTo(x + size * .25f, y + size * .34f);
+    highlight.CubicTo(x + size * .15f, y + size * .47f, x + size * .15f, y + size * .70f, x + size * .22f, y + size * .78f);
+    using var highlightPaint = new SKPaint { Color = new SKColor(PageBorderArtVisualPlanner.AppleHighlightRed, PageBorderArtVisualPlanner.AppleHighlightGreen, PageBorderArtVisualPlanner.AppleHighlightBlue), IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 2f * size / 32f, StrokeCap = SKStrokeCap.Round };
+    canvas.DrawPath(highlight, highlightPaint);
 }
 
 static void DrawSoftwareWatermark(SKCanvas canvas, PageSettings page, int width, int height)
@@ -1920,6 +1941,103 @@ static BitmapSource? TryDecodeWatermarkImage(byte[]? bytes)
     catch (Exception)
     {
         return null;
+    }
+}
+
+static void DrawPageBorderVisual(
+    DrawingContext drawingContext,
+    PageBorder border,
+    PageSettings page,
+    double marginLeft,
+    double marginRight,
+    double marginBottom,
+    double width,
+    double height)
+{
+    var borderColor = ParseHexColor(border.ColorHex, Colors.Black);
+    var edgeInset = Math.Min(
+        PageLayout.PointsToDip(border.SpacePt),
+        Math.Min(width, height) / 4.0);
+    var borderWidth = Math.Max(1, border.WidthPt * PageLayout.DipPerPoint);
+    if (border.ArtId > 0)
+    {
+        Rect artFrame;
+        double artInset;
+        if (border.OffsetFrom == PageBorderOffsetFrom.Text)
+        {
+            var headerDistance = page.HeaderDistancePt > 0
+                ? PageLayout.PointsToDip(page.HeaderDistancePt)
+                : PageLayout.PointsToDip(36);
+            var space = PageLayout.PointsToDip(border.SpacePt);
+            artFrame = new Rect(
+                Math.Max(0, marginLeft - space - borderWidth),
+                Math.Max(0, headerDistance - space - borderWidth),
+                Math.Max(0, width - marginLeft - marginRight + 2 * (space + borderWidth)),
+                Math.Max(0, height - headerDistance - marginBottom + 2 * (space + borderWidth)));
+            artInset = 0;
+        }
+        else
+        {
+            artFrame = new Rect(0, 0, width, height);
+            artInset = edgeInset;
+        }
+
+        if (PageBorderArtWpfRenderer.TryDraw(drawingContext, border, artFrame, artInset))
+            return;
+    }
+
+    if (border.OffsetFrom == PageBorderOffsetFrom.Text)
+    {
+        var headerDistance = page.HeaderDistancePt > 0
+            ? PageLayout.PointsToDip(page.HeaderDistancePt)
+            : PageLayout.PointsToDip(36);
+        var space = PageLayout.PointsToDip(border.SpacePt);
+        var outerFrame = new Rect(
+            Math.Max(0, marginLeft - space - borderWidth),
+            Math.Max(0, headerDistance - space - borderWidth),
+            Math.Max(0, width - marginLeft - marginRight + 2 * (space + borderWidth)),
+            Math.Max(0, height - headerDistance - marginBottom + 2 * (space + borderWidth)));
+
+        if (border.LineStyle == BorderLineStyle.Wave)
+        {
+            DrawWavePageBorderFrame(drawingContext, borderColor, outerFrame, 0);
+        }
+        else if (border.LineStyle == BorderLineStyle.Double)
+        {
+            var pen = new Pen(new SolidColorBrush(borderColor), borderWidth * 0.75);
+            DrawTextRelativePageBorderFrame(drawingContext, pen, outerFrame);
+            DrawTextRelativePageBorderFrame(
+                drawingContext,
+                pen,
+                DeflatePageBorderFrame(outerFrame, borderWidth * 2.0));
+        }
+        else
+        {
+            DrawTextRelativePageBorderFrame(
+                drawingContext,
+                new Pen(new SolidColorBrush(borderColor), borderWidth),
+                outerFrame);
+        }
+    }
+    else if (border.LineStyle == BorderLineStyle.Double)
+    {
+        var strokeWidth = borderWidth * 0.75;
+        var pen = new Pen(new SolidColorBrush(borderColor), strokeWidth);
+        DrawPageBorderFrame(drawingContext, pen, edgeInset, width, height);
+        DrawPageBorderFrame(drawingContext, pen, edgeInset + borderWidth * 2.0, width, height);
+    }
+    else if (border.LineStyle == BorderLineStyle.Wave)
+    {
+        DrawWavePageBorderFrame(drawingContext, borderColor, new Rect(0, 0, width, height), edgeInset);
+    }
+    else
+    {
+        DrawPageBorderFrame(
+            drawingContext,
+            new Pen(new SolidColorBrush(borderColor), borderWidth),
+            edgeInset,
+            width,
+            height);
     }
 }
 

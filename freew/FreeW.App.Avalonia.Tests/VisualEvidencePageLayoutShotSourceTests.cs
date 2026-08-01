@@ -272,13 +272,25 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_UsesSharedDecorativePageBorderPlanForLiveAndPdf()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildApplesFrame(");
+        source.Should().Contain("TryDrawPageBorderArt(context, pb, artFrame, artInset)");
+        source.Should().Contain("BuildPdfAppleBorderOps(appleMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");
+    }
+
+    [Fact]
     public void AvaloniaDocumentView_UsesSharedPageBorderVisibilitySemantics()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
         source.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, pageIndex)");
         source.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pb.Display, pageIndex)");
-        source.Should().Contain("DrawPageBorder(context, pageRect, pi)");
+        source.Should().Contain("DrawPageBordersForLayer(context, PageBorderRenderLayer.BehindText)");
+        source.Should().Contain("DrawPageBordersForLayer(context, PageBorderRenderLayer.InFrontOfText)");
+        source.Should().Contain("PageBorderVisibilityPlanner.LayerFor(border.ZOrder)");
     }
 
     [Fact]

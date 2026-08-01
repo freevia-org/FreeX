@@ -288,7 +288,8 @@ internal sealed class HeaderFooterPaginator(
 
         var basePage = inner.GetPage(pageNumber);
         var hasWatermark = !string.IsNullOrEmpty(page.Watermark);
-        var hasBorder = page.PageBorder is { } pageBorder
+        var pageBorder = page.PageBorder;
+        var hasBorder = pageBorder is not null
             && PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, pageNumber);
         var hasLineNumbers = page.LineNumberMode != LineNumberMode.None && lineHeightDip > 0;
         var hasColumnRule = page.ColumnsLineBetween && page.ColumnCount > 1;
@@ -315,12 +316,16 @@ internal sealed class HeaderFooterPaginator(
 
         var size = basePage.Size;
         var visual = new ContainerVisual();
-        // The watermark sits behind the page content; the border is drawn on top of the page edge.
+        // The watermark sits behind page content. Page-border z-order decides which side of body text owns it.
         if (hasWatermark)
             visual.Children.Add(BuildWatermark(page.Watermark!, size));
+        if (hasBorder
+            && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.BehindText)
+            visual.Children.Add(BuildPageBorder(pageBorder, size));
         visual.Children.Add(basePage.Visual);
-        if (hasBorder)
-            visual.Children.Add(BuildPageBorder(page.PageBorder!, size));
+        if (hasBorder
+            && PageBorderVisibilityPlanner.LayerFor(pageBorder!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
+            visual.Children.Add(BuildPageBorder(pageBorder, size));
         if (hasColumnRule)
             visual.Children.Add(DocumentView.BuildColumnRuleVisual(
                 page,
@@ -484,8 +489,11 @@ internal sealed class HeaderFooterPaginator(
 
         if (!string.IsNullOrEmpty(page.Watermark))
             visual.Children.Add(BuildWatermark(page.Watermark!, size));
-        if (page.PageBorder is { } border
-            && PageBorderVisibilityPlanner.ShouldRender(border.Display, pageNumber))
+        var border = page.PageBorder;
+        var hasBorder = border is not null
+            && PageBorderVisibilityPlanner.ShouldRender(border.Display, pageNumber);
+        if (hasBorder
+            && PageBorderVisibilityPlanner.LayerFor(border!.ZOrder) == PageBorderRenderLayer.BehindText)
             visual.Children.Add(BuildPageBorder(border, size));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);
@@ -510,6 +518,10 @@ internal sealed class HeaderFooterPaginator(
             includeEndnotes: true,
             separatorYOverride: PageLayout.PointsToDip(page.MarginTopPt) + 7,
             maxYOverride: size.Height - PageLayout.PointsToDip(page.MarginBottomPt)));
+
+        if (hasBorder
+            && PageBorderVisibilityPlanner.LayerFor(border!.ZOrder) == PageBorderRenderLayer.InFrontOfText)
+            visual.Children.Add(BuildPageBorder(border, size));
 
         var contentBox = new Rect(
             marginLeft,
@@ -628,6 +640,21 @@ internal sealed class HeaderFooterPaginator(
     {
         var visual = new DrawingVisual();
         var color = ParseColor(border.ColorHex);
+        var artInset = Math.Min(
+            PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+            Math.Min(size.Width, size.Height) / 4);
+        using (var artContext = visual.RenderOpen())
+        {
+            if (PageBorderArtWpfRenderer.TryDraw(
+                    artContext,
+                    border,
+                    new Rect(0, 0, size.Width, size.Height),
+                    artInset))
+            {
+                return visual;
+            }
+        }
+
         if (border.LineStyle == BorderLineStyle.Wave)
         {
             var waveInset = Math.Min(
