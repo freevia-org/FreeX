@@ -101,6 +101,27 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void WeavingRibbon_UsesContinuousRailsAndAlternatingDiagonalStripes()
+    {
+        PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(95, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().Equal(
+            new PageBorderArtFillRectangle(32, 32, 752, 32, 0, 0, 0),
+            new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
+            new PageBorderArtFillRectangle(31, 32, 32, 992, 0, 0, 0),
+            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
+        plan.Polygons.Should().HaveCount(220);
+        plan.Polygons[0].Points.Should().Equal(
+            new PageBorderArtPoint(44, 63),
+            new PageBorderArtPoint(44, 64),
+            new PageBorderArtPoint(55, 64),
+            new PageBorderArtPoint(76, 43),
+            new PageBorderArtPoint(76, 32),
+            new PageBorderArtPoint(65, 32));
+    }
+
+    [Fact]
     public void TinyFrame_IsRecognizedButProducesNoMotifs()
     {
         PageBorderArtVisualPlanner.TryBuildApplesFrame(1, 3, 40, 40, 20, out var motifs)

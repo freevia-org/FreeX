@@ -224,6 +224,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.InterlockingRingsLayoutCommandId] = SmartArtLayoutPreset.InterlockingRings,
             [SmartArtAuthoringPlanner.OpposingIdeasLayoutCommandId] = SmartArtLayoutPreset.OpposingIdeas,
             [SmartArtAuthoringPlanner.ConvergingRadialLayoutCommandId] = SmartArtLayoutPreset.ConvergingRadial,
+            [SmartArtAuthoringPlanner.DivergingRadialLayoutCommandId] = SmartArtLayoutPreset.DivergingRadial,
             [SmartArtAuthoringPlanner.Hierarchy3LayoutCommandId] = SmartArtLayoutPreset.Hierarchy3,
             [SmartArtAuthoringPlanner.GearCycleLayoutCommandId] = SmartArtLayoutPreset.GearCycle,
             [SmartArtAuthoringPlanner.Cycle2LayoutCommandId] = SmartArtLayoutPreset.Cycle2,
@@ -235,6 +236,7 @@ public class RibbonEditorCompleteness5BTests
             [SmartArtAuthoringPlanner.List2LayoutCommandId] = SmartArtLayoutPreset.List2,
             [SmartArtAuthoringPlanner.BasicRadialLayoutCommandId] = SmartArtLayoutPreset.BasicRadial,
             [SmartArtAuthoringPlanner.InvertedPyramidLayoutCommandId] = SmartArtLayoutPreset.InvertedPyramid,
+            [SmartArtAuthoringPlanner.RadialClusterLayoutCommandId] = SmartArtLayoutPreset.RadialCluster,
             [SmartArtAuthoringPlanner.RadialListLayoutCommandId] = SmartArtLayoutPreset.RadialList,
         };
 

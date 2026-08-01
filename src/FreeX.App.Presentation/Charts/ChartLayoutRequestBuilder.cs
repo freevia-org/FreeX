@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 
 using FreeX.App.Presentation.Text;
 using FreeX.Core.Model;
@@ -38,6 +39,20 @@ public static class ChartLayoutRequestBuilder
         if (!ChartLayoutEngine.IsSupported(chart.Type))
             return null;
 
+        // R113-presentation-chart-embedded-fallback-1: a chart preserved through the named-range
+        // embedded-cache fallback (XlsxChartPartReader.*'s numCache/strCache readers, r110-r112)
+        // carries a synthetic 1x1 placeholder DataRange -- its real series/point data lives in
+        // chart.EmbeddedSeriesData instead. This is the SAME authoritative-when-present rule
+        // ChartTypeSupport.GetDataSeriesCount/GetDataPointCount already apply (r112); reuse it here
+        // rather than re-deriving from the placeholder DataRange, which either returns null outright
+        // (a header row makes the synthetic range's dataStartRow > endRow) or builds a meaningless
+        // single-point series from whatever real cell happens to sit at the placeholder's (1,1)
+        // address. Cell-accessor lookups can never recover the real data here anyway (the accessor
+        // has no way to address a different sheet than the one it was built for), so preferring the
+        // embedded cache whenever it is present is a strict improvement, never a regression.
+        if (chart.EmbeddedSeriesData is { Count: > 0 } embeddedSeries)
+            return BuildFromEmbeddedData(chart, embeddedSeries, plotArea, textMeasurer);
+
         var range = chart.DataRange;
         var startRow = range.Start.Row;
         var endRow = range.End.Row;
@@ -74,6 +89,70 @@ public static class ChartLayoutRequestBuilder
         {
             Chart = chart,
             Categories = categories,
+            Series = series,
+            PlotArea = plotArea,
+            TextMeasurer = textMeasurer,
+        };
+    }
+
+    /// <summary>
+    /// Builds a <see cref="ChartLayoutRequest"/> directly from <see cref="ChartModel.EmbeddedSeriesData"/>,
+    /// bypassing the cell accessor entirely. Used when the chart's series formulas are unresolvable
+    /// named ranges (or unreachable cross-sheet references) but the chart XML carries embedded
+    /// <c>&lt;c:numCache&gt;</c>/<c>&lt;c:strCache&gt;</c> values -- see the r113 note in
+    /// <see cref="TryBuild"/>. Every <see cref="ChartLayoutEngine.Layout"/> branch consumes the same
+    /// <see cref="ChartSeriesData"/>/category shape produced here, so this one accessor covers the
+    /// whole chart-type family rather than special-casing each layout branch.
+    /// </summary>
+    private static ChartLayoutRequest BuildFromEmbeddedData(
+        ChartModel chart,
+        List<ChartEmbeddedSeriesData> embeddedSeries,
+        PlotRect plotArea,
+        ITextMeasurer textMeasurer)
+    {
+        // Categories are shared across series in the model (one axis), but each embedded series
+        // carries its own cached copy (they read the same <c:cat>/<c:xVal> formula) -- use the first
+        // non-empty one, matching the desktop renderer's BuildPlotModelFromEmbeddedData fallback.
+        var categories = embeddedSeries
+            .Select(s => s.Categories)
+            .FirstOrDefault(c => c.Count > 0)?.ToList() ?? [];
+
+        var isScatter = chart.Type == ChartType.Scatter;
+        var series = new List<ChartSeriesData>(embeddedSeries.Count);
+        foreach (var embedded in embeddedSeries)
+        {
+            IReadOnlyList<double>? xValues = null;
+            if (isScatter)
+            {
+                // Scatter reads its embedded data with categoryContainerName "xVal" (see
+                // XlsxChartPartReader.Scatter.cs), so this series' own Categories are its X values
+                // as formatted numeric strings, not axis labels. A point whose cached text doesn't
+                // parse falls back to its positional index, matching ExtractScatterSeries.
+                var xs = new double[embedded.Values.Count];
+                for (var i = 0; i < xs.Length; i++)
+                {
+                    var text = i < embedded.Categories.Count ? embedded.Categories[i] : null;
+                    xs[i] = double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var x)
+                        ? x
+                        : i;
+                }
+
+                xValues = xs;
+            }
+
+            series.Add(new ChartSeriesData
+            {
+                SeriesIndex = embedded.SeriesIndex,
+                Name = embedded.SeriesName,
+                Values = embedded.Values,
+                XValues = xValues,
+            });
+        }
+
+        return new ChartLayoutRequest
+        {
+            Chart = chart,
+            Categories = isScatter ? [] : categories,
             Series = series,
             PlotArea = plotArea,
             TextMeasurer = textMeasurer,

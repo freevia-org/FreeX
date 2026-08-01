@@ -1074,6 +1074,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.AlternatingProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.ArrowRibbon, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleProcess, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.CircleArrowProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.FunnelProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
@@ -1097,12 +1098,14 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.InvertedPyramid, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.RadialCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicRadial, SmartArtFamily.Cycle)]
+    [InlineData(SmartArtLayoutPreset.RadialCluster, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.RadialList, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.TitledMatrix, SmartArtFamily.Matrix)]
     [InlineData(SmartArtLayoutPreset.BasicRelationship, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.OpposingIdeas, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.ConvergingRadial, SmartArtFamily.Relationship)]
+    [InlineData(SmartArtLayoutPreset.DivergingRadial, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.BasicVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.RadialVenn, SmartArtFamily.Relationship)]
     [InlineData(SmartArtLayoutPreset.TargetList, SmartArtFamily.Relationship)]
@@ -2668,6 +2671,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesDivergingRadialAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial",
+            nodes: [("id1", "Central"), ("id2", "North"), ("id3", "East"), ("id4", "South")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
+            "divergingRadial is a relationship-family layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "divergingRadial must use the editable shared relationship planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Central", "North", "East", "South");
+    }
+
+    [Fact]
     public void Reader_ParsesTargetListAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2760,6 +2782,25 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "radial1 is in the bounded shared live-layout planner");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Core", "Branch A", "Branch B");
+    }
+
+    [Fact]
+    public void Reader_ParsesRadialClusterAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2008/layout/RadialCluster",
+            nodes: [("id1", "Theme"), ("id2", "North"), ("id3", "East"), ("id4", "South")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "RadialCluster is a cycle-family central-idea layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "RadialCluster is admitted through the shared hub-and-spoke planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Theme", "North", "East", "South");
     }
 
     [Fact]

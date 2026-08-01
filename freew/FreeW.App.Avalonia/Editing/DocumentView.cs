@@ -4381,6 +4381,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfBatBorderOps(batMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var ribbonPlan))
+        {
+            return BuildPdfWeavingRibbonBorderOps(ribbonPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
         if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -4583,6 +4593,44 @@ public sealed class DocumentView : Control
                     points.Skip(1).Select(PdfPathSegment.LineTo).ToArray(),
                     true)],
                 PdfColor.Black,
+                null,
+                0));
+        }
+
+        return ops;
+    }
+
+    private static IReadOnlyList<PdfDrawOp> BuildPdfWeavingRibbonBorderOps(
+        PageBorderWeavingRibbonPlan plan,
+        double originXDip,
+        double originTopDip,
+        double pageHeightPt)
+    {
+        var ops = new List<PdfDrawOp>(plan.Fills.Count + plan.Polygons.Count);
+        foreach (var fill in plan.Fills)
+        {
+            ops.Add(new PdfFillRect(
+                (originXDip + fill.Xdip) / PxPerPoint,
+                pageHeightPt - (originTopDip + fill.Ydip + fill.HeightDip) / PxPerPoint,
+                fill.WidthDip / PxPerPoint,
+                fill.HeightDip / PxPerPoint,
+                new PdfColor(fill.Red, fill.Green, fill.Blue)));
+        }
+        foreach (var polygon in plan.Polygons)
+        {
+            var points = polygon.Points
+                .Select(point => new PdfPathPoint(
+                    (originXDip + point.XDip) / PxPerPoint,
+                    pageHeightPt - (originTopDip + point.YDip) / PxPerPoint))
+                .ToArray();
+            if (points.Length == 0)
+                continue;
+            ops.Add(new PdfPath(
+                [new PdfPathContour(
+                    points[0],
+                    points.Skip(1).Select(PdfPathSegment.LineTo).ToArray(),
+                    true)],
+                new PdfColor(polygon.Red, polygon.Green, polygon.Blue),
                 null,
                 0));
         }
@@ -10219,6 +10267,51 @@ public sealed class DocumentView : Control
                     path.EndFigure(true);
                 }
                 context.DrawGeometry(Brushes.Black, null, geometry);
+            }
+
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var ribbonPlan))
+        {
+            foreach (var fill in ribbonPlan.Fills)
+            {
+                context.FillRectangle(
+                    new SolidColorBrush(Color.FromRgb(fill.Red, fill.Green, fill.Blue)),
+                    new Rect(
+                        frame.X + fill.Xdip,
+                        frame.Y + fill.Ydip,
+                        fill.WidthDip,
+                        fill.HeightDip));
+            }
+            foreach (var polygon in ribbonPlan.Polygons)
+            {
+                if (polygon.Points.Count == 0)
+                    continue;
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(
+                        new Point(
+                            frame.X + polygon.Points[0].XDip,
+                            frame.Y + polygon.Points[0].YDip),
+                        true);
+                    foreach (var point in polygon.Points.Skip(1))
+                    {
+                        path.LineTo(new Point(frame.X + point.XDip, frame.Y + point.YDip));
+                    }
+                    path.EndFigure(true);
+                }
+                context.DrawGeometry(
+                    new SolidColorBrush(Color.FromRgb(polygon.Red, polygon.Green, polygon.Blue)),
+                    null,
+                    geometry);
             }
 
             return true;

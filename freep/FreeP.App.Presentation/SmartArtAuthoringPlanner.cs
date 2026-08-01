@@ -78,6 +78,7 @@ public enum SmartArtLayoutPreset
     AlternatingProcess,
     ArrowRibbon,
     CircleProcess,
+    CircleArrowProcess,
     FunnelProcess,
     VerticalProcess,
     VerticalBoxList,
@@ -105,6 +106,7 @@ public enum SmartArtLayoutPreset
     InvertedPyramid,
     RadialCycle,
     BasicRadial,
+    RadialCluster,
     RadialList,
     BasicMatrix,
     TitledMatrix,
@@ -112,6 +114,7 @@ public enum SmartArtLayoutPreset
     BasicRelationship,
     OpposingIdeas,
     ConvergingRadial,
+    DivergingRadial,
     BasicVenn,
     RadialVenn,
     TargetList,
@@ -222,6 +225,7 @@ public static class SmartArtAuthoringPlanner
     public const string AlternatingProcessLayoutCommandId = "freep.smartart.layout.alternating-process";
     public const string ArrowRibbonLayoutCommandId = "freep.smartart.layout.arrow-ribbon";
     public const string CircleProcessLayoutCommandId = "freep.smartart.layout.circle-process";
+    public const string CircleArrowProcessLayoutCommandId = "freep.smartart.layout.circle-arrow-process";
     public const string FunnelProcessLayoutCommandId = "freep.smartart.layout.funnel-process";
     public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
@@ -249,6 +253,7 @@ public static class SmartArtAuthoringPlanner
     public const string InvertedPyramidLayoutCommandId = "freep.smartart.layout.inverted-pyramid";
     public const string RadialCycleLayoutCommandId = "freep.smartart.layout.radial-cycle";
     public const string BasicRadialLayoutCommandId = "freep.smartart.layout.basic-radial";
+    public const string RadialClusterLayoutCommandId = "freep.smartart.layout.radial-cluster";
     public const string RadialListLayoutCommandId = "freep.smartart.layout.radial-list";
     public const string BasicMatrixLayoutCommandId = "freep.smartart.layout.basic-matrix";
     public const string TitledMatrixLayoutCommandId = "freep.smartart.layout.titled-matrix";
@@ -256,6 +261,7 @@ public static class SmartArtAuthoringPlanner
     public const string BasicRelationshipLayoutCommandId = "freep.smartart.layout.basic-relationship";
     public const string OpposingIdeasLayoutCommandId = "freep.smartart.layout.opposing-ideas";
     public const string ConvergingRadialLayoutCommandId = "freep.smartart.layout.converging-radial";
+    public const string DivergingRadialLayoutCommandId = "freep.smartart.layout.diverging-radial";
     public const string BasicVennLayoutCommandId = "freep.smartart.layout.basic-venn";
     public const string RadialVennLayoutCommandId = "freep.smartart.layout.radial-venn";
     public const string TargetListLayoutCommandId = "freep.smartart.layout.target-list";
@@ -578,6 +584,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon", SmartArtFamily.Process),
             SmartArtLayoutPreset.CircleProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/circleProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.CircleArrowProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/circleArrowProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.FunnelProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalProcess =>
@@ -632,6 +640,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicRadial =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radial1", SmartArtFamily.Cycle),
+            SmartArtLayoutPreset.RadialCluster =>
+                ("urn:microsoft.com/office/officeart/2008/layout/RadialCluster", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.RadialList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/radialList", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.BasicMatrix =>
@@ -646,6 +656,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/opposingIdeas", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.ConvergingRadial =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/convergingRadial", SmartArtFamily.Relationship),
+            SmartArtLayoutPreset.DivergingRadial =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/divergingRadial", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.BasicVenn =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicVenn", SmartArtFamily.Relationship),
             SmartArtLayoutPreset.RadialVenn =>

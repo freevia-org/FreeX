@@ -96,9 +96,33 @@ public static partial class ChartRenderer
         uint dataStartRow = chart.FirstRowIsHeader ? startRow + 1 : startRow;
         uint dataStartCol = chart.FirstColIsCategories ? startCol + 1 : startCol;
 
+        List<string>? embeddedCategories = null;
+        // R113-render-chart-embedded-fallback-all-types: r110-r112 taught the *readers* to fall back
+        // to a series' embedded <c:numCache>/<c:strCache> (or chartEx <cx:lvl>/<cx:pt>) cache when its
+        // formula is an unresolvable named range or an unreachable cross-sheet reference, and r112
+        // fixed ChartTypeSupport's series/point counts to consult that cache too -- but this renderer
+        // still iterated the (now correctly empty) live cellLookup directly for every chart type
+        // except Column/Bar (see the old BuildPlotModelFromEmbeddedData, which implemented only
+        // those two), so every other type still drew blank. Rather than adding a type-specific
+        // "if embedded, do X" branch to each of the ~20 chart-type code paths below (exactly the
+        // pattern that let this bug hide for three rounds), synthesize an ordinary cellLookup +
+        // row/column bounds from the embedded data ONCE here, before any type-specific code runs.
+        // Every branch after this point -- the inline Column/Bar/Area/Line/Scatter loop, the
+        // Pie/Doughnut block, and every extracted BuildXxxModel helper (Stacked*/Radar/Stock/
+        // Surface/Waterfall/Histogram/Pareto/BoxAndWhisker/Treemap/Sunburst/Funnel/Bubble) --
+        // consumes cellLookup/dataStartRow/endRow/dataStartCol/endCol/startRow exactly the same way
+        // whether the cells are live or synthesized from embedded cache data, so this substitution
+        // point is the ONLY embedded-data-aware code the renderer needs. cellLookup.Count == 0 is a
+        // safe "no live data at all" test because BuildChartCellLookup already filtered every cell to
+        // chart.DataRange -- an empty result means literally nothing in the viewport fell inside it.
+        if (cellLookup.Count == 0 && chart.EmbeddedSeriesData is { Count: > 0 })
+        {
+            (cellLookup, embeddedCategories, startRow, dataStartRow, endRow, dataStartCol, endCol) = BuildEmbeddedCellLookup(chart);
+        }
+
         var dataPointCapacity = GetDataPointCapacity(dataStartRow, endRow);
-        var categories = new List<string>(chart.FirstColIsCategories ? dataPointCapacity : 0);
-        if (chart.FirstColIsCategories)
+        var categories = embeddedCategories ?? new List<string>(chart.FirstColIsCategories ? dataPointCapacity : 0);
+        if (embeddedCategories is null && chart.FirstColIsCategories)
             for (uint r = dataStartRow; r <= endRow; r++)
                 categories.Add(cellLookup.TryGetValue((r, startCol), out var c) ? FormatCategoryLabel(chart, c) : "");
 
@@ -582,40 +606,7 @@ public static partial class ChartRenderer
         ApplyAxisBounds(model, chart, theme);
         AddChartDataTableAnnotations(model, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
 
-        // If the live-cell lookup produced no data for any series and embedded cache data is
-        // available (e.g. cross-sheet refs whose data sheet cells are not in the viewport),
-        // fall back to the embedded numCache/strCache values so the chart renders rather than
-        // appearing blank.  Charts that DO have live data continue to use live cells.
-        if (chart.EmbeddedSeriesData is { Count: > 0 } && AllSeriesEmpty(model))
-            return BuildPlotModelFromEmbeddedData(chart, theme) ?? model;
-
         return model;
-    }
-
-    /// <summary>
-    /// Returns true when every series in the model has zero data points (items/points).
-    /// Used to decide whether to fall back to embedded numCache data.
-    /// </summary>
-    private static bool AllSeriesEmpty(PlotModel model)
-    {
-        if (model.Series.Count == 0)
-            return true;
-
-        foreach (var series in model.Series)
-        {
-            if (series is RectangleBarSeries rbs && rbs.Items.Count > 0)
-                return false;
-            if (series is BarSeries bs && bs.Items.Count > 0)
-                return false;
-            if (series is LineSeries ls && ls.Points.Count > 0)
-                return false;
-            if (series is AreaSeries als && als.Points.Count > 0)
-                return false;
-            if (series is ScatterSeries ss && ss.Points.Count > 0)
-                return false;
-        }
-
-        return true;
     }
 
     /// <summary>
@@ -642,104 +633,92 @@ public static partial class ChartRenderer
                 : 0);
 
     /// <summary>
-    /// Renders a Column or Bar chart entirely from <see cref="ChartModel.EmbeddedSeriesData"/>,
-    /// bypassing the cell lookup.  Used when the series data formulas are unresolvable named
-    /// ranges (e.g. OFFSET-based dynamic names like <c>'Sheet1'!rngCount</c>) but the chart XML
-    /// carries embedded <c>&lt;c:numCache&gt;</c> / <c>&lt;c:strCache&gt;</c> values.
+    /// R113-render-chart-embedded-fallback-all-types: builds a synthetic cellLookup (plus matching
+    /// row/column bounds and categories) from <see cref="ChartModel.EmbeddedSeriesData"/> so every
+    /// chart-type branch in <see cref="BuildPlotModel"/> can render a fallback-loaded chart through
+    /// EXACTLY the same code that renders a live cell-range-backed one -- see the call site's
+    /// comment for why this single substitution point replaces the old per-type-only
+    /// BuildPlotModelFromEmbeddedData special case (which implemented just Column/Bar).
+    /// <para>
+    /// Layout: row 1 holds each series' cached name (read only when <see cref="ChartModel.FirstRowIsHeader"/>
+    /// is set, exactly like a live chart's header row); rows 2.. hold each series' cached values, one
+    /// column per series. Scatter and Bubble reserve column 1 for a shared X column built from the
+    /// FIRST series' cached X values (<see cref="ChartEmbeddedSeriesData.Categories"/> holds the
+    /// &lt;c:xVal&gt; numCache, formatted as a string, for those two chart types -- see
+    /// <c>XlsxChartPartReader.Scatter.cs</c>/<c>PieBubble.cs</c>, which override
+    /// categoryContainerName to "xVal" when reading their embedded data). This mirrors the live-cell
+    /// renderer's own assumption of one shared X column feeding every Y series
+    /// (<see cref="ShouldSkipScatterXColumn"/>; BuildBubbleModel reads its X column from the same
+    /// <c>dataStartCol</c> this method returns). Bubble additionally leaves an empty column after
+    /// each Y column for the (uncached) bubble-size series -- <see cref="ChartEmbeddedSeriesData"/>
+    /// never carries a bubbleSize cache at all, so those bubbles fall back to BuildBubbleModel's own
+    /// existing default (uniform size) rather than being lost entirely.
+    /// </para>
     /// </summary>
-    private static PlotModel? BuildPlotModelFromEmbeddedData(ChartModel chart, WorkbookTheme theme)
+    private static (
+        Dictionary<(uint Row, uint Col), DisplayCell> Lookup,
+        List<string> Categories,
+        uint StartRow,
+        uint DataStartRow,
+        uint EndRow,
+        uint DataStartCol,
+        uint EndCol) BuildEmbeddedCellLookup(ChartModel chart)
     {
         var embeddedData = chart.EmbeddedSeriesData!;
+        const uint headerRow = 1;
+        const uint dataStartRow = 2;
+
         var categories = embeddedData.Count > 0 ? embeddedData[0].Categories.ToList() : new List<string>();
 
-        var model = new PlotModel { Title = chart.Title };
-        model.DefaultColors = BuildExcelSeriesPalette(theme);
-        ApplyTitleStyle(model, chart, theme);
-        ApplyAreaStyle(model, chart, theme);
-        ConfigureLegend(model, chart, theme);
-        AddPivotChartFieldButtons(model, chart);
-        var pointDataLabelFormats = ShouldUseAnnotationLabels(chart)
-            ? new ChartPointDataLabelFormatLookup(chart.PointDataLabelFormats)
-            : default;
+        var maxPoints = 0;
+        foreach (var series in embeddedData)
+            maxPoints = Math.Max(maxPoints, Math.Max(series.Values.Count, series.Categories.Count));
+        var endRow = maxPoints > 0 ? dataStartRow + (uint)maxPoints - 1 : dataStartRow;
 
-        if (chart.Type is ChartType.Column or ChartType.ThreeDColumn)
+        var isXyChart = chart.Type is ChartType.Scatter or ChartType.Bubble;
+        var isBubble = chart.Type == ChartType.Bubble;
+        var lookup = new Dictionary<(uint Row, uint Col), DisplayCell>();
+
+        if (isXyChart && embeddedData.Count > 0)
         {
-            // When there are no category labels the effective count comes from the value series
-            // so the x-axis spans all data points (same fix as the live-cell path).
-            var maxValueCount = embeddedData.Count > 0 ? embeddedData.Max(s => s.Values.Count) : 0;
-            var categoryOrValueCount = categories.Count > 0 ? categories.Count : maxValueCount;
-            model.Axes.Add(CreateCenteredIndexedCategoryAxis(AxisPosition.Bottom, chart.XAxisTitle, categories, categoryOrValueCount));
-            model.Axes.Add(new LinearAxis { Position = AxisPosition.Left, Title = chart.YAxisTitle });
-
-            foreach (var seriesData in embeddedData)
+            // Shared X column at col 1, populated from the FIRST series' cached X values (every
+            // Scatter/Bubble series in a chart normally shares one X range; a chart whose series
+            // genuinely disagree on X is the one case this fallback does not reproduce exactly).
+            var xSource = embeddedData[0].Categories;
+            for (var p = 0; p < xSource.Count; p++)
             {
-                var seriesName = seriesData.SeriesName ?? $"Series {seriesData.SeriesIndex + 1}";
-                var series = new RectangleBarSeries
-                {
-                    Title = IsLegendEntryDeleted(chart, seriesData.SeriesIndex) ? "" : seriesName,
-                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 4)
-                };
-                var seriesFormat = GetSeriesFormat(chart, seriesData.SeriesIndex);
-                ApplyRectangleBarFormat(series, seriesFormat, theme);
-                ApplyNativeDataLabelStyle(series, chart, theme);
-                var colHalfWidth = ColumnBarHalfWidth(chart);
-                for (var i = 0; i < seriesData.Values.Count; i++)
-                {
-                    var v = seriesData.Values[i];
-                    if (v.HasValue)
-                    {
-                        var embeddedColumnBarItem = new RectangleBarItem(i - colHalfWidth, Math.Min(0, v.Value), i + colHalfWidth, Math.Max(0, v.Value));
-                        // R91-render-chart-series-format-5-2: same "Invert if negative" wiring as the
-                        // live cell-lookup path above.
-                        if (ResolveInvertIfNegativeItemColor(seriesFormat, v.Value) is { } invertColor)
-                        {
-                            embeddedColumnBarItem.Color = invertColor;
-                        }
-                        series.Items.Add(embeddedColumnBarItem);
-                        if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), i, v.Value, v.Value);
-                    }
-                }
-                model.Series.Add(series);
+                if (!double.TryParse(xSource[p], NumberStyles.Float, CultureInfo.InvariantCulture, out var x))
+                    continue;
+                var row = dataStartRow + (uint)p;
+                lookup[(row, 1u)] = new DisplayCell(row, 1u, new NumberValue(x), xSource[p], null, StyleId.Default, null);
             }
         }
-        else if (chart.Type is ChartType.Bar or ChartType.ThreeDBar)
-        {
-            model.Axes.Add(CreateCategoryAxis(AxisPosition.Left, chart.YAxisTitle, categories));
-            model.Axes.Add(new LinearAxis { Position = AxisPosition.Bottom, Title = chart.XAxisTitle });
 
-            foreach (var seriesData in embeddedData)
+        const uint dataStartCol = 1; // Scatter/Bubble: col 1 is the shared X column (skipped as a series); others: col 1 is series 0.
+        var seriesColStride = isBubble ? 2u : 1u;
+        var firstSeriesCol = isXyChart ? 2u : 1u;
+
+        for (var i = 0; i < embeddedData.Count; i++)
+        {
+            var col = firstSeriesCol + (uint)i * seriesColStride;
+            var series = embeddedData[i];
+            if (!string.IsNullOrEmpty(series.SeriesName))
+                lookup[(headerRow, col)] = new DisplayCell(headerRow, col, null, series.SeriesName, null, StyleId.Default, null);
+
+            for (var p = 0; p < series.Values.Count; p++)
             {
-                var seriesName = seriesData.SeriesName ?? $"Series {seriesData.SeriesIndex + 1}";
-                var series = new BarSeries
-                {
-                    Title = IsLegendEntryDeleted(chart, seriesData.SeriesIndex) ? "" : seriesName,
-                    LabelFormatString = ChartDataLabelFormatter.GetNativeValueLabelFormat(chart, 0),
-                    LabelPlacement = ToOxyLabelPlacement(chart.DataLabelPosition)
-                };
-                ApplyBarFormat(series, GetSeriesFormat(chart, seriesData.SeriesIndex), theme);
-                ApplyNativeDataLabelStyle(series, chart, theme);
-                for (var i = 0; i < seriesData.Values.Count; i++)
-                {
-                    var v = seriesData.Values[i];
-                    if (v.HasValue)
-                    {
-                        series.Items.Add(new BarItem { Value = v.Value });
-                        if (ShouldUseAnnotationLabels(chart))
-                            AddDataLabelAnnotation(model, chart, theme, pointDataLabelFormats, seriesName, seriesData.SeriesIndex, i, ChartDataLabelTextPlanner.GetCategory(categories, i), v.Value, i, v.Value);
-                    }
-                }
-                model.Series.Add(series);
+                if (series.Values[p] is not { } value)
+                    continue;
+                var row = dataStartRow + (uint)p;
+                lookup[(row, col)] = new DisplayCell(row, col, new NumberValue(value), value.ToString(CultureInfo.InvariantCulture), null, StyleId.Default, null);
             }
         }
-        else
-        {
-            // Unsupported type for embedded data path — fall through to null (empty render)
-            return null;
-        }
 
-        ApplyAxisBounds(model, chart, theme);
-        return model;
+        var lastSeriesCol = embeddedData.Count > 0 ? firstSeriesCol + (uint)(embeddedData.Count - 1) * seriesColStride : firstSeriesCol;
+        // Bubble reserves one trailing empty column for the last series' (uncached) size.
+        var endCol = isBubble ? lastSeriesCol + 1 : lastSeriesCol;
+
+        return (lookup, categories, headerRow, dataStartRow, endRow, dataStartCol, endCol);
     }
 
     /// <summary>

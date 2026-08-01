@@ -1164,6 +1164,13 @@ public sealed class Run(string text, RunFormatting? formatting = null)
                 DocPartUnique: unique)
         };
     }
+
+    /// <summary>
+    /// Creates an inline Group content control backed by w:sdtPr/w:group. Group controls protect their
+    /// contained controls as one unit while retaining ordinary run-level ownership.
+    /// </summary>
+    public static Run GroupControl(string text, string? tag = null, string? alias = null) =>
+        new(text) { Control = new ContentControl(ContentControlKind.Group, tag, alias) };
 }
 
 /// <summary>A formatted fragment in the base or phonetic text of a Word ruby annotation.</summary>
@@ -1218,8 +1225,9 @@ public enum RubyAlignment
 /// <see cref="DropDownList"/> is a drop-down list (w:sdtPr/w:dropDownList + w:listItem entries) the user
 /// can only pick from; <see cref="ComboBox"/> is a combo box (w:sdtPr/w:comboBox + w:listItem entries)
 /// that additionally allows free text; <see cref="Picture"/> is a picture control (w:sdtPr/w:picture)
-/// whose run carries an <see cref="InlineImage"/>; and <see cref="BuildingBlockGallery"/> is a
-/// building-block gallery control (w:sdtPr/w:docPartObj).
+/// whose run carries an <see cref="InlineImage"/>; <see cref="BuildingBlockGallery"/> is a
+/// building-block gallery control (w:sdtPr/w:docPartObj); and <see cref="Group"/> is a Group control
+/// (w:sdtPr/w:group).
 /// </summary>
 public enum ContentControlKind
 {
@@ -1230,7 +1238,8 @@ public enum ContentControlKind
     DropDownList,
     ComboBox,
     Picture,
-    BuildingBlockGallery
+    BuildingBlockGallery,
+    Group
 }
 
 /// <summary>Word content-control locking from w:sdtPr/w:lock.</summary>
@@ -1934,7 +1943,8 @@ public enum BlockContentControlKind
     Bibliography,
     RepeatingSection,
     RepeatingSectionItem,
-    BuildingBlockGallery
+    BuildingBlockGallery,
+    Group
 }
 
 /// <summary>
@@ -1985,6 +1995,10 @@ public sealed record BlockContentControl(
             DocPartCategory: category,
             DocPartUnique: unique);
     }
+
+    /// <summary>Creates a body-level Group content control (w:sdtPr/w:group).</summary>
+    public static BlockContentControl GroupRegion(string? tag = null, string? alias = null) =>
+        new(BlockContentControlKind.Group, Tag: tag, Alias: alias);
 
     /// <summary>Creates a Word 2013 repeating-section content control (w15:repeatingSection).</summary>
     public static BlockContentControl RepeatingSection(
