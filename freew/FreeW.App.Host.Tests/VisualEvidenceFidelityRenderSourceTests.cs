@@ -303,6 +303,19 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void WpfPageBorderConsumers_UseSharedWordWaveSegments()
+    {
+        var renderSource = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+        var viewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var previewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"));
+
+        renderSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, edgeInset)");
+        viewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(ActualWidth, ActualHeight, inset)");
+        viewSource.Should().Contain("pb.LineStyle == BorderLineStyle.Wave");
+        previewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(size.Width, size.Height, waveInset)");
+    }
+
+    [Fact]
     public void FidelityRender_UsesArrangedAnchorOnlyForDrawingGroups()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
