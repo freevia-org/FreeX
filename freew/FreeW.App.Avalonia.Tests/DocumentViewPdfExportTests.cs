@@ -49,6 +49,180 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_ExportsRunBackgroundPrecedenceAndItalicFace() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Highlighted", RunFormatting.Default with
+            {
+                HighlightColorHex = "#FFFF00",
+                Italic = true,
+            }));
+            paragraph.Runs.Add(new Run(" Shaded", RunFormatting.Default with
+            {
+                HighlightColorHex = "#FF0000",
+                CharacterShadingHex = "#00FF00",
+            }));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            var ops = pdf.Pages[0].Ops.ToList();
+            var fills = ops.OfType<PdfFillRect>().ToList();
+            fills.Select(fill => fill.Color).Should().Contain(new PdfColor(0xFF, 0xFF, 0x00));
+            fills.Select(fill => fill.Color).Should().Contain(new PdfColor(0x00, 0xFF, 0x00));
+            fills.Select(fill => fill.Color).Should().NotContain(new PdfColor(0xFF, 0x00, 0x00),
+                "character shading takes precedence over highlight in live Print Layout");
+            fills.Should().OnlyContain(fill => fill.Width > 0 && fill.Height > 0);
+
+            var italic = ops.OfType<PdfText>().Single(text => text.Text == "Highlighted");
+            italic.Face.Should().Be(PdfFontFace.Italic);
+            ops.IndexOf(fills.Single(fill => fill.Color == new PdfColor(0xFF, 0xFF, 0x00)))
+                .Should().BeLessThan(ops.IndexOf(italic));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_ExportsUnderlineStrikeAndHyperlinkVisualStyle() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Under", RunFormatting.Default with
+            {
+                Underline = true,
+                ColorHex = "#CC0000",
+            }));
+            paragraph.Runs.Add(new Run(" Strike", RunFormatting.Default with
+            {
+                Strikethrough = true,
+                ColorHex = "#0055AA",
+            }));
+            paragraph.Runs.Add(new Run(" Link")
+            {
+                HyperlinkUrl = "https://example.com",
+            });
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            var ops = pdf.Pages[0].Ops.ToList();
+            var underlineText = ops.OfType<PdfText>().Single(text => text.Text == "Under");
+            var strikeText = ops.OfType<PdfText>().Single(text => text.Text == " Strike");
+            var linkText = ops.OfType<PdfText>().Single(text => text.Text == " Link");
+            linkText.Color.Should().Be(new PdfColor(0x05, 0x63, 0xC1));
+
+            var underline = ops.OfType<PdfLine>().Single(line => line.Color == underlineText.Color);
+            var strike = ops.OfType<PdfLine>().Single(line => line.Color == strikeText.Color);
+            var linkUnderline = ops.OfType<PdfLine>().Single(line => line.Color == linkText.Color);
+            strike.Y1.Should().BeGreaterThan(underline.Y1);
+            underline.X1.Should().BeApproximately(underlineText.X, 0.001);
+            linkUnderline.X1.Should().BeApproximately(linkText.X, 0.001);
+            new[] { underline, strike, linkUnderline }.Should().OnlyContain(line =>
+                line.X2 > line.X1 && line.LineWidth > 0 && Math.Abs(line.Y1 - line.Y2) < 0.001);
+            ops.IndexOf(underline).Should().BeGreaterThan(ops.IndexOf(underlineText));
+            ops.IndexOf(strike).Should().BeGreaterThan(ops.IndexOf(strikeText));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_ExportsSelectiveCharacterBorderPath() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Selective border", RunFormatting.Default with
+            {
+                CharacterBorder = new ParagraphBorder("#7F6000", 1.5)
+                {
+                    LineStyle = BorderLineStyle.Dotted,
+                    Top = false,
+                    Left = true,
+                    Bottom = true,
+                    Right = false,
+                },
+            }));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            var ops = pdf.Pages[0].Ops.ToList();
+            var text = ops.OfType<PdfText>().Single(item => item.Text == "Selective border");
+            var border = ops.OfType<PdfPath>().Single(path => path.StrokeColor == new PdfColor(0x7F, 0x60, 0x00));
+            border.Contours.Should().HaveCount(2, "only the authored left and bottom edges are visible");
+            border.Contours.Should().OnlyContain(contour => contour.Segments.Count == 1 && !contour.Closed);
+            border.StrokeWidth.Should().BeApproximately(1.5, 0.001);
+            border.StrokeDash.Should().NotBeNull();
+            border.StrokeDash!.Segments.Should().Equal(0.75, 1.5);
+            ops.IndexOf(border).Should().BeGreaterThan(ops.IndexOf(text));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_ExportsResolvedFirstEvenAndDefaultHeaderImages() =>
+        Session.Dispatch(() =>
+        {
+            var firstBytes = SolidPng(SKColors.Red);
+            var evenBytes = SolidPng(SKColors.Green);
+            var defaultBytes = SolidPng(SKColors.Blue);
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 24;
+            document.Page.MarginBottomPt = 18;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            document.Page.DifferentFirstPage = true;
+            document.Page.DifferentOddEvenPages = true;
+            document.FinalSectionHeadersFooters.FirstHeader = ImageHeader(firstBytes, TextAlignment.Left);
+            document.FinalSectionHeadersFooters.EvenHeader = ImageHeader(evenBytes, TextAlignment.Center);
+            document.FinalSectionHeadersFooters.Header = ImageHeader(defaultBytes, TextAlignment.Right);
+            for (var index = 0; index < 60; index++)
+            {
+                document.Blocks.Add(new Paragraph($"Header image page {index + 1}")
+                {
+                    Formatting = ParagraphFormatting.Default with
+                    {
+                        SpaceAfterPt = 0,
+                        SpaceAfterIsSet = true,
+                    },
+                });
+            }
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThanOrEqualTo(3);
+            var first = pdf.Pages[0].Ops.OfType<PdfImage>().Single();
+            var even = pdf.Pages[1].Ops.OfType<PdfImage>().Single();
+            var defaultOdd = pdf.Pages[2].Ops.OfType<PdfImage>().Single();
+            first.ImageBytes.Should().Equal(firstBytes);
+            even.ImageBytes.Should().Equal(evenBytes);
+            defaultOdd.ImageBytes.Should().Equal(defaultBytes);
+            first.X.Should().BeLessThan(even.X);
+            even.X.Should().BeLessThan(defaultOdd.X);
+            new[] { first, even, defaultOdd }.Should().OnlyContain(image =>
+                image.Y >= 0 && image.Y + image.Height <= document.Page.HeightPt);
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesTableSurfacesBeforeCellText() =>
         Session.Dispatch(() =>
         {
@@ -1340,6 +1514,21 @@ public sealed class DocumentViewPdfExportTests
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    private static HeaderFooter ImageHeader(byte[] bytes, TextAlignment alignment)
+    {
+        var header = new HeaderFooter();
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { Alignment = alignment },
+        };
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(bytes, 30, 12)
+        {
+            Wrapping = ImageWrapping.Inline,
+        }));
+        header.Paragraphs.Add(paragraph);
+        return header;
     }
 
     private static int CountNonWhitePixels(SKBitmap bitmap)

@@ -3299,7 +3299,9 @@ public sealed class DocumentView : Control
         var pagesOps = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
 
         var runStartX = 0.0;
+        var runEndX = 0.0;
         var runY = 0.0;
+        var runLineHeight = 0.0;
         var runText = new StringBuilder();
         RunFormatting? runFmt = null;
         var runPageIndex = -1;
@@ -3317,7 +3319,13 @@ public sealed class DocumentView : Control
                 pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
 
             var fontSizePt = runFmt.FontSizePt ?? DefaultFontSizePt;
-            var face = runFmt.Bold ? Free.Shared.Pdf.PdfFontFace.Bold : Free.Shared.Pdf.PdfFontFace.Regular;
+            var face = (runFmt.Bold, runFmt.Italic) switch
+            {
+                (true, true) => Free.Shared.Pdf.PdfFontFace.BoldItalic,
+                (true, false) => Free.Shared.Pdf.PdfFontFace.Bold,
+                (false, true) => Free.Shared.Pdf.PdfFontFace.Italic,
+                _ => Free.Shared.Pdf.PdfFontFace.Regular,
+            };
             var color = ParseColor(runFmt.ColorHex);
 
             // Convert px -> pt and flip to PDF y-up. The glyph Y is the top of the line box; the text
@@ -3331,8 +3339,92 @@ public sealed class DocumentView : Control
             var baselineFromTopPt = yWithinPagePx / PxPerPoint + fontSizePt;
             var yPt = pageHeightPt - baselineFromTopPt;
 
+            var decorationPlan = RunDecorationVisualPlanner.Build(runFmt, PxPerPoint);
+            if (decorationPlan.HasBackground)
+            {
+                var widthPt = Math.Max(1, runEndX - runStartX) / PxPerPoint;
+                var heightPt = Math.Max(1, runLineHeight) / PxPerPoint;
+                var bottomPt = pageHeightPt - (yWithinPagePx + Math.Max(1, runLineHeight)) / PxPerPoint;
+                pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfFillRect(
+                    Math.Max(0, xPt),
+                    bottomPt,
+                    widthPt,
+                    heightPt,
+                    ParseColor(decorationPlan.BackgroundColorHex)));
+            }
+
             pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfText(
                 Math.Max(0, xPt), yPt, fontSizePt, face, color, runText.ToString()));
+
+            if (decorationPlan.HasBorder && decorationPlan.Border is { } border)
+            {
+                var left = Math.Max(0, xPt);
+                var right = left + Math.Max(1, runEndX - runStartX) / PxPerPoint;
+                var bottom = pageHeightPt
+                    - (yWithinPagePx + Math.Max(1, runLineHeight)) / PxPerPoint;
+                var top = bottom + Math.Max(1, runLineHeight) / PxPerPoint;
+                var contours = new List<Free.Shared.Pdf.PdfPathContour>(4);
+
+                static Free.Shared.Pdf.PdfPathContour Edge(
+                    double x1,
+                    double y1,
+                    double x2,
+                    double y2) =>
+                    new(
+                        new Free.Shared.Pdf.PdfPathPoint(x1, y1),
+                        [Free.Shared.Pdf.PdfPathSegment.LineTo(new Free.Shared.Pdf.PdfPathPoint(x2, y2))],
+                        Closed: false);
+
+                if (decorationPlan.DrawTopBorder)
+                    contours.Add(Edge(left, top, right, top));
+                if (decorationPlan.DrawLeftBorder)
+                    contours.Add(Edge(left, top, left, bottom));
+                if (decorationPlan.DrawBottomBorder)
+                    contours.Add(Edge(left, bottom, right, bottom));
+                if (decorationPlan.DrawRightBorder)
+                    contours.Add(Edge(right, top, right, bottom));
+
+                Free.Shared.Pdf.PdfDashPattern? dash = border.LineStyle switch
+                {
+                    BorderLineStyle.Dashed => new Free.Shared.Pdf.PdfDashPattern([4 / PxPerPoint, 3 / PxPerPoint]),
+                    BorderLineStyle.Dotted => new Free.Shared.Pdf.PdfDashPattern([1 / PxPerPoint, 2 / PxPerPoint]),
+                    _ => null,
+                };
+                pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfPath(
+                    contours,
+                    FillColor: null,
+                    StrokeColor: ParseColor(border.ColorHex),
+                    StrokeWidth: decorationPlan.BorderWidthDip / PxPerPoint,
+                    StrokeDash: dash));
+            }
+
+            var decorationLineWidthPt = Math.Max(1, fontSizePt * PxPerPoint / 14) / PxPerPoint;
+            var runWidthPt = Math.Max(1, runEndX - runStartX) / PxPerPoint;
+            if (runFmt.Underline)
+            {
+                var underlineY = pageHeightPt
+                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.82) / PxPerPoint;
+                pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
+                    Math.Max(0, xPt),
+                    underlineY,
+                    Math.Max(0, xPt) + runWidthPt,
+                    underlineY,
+                    color,
+                    decorationLineWidthPt));
+            }
+
+            if (runFmt.Strikethrough)
+            {
+                var strikeY = pageHeightPt
+                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.5) / PxPerPoint;
+                pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
+                    Math.Max(0, xPt),
+                    strikeY,
+                    Math.Max(0, xPt) + runWidthPt,
+                    strikeY,
+                    color,
+                    decorationLineWidthPt));
+            }
 
             runText.Clear();
             runFmt = null;
@@ -3347,22 +3439,33 @@ public sealed class DocumentView : Control
             //   pageSpaceY = DeskPadding + pageIndex*(pageHeightPx+PageGap) + marginTopDip + offsetWithinPage
             var rel = g.Y - _surfacePlan.DeskPaddingDip;
             var pageIndex = Math.Max(0, (int)(rel / pageStride));
+            var pdfFmt = g.IsHyperlink
+                ? g.Fmt with
+                {
+                    ColorHex = string.IsNullOrWhiteSpace(g.Fmt.ColorHex) ? HyperlinkColorHex : g.Fmt.ColorHex,
+                    Underline = true,
+                }
+                : g.Fmt;
             var sameRun = runFmt is not null
                 && runPageIndex == pageIndex
                 && Math.Abs(g.Y - runY) < 0.5
-                && FormatKey(g.Fmt) == FormatKey(runFmt)
+                && FormatKey(pdfFmt) == FormatKey(runFmt)
                 && g.X >= runStartX; // left-to-right on the line
 
             if (!sameRun)
             {
                 Flush();
                 runStartX = g.X;
+                runEndX = g.X;
                 runY = g.Y;
-                runFmt = g.Fmt;
+                runLineHeight = 0;
+                runFmt = pdfFmt;
                 runPageIndex = pageIndex;
             }
 
             runText.Append(g.Ch);
+            runEndX = Math.Max(runEndX, g.X + Math.Max(1, g.W));
+            runLineHeight = Math.Max(runLineHeight, g.LineHeight);
         }
 
         Flush();
@@ -3878,7 +3981,34 @@ public sealed class DocumentView : Control
         }
 
         foreach (var item in _headerFooterItems)
+        {
+            if (item.Image is { } image)
+            {
+                var pageIndex = PageIndexFromPageSpaceY(item.Y + 0.01);
+                if (pageIndex < 0)
+                    continue;
+
+                EnsurePage(pageIndex);
+                var sourceRect = new Rect(
+                    item.X,
+                    item.Y,
+                    Math.Max(1, item.Width),
+                    Math.Max(1, item.Height));
+                if (BuildPdfImage(
+                        sourceRect,
+                        image,
+                        DecodeRenderedImage(image),
+                        _surfacePlan.PageTopDip(pageIndex),
+                        pageHeightPt) is { } imageOp)
+                {
+                    pagesOps[pageIndex].Add(imageOp);
+                }
+
+                continue;
+            }
+
             AddTextRegion(item.Text, item.Fmt, item.X, item.Y);
+        }
 
         foreach (var item in _noteItems)
             AddTextRegion(item.Text, item.Fmt, item.X, item.Y);
@@ -4314,8 +4444,17 @@ public sealed class DocumentView : Control
         ];
     }
 
-    private static string FormatKey(RunFormatting fmt) =>
-        $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}";
+    private static string FormatKey(RunFormatting fmt)
+    {
+        var border = fmt.CharacterBorder;
+        var borderKey = border is null
+            ? string.Empty
+            : $"{border.ColorHex}|{border.WidthPt}|{border.BottomOnly}|{border.LineStyle}|" +
+              $"{border.Top}|{border.Left}|{border.Bottom}|{border.Right}";
+        return $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
+               $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|" +
+               $"{fmt.Strikethrough}|{borderKey}";
+    }
 
     private static DocumentFloatingObjectSnapshot BuildInlineDrawingSnapshot(
         DocumentFloatingObjectKind kind,

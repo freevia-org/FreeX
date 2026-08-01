@@ -402,7 +402,7 @@ internal sealed class FileCommands
 
     /// <summary>
     /// Builds the shared PowerPoint-style video frame package. WPF supplies the slide raster callback;
-    /// native MP4 execution is performed by <see cref="ExportVideoAsync"/> when ffmpeg is available.
+    /// native MP4 execution is performed by <see cref="ExportVideoAsync"/> through the detected host adapter.
     /// </summary>
     public PresentationVideoFramePackage BuildVideoFramePackage(PresentationVideoExportRequest? request = null)
     {
@@ -434,17 +434,10 @@ internal sealed class FileCommands
     public PresentationVideoExportPlan BuildVideoExportPlan(PresentationVideoExportRequest? request = null)
     {
         var presentation = _getModel();
-        var plan = PresentationExportPlanner.BuildVideoExportPlan(request, presentation);
-        if (!_videoExportHostCapabilities.CanEncodeMp4)
-            return plan;
-
-        var hasSlides = plan.SlideRange.SlideNumbers.Count > 0;
-        return plan with
-        {
-            IsImplemented = true,
-            CanExecute = hasSlides,
-            DisabledReason = hasSlides ? null : plan.DisabledReason,
-        };
+        return PresentationExportPlanner.BuildVideoExportPlan(
+            request,
+            presentation,
+            _videoExportHostCapabilities);
     }
 
     /// <summary>
