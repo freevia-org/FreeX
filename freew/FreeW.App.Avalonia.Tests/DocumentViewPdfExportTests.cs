@@ -1081,6 +1081,46 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedMapleMuffinsPageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.MapleMuffinsArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            fills.Should().BeEmpty();
+            paths.Should().HaveCount(816);
+            paths[0].FillColor.Should().Be(PdfColor.Black);
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(27.75, 758.25));
+            paths[1].FillColor.Should().Be(new PdfColor(0xFF, 0x80, 0));
+            paths[2].FillColor.Should().Be(new PdfColor(0xBF, 0x40, 0));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var orangeInk = 0;
+            for (var y = 32; y < 64; y++)
+            for (var x = 32; x < 64; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red > 180 && pixel.Green is > 35 and < 170 && pixel.Blue < 30)
+                    orangeInk++;
+            }
+            orangeInk.Should().BeGreaterThan(280);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {
