@@ -128,6 +128,8 @@ public sealed class DesignDialogPlannerTests
     [Fact]
     public void PageBorderPlanner_RetainsArtAndWidthSemanticsUsedByAvaloniaDialog()
     {
+        BordersAndShadingDialogPlanner.ArtBorders[BordersAndShadingDialogPlanner.ArtIndexFor(84)]
+            .Should().Be(new PageBorderArtOption("People (84)", 84));
         var input = new BordersAndShadingDialogInput(
             ParagraphSettingIndex: 0,
             ParagraphLineStyleIndex: 0,

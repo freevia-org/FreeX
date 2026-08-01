@@ -2718,11 +2718,8 @@ public sealed record PageBorder(string ColorHex = "#000000", double WidthPt = 1.
     public BorderLineStyle LineStyle { get; init; } = BorderLineStyle.Single;
 
     /// <summary>
-    /// Optional decorative art border id (the <c>@w:art</c> attribute on each <c>w:pgBorders</c> edge).
-    /// Zero (the default) means a plain line border (no <c>@w:art</c> is emitted so existing documents
-    /// are unaffected). Non-zero values correspond to Word's built-in art border ids (1-166) and are
-    /// written as <c>@w:art</c> and read back verbatim. FreeW renders a curated subset of art borders as
-    /// a repeating pattern or a distinct styled stroke; unrecognised ids fall back to a dashed stroke.
+    /// Optional Word <c>WdPageBorderArt</c> id. Zero means a plain line border. Curated non-zero ids map
+    /// to the corresponding WordprocessingML <c>w:val</c> art token on every page-border edge.
     /// </summary>
     public int ArtId { get; init; }
 }

@@ -204,6 +204,18 @@ public class DesignDepthModelTests
         copy.ArtId.Should().Be(1);
     }
 
+    [Fact]
+    public void PageBorderArtStyles_CuratedMappingsUseWordIdsAndCanonicalTokens()
+    {
+        PageBorderArtStyles.Curated.Should().HaveCount(17);
+        PageBorderArtStyles.Curated.Select(style => style.ArtId).Should().OnlyHaveUniqueItems();
+        PageBorderArtStyles.Curated.Select(style => style.Token).Should().OnlyHaveUniqueItems();
+        PageBorderArtStyles.TryGetById(1, out var apples).Should().BeTrue();
+        apples.Should().Be(new PageBorderArtStyle(1, "apples", "Apples"));
+        PageBorderArtStyles.TryGetByToken("people", out var people).Should().BeTrue();
+        people.ArtId.Should().Be(84);
+    }
+
     // ── WatermarkOptions image fields ─────────────────────────────────────────────────────────────
 
     [Fact]
