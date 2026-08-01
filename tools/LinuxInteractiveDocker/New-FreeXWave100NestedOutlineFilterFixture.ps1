@@ -43,7 +43,9 @@ $parent = [System.IO.Path]::GetDirectoryName($output)
 if (-not [string]::IsNullOrWhiteSpace($parent)) {
     [System.IO.Directory]::CreateDirectory($parent) | Out-Null
 }
-$temporary = "$output.$([guid]::NewGuid().ToString('N')).tmp"
+# Keep the staging name short: validation report paths can already approach MAX_PATH
+# before a GUID suffix is appended.
+$temporary = Join-Path $parent ".freex-wave100-$PID-$([guid]::NewGuid().ToString('N').Substring(0, 8)).tmp"
 
 $contentTypes = @'
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
