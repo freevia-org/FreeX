@@ -788,7 +788,8 @@ public static class SlideCompositor
 
                     textLayout = ResolveTableCellTextLayout(
                         cell.TextBody, insets,
-                        resolvedTextColor, theme, effectiveClrMap);
+                        resolvedTextColor, theme, effectiveClrMap,
+                        cell.Anchor ?? TableCellAnchor.Top);
                 }
 
                 cellOps.Add(new TableCellOp
@@ -1210,7 +1211,8 @@ public static class SlideCompositor
         TextFrameInsets insets,
         SrgbColor? styleTextColor,
         PresentationTheme theme,
-        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null,
+        TableCellAnchor anchor = TableCellAnchor.Top)
     {
         string defaultFont   = theme.FontScheme.MinorLatinFont;
         double defaultSizePt = 14.0; // typical table text default
@@ -1261,7 +1263,13 @@ public static class SlideCompositor
         return new ResolvedTextLayout
         {
             Paragraphs    = resolvedParas,
-            Anchor        = VerticalAnchor.Top, // cell anchor handled by TableCellOp.Anchor
+            Anchor        = anchor switch
+            {
+                TableCellAnchor.Middle => VerticalAnchor.Middle,
+                TableCellAnchor.Bottom => VerticalAnchor.Bottom,
+                _ => VerticalAnchor.Top,
+            },
+            VerticalType  = body.VerticalType,
             InsetLeftDip  = insets.Left,
             InsetRightDip = insets.Right,
             InsetTopDip   = insets.Top,

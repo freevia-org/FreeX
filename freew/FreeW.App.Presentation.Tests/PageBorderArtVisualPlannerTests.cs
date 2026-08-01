@@ -64,6 +64,27 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void DecorativeArch_UsesMeasuredRailsAndSharedCornerStrokes()
+    {
+        PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(89, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().HaveCount(25);
+        plan.Strokes.Should().HaveCount(16);
+        plan.Fills[0].Should().Be(new PageBorderArtFillRectangle(48, 40, 720, 1, 0x33, 0x33, 0x33));
+        plan.Fills[5].Should().Be(new PageBorderArtFillRectangle(48, 1000, 720, 1, 0x20, 0x20, 0x20));
+        plan.Fills[11].Should().Be(new PageBorderArtFillRectangle(37, 48, 1, 960, 0, 0, 0));
+        plan.Fills[21].Should().Be(new PageBorderArtFillRectangle(37, 32, 21, 32, 0, 0, 0));
+        plan.Strokes[0].Should().Be(new PageBorderArtCubicStroke(
+            38, 62,
+            38, 40,
+            58, 40,
+            58, 62,
+            10,
+            0, 0, 0));
+    }
+
+    [Fact]
     public void TinyFrame_IsRecognizedButProducesNoMotifs()
     {
         PageBorderArtVisualPlanner.TryBuildApplesFrame(1, 3, 40, 40, 20, out var motifs)

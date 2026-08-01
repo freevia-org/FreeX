@@ -25,7 +25,8 @@ public sealed record InCanvasRichClipboardTableCellStyle(
     bool VerticalMergeContinuation = false,
     string? FillPattern = null,
     int? FillForegroundRgb = null,
-    int? FillBackgroundRgb = null);
+    int? FillBackgroundRgb = null,
+    TextVerticalType? TextVerticalType = null);
 
 /// <summary>
 /// One image payload carried by an external rich clipboard fragment. Width and height are

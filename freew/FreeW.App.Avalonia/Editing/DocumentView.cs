@@ -4371,6 +4371,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfShorebirdTrackBorderOps(trackMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var archPlan))
+        {
+            return BuildPdfDecorativeArchBorderOps(archPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
 
         if (border.LineStyle == BorderLineStyle.Wave)
         {
@@ -4535,6 +4545,43 @@ public sealed class DocumentView : Control
                 pageHeightPt - (originTopDip + segment.Y2Dip) / PxPerPoint,
                 PdfColor.Black,
                 PageBorderArtVisualPlanner.ShorebirdTrackStrokeWidthDip / PxPerPoint));
+        }
+
+        return ops;
+    }
+
+    private static IReadOnlyList<PdfDrawOp> BuildPdfDecorativeArchBorderOps(
+        PageBorderDecorativeArchPlan plan,
+        double originXDip,
+        double originTopDip,
+        double pageHeightPt)
+    {
+        var ops = new List<PdfDrawOp>(plan.Fills.Count + plan.Strokes.Count);
+        foreach (var fill in plan.Fills)
+        {
+            ops.Add(new PdfFillRect(
+                (originXDip + fill.Xdip) / PxPerPoint,
+                pageHeightPt - (originTopDip + fill.Ydip + fill.HeightDip) / PxPerPoint,
+                fill.WidthDip / PxPerPoint,
+                fill.HeightDip / PxPerPoint,
+                new PdfColor(fill.Red, fill.Green, fill.Blue)));
+        }
+        foreach (var stroke in plan.Strokes)
+        {
+            PdfPathPoint Point(double x, double y) => new(
+                (originXDip + x) / PxPerPoint,
+                pageHeightPt - (originTopDip + y) / PxPerPoint);
+            ops.Add(new PdfPath(
+                [new PdfPathContour(
+                    Point(stroke.StartXDip, stroke.StartYDip),
+                    [PdfPathSegment.BezierTo(
+                        Point(stroke.Control1XDip, stroke.Control1YDip),
+                        Point(stroke.Control2XDip, stroke.Control2YDip),
+                        Point(stroke.EndXDip, stroke.EndYDip))],
+                    false)],
+                null,
+                new PdfColor(stroke.Red, stroke.Green, stroke.Blue),
+                stroke.WidthDip / PxPerPoint));
         }
 
         return ops;
@@ -10100,6 +10147,47 @@ public sealed class DocumentView : Control
                         new Point(segment.X1Dip, segment.Y1Dip),
                         new Point(segment.X2Dip, segment.Y2Dip));
                 }
+            }
+
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var archPlan))
+        {
+            foreach (var fill in archPlan.Fills)
+            {
+                context.FillRectangle(
+                    new SolidColorBrush(Color.FromRgb(fill.Red, fill.Green, fill.Blue)),
+                    new Rect(
+                        frame.X + fill.Xdip,
+                        frame.Y + fill.Ydip,
+                        fill.WidthDip,
+                        fill.HeightDip));
+            }
+            foreach (var stroke in archPlan.Strokes)
+            {
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(
+                        new Point(frame.X + stroke.StartXDip, frame.Y + stroke.StartYDip),
+                        false);
+                    path.CubicBezierTo(
+                        new Point(frame.X + stroke.Control1XDip, frame.Y + stroke.Control1YDip),
+                        new Point(frame.X + stroke.Control2XDip, frame.Y + stroke.Control2YDip),
+                        new Point(frame.X + stroke.EndXDip, frame.Y + stroke.EndYDip));
+                    path.EndFigure(false);
+                }
+                context.DrawGeometry(
+                    null,
+                    new Pen(new SolidColorBrush(Color.FromRgb(stroke.Red, stroke.Green, stroke.Blue)), stroke.WidthDip),
+                    geometry);
             }
 
             return true;

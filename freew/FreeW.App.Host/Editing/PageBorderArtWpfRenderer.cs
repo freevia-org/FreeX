@@ -83,6 +83,47 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var archPlan))
+        {
+            foreach (var fill in archPlan.Fills)
+            {
+                context.DrawRectangle(
+                    GrayBrush(fill.Red),
+                    null,
+                    new Rect(
+                        frame.X + fill.Xdip,
+                        frame.Y + fill.Ydip,
+                        fill.WidthDip,
+                        fill.HeightDip));
+            }
+            foreach (var stroke in archPlan.Strokes)
+            {
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(
+                        new Point(frame.X + stroke.StartXDip, frame.Y + stroke.StartYDip),
+                        false,
+                        false);
+                    path.BezierTo(
+                        new Point(frame.X + stroke.Control1XDip, frame.Y + stroke.Control1YDip),
+                        new Point(frame.X + stroke.Control2XDip, frame.Y + stroke.Control2YDip),
+                        new Point(frame.X + stroke.EndXDip, frame.Y + stroke.EndYDip),
+                        true,
+                        false);
+                }
+                geometry.Freeze();
+                context.DrawGeometry(null, new Pen(GrayBrush(stroke.Red), stroke.WidthDip), geometry);
+            }
+            return true;
+        }
+
         return false;
     }
 
@@ -184,6 +225,18 @@ public static class PageBorderArtWpfRenderer
         brush.Freeze();
         return brush;
     }
+
+    private static Brush GrayBrush(byte value) => value switch
+    {
+        0x00 => Brushes.Black,
+        0x20 => FrozenBrush(0x20, 0x20, 0x20),
+        0x33 => FrozenBrush(0x33, 0x33, 0x33),
+        0x60 => FrozenBrush(0x60, 0x60, 0x60),
+        0xB2 => FrozenBrush(0xB2, 0xB2, 0xB2),
+        0xCC => FrozenBrush(0xCC, 0xCC, 0xCC),
+        0xFF => Brushes.White,
+        _ => FrozenBrush(value, value, value),
+    };
 
     private static Pen FrozenPen(
         byte red,

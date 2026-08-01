@@ -279,6 +279,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildApplesFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildShadowedSquaresFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(");
+        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(");
         source.Should().Contain("TryDrawPageBorderArt(context, pb, artFrame, artInset)");
         source.Should().Contain("BuildPdfAppleBorderOps(appleMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");
         source.Should().Contain("BuildPdfShadowedSquareBorderOps(squareMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");

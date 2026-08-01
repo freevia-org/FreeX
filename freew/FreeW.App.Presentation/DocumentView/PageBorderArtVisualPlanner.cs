@@ -22,11 +22,39 @@ public sealed record PageBorderArtLineSegment(
     double X2Dip,
     double Y2Dip);
 
+public sealed record PageBorderArtFillRectangle(
+    double Xdip,
+    double Ydip,
+    double WidthDip,
+    double HeightDip,
+    byte Red,
+    byte Green,
+    byte Blue);
+
+public sealed record PageBorderArtCubicStroke(
+    double StartXDip,
+    double StartYDip,
+    double Control1XDip,
+    double Control1YDip,
+    double Control2XDip,
+    double Control2YDip,
+    double EndXDip,
+    double EndYDip,
+    double WidthDip,
+    byte Red,
+    byte Green,
+    byte Blue);
+
+public sealed record PageBorderDecorativeArchPlan(
+    IReadOnlyList<PageBorderArtFillRectangle> Fills,
+    IReadOnlyList<PageBorderArtCubicStroke> Strokes);
+
 public static class PageBorderArtVisualPlanner
 {
     public const int ApplesArtId = 1;
     public const int ShadowedSquaresArtId = 57;
     public const int ShorebirdTracksArtId = 83;
+    public const int DecorativeArchArtId = 89;
     public const byte AppleFillRed = 0xB5;
     public const byte AppleStemRed = 0x66;
     public const byte AppleHighlightRed = 0xD8;
@@ -148,6 +176,53 @@ public static class PageBorderArtVisualPlanner
         }).ToList();
     }
 
+    public static bool TryBuildDecorativeArchFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderDecorativeArchPlan plan)
+    {
+        if (artId != DecorativeArchArtId)
+        {
+            plan = new PageBorderDecorativeArchPlan([], []);
+            return false;
+        }
+
+        var frameWidth = Math.Max(0, frameWidthDip);
+        var frameHeight = Math.Max(0, frameHeightDip);
+        var inset = Math.Max(0, edgeInsetDip);
+        var size = ResolveMotifSize(modelWidthPt);
+        if (frameWidth < 2 * (inset + size) || frameHeight < 2 * (inset + size))
+        {
+            plan = new PageBorderDecorativeArchPlan([], []);
+            return true;
+        }
+
+        var fills = new List<PageBorderArtFillRectangle>();
+        var strokes = new List<PageBorderArtCubicStroke>();
+        var left = inset + size * 0.15625;
+        var right = frameWidth - inset - size + size * 0.15625;
+        var top = inset + size * 0.25;
+        var bottom = frameHeight - inset - size + size * 0.25;
+        var horizontalStart = inset + size / 2.0;
+        var horizontalWidth = frameWidth - 2 * horizontalStart;
+        var verticalStart = inset + size / 2.0;
+        var verticalHeight = frameHeight - 2 * verticalStart;
+
+        AddHorizontalRail(fills, horizontalStart, top, horizontalWidth, bottom: false);
+        AddHorizontalRail(fills, horizontalStart, bottom, horizontalWidth, bottom: true);
+        AddVerticalRail(fills, left, verticalStart, verticalHeight);
+        AddVerticalRail(fills, right, verticalStart, verticalHeight);
+        AddDecorativeArchCorner(fills, strokes, inset, inset, size, flipX: false, flipY: false);
+        AddDecorativeArchCorner(fills, strokes, frameWidth - inset - size, inset, size, flipX: true, flipY: false);
+        AddDecorativeArchCorner(fills, strokes, inset, frameHeight - inset - size, size, flipX: false, flipY: true);
+        AddDecorativeArchCorner(fills, strokes, frameWidth - inset - size, frameHeight - inset - size, size, flipX: true, flipY: true);
+        plan = new PageBorderDecorativeArchPlan(fills, strokes);
+        return true;
+    }
+
     private static IReadOnlyList<PageBorderArtPlacement> BuildFrame(
         double frameWidthDip,
         double frameHeightDip,
@@ -198,6 +273,100 @@ public static class PageBorderArtVisualPlanner
                 : new PageBorderShorebirdTrackMotif(fixedCenter + offset.X, along + offset.Y, size, quarterTurns));
         }
     }
+
+    private static void AddHorizontalRail(
+        List<PageBorderArtFillRectangle> fills,
+        double x,
+        double y,
+        double width,
+        bool bottom)
+    {
+        if (!bottom)
+        {
+            AddFill(fills, x, y, width, 1, 0x33);
+            AddFill(fills, x, y + 1, width, 6, 0xCC);
+            AddFill(fills, x, y + 7, width, 8, 0x00);
+            AddFill(fills, x, y + 15, width, 5, 0xCC);
+            AddFill(fills, x, y + 20, width, 1, 0x60);
+            return;
+        }
+
+        AddFill(fills, x, y, width, 1, 0x20);
+        AddFill(fills, x, y + 1, width, 1, 0xB2);
+        AddFill(fills, x, y + 2, width, 5, 0xCC);
+        AddFill(fills, x, y + 7, width, 8, 0x00);
+        AddFill(fills, x, y + 15, width, 5, 0xCC);
+        AddFill(fills, x, y + 20, width, 1, 0x00);
+    }
+
+    private static void AddVerticalRail(
+        List<PageBorderArtFillRectangle> fills,
+        double x,
+        double y,
+        double height)
+    {
+        AddFill(fills, x, y, 1, height, 0x00);
+        AddFill(fills, x + 1, y, 6, height, 0xB2);
+        AddFill(fills, x + 7, y, 8, height, 0x00);
+        AddFill(fills, x + 15, y, 5, height, 0xB2);
+        AddFill(fills, x + 20, y, 1, height, 0x00);
+    }
+
+    private static void AddDecorativeArchCorner(
+        List<PageBorderArtFillRectangle> fills,
+        List<PageBorderArtCubicStroke> strokes,
+        double x,
+        double y,
+        double size,
+        bool flipX,
+        bool flipY)
+    {
+        var scale = size / 32.0;
+        var tileX = x + 5 * scale;
+        var tileY = y;
+        AddFill(fills, tileX, tileY, 21 * scale, 32 * scale, 0x00);
+
+        (double X, double Y) Point(double localX, double localY)
+        {
+            var px = flipX ? 32 - localX : localX;
+            var py = flipY ? 32 - localY : localY;
+            return (x + px * scale, y + py * scale);
+        }
+
+        var start = Point(6, 30);
+        var control1 = Point(6, 8);
+        var control2 = Point(26, 8);
+        var end = Point(26, 30);
+        AddStroke(strokes, start, control1, control2, end, 10 * scale, 0x00);
+        AddStroke(strokes, start, control1, control2, end, 8 * scale, 0xB2);
+        AddStroke(strokes, start, control1, control2, end, 4 * scale, 0xFF);
+        AddStroke(strokes, start, control1, control2, end, 1 * scale, 0x00);
+    }
+
+    private static void AddFill(
+        List<PageBorderArtFillRectangle> fills,
+        double x,
+        double y,
+        double width,
+        double height,
+        byte gray) =>
+        fills.Add(new PageBorderArtFillRectangle(x, y, width, height, gray, gray, gray));
+
+    private static void AddStroke(
+        List<PageBorderArtCubicStroke> strokes,
+        (double X, double Y) start,
+        (double X, double Y) control1,
+        (double X, double Y) control2,
+        (double X, double Y) end,
+        double width,
+        byte gray) =>
+        strokes.Add(new PageBorderArtCubicStroke(
+            start.X, start.Y,
+            control1.X, control1.Y,
+            control2.X, control2.Y,
+            end.X, end.Y,
+            width,
+            gray, gray, gray));
 
     private static (double X, double Y) Rotate(double x, double y, int quarterTurns) =>
         (((quarterTurns % 4) + 4) % 4) switch

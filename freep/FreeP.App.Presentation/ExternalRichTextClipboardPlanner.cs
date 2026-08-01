@@ -109,6 +109,7 @@ public static class ExternalRichTextClipboardPlanner
             public InCanvasRichClipboardTableBorder? Top { get; private set; }
             public InCanvasRichClipboardTableBorder? Bottom { get; private set; }
             public TableCellAnchor? Anchor { get; set; }
+            public TextVerticalType? TextVerticalType { get; set; }
             public double? InsetLeftPt { get; set; }
             public double? InsetRightPt { get; set; }
             public double? InsetTopPt { get; set; }
@@ -160,7 +161,8 @@ public static class ExternalRichTextClipboardPlanner
                     VerticalMergeContinuation,
                     FillPattern,
                     FillForegroundRgb,
-                    FillBackgroundRgb ?? FillRgb);
+                    FillBackgroundRgb ?? FillRgb,
+                    TextVerticalType);
             }
 
             public void Reset()
@@ -176,6 +178,7 @@ public static class ExternalRichTextClipboardPlanner
                 _borderSide = null;
                 _borderDefined = false;
                 Anchor = null;
+                TextVerticalType = null;
                 InsetLeftPt = null;
                 InsetRightPt = null;
                 InsetTopPt = null;
@@ -1059,6 +1062,9 @@ public static class ExternalRichTextClipboardPlanner
                 case "clvertalt": _pendingCellStyle.Anchor = TableCellAnchor.Top; break;
                 case "clvertalc": _pendingCellStyle.Anchor = TableCellAnchor.Middle; break;
                 case "clvertalb": _pendingCellStyle.Anchor = TableCellAnchor.Bottom; break;
+                case "cltxlrtb": _pendingCellStyle.TextVerticalType = TextVerticalType.Horizontal; break;
+                case "cltxtbrl": _pendingCellStyle.TextVerticalType = TextVerticalType.Vertical; break;
+                case "cltxbtlr": _pendingCellStyle.TextVerticalType = TextVerticalType.Vertical270; break;
                 case "clpadl": _pendingCellStyle.InsetLeftPt = ToCellInsetPoints(value); break;
                 case "clpadr": _pendingCellStyle.InsetRightPt = ToCellInsetPoints(value); break;
                 case "clpadt": _pendingCellStyle.InsetTopPt = ToCellInsetPoints(value); break;
@@ -1109,8 +1115,6 @@ public static class ExternalRichTextClipboardPlanner
                 case "clpadfr":
                 case "clpadft":
                 case "clpadfb":
-                case "cltxlrtb":
-                case "cltxtbrl":
                 case "clshdrawnil":
                     break;
                 case "trrh":
@@ -1934,6 +1938,8 @@ public static class ExternalRichTextClipboardPlanner
             }
 
             cell.Anchor = style.Anchor;
+            if (style.TextVerticalType is { } textVerticalType && cell.TextBody is { } body)
+                body.VerticalType = textVerticalType;
             cell.InsetLeftPt = style.InsetLeftPt;
             cell.InsetRightPt = style.InsetRightPt;
             cell.InsetTopPt = style.InsetTopPt;

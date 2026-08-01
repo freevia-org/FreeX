@@ -891,6 +891,44 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedDecorativeArchPageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.DecorativeArchArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            fills.Should().HaveCount(25);
+            paths.Should().HaveCount(16);
+            fills[0].Should().Be(new PdfFillRect(
+                36,
+                761.25,
+                540,
+                0.75,
+                new PdfColor(0x33, 0x33, 0x33)));
+            fills[21].Should().Be(new PdfFillRect(27.75, 744, 15.75, 24, PdfColor.Black));
+            paths[0].StrokeWidth.Should().Be(7.5);
+            paths[0].StrokeColor.Should().Be(PdfColor.Black);
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(28.5, 745.5));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            bitmap.GetPixel(300, 50).Red.Should().BeLessThan((byte)20);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {
