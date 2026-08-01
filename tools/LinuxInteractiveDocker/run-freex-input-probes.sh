@@ -2402,6 +2402,88 @@ probe_outline_group_physical() {
     send_key Escape || true
 }
 
+probe_outline_column_group_physical() {
+    local column2_value="" column3_value="" column4_value=""
+    local grouped_score=false collapse_changed=false expand_changed=false expanded_score=false
+    local values_restored=false group_command=false
+    local column_header_y toggle_x toggle_y collapsed_toggle_x outline_top outline_height
+    local artifacts="outline-columns-selected.png;outline-columns-grouped.png;outline-columns-collapsed.png;outline-columns-expanded.png;outline-columns-group-postcondition.txt"
+
+    # Seed distinct values in the grouped columns through the production inline editor. Keeping
+    # the values on one visible row makes the postcondition independent of the fixture document.
+    if ! set_cell_text_without_save 1 1 B2 OutlineColumn2 ||
+       ! set_cell_text_without_save 2 1 C2 OutlineColumn3 ||
+       ! set_cell_text_without_save 3 1 D2 OutlineColumn4; then
+        write_artifact "outline-columns-group-postcondition.txt" "seeded=false\n"
+        record "outline-columns-group-physical" "failed" "outline-columns-group-postcondition.txt" \
+            "Could not seed the column-group fixture through real X11 inline editing." "$artifacts"
+        return
+    fi
+
+    # Select whole columns through the real X11 headers. The first header click selects B and
+    # Shift+Right extends the production header selection to D before the Data keytip route groups it.
+    column_header_y="$((a1_y - cell_height / 2))"
+    if select_cell 1 1 B2; then
+        focus_app
+        xdotool_mousemove_sync "$(cell_center_x 1)" "$column_header_y" click 1
+        sleep "$settle_seconds"
+        send_key shift+Right
+        send_key shift+Right
+        capture "outline-columns-selected.png"
+        send_key alt+a
+        send_key g
+        send_key g
+        sleep "$settle_seconds"
+        capture "outline-columns-grouped.png"
+        group_command=true
+    fi
+
+    # Summary columns to the right place the +/- control over the next visible column (E), in
+    # the top outline gutter. The gutter begins at the calibrated column-header origin and its
+    # level-one center is 13 DIPs below that origin.
+    toggle_x="$(cell_center_x 4)"
+    outline_top="$((a1_y - 18 - 26))"
+    outline_height="$((18 + 26))"
+    toggle_y="$((outline_top + 13))"
+    if $group_command && outline_green_score "$output/outline-columns-grouped.png" "$outline_top" "$outline_height"; then
+        grouped_score=true
+        focus_app
+        xdotool_mousemove_sync "$toggle_x" "$toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-columns-collapsed.png"
+        screen_changed "$output/outline-columns-grouped.png" "$output/outline-columns-collapsed.png" 300 && collapse_changed=true
+
+        # Once B:D are hidden, the summary column E moves into the first visible data slot.
+        collapsed_toggle_x="$(cell_center_x 1)"
+        focus_app
+        xdotool_mousemove_sync "$collapsed_toggle_x" "$toggle_y" click 1
+        sleep "$settle_seconds"
+        capture "outline-columns-expanded.png"
+        screen_changed "$output/outline-columns-collapsed.png" "$output/outline-columns-expanded.png" 300 && expand_changed=true
+        outline_green_score "$output/outline-columns-expanded.png" "$outline_top" "$outline_height" && expanded_score=true
+    fi
+
+    column2_value="$(copy_cell_formula 1 1 B2 || true)"
+    column3_value="$(copy_cell_formula 2 1 C2 || true)"
+    column4_value="$(copy_cell_formula 3 1 D2 || true)"
+    if [[ "$column2_value" == "OutlineColumn2" && "$column3_value" == "OutlineColumn3" && "$column4_value" == "OutlineColumn4" ]]; then
+        values_restored=true
+    fi
+
+    write_artifact "outline-columns-group-postcondition.txt" \
+        "seeded=true\nselection-gesture=column-header-B,Shift+Right,Shift+Right\ngroup-gesture=Alt+A,G,G\ngroup-command=$group_command\ngrouped-outline-green=$grouped_score\ncollapse-screen-changed=$collapse_changed\nexpand-screen-changed=$expand_changed\nexpanded-outline-green=$expanded_score\nrestored-values=$column2_value,$column3_value,$column4_value\nvalues-restored=$values_restored\n"
+    if $group_command && $grouped_score && $collapse_changed && $expand_changed && $expanded_score && $values_restored; then
+        record "outline-columns-group-physical" "passed" \
+            "outline-columns-selected.png; outline-columns-grouped.png; outline-columns-collapsed.png; outline-columns-expanded.png; columns=B:D; values=OutlineColumn2,OutlineColumn3,OutlineColumn4" \
+            "Real X11 column-header selection and Data > Group input rendered the column outline gutter; physical +/- collapse hid the grouped columns, a second physical +/- expanded them, and all three model values read back exactly." "$artifacts"
+    else
+        record "outline-columns-group-physical" "failed" \
+            "outline-columns-selected.png; outline-columns-grouped.png; outline-columns-collapsed.png; outline-columns-expanded.png; outline-columns-group-postcondition.txt" \
+            "The real-input column Group/Outline workflow did not prove every required state: group-command=$group_command, grouped-outline-green=$grouped_score, collapse-screen-changed=$collapse_changed, expand-screen-changed=$expand_changed, expanded-outline-green=$expanded_score, values-restored=$values_restored." "$artifacts"
+    fi
+    send_key Escape || true
+}
+
 probe_formula_bar_point_mode_multi_area_edit() {
     local committed_formula="" committed_display="" normalized_formula=""
     local formula_passed=false result_passed=false selection_passed=false
@@ -3463,8 +3545,9 @@ if [[ "$probe_selector" == "grid-drag" ]]; then
 fi
 
 if [[ "$probe_selector" == "outline-group" ]]; then
-    # Focused iteration mode for physical row grouping plus the visible outline +/- control.
+    # Focused iteration mode for physical row and column grouping plus visible outline controls.
     probe_outline_group_physical
+    probe_outline_column_group_physical
     if (( mousemove_timeout_count > 0 )); then
         record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused Group/Outline probe."
     fi

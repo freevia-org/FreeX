@@ -222,6 +222,10 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("FREEX_X11_PROBE_SELECTOR", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"sheet-tabs\"", probe, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"name-box-dropdown-parity\"", probe, StringComparison.Ordinal);
+        Assert.Contains("probe_outline_column_group_physical", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-columns-group-physical", probe, StringComparison.Ordinal);
+        Assert.Contains("outline-columns-group-physical", runner, StringComparison.Ordinal);
+        Assert.Contains("Shift+Right", probe, StringComparison.Ordinal);
         Assert.Contains("name-box-dropdown-parity-native-crop", probe, StringComparison.Ordinal);
         Assert.Contains("Assert-NameBoxDropdownParityNativeContract", runner, StringComparison.Ordinal);
         Assert.Contains("probe_selector\" == \"formula-3d-point\"", probe, StringComparison.Ordinal);
