@@ -89,6 +89,8 @@ public sealed class PageSetupDialogVisualParityTests
                     .Should().Equal("Different first page", "Different odd and even");
                 checks.Children.OfType<CheckBox>().Select(check => check.Margin)
                     .Should().Equal(new Thickness(0), new Thickness(0, 4, 0, 0));
+                checks.Children.OfType<CheckBox>()
+                    .Should().OnlyContain(check => check.Height == 18 && check.MinHeight == 18);
             }
             finally
             {

@@ -298,7 +298,8 @@ public sealed class PageSetupDialog : FreeWDialogWindow
     private static CheckBox Check(string label, bool value, Thickness margin)
     {
         var box = new CheckBox { Content = label, IsChecked = value, Margin = margin };
-        AvaloniaCompactDialogChrome.ApplyCheckBox(box, DialogChromeStyle);
+        // Page Setup follows the compact WPF checkbox glyph and row metrics used by the authority.
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
         return box;
     }
 }
