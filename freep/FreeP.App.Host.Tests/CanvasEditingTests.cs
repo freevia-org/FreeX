@@ -856,6 +856,67 @@ public sealed class CanvasEditingTests
     }
 
     [StaFact]
+    public void CanvasGestureHandler_Dispose_DetachesEditorSubscriptions()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 914400L,
+        });
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        var handler = new CanvasGestureHandler(new SlideCanvas(), editor);
+
+        editor.Select(1);
+        handler.AdornerForTests.SelectionRects.Should().ContainSingle();
+
+        handler.Dispose();
+        editor.ClearSelection();
+
+        handler.AdornerForTests.SelectionRects.Should().ContainSingle(
+            "disposing the handler must stop stale editor events from clearing the new handler's visual state");
+        handler.Dispose();
+    }
+
+    [StaFact]
+    public void AttachEditing_DisposesPreviousGestureHandler()
+    {
+        var canvas = new SlideCanvas();
+        var firstPresentation = Presentation.CreateEmpty();
+        firstPresentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            ExtentCxEmu = 914400L,
+            ExtentCyEmu = 914400L,
+        });
+        var firstEditor = new EditingSession(
+            firstPresentation,
+            new PresentationCommandBus(firstPresentation));
+        var secondPresentation = Presentation.CreateEmpty();
+        var secondEditor = new EditingSession(
+            secondPresentation,
+            new PresentationCommandBus(secondPresentation));
+        var overlay = new System.Windows.Controls.Canvas();
+
+        canvas.AttachEditing(firstEditor, overlay);
+        var firstHandler = canvas.GestureHandlerForTests!;
+        firstEditor.Select(1);
+        firstHandler.AdornerForTests.SelectionRects.Should().ContainSingle();
+
+        canvas.AttachEditing(secondEditor, overlay);
+        firstEditor.ClearSelection();
+
+        firstHandler.AdornerForTests.SelectionRects.Should().ContainSingle(
+            "AttachEditing must dispose the previous handler before binding the replacement editor");
+        canvas.GestureHandlerForTests.Should().NotBeSameAs(firstHandler);
+    }
+
+    [StaFact]
     public void AttachEditing_ExposesCurrentTransformIdentity_BeforeRender()
     {
         var canvas = new SlideCanvas();

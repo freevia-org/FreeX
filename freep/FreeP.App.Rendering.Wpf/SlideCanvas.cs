@@ -124,7 +124,9 @@ public sealed class SlideCanvas : FrameworkElement
     public void AttachEditing(EditingSession editor, Canvas textOverlay)
     {
         var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
-        // Detach previous handler if any (don't re-add adorner on every call)
+        // Rebuilds replace the EditingSession. Dispose the previous handler first so its
+        // canvas/editor subscriptions and adorner cannot process the new document too.
+        _gestureHandler?.Dispose();
         _textEditor?.Dispose();
         ActiveTextEditShapeId = null;
         _textEditor      = null;
@@ -172,6 +174,8 @@ public sealed class SlideCanvas : FrameworkElement
 
     /// <summary>Enables or disables the Edit Points interaction mode.</summary>
     public void SetEditPointsMode(bool enabled) => EditPointsEnabled = enabled;
+
+    internal CanvasGestureHandler? GestureHandlerForTests => _gestureHandler;
 
     // ── Wave 10A: active editor access for ribbon routing ──────────────────────
 

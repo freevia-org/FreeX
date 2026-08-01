@@ -24,13 +24,15 @@ namespace FreeP.App.Rendering.Wpf;
 ///         is fully unit-testable.</item>
 /// </list>
 /// </summary>
-public sealed class CanvasGestureHandler
+public sealed class CanvasGestureHandler : IDisposable
 {
     // ── Wiring ────────────────────────────────────────────────────────────────────────────────
 
     private readonly SlideCanvas       _canvas;
     private readonly EditingSession    _editor;
     private readonly SelectionAdorner  _adorner;
+    private readonly AdornerLayer?     _adornerLayer;
+    private bool                       _disposed;
 
     // ── Drag state ────────────────────────────────────────────────────────────────────────────
 
@@ -100,9 +102,9 @@ public sealed class CanvasGestureHandler
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
 
         // Add adorner to the adorner layer
-        var layer = AdornerLayer.GetAdornerLayer(_canvas);
-        _adorner  = new SelectionAdorner(_canvas);
-        layer?.Add(_adorner);
+        _adornerLayer = AdornerLayer.GetAdornerLayer(_canvas);
+        _adorner      = new SelectionAdorner(_canvas);
+        _adornerLayer?.Add(_adorner);
 
         // Hook canvas events
         _canvas.MouseLeftButtonDown += OnMouseDown;
@@ -113,10 +115,33 @@ public sealed class CanvasGestureHandler
         _canvas.Focusable           = true;
 
         // React to selection changes from the editor (e.g. SelectAll via ribbon)
-        _editor.SelectionChanged += (_, _) => RefreshAdorner();
-        _editor.Changed          += () => RefreshAdorner();
-        _editor.CurrentSlideChanged += (_, _) => RefreshAdorner();
+        _editor.SelectionChanged    += OnEditorSelectionChanged;
+        _editor.Changed             += OnEditorChanged;
+        _editor.CurrentSlideChanged += OnEditorCurrentSlideChanged;
     }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _canvas.MouseLeftButtonDown -= OnMouseDown;
+        _canvas.MouseLeftButtonUp   -= OnMouseUp;
+        _canvas.MouseMove           -= OnMouseMove;
+        _canvas.LostMouseCapture    -= OnLostMouseCapture;
+        _canvas.KeyDown             -= OnKeyDown;
+        _editor.SelectionChanged    -= OnEditorSelectionChanged;
+        _editor.Changed             -= OnEditorChanged;
+        _editor.CurrentSlideChanged -= OnEditorCurrentSlideChanged;
+
+        CancelActiveGesture(releaseCapture: true);
+        _adornerLayer?.Remove(_adorner);
+    }
+
+    private void OnEditorSelectionChanged(object? sender, EventArgs e) => RefreshAdorner();
+    private void OnEditorChanged() => RefreshAdorner();
+    private void OnEditorCurrentSlideChanged(object? sender, EventArgs e) => RefreshAdorner();
 
     /// <summary>Captures the selected source and arms source-then-target Format Painter mode.</summary>
     public bool BeginFormatPainter() => _editor.BeginFormatPainter();
@@ -914,6 +939,8 @@ public sealed class CanvasGestureHandler
 
     internal bool HasTransientInteractionVisualsForTests =>
         _adorner.HasTransientInteractionVisualsForTests;
+
+    internal SelectionAdorner AdornerForTests => _adorner;
 
     internal bool HandleEscapeForTests() => HandleKeyDown(Key.Escape);
 
