@@ -2482,6 +2482,12 @@
   <data name="Ribbon_Command_AnimationMotionArcRight_KeyTip" xml:space="preserve">
     <value>A</value>
   </data>
+  <data name="Ribbon_Command_AnimationMotionArcLeft_Label" xml:space="preserve">
+    <value>Arc Left</value>
+  </data>
+  <data name="Ribbon_Command_AnimationMotionArcLeft_KeyTip" xml:space="preserve">
+    <value>AL</value>
+  </data>
   <data name="Ribbon_Group_AnimationTiming_Label" xml:space="preserve">
     <value>Timing</value>
   </data>
