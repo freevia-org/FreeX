@@ -434,6 +434,62 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_IncludesInlineChartWordArtAndSmartArtBeforeBodyText() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+
+            var chart = Chart.Create(
+                ChartKind.Column,
+                ["A", "B", "C"],
+                [10.0, 25.0, 15.0],
+                "Series 1",
+                "Inline PDF Chart");
+            chart.WidthPt = 220;
+            chart.HeightPt = 120;
+            var chartParagraph = new Paragraph();
+            chartParagraph.Runs.Add(new Run(string.Empty, RunFormatting.Default) { Chart = chart });
+            document.Blocks.Add(chartParagraph);
+
+            var wordArt = new WordArt("Inline PDF WordArt", WordArtStyle.FillBlue, 26);
+            var wordArtParagraph = new Paragraph();
+            wordArtParagraph.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wordArt });
+            document.Blocks.Add(wordArtParagraph);
+
+            var smartArt = SmartArt.Create(SmartArtKind.Process, ["Plan", "Ship", "Review"]);
+            smartArt.WidthPt = 260;
+            smartArt.HeightPt = 110;
+            var smartArtParagraph = new Paragraph();
+            smartArtParagraph.Runs.Add(new Run(string.Empty, RunFormatting.Default) { SmartArt = smartArt });
+            document.Blocks.Add(smartArtParagraph);
+            document.Blocks.Add(new Paragraph("Tail body text"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var ops = pdf.Pages.SelectMany(page => page.Ops).ToList();
+            var flattened = FlattenPdfOps(ops).ToList();
+            var texts = flattened.OfType<PdfText>().ToArray();
+            var chartTitle = texts.Single(text => text.Text == "Inline PDF Chart");
+            var planText = texts.Single(text => text.Text == "Plan");
+            var shipText = texts.Single(text => text.Text == "Ship");
+            var reviewText = texts.Single(text => text.Text == "Review");
+            var tailText = texts.Single(text => text.Text.Contains("Tail body text", StringComparison.Ordinal));
+
+            string.Concat(texts.Select(text => text.Text)).Should().Contain("Inline PDF WordArt");
+            flattened.IndexOf(chartTitle).Should().BeLessThan(flattened.IndexOf(planText));
+            flattened.IndexOf(planText).Should().BeLessThan(flattened.IndexOf(shipText));
+            flattened.IndexOf(shipText).Should().BeLessThan(flattened.IndexOf(reviewText));
+            flattened.IndexOf(reviewText).Should().BeLessThan(flattened.IndexOf(tailText));
+            ops.OfType<PdfFillRect>().Should().Contain(fill => fill.Color == new PdfColor(0xF9, 0xF9, 0xF9));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var rendered = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            CountNonWhitePixels(rendered).Should().BeGreaterThan(500);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesLaidOutInlineImageWithSharedCropOpacityRotationAndOrdering() =>
         Session.Dispatch(() =>
         {
@@ -1149,5 +1205,25 @@ public sealed class DocumentViewPdfExportTests
         }
 
         return count;
+    }
+
+    private static IEnumerable<PdfDrawOp> FlattenPdfOps(IEnumerable<PdfDrawOp> ops)
+    {
+        foreach (var op in ops)
+        {
+            yield return op;
+            IReadOnlyList<PdfDrawOp>? children = op switch
+            {
+                PdfRotationGroup rotation => rotation.Ops,
+                PdfClipGroup clip => clip.Ops,
+                PdfOpacityGroup opacity => opacity.Ops,
+                PdfEffectGroup effect => effect.Ops,
+                _ => null,
+            };
+            if (children is null)
+                continue;
+            foreach (var child in FlattenPdfOps(children))
+                yield return child;
+        }
     }
 }

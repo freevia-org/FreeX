@@ -3729,6 +3729,121 @@ public sealed class DocumentView : Control
                 floatingBehindOpsByPage[pageIndex]);
         }
 
+        // Inline charts, WordArt, and SmartArt are laid out into page-space rectangles by the same
+        // non-text flow pass as inline images. Reuse those resolved rectangles and shared visual
+        // plans, preserving the live chart -> WordArt -> SmartArt paint order before body glyphs.
+        var inlineDrawingOpsByPage = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
+
+        void AddInlineDrawingOps(Rect rect, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp> objectOps)
+        {
+            if (objectOps.Count == 0)
+                return;
+
+            var pageIndex = PageIndexFromPageSpaceY(rect.Top + 0.01);
+            if (pageIndex < 0)
+                return;
+            while (inlineDrawingOpsByPage.Count <= pageIndex)
+                inlineDrawingOpsByPage.Add([]);
+            inlineDrawingOpsByPage[pageIndex].AddRange(objectOps);
+        }
+
+        foreach (var chartData in _inlineCharts)
+        {
+            if (chartData.Model is not { } chart)
+                continue;
+            var pageIndex = PageIndexFromPageSpaceY(chartData.Rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+            var snapshot = BuildInlineDrawingSnapshot(
+                DocumentFloatingObjectKind.Chart,
+                chartData.Rect,
+                chartData.BlockIndex,
+                chartData.RunIndex,
+                chart.RotationAngle,
+                chart.FlipH,
+                chart.FlipV);
+            AddInlineDrawingOps(
+                chartData.Rect,
+                BuildPdfChartOps(
+                    chart,
+                    DrawingObjectVisualPlanner.BuildVisualPlan(chart, snapshot),
+                    chartData.Rect,
+                    _surfacePlan.PageTopDip(pageIndex),
+                    pageHeightPt));
+        }
+
+        foreach (var wordArtData in _inlineWordArts)
+        {
+            if (wordArtData.Model is not { } wordArt)
+                continue;
+            var pageIndex = PageIndexFromPageSpaceY(wordArtData.Rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+            var snapshot = BuildInlineDrawingSnapshot(
+                DocumentFloatingObjectKind.WordArt,
+                wordArtData.Rect,
+                wordArtData.BlockIndex,
+                wordArtData.RunIndex,
+                wordArt.RotationAngle,
+                wordArt.FlipH,
+                wordArt.FlipV);
+            AddInlineDrawingOps(
+                wordArtData.Rect,
+                BuildPdfWordArtOps(
+                    DrawingObjectVisualPlanner.BuildVisualPlan(wordArt, snapshot),
+                    wordArtData.Rect,
+                    _surfacePlan.PageTopDip(pageIndex),
+                    pageHeightPt));
+        }
+
+        foreach (var smartArtData in _inlineSmartArts)
+        {
+            if (smartArtData.IsWordSuppressedByDuplicateDrawingId
+                || smartArtData.Model is not { } smartArt)
+            {
+                continue;
+            }
+
+            var pageIndex = PageIndexFromPageSpaceY(smartArtData.Rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+            var snapshot = BuildInlineDrawingSnapshot(
+                DocumentFloatingObjectKind.SmartArt,
+                smartArtData.Rect,
+                smartArtData.BlockIndex,
+                smartArtData.RunIndex,
+                smartArt.RotationAngle,
+                smartArt.FlipH,
+                smartArt.FlipV);
+            AddInlineDrawingOps(
+                smartArtData.Rect,
+                BuildPdfSmartArtOps(
+                    DrawingObjectVisualPlanner.BuildVisualPlan(smartArt, snapshot),
+                    smartArtData.Rect,
+                    _surfacePlan.PageTopDip(pageIndex),
+                    pageHeightPt));
+        }
+
+        for (var pageIndex = 0; pageIndex < inlineDrawingOpsByPage.Count; pageIndex++)
+        {
+            if (inlineDrawingOpsByPage[pageIndex].Count == 0)
+                continue;
+
+            EnsurePage(pageIndex);
+            var tableCount = pageIndex < tableSurfaceCountsByPage.Count
+                ? tableSurfaceCountsByPage[pageIndex]
+                : 0;
+            var behindCount = pageIndex < floatingBehindOpsByPage.Count
+                ? floatingBehindOpsByPage[pageIndex].Count
+                : 0;
+            var imageCount = pageIndex < imageOpsByPage.Count
+                ? imageOpsByPage[pageIndex].Count
+                : 0;
+            pagesOps[pageIndex].InsertRange(
+                Math.Min(tableCount + behindCount + imageCount, pagesOps[pageIndex].Count),
+                inlineDrawingOpsByPage[pageIndex]);
+        }
+
         // The live Avalonia layout has already resolved page ownership, field text, wrapping, and
         // note bands. Carry those same text regions into the PDF model so export does not silently
         // lose document chrome that Print Preview visibly shows.
@@ -4050,6 +4165,26 @@ public sealed class DocumentView : Control
 
     private static string FormatKey(RunFormatting fmt) =>
         $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}";
+
+    private static DocumentFloatingObjectSnapshot BuildInlineDrawingSnapshot(
+        DocumentFloatingObjectKind kind,
+        Rect rect,
+        int blockIndex,
+        int runIndex,
+        double rotationAngle,
+        bool flipH,
+        bool flipV) =>
+        new(
+            kind,
+            blockIndex,
+            runIndex,
+            ToPlannerRect(rect),
+            BehindText: false,
+            ZOrderIndex: 0,
+            ImageWrapping.Inline,
+            rotationAngle,
+            flipH,
+            flipV);
 
     private PdfImage? BuildPdfImage(
         Rect sourceRect,
@@ -21938,6 +22073,7 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
+        public Chart? Model;
         public ChartScene Scene = new(
             Kind: ChartKind.Column,
             GeometryKind: ChartVisualGeometryKind.Bars,
@@ -21968,6 +22104,7 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
+        public WordArt? Model;
         public string       Text        = string.Empty;
         public WordArtStyle Style;
         public double       FontSizePt  = 36;
@@ -21993,6 +22130,7 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
+        public SmartArt? Model;
         public SmartArtKind     Kind;
         public string           LayoutId = "list1";
         public SmartArtStyle    Style = SmartArtStyle.Default;
@@ -22082,6 +22220,7 @@ public sealed class DocumentView : Control
             ZOrder = 0,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
+            Model = wordArt,
             Text = plan.WordArt.Text,
             Style = plan.WordArt.Style,
             FontSizePt = plan.WordArt.FontSizeDip / PxPerPoint,
@@ -22114,6 +22253,7 @@ public sealed class DocumentView : Control
             ZOrder = zOrder,
             BlockIndex = blockIndex,
             RunIndex = runIndex,
+            Model = smartArt,
             Kind = plan.Kind,
             LayoutId = plan.LayoutId,
             Style = plan.Style,
@@ -22286,6 +22426,7 @@ public sealed class DocumentView : Control
             Rect              = rect,
             BehindText        = behindText,
             ZOrder            = zOrder,
+            Model             = chart,
             Scene             = scene,
         };
     }
