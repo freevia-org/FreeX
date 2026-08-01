@@ -32,6 +32,7 @@ internal sealed class BackstageView : Window
     // uses padded action buttons, which changes the whole Backstage family at once.
     internal static readonly IBrush PrimaryInk = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33));
     internal static readonly IBrush SecondaryInk = new SolidColorBrush(Color.FromRgb(0x70, 0x70, 0x70));
+    private static readonly FontFamily BackstageFontFamily = new("Segoe UI");
     private static readonly IBrush LinkBrush = new SolidColorBrush(Color.FromRgb(0x0F, 0x6D, 0x8C));
     private static readonly IBrush TileBorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xE5));
     private static readonly IBrush TileInnerBorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE6, 0xEF));
@@ -310,7 +311,7 @@ internal sealed class BackstageView : Window
         content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
 
         // Document settings grid
-        content.Children.Add(BuildSectionHeader(BackstageViewTextResources.DocumentSettingsSection));
+        content.Children.Add(BuildSectionHeader("Document"));
         var fieldGrid = CreateDetailGrid();
         foreach (var field in surface.Fields)
             AddDetailRow(fieldGrid, field.Label, field.Value, $"PrintField_{field.Label}");
@@ -335,7 +336,7 @@ internal sealed class BackstageView : Window
                 margin: new Thickness(0, 8, 0, 0)));
         }
 
-        return content;
+        return CreateScroll(content);
     }
 
     // ── Share pane ────────────────────────────────────────────────────────────
@@ -905,12 +906,20 @@ internal sealed class BackstageView : Window
         grid.Children.Add(valueBlock);
     }
 
-    private static ScrollViewer CreateScroll(Control child) => new()
+    private static ScrollViewer CreateScroll(Control child)
     {
-        Content = child,
-        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-    };
+        var scroll = new ScrollViewer
+        {
+            Content = child,
+            Padding = new Thickness(0),
+            FontFamily = BackstageFontFamily,
+            FontSize = 12,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        };
+        TextOptions.SetTextRenderingMode(scroll, TextRenderingMode.Antialias);
+        return scroll;
+    }
 
     private static Control CreateTemplateTile(string caption, Action action)
     {
@@ -971,6 +980,7 @@ internal sealed class BackstageView : Window
             SelectedIndex = selectedIndex,
             MinWidth = 380,
             Margin = new Thickness(0, 2, 0, 12),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         AutomationProperties.SetAutomationId(typeCombo, "SaveAsSelectedExtension");
         typeCombo.SelectionChanged += (_, _) =>

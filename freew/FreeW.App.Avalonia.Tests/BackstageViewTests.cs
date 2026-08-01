@@ -2,12 +2,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Free.Shared.Shell;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Presentation.Backstage;
@@ -192,6 +194,40 @@ public class BackstageViewTests
             items.Select(item => item.Content).Should().OnlyContain(content => content == null);
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BackstageView_pane_scroll_host_uses_WPF_typography_and_zero_padding()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            view.TryActivateEntry("Open").Should().BeTrue();
+
+            var pane = view.GetLogicalDescendants()
+                .OfType<ScrollViewer>()
+                .Single(scroll => scroll.Content is StackPanel panel && panel.MaxWidth == 720);
+
+            pane.Padding.Should().Be(new Thickness(0));
+            pane.FontFamily.Name.Should().Be("Segoe UI");
+            pane.FontSize.Should().Be(12);
+            TextOptions.GetTextRenderingMode(pane).Should().Be(TextRenderingMode.Antialias);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task BackstageView_print_uses_the_same_WPF_parity_scroll_host()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            view.TryActivateEntry("Print").Should().BeTrue();
+
+            view.GetLogicalDescendants()
+                .OfType<ScrollViewer>()
+                .Any(scroll => scroll.Content is StackPanel panel && panel.Spacing == 16)
+                .Should().BeTrue();
         }, CancellationToken.None);
     }
 
