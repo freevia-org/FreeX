@@ -851,6 +851,46 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedShorebirdTracksPageBorderMotifs() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.ShorebirdTracksArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var lines = pdf.Pages.Single().Ops.OfType<PdfLine>().ToArray();
+            lines.Should().HaveCount(72 * 4);
+            lines[0].Should().Be(new PdfLine(
+                54,
+                751.125,
+                60.75,
+                751.125,
+                PdfColor.Black,
+                0.375));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var footprintInk = 0;
+            for (var y = 44; y < 65; y++)
+            for (var x = 70; x < 106; x++)
+            {
+                if (bitmap.GetPixel(x, y).Red < 245)
+                    footprintInk++;
+            }
+            footprintInk.Should().BeGreaterThan(20);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {

@@ -3079,8 +3079,9 @@ public static class DocxReader
     /// w:tag / w:alias and the control kind. A w14:checkbox (or w:checkbox) marks a checkbox control,
     /// whose checked state comes from the nested w14:checked/@val ("1"/"true"/"on"); a w:date marks a
     /// date picker (recovering its w:dateFormat); a w:dropDownList / w:comboBox marks a list control
-    /// (recovering its w:listItem choices); a w:richText marks a rich-text control; anything else is a
-    /// plain-text control. A null/absent w:sdtPr yields a default plain-text control.
+    /// (recovering its w:listItem choices); a w:picture marks a picture control; a w:richText marks a
+    /// rich-text control; anything else is a plain-text control. A null/absent w:sdtPr yields a default
+    /// plain-text control.
     /// </summary>
     private static void AddContentControlRuns(
         Paragraph paragraph,
@@ -3207,6 +3208,10 @@ public static class DocxReader
         if (combo is not null)
             return new ContentControl(ContentControlKind.ComboBox, normTag, normAlias,
                 ListItems: ReadListItems(combo), LockMode: lockMode, WordMetadata: wordMetadata);
+
+        if (sdtPr?.Element(W + "picture") is not null)
+            return new ContentControl(ContentControlKind.Picture, normTag, normAlias,
+                LockMode: lockMode, WordMetadata: wordMetadata);
 
         if (sdtPr?.Element(W + "richText") is not null)
             return new ContentControl(ContentControlKind.RichText, normTag, normAlias,
@@ -3341,7 +3346,7 @@ public static class DocxReader
         var image = ReadImage(r, archive, imageRelationships);
         if (image is not null)
         {
-            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId, Control = control };
             ApplyRevision(imageRun);
             paragraph.Runs.Add(imageRun);
             return;

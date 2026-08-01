@@ -1128,6 +1128,17 @@ public sealed class Run(string text, RunFormatting? formatting = null)
         {
             Control = new ContentControl(ContentControlKind.ComboBox, tag, alias, ListItems: items)
         };
+
+    /// <summary>
+    /// Creates a picture content control whose content is <paramref name="image"/>. Serialises as a
+    /// w:sdt with an empty w:picture property wrapping the ordinary DrawingML picture run.
+    /// </summary>
+    public static Run PictureControl(InlineImage image, string? tag = null, string? alias = null) =>
+        new(string.Empty)
+        {
+            Image = image,
+            Control = new ContentControl(ContentControlKind.Picture, tag, alias)
+        };
 }
 
 /// <summary>A formatted fragment in the base or phonetic text of a Word ruby annotation.</summary>
@@ -1181,7 +1192,8 @@ public enum RubyAlignment
 /// <see cref="DatePicker"/> is a date picker (w:sdtPr/w:date) whose run carries the displayed date;
 /// <see cref="DropDownList"/> is a drop-down list (w:sdtPr/w:dropDownList + w:listItem entries) the user
 /// can only pick from; <see cref="ComboBox"/> is a combo box (w:sdtPr/w:comboBox + w:listItem entries)
-/// that additionally allows free text.
+/// that additionally allows free text; <see cref="Picture"/> is a picture control (w:sdtPr/w:picture)
+/// whose run carries an <see cref="InlineImage"/>.
 /// </summary>
 public enum ContentControlKind
 {
@@ -1190,7 +1202,8 @@ public enum ContentControlKind
     RichText,
     DatePicker,
     DropDownList,
-    ComboBox
+    ComboBox,
+    Picture
 }
 
 /// <summary>Word content-control locking from w:sdtPr/w:lock.</summary>
