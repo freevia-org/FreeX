@@ -57,6 +57,19 @@ public static class SlideCloner
         return copy;
     }
 
+    /// <summary>
+    /// Returns a fully independent deep copy of <paramref name="slide"/> for an in-place edit.
+    /// Unlike <see cref="CloneSlide"/>, the package identity is preserved so slide-targeting
+    /// references remain valid while the edited model is swapped into the presentation.
+    /// </summary>
+    public static Slide CloneSlidePreservingIdentity(Slide slide)
+    {
+        var copy = CloneSlide(slide);
+        copy.Id = slide.Id;
+        copy.NumericId = slide.NumericId;
+        return copy;
+    }
+
     /// <summary>Returns a fully independent deep copy of <paramref name="shape"/>.</summary>
     public static SlideShape CloneShape(SlideShape shape)
     {

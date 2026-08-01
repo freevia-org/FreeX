@@ -719,13 +719,13 @@ public static class HeaderFooterCommandPlanner
 
                 if (!_before.ContainsKey(index))
                 {
-                    _before[index] = SlideCloner.CloneSlide(presentation.Slides[index]);
-                    var updated = SlideCloner.CloneSlide(presentation.Slides[index]);
+                    _before[index] = SlideCloner.CloneSlidePreservingIdentity(presentation.Slides[index]);
+                    var updated = SlideCloner.CloneSlidePreservingIdentity(presentation.Slides[index]);
                     ApplyToSlide(presentation, updated, _plan.Options);
                     _after[index] = updated;
                 }
 
-                presentation.Slides[index] = SlideCloner.CloneSlide(_after[index]);
+                presentation.Slides[index] = SlideCloner.CloneSlidePreservingIdentity(_after[index]);
             }
         }
 
@@ -735,7 +735,7 @@ public static class HeaderFooterCommandPlanner
             {
                 if (index >= 0 && index < presentation.Slides.Count)
                 {
-                    presentation.Slides[index] = SlideCloner.CloneSlide(slide);
+                    presentation.Slides[index] = SlideCloner.CloneSlidePreservingIdentity(slide);
                 }
             }
         }
