@@ -1,5 +1,3 @@
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using FreeP.App.Avalonia;
@@ -60,5 +58,4 @@ public sealed class StartupDocumentAttachmentTests
             try { Directory.Delete(tempDir, recursive: true); } catch { }
         }
     }
-
 }
