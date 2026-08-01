@@ -3315,6 +3315,7 @@ public sealed class DocumentView : Control
         // Bucket glyphs by page index (continuous column split at page height).
         var pagesOps = new List<List<Free.Shared.Pdf.PdfDrawOp>>();
         var pageLinkOverlays = new List<List<Free.Shared.Pdf.PdfLinkOverlay>>();
+        var pageNamedDestinations = new List<List<Free.Shared.Pdf.PdfNamedDestination>>();
 
         var runStartX = 0.0;
         var runEndX = 0.0;
@@ -3461,7 +3462,7 @@ public sealed class DocumentView : Control
                     decorationLineWidthPt));
             }
 
-            if (runLink is { IsExternal: true } link && !string.IsNullOrWhiteSpace(link.Url))
+            if (runLink is { HasTarget: true } link)
             {
                 while (pageLinkOverlays.Count <= runPageIndex)
                     pageLinkOverlays.Add(new List<Free.Shared.Pdf.PdfLinkOverlay>());
@@ -3471,8 +3472,9 @@ public sealed class DocumentView : Control
                     Math.Max(0, yWithinPagePx / PxPerPoint),
                     Math.Max(1, runEndX - runStartX) / PxPerPoint,
                     Math.Max(1, runLineHeight) / PxPerPoint,
-                    link.Url!,
-                    link.Tooltip));
+                    link.IsExternal ? link.Url : null,
+                    link.Tooltip,
+                    link.IsInternal ? link.Anchor?.TrimStart('#').Trim() : null));
             }
 
             runText.Clear();
@@ -3521,6 +3523,55 @@ public sealed class DocumentView : Control
         }
 
         Flush();
+
+        var emittedDestinationNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var location in Bookmarks.List(_doc))
+        {
+            if (string.IsNullOrWhiteSpace(location.Name)
+                || !emittedDestinationNames.Add(location.Name)
+                || location.BlockIndex < 0
+                || location.BlockIndex >= _doc.Blocks.Count
+                || _doc.Blocks[location.BlockIndex] is not Paragraph paragraph)
+            {
+                continue;
+            }
+
+            var targetOffset = 0;
+            var startBoundary = paragraph.BookmarkBoundaries.FirstOrDefault(boundary =>
+                boundary.Kind == BookmarkBoundaryKind.Start
+                && string.Equals(boundary.Name, location.Name, StringComparison.Ordinal));
+            if (startBoundary is not null)
+            {
+                var runLimit = Math.Clamp(startBoundary.RunIndex, 0, paragraph.Runs.Count);
+                targetOffset = paragraph.Runs.Take(runLimit).Sum(run => run.Text?.Length ?? 0);
+            }
+
+            var placement = _placed
+                .Where(item => item.Block == location.BlockIndex && item.Offset >= targetOffset)
+                .OrderBy(item => item.Offset)
+                .ThenBy(item => item.Y)
+                .Select(item => (PlacedChar?)item)
+                .FirstOrDefault()
+                ?? _placed
+                    .Where(item => item.Block == location.BlockIndex)
+                    .OrderBy(item => item.Offset)
+                    .ThenBy(item => item.Y)
+                    .Select(item => (PlacedChar?)item)
+                    .FirstOrDefault();
+            if (placement is not { } target)
+                continue;
+
+            var destinationPageIndex = PageIndexFromPageSpaceY(target.Y + 0.01);
+            if (destinationPageIndex < 0)
+                continue;
+            while (pageNamedDestinations.Count <= destinationPageIndex)
+                pageNamedDestinations.Add(new List<Free.Shared.Pdf.PdfNamedDestination>());
+
+            pageNamedDestinations[destinationPageIndex].Add(new Free.Shared.Pdf.PdfNamedDestination(
+                location.Name,
+                Math.Max(0, (target.X - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt),
+                Math.Max(0, (target.Y - _surfacePlan.PageTopDip(destinationPageIndex)) / PxPerPoint)));
+        }
 
         // Table cell rectangles are already in page space and are painted below glyphs by the live
         // Avalonia renderer. Reuse those same items for PDF export; do not remeasure or paginate a
@@ -4169,6 +4220,9 @@ public sealed class DocumentView : Control
                 ops,
                 pageIndex < pageLinkOverlays.Count && pageLinkOverlays[pageIndex].Count > 0
                     ? pageLinkOverlays[pageIndex]
+                    : null,
+                pageIndex < pageNamedDestinations.Count && pageNamedDestinations[pageIndex].Count > 0
+                    ? pageNamedDestinations[pageIndex]
                     : null))
             .ToList();
         var properties = new Free.Shared.Pdf.PdfDocumentProperties(

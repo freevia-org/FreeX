@@ -99,6 +99,32 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsInternalLinkToCrossPageNamedDestination()
+    {
+        var pages = new[]
+        {
+            new PdfContentPage(
+                100,
+                80,
+                [new PdfText(10, 60, 10, PdfFontFace.Regular, PdfColor.Black, "Jump")],
+                [new PdfLinkOverlay(10, 10, 40, 20, null, "Jump to target", "Target1")]),
+            new PdfContentPage(
+                100,
+                80,
+                [new PdfText(12, 20, 10, PdfFontFace.Regular, PdfColor.Black, "Target")],
+                NamedDestinations: [new PdfNamedDestination("Target1", 12, 20)]),
+        };
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(pages)));
+
+        pdf.Should().Contain("/Type /Annot /Subtype /Link");
+        pdf.Should().Contain("/Contents (Jump to target)");
+        pdf.Should().Contain("/Dest [");
+        pdf.Should().Contain("/XYZ 12 60 null]");
+        pdf.Should().NotContain("/S /URI");
+    }
+
+    [Fact]
     public void Write_EmitsPdfLineAsMoveThenLineStroke()
     {
         // PdfLine should emit a PDF path: m (moveto), l (lineto), S (stroke).

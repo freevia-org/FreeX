@@ -161,7 +161,7 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
-    public Task BuildPdfContent_ExportsDistinctExternalHyperlinkRegionsAndSkipsInternalAnchors() =>
+    public Task BuildPdfContent_ExportsExternalAndCrossPageBookmarkHyperlinks() =>
         Session.Dispatch(() =>
         {
             var document = TextDocument.CreateEmpty();
@@ -180,20 +180,47 @@ public sealed class DocumentViewPdfExportTests
             paragraph.Runs.Add(new Run("Bookmark")
             {
                 HyperlinkAnchor = "Target1",
+                HyperlinkTooltip = "Jump to target",
             });
             document.Blocks.Add(paragraph);
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            for (var index = 0; index < 12; index++)
+                document.Blocks.Add(new Paragraph($"Filler {index + 1}"));
+            var target = new Paragraph();
+            target.Runs.Add(new Run("Prefix "));
+            target.Runs.Add(new Run("Target paragraph", RunFormatting.Default with { Bold = true }));
+            target.BookmarkNames.Add("Target1");
+            target.BookmarkBoundaries.Add(new BookmarkBoundary(
+                "target-pair",
+                BookmarkBoundaryKind.Start,
+                RunIndex: 1,
+                Name: "Target1"));
+            target.BookmarkBoundaries.Add(new BookmarkBoundary(
+                "target-pair",
+                BookmarkBoundaryKind.End,
+                RunIndex: 2));
+            document.Blocks.Add(target);
 
             var view = new DocumentView();
             view.LoadDocument(document);
 
             var pdf = view.BuildPdfContent();
 
-            var links = pdf.Pages.Single().LinkOverlays.Should().NotBeNull().And.Subject!.ToArray();
-            links.Should().HaveCount(2);
-            links.Select(link => link.Uri).Should().Equal(
+            pdf.Pages.Should().HaveCountGreaterThan(1);
+            var links = pdf.Pages[0].LinkOverlays.Should().NotBeNull().And.Subject!.ToArray();
+            links.Should().HaveCount(3);
+            links.Take(2).Select(link => link.Uri).Should().Equal(
                 "https://first.example/path",
                 "https://second.example/path");
-            links.Select(link => link.Tooltip).Should().Equal("First tip", "Second tip");
+            links.Take(2).Select(link => link.Tooltip).Should().Equal("First tip", "Second tip");
+            links[2].Uri.Should().BeNull();
+            links[2].DestinationName.Should().Be("Target1");
+            links[2].Tooltip.Should().Be("Jump to target");
             links.Should().OnlyContain(link =>
                 link.X >= 0
                 && link.Y >= 0
@@ -202,16 +229,26 @@ public sealed class DocumentViewPdfExportTests
                 && link.X + link.Width <= pdf.Pages[0].WidthPoints
                 && link.Y + link.Height <= pdf.Pages[0].HeightPoints);
             links[1].X.Should().BeGreaterThan(links[0].X + links[0].Width - 0.01);
+            var destinationPage = pdf.Pages
+                .Skip(1)
+                .Single(page => page.NamedDestinations is { Count: > 0 });
+            var destination = destinationPage.NamedDestinations.Should().ContainSingle().Which;
+            destination.Name.Should().Be("Target1");
+            var targetText = destinationPage.Ops.OfType<PdfText>()
+                .First(text => text.Face == PdfFontFace.Bold
+                    && text.Text.Contains("Target", StringComparison.Ordinal));
+            destination.X.Should().BeApproximately(targetText.X, 0.01);
 
             var portable = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(pdf));
             portable.Should().Contain("/URI (https://first.example/path)");
             portable.Should().Contain("/URI (https://second.example/path)");
-            portable.Should().NotContain("Target1");
+            portable.Should().Contain("/Dest [");
+            portable.Should().Contain("/Contents (Jump to target)");
 
             var skia = Encoding.Latin1.GetString(SkiaPdfWriter.WriteToBytes(pdf));
             skia.Should().Contain("/URI (https://first.example/path)");
             skia.Should().Contain("/URI (https://second.example/path)");
-            skia.Should().NotContain("Target1");
+            skia.Should().Contain("Target1");
         }, CancellationToken.None);
 
     [Fact]

@@ -64,6 +64,30 @@ public sealed class SkiaPdfWriterTests
         pdf.Should().Contain("/URI (https://example.com)");
     }
 
+    [Fact]
+    public void Write_EmitsInternalLinkToCrossPageNamedDestination()
+    {
+        var pages = new[]
+        {
+            new PdfContentPage(
+                100,
+                80,
+                [new PdfText(10, 60, 10, PdfFontFace.Regular, PdfColor.Black, "Jump")],
+                [new PdfLinkOverlay(10, 10, 40, 20, null, DestinationName: "Target1")]),
+            new PdfContentPage(
+                100,
+                80,
+                [new PdfText(12, 20, 10, PdfFontFace.Regular, PdfColor.Black, "Target")],
+                NamedDestinations: [new PdfNamedDestination("Target1", 12, 20)]),
+        };
+
+        var pdf = Encoding.Latin1.GetString(SkiaPdfWriter.WriteToBytes(new PdfContentDocument(pages)));
+
+        pdf.Should().Contain("/Subtype /Link");
+        pdf.Should().Contain("Target1");
+        pdf.Should().NotContain("/URI (Target1)");
+    }
+
     [Theory]
     [InlineData(PdfImageClipKind.Triangle)]
     [InlineData(PdfImageClipKind.Diamond)]
