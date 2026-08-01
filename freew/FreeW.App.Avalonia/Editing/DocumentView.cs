@@ -3318,7 +3318,10 @@ public sealed class DocumentView : Control
             while (pagesOps.Count <= runPageIndex)
                 pagesOps.Add(new List<Free.Shared.Pdf.PdfDrawOp>());
 
-            var fontSizePt = runFmt.FontSizePt ?? DefaultFontSizePt;
+            var sourceFontSizePt = runFmt.FontSizePt ?? DefaultFontSizePt;
+            var fontSizePt = runFmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript
+                ? sourceFontSizePt * SuperSubScale
+                : sourceFontSizePt;
             var face = (runFmt.Bold, runFmt.Italic) switch
             {
                 (true, true) => Free.Shared.Pdf.PdfFontFace.BoldItalic,
@@ -3336,7 +3339,13 @@ public sealed class DocumentView : Control
             //   pageTop(pageSpace) = DeskPadding + pageIndex*(pageHeightPx+PageGap)
             //   yWithinPagePx = runY - pageTop(pageSpace) = runY - DeskPadding - pageIndex*(pageHeightPx+PageGap)
             var yWithinPagePx = runY - _surfacePlan.PageTopDip(runPageIndex);
-            var baselineFromTopPt = yWithinPagePx / PxPerPoint + fontSizePt;
+            var drawOffsetDip = runFmt.VerticalAlign switch
+            {
+                VerticalAlign.Superscript => Math.Max(1, runLineHeight) * SuperYRaiseFraction,
+                VerticalAlign.Subscript => Math.Max(1, runLineHeight) * SubYLowerFraction,
+                _ => 0,
+            };
+            var baselineFromTopPt = (yWithinPagePx + drawOffsetDip) / PxPerPoint + fontSizePt;
             var yPt = pageHeightPt - baselineFromTopPt;
 
             var decorationPlan = RunDecorationVisualPlanner.Build(runFmt, PxPerPoint);
@@ -4451,7 +4460,7 @@ public sealed class DocumentView : Control
             ? string.Empty
             : $"{border.ColorHex}|{border.WidthPt}|{border.BottomOnly}|{border.LineStyle}|" +
               $"{border.Top}|{border.Left}|{border.Bottom}|{border.Right}";
-        return $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
+        return $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.VerticalAlign}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
                $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|" +
                $"{fmt.Strikethrough}|{borderKey}";
     }
