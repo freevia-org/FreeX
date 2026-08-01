@@ -56,6 +56,7 @@ public sealed partial class MainWindow
         _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.TextBox);
         RefreshTableContextualTab();
         RefreshPivotContextualTab();
+        RequestTextBoxInlinePhysicalLayoutObservation();
         RefreshShell("Ready");
         FocusTextBoxInlineEditor();
     }
@@ -95,6 +96,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(_textBoxInlineEditor, "Text box inline editor");
         AutomationProperties.SetHelpText(_textBoxInlineEditor, "Edits the selected text box in place.");
         _textBoxInlineEditor.KeyDown += TextBoxInlineEditor_KeyDown;
+        _textBoxInlineEditor.LayoutUpdated += TextBoxInlineEditor_LayoutUpdated;
         _textBoxInlineEditor.TextChanged += (_, _) =>
         {
             if (_textBoxInlineEditingId is { } textBoxId && _textBoxInlineEditor.IsVisible)
@@ -187,8 +189,6 @@ public sealed partial class MainWindow
         _textBoxInlineEditor.CaretIndex = _textBoxInlineEditor.Text?.Length ?? 0;
         _textBoxInlineEditor.SelectionStart = _textBoxInlineEditor.CaretIndex;
         _textBoxInlineEditor.SelectionEnd = _textBoxInlineEditor.CaretIndex;
-        if (_textBoxInlineEditingId is { } activeTextBoxId)
-            RecordTextBoxInlinePhysicalEvidence("editing", activeTextBoxId);
     }
 
     private bool HideTextBoxInlineEditor(bool commit, bool refresh = true)

@@ -44,8 +44,16 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
         probe.Should().Contain("send_key Escape");
         probe.Should().Contain("TextBoxInlineEditor");
         probe.Should().Contain("read_textbox_text");
+        probe.Should().Contain("'provenance': 'xlsx-package-readback-before-interaction'");
+        probe.Should().Contain("e.get(\"modelText\") == \"Wave93 committed\\nsecond line\"");
+        probe.Should().Contain("if wait_for_runtime reopen; then reopen_observed=true; fi");
+        probe.Should().Contain("if wait_for_runtime cancel-input; then cancel_input_observed=true; fi");
         probe.Should().Contain("identify -format '%w %h'");
         probe.Should().Contain("results.json");
+        probe.Should().NotContain("send_key ctrl+s");
+        probe.Should().NotContain("wait_for_package_text");
+        probe.Should().NotContain("package-committed.txt");
+        probe.Should().NotContain("package-canceled.txt");
         probe.Should().NotContain("BeginTextBoxInlineEditForTest");
         probe.Should().NotContain("RaiseTextBoxInlineEditorKeyDownForTest");
     }
@@ -74,6 +82,10 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
         properties.GetProperty("suite").GetProperty("const").GetString()
             .Should().Be("freex-linux-textbox-inline-edit-physical");
         properties.GetProperty("screenshots").GetProperty("maxItems").GetInt32().Should().Be(5);
+        properties.GetProperty("fixture").GetProperty("properties")
+            .GetProperty("packageText").GetProperty("const").GetString()
+            .Should().Be("Wave93 initial text");
+        properties.TryGetProperty("package", out _).Should().BeFalse();
         properties.GetProperty("results").GetProperty("maxItems").GetInt32().Should().Be(6);
         properties.GetProperty("summary").GetProperty("properties")
             .GetProperty("passed").GetProperty("const").GetInt32().Should().Be(6);
@@ -85,6 +97,7 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
         var runtimeProperties = properties.GetProperty("runtime").GetProperty("properties")
             .GetProperty("events").GetProperty("items").GetProperty("properties");
         runtimeProperties.GetProperty("editorVisible").GetProperty("type").GetString().Should().Be("boolean");
+        runtimeProperties.GetProperty("nonZeroBounds").GetProperty("const").GetBoolean().Should().BeTrue();
         runtimeProperties.GetProperty("editorWidth").GetProperty("exclusiveMinimum").GetDouble().Should().Be(0);
         runtimeProperties.GetProperty("editorHeight").GetProperty("exclusiveMinimum").GetDouble().Should().Be(0);
 
@@ -106,9 +119,14 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
         observer.Should().Contain("EditorAutomationId");
         observer.Should().Contain("EditorWidth");
         observer.Should().Contain("ModelText");
+        observer.Should().Contain("_textBoxInlinePhysicalLayoutObservationPending = false;");
+        observer.Should().Contain("editor.Bounds.Width <= 0 || editor.Bounds.Height <= 0");
         observer.Should().Contain("File.Move(temporaryPath, path, overwrite: true)");
+        editor.Should().Contain("RequestTextBoxInlinePhysicalLayoutObservation();");
+        editor.Should().Contain("_textBoxInlineEditor.LayoutUpdated += TextBoxInlineEditor_LayoutUpdated;");
         editor.Should().Contain("RecordTextBoxInlinePhysicalEvidence(\"committed\"");
         editor.Should().Contain("RecordTextBoxInlinePhysicalEvidence(\"canceled\"");
+        editor.Should().NotContain("RecordTextBoxInlinePhysicalEvidence(\"editing\", activeTextBoxId)");
         editor.Should().NotContain("Environment.GetEnvironmentVariable(\"FREEX_TEXTBOX_INLINE_PHYSICAL_RESULT\")");
     }
 

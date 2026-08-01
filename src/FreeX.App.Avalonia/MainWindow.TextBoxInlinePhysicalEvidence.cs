@@ -14,6 +14,29 @@ public sealed partial class MainWindow
         Environment.GetEnvironmentVariable(TextBoxInlinePhysicalEvidenceEnvironmentVariable);
 
     private readonly List<TextBoxInlinePhysicalEvidenceEvent> _textBoxInlinePhysicalEvidenceEvents = [];
+    private bool _textBoxInlinePhysicalLayoutObservationPending;
+
+    private void RequestTextBoxInlinePhysicalLayoutObservation()
+    {
+        if (!string.IsNullOrWhiteSpace(_textBoxInlinePhysicalEvidencePath))
+            _textBoxInlinePhysicalLayoutObservationPending = true;
+    }
+
+    private void TextBoxInlineEditor_LayoutUpdated(object? sender, EventArgs args)
+    {
+        if (!_textBoxInlinePhysicalLayoutObservationPending ||
+            _textBoxInlineEditingId is not { } textBoxId ||
+            _textBoxInlineEditor is not { IsVisible: true, IsFocused: true } editor ||
+            editor.Bounds.Width <= 0 ||
+            editor.Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        // Clear first so writing evidence cannot re-enter through another layout pass.
+        _textBoxInlinePhysicalLayoutObservationPending = false;
+        RecordTextBoxInlinePhysicalEvidence("editing", textBoxId);
+    }
 
     private void RecordTextBoxInlinePhysicalEvidence(string phase, Guid textBoxId)
     {
@@ -21,20 +44,23 @@ public sealed partial class MainWindow
             return;
 
         var editor = _textBoxInlineEditor;
+        if (editor is null || editor.Bounds.Width <= 0 || editor.Bounds.Height <= 0)
+            return;
+
         var focusedElement = FocusManager?.GetFocusedElement();
         var focusedControl = focusedElement as Control;
         var textBox = GetCurrentSheetTextBox(textBoxId);
         var eventRecord = new TextBoxInlinePhysicalEvidenceEvent(
             phase,
             textBoxId.ToString("D"),
-            editor is not null && editor.IsVisible,
-            editor?.IsFocused == true,
-            editor is not null && editor.Bounds.Width > 0 && editor.Bounds.Height > 0,
-            editor?.Bounds.Width ?? 0,
-            editor?.Bounds.Height ?? 0,
-            editor is null ? null : AutomationProperties.GetAutomationId(editor),
+            editor.IsVisible,
+            editor.IsFocused,
+            true,
+            editor.Bounds.Width,
+            editor.Bounds.Height,
+            AutomationProperties.GetAutomationId(editor),
             focusedControl is null ? null : AutomationProperties.GetAutomationId(focusedControl),
-            editor?.Text ?? string.Empty,
+            editor.Text ?? string.Empty,
             textBox?.Text ?? string.Empty,
             DateTimeOffset.UtcNow);
         _textBoxInlinePhysicalEvidenceEvents.Add(eventRecord);

@@ -133,12 +133,26 @@ if expression == "entry":
              float(e.get("editorWidth", 0)) > 0 and float(e.get("editorHeight", 0)) > 0 for e in events)
 elif expression == "multiline":
     ok = any(e.get("phase") == "editing" and e.get("editorVisible") and e.get("editorFocused") and
-             "Wave93 committed\nsecond line" == e.get("editorText") for e in events)
+             e.get("editorText") == "Wave93 committed\nsecond line" and
+             e.get("modelText") == "Wave93 initial text" for e in events)
 elif expression == "commit":
     ok = any(e.get("phase") == "committed" and not e.get("editorVisible") and
+             e.get("editorText") == "Wave93 committed\nsecond line" and
+             e.get("modelText") == "Wave93 committed\nsecond line" for e in events)
+elif expression == "reopen":
+    committed_indexes = [i for i, e in enumerate(events) if e.get("phase") == "committed"]
+    last_commit = committed_indexes[-1] if committed_indexes else -1
+    ok = any(i > last_commit and e.get("phase") == "editing" and e.get("editorVisible") and
+             e.get("editorFocused") and e.get("editorText") == "Wave93 committed\nsecond line" and
+             e.get("modelText") == "Wave93 committed\nsecond line"
+             for i, e in enumerate(events))
+elif expression == "cancel-input":
+    ok = any(e.get("phase") == "editing" and e.get("editorVisible") and e.get("editorFocused") and
+             e.get("editorText") == "Wave93 canceled" and
              e.get("modelText") == "Wave93 committed\nsecond line" for e in events)
 elif expression == "cancel":
     ok = any(e.get("phase") == "canceled" and not e.get("editorVisible") and
+             e.get("editorText") == "Wave93 committed\nsecond line" and
              e.get("modelText") == "Wave93 committed\nsecond line" for e in events)
 else:
     raise SystemExit(2)
@@ -174,15 +188,6 @@ else:
 PY
 }
 
-wait_for_package_text() {
-    local expected="$1"
-    for _ in $(seq 1 30); do
-        if [[ "$(read_textbox_text 2>/dev/null || true)" == "$expected" ]]; then return 0; fi
-        sleep 0.25
-    done
-    return 1
-}
-
 write_manifest() {
     local passed=0 failed=0
     for row in "${results[@]}"; do
@@ -209,16 +214,15 @@ def read_optional(name):
         return ''
     with open(path, encoding='utf-8') as handle:
         return handle.read().rstrip('\n')
-package = {
-    'fixtureText': read_optional('package-fixture.txt'),
-    'committedText': read_optional('package-committed.txt'),
-    'canceledText': read_optional('package-canceled.txt')
+fixture = {
+    'packageText': read_optional('package-fixture.txt'),
+    'provenance': 'xlsx-package-readback-before-interaction'
 }
 manifest = {
     'schemaVersion': 1, 'suite': 'freex-linux-textbox-inline-edit-physical',
     'platform': 'linux', 'shell': 'avalonia', 'app': 'FreeX',
     'window': {'pattern':'FreeX', 'visible': True, 'id':window_id, 'width':int(window_width), 'height':int(window_height)},
-    'screenshots': screenshots, 'package': package, 'runtime': runtime,
+    'screenshots': screenshots, 'fixture': fixture, 'runtime': runtime,
     'results': normalized, 'summary': {'passed':int(passed), 'failed':int(failed), 'total':int(passed)+int(failed)}
 }
 with open(os.path.join(output, 'results.json'), 'w', encoding='utf-8') as handle:
@@ -287,31 +291,30 @@ else
 fi
 
 send_key Tab
-send_key ctrl+s
-if wait_for_runtime commit && wait_for_package_text $'Wave93 committed\nsecond line'; then
-    read_textbox_text > "$output/package-committed.txt"
+if wait_for_runtime commit; then
     capture committed committed.png
-    record "textbox-editor-commit" "passed" "Tab committed the real editor; the observer reported the editor hidden and XLSX drawing readback contains the authored multiline text." "committed.png;package-committed.txt;freex-textbox-inline-physical.json"
+    record "textbox-editor-commit" "passed" "Tab committed the real editor; the opt-in observer reported the editor hidden and the live drawing TextBox model contains the exact authored multiline text." "committed.png;freex-textbox-inline-physical.json"
 else
-    read_textbox_text > "$output/package-committed.txt" 2>/dev/null || true
     capture committed committed.png || true
-    record "textbox-editor-commit" "failed" "Tab did not prove editor disappearance plus exact model/package persistence." "committed.png;package-committed.txt;freex-textbox-inline-physical.json"
+    record "textbox-editor-commit" "failed" "Tab did not prove editor disappearance plus the exact committed live model text." "committed.png;freex-textbox-inline-physical.json"
 fi
 
 focus_owner
 xdotool mousemove --sync "$object_x" "$object_y"
 xdotool click --clearmodifiers --repeat 2 --delay 180 1
 sleep "$settle_seconds"
+reopen_observed=false
+if wait_for_runtime reopen; then reopen_observed=true; fi
 send_key ctrl+a
 type_text 'Wave93 canceled'
+cancel_input_observed=false
+if wait_for_runtime cancel-input; then cancel_input_observed=true; fi
 send_key Escape
 capture canceled canceled.png
-if wait_for_runtime cancel && wait_for_package_text $'Wave93 committed\nsecond line'; then
-    read_textbox_text > "$output/package-canceled.txt"
-    record "textbox-editor-cancel" "passed" "Escape canceled a second real edit; the observer reported the editor hidden and package readback remained at the committed text." "canceled.png;package-canceled.txt;freex-textbox-inline-physical.json"
+if $reopen_observed && $cancel_input_observed && wait_for_runtime cancel; then
+    record "textbox-editor-cancel" "passed" "A second physical double-click reopened the editor, the cancellation value was observed live, and Escape hid the editor while restoring the exact committed model text." "canceled.png;freex-textbox-inline-physical.json"
 else
-    read_textbox_text > "$output/package-canceled.txt" 2>/dev/null || true
-    record "textbox-editor-cancel" "failed" "Escape did not prove rollback to the committed drawing TextBox text." "canceled.png;package-canceled.txt;freex-textbox-inline-physical.json"
+    record "textbox-editor-cancel" "failed" "The second physical edit did not prove reopen, cancellation input, and exact live-model rollback after Escape." "canceled.png;freex-textbox-inline-physical.json"
 fi
 
 write_manifest

@@ -3,7 +3,7 @@
   "$id": "freex.linux.textbox-inline-edit.physical.v1",
   "title": "FreeX Wave 93 drawing TextBox inline edit physical validation",
   "type": "object",
-  "required": ["schemaVersion", "suite", "platform", "shell", "app", "window", "screenshots", "package", "runtime", "results", "summary"],
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "window", "screenshots", "fixture", "runtime", "results", "summary"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "suite": { "const": "freex-linux-textbox-inline-edit-physical" },
@@ -38,13 +38,12 @@
         "additionalProperties": false
       }
     },
-    "package": {
+    "fixture": {
       "type": "object",
-      "required": ["fixtureText", "committedText", "canceledText"],
+      "required": ["packageText", "provenance"],
       "properties": {
-        "fixtureText": { "const": "Wave93 initial text" },
-        "committedText": { "const": "Wave93 committed\nsecond line" },
-        "canceledText": { "const": "Wave93 committed\nsecond line" }
+        "packageText": { "const": "Wave93 initial text" },
+        "provenance": { "const": "xlsx-package-readback-before-interaction" }
       },
       "additionalProperties": false
     },
@@ -61,11 +60,11 @@
             "type": "object",
             "required": ["phase", "textBoxId", "editorVisible", "editorFocused", "nonZeroBounds", "editorWidth", "editorHeight", "editorAutomationId", "editorText", "modelText"],
             "properties": {
-              "phase": { "type": "string" },
+              "phase": { "enum": ["editing", "committed", "canceled"] },
               "textBoxId": { "type": "string", "minLength": 1 },
               "editorVisible": { "type": "boolean" },
               "editorFocused": { "type": "boolean" },
-              "nonZeroBounds": { "type": "boolean" },
+              "nonZeroBounds": { "const": true },
               "editorWidth": { "type": "number", "exclusiveMinimum": 0 },
               "editorHeight": { "type": "number", "exclusiveMinimum": 0 },
               "editorAutomationId": { "const": "TextBoxInlineEditor" },
