@@ -2837,6 +2837,8 @@ public static class PptxPackageReader
         {
             case "sp":
                 return ReadDspSp(el, scheme, archive, drawingPartPath);
+            case "cxnSp":
+                return ReadDspCxnSp(el, scheme);
             case "pic":
                 return ReadDspPic(el, scheme, archive, drawingPartPath);
             case "grpSp":
@@ -2917,6 +2919,65 @@ public static class PptxPackageReader
         }
 
         return shape;
+    }
+
+    private static SlideShape ReadDspCxnSp(
+        XElement cxnSp,
+        PresentationColorScheme scheme)
+    {
+        // Some Office producers use a native connector element in the SmartArt
+        // drawing cache instead of the more common line-shaped dsp:sp form.  Keep
+        // it as a connector fallback rather than silently dropping the cached edge.
+        var cNvPrEl = cxnSp.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "nvCxnSpPr")
+            ?.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "cNvPr");
+
+        var shape = new SlideShape
+        {
+            Id = ParseUint(cNvPrEl?.Attribute("id")?.Value),
+            Name = cNvPrEl?.Attribute("name")?.Value ?? string.Empty,
+            AlternativeTextTitle = ReadAlternativeTextTitle(cNvPrEl),
+            AlternativeText = ReadAlternativeText(cNvPrEl),
+            IsDecorative = ReadDecorative(cNvPrEl),
+            IsHidden = ReadHidden(cNvPrEl),
+            Kind = SlideShapeKind.Connector,
+        };
+
+        var connectionProperties = cxnSp.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "nvCxnSpPr")
+            ?.Elements()
+            .FirstOrDefault(element => element.Name.LocalName == "cNvCxnSpPr");
+        if (connectionProperties is not null)
+        {
+            shape.ConnectionStart = ReadDspConnectorAttachment(
+                connectionProperties.Elements().FirstOrDefault(element => element.Name.LocalName == "stCxn"));
+            shape.ConnectionEnd = ReadDspConnectorAttachment(
+                connectionProperties.Elements().FirstOrDefault(element => element.Name.LocalName == "endCxn"));
+        }
+
+        var spPr = cxnSp.Elements().FirstOrDefault(element => element.Name.LocalName == "spPr");
+        if (spPr is not null)
+        {
+            var aSpPr = new XElement(A + "spPr", spPr.Attributes(), spPr.Elements());
+            ReadSpPr(aSpPr, shape, scheme);
+            var preset = aSpPr.Element(A + "prstGeom")?.Attribute("prst")?.Value;
+            shape.AutoShapeKind = PptxShapeKindMap.FromPreset(preset);
+        }
+
+        return shape;
+    }
+
+    private static ConnectorAttachment? ReadDspConnectorAttachment(XElement? element)
+    {
+        if (element is null ||
+            !uint.TryParse(element.Attribute("id")?.Value, out var shapeId) ||
+            !int.TryParse(element.Attribute("idx")?.Value, out var siteIndex))
+        {
+            return null;
+        }
+
+        return new ConnectorAttachment { ShapeId = shapeId, SiteIndex = siteIndex };
     }
 
     private static SlideShape ReadDspPic(
