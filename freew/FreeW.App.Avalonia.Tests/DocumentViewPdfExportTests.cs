@@ -896,6 +896,34 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_RestartsLineNumbersAtAContinuousSectionBoundary() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var firstSectionPage = new PageSettings
+            {
+                LineNumberMode = LineNumberMode.RestartEachSection,
+                LineNumberStartAt = 4,
+            };
+            document.Page.LineNumberMode = LineNumberMode.RestartEachSection;
+            document.Page.LineNumberStartAt = 9;
+            document.Blocks.Add(new Paragraph("First section")
+            {
+                SectionBreak = new Section(firstSectionPage, SectionBreakKind.Continuous),
+            });
+            document.Blocks.Add(new Paragraph("Second section"));
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            var lineNumbers = view.BuildPdfContent().Pages.Single().Ops.OfType<PdfText>()
+                .Where(text => text.Color == new PdfColor(0x60, 0x60, 0x60))
+                .Select(text => text.Text);
+
+            lineNumbers.Should().Equal("4", "9");
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitLineNumbersWhenDisabled() =>
         Session.Dispatch(() =>
         {

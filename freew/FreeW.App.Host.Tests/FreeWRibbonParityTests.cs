@@ -1004,18 +1004,22 @@ public sealed class FreeWRibbonParityTests
                 ("freew.line-numbers-none", "None"),
                 ("freew.line-numbers-continuous", "Continuous"),
                 ("freew.line-numbers-restart-page", "Restart Each Page"),
+                ("freew.line-numbers-restart-section", "Restart Each Section"),
                 ("freew.line-numbers-options", "Line Numbering Options..."));
 
         registry.TryGet("freew.line-numbers", out _).Should().BeTrue("the top-level Line Numbers command keeps quick cycle behavior");
         registry.TryGet("freew.line-numbers-none", out var none).Should().BeTrue();
         registry.TryGet("freew.line-numbers-continuous", out var continuous).Should().BeTrue();
         registry.TryGet("freew.line-numbers-restart-page", out var restartPage).Should().BeTrue();
+        registry.TryGet("freew.line-numbers-restart-section", out var restartSection).Should().BeTrue();
         registry.TryGet("freew.line-numbers-options", out _).Should().BeTrue("Word exposes Line Numbering Options from the same dropdown");
 
         continuous!.Execute(RibbonCommandContext.Empty);
         editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.Continuous);
         restartPage!.Execute(RibbonCommandContext.Empty);
         editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.RestartEachPage);
+        restartSection!.Execute(RibbonCommandContext.Empty);
+        editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.RestartEachSection);
         none!.Execute(RibbonCommandContext.Empty);
         editor.Model.Page.LineNumberMode.Should().Be(LineNumberMode.None);
     }

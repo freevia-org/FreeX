@@ -551,6 +551,7 @@ internal static class FreeWAvaloniaRibbonDefinition
             new("None", new RibbonCommandId("freew.line-numbers-none")),
             new("Continuous", new RibbonCommandId("freew.line-numbers-continuous")),
             new("Restart Each Page", new RibbonCommandId("freew.line-numbers-restart-page")),
+            new("Restart Each Section", new RibbonCommandId("freew.line-numbers-restart-section")),
             RibbonMenuItem.Separator(),
             new("Line Numbering Options...", new RibbonCommandId("freew.line-numbers-options")),
         });
