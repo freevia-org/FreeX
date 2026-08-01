@@ -388,6 +388,31 @@ public sealed class DrawingGroupHostTests
     }
 
     [StaFact]
+    public void NestedGroupShape_FormattingRoutesTargetLeafAndUndoThroughWpfHost()
+    {
+        var doc = NestedChildDoc(out var outer, out _, out var leaf);
+        var sibling = (Shape)outer.Children[1];
+        leaf.FillColorHex = "#111111";
+        sibling.FillColorHex = "#222222";
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.SelectFloatingObject(outer);
+        view.SelectFloatingGroupChild(outer, [0, 1]);
+
+        view.SetSelectedShapeFill("#ABCDEF");
+        view.SetSelectedShapeOutline("#123456", 2, "dash");
+
+        leaf.FillColorHex.Should().Be("#ABCDEF");
+        leaf.OutlineColorHex.Should().Be("#123456");
+        sibling.FillColorHex.Should().Be("#222222");
+        sibling.OutlineColorHex.Should().BeNull();
+        view.Undo();
+        leaf.OutlineColorHex.Should().BeNull();
+        view.Undo();
+        leaf.FillColorHex.Should().Be("#111111");
+    }
+
+    [StaFact]
     public void WpfRibbon_RotatesAndFlipsDirectGroupedChartChild_AndUndoRedoRestoresIt()
     {
         var document = ChartSmartArtGroupDoc(out var group, out var chart, out _);
