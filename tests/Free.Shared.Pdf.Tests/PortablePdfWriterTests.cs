@@ -514,6 +514,32 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_BlurFallbackUsesSymmetricWeightedStamps()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfEffectGroup(
+                PdfEffectKind.SoftEdge,
+                20,
+                25,
+                30,
+                20,
+                new PdfEffectParameters(null, 1, 9),
+                [new PdfFillRect(20, 25, 30, 20, new PdfColor(0xD0, 0x30, 0x30))]),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument([page])))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("1 0 0 1 -9 -9 cm",
+            "the portable blur kernel should extend in the negative diagonal direction");
+        pdf.Should().Contain("1 0 0 1 9 9 cm",
+            "the portable blur kernel should extend in the positive diagonal direction");
+        pdf.Should().Contain("/ca 0.01 /CA 0.01",
+            "blur stamps should use weighted opacity resources instead of repeated opaque silhouettes");
+    }
+
+    [Fact]
     public void Write_ReflectionFallbackUsesBoundedFadeBandsAndOfficeTransformParameters()
     {
         var source = new PdfDrawOp[]
@@ -547,8 +573,9 @@ public sealed class PortablePdfWriterTests
         var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument([page])))
             .Replace("\r\n", "\n");
 
-        pdf.Split(" re W n", StringSplitOptions.None).Should().HaveCount(7,
-            "portable PDF should retain a bounded, visibly fading reflection instead of collapsing it to one opaque pass");
+        pdf.Split("h W n", StringSplitOptions.None).Should().HaveCount(13,
+            "portable PDF should retain a fine, visibly fading diagonal reflection instead of collapsing it to one opaque pass");
+        pdf.Should().Contain(" m\n", "directional reflection bands should be emitted as transformed polygons");
         pdf.Should().Contain("/GS");
         pdf.Should().Contain(" cm");
     }

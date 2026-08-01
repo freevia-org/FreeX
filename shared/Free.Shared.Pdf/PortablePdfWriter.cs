@@ -23,6 +23,13 @@ public static class PortablePdfWriter
 {
     private static readonly Encoding PdfEncoding = Encoding.ASCII;
     private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
+    private static readonly EffectBlurStamp[] EffectBlurStamps =
+    [
+        new(-1, -1, 0.08), new(0, -1, 0.12), new(1, -1, 0.08),
+        new(-1, 0, 0.12), new(0, 0, 0.20), new(1, 0, 0.12),
+        new(-1, 1, 0.08), new(0, 1, 0.12), new(1, 1, 0.08),
+    ];
+    private const int ReflectionPassCount = 12;
     private const string DeferredUnicodePdfPathRequirements =
         PdfWinAnsiTextCapability.DeferredUnicodePdfPathRequirements;
 
@@ -458,19 +465,39 @@ public static class PortablePdfWriter
                 yield return PdfRenderGeometry.NormalizeOpacity(group.Opacity);
                 break;
             case PdfEffectGroup group:
-                yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity);
                 switch (group.Kind)
                 {
+                    case PdfEffectKind.Shadow:
+                        foreach (var opacity in EnumerateEffectPassOpacities(
+                                     group.Parameters.Opacity,
+                                     group.Parameters.Radius * 0.18))
+                            yield return opacity;
+                        break;
                     case PdfEffectKind.Glow:
-                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.18);
-                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.26);
-                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.34);
+                        var glowRadius = Math.Max(1, group.Parameters.Radius);
+                        for (var index = 3; index >= 1; index--)
+                        {
+                            var spread = glowRadius * index / 3;
+                            foreach (var opacity in EnumerateEffectPassOpacities(
+                                         group.Parameters.Opacity * (0.18 + 0.08 * (3 - index)),
+                                         spread))
+                                yield return opacity;
+                        }
                         break;
                     case PdfEffectKind.SoftEdge:
-                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity * 0.12);
+                        var softEdgeRadius = Math.Max(1, group.Parameters.Radius);
+                        for (var index = 3; index >= 1; index--)
+                        {
+                            var spread = softEdgeRadius * index / 3;
+                            foreach (var opacity in EnumerateEffectPassOpacities(
+                                         group.Parameters.Opacity * 0.12,
+                                         spread))
+                                yield return opacity;
+                        }
                         break;
                     case PdfEffectKind.Reflection:
-                        for (var index = 0; index < 6; index++)
+                        yield return PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity);
+                        for (var index = 0; index < ReflectionPassCount; index++)
                             yield return ReflectionPassOpacity(group, index);
                         break;
                     case PdfEffectKind.Bevel:
@@ -480,6 +507,18 @@ public static class PortablePdfWriter
                 }
                 break;
         }
+    }
+
+    private static IEnumerable<double> EnumerateEffectPassOpacities(double opacity, double spread)
+    {
+        if (spread <= 0)
+        {
+            yield return PdfRenderGeometry.NormalizeOpacity(opacity);
+            yield break;
+        }
+
+        foreach (var stamp in EffectBlurStamps)
+            yield return PdfRenderGeometry.NormalizeOpacity(opacity * stamp.Weight);
     }
 
     private static IEnumerable<PdfLinearGradient> EnumerateGradients(PdfDrawOp op)
@@ -1171,26 +1210,28 @@ public static class PortablePdfWriter
         IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
         PatternResourceSet patternResources)
     {
-        var resourceName = opacityResources.TryGetValue(PdfRenderGeometry.NormalizeOpacity(opacity), out var resource)
-            ? resource.ResourceName
-            : null;
-        content.AppendLine("q");
-        AppendOpacityState(content, resourceName);
-        if (offsetX != 0 || offsetY != 0)
-            content.AppendLine($"1 0 0 1 {FormatNumber(offsetX)} {FormatNumber(offsetY)} cm");
-
-        // PDF has no portable vector blur primitive. Multiple translated, recolored silhouettes
-        // retain the effect as visible paint in the dependency-free backend.
-        var passes = spread > 0 ? 3 : 1;
-        for (var index = 0; index < passes; index++)
+        // PDF has no portable vector blur primitive. A symmetric weighted stamp kernel is a
+        // deterministic approximation that keeps the blur centered instead of drifting along a
+        // single diagonal as the old cumulative-translation fallback did.
+        IReadOnlyList<EffectBlurStamp> stamps = spread > 0
+            ? EffectBlurStamps
+            : [new EffectBlurStamp(0, 0, 1)];
+        foreach (var stamp in stamps)
         {
-            var distance = spread * (index + 1) / passes;
-            if (distance != 0)
-                content.AppendLine($"1 0 0 1 {FormatNumber(distance * 0.35)} {FormatNumber(distance * 0.2)} cm");
+            var stampOpacity = PdfRenderGeometry.NormalizeOpacity(opacity * stamp.Weight);
+            var resourceName = opacityResources.TryGetValue(stampOpacity, out var resource)
+                ? resource.ResourceName
+                : null;
+            content.AppendLine("q");
+            AppendOpacityState(content, resourceName);
+            var stampOffsetX = offsetX + (spread * stamp.X);
+            var stampOffsetY = offsetY + (spread * stamp.Y);
+            if (stampOffsetX != 0 || stampOffsetY != 0)
+                content.AppendLine($"1 0 0 1 {FormatNumber(stampOffsetX)} {FormatNumber(stampOffsetY)} cm");
             foreach (var op in ops)
                 AppendDrawOp(content, op, imageResources, opacityResources, patternResources, color);
+            content.AppendLine("Q");
         }
-        content.AppendLine("Q");
     }
 
     private static void AppendEffectReflection(
@@ -1200,7 +1241,6 @@ public static class PortablePdfWriter
         IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
         PatternResourceSet patternResources)
     {
-        const int passCount = 6;
         var startOpacity = PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity);
         var endOpacity = PdfRenderGeometry.NormalizeOpacity(group.Parameters.ReflectionEndOpacity);
         var startPosition = Math.Clamp(group.Parameters.ReflectionStartPosition, 0, 1);
@@ -1211,19 +1251,19 @@ public static class PortablePdfWriter
             endPosition = 1;
         }
 
-        for (var index = 0; index < passCount; index++)
+        for (var index = 0; index < ReflectionPassCount; index++)
         {
-            var t0 = startPosition + (endPosition - startPosition) * index / passCount;
-            var t1 = startPosition + (endPosition - startPosition) * (index + 1) / passCount;
+            var t0 = startPosition + (endPosition - startPosition) * index / ReflectionPassCount;
+            var t1 = startPosition + (endPosition - startPosition) * (index + 1) / ReflectionPassCount;
             var opacity = PdfRenderGeometry.NormalizeOpacity(
-                startOpacity + (endOpacity - startOpacity) * (index + 0.5) / passCount);
+                startOpacity + (endOpacity - startOpacity) * (index + 0.5) / ReflectionPassCount);
             var resourceName = opacityResources.TryGetValue(opacity, out var resource)
                 ? resource.ResourceName
                 : null;
             content.AppendLine("q");
             AppendOpacityState(content, resourceName);
             AppendReflectionTransform(content, group);
-            content.AppendLine($"{FormatNumber(group.BoundsX)} {FormatNumber(group.BoundsY + group.BoundsHeight * t0)} {FormatNumber(group.BoundsWidth)} {FormatNumber(group.BoundsHeight * (t1 - t0))} re W n");
+            AppendReflectionFadeBand(content, group, t0, t1);
             foreach (var op in group.Ops)
                 AppendDrawOp(content, op, imageResources, opacityResources, patternResources, group.Parameters.Color);
             content.AppendLine("Q");
@@ -1234,11 +1274,79 @@ public static class PortablePdfWriter
     {
         var start = PdfRenderGeometry.NormalizeOpacity(group.Parameters.Opacity);
         var end = PdfRenderGeometry.NormalizeOpacity(group.Parameters.ReflectionEndOpacity);
-        var opacity = start + (end - start) * (index + 0.5) / 6;
+        var opacity = start + (end - start) * (index + 0.5) / ReflectionPassCount;
         return PdfRenderGeometry.NormalizeOpacity(opacity);
     }
 
+    private static void AppendReflectionFadeBand(
+        StringBuilder content,
+        PdfEffectGroup group,
+        double startPosition,
+        double endPosition)
+    {
+        var direction = (group.Parameters.ReflectionFadeDirectionDegrees - 90) * Math.PI / 180d;
+        if (Math.Abs(Math.Sin(direction)) < 0.0001)
+        {
+            content.AppendLine($"{FormatNumber(group.BoundsX)} {FormatNumber(group.BoundsY + group.BoundsHeight * startPosition)} {FormatNumber(group.BoundsWidth)} {FormatNumber(group.BoundsHeight * (endPosition - startPosition))} re W n");
+            return;
+        }
+
+        var centerX = group.BoundsX + group.BoundsWidth / 2;
+        var centerY = group.BoundsY + group.BoundsHeight / 2;
+        var diagonal = Math.Sqrt(group.BoundsWidth * group.BoundsWidth + group.BoundsHeight * group.BoundsHeight);
+        var desiredAxisX = Math.Sin(direction);
+        var desiredAxisY = -Math.Cos(direction);
+        var transform = GetReflectionTransform(group);
+        var determinant = transform.A * transform.D - transform.B * transform.C;
+        var axisX = Math.Abs(determinant) < 0.000001
+            ? desiredAxisX
+            : (transform.D * desiredAxisX - transform.C * desiredAxisY) / determinant;
+        var axisY = Math.Abs(determinant) < 0.000001
+            ? -desiredAxisY
+            : (-transform.B * desiredAxisX + transform.A * desiredAxisY) / determinant;
+        var axisLength = Math.Sqrt(axisX * axisX + axisY * axisY);
+        if (axisLength > 0.000001)
+        {
+            axisX /= axisLength;
+            axisY /= axisLength;
+        }
+        var perpendicularX = -axisY;
+        var perpendicularY = axisX;
+        var bandCenter = (startPosition + endPosition) / 2 - 0.5;
+        var halfAxis = (endPosition - startPosition) * diagonal / 2;
+        var axisCenterX = centerX + axisX * bandCenter * diagonal;
+        var axisCenterY = centerY + axisY * bandCenter * diagonal;
+        var halfPerpendicular = diagonal / 2;
+        var points = new[]
+        {
+            (X: axisCenterX - axisX * halfAxis - perpendicularX * halfPerpendicular,
+             Y: axisCenterY - axisY * halfAxis - perpendicularY * halfPerpendicular),
+            (X: axisCenterX + axisX * halfAxis - perpendicularX * halfPerpendicular,
+             Y: axisCenterY + axisY * halfAxis - perpendicularY * halfPerpendicular),
+            (X: axisCenterX + axisX * halfAxis + perpendicularX * halfPerpendicular,
+             Y: axisCenterY + axisY * halfAxis + perpendicularY * halfPerpendicular),
+            (X: axisCenterX - axisX * halfAxis + perpendicularX * halfPerpendicular,
+             Y: axisCenterY - axisY * halfAxis + perpendicularY * halfPerpendicular),
+        };
+
+        // Keep the rotated fade strip bounded by the effect's declared object bounds before
+        // applying the directional strip intersection.
+        content.AppendLine($"{FormatNumber(group.BoundsX)} {FormatNumber(group.BoundsY)} {FormatNumber(group.BoundsWidth)} {FormatNumber(group.BoundsHeight)} re W n");
+        content.AppendLine($"{FormatNumber(points[0].X)} {FormatNumber(points[0].Y)} m");
+        for (var index = 1; index < points.Length; index++)
+            content.AppendLine($"{FormatNumber(points[index].X)} {FormatNumber(points[index].Y)} l");
+        content.AppendLine("h W n");
+    }
+
     private static void AppendReflectionTransform(StringBuilder content, PdfEffectGroup group)
+    {
+        var transform = GetReflectionTransform(group);
+        content.AppendLine(
+            $"{FormatNumber(transform.A)} {FormatNumber(transform.B)} {FormatNumber(transform.C)} {FormatNumber(transform.D)} {FormatNumber(transform.E)} {FormatNumber(transform.F)} cm");
+    }
+
+    private static (double A, double B, double C, double D, double E, double F) GetReflectionTransform(
+        PdfEffectGroup group)
     {
         var axisAngle = (group.Parameters.ReflectionDirectionDegrees - 90) * Math.PI / 180d;
         var cos = Math.Cos(axisAngle);
@@ -1262,7 +1370,7 @@ public static class PortablePdfWriter
         var centerY = group.BoundsY - group.Parameters.ReflectionGap / 2;
         var e = centerX - a * centerX - c * centerY;
         var f = centerY - b * centerX - d * centerY;
-        content.AppendLine($"{FormatNumber(a)} {FormatNumber(b)} {FormatNumber(c)} {FormatNumber(d)} {FormatNumber(e)} {FormatNumber(f)} cm");
+        return (a, b, c, d, e, f);
     }
 
     private static void AppendOpacityState(StringBuilder content, string? opacityResourceName)
@@ -1968,6 +2076,8 @@ public static class PortablePdfWriter
         string ResourceName,
         PdfLinearGradient? Gradient = null,
         PdfPatternFill? Pattern = null);
+
+    private readonly record struct EffectBlurStamp(double X, double Y, double Weight);
 
     private readonly record struct PdfImagePlacement(double X, double Y, double Width, double Height);
 
