@@ -3910,6 +3910,12 @@ public sealed class DocumentView : Control
                 lineNumberOps);
         }
 
+        foreach (var (pageIndex, decorationOps) in BuildPdfParagraphDecorationOps(pageHeightPt))
+        {
+            EnsurePage(pageIndex);
+            pagesOps[pageIndex].InsertRange(0, decorationOps);
+        }
+
         if (_doc.Page.PageBorder is not null)
         {
             var borderedPageCount = Math.Max(1, Math.Max(_pageCount, pagesOps.Count));
@@ -4047,6 +4053,95 @@ public sealed class DocumentView : Control
                 Free.Shared.Pdf.PdfFontFace.Regular,
                 color,
                 number));
+        }
+
+        return byPage.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>)pair.Value);
+    }
+
+    private IReadOnlyDictionary<int, IReadOnlyList<Free.Shared.Pdf.PdfDrawOp>> BuildPdfParagraphDecorationOps(
+        double pageHeightPt)
+    {
+        var byPage = new Dictionary<int, List<Free.Shared.Pdf.PdfDrawOp>>();
+        foreach (var (rect, shadingHex, border) in _paragraphDecorations)
+        {
+            var pageIndex = PageIndexFromPageSpaceY(rect.Top + 0.01);
+            if (pageIndex < 0)
+                continue;
+
+            var pageTopDip = _surfacePlan.PageTopDip(pageIndex);
+            var pageBottomDip = pageTopDip + _pageHeightPx;
+            var clipped = rect.Intersect(new Rect(_pageLeft, pageTopDip, _pageWidth, _pageHeightPx));
+            if (clipped.Width <= 0 || clipped.Height <= 0)
+                continue;
+
+            if (!byPage.TryGetValue(pageIndex, out var ops))
+            {
+                ops = [];
+                byPage[pageIndex] = ops;
+            }
+
+            var x = (clipped.Left - _pageLeft) / PxPerPoint;
+            var y = pageHeightPt - (clipped.Bottom - pageTopDip) / PxPerPoint;
+            var width = clipped.Width / PxPerPoint;
+            var height = clipped.Height / PxPerPoint;
+            if (!string.IsNullOrWhiteSpace(shadingHex))
+            {
+                ops.Add(new Free.Shared.Pdf.PdfFillRect(
+                    x,
+                    y,
+                    width,
+                    height,
+                    ParseColor(shadingHex)));
+            }
+
+            if (border is null)
+                continue;
+
+            var contours = new List<Free.Shared.Pdf.PdfPathContour>();
+
+            void AddEdge(double x1, double y1, double x2, double y2) =>
+                contours.Add(new Free.Shared.Pdf.PdfPathContour(
+                    new Free.Shared.Pdf.PdfPathPoint(x1, y1),
+                    [Free.Shared.Pdf.PdfPathSegment.LineTo(new Free.Shared.Pdf.PdfPathPoint(x2, y2))],
+                    Closed: false));
+
+            var left = x;
+            var right = x + width;
+            var bottom = y;
+            var top = y + height;
+            if (border.Top
+                && !border.BottomOnly
+                && rect.Top >= pageTopDip - 0.01
+                && rect.Top <= pageBottomDip + 0.01)
+                AddEdge(left, top, right, top);
+            if ((border.Bottom || border.BottomOnly)
+                && rect.Bottom >= pageTopDip - 0.01
+                && rect.Bottom <= pageBottomDip + 0.01)
+            {
+                AddEdge(left, bottom, right, bottom);
+            }
+            if (border.Left && !border.BottomOnly)
+                AddEdge(left, bottom, left, top);
+            if (border.Right && !border.BottomOnly)
+                AddEdge(right, bottom, right, top);
+            if (contours.Count == 0)
+                continue;
+
+            var widthPt = Math.Max(0.5 / PxPerPoint, border.WidthPt);
+            var dash = border.LineStyle switch
+            {
+                BorderLineStyle.Dashed => new Free.Shared.Pdf.PdfDashPattern([4 * widthPt, 3 * widthPt]),
+                BorderLineStyle.Dotted => new Free.Shared.Pdf.PdfDashPattern([widthPt, 2 * widthPt]),
+                _ => null,
+            };
+            ops.Add(new Free.Shared.Pdf.PdfPath(
+                contours,
+                FillColor: null,
+                StrokeColor: ParseColor(border.ColorHex),
+                StrokeWidth: widthPt,
+                StrokeDash: dash));
         }
 
         return byPage.ToDictionary(
@@ -8923,7 +9018,7 @@ public sealed class DocumentView : Control
             return;
 
         var pen = ParagraphBorderPen(border);
-        if (border.Top)
+        if (border.Top && !border.BottomOnly)
             context.DrawLine(pen, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
         if (border.Bottom || border.BottomOnly)
             context.DrawLine(pen, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));

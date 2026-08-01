@@ -135,6 +135,92 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_IncludesParagraphShadingAndSelectiveDashedBordersBeforeText() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Blocks.Add(new Paragraph("Shaded bordered paragraph")
+            {
+                Formatting = ParagraphFormatting.Default with
+                {
+                    ShadingColorHex = "#D9EAD3",
+                    Border = new ParagraphBorder("#C00000", 1.5)
+                    {
+                        LineStyle = BorderLineStyle.Dashed,
+                        Right = false,
+                    },
+                    SpaceAfterPt = 0,
+                    SpaceAfterIsSet = true,
+                },
+            });
+            document.Blocks.Add(new Paragraph("Bottom rule")
+            {
+                Formatting = ParagraphFormatting.Default with
+                {
+                    Border = new ParagraphBorder("#0070C0", 1, BottomOnly: true)
+                    {
+                        LineStyle = BorderLineStyle.Dotted,
+                    },
+                    SpaceAfterPt = 0,
+                    SpaceAfterIsSet = true,
+                },
+            });
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var ops = pdf.Pages.Single().Ops.ToList();
+            var shading = ops.OfType<PdfFillRect>()
+                .Single(fill => fill.Color == new PdfColor(0xD9, 0xEA, 0xD3));
+            var dashed = ops.OfType<PdfPath>()
+                .Single(path => path.StrokeColor == new PdfColor(0xC0, 0x00, 0x00));
+            var bottomOnly = ops.OfType<PdfPath>()
+                .Single(path => path.StrokeColor == new PdfColor(0x00, 0x70, 0xC0));
+            var firstText = ops.OfType<PdfText>()
+                .Single(text => text.Text.Contains("Shaded bordered paragraph", StringComparison.Ordinal));
+
+            shading.Width.Should().BeGreaterThan(0);
+            shading.Height.Should().BeGreaterThan(0);
+            dashed.Contours.Should().HaveCount(3);
+            dashed.StrokeWidth.Should().Be(1.5);
+            dashed.StrokeDash.Should().NotBeNull();
+            dashed.StrokeDash!.Segments.Should().Equal(6, 4.5);
+            bottomOnly.Contours.Should().ContainSingle();
+            bottomOnly.StrokeWidth.Should().Be(1);
+            bottomOnly.StrokeDash.Should().NotBeNull();
+            bottomOnly.StrokeDash!.Segments.Should().Equal(1, 2);
+            ops.IndexOf(shading).Should().BeLessThan(ops.IndexOf(firstText));
+            ops.IndexOf(dashed).Should().BeLessThan(ops.IndexOf(firstText));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var greenPixels = 0;
+            for (var y = 0; y < bitmap.Height; y++)
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red == 0xD9 && pixel.Green == 0xEA && pixel.Blue == 0xD3)
+                    greenPixels++;
+            }
+            greenPixels.Should().BeGreaterThan(100);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_DoesNotEmitParagraphSurfacesWithoutAuthoredDecoration() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var ops = view.BuildPdfContent().Pages.SelectMany(page => page.Ops).ToArray();
+            ops.OfType<PdfFillRect>().Should().BeEmpty();
+            ops.OfType<PdfPath>().Should().BeEmpty();
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesPageBorderOnEveryPageBeforeDocumentContent() =>
         Session.Dispatch(() =>
         {
