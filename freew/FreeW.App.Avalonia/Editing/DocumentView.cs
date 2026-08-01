@@ -3356,6 +3356,48 @@ public sealed class DocumentView : Control
             pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfText(
                 Math.Max(0, xPt), yPt, fontSizePt, face, color, runText.ToString()));
 
+            if (decorationPlan.HasBorder && decorationPlan.Border is { } border)
+            {
+                var left = Math.Max(0, xPt);
+                var right = left + Math.Max(1, runEndX - runStartX) / PxPerPoint;
+                var bottom = pageHeightPt
+                    - (yWithinPagePx + Math.Max(1, runLineHeight)) / PxPerPoint;
+                var top = bottom + Math.Max(1, runLineHeight) / PxPerPoint;
+                var contours = new List<Free.Shared.Pdf.PdfPathContour>(4);
+
+                static Free.Shared.Pdf.PdfPathContour Edge(
+                    double x1,
+                    double y1,
+                    double x2,
+                    double y2) =>
+                    new(
+                        new Free.Shared.Pdf.PdfPathPoint(x1, y1),
+                        [Free.Shared.Pdf.PdfPathSegment.LineTo(new Free.Shared.Pdf.PdfPathPoint(x2, y2))],
+                        Closed: false);
+
+                if (decorationPlan.DrawTopBorder)
+                    contours.Add(Edge(left, top, right, top));
+                if (decorationPlan.DrawLeftBorder)
+                    contours.Add(Edge(left, top, left, bottom));
+                if (decorationPlan.DrawBottomBorder)
+                    contours.Add(Edge(left, bottom, right, bottom));
+                if (decorationPlan.DrawRightBorder)
+                    contours.Add(Edge(right, top, right, bottom));
+
+                Free.Shared.Pdf.PdfDashPattern? dash = border.LineStyle switch
+                {
+                    BorderLineStyle.Dashed => new Free.Shared.Pdf.PdfDashPattern([4 / PxPerPoint, 3 / PxPerPoint]),
+                    BorderLineStyle.Dotted => new Free.Shared.Pdf.PdfDashPattern([1 / PxPerPoint, 2 / PxPerPoint]),
+                    _ => null,
+                };
+                pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfPath(
+                    contours,
+                    FillColor: null,
+                    StrokeColor: ParseColor(border.ColorHex),
+                    StrokeWidth: decorationPlan.BorderWidthDip / PxPerPoint,
+                    StrokeDash: dash));
+            }
+
             var decorationLineWidthPt = Math.Max(1, fontSizePt * PxPerPoint / 14) / PxPerPoint;
             var runWidthPt = Math.Max(1, runEndX - runStartX) / PxPerPoint;
             if (runFmt.Underline)
@@ -4402,9 +4444,17 @@ public sealed class DocumentView : Control
         ];
     }
 
-    private static string FormatKey(RunFormatting fmt) =>
-        $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
-        $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|{fmt.Strikethrough}";
+    private static string FormatKey(RunFormatting fmt)
+    {
+        var border = fmt.CharacterBorder;
+        var borderKey = border is null
+            ? string.Empty
+            : $"{border.ColorHex}|{border.WidthPt}|{border.BottomOnly}|{border.LineStyle}|" +
+              $"{border.Top}|{border.Left}|{border.Bottom}|{border.Right}";
+        return $"{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
+               $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|" +
+               $"{fmt.Strikethrough}|{borderKey}";
+    }
 
     private static DocumentFloatingObjectSnapshot BuildInlineDrawingSnapshot(
         DocumentFloatingObjectKind kind,

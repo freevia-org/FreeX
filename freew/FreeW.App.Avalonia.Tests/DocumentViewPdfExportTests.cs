@@ -135,6 +135,43 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_ExportsSelectiveCharacterBorderPath() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Selective border", RunFormatting.Default with
+            {
+                CharacterBorder = new ParagraphBorder("#7F6000", 1.5)
+                {
+                    LineStyle = BorderLineStyle.Dotted,
+                    Top = false,
+                    Left = true,
+                    Bottom = true,
+                    Right = false,
+                },
+            }));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            var ops = pdf.Pages[0].Ops.ToList();
+            var text = ops.OfType<PdfText>().Single(item => item.Text == "Selective border");
+            var border = ops.OfType<PdfPath>().Single(path => path.StrokeColor == new PdfColor(0x7F, 0x60, 0x00));
+            border.Contours.Should().HaveCount(2, "only the authored left and bottom edges are visible");
+            border.Contours.Should().OnlyContain(contour => contour.Segments.Count == 1 && !contour.Closed);
+            border.StrokeWidth.Should().BeApproximately(1.5, 0.001);
+            border.StrokeDash.Should().NotBeNull();
+            border.StrokeDash!.Segments.Should().Equal(0.75, 1.5);
+            ops.IndexOf(border).Should().BeGreaterThan(ops.IndexOf(text));
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_ExportsResolvedFirstEvenAndDefaultHeaderImages() =>
         Session.Dispatch(() =>
         {
