@@ -109,6 +109,36 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void Write_AcceptsClipGroupsAroundNestedTransforms()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfRotationGroup(
+                40,
+                35,
+                17,
+                new PdfDrawOp[]
+                {
+                    new PdfClipGroup(
+                        10,
+                        15,
+                        60,
+                        40,
+                        new PdfDrawOp[]
+                        {
+                            new PdfFillRect(0, 0, 120, 80, new PdfColor(0x11, 0x22, 0x33)),
+                        }),
+                }),
+        });
+        using var stream = new MemoryStream();
+
+        var pageCount = SkiaPdfWriter.Write(new PdfContentDocument(new[] { page }), stream);
+
+        pageCount.Should().Be(1);
+        stream.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void WriteToBytes_EmbedsFontForNonWinAnsiText()
     {
         var page = new PdfContentPage(240, 120, new PdfDrawOp[]

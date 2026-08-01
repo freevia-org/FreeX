@@ -169,6 +169,9 @@ public static class PortablePdfWriter
             case PdfRotationGroup group:
                 AppendRotationGroup(content, group, imageResources, opacityResources, patternResources);
                 break;
+            case PdfClipGroup group:
+                AppendClipGroup(content, group, imageResources, opacityResources, patternResources);
+                break;
             case PdfOpacityGroup group:
                 opacityResources.TryGetValue(PdfRenderGeometry.NormalizeOpacity(group.Opacity), out var groupOpacityResource);
                 AppendOpacityGroup(content, group, groupOpacityResource?.ResourceName, imageResources, opacityResources, patternResources);
@@ -399,6 +402,12 @@ public static class PortablePdfWriter
         if (op is PdfRotationGroup group)
         {
             foreach (var child in group.Ops.SelectMany(EnumerateOps))
+                yield return child;
+        }
+
+        if (op is PdfClipGroup clipGroup)
+        {
+            foreach (var child in clipGroup.Ops.SelectMany(EnumerateOps))
                 yield return child;
         }
 
@@ -1014,6 +1023,23 @@ public static class PortablePdfWriter
         foreach (var op in group.Ops)
             AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
 
+        content.AppendLine("Q");
+    }
+
+    private static void AppendClipGroup(
+        StringBuilder content,
+        PdfClipGroup group,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        PatternResourceSet patternResources)
+    {
+        if (group.Ops.Count == 0 || group.Width <= 0 || group.Height <= 0)
+            return;
+
+        content.AppendLine("q");
+        content.AppendLine($"{FormatNumber(group.X)} {FormatNumber(group.Y)} {FormatNumber(group.Width)} {FormatNumber(group.Height)} re W n");
+        foreach (var op in group.Ops)
+            AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
         content.AppendLine("Q");
     }
 

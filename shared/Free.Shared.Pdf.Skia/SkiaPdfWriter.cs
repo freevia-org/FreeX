@@ -431,6 +431,24 @@ public static class SkiaPdfWriter
                 break;
             }
 
+            case PdfClipGroup group:
+            {
+                if (group.Ops.Count == 0 || group.Width <= 0 || group.Height <= 0)
+                    break;
+
+                var top = (float)PdfRenderGeometry.ToCanvasTop(pageHeight, group.Y, group.Height);
+                canvas.Save();
+                canvas.ClipRect(new SKRect(
+                    (float)group.X,
+                    top,
+                    (float)(group.X + group.Width),
+                    top + (float)group.Height));
+                foreach (var child in group.Ops)
+                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                canvas.Restore();
+                break;
+            }
+
             case PdfOpacityGroup group:
             {
                 if (group.Ops.Count == 0)

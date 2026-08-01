@@ -312,6 +312,18 @@ public sealed record PdfRotationGroup(
     bool FlipV = false) : PdfDrawOp;
 
 /// <summary>
+/// Clips a child draw-op list to an axis-aligned rectangular bounds in PDF user space.
+/// This is the shared equivalent of a drawing group's local <c>ClipToBounds</c> surface and is
+/// intentionally composable with <see cref="PdfRotationGroup"/> for nested group transforms.
+/// </summary>
+public sealed record PdfClipGroup(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    IReadOnlyList<PdfDrawOp> Ops) : PdfDrawOp;
+
+/// <summary>
 /// Applies a uniform opacity to a child draw-op list. Writers render the children as a graphics
 /// state/layer so callers can reuse the same vector geometry for approximate effects.
 /// </summary>

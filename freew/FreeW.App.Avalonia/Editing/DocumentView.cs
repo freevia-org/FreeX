@@ -3271,8 +3271,10 @@ public sealed class DocumentView : Control
     /// <para>
     /// The adapter emits the already-laid-out table cell surfaces before inline images and body
     /// glyphs, together with the already-paginated headers, footers, footnotes, and endnotes.
-    /// Floating images use the same snapshot geometry and behind/in-front passes as the live
-    /// Avalonia compositor; other floating object kinds remain outside this bounded draw-op slice.
+    /// Floating images, shapes, and drawing groups use the same snapshot geometry and
+    /// behind/in-front passes as the live Avalonia compositor. Group children are consumed from
+    /// the shared recursive visual plan so their order and nested transforms remain explicit in the
+    /// shared PDF operation tree.
     /// </para>
     /// </summary>
     public Free.Shared.Pdf.PdfContentDocument BuildPdfContent()
@@ -3641,7 +3643,9 @@ public sealed class DocumentView : Control
                     || _doc.Blocks[snapshot.BlockIndex] is not Paragraph paragraph
                     || snapshot.RunIndex < 0
                     || snapshot.RunIndex >= paragraph.Runs.Count
-                    || snapshot.Kind is not (DocumentFloatingObjectKind.Image or DocumentFloatingObjectKind.Shape))
+                    || snapshot.Kind is not (DocumentFloatingObjectKind.Image
+                        or DocumentFloatingObjectKind.Shape
+                        or DocumentFloatingObjectKind.Group))
                     continue;
 
                 var pageIndex = PageIndexFromPageSpaceY(snapshot.Rect.TopDip + 0.01);
@@ -3672,6 +3676,8 @@ public sealed class DocumentView : Control
                             : [],
                     DocumentFloatingObjectKind.Shape when paragraph.Runs[snapshot.RunIndex].Shape is { IsFloating: true } shape =>
                         BuildPdfShapeOps(shape, snapshot, sourceRect, pageTopDip, pageHeightPt),
+                    DocumentFloatingObjectKind.Group when paragraph.Runs[snapshot.RunIndex].DrawingGroup is { } group =>
+                        BuildPdfGroupOps(group, snapshot, pageTopDip, pageHeightPt),
                     _ => [],
                 };
                 if (objectOps.Count == 0)
@@ -3829,6 +3835,101 @@ public sealed class DocumentView : Control
                 image.CropBottom));
     }
 
+    private IReadOnlyList<PdfDrawOp> BuildPdfGroupOps(
+        FreeW.Core.Model.DrawingGroup group,
+        DocumentFloatingObjectSnapshot snapshot,
+        double pageTopDip,
+        double pageHeightPt)
+    {
+        var plan = DrawingObjectVisualPlanner.BuildVisualPlan(group, snapshot);
+        var childOps = new List<PdfDrawOp>();
+
+        // The shared visual plan already resolves each child to page-space geometry in group-list
+        // order. Keep that order as the PDF z-order, and only add transforms/clipping as explicit
+        // shared operations so backends cannot accidentally flatten nested groups.
+        foreach (var childPlan in plan.GroupChildren)
+        {
+            if (childPlan.ChildIndex < 0 || childPlan.ChildIndex >= group.Children.Count)
+                continue;
+
+            var child = group.Children[childPlan.ChildIndex];
+            var childSnapshot = new DocumentFloatingObjectSnapshot(
+                child switch
+                {
+                    InlineImage => DocumentFloatingObjectKind.Image,
+                    Shape => DocumentFloatingObjectKind.Shape,
+                    Chart => DocumentFloatingObjectKind.Chart,
+                    WordArt => DocumentFloatingObjectKind.WordArt,
+                    SmartArt => DocumentFloatingObjectKind.SmartArt,
+                    FreeW.Core.Model.DrawingGroup => DocumentFloatingObjectKind.Group,
+                    _ => DocumentFloatingObjectKind.Shape,
+                },
+                snapshot.BlockIndex,
+                snapshot.RunIndex,
+                childPlan.Visual.Rect,
+                snapshot.BehindText,
+                snapshot.ZOrderIndex,
+                snapshot.Wrapping,
+                childPlan.Visual.RotationAngle,
+                childPlan.Visual.FlipH,
+                childPlan.Visual.FlipV,
+                snapshot.WrapTextSide);
+            var childRect = ToAvaloniaRect(childPlan.Visual.Rect);
+
+            switch (child)
+            {
+                case Shape shape when childPlan.Visual.Kind == DrawingObjectVisualKind.Shape:
+                    childOps.AddRange(BuildPdfShapeOps(
+                        childPlan.Visual,
+                        childSnapshot,
+                        childRect,
+                        pageTopDip,
+                        pageHeightPt));
+                    break;
+
+                case InlineImage image when childPlan.Visual.Kind == DrawingObjectVisualKind.Image:
+                    if (BuildPdfImage(childRect, image, DecodeRenderedImage(image), pageTopDip, pageHeightPt)
+                        is { } imageOp)
+                    {
+                        childOps.Add(imageOp);
+                    }
+                    break;
+
+                case FreeW.Core.Model.DrawingGroup nestedGroup
+                    when childPlan.Visual.Kind == DrawingObjectVisualKind.Group:
+                    childOps.AddRange(BuildPdfGroupOps(
+                        nestedGroup,
+                        childSnapshot,
+                        pageTopDip,
+                        pageHeightPt));
+                    break;
+            }
+        }
+
+        if (childOps.Count == 0)
+            return [];
+
+        var groupRect = ToAvaloniaRect(plan.Rect);
+        var xPt = (groupRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+        var yPt = pageHeightPt - ((groupRect.Bottom - pageTopDip) / PxPerPoint);
+        var widthPt = groupRect.Width / PxPerPoint;
+        var heightPt = groupRect.Height / PxPerPoint;
+        var boundedOps = new PdfClipGroup(xPt, yPt, widthPt, heightPt, childOps);
+
+        if (Math.Abs(plan.RotationAngle) > 0.001 || plan.FlipH || plan.FlipV)
+        {
+            return [new PdfRotationGroup(
+                xPt + widthPt / 2,
+                yPt + heightPt / 2,
+                plan.RotationAngle,
+                [boundedOps],
+                plan.FlipH,
+                plan.FlipV)];
+        }
+
+        return [boundedOps];
+    }
+
     private IReadOnlyList<PdfDrawOp> BuildPdfShapeOps(
         Shape shape,
         DocumentFloatingObjectSnapshot snapshot,
@@ -3837,6 +3938,16 @@ public sealed class DocumentView : Control
         double pageHeightPt)
     {
         var plan = DrawingObjectVisualPlanner.BuildVisualPlan(shape, snapshot);
+        return BuildPdfShapeOps(plan, snapshot, sourceRect, pageTopDip, pageHeightPt);
+    }
+
+    private IReadOnlyList<PdfDrawOp> BuildPdfShapeOps(
+        DrawingObjectVisualPlan plan,
+        DocumentFloatingObjectSnapshot snapshot,
+        Rect sourceRect,
+        double pageTopDip,
+        double pageHeightPt)
+    {
         var xPt = (sourceRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
         var yPt = pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint);
         var widthPt = sourceRect.Width / PxPerPoint;

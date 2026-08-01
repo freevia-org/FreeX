@@ -380,6 +380,40 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsNestedClipAndRotationGroupsWithoutFlatteningChildren()
+    {
+        var page = new PdfContentPage(160, 120, new PdfDrawOp[]
+        {
+            new PdfRotationGroup(
+                50,
+                45,
+                23,
+                new PdfDrawOp[]
+                {
+                    new PdfClipGroup(
+                        10,
+                        20,
+                        80,
+                        50,
+                        new PdfDrawOp[]
+                        {
+                            new PdfFillRect(0, 0, 140, 90, new PdfColor(0x11, 0x22, 0x33)),
+                            new PdfText(12, 28, 8, PdfFontFace.Regular, PdfColor.Black, "Nested"),
+                        }),
+                }),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("q\n");
+        pdf.Should().Contain("10 20 80 50 re W n");
+        pdf.Should().Contain("0 0 140 90 re f");
+        pdf.Should().Contain("(Nested) Tj");
+        pdf.Should().Contain("Q\nQ\nendstream", "nested groups must each restore their graphics state");
+    }
+
+    [Fact]
     public void Write_EmitsPngImageXObjectAndPlacement()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

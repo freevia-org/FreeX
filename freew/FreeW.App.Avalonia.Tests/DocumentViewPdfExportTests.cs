@@ -453,6 +453,101 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_RecursivelyExportsNestedGroupChildrenWithTransformsBoundsAndOrder() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 300;
+            document.Page.HeightPt = 220;
+
+            var inner = new DrawingGroup
+            {
+                WidthPt = 84,
+                HeightPt = 52,
+                RotationAngle = 19,
+                FlipH = true,
+            };
+            var patternedEllipse = new Shape(ShapeKind.Ellipse, 36, 24, "#FFFFFF")
+            {
+                OutlineColorHex = "#000000",
+                OutlineWidthPt = 1.25,
+                OutlineDash = "dash",
+            };
+            patternedEllipse.ExtendedFill = ShapeFill.Patterned("pct50", "#C00000", "#FFFFFF");
+            var innerText = Shape.TextBoxWith("Nested", 42, 24, "#00AA00");
+            innerText.OutlineColorHex = "#0000FF";
+            innerText.OutlineWidthPt = 1.5;
+            inner.Children.Add(patternedEllipse);
+            inner.ChildOffsets.Add((4, 6));
+            inner.Children.Add(innerText);
+            inner.ChildOffsets.Add((40, 24));
+
+            var outer = new DrawingGroup
+            {
+                WidthPt = 180,
+                HeightPt = 100,
+                RotationAngle = 27,
+                FlipV = true,
+                Placement = new FloatingPlacement
+                {
+                    Wrapping = ImageWrapping.InFront,
+                    HorizontalAnchor = HorizontalAnchor.Page,
+                    HorizontalOffsetPt = 30,
+                    VerticalAnchor = VerticalAnchor.Page,
+                    VerticalOffsetPt = 40,
+                    ZOrderIndex = 7,
+                },
+            };
+            outer.Children.Add(inner);
+            outer.ChildOffsets.Add((20, 15));
+            var frontShape = Shape.TextBoxWith("Front child", 54, 28, "#4472C4");
+            frontShape.RotationAngle = -11;
+            frontShape.FlipH = true;
+            frontShape.OutlineColorHex = "#ED7D31";
+            frontShape.OutlineWidthPt = 2;
+            outer.Children.Add(frontShape);
+            outer.ChildOffsets.Add((112, 62));
+
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromDrawingGroup(outer));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(900, 1200));
+
+            var pageOps = view.BuildPdfContent().Pages.Single().Ops;
+            var outerTransform = pageOps.OfType<PdfRotationGroup>().Single();
+            outerTransform.RotationDegrees.Should().BeApproximately(27, 0.001);
+            outerTransform.FlipV.Should().BeTrue();
+            var outerClip = outerTransform.Ops.OfType<PdfClipGroup>().Single();
+            outerClip.Width.Should().BeApproximately(180, 0.001);
+            outerClip.Height.Should().BeApproximately(100, 0.001);
+            outerClip.Ops.Should().HaveCount(2, "group list order must remain the PDF z-order");
+
+            var innerTransform = outerClip.Ops[0].Should().BeOfType<PdfRotationGroup>().Subject;
+            innerTransform.RotationDegrees.Should().BeApproximately(19, 0.001);
+            innerTransform.FlipH.Should().BeTrue();
+            var innerClip = innerTransform.Ops.OfType<PdfClipGroup>().Single();
+            innerClip.Width.Should().BeApproximately(84, 0.001);
+            innerClip.Height.Should().BeApproximately(52, 0.001);
+            innerClip.Ops.OfType<PdfFillEllipsePattern>().Should().ContainSingle();
+            innerClip.Ops.OfType<PdfStrokeEllipse>().Single().Dash!.Segments.Should().Equal(4, 3);
+            string.Concat(innerClip.Ops.OfType<PdfText>().Select(op => op.Text)).Should().Contain("Nested");
+
+            var frontOps = outerClip.Ops.Skip(1).ToArray();
+            frontOps.OfType<PdfRotationGroup>().Should().ContainSingle();
+            var frontTransform = frontOps.OfType<PdfRotationGroup>().Single();
+            frontTransform.RotationDegrees.Should().BeApproximately(-11, 0.001);
+            frontTransform.FlipH.Should().BeTrue();
+            string.Concat(frontTransform.Ops.OfType<PdfText>().Select(op => op.Text)).Should().Contain("Front child");
+
+            var pdfBytes = SkiaPdfWriter.WriteToBytes(view.BuildPdfContent());
+            pdfBytes.Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_RendersFloatingImagesAtTheirPageSpacePixels() =>
         Session.Dispatch(() =>
         {
