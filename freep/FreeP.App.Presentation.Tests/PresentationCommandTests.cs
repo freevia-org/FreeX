@@ -127,6 +127,39 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void DeleteSlideCommand_PrunesAndRestoresSectionAndCustomShowReferences()
+    {
+        var (p, bus) = Make(3);
+        var firstId = p.Slides[0].Id;
+        var deletedId = p.Slides[1].Id;
+        var lastId = p.Slides[2].Id;
+
+        var section = new PresentationSection { Id = "section-1", Name = "Main" };
+        section.SlideIds.AddRange(new[] { firstId, deletedId, deletedId, lastId });
+        p.Sections.Add(section);
+
+        var customShow = new PresentationCustomShow { Id = 4, Name = "Review" };
+        customShow.SlideIds.AddRange(new[] { deletedId, firstId, deletedId, lastId });
+        p.CustomShows.Add(customShow);
+
+        bus.Execute(new DeleteSlideCommand(1));
+
+        p.Sections[0].SlideIds.Should().Equal(firstId, lastId);
+        p.CustomShows[0].SlideIds.Should().Equal(firstId, lastId);
+
+        bus.Undo();
+
+        p.Slides[1].Id.Should().Be(deletedId);
+        p.Sections[0].SlideIds.Should().Equal(firstId, deletedId, deletedId, lastId);
+        p.CustomShows[0].SlideIds.Should().Equal(deletedId, firstId, deletedId, lastId);
+
+        bus.Redo();
+
+        p.Sections[0].SlideIds.Should().Equal(firstId, lastId);
+        p.CustomShows[0].SlideIds.Should().Equal(firstId, lastId);
+    }
+
+    [Fact]
     public void DuplicateSlideCommand_Apply_InsertsDeepCloneAfterSource()
     {
         var (p, bus) = Make(1);
