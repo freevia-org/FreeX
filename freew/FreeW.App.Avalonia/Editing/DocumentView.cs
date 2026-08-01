@@ -3878,7 +3878,34 @@ public sealed class DocumentView : Control
         }
 
         foreach (var item in _headerFooterItems)
+        {
+            if (item.Image is { } image)
+            {
+                var pageIndex = PageIndexFromPageSpaceY(item.Y + 0.01);
+                if (pageIndex < 0)
+                    continue;
+
+                EnsurePage(pageIndex);
+                var sourceRect = new Rect(
+                    item.X,
+                    item.Y,
+                    Math.Max(1, item.Width),
+                    Math.Max(1, item.Height));
+                if (BuildPdfImage(
+                        sourceRect,
+                        image,
+                        DecodeRenderedImage(image),
+                        _surfacePlan.PageTopDip(pageIndex),
+                        pageHeightPt) is { } imageOp)
+                {
+                    pagesOps[pageIndex].Add(imageOp);
+                }
+
+                continue;
+            }
+
             AddTextRegion(item.Text, item.Fmt, item.X, item.Y);
+        }
 
         foreach (var item in _noteItems)
             AddTextRegion(item.Text, item.Fmt, item.X, item.Y);

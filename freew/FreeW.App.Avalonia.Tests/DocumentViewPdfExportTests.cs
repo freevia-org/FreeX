@@ -49,6 +49,57 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_ExportsResolvedFirstEvenAndDefaultHeaderImages() =>
+        Session.Dispatch(() =>
+        {
+            var firstBytes = SolidPng(SKColors.Red);
+            var evenBytes = SolidPng(SKColors.Green);
+            var defaultBytes = SolidPng(SKColors.Blue);
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 260;
+            document.Page.HeightPt = 180;
+            document.Page.MarginTopPt = 24;
+            document.Page.MarginBottomPt = 18;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            document.Page.DifferentFirstPage = true;
+            document.Page.DifferentOddEvenPages = true;
+            document.FinalSectionHeadersFooters.FirstHeader = ImageHeader(firstBytes, TextAlignment.Left);
+            document.FinalSectionHeadersFooters.EvenHeader = ImageHeader(evenBytes, TextAlignment.Center);
+            document.FinalSectionHeadersFooters.Header = ImageHeader(defaultBytes, TextAlignment.Right);
+            for (var index = 0; index < 60; index++)
+            {
+                document.Blocks.Add(new Paragraph($"Header image page {index + 1}")
+                {
+                    Formatting = ParagraphFormatting.Default with
+                    {
+                        SpaceAfterPt = 0,
+                        SpaceAfterIsSet = true,
+                    },
+                });
+            }
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+
+            pdf.Pages.Should().HaveCountGreaterThanOrEqualTo(3);
+            var first = pdf.Pages[0].Ops.OfType<PdfImage>().Single();
+            var even = pdf.Pages[1].Ops.OfType<PdfImage>().Single();
+            var defaultOdd = pdf.Pages[2].Ops.OfType<PdfImage>().Single();
+            first.ImageBytes.Should().Equal(firstBytes);
+            even.ImageBytes.Should().Equal(evenBytes);
+            defaultOdd.ImageBytes.Should().Equal(defaultBytes);
+            first.X.Should().BeLessThan(even.X);
+            even.X.Should().BeLessThan(defaultOdd.X);
+            new[] { first, even, defaultOdd }.Should().OnlyContain(image =>
+                image.Y >= 0 && image.Y + image.Height <= document.Page.HeightPt);
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesTableSurfacesBeforeCellText() =>
         Session.Dispatch(() =>
         {
@@ -1340,6 +1391,21 @@ public sealed class DocumentViewPdfExportTests
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
+    }
+
+    private static HeaderFooter ImageHeader(byte[] bytes, TextAlignment alignment)
+    {
+        var header = new HeaderFooter();
+        var paragraph = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { Alignment = alignment },
+        };
+        paragraph.Runs.Add(Run.FromImage(new InlineImage(bytes, 30, 12)
+        {
+            Wrapping = ImageWrapping.Inline,
+        }));
+        header.Paragraphs.Add(paragraph);
+        return header;
     }
 
     private static int CountNonWhitePixels(SKBitmap bitmap)
