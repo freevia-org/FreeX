@@ -73,6 +73,7 @@ public static class PageBorderArtVisualPlanner
     public const int ApplesArtId = 1;
     public const int MapleMuffinsArtId = 2;
     public const int CakeSliceArtId = 3;
+    public const int BirdsFlightArtId = 35;
     public const int ShadowedSquaresArtId = 57;
     public const int ShorebirdTracksArtId = 83;
     public const int DecorativeArchArtId = 89;
@@ -173,6 +174,27 @@ public static class PageBorderArtVisualPlanner
         var polygons = new List<PageBorderArtPolygon>();
         foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
             AddCakeSlice(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
+        plan = new PageBorderArtFilledShapePlan([], polygons);
+        return true;
+    }
+
+    public static bool TryBuildBirdsFlightFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != BirdsFlightArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var polygons = new List<PageBorderArtPolygon>();
+        foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
+            AddBirdInFlight(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
         plan = new PageBorderArtFilledShapePlan([], polygons);
         return true;
     }
@@ -789,6 +811,27 @@ public static class PageBorderArtVisualPlanner
         Add(0xFF, 0xEE, 0xCA,
             (4, 19), (8, 17), (14, 20), (22, 23), (26, 25), (25, 28), (21, 29),
             (16, 27), (10, 26), (4, 23));
+    }
+
+    private static void AddBirdInFlight(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        polygons.Add(new PageBorderArtPolygon(
+            [
+                Point(2, 3), Point(7, 5), Point(14, 16), Point(17, 12), Point(23, 6), Point(25, 0),
+                Point(25, 6), Point(22, 13), Point(30, 7), Point(31, 8), Point(24, 15), Point(22, 19),
+                Point(31, 23), Point(32, 26), Point(26, 26), Point(20, 24), Point(20, 29), Point(27, 32),
+                Point(20, 31), Point(16, 26), Point(11, 31), Point(8, 32), Point(8, 27), Point(11, 22),
+                Point(7, 18), Point(6, 13), Point(6, 7),
+            ],
+            0x04,
+            0x07,
+            0x50));
     }
 
     private static void AddVineCorner(
