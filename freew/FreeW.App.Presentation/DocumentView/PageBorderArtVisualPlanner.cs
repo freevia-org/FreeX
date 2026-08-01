@@ -64,7 +64,7 @@ public sealed record PageBorderDecorativeArchPlan(
     IReadOnlyList<PageBorderArtFillRectangle> Fills,
     IReadOnlyList<PageBorderArtCubicStroke> Strokes);
 
-public sealed record PageBorderWeavingRibbonPlan(
+public sealed record PageBorderArtFilledShapePlan(
     IReadOnlyList<PageBorderArtFillRectangle> Fills,
     IReadOnlyList<PageBorderArtPolygon> Polygons);
 
@@ -75,6 +75,7 @@ public static class PageBorderArtVisualPlanner
     public const int ShorebirdTracksArtId = 83;
     public const int DecorativeArchArtId = 89;
     public const int BatsArtId = 37;
+    public const int PapyrusArtId = 92;
     public const int WeavingRibbonArtId = 95;
     public const byte AppleFillRed = 0xB5;
     public const byte AppleStemRed = 0x66;
@@ -259,11 +260,11 @@ public static class PageBorderArtVisualPlanner
         double frameWidthDip,
         double frameHeightDip,
         double edgeInsetDip,
-        out PageBorderWeavingRibbonPlan plan)
+        out PageBorderArtFilledShapePlan plan)
     {
         if (artId != WeavingRibbonArtId)
         {
-            plan = new PageBorderWeavingRibbonPlan([], []);
+            plan = new PageBorderArtFilledShapePlan([], []);
             return false;
         }
 
@@ -275,7 +276,7 @@ public static class PageBorderArtVisualPlanner
         var railHeight = frameHeight - 2 * inset;
         if (railWidth < size || railHeight < size)
         {
-            plan = new PageBorderWeavingRibbonPlan([], []);
+            plan = new PageBorderArtFilledShapePlan([], []);
             return true;
         }
 
@@ -291,7 +292,72 @@ public static class PageBorderArtVisualPlanner
         AddRibbonHorizontalStripes(polygons, inset, frameHeight - inset - size, railWidth, size, slash: true, phaseDip: 0);
         AddRibbonVerticalStripes(polygons, inset - 1, inset, railHeight, size, slash: false);
         AddRibbonVerticalStripes(polygons, frameWidth - inset - size, inset, railHeight, size, slash: false);
-        plan = new PageBorderWeavingRibbonPlan(fills, polygons);
+        plan = new PageBorderArtFilledShapePlan(fills, polygons);
+        return true;
+    }
+
+    public static bool TryBuildPapyrusFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != PapyrusArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var frameWidth = Math.Max(0, frameWidthDip);
+        var frameHeight = Math.Max(0, frameHeightDip);
+        var inset = Math.Max(0, edgeInsetDip);
+        var size = ResolveMotifSize(modelWidthPt);
+        if (frameWidth < 2 * (inset + size) || frameHeight < 2 * (inset + size))
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return true;
+        }
+
+        var scale = size / 32.0;
+        var railOffset = 7 * scale;
+        var railThickness = 17 * scale;
+        var innerOffset = 4 * scale;
+        var innerThickness = 9 * scale;
+        var horizontalLength = frameWidth - 2 * inset;
+        var verticalLength = frameHeight - 2 * inset;
+        var left = inset + railOffset;
+        var right = frameWidth - inset - railOffset - railThickness;
+        var top = inset + railOffset;
+        var bottom = frameHeight - inset - railOffset - railThickness;
+        var innerStart = inset + size;
+        var innerHorizontalLength = frameWidth - 2 * innerStart;
+        var innerVerticalLength = frameHeight - 2 * innerStart;
+
+        var fills = new List<PageBorderArtFillRectangle>
+        {
+            new(inset, top, horizontalLength, railThickness, 0, 0, 0),
+            new(inset, bottom, horizontalLength, railThickness, 0, 0, 0),
+            new(left, inset, railThickness, verticalLength, 0, 0, 0),
+            new(right, inset, railThickness, verticalLength, 0, 0, 0),
+            new(innerStart, top + innerOffset, innerHorizontalLength, innerThickness, 0xFF, 0xFF, 0xFF),
+            new(innerStart, bottom + innerOffset, innerHorizontalLength, innerThickness, 0xFF, 0xFF, 0xFF),
+            new(left + innerOffset, innerStart, innerThickness, innerVerticalLength, 0xFF, 0xFF, 0xFF),
+            new(right + innerOffset, innerStart, innerThickness, innerVerticalLength, 0xFF, 0xFF, 0xFF),
+        };
+        var polygons = new List<PageBorderArtPolygon>();
+        AddPapyrusRailTiles(polygons, innerStart, innerHorizontalLength, top + innerOffset, innerThickness, size, horizontal: true);
+        AddPapyrusRailTiles(polygons, innerStart, innerHorizontalLength, bottom + innerOffset, innerThickness, size, horizontal: true);
+        AddPapyrusRailTiles(polygons, innerStart, innerVerticalLength, left + innerOffset, innerThickness, size, horizontal: false);
+        AddPapyrusRailTiles(polygons, innerStart, innerVerticalLength, right + innerOffset, innerThickness, size, horizontal: false);
+
+        AddPapyrusCorner(polygons, inset, inset, size);
+        AddPapyrusCorner(polygons, frameWidth - inset - size, inset, size);
+        AddPapyrusCorner(polygons, inset, frameHeight - inset - size, size);
+        AddPapyrusCorner(polygons, frameWidth - inset - size, frameHeight - inset - size, size);
+
+        plan = new PageBorderArtFilledShapePlan(fills, polygons);
         return true;
     }
 
@@ -416,6 +482,117 @@ public static class PageBorderArtVisualPlanner
         AddFill(fills, x, y + 7, width, 8, 0x00);
         AddFill(fills, x, y + 15, width, 5, 0xCC);
         AddFill(fills, x, y + 20, width, 1, 0x00);
+    }
+
+    private static void AddPapyrusRailTiles(
+        List<PageBorderArtPolygon> polygons,
+        double alongStart,
+        double alongLength,
+        double acrossStart,
+        double innerThickness,
+        double size,
+        bool horizontal)
+    {
+        var scale = size / 32.0;
+        var ovalWidth = 24 * scale;
+        var endInset = 4 * scale;
+        var count = Math.Max(1, (int)Math.Floor((alongLength - 0.01) / size));
+        var first = alongStart + endInset;
+        var last = alongStart + alongLength - endInset - ovalWidth;
+        var step = count > 1 ? (last - first) / (count - 1) : 0;
+        for (var index = 0; index < count; index++)
+        {
+            var ovalStart = first + index * step;
+            AddPapyrusOval(polygons, ovalStart, acrossStart, ovalWidth, innerThickness, horizontal);
+            AddPapyrusHourglass(polygons, ovalStart - endInset, acrossStart, innerThickness, scale, horizontal);
+        }
+
+        AddPapyrusHourglass(polygons, last + ovalWidth + endInset, acrossStart, innerThickness, scale, horizontal);
+    }
+
+    private static void AddPapyrusOval(
+        List<PageBorderArtPolygon> polygons,
+        double alongStart,
+        double acrossStart,
+        double alongLength,
+        double acrossLength,
+        bool horizontal)
+    {
+        PageBorderArtPoint Point(double along, double across) => horizontal
+            ? new PageBorderArtPoint(alongStart + along, acrossStart + across)
+            : new PageBorderArtPoint(acrossStart + across, alongStart + along);
+
+        polygons.Add(new PageBorderArtPolygon(
+            [
+                Point(0, acrossLength * 0.5),
+                Point(alongLength * 0.08, acrossLength * 0.22),
+                Point(alongLength * 0.29, acrossLength * 0.05),
+                Point(alongLength * 0.71, acrossLength * 0.05),
+                Point(alongLength * 0.92, acrossLength * 0.22),
+                Point(alongLength, acrossLength * 0.5),
+                Point(alongLength * 0.92, acrossLength * 0.78),
+                Point(alongLength * 0.71, acrossLength * 0.95),
+                Point(alongLength * 0.29, acrossLength * 0.95),
+                Point(alongLength * 0.08, acrossLength * 0.78),
+            ],
+            0x7F, 0x7F, 0x7F));
+    }
+
+    private static void AddPapyrusHourglass(
+        List<PageBorderArtPolygon> polygons,
+        double center,
+        double acrossStart,
+        double acrossLength,
+        double scale,
+        bool horizontal)
+    {
+        var outer = 7 * scale;
+        var inner = 4 * scale;
+
+        PageBorderArtPoint Point(double along, double across) => horizontal
+            ? new PageBorderArtPoint(center + along, acrossStart + across)
+            : new PageBorderArtPoint(acrossStart + across, center + along);
+
+        polygons.Add(new PageBorderArtPolygon(
+            [
+                Point(-outer, 0),
+                Point(outer, 0),
+                Point(inner, acrossLength * 0.5),
+                Point(outer, acrossLength),
+                Point(-outer, acrossLength),
+                Point(-inner, acrossLength * 0.5),
+            ],
+            0, 0, 0));
+    }
+
+    private static void AddPapyrusCorner(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        var centerX = x + 16 * scale;
+        var centerY = y + 16 * scale;
+        var points = new (double X, double Y)[]
+        {
+            (16, 2), (19, 11), (25, 5), (22, 13),
+            (30, 12), (23, 16), (30, 20), (22, 19),
+            (25, 27), (19, 21), (16, 30), (13, 21),
+            (7, 27), (10, 19), (2, 20), (9, 16),
+            (2, 12), (10, 13), (7, 5), (13, 11),
+        };
+        polygons.Add(new PageBorderArtPolygon(
+            points.Select(point => new PageBorderArtPoint(x + point.X * scale, y + point.Y * scale)).ToList(),
+            0xFF, 0xFF, 0xFF));
+        polygons.Add(new PageBorderArtPolygon(
+            [
+                new PageBorderArtPoint(centerX, y + 9 * scale),
+                new PageBorderArtPoint(x + 23 * scale, centerY),
+                new PageBorderArtPoint(centerX, y + 23 * scale),
+                new PageBorderArtPoint(x + 9 * scale, centerY),
+            ],
+            0x7F, 0x7F, 0x7F));
     }
 
     private static void AddRibbonHorizontalStripes(

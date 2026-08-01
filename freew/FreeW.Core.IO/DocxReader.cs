@@ -3105,11 +3105,7 @@ public static class DocxReader
         if (sdtContent is null)
             return;
 
-        // Word's citation content control is structural field metadata, not an editable text control.
-        // Keep the complex field run unwrapped so the writer can emit the native <w:citation/> SDT again.
-        var control = sdtPr?.Element(W + "citation") is not null
-            ? inheritedControl
-            : ReadContentControl(sdtPr);
+        var control = ReadContentControl(sdtPr);
 
         AddParagraphRuns(
             paragraph,
@@ -3147,14 +3143,16 @@ public static class DocxReader
                 ? BlockContentControlKind.RepeatingSectionItem
                 : sdtPr?.Element(W + "group") is not null
                     ? BlockContentControlKind.Group
-                : gallery is not null
-                    && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
-                        ? BlockContentControlKind.Bibliography
-                        : docPart is not null
-                            ? BlockContentControlKind.BuildingBlockGallery
-                            : sdtPr?.Element(W + "text") is not null
-                                ? BlockContentControlKind.PlainText
-                                : BlockContentControlKind.RichText;
+                    : sdtPr?.Element(W + "citation") is not null
+                        ? BlockContentControlKind.Citation
+                        : gallery is not null
+                          && string.Equals(gallery, BlockContentControl.BibliographyGallery, StringComparison.OrdinalIgnoreCase)
+                            ? BlockContentControlKind.Bibliography
+                            : docPart is not null
+                                ? BlockContentControlKind.BuildingBlockGallery
+                                : sdtPr?.Element(W + "text") is not null
+                                    ? BlockContentControlKind.PlainText
+                                    : BlockContentControlKind.RichText;
 
         return new BlockContentControl(
             kind,
@@ -3229,6 +3227,10 @@ public static class DocxReader
 
         if (sdtPr?.Element(W + "picture") is not null)
             return new ContentControl(ContentControlKind.Picture, normTag, normAlias,
+                LockMode: lockMode, WordMetadata: wordMetadata);
+
+        if (sdtPr?.Element(W + "citation") is not null)
+            return new ContentControl(ContentControlKind.Citation, normTag, normAlias,
                 LockMode: lockMode, WordMetadata: wordMetadata);
 
         if (sdtPr?.Element(W + "group") is not null)

@@ -4381,6 +4381,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfBatBorderOps(batMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildPapyrusFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var papyrusPlan))
+        {
+            return BuildPdfFilledShapeBorderOps(papyrusPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
         if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -4389,7 +4399,7 @@ public sealed class DocumentView : Control
                 artInsetDip,
                 out var ribbonPlan))
         {
-            return BuildPdfWeavingRibbonBorderOps(ribbonPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+            return BuildPdfFilledShapeBorderOps(ribbonPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
         if (PageBorderArtVisualPlanner.TryBuildDecorativeArchFrame(
                 border.ArtId,
@@ -4600,8 +4610,8 @@ public sealed class DocumentView : Control
         return ops;
     }
 
-    private static IReadOnlyList<PdfDrawOp> BuildPdfWeavingRibbonBorderOps(
-        PageBorderWeavingRibbonPlan plan,
+    private static IReadOnlyList<PdfDrawOp> BuildPdfFilledShapeBorderOps(
+        PageBorderArtFilledShapePlan plan,
         double originXDip,
         double originTopDip,
         double pageHeightPt)
@@ -10272,6 +10282,18 @@ public sealed class DocumentView : Control
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildPapyrusFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var papyrusPlan))
+        {
+            DrawFilledShapePlan(context, frame, papyrusPlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -10280,40 +10302,7 @@ public sealed class DocumentView : Control
                 edgeInsetDip,
                 out var ribbonPlan))
         {
-            foreach (var fill in ribbonPlan.Fills)
-            {
-                context.FillRectangle(
-                    new SolidColorBrush(Color.FromRgb(fill.Red, fill.Green, fill.Blue)),
-                    new Rect(
-                        frame.X + fill.Xdip,
-                        frame.Y + fill.Ydip,
-                        fill.WidthDip,
-                        fill.HeightDip));
-            }
-            foreach (var polygon in ribbonPlan.Polygons)
-            {
-                if (polygon.Points.Count == 0)
-                    continue;
-                var geometry = new StreamGeometry();
-                using (var path = geometry.Open())
-                {
-                    path.BeginFigure(
-                        new Point(
-                            frame.X + polygon.Points[0].XDip,
-                            frame.Y + polygon.Points[0].YDip),
-                        true);
-                    foreach (var point in polygon.Points.Skip(1))
-                    {
-                        path.LineTo(new Point(frame.X + point.XDip, frame.Y + point.YDip));
-                    }
-                    path.EndFigure(true);
-                }
-                context.DrawGeometry(
-                    new SolidColorBrush(Color.FromRgb(polygon.Red, polygon.Green, polygon.Blue)),
-                    null,
-                    geometry);
-            }
-
+            DrawFilledShapePlan(context, frame, ribbonPlan);
             return true;
         }
 
@@ -10359,6 +10348,44 @@ public sealed class DocumentView : Control
         }
 
         return false;
+    }
+
+    private static void DrawFilledShapePlan(
+        DrawingContext context,
+        Rect frame,
+        PageBorderArtFilledShapePlan plan)
+    {
+        foreach (var fill in plan.Fills)
+        {
+            context.FillRectangle(
+                new SolidColorBrush(Color.FromRgb(fill.Red, fill.Green, fill.Blue)),
+                new Rect(
+                    frame.X + fill.Xdip,
+                    frame.Y + fill.Ydip,
+                    fill.WidthDip,
+                    fill.HeightDip));
+        }
+        foreach (var polygon in plan.Polygons)
+        {
+            if (polygon.Points.Count == 0)
+                continue;
+            var geometry = new StreamGeometry();
+            using (var path = geometry.Open())
+            {
+                path.BeginFigure(
+                    new Point(
+                        frame.X + polygon.Points[0].XDip,
+                        frame.Y + polygon.Points[0].YDip),
+                    true);
+                foreach (var point in polygon.Points.Skip(1))
+                    path.LineTo(new Point(frame.X + point.XDip, frame.Y + point.YDip));
+                path.EndFigure(true);
+            }
+            context.DrawGeometry(
+                new SolidColorBrush(Color.FromRgb(polygon.Red, polygon.Green, polygon.Blue)),
+                null,
+                geometry);
+        }
     }
 
     private static void DrawPageBorderApple(
