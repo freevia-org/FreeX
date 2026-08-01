@@ -899,6 +899,14 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new SetPageSettingsCommand(settings));
     }
 
+    /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
+    public void ApplyManualHyphenation(IReadOnlyList<ManualHyphenationEdit> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+        if (edits.Count > 0)
+            _commands.Execute(new ApplyManualHyphenationCommand(edits));
+    }
+
     public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>
         ApplyPageSettings(page => PageNumberFormatDialogPlanner.ApplyResult(page, result));
 
@@ -2228,6 +2236,20 @@ public sealed class DocumentView : RichTextBox
         return (-1, -1, null);
     }
 
+    private (int BlockIndex, int RunIndex, IReadOnlyList<int> ChildPath)? SelectedNestedShapeLocation()
+    {
+        if (_selectedFloatingGroupChild is not { } selected
+            || !DrawingGroupChildPathResolver.TryGetChild(
+                selected.RootGroup, selected.ChildPath, out _, out var child)
+            || child is not Shape)
+            return null;
+
+        var location = FindFloatingObjectLocation(selected.RootGroup);
+        return location.BlockIndex >= 0
+            ? (location.BlockIndex, location.RunIndex, selected.ChildPath)
+            : null;
+    }
+
     private static Shape? ShapeAtPointer(TextPointer? pointer)
     {
         if (pointer is null)
@@ -2318,6 +2340,13 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeKind(ShapeKind kind)
     {
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetShapeKindCommand(
+                nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
         _commands.Execute(new SetShapeKindCommand(blockIndex, runIndex, kind));
@@ -2438,6 +2467,13 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeFill(string? colorHex)
     {
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetShapeFillCommand(
+                nested.BlockIndex, nested.RunIndex, colorHex, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
         _commands.Execute(new SetShapeFillCommand(blockIndex, runIndex, colorHex));
@@ -2450,6 +2486,13 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeOutline(string? colorHex, double widthPt, string? dash = null)
     {
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetShapeOutlineCommand(
+                nested.BlockIndex, nested.RunIndex, colorHex, widthPt, dash, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
         _commands.Execute(new SetShapeOutlineCommand(blockIndex, runIndex, colorHex, widthPt, dash));
@@ -2475,10 +2518,17 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeAltText(string? altText)
     {
         CommitToModel();
+        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetShapeAltTextCommand(
+                nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, shape) = SelectedShapeLocation();
         if (shape is null) return;
-        _commands.Execute(new SetShapeAltTextCommand(blockIndex, runIndex,
-            string.IsNullOrWhiteSpace(altText) ? null : altText!.Trim()));
+        _commands.Execute(new SetShapeAltTextCommand(blockIndex, runIndex, normalized));
         Render();
     }
 
@@ -2569,6 +2619,13 @@ public sealed class DocumentView : RichTextBox
     public void ApplySelectedShapeStyle(ShapeStylePreset preset)
     {
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new ApplyShapeStyleCommand(
+                nested.BlockIndex, nested.RunIndex, preset, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
         _commands.Execute(new ApplyShapeStyleCommand(blockIndex, runIndex, preset));
@@ -2581,6 +2638,13 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeExtendedFill(ShapeFill? fill)
     {
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetShapeExtendedFillCommand(
+                nested.BlockIndex, nested.RunIndex, fill, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
         _commands.Execute(new SetShapeExtendedFillCommand(blockIndex, runIndex, fill));
@@ -2593,6 +2657,13 @@ public sealed class DocumentView : RichTextBox
     public void SetSelectedShapeEffects(ShapeEffectLst? effects)
     {
         CommitToModel();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _commands.Execute(new SetShapeEffectsCommand(
+                nested.BlockIndex, nested.RunIndex, effects, nested.ChildPath));
+            Render();
+            return;
+        }
         var (blockIndex, runIndex, _) = SelectedShapeLocation();
         if (blockIndex < 0) return;
         _commands.Execute(new SetShapeEffectsCommand(blockIndex, runIndex, effects));

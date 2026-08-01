@@ -298,6 +298,77 @@ public sealed class DrawingGroupModelTests
         (inner.WidthPt, inner.HeightPt).Should().Be(innerSize);
     }
 
+    [Fact]
+    public void NestedShapeFormattingCommands_TargetLeafAndUndoWithoutChangingSibling()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var leaf = new Shape(ShapeKind.Ellipse, 42, 24) { FillColorHex = "#111111" };
+        var sibling = new Shape(ShapeKind.Rectangle, 30, 18) { FillColorHex = "#222222" };
+        var inner = new DrawingGroup();
+        inner.Children.Add(sibling);
+        inner.ChildOffsets.Add((0, 0));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((36, 18));
+        var outer = new DrawingGroup();
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((12, 8));
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 24, 16));
+        outer.ChildOffsets.Add((96, 48));
+        doc.Blocks.Add(new Paragraph { Runs = { Run.FromDrawingGroup(outer) } });
+        var context = new TestCtx(doc);
+        var path = new[] { 0, 1 };
+        var fill = ShapeFill.Patterned("diagCross", "#ABCDEF", "#FFFFFF");
+        var effects = new ShapeEffectLst { HasGlow = true, GlowColorHex = "ABCDEF" };
+        var style = ShapeStylePreset.Catalog[1];
+
+        var kindCommand = new SetShapeKindCommand(0, 0, ShapeKind.RoundedRectangle, path);
+        kindCommand.Apply(context);
+        leaf.Kind.Should().Be(ShapeKind.RoundedRectangle);
+        kindCommand.Revert(context);
+        leaf.Kind.Should().Be(ShapeKind.Ellipse);
+
+        var altTextCommand = new SetShapeAltTextCommand(0, 0, "Nested leaf", path);
+        altTextCommand.Apply(context);
+        leaf.AltText.Should().Be("Nested leaf");
+        altTextCommand.Revert(context);
+        leaf.AltText.Should().BeNull();
+
+        var solidCommand = new SetShapeFillCommand(0, 0, "#334455", path);
+        solidCommand.Apply(context);
+        leaf.FillColorHex.Should().Be("#334455");
+        solidCommand.Revert(context);
+        leaf.FillColorHex.Should().Be("#111111");
+
+        var outlineCommand = new SetShapeOutlineCommand(0, 0, "#556677", 2.5, "dash", path);
+        outlineCommand.Apply(context);
+        (leaf.OutlineColorHex, leaf.OutlineWidthPt, leaf.OutlineDash)
+            .Should().Be(("#556677", 2.5, "dash"));
+        outlineCommand.Revert(context);
+
+        var extendedFillCommand = new SetShapeExtendedFillCommand(0, 0, fill, path);
+        extendedFillCommand.Apply(context);
+        leaf.ExtendedFill.Should().BeSameAs(fill);
+        extendedFillCommand.Revert(context);
+
+        var effectsCommand = new SetShapeEffectsCommand(0, 0, effects, path);
+        effectsCommand.Apply(context);
+        leaf.Effects.Should().BeSameAs(effects);
+        effectsCommand.Revert(context);
+
+        var styleCommand = new ApplyShapeStyleCommand(0, 0, style, path);
+        styleCommand.Apply(context);
+        leaf.FillColorHex.Should().Be(style.FillColorHex);
+        styleCommand.Revert(context);
+
+        sibling.FillColorHex.Should().Be("#222222");
+        sibling.Kind.Should().Be(ShapeKind.Rectangle);
+        sibling.AltText.Should().BeNull();
+        sibling.OutlineColorHex.Should().BeNull();
+        sibling.ExtendedFill.Should().BeNull();
+        sibling.Effects.Should().BeNull();
+    }
+
     // ── GroupFloatingObjectsCommand ──────────────────────────────────────────────────────────────
 
     [Fact]

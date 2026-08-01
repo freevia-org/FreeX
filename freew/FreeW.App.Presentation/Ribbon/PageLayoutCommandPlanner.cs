@@ -181,24 +181,7 @@ public static class PageLayoutCommandPlanner
 
     public static int CountHyphenationCandidates(TextDocument document)
     {
-        ArgumentNullException.ThrowIfNull(document);
-
-        var count = 0;
-        foreach (var block in document.Blocks)
-        {
-            if (block is not Paragraph { Formatting.SuppressAutoHyphens: false } paragraph)
-                continue;
-
-            foreach (var run in paragraph.Runs)
-            foreach (var token in run.Text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
-            {
-                var word = token.Trim('(', ')', ',', '.', ';', ':', '"', '\'');
-                if (Hyphenator.BreakPoints(word).Count > 0)
-                    count++;
-            }
-        }
-
-        return count;
+        return ManualHyphenationPlanner.CreateSession(document).CandidateCount;
     }
 
     public static bool HasNormalMargins(PageSettings page) =>

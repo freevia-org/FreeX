@@ -861,6 +861,9 @@ public sealed partial class MainWindow : Window
     private Task OpenHyphenationOptionsDialogAsync() =>
         HyphenationOptionsDialog.ShowAndApplyAsync(this, _editor);
 
+    private Task OpenManualHyphenationDialogAsync() =>
+        ManualHyphenationDialog.ShowAndApplyAsync(this, _editor, message => _status.Text = message);
+
     private Task OpenLineNumberOptionsDialogAsync() =>
         LineNumberOptionsDialog.ShowAndApplyAsync(this, _editor);
 
@@ -941,10 +944,11 @@ public sealed partial class MainWindow : Window
 
     private async Task OpenShapeAltTextDialogAsync()
     {
-        var seed = _editor.SelectedFloatingShape()?.AltText
-                   ?? _editor.SelectedFloatingWordArt()?.AltText;
-        if (_editor.SelectedFloatingInfo?.Kind is not ("Shape" or "WordArt"))
+        var selectedShape = _editor.SelectedFloatingShape();
+        var selectedWordArt = _editor.SelectedFloatingWordArt();
+        if (selectedShape is null && selectedWordArt is null)
             return;
+        var seed = selectedShape?.AltText ?? selectedWordArt?.AltText;
         var result = await ImageAltTextDialog.ShowAsync(this, seed ?? string.Empty);
         if (result is not null)
             _editor.SetSelectedFloatingAltText(result);
@@ -1724,8 +1728,8 @@ public sealed partial class MainWindow : Window
             OpenCustomParagraphSpacingDialog: () => _ = OpenCustomParagraphSpacingDialogAsync(),
             OpenDropCapOptionsDialog: () => _ = OpenDropCapOptionsDialogAsync(),
             OpenHyphenationOptionsDialog: () => _ = OpenHyphenationOptionsDialogAsync(),
+            OpenManualHyphenationDialog: () => _ = OpenManualHyphenationDialogAsync(),
             OpenLineNumberOptionsDialog: () => _ = OpenLineNumberOptionsDialogAsync(),
-            ShowHyphenationInfo: message => _status.Text = message,
             OpenPageNumberFormatDialog: () => _ = OpenPageNumberFormatDialogAsync(),
             AskHeaderFooterText: _askHeaderFooterText ??
                 ((footer, initial) => HeaderFooterTextDialog.ShowAsync(this, footer, initial)),

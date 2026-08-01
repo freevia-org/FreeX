@@ -925,6 +925,61 @@ public sealed class DocumentViewFloatingShapeTests
     }
 
     [Fact]
+    public async Task Nested_group_shape_formatting_targets_leaf_and_undoes()
+    {
+        var verified = false;
+        var ran = await OnUiThread(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var leaf = new Shape(ShapeKind.Ellipse, 42, 24) { FillColorHex = "#111111" };
+            var sibling = new Shape(ShapeKind.Rectangle, 30, 18) { FillColorHex = "#222222" };
+            var inner = new DrawingGroup { WidthPt = 100, HeightPt = 60 };
+            inner.Children.Add(new Shape(ShapeKind.Rectangle, 20, 20));
+            inner.ChildOffsets.Add((0, 0));
+            inner.Children.Add(leaf);
+            inner.ChildOffsets.Add((30, 18));
+            var outer = new DrawingGroup { WidthPt = 180, HeightPt = 100 };
+            outer.Children.Add(inner);
+            outer.ChildOffsets.Add((10, 8));
+            outer.Children.Add(sibling);
+            outer.ChildOffsets.Add((130, 65));
+            document.Blocks.Add(new Paragraph { Runs = { Run.FromDrawingGroup(outer) } });
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new Size(800, 1200));
+            view.SelectFloating(0, 0);
+            var leafRect = view.FloatingGroupChildRectForPathForTest(0, 0, [0, 1])!.Value;
+            view.SelectFloatingGroupChildForTest(leafRect.Center).Should().BeTrue();
+
+            view.SetSelectedShapeKind(ShapeKind.RoundedRectangle);
+            view.SetSelectedFloatingAltText(" Nested leaf ");
+            view.SetSelectedShapeFill("#ABCDEF");
+            view.SetSelectedShapeOutline("#123456", 2, "dash");
+            var applied = leaf.Kind == ShapeKind.RoundedRectangle
+                && leaf.AltText == "Nested leaf"
+                && leaf.FillColorHex == "#ABCDEF"
+                && leaf.OutlineColorHex == "#123456"
+                && sibling.Kind == ShapeKind.Rectangle
+                && sibling.AltText is null
+                && sibling.FillColorHex == "#222222"
+                && sibling.OutlineColorHex is null;
+            view.Undo();
+            var outlineUndone = leaf.OutlineColorHex is null;
+            view.Undo();
+            var fillUndone = leaf.FillColorHex == "#111111";
+            view.Undo();
+            var altTextUndone = leaf.AltText is null;
+            view.Undo();
+            verified = applied && outlineUndone && fillUndone && altTextUndone
+                && leaf.Kind == ShapeKind.Ellipse;
+        });
+        if (!ran) return;
+        verified.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Multiple_floating_shapes_are_all_collected()
     {
         int count = 0;

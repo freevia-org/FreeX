@@ -13207,6 +13207,19 @@ public sealed class DocumentView : Control
         return (sel.BlockIndex, sel.RunIndex, shape, sel.Kind);
     }
 
+    private (int BlockIndex, int RunIndex, IReadOnlyList<int> ChildPath)? SelectedNestedShapeLocation()
+    {
+        if (_selectedFloatingGroupChild is not { Kind: "Shape" } selected
+            || !TryGetRun(selected.BlockIndex, selected.RunIndex, out var run)
+            || run.DrawingGroup is not { } root
+            || !DrawingGroupChildPathResolver.TryGetChild(
+                root, selected.ChildPath, out _, out var child)
+            || child is not Shape)
+            return null;
+
+        return (selected.BlockIndex, selected.RunIndex, selected.ChildPath);
+    }
+
     /// <summary>
     /// Align the paragraph containing the selected floating image, matching the WPF command behavior.
     /// </summary>
@@ -13397,10 +13410,19 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedFloatingAltText(string? altText)
     {
+        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetShapeAltTextCommand(
+                nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
+
         if (_selectedFloating is not { } sel) return;
         if (!TryGetRun(sel.BlockIndex, sel.RunIndex, out var run)) return;
 
-        var normalized = string.IsNullOrWhiteSpace(altText) ? null : altText.Trim();
         IDocumentCommand? command = run switch
         {
             { Image: { IsFloating: true } } => new SetImageAltTextCommand(sel.BlockIndex, sel.RunIndex, normalized),
@@ -13604,6 +13626,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public void ApplySelectedShapeStyle(ShapeStylePreset preset)
     {
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new ApplyShapeStyleCommand(
+                nested.BlockIndex, nested.RunIndex, preset, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
         if (SelectedFloatingShapeLocation() is not { } sel) return;
         _bus.Execute(new ApplyShapeStyleCommand(sel.BlockIndex, sel.RunIndex, preset));
         InvalidateLayoutAndVisual();
@@ -13616,6 +13646,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedShapeKind(ShapeKind kind)
     {
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetShapeKindCommand(
+                nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
         if (SelectedFloatingShapeLocation() is not { } selected)
             return;
 
@@ -13629,6 +13667,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedShapeEffects(ShapeEffectLst? effects)
     {
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetShapeEffectsCommand(
+                nested.BlockIndex, nested.RunIndex, effects, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
         if (SelectedFloatingShapeLocation() is not { } selected)
             return;
 
@@ -13646,6 +13692,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedShapeFill(string? colorHex)
     {
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetShapeFillCommand(
+                nested.BlockIndex, nested.RunIndex, colorHex, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
         if (SelectedFloatingShapeLocation() is not { } sel) return;
         _bus.Execute(new SetShapeFillCommand(sel.BlockIndex, sel.RunIndex, colorHex));
         InvalidateLayoutAndVisual();
@@ -13658,6 +13712,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedShapeExtendedFill(ShapeFill? fill)
     {
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetShapeExtendedFillCommand(
+                nested.BlockIndex, nested.RunIndex, fill, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
         if (SelectedFloatingShapeLocation() is not { } sel) return;
         _bus.Execute(new SetShapeExtendedFillCommand(sel.BlockIndex, sel.RunIndex, fill));
         InvalidateLayoutAndVisual();
@@ -13711,6 +13773,14 @@ public sealed class DocumentView : Control
     /// </summary>
     public void SetSelectedShapeOutline(string? colorHex, double widthPt, string? dash = null)
     {
+        if (SelectedNestedShapeLocation() is { } nested)
+        {
+            _bus.Execute(new SetShapeOutlineCommand(
+                nested.BlockIndex, nested.RunIndex, colorHex, widthPt, dash, nested.ChildPath));
+            InvalidateLayoutAndVisual();
+            RefreshSelectedFloatingRect(nested.BlockIndex, nested.RunIndex, "Group");
+            return;
+        }
         if (SelectedFloatingShapeLocation() is not { } sel) return;
         _bus.Execute(new SetShapeOutlineCommand(sel.BlockIndex, sel.RunIndex, colorHex, widthPt, dash));
         InvalidateLayoutAndVisual();
@@ -17939,6 +18009,14 @@ public sealed class DocumentView : Control
         var settings = _doc.Page.Clone();
         apply(settings);
         SetPageSettings(settings);
+    }
+
+    /// <summary>Apply confirmed manual soft-hyphen insertions as one undoable body edit.</summary>
+    public void ApplyManualHyphenation(IReadOnlyList<ManualHyphenationEdit> edits)
+    {
+        ArgumentNullException.ThrowIfNull(edits);
+        if (edits.Count > 0)
+            _bus.Execute(new ApplyManualHyphenationCommand(edits));
     }
 
     public void ApplyPageNumberFormat(PageNumberFormatDialogResult result) =>

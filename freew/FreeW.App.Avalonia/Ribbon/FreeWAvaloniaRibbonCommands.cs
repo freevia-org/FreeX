@@ -470,7 +470,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.hyphenation", new PageSettingCommand(editor, PageLayoutCommandPlanner.ToggleHyphenation, page => page.AutoHyphenation));
         r.Register("freew.hyphenation-none", new PageSettingCommand(editor, page => page.AutoHyphenation = false, page => !page.AutoHyphenation));
         r.Register("freew.hyphenation-auto", new PageSettingCommand(editor, page => page.AutoHyphenation = true, page => page.AutoHyphenation));
-        r.Register("freew.hyphenation-manual", new ActionRibbonCommand(() => RunManualHyphenation(editor, callbacks)));
+        r.Register("freew.hyphenation-manual", new ActionRibbonCommand(callbacks.OpenManualHyphenationDialog ?? (() => { })));
         r.Register("freew.hyphenation-options", new ActionRibbonCommand(callbacks.OpenHyphenationOptionsDialog ?? (() => { })));
         r.Register("freew.different-first-page", new PageSettingCommand(editor, page => page.DifferentFirstPage = !page.DifferentFirstPage, page => page.DifferentFirstPage));
         r.Register("freew.page-valign", new ActionRibbonCommand(editor.CyclePageVerticalAlignment));
@@ -807,16 +807,6 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         callbacks.OpenPageNumberFormatDialog?.Invoke();
-    }
-
-    private static void RunManualHyphenation(DocumentView editor, RibbonHostCallbacks callbacks)
-    {
-        var candidates = PageLayoutCommandPlanner.CountHyphenationCandidates(editor.Document);
-        editor.ApplyPageSettings(page => page.AutoHyphenation = true);
-        callbacks.ShowHyphenationInfo?.Invoke(
-            candidates == 0
-                ? "Manual hyphenation found no long words to hyphenate."
-                : $"Manual hyphenation proposed break points for {candidates} word(s). They will hyphenate at line ends.");
     }
 
     private sealed class PageSettingCommand(

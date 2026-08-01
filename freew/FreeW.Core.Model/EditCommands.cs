@@ -1881,7 +1881,11 @@ public sealed class ReplaceSourcesCommand(IReadOnlyList<Source> sources) : IDocu
 /// Change the <see cref="Shape.Kind"/> of the inline shape at the given paragraph/run indices,
 /// snapshotting the prior kind for undo.
 /// </summary>
-public sealed class SetShapeKindCommand(int paragraphIndex, int runIndex, ShapeKind kind) : IDocumentCommand
+public sealed class SetShapeKindCommand(
+    int paragraphIndex,
+    int runIndex,
+    ShapeKind kind,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private ShapeKind _previous;
     private bool _applied;
@@ -1904,15 +1908,19 @@ public sealed class SetShapeKindCommand(int paragraphIndex, int runIndex, ShapeK
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>
 /// Set the fill colour of the inline shape at the given paragraph/run indices, snapshotting the
 /// prior colour for undo. Pass null to remove the fill.
 /// </summary>
-public sealed class SetShapeFillCommand(int paragraphIndex, int runIndex, string? colorHex) : IDocumentCommand
+public sealed class SetShapeFillCommand(
+    int paragraphIndex,
+    int runIndex,
+    string? colorHex,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private string? _previous;
     private bool _applied;
@@ -1935,8 +1943,8 @@ public sealed class SetShapeFillCommand(int paragraphIndex, int runIndex, string
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>
@@ -1944,7 +1952,7 @@ public sealed class SetShapeFillCommand(int paragraphIndex, int runIndex, string
 /// paragraph/run indices, snapshotting prior values for undo. Pass null colorHex to remove the outline.
 /// </summary>
 public sealed class SetShapeOutlineCommand(int paragraphIndex, int runIndex,
-    string? colorHex, double widthPt, string? dash) : IDocumentCommand
+    string? colorHex, double widthPt, string? dash, IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private string? _prevColor;
     private double _prevWidth;
@@ -1969,8 +1977,8 @@ public sealed class SetShapeOutlineCommand(int paragraphIndex, int runIndex,
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>
@@ -2009,7 +2017,11 @@ public sealed class SetShapeSizeCommand(int paragraphIndex, int runIndex, double
 /// Set the alt-text accessibility description on the inline shape at the given paragraph/run indices,
 /// snapshotting the prior value for undo.
 /// </summary>
-public sealed class SetShapeAltTextCommand(int paragraphIndex, int runIndex, string? altText) : IDocumentCommand
+public sealed class SetShapeAltTextCommand(
+    int paragraphIndex,
+    int runIndex,
+    string? altText,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private string? _previous;
     private bool _applied;
@@ -2032,8 +2044,8 @@ public sealed class SetShapeAltTextCommand(int paragraphIndex, int runIndex, str
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>
@@ -2074,6 +2086,19 @@ public sealed class SetShapeTextDirectionCommand(
 
 /// <summary>Resolves direct and nested grouped text-box targets for shared text commands.</summary>
 internal static class ShapeTextTargetResolver
+{
+    public static bool TryGetShape(
+        IDocumentCommandContext context,
+        int paragraphIndex,
+        int runIndex,
+        IReadOnlyList<int>? childPath,
+        out Shape shape)
+        => ShapeCommandTargetResolver.TryGetShape(
+            context, paragraphIndex, runIndex, childPath, out shape);
+}
+
+/// <summary>Resolves direct and nested grouped shape targets for shared formatting commands.</summary>
+internal static class ShapeCommandTargetResolver
 {
     public static bool TryGetShape(
         IDocumentCommandContext context,
@@ -2570,7 +2595,11 @@ public sealed class SetWordArtStyleCommand(int paragraphIndex, int runIndex, Wor
 /// Apply a <see cref="ShapeStylePreset"/> to the inline shape at the given paragraph/run indices.
 /// Snapshots fill, outline and effect for undo.
 /// </summary>
-public sealed class ApplyShapeStyleCommand(int paragraphIndex, int runIndex, ShapeStylePreset preset) : IDocumentCommand
+public sealed class ApplyShapeStyleCommand(
+    int paragraphIndex,
+    int runIndex,
+    ShapeStylePreset preset,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private string? _prevFill;
     private ShapeFill? _prevExtFill;
@@ -2614,14 +2643,18 @@ public sealed class ApplyShapeStyleCommand(int paragraphIndex, int runIndex, Sha
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>
 /// Set the extended fill (gradient / pattern / no-fill) on the inline shape. Snapshots prior fill for undo.
 /// </summary>
-public sealed class SetShapeExtendedFillCommand(int paragraphIndex, int runIndex, ShapeFill? fill) : IDocumentCommand
+public sealed class SetShapeExtendedFillCommand(
+    int paragraphIndex,
+    int runIndex,
+    ShapeFill? fill,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private string? _prevSolid;
     private ShapeFill? _prevExt;
@@ -2646,14 +2679,18 @@ public sealed class SetShapeExtendedFillCommand(int paragraphIndex, int runIndex
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>
 /// Set (or clear) the effects bundle on the inline shape. Snapshots prior effects for undo.
 /// </summary>
-public sealed class SetShapeEffectsCommand(int paragraphIndex, int runIndex, ShapeEffectLst? effects) : IDocumentCommand
+public sealed class SetShapeEffectsCommand(
+    int paragraphIndex,
+    int runIndex,
+    ShapeEffectLst? effects,
+    IReadOnlyList<int>? childPath = null) : IDocumentCommand
 {
     private ShapeEffectLst? _previous;
     private bool _applied;
@@ -2676,8 +2713,8 @@ public sealed class SetShapeEffectsCommand(int paragraphIndex, int runIndex, Sha
     }
 
     private Shape? ShapeAt(IDocumentCommandContext context) =>
-        context.Document.Blocks[paragraphIndex] is Paragraph p && runIndex >= 0 && runIndex < p.Runs.Count
-            ? p.Runs[runIndex].Shape : null;
+        ShapeCommandTargetResolver.TryGetShape(context, paragraphIndex, runIndex, childPath, out var shape)
+            ? shape : null;
 }
 
 /// <summary>Set the text warp preset on the WordArt at the given paragraph/run indices.</summary>

@@ -58,6 +58,23 @@ public sealed class ObjectFormatCommandPolicySourceGuardTests
         avaloniaRibbon.Should().Contain("editor.FlipSelectedFloating(horizontal: true)");
     }
 
+    [Fact]
+    public void WpfAndAvaloniaNestedShapeTypeAndAltTextRoutes_PreserveTheChildPath()
+    {
+        var wpfEditor = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
+        var avaloniaEditor = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
+        var avaloniaMain = ReadSource("freew", "FreeW.App.Avalonia", "MainWindow.cs");
+
+        wpfEditor.Should().Contain("new SetShapeKindCommand(");
+        wpfEditor.Should().Contain("new SetShapeAltTextCommand(");
+        wpfEditor.Should().Contain("nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath");
+        wpfEditor.Should().Contain("nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath");
+        avaloniaEditor.Should().Contain("nested.BlockIndex, nested.RunIndex, kind, nested.ChildPath");
+        avaloniaEditor.Should().Contain("nested.BlockIndex, nested.RunIndex, normalized, nested.ChildPath");
+        avaloniaMain.Should().Contain("selectedShape is null && selectedWordArt is null");
+        avaloniaMain.Should().NotContain("SelectedFloatingInfo?.Kind is not (\"Shape\" or \"WordArt\")");
+    }
+
     private static string ReadSource(params string[] relativePath)
     {
         var path = relativePath.Aggregate(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), Path.Combine);

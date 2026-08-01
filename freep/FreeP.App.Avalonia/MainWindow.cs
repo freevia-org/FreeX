@@ -6127,12 +6127,20 @@ public sealed partial class MainWindow : Window
             paragraphBuildPlan.ShouldApply,
             paragraphBuildPlan.DisabledReason ?? paragraphBuildPlan.DisplayText,
             () => ToggleParagraphBuild(item.ShapeId));
+        var editMotionPathButton = item.Kind == AnimationKind.Motion
+            ? BuildAnimationPaneActionButton("Edit", true, "Edit motion path geometry", () => _ = OpenMotionPathEditorAsync(item.Index))
+            : null;
         var actionPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { moveEarlierButton, moveLaterButton, paragraphBuildButton, removeButton },
         };
+        actionPanel.Children.Add(moveEarlierButton);
+        actionPanel.Children.Add(moveLaterButton);
+        actionPanel.Children.Add(paragraphBuildButton);
+        if (editMotionPathButton is not null)
+            actionPanel.Children.Add(editMotionPathButton);
+        actionPanel.Children.Add(removeButton);
 
         var innerGrid = new Grid
         {
@@ -6219,6 +6227,13 @@ public sealed partial class MainWindow : Window
         border.Cursor = new Cursor(StandardCursorType.Hand);
         border.PointerPressed += (_, _) => SelectAnimationPaneItem(item.Index);
         return border;
+    }
+
+    private async Task OpenMotionPathEditorAsync(int animationIndex)
+    {
+        var dialog = new MotionPathEditorDialog(Editor, animationIndex);
+        await dialog.ShowDialog<bool?>(this);
+        RefreshVisibleAnimationPane(animationIndex);
     }
 
     private void ToggleParagraphBuild(uint shapeId)

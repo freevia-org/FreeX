@@ -86,6 +86,25 @@ public sealed class PageLayoutDialogParityTests
         }
     }
 
+    [Fact]
+    public void Manual_hyphenation_uses_owner_modal_shared_session_without_enabling_automatic_mode()
+    {
+        var dialogs = ReadSource("PageLayoutDialogs.cs");
+        var registry = ReadSource(Path.Combine("Ribbon", "FreeWAvaloniaRibbonCommands.cs"));
+        var mainWindow = ReadSource("MainWindow.cs");
+        var start = dialogs.IndexOf("public sealed class ManualHyphenationDialog", StringComparison.Ordinal);
+        var end = dialogs.IndexOf("public sealed class LineNumberOptionsDialog", start, StringComparison.Ordinal);
+        var dialog = dialogs[start..end];
+
+        registry.Should().Contain("callbacks.OpenManualHyphenationDialog");
+        mainWindow.Should().Contain("ManualHyphenationDialog.ShowAndApplyAsync(this, _editor");
+        dialog.Should().Contain("ManualHyphenationPlanner.CreateSession(editor.Document)");
+        dialog.Should().Contain("editor.ApplyManualHyphenation(session.Edits)");
+        dialog.Should().Contain("ShowDialog<ManualHyphenationDialogResult?>");
+        dialog.Should().NotContain("AutoHyphenation");
+        dialog.Should().NotContain("ApplyPageSettings");
+    }
+
     private static string ReadDefinitionSource()
     {
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");

@@ -617,6 +617,54 @@ public sealed class DrawingGroupRoundTripTests
     }
 
     [Fact]
+    public void DrawingGroup_NestedShapeFormattingCommand_RoundTripsLeafOnly()
+    {
+        var inner = new DrawingGroup { WidthPt = 126, HeightPt = 72 };
+        var sibling = new Shape(ShapeKind.Rectangle, 36, 22) { FillColorHex = "#222222" };
+        var leaf = new Shape(ShapeKind.Ellipse, 82, 52) { FillColorHex = "#111111" };
+        inner.Children.Add(sibling);
+        inner.ChildOffsets.Add((10, 8));
+        inner.Children.Add(leaf);
+        inner.ChildOffsets.Add((54, 26));
+        var outer = new DrawingGroup { WidthPt = 252, HeightPt = 144 };
+        outer.Children.Add(inner);
+        outer.ChildOffsets.Add((28, 22));
+        outer.Children.Add(new Shape(ShapeKind.Rectangle, 54, 34));
+        outer.ChildOffsets.Add((168, 76));
+        var document = DocumentWith(outer);
+        var context = new CommandContext(document);
+        var path = new[] { 0, 1 };
+
+        new SetShapeKindCommand(0, 0, ShapeKind.RoundedRectangle, path).Apply(context);
+        new SetShapeAltTextCommand(0, 0, "Nested leaf", path).Apply(context);
+        new SetShapeFillCommand(0, 0, "#ABCDEF", path).Apply(context);
+        new SetShapeOutlineCommand(0, 0, "#123456", 2.5, "dash", path).Apply(context);
+        new SetShapeEffectsCommand(
+            0, 0, new ShapeEffectLst { HasGlow = true, GlowColorHex = "ABCDEF" }, path).Apply(context);
+
+        var recovered = RoundTrip(document);
+        var readOuter = ((Paragraph)recovered.Blocks[0]).Runs.Single().DrawingGroup!;
+        var readInner = readOuter.Children[0].Should().BeOfType<DrawingGroup>().Subject;
+        var readSibling = readInner.Children[0].Should().BeOfType<Shape>().Subject;
+        var readLeaf = readInner.Children[1].Should().BeOfType<Shape>().Subject;
+
+        readLeaf.Kind.Should().Be(ShapeKind.RoundedRectangle);
+        readLeaf.AltText.Should().Be("Nested leaf");
+        readLeaf.FillColorHex.Should().Be("#ABCDEF");
+        readLeaf.OutlineColorHex.Should().Be("#123456");
+        readLeaf.OutlineWidthPt.Should().BeApproximately(2.5, 0.01);
+        readLeaf.OutlineDash.Should().Be("dash");
+        readLeaf.Effects.Should().NotBeNull();
+        readLeaf.Effects!.HasGlow.Should().BeTrue();
+        readLeaf.Effects.GlowColorHex.Should().Be("ABCDEF");
+        readSibling.Kind.Should().Be(ShapeKind.Rectangle);
+        readSibling.AltText.Should().BeNull();
+        readSibling.FillColorHex.Should().Be("#222222");
+        readSibling.OutlineColorHex.Should().BeNull();
+        readSibling.Effects.Should().BeNull();
+    }
+
+    [Fact]
     public void DrawingGroup_ChartAndSmartArtChildTransforms_RoundTripThroughDocx()
     {
         var group = ChartAndSmartArtGroup();
@@ -744,4 +792,9 @@ public sealed class DrawingGroupRoundTripTests
         var grp = ((Paragraph)recovered.Blocks[1]).Runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
         grp.Children.Should().HaveCount(2);
     }
+}
+
+file sealed class CommandContext(TextDocument document) : IDocumentCommandContext
+{
+    public TextDocument Document { get; } = document;
 }
