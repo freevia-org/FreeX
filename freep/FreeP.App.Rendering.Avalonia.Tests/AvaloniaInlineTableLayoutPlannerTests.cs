@@ -38,4 +38,17 @@ public sealed class AvaloniaInlineTableLayoutPlannerTests
         plan.Area.Should().Be(new Rect(12, 22, 36, 26));
         plan.Origin.Should().Be(new Point(12, 22));
     }
+
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData(TableRowHorizontalAlignment.Left, 0)]
+    [InlineData(TableRowHorizontalAlignment.Center, 30)]
+    [InlineData(TableRowHorizontalAlignment.Right, 60)]
+    public void RowHorizontalAlignmentOffsetsInlineTableWithinAvailableWidth(
+        TableRowHorizontalAlignment? alignment,
+        double expectedOffset)
+    {
+        AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(alignment, 120, 60)
+            .Should().Be(expectedOffset);
+    }
 }

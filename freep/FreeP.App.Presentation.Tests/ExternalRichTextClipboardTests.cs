@@ -603,10 +603,10 @@ public sealed class ExternalRichTextClipboardTests
     {
         const string rtf =
             @"{\rtf1\ansi
-\trowd\itap1\trrh-480\trpaddl120\trpaddr240\trpaddt60\trpaddb80
+\trowd\itap1\trqc\trrh-480\trpaddl120\trpaddr240\trpaddt60\trpaddb80
 \clpadl300\cellx2000\cellx4000
 \intbl Outer A\cell
-\trowd\itap2\nesttableprops\trrh720\clpadl40\clpadr80\clpadt100\clpadb140\cellx1000\cellx2000
+\trowd\itap2\nesttableprops\trqr\trrh720\clpadl40\clpadr80\clpadt100\clpadb140\cellx1000\cellx2000
 \intbl Inner B\nestcell
 \intbl Inner C\nestcell
 \nestrow
@@ -625,6 +625,8 @@ public sealed class ExternalRichTextClipboardTests
         outerRun.InlineTable!.Table.Rows.Should().HaveCount(1);
         outerRun.InlineTable.Table.Rows[0].HeightEmu.Should().Be(304_800);
         outerRun.InlineTable.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
+        outerRun.InlineTable.Table.Rows[0].HorizontalAlignment
+            .Should().Be(TableRowHorizontalAlignment.Center);
         outerRun.InlineTable.Table.Rows[0].Cells.Should().HaveCount(2);
         var outerCells = outerRun.InlineTable.Table.Rows[0].Cells;
         outerCells[0].InsetLeftPt.Should().Be(15);
@@ -643,6 +645,8 @@ public sealed class ExternalRichTextClipboardTests
         innerRun.InlineTable!.Table.Rows.Should().HaveCount(1);
         innerRun.InlineTable.Table.Rows[0].HeightEmu.Should().Be(457_200);
         innerRun.InlineTable.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.AtLeast);
+        innerRun.InlineTable.Table.Rows[0].HorizontalAlignment
+            .Should().Be(TableRowHorizontalAlignment.Right);
         innerRun.InlineTable.Table.Rows[0].Cells.Select(cell =>
                 cell.TextBody!.Paragraphs[0].Runs[0].Text)
             .Should().Equal("Inner B", "Inner C");
@@ -682,6 +686,31 @@ public sealed class ExternalRichTextClipboardTests
         reopenedInnerCells[0].InsetRightPt.Should().Be(4);
         reopenedInnerCells[0].InsetTopPt.Should().Be(5);
         reopenedInnerCells[0].InsetBottomPt.Should().Be(7);
+    }
+
+    [Fact]
+    public void RtfTableRowAlignment_PreservesLeftControlAndDefaultsToLeftWhenOmitted()
+    {
+        const string rtf =
+            @"{\rtf1\ansi
+\trowd\itap1\trql\cellx2000\cellx4000
+\intbl Explicit left\cell
+\trowd\itap2\nesttableprops\cellx1000
+\intbl Nested default\nestcell
+\nestrow
+\itap1\cell\row}";
+
+        var payload = ExternalRichTextClipboardPlanner.TryParseRtf(Encoding.ASCII.GetBytes(rtf));
+
+        payload.Should().NotBeNull();
+        var table = payload!.Body.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table;
+        table.Rows.Should().ContainSingle();
+        table.Rows[0].HorizontalAlignment.Should().Be(TableRowHorizontalAlignment.Left);
+        table.Rows[0].Cells[1].TextBody!.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].HorizontalAlignment.Should().BeNull();
     }
 
     [Fact]

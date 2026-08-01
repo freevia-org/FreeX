@@ -68,6 +68,7 @@ public sealed class InCanvasRichClipboardTests
         nested.Table.ColumnWidthsEmu.Add(457200);
         nested.Table.Rows.Add(new TableRow
         {
+            HorizontalAlignment = TableRowHorizontalAlignment.Right,
             Cells =
             {
                 new TableCell
@@ -82,6 +83,7 @@ public sealed class InCanvasRichClipboardTests
         {
             HeightEmu = 304800,
             HeightRule = TableRowHeightRule.Exact,
+            HorizontalAlignment = TableRowHorizontalAlignment.Center,
             Cells =
             {
                 new TableCell { TextBody = Body("Outer") },
@@ -130,7 +132,11 @@ public sealed class InCanvasRichClipboardTests
         var decodedOuter = decoded!.Body.Paragraphs.Single().Runs[1].InlineTable;
         decodedOuter.Should().NotBeNull();
         decodedOuter!.Table.Rows[0].HeightRule.Should().Be(TableRowHeightRule.Exact);
+        decodedOuter.Table.Rows[0].HorizontalAlignment.Should().Be(TableRowHorizontalAlignment.Center);
         decodedOuter!.Table.Rows[0].Cells[1].TextBody!.Paragraphs[0].Runs
+            .Single(run => run.InlineTable is not null)
+            .InlineTable!.Table.Rows[0].HorizontalAlignment.Should().Be(TableRowHorizontalAlignment.Right);
+        decodedOuter.Table.Rows[0].Cells[1].TextBody!.Paragraphs[0].Runs
             .Single(run => run.InlineTable is not null)
             .InlineTable!.Table.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text
             .Should().Be("Nested");

@@ -465,6 +465,7 @@ public static class InCanvasRichClipboardPlanner
             {
                 HeightEmu = row.HeightEmu,
                 HeightRule = row.HeightRule,
+                HorizontalAlignment = row.HorizontalAlignment,
                 Cells = row.Cells.Select(cell => new ClipboardInlineTableCellDto
                 {
                     Body = cell.TextBody is null ? null : ToDto(cell.TextBody),
@@ -525,6 +526,7 @@ public static class InCanvasRichClipboardPlanner
             {
                 HeightEmu = rowDto.HeightEmu,
                 HeightRule = rowDto.HeightRule,
+                HorizontalAlignment = rowDto.HorizontalAlignment,
             };
             foreach (var cellDto in rowDto.Cells ?? [])
             {
@@ -1155,6 +1157,7 @@ public static class InCanvasRichClipboardPlanner
     {
         public long HeightEmu { get; set; }
         public TableRowHeightRule? HeightRule { get; set; }
+        public TableRowHorizontalAlignment? HorizontalAlignment { get; set; }
         public List<ClipboardInlineTableCellDto>? Cells { get; set; }
     }
 

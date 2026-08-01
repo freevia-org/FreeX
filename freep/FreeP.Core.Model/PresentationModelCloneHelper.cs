@@ -62,6 +62,7 @@ internal static class PresentationModelCloneHelper
         {
             HeightEmu = source.HeightEmu,
             HeightRule = source.HeightRule,
+            HorizontalAlignment = source.HorizontalAlignment,
         };
         foreach (var cell in source.Cells)
             copy.Cells.Add(CloneTableCell(cell));

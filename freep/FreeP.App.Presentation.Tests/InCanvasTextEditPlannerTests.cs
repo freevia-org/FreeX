@@ -495,6 +495,23 @@ public sealed class InCanvasTextEditPlannerTests
         cleared.Paragraphs[0].Runs[0].Hyperlink.Should().BeNull();
     }
 
+    [Fact]
+    public void InlineTableCloneAndEquality_PreserveRowHorizontalAlignment()
+    {
+        var source = new InlineTableInfo();
+        source.Table.Rows.Add(new TableRow
+        {
+            HorizontalAlignment = TableRowHorizontalAlignment.Center,
+            Cells = { new TableCell { TextBody = MakeBody("text") } },
+        });
+
+        var clone = source.Clone();
+
+        TextBodyModelCloner.InlineTablesEqual(source, clone).Should().BeTrue();
+        clone.Table.Rows[0].HorizontalAlignment = TableRowHorizontalAlignment.Right;
+        TextBodyModelCloner.InlineTablesEqual(source, clone).Should().BeFalse();
+    }
+
     private static TextBody MakeBody(string text, ThemeAwareColor? color = null)
     {
         var body = new TextBody { Wrap = true, Anchor = VerticalAnchor.Middle };

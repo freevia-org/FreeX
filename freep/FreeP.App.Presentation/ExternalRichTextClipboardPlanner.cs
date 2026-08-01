@@ -1065,9 +1065,15 @@ public static class ExternalRichTextClipboardPlanner
                 case "clvmrg": _pendingCellStyle.VerticalMergeContinuation = true; break;
                 case "trleft":
                 case "trgaph":
-                case "trqc":
+                    break;
                 case "trql":
+                    SetCurrentTableRowAlignment(TableRowHorizontalAlignment.Left);
+                    break;
+                case "trqc":
+                    SetCurrentTableRowAlignment(TableRowHorizontalAlignment.Center);
+                    break;
                 case "trqr":
+                    SetCurrentTableRowAlignment(TableRowHorizontalAlignment.Right);
                     break;
                 case "trpaddl":
                     if (CurrentTableCapture() is { } leftCapture && parameter is { } leftPadding)
@@ -1544,6 +1550,12 @@ public static class ExternalRichTextClipboardPlanner
 
         private TableCaptureContext? CurrentTableCapture() =>
             _tableCaptures.Count == 0 ? null : _tableCaptures[^1];
+
+        private void SetCurrentTableRowAlignment(TableRowHorizontalAlignment alignment)
+        {
+            if (CurrentTableCapture() is { CurrentRow: { } row })
+                row.HorizontalAlignment = alignment;
+        }
 
         private void BeginCapturedTableRow()
         {

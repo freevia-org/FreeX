@@ -11,6 +11,7 @@ using WpfRun       = System.Windows.Documents.Run;
 using ModelParagraph = FreeP.Core.Model.Paragraph;
 using ModelRun       = FreeP.Core.Model.Run;
 using ModelTableCell = FreeP.Core.Model.TableCell;
+using ModelTableRow  = FreeP.Core.Model.TableRow;
 using WpfHyperlink  = System.Windows.Documents.Hyperlink;
 
 namespace FreeP.App.Rendering.Wpf;
@@ -474,24 +475,28 @@ internal static class TextBodyFlowDocumentConverter
     private static Grid CreateInlineTableEditor(InlineTableInfo info)
     {
         var table = info.Table;
+        var columnWidths = Enumerable.Range(0, Math.Max(1, table.ColumnWidthsEmu.Count))
+            .Select(column => column < table.ColumnWidthsEmu.Count
+                ? Math.Max(24, table.ColumnWidthsEmu[column] / 9525.0)
+                : 72)
+            .ToArray();
         var grid = new Grid
         {
             Tag = info.Clone(),
             Background = Brushes.Transparent,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = ToWpfHorizontalAlignment(
+                table.Rows.FirstOrDefault()?.HorizontalAlignment),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
+        int columnCount = columnWidths.Length;
         for (int column = 0; column < columnCount; column++)
-        {
-            double width = column < table.ColumnWidthsEmu.Count
-                ? Math.Max(24, table.ColumnWidthsEmu[column] / 9525.0)
-                : 72;
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(width) });
-        }
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(columnWidths[column]) });
+
+        double tableWidth = columnWidths.Sum();
         for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
         {
             var row = table.Rows[rowIndex];
+            double rowOffset = GetHorizontalOffset(row, columnWidths, tableWidth);
             double height = row.HeightEmu > 0 ? Math.Max(20, row.HeightEmu / 9525.0) : 24;
             var rowDefinition = new RowDefinition();
             if (row.HeightRule == TableRowHeightRule.AtLeast && row.HeightEmu > 0)
@@ -527,6 +532,9 @@ internal static class TextBodyFlowDocumentConverter
                         TableCellAnchor.Bottom => VerticalAlignment.Bottom,
                         _ => VerticalAlignment.Top,
                     },
+                    RenderTransform = rowOffset > 0
+                        ? new TranslateTransform(rowOffset, 0)
+                        : null,
                 };
                 if (cell.Fill is ShapeFill.Solid solid)
                     textBox.Background = new SolidColorBrush(
@@ -542,6 +550,38 @@ internal static class TextBodyFlowDocumentConverter
         }
         return grid;
     }
+
+    private static double GetHorizontalOffset(
+        ModelTableRow row,
+        IReadOnlyList<double> columnWidths,
+        double tableWidth)
+    {
+        int columnIndex = 0;
+        double rowWidth = 0;
+        foreach (var cell in row.Cells)
+        {
+            int span = Math.Max(1, cell.GridSpan);
+            for (int index = 0; index < span && columnIndex + index < columnWidths.Count; index++)
+                rowWidth += columnWidths[columnIndex + index];
+            columnIndex += span;
+        }
+
+        double extra = Math.Max(0, tableWidth - rowWidth);
+        return row.HorizontalAlignment switch
+        {
+            TableRowHorizontalAlignment.Center => extra / 2,
+            TableRowHorizontalAlignment.Right => extra,
+            _ => 0,
+        };
+    }
+
+    private static HorizontalAlignment ToWpfHorizontalAlignment(
+        TableRowHorizontalAlignment? alignment) => alignment switch
+    {
+        TableRowHorizontalAlignment.Center => HorizontalAlignment.Center,
+        TableRowHorizontalAlignment.Right => HorizontalAlignment.Right,
+        _ => HorizontalAlignment.Left,
+    };
 
     private sealed record InlineTableCellBinding(int RowIndex, ModelTableCell SourceCell, int CellIndex);
 

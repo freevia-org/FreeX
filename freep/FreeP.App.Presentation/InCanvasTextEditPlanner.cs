@@ -1064,6 +1064,7 @@ internal static class TextBodyModelCloner
             var rightRow = right.Rows[rowIndex];
             if (leftRow.HeightEmu != rightRow.HeightEmu
                 || leftRow.HeightRule != rightRow.HeightRule
+                || leftRow.HorizontalAlignment != rightRow.HorizontalAlignment
                 || leftRow.Cells.Count != rightRow.Cells.Count)
                 return false;
 

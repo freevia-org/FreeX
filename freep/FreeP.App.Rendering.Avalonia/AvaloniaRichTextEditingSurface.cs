@@ -319,7 +319,7 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 width - originX - ContentPadding.Right);
             var inlineImages = CreateInlineImages(paragraph);
             var inlineOleObjects = CreateInlineOleObjects(paragraph);
-            var inlineTables = CreateInlineTables(paragraph);
+            var inlineTables = CreateInlineTables(paragraph, maxWidth);
             var layout = CreateLayout(
                 paragraph,
                 maxWidth,
@@ -569,7 +569,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
     }
 
     private static IReadOnlyList<InlineTableLayout> CreateInlineTables(
-        InCanvasRichTextVisualParagraph paragraph)
+        InCanvasRichTextVisualParagraph paragraph,
+        double availableWidthDip)
     {
         var result = new List<InlineTableLayout>();
         foreach (var run in paragraph.Runs.Where(run => run.InlineTable is not null))
@@ -584,7 +585,8 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 run.Start,
                 run.InlineTable,
                 Math.Max(24, width),
-                Math.Max(20, height)));
+                Math.Max(20, height),
+                Math.Max(width, availableWidthDip)));
         }
         return result;
     }
@@ -931,8 +933,14 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
             double y = origin.Y;
             for (int rowIndex = 0; rowIndex < rowCount; rowIndex++)
             {
-                double x = origin.X;
                 var row = table.Rows.ElementAtOrDefault(rowIndex);
+                double rowWidth = row is null
+                    ? widths.Sum()
+                    : widths.Take(Math.Min(widths.Length, row.Cells.Sum(cell => Math.Max(1, cell.GridSpan)))).Sum();
+                double x = origin.X + AvaloniaInlineTableLayoutPlanner.GetHorizontalOffset(
+                    row?.HorizontalAlignment,
+                    _table.AvailableWidthDip,
+                    rowWidth);
                 for (int columnIndex = 0; columnIndex < columnCount; columnIndex++)
                 {
                     double width = widths[columnIndex];
@@ -1019,5 +1027,6 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         int Start,
         InlineTableInfo Info,
         double WidthDip,
-        double HeightDip);
+        double HeightDip,
+        double AvailableWidthDip);
 }

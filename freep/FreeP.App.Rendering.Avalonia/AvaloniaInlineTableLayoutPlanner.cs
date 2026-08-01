@@ -35,6 +35,20 @@ internal static class AvaloniaInlineTableLayoutPlanner
         return area;
     }
 
+    internal static double GetHorizontalOffset(
+        TableRowHorizontalAlignment? alignment,
+        double availableWidth,
+        double rowWidth)
+    {
+        double extra = Math.Max(0, availableWidth - rowWidth);
+        return alignment switch
+        {
+            TableRowHorizontalAlignment.Center => extra / 2,
+            TableRowHorizontalAlignment.Right => extra,
+            _ => 0,
+        };
+    }
+
     internal static Point GetTextOrigin(
         TableCell? cell,
         Rect area,
