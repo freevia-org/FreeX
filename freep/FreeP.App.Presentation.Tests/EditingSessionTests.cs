@@ -1081,6 +1081,7 @@ public sealed class EditingSessionTests
         sess.SetTextAutoFitOnSelection(TextAutoFitKind.Normal).Should().Be(1);
         sess.SetTextVerticalTypeOnSelection(TextVerticalType.Vertical270).Should().Be(1);
         sess.SetTextColumnCountOnSelection(2).Should().Be(1);
+        sess.SetTextColumnSpacingOnSelection(152_400).Should().Be(1);
 
         run.Bold.Should().BeTrue();
         run.FontFamily.Should().Be("Verdana");
@@ -1089,6 +1090,7 @@ public sealed class EditingSessionTests
         child.TextBody.AutoFitKind.Should().Be(TextAutoFitKind.Normal);
         child.TextBody.VerticalType.Should().Be(TextVerticalType.Vertical270);
         child.TextBody.ColumnCount.Should().Be(2);
+        child.TextBody.ColumnSpacingEmu.Should().Be(152_400);
     }
 
     [Fact]
