@@ -48,6 +48,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.BlockCycle, "blockCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.NonDirectionalCycle, "nonDirectionalCycle", SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.BasicList, "list1", SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.List2, "list2", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.BasicBlockList, "basicBlockList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.StackedList, "stackedList", SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.DescendingBlockList, "descendingBlockList", SmartArtFamily.List)]
