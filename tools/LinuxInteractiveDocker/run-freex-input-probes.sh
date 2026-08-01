@@ -3777,6 +3777,7 @@ probe_worksheet_context_clear
 probe_clipboard_roundtrips
 probe_sheet_tabs
 probe_window_management
+probe_outline_group_physical
 
 # Real shortcut-to-dialog path, followed by paced focus traversal and Escape cancellation.
 send_key ctrl+1
