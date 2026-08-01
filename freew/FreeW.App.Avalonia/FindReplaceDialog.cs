@@ -42,21 +42,19 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
     private readonly TextBox _findBox = new()
     {
         MinWidth = 220,
-        PlaceholderText = "Search text…",
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly TextBox _replaceBox = new()
     {
         MinWidth = 220,
-        PlaceholderText = "Replacement text…",
         Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly CheckBox _matchCase = new()
     {
         Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.MatchCase),
-        Margin = new Thickness(0, 8, 0, 0),
+        Margin = new Thickness(0, 6, 0, 0),
     };
 
     private readonly CheckBox _wholeWord = new()
@@ -79,10 +77,8 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
     private readonly TextBlock _status = new()
     {
-        Foreground = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60)),
-        FontSize = 11,
-        TextWrapping = TextWrapping.Wrap,
-        Margin = new Thickness(0, 8, 0, 0),
+        Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+        Margin = new Thickness(0, 6, 0, 0),
     };
 
     private TextBox _lastFocusedBox = null!;
@@ -98,7 +94,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         _openMode = openMode;
 
         Title = "Find & Replace";
-        Width = 440;
+        Width = 420;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -114,7 +110,7 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyComboBox(_goToTarget, DialogChromeStyle);
 
         // --- Main grid (Find label | Find box, Replace label | Replace box) ------
-        var grid = new Grid { Margin = new Thickness(14, 10, 14, 0) };
+        var grid = new Grid { Margin = new Thickness(14, 14, 14, 0) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -149,17 +145,13 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         var closeButton = MakeButton("Close", (_, _) => Close());
         var btnRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [findNextButton, replaceButton, replaceAllButton, closeButton],
-            new Thickness(14, 10, 14, 0));
+            new Thickness(14, 10, 14, 14));
 
         // --- Go To section ---------------------------------------------------
         var goToSection = BuildGoToSection();
 
         // --- Status bar -------------------------------------------------------
-        var statusHost = new Border
-        {
-            Margin = new Thickness(14, 4, 14, 10),
-            Child = _status,
-        };
+        var statusHost = new Border { Margin = new Thickness(14, 0, 14, 12), Child = _status };
 
         // --- Outer stack ------------------------------------------------------
         var outer = new StackPanel();
@@ -187,7 +179,8 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
     internal void ActivateFor(FindReplaceDialogOpenMode openMode)
     {
         _openMode = openMode;
-        (_openMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox).Focus();
+        AvaloniaCompactDialogChrome.FocusAndSelect(
+            _openMode == FindReplaceDialogOpenMode.Replace ? _replaceBox : _findBox);
     }
 
     internal FindReplaceDialogOpenMode OpenModeForTest => _openMode;
@@ -230,21 +223,19 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
 
     private Panel BuildGoToSection()
     {
-        var panel = new StackPanel { Margin = new Thickness(14, 6, 14, 0) };
+        var panel = new StackPanel { Margin = new Thickness(14, 0, 14, 0) };
 
         panel.Children.Add(new Border
         {
             Height = 1,
             Background = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
-            Margin = new Thickness(0, 6, 0, 6),
+            Margin = new Thickness(0, 0, 0, 6),
         });
 
         panel.Children.Add(new TextBlock
         {
             Text = "Go to:",
             FontWeight = FontWeight.SemiBold,
-            FontSize = 12,
-            Margin = new Thickness(0, 0, 0, 4),
         });
 
         var row = new Grid();
@@ -258,6 +249,8 @@ public sealed class FindReplaceDialog : FreeWDialogWindow
         var goBtn = MakeButton("Go", (_, _) => GoTo());
         Grid.SetColumn(goBtn, 2);
         row.Children.Add(goBtn);
+
+        row.Margin = new Thickness(0, 0, 0, 2);
 
         panel.Children.Add(row);
 

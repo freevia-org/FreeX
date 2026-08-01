@@ -35,6 +35,24 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().NotContain("Replaced {count}");
     }
 
+    [Fact]
+    public void FindReplaceDialog_MatchesWpfChromeAndReactivationContract()
+    {
+        var avalonia = ReadAvaloniaSource("FindReplaceDialog.cs");
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var wpf = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FindReplaceDialog.cs"));
+
+        avalonia.Should().Contain("Width = 420");
+        avalonia.Should().Contain("new Thickness(14, 14, 14, 0)");
+        avalonia.Should().Contain("new Thickness(14, 10, 14, 14)");
+        avalonia.Should().Contain("AvaloniaCompactDialogChrome.FocusAndSelect(");
+        avalonia.Should().NotContain("PlaceholderText =");
+
+        wpf.Should().Contain("Width = 420");
+        wpf.Should().Contain("DialogFocus.FocusAndSelect(");
+        wpf.Should().Contain("new Thickness(14)");
+    }
+
     private static string ReadAvaloniaSource(string fileName)
     {
         var path = Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Avalonia", fileName);
