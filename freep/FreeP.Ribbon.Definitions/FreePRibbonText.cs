@@ -603,6 +603,7 @@ internal static class FreePRibbonText
     public static RibbonText AnimationMotionUpCommand { get; } = new("Ribbon_Command_AnimationMotionUp_Label", "Ribbon_Command_AnimationMotionUp_KeyTip");
     public static RibbonText AnimationMotionDownCommand { get; } = new("Ribbon_Command_AnimationMotionDown_Label", "Ribbon_Command_AnimationMotionDown_KeyTip");
     public static RibbonText AnimationMotionArcRightCommand { get; } = new("Ribbon_Command_AnimationMotionArcRight_Label", "Ribbon_Command_AnimationMotionArcRight_KeyTip");
+    public static RibbonText AnimationMotionArcLeftCommand { get; } = new("Ribbon_Command_AnimationMotionArcLeft_Label", "Ribbon_Command_AnimationMotionArcLeft_KeyTip");
     public static RibbonText AnimationTimingGroup { get; } = new("Ribbon_Group_AnimationTiming_Label", "Ribbon_Group_AnimationTiming_KeyTip");
     public static RibbonText AnimationTriggerCommand { get; } = new("Ribbon_Command_AnimationTrigger_Label", "Ribbon_Command_AnimationTrigger_KeyTip");
     public static RibbonText AnimationDurationCommand { get; } = new("Ribbon_Command_AnimationDuration_Label", "Ribbon_Command_AnimationDuration_KeyTip");
