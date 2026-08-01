@@ -196,10 +196,16 @@ public partial class MainWindow
         => TryAppendDisjointFormulaRangeReference(new GridRange(newAddr, newAddr));
 
     private bool TryAppendDisjointFormulaRangeReference(GridRange range)
+        => TryAppendDisjointFormulaRangeReference(range, null, null);
+
+    private bool TryAppendDisjointFormulaRangeReference(
+        GridRange range,
+        string? selectedSheetNameOverride,
+        string? selectedWorkbookName)
     {
         var editor = GetFormulaRangeEntryEditor();
         if (editor is null)
-            return false;
+            return TryRouteFormulaPointModeSelection(range, append: true);
 
         if (_formulaEditCell is not { } formulaCell ||
             !FormulaRangeEntryPlanner.TryGetReferenceSpanForPointEntry(
@@ -218,7 +224,8 @@ public partial class MainWindow
                 formulaCell,
                 _options.UseR1C1ReferenceStyle,
                 out var edit,
-                _workbook.GetSheet(range.Start.Sheet)?.Name))
+                selectedSheetNameOverride ?? _workbook.GetSheet(range.Start.Sheet)?.Name,
+                selectedWorkbookName: selectedWorkbookName))
         {
             return false;
         }
@@ -231,13 +238,16 @@ public partial class MainWindow
 
         HideValidationDropdown();
         ClearCommentPreview();
-        _selectionAnchor = range.Start;
-        _selectionCursor = range.End;
-        SheetGrid.SelectedRanges = null;
-        SheetGrid.SelectedRange = range;
-        CellAddressBox.Text = range.Start == range.End
-            ? FormatCellReference(range.Start)
-            : FormatRangeReference(range.Start, range.End);
+        if (selectedWorkbookName is null)
+        {
+            _selectionAnchor = range.Start;
+            _selectionCursor = range.End;
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.SelectedRange = range;
+            CellAddressBox.Text = range.Start == range.End
+                ? FormatCellReference(range.Start)
+                : FormatRangeReference(range.Start, range.End);
+        }
         RefreshStatusBar();
         RefreshFormulaReferenceHighlights();
         SetFormulaEditStatusBarMode(pointMode: true);
@@ -418,7 +428,6 @@ public partial class MainWindow
             // replacing the previously-inserted reference like a plain click
             // (R52-render-formula-bar-ref-3-3).
             if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
-                GetFormulaRangeEntryEditor() is not null &&
                 TryAppendDisjointFormulaReference(newAddr))
             {
                 _dragSelectionTransientOverlaysCleared = false;
@@ -428,8 +437,31 @@ public partial class MainWindow
                 return;
             }
 
+            if ((Keyboard.Modifiers & ModifierKeys.Control) != 0 &&
+                TryRouteFormulaPointModeSelection(new GridRange(newAddr, newAddr), append: true))
+            {
+                _selectionAnchor = newAddr;
+                _selectionCursor = newAddr;
+                _dragSelectionTransientOverlaysCleared = false;
+                _dragSelectActive = true;
+                SheetGrid.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
             if (TryApplyFormulaRangeSelection(newAddr, extendSelection: (Keyboard.Modifiers & ModifierKeys.Shift) != 0))
             {
+                _dragSelectionTransientOverlaysCleared = false;
+                _dragSelectActive = true;
+                SheetGrid.CaptureMouse();
+                e.Handled = true;
+                return;
+            }
+
+            if (TryRouteFormulaPointModeSelection(new GridRange(newAddr, newAddr)))
+            {
+                _selectionAnchor = newAddr;
+                _selectionCursor = newAddr;
                 _dragSelectionTransientOverlaysCleared = false;
                 _dragSelectActive = true;
                 SheetGrid.CaptureMouse();
@@ -676,6 +708,12 @@ public partial class MainWindow
 
         if (e.Key is System.Windows.Input.Key.CapsLock or System.Windows.Input.Key.NumLock)
             RefreshKeyLockIndicators();
+
+        if (Keyboard.Modifiers == ModifierKeys.None && TryRouteFormulaPointModeKey(e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
 
         if (Keyboard.FocusedElement is not TextBox and not ComboBox)
         {
@@ -1967,6 +2005,19 @@ public partial class MainWindow
         if (_selectionAnchor is not { } anchor) return;
         if (hitAddr.HasValue && GetFormulaRangeEntryEditor() is not null)
             TryApplyFormulaRangeSelection(hitAddr.Value, extendSelection: true);
+        else if (hitAddr.HasValue && _selectionAnchor is { } formulaSourceAnchor &&
+                 TryRouteFormulaPointModeSelection(
+                     new GridRange(
+                         new CellAddress(_currentSheetId,
+                             Math.Min(formulaSourceAnchor.Row, hitAddr.Value.Row),
+                             Math.Min(formulaSourceAnchor.Col, hitAddr.Value.Col)),
+                         new CellAddress(_currentSheetId,
+                             Math.Max(formulaSourceAnchor.Row, hitAddr.Value.Row),
+                             Math.Max(formulaSourceAnchor.Col, hitAddr.Value.Col))),
+                     extendSelection: true))
+        {
+            _selectionCursor = hitAddr.Value;
+        }
         else if (hitAddr.HasValue && _dragSelectAddsAdditionalRange)
             AddOrMoveAdditionalSelection(hitAddr.Value, extendSelection: true);
         else if (hitAddr.HasValue)

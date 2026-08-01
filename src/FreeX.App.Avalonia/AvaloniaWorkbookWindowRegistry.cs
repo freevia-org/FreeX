@@ -1,4 +1,5 @@
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -13,6 +14,9 @@ internal sealed class AvaloniaWorkbookWindowRegistry
     private readonly List<MainWindow> _windows = [];
 
     internal IReadOnlyList<MainWindow> Windows => _windows;
+
+    internal IReadOnlyList<IFormulaPointModeWorkbookWindow> FormulaPointModeWindows =>
+        _windows.Cast<IFormulaPointModeWorkbookWindow>().ToArray();
 
     internal IReadOnlyList<MainWindow> VisibleWindows =>
         _windows.Where(static window => window.IsVisible).ToArray();

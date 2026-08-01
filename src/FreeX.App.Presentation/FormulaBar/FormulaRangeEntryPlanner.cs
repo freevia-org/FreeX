@@ -143,14 +143,16 @@ public static class FormulaRangeEntryPlanner
         bool useR1C1ReferenceStyle,
         out FormulaRangeEntryEdit edit,
         string? selectedSheetName = null,
-        FormulaSheetSpanEntryState? sheetSpan = null)
+        FormulaSheetSpanEntryState? sheetSpan = null,
+        string? selectedWorkbookName = null)
     {
         var referenceText = FormatRangeReference(
             selectedRange,
             formulaCell,
             useR1C1ReferenceStyle,
             selectedSheetName,
-            sheetSpan);
+            sheetSpan,
+            selectedWorkbookName);
 
         return TryApplySelectionText(
             text,
@@ -171,7 +173,8 @@ public static class FormulaRangeEntryPlanner
         bool useR1C1ReferenceStyle,
         out FormulaRangeEntryEdit edit,
         string? selectedSheetName = null,
-        FormulaSheetSpanEntryState? sheetSpan = null)
+        FormulaSheetSpanEntryState? sheetSpan = null,
+        string? selectedWorkbookName = null)
     {
         var safeCaret = text.Length;
         edit = new FormulaRangeEntryEdit(new ExcelTextEdit(text, safeCaret, 0), safeCaret, 0);
@@ -190,7 +193,8 @@ public static class FormulaRangeEntryPlanner
             formulaCell,
             useR1C1ReferenceStyle,
             selectedSheetName,
-            sheetSpan);
+            sheetSpan,
+            selectedWorkbookName);
         var insertAt = start + length;
         var insertionText = "," + referenceText;
         var updatedText = text.Insert(insertAt, insertionText);
@@ -324,7 +328,8 @@ public static class FormulaRangeEntryPlanner
         CellAddress formulaCell,
         bool useR1C1ReferenceStyle,
         string? selectedSheetName,
-        FormulaSheetSpanEntryState? sheetSpan)
+        FormulaSheetSpanEntryState? sheetSpan,
+        string? selectedWorkbookName)
     {
         var shorthand = useR1C1ReferenceStyle
             ? null
@@ -336,6 +341,12 @@ public static class FormulaRangeEntryPlanner
                     useR1C1ReferenceStyle);
         if (sheetSpan is { HasSpan: true })
             return $"{FormulaSheetSpanEntryPlanner.FormatSheetQualifier(sheetSpan.Value)}!{cellReferenceText}";
+
+        if (selectedWorkbookName is not null && selectedSheetName is not null)
+        {
+            var externalSheetName = $"[{selectedWorkbookName}]{selectedSheetName}";
+            return $"{SheetNameFormatter.QuoteIfNeeded(externalSheetName)}!{cellReferenceText}";
+        }
 
         return selectedRange.Start.Sheet == formulaCell.Sheet || selectedSheetName is null
             ? cellReferenceText

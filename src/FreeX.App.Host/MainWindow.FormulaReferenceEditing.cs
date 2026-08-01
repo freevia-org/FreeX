@@ -215,7 +215,9 @@ public partial class MainWindow
     private bool TryApplyFormulaRangeSelection(
         GridRange range,
         CellAddress selectionAnchor,
-        CellAddress selectionCursor)
+        CellAddress selectionCursor,
+        string? selectedSheetNameOverride = null,
+        string? selectedWorkbookName = null)
     {
         var editor = GetFormulaRangeEntryEditor();
         if (editor is null)
@@ -225,7 +227,9 @@ public partial class MainWindow
         if (formulaCell is null)
             return false;
 
-        var getPivotDataPlan = range.Start == range.End && _options.GenerateGetPivotData
+        var isExternalWorkbookSelection = selectedWorkbookName is not null;
+        var getPivotDataPlan = !isExternalWorkbookSelection &&
+            range.Start == range.End && _options.GenerateGetPivotData
             ? GetPivotDataFormulaPlanner.Create(
                 _workbook,
                 _workbook.GetSheet(formulaCell.Value.Sheet)!,
@@ -271,8 +275,9 @@ public partial class MainWindow
                 formulaCell.Value,
                 _options.UseR1C1ReferenceStyle,
                 out edit,
-                _workbook.GetSheet(range.Start.Sheet)?.Name,
-                _formulaSheetSpanEntryState);
+                selectedSheetNameOverride ?? _workbook.GetSheet(range.Start.Sheet)?.Name,
+                _formulaSheetSpanEntryState,
+                selectedWorkbookName);
 
         if (!applied)
         {
@@ -282,11 +287,14 @@ public partial class MainWindow
         HideValidationDropdown();
         ClearCommentPreview();
 
-        _selectionAnchor = selectionAnchor;
-        _selectionCursor = selectionCursor;
-        SheetGrid.SelectedRanges = null;
-        SheetGrid.SelectedRange = range;
-        CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+        if (!isExternalWorkbookSelection)
+        {
+            _selectionAnchor = selectionAnchor;
+            _selectionCursor = selectionCursor;
+            SheetGrid.SelectedRanges = null;
+            SheetGrid.SelectedRange = range;
+            CellAddressBox.Text = FormatRangeReference(range.Start, range.End);
+        }
         RefreshStatusBar();
 
         ApplyFormulaEditorTextEdit(editor, edit.TextEdit);

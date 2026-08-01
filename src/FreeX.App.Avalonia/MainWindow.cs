@@ -66,7 +66,7 @@ using CoreSortKey = FreeX.Core.Commands.SortKey;
 
 namespace FreeX.App.Avalonia;
 
-public sealed partial class MainWindow : Window
+public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 {
     private const string ApplicationTitle = "FreeX";
     private const string GroupTitleSuffix = " [Group]";
@@ -9241,7 +9241,6 @@ public sealed partial class MainWindow : Window
         {
             var point = args.GetCurrentPoint(border);
             if (point.Properties.IsLeftButtonPressed &&
-                IsFormulaRangeEntryActiveForPointMode() &&
                 IsFormulaDisjointReferenceModifier(args.KeyModifiers) &&
                 TryAppendDisjointFormulaPointReference(address))
             {
@@ -10133,7 +10132,9 @@ public sealed partial class MainWindow : Window
     private bool TryApplyFormulaRangeSelection(
         GridRange range,
         CellAddress selectionAnchor,
-        CellAddress selectionCursor)
+        CellAddress selectionCursor,
+        string? selectedSheetNameOverride = null,
+        string? selectedWorkbookName = null)
     {
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _session.FormulaEditAddress;
@@ -10190,8 +10191,9 @@ public sealed partial class MainWindow : Window
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
                 out edit,
-                _session.ActiveSheet.Name,
-                _formulaSheetSpanEntryState);
+                selectedSheetNameOverride ?? _session.ActiveSheet.Name,
+                _formulaSheetSpanEntryState,
+                selectedWorkbookName);
         if (!applied)
         {
             return false;
@@ -10209,13 +10211,17 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
-        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, selectionAnchor);
+        if (selectedWorkbookName is null)
+            _session.SelectRangeForFormulaEdit(range, formulaCell.Value, selectionAnchor);
         _formulaRangeSelectionAnchor = selectionAnchor;
         _formulaRangeSelectionCursor = selectionCursor;
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
-        _cellAddressText.Text = FormatRangeReference(range);
-        _selectionStatsText.Text = _session.SelectionStatsText;
+        if (selectedWorkbookName is null)
+        {
+            _cellAddressText.Text = FormatRangeReference(range);
+            _selectionStatsText.Text = _session.SelectionStatsText;
+        }
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
         ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
@@ -10702,7 +10708,7 @@ public sealed partial class MainWindow : Window
     {
         var editor = GetFormulaRangeEntryEditor();
         if (editor is null)
-            return false;
+            return TryRouteFormulaPointModeSelection(new GridRange(address, address));
 
         var text = editor.Text ?? "";
         if (_session.FormulaEditAddress is null ||
@@ -10734,13 +10740,19 @@ public sealed partial class MainWindow : Window
         => TryAppendDisjointFormulaPointRange(new GridRange(address, address));
 
     private bool TryAppendDisjointFormulaPointRange(GridRange range)
+        => TryAppendDisjointFormulaPointRange(range, null, null);
+
+    private bool TryAppendDisjointFormulaPointRange(
+        GridRange range,
+        string? selectedSheetNameOverride,
+        string? selectedWorkbookName)
     {
         var editor = GetFormulaRangeEntryEditor();
         var formulaCell = _session.FormulaEditAddress;
         if (editor is null || formulaCell is null ||
             !TryGetFormulaReferenceSpanForAppend(editor, out var start, out var length))
         {
-            return false;
+            return TryRouteFormulaPointModeSelection(range, append: true);
         }
 
         var editorText = editor.Text ?? "";
@@ -10755,7 +10767,8 @@ public sealed partial class MainWindow : Window
                 formulaCell.Value,
                 UseR1C1ReferenceStyle,
                 out var edit,
-                _session.Workbook.GetSheet(range.Start.Sheet)?.Name))
+                selectedSheetNameOverride ?? _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+                selectedWorkbookName: selectedWorkbookName))
         {
             return false;
         }
@@ -10772,13 +10785,17 @@ public sealed partial class MainWindow : Window
             _isApplyingFormulaBoxText = false;
         }
 
-        _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
+        if (selectedWorkbookName is null)
+            _session.SelectRangeForFormulaEdit(range, formulaCell.Value, range.Start);
         _formulaRangeSelectionAnchor = range.Start;
         _formulaRangeSelectionCursor = range.End;
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
-        _cellAddressText.Text = FormatRangeReference(range);
-        _selectionStatsText.Text = _session.SelectionStatsText;
+        if (selectedWorkbookName is null)
+        {
+            _cellAddressText.Text = FormatRangeReference(range);
+            _selectionStatsText.Text = _session.SelectionStatsText;
+        }
         RefreshFormulaReferenceHighlights();
         RefreshFormulaReferenceGridHighlights();
         ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
@@ -10789,7 +10806,19 @@ public sealed partial class MainWindow : Window
     private bool TryContinueFormulaRangeSelectionDrag(CellAddress address)
     {
         if (GetFormulaRangeEntryEditor() is null)
-            return false;
+        {
+            if (_cellDragSelectionAnchor is not { } sourceAnchor)
+                return false;
+
+            var range = new GridRange(
+                new CellAddress(address.Sheet,
+                    Math.Min(sourceAnchor.Row, address.Row),
+                    Math.Min(sourceAnchor.Col, address.Col)),
+                new CellAddress(address.Sheet,
+                    Math.Max(sourceAnchor.Row, address.Row),
+                    Math.Max(sourceAnchor.Col, address.Col)));
+            return TryRouteFormulaPointModeSelection(range, extendSelection: true);
+        }
 
         if (_cellDragFormulaPointCursor == address)
             return true;
@@ -18788,6 +18817,14 @@ public sealed partial class MainWindow : Window
 
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (e.KeyModifiers == KeyModifiers.None &&
+            (e.Key == Key.Enter || e.Key == Key.Escape) &&
+            TryRouteFormulaPointModeKey(e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // R92-meta-2: see the matching check in InlineCellEditor_KeyDown -- the popup must claim
         // these keys before any of the Formula Bar's own navigation/commit handling below.
         if (HandleFunctionAutocompleteKeyDown(_formulaBox, e.Key))
@@ -26818,6 +26855,12 @@ public sealed partial class MainWindow : Window
         {
             UpdateKeyLockToggleState(e.Key);
             RefreshKeyLockIndicators();
+        }
+
+        if (e.KeyModifiers == KeyModifiers.None && TryRouteFormulaPointModeKey(e.Key))
+        {
+            e.Handled = true;
+            return;
         }
 
         if (TryHandleWorkbookWindowSwitchShortcut(e))

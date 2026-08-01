@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -94,6 +95,10 @@ public sealed class WorkbookWindowRegistry
 
     /// <summary>Live windows in registration order.</summary>
     public IReadOnlyList<IWorkbookWindow> Windows => _windows;
+
+    /// <summary>Registered windows that expose a live formula point-mode session.</summary>
+    public IReadOnlyList<IFormulaPointModeWorkbookWindow> FormulaPointModeWindows =>
+        _windows.OfType<IFormulaPointModeWorkbookWindow>().ToList();
 
     /// <summary>Registered windows that are currently visible, in registration order.</summary>
     public IReadOnlyList<IWorkbookWindow> VisibleWindows => _windows.Where(w => !_hidden.Contains(w)).ToList();

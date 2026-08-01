@@ -19,7 +19,7 @@ namespace FreeX.App.Host;
 /// Main application window — the spreadsheet shell.
 /// Coordinates between the engine and the UI components.
 /// </summary>
-public partial class MainWindow : Window, IWorkbookWindow
+public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWorkbookWindow
 {
     private const double MaximizedSafeInsetDip = 8.0;
     private const double SheetTabNavScrollAmount = 140.0;

@@ -48,7 +48,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    internal WorkbookId DocumentId => _session.Workbook.Id;
+    public WorkbookId DocumentId => _session.Workbook.Id;
 
     internal void ApplyWindowTitleSuffix(string suffix)
     {

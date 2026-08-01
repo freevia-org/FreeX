@@ -1108,6 +1108,14 @@ public partial class MainWindow
 
     private void FormulaBar_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        if (e.KeyboardDevice.Modifiers == ModifierKeys.None &&
+            (e.Key == Key.Enter || e.Key == Key.Escape) &&
+            TryRouteFormulaPointModeKey(e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // R88-app-autocomplete-picklist-5-3: Backspace/Delete reject a live AutoComplete suggestion
         // (Excel behavior) rather than instantly re-offering the same completion the deletion just
         // removed -- mirrors InlineEditor_KeyDown's identical guard for the in-cell editor.
