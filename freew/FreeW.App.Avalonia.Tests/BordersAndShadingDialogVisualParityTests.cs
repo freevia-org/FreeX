@@ -96,15 +96,24 @@ public sealed class BordersAndShadingDialogVisualParityTests
         await Session.Dispatch(() =>
         {
             var dialog = new BordersAndShadingDialog(ParagraphFormatting.Default, null);
-            var ok = dialog.GetLogicalDescendants().OfType<Button>()
-                .Single(button => AutomationProperties.GetAutomationId(button) == "BordersAndShadingOkButton");
-            dialog.ParagraphWidthForTest.Text = "13";
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+                var ok = dialog.GetLogicalDescendants().OfType<Button>()
+                    .Single(button => AutomationProperties.GetAutomationId(button) == "BordersAndShadingOkButton");
+                dialog.ParagraphWidthForTest.Text = "13";
 
-            ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                ok.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-            dialog.StatusForTest.IsVisible.Should().BeTrue();
-            dialog.StatusForTest.Text.Should().Be(BordersAndShadingDialogPlanner.WidthValidationMessage);
-            dialog.IsVisible.Should().BeFalse();
+                dialog.StatusForTest.IsVisible.Should().BeTrue();
+                dialog.StatusForTest.Text.Should().Be(BordersAndShadingDialogPlanner.WidthValidationMessage);
+                dialog.IsVisible.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
         }, CancellationToken.None);
     }
 
