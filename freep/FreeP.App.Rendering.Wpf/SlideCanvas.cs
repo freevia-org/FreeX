@@ -121,7 +121,10 @@ public sealed class SlideCanvas : FrameworkElement
     /// Call once after constructing the canvas and once on every file new/open to wire up
     /// the new Editor instance.  The overlay canvas must already be in the visual tree.
     /// </summary>
-    public void AttachEditing(EditingSession editor, Canvas textOverlay)
+    public void AttachEditing(
+        EditingSession editor,
+        Canvas textOverlay,
+        Func<SlideShape, bool>? tryOpenOleInPlace = null)
     {
         var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
         // Rebuilds replace the EditingSession. Dispose the previous handler first so its
@@ -131,7 +134,7 @@ public sealed class SlideCanvas : FrameworkElement
         ActiveTextEditShapeId = null;
         _textEditor      = null;
         _tableCellEditor = null;
-        _gestureHandler  = new CanvasGestureHandler(this, editor);
+        _gestureHandler  = new CanvasGestureHandler(this, editor, tryOpenOleInPlace);
         _gestureHandler.EditPointsEnabled = editPointsEnabled;
         ApplyViewShowState(_viewShowState);
         _textOverlay     = textOverlay;

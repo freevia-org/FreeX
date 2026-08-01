@@ -1,4 +1,5 @@
 using FreeW.App.Presentation.DocumentView;
+using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.Tests;
 
@@ -23,5 +24,20 @@ public sealed class PageBorderWaveVisualPlannerTests
     public void BuildFrame_RejectsCollapsedFrames()
     {
         PageBorderWaveVisualPlanner.BuildFrame(40, 40, 20).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(PageBorderDisplay.AllPages, 0, true)]
+    [InlineData(PageBorderDisplay.AllPages, 3, true)]
+    [InlineData(PageBorderDisplay.FirstPage, 0, true)]
+    [InlineData(PageBorderDisplay.FirstPage, 1, false)]
+    [InlineData(PageBorderDisplay.NotFirstPage, 0, false)]
+    [InlineData(PageBorderDisplay.NotFirstPage, 1, true)]
+    public void VisibilityPlanner_UsesZeroBasedPageSemantics(
+        PageBorderDisplay display,
+        int pageIndex,
+        bool expected)
+    {
+        PageBorderVisibilityPlanner.ShouldRender(display, pageIndex).Should().Be(expected);
     }
 }

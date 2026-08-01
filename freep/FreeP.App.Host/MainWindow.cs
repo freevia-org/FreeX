@@ -114,6 +114,8 @@ public sealed partial class MainWindow : Window
 
     private Border _canvasHost = null!;
     private Canvas _textOverlay = null!;
+    private Canvas _oleOverlay = null!;
+    private WpfOleInPlaceHost? _activeOleHost;
     private TextBlock _slideCountText = null!;
     private PresentationViewShowState _viewShowState = PresentationViewShowState.Default;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
@@ -610,8 +612,47 @@ public sealed partial class MainWindow : Window
         if (_textOverlay is null) return;
         SlideCanvas.MouseRightButtonUp -= OnSlideCanvasMouseRightButtonUp;
         SlideCanvas.MouseRightButtonUp += OnSlideCanvasMouseRightButtonUp;
-        SlideCanvas.AttachEditing(Editor, _textOverlay);
+        SlideCanvas.AttachEditing(Editor, _textOverlay, TryOpenOleInPlace);
         SlideCanvas.ApplyViewShowState(_viewShowState);
+    }
+
+    private bool TryOpenOleInPlace(SlideShape shape)
+    {
+        if (shape.Kind != SlideShapeKind.Ole
+            || shape.OleObject is null
+            || _oleOverlay is null
+            || Math.Abs(shape.RotationDeg) > 0.01
+            || shape.FlipH
+            || shape.FlipV)
+            return false;
+
+        CloseActiveOleHost();
+        var transform = SlideCanvas.CurrentTransform;
+        var margin = SlideCanvas.Margin;
+        var topLeft = transform.SlideToScreen(
+            SlideTransform.EmuToDip(shape.OffsetXEmu),
+            SlideTransform.EmuToDip(shape.OffsetYEmu));
+        var bounds = new Rect(
+            margin.Left + topLeft.X,
+            margin.Top + topLeft.Y,
+            transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCxEmu)),
+            transform.ScaleDipToScreen(SlideTransform.EmuToDip(shape.ExtentCyEmu)));
+
+        return WpfOleInPlaceHost.TryShow(
+            _oleOverlay,
+            shape.OleObject,
+            bounds,
+            out _activeOleHost);
+    }
+
+    private void CloseActiveOleHost()
+    {
+        if (_activeOleHost is null)
+            return;
+
+        _activeOleHost.Dispose();
+        _oleOverlay.Children.Remove(_activeOleHost);
+        _activeOleHost = null;
     }
 
     private void OnSlideCanvasMouseRightButtonUp(object sender, MouseButtonEventArgs e)
@@ -795,6 +836,12 @@ public sealed partial class MainWindow : Window
             VerticalAlignment   = VerticalAlignment.Stretch
         };
 
+        _oleOverlay = new Canvas
+        {
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+
         // Wave 11B: comment indicator overlay (speech-bubble dots, non-interactive).
         _commentOverlay = new Canvas
         {
@@ -808,6 +855,7 @@ public sealed partial class MainWindow : Window
         stageGrid.Children.Add(SlideCanvas);
         stageGrid.Children.Add(_textOverlay);
         stageGrid.Children.Add(_commentOverlay);
+        stageGrid.Children.Add(_oleOverlay);
 
         // AdornerDecorator ensures the adorner layer sits directly above SlideCanvas,
         // so SelectionAdorner handles are positioned correctly regardless of zoom.
@@ -1580,6 +1628,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshCanvas()
     {
+        CloseActiveOleHost();
         SlideCanvas.Presentation = _presentation;
         SlideCanvas.Slide        = Editor.CurrentSlide;
         SlideCanvas.Refresh();

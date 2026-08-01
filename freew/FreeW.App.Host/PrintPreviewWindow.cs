@@ -288,7 +288,8 @@ internal sealed class HeaderFooterPaginator(
 
         var basePage = inner.GetPage(pageNumber);
         var hasWatermark = !string.IsNullOrEmpty(page.Watermark);
-        var hasBorder = page.PageBorder is not null;
+        var hasBorder = page.PageBorder is { } pageBorder
+            && PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, pageNumber);
         var hasLineNumbers = page.LineNumberMode != LineNumberMode.None && lineHeightDip > 0;
         var hasColumnRule = page.ColumnsLineBetween && page.ColumnCount > 1;
         // Footnote bodies follow the page containing their reference. Markerless single-page models
@@ -483,7 +484,8 @@ internal sealed class HeaderFooterPaginator(
 
         if (!string.IsNullOrEmpty(page.Watermark))
             visual.Children.Add(BuildWatermark(page.Watermark!, size));
-        if (page.PageBorder is { } border)
+        if (page.PageBorder is { } border
+            && PageBorderVisibilityPlanner.ShouldRender(border.Display, pageNumber))
             visual.Children.Add(BuildPageBorder(border, size));
 
         var marginLeft = PageLayout.PointsToDip(page.MarginLeftPt);

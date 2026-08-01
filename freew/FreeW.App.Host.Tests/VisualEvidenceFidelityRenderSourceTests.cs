@@ -316,6 +316,20 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
     }
 
     [Fact]
+    public void WpfPageBorderConsumers_UseSharedPageVisibilitySemantics()
+    {
+        var renderSource = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+        var viewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"));
+        var previewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"));
+
+        renderSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pb.Display, i)");
+        renderSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(border.Display, pageIndex)");
+        viewSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pb.Display, 0)");
+        previewSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(pageBorder.Display, pageNumber)");
+        previewSource.Should().Contain("PageBorderVisibilityPlanner.ShouldRender(border.Display, pageNumber)");
+    }
+
+    [Fact]
     public void FidelityRender_UsesArrangedAnchorOnlyForDrawingGroups()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
