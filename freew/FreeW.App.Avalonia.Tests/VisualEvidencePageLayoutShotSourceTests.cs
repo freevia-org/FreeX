@@ -258,7 +258,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
-        source.Should().Contain("var rect = pageRect.Deflate(new Thickness(inset + 1.5))");
+        source.Should().Contain("rect = pageRect.Deflate(new Thickness(inset + 1.5))");
     }
 
     [Fact]
