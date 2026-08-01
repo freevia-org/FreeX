@@ -39,6 +39,20 @@ public sealed record RibbonPopupChromeMetrics(
     double ShadowDepth,
     double ShadowBlurRadius,
     double ShadowOpacity,
-    double AnchorGap);
+    double AnchorGap)
+{
+    /// <summary>Chrome shared by native submenu presenters; toolkit arrows remain native.</summary>
+    public RibbonPopupSubmenuChromeMetrics Submenu { get; init; } = new(
+        ItemMinHeight,
+        ItemPadding,
+        AnchorGap: 2,
+        BorderThickness);
+}
+
+public sealed record RibbonPopupSubmenuChromeMetrics(
+    double ItemMinHeight,
+    RibbonPopupInsets ItemPadding,
+    double AnchorGap,
+    double BorderThickness);
 
 public readonly record struct RibbonPopupInsets(double Left, double Top, double Right, double Bottom);

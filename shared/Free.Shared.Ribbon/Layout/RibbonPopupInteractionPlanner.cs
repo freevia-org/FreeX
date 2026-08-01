@@ -6,6 +6,39 @@ public enum RibbonPopupPlacement
     AboveAnchor,
 }
 
+public enum RibbonPopupDismissKey
+{
+    Escape,
+    Left,
+}
+
+public enum RibbonPopupDismissal
+{
+    None,
+    CloseSubmenu,
+    ClosePopup,
+}
+
+/// <summary>Neutral submenu behavior shared by the WPF and Avalonia menu controls.</summary>
+public sealed record RibbonPopupSubmenuContract(
+    bool FocusFirstEnabledItemOnOpen,
+    bool TraverseEnabledItems,
+    bool DismissOnEscape,
+    bool DismissOnLeft,
+    bool RestoreFocusToParentOnClose,
+    bool RepositionAtScreenEdge,
+    double AnchorGap)
+{
+    public static RibbonPopupSubmenuContract Default { get; } = new(
+        FocusFirstEnabledItemOnOpen: true,
+        TraverseEnabledItems: true,
+        DismissOnEscape: true,
+        DismissOnLeft: true,
+        RestoreFocusToParentOnClose: true,
+        RepositionAtScreenEdge: true,
+        AnchorGap: RibbonVisualMetrics.PopupChrome.Submenu.AnchorGap);
+}
+
 /// <summary>
 /// Shared interaction contract for transient ribbon popups. Native renderers own the popup controls,
 /// but both hosts must give a collapsed group the same focus and dismissal lifecycle.
@@ -19,6 +52,9 @@ public sealed record RibbonPopupInteractionContract(
     bool RepositionAtScreenEdge,
     double AnchorGap)
 {
+    public bool DismissOnLeft { get; init; } = true;
+    public RibbonPopupSubmenuContract Submenu { get; init; } = RibbonPopupSubmenuContract.Default;
+
     public static RibbonPopupInteractionContract CollapsedGroup { get; } = new(
         RibbonPopupPlacement.BelowAnchor,
         FocusFirstEnabledItemOnOpen: true,
@@ -35,6 +71,68 @@ public readonly record struct RibbonPopupPlacementResult(
     RibbonPopupPlacement Placement,
     double X,
     double Y);
+
+/// <summary>
+/// Describes one monitor in device pixels while keeping the work area in the normalized popup
+/// coordinate space used by the shared placement planner.
+/// </summary>
+public readonly record struct RibbonPopupMonitorWorkArea(
+    RibbonPopupRect DeviceBounds,
+    RibbonPopupRect WorkArea);
+
+public static class RibbonPopupMonitorPlanner
+{
+    public static RibbonPopupRect SelectWorkArea(
+        RibbonPopupRect anchorDeviceRect,
+        IReadOnlyList<RibbonPopupMonitorWorkArea> monitors,
+        RibbonPopupRect fallbackWorkArea)
+    {
+        ArgumentNullException.ThrowIfNull(monitors);
+        if (monitors.Count == 0)
+            return fallbackWorkArea;
+
+        var point = new RibbonPopupPoint(
+            anchorDeviceRect.X + anchorDeviceRect.Width / 2,
+            anchorDeviceRect.Y + anchorDeviceRect.Height / 2);
+        var containing = monitors.FirstOrDefault(m => Contains(m.DeviceBounds, point));
+        if (containing.DeviceBounds.Width > 0 && containing.DeviceBounds.Height > 0)
+            return containing.WorkArea;
+
+        var nearest = monitors
+            .OrderBy(m => DistanceSquared(m.DeviceBounds, point))
+            .First();
+        return nearest.WorkArea;
+    }
+
+    public static RibbonPopupRect NormalizeFromDevicePixels(
+        RibbonPopupRect deviceRect,
+        RibbonPopupPoint deviceOrigin,
+        RibbonPopupPoint dipOrigin,
+        double scaleX,
+        double scaleY)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scaleX);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scaleY);
+        return new RibbonPopupRect(
+            dipOrigin.X + (deviceRect.X - deviceOrigin.X) / scaleX,
+            dipOrigin.Y + (deviceRect.Y - deviceOrigin.Y) / scaleY,
+            deviceRect.Width / scaleX,
+            deviceRect.Height / scaleY);
+    }
+
+    private static bool Contains(RibbonPopupRect rect, RibbonPopupPoint point) =>
+        point.X >= rect.X && point.X < rect.X + rect.Width &&
+        point.Y >= rect.Y && point.Y < rect.Y + rect.Height;
+
+    private static double DistanceSquared(RibbonPopupRect rect, RibbonPopupPoint point)
+    {
+        var dx = point.X < rect.X ? rect.X - point.X : point.X > rect.X + rect.Width ? point.X - (rect.X + rect.Width) : 0;
+        var dy = point.Y < rect.Y ? rect.Y - point.Y : point.Y > rect.Y + rect.Height ? point.Y - (rect.Y + rect.Height) : 0;
+        return (dx * dx) + (dy * dy);
+    }
+}
+
+public readonly record struct RibbonPopupPoint(double X, double Y);
 
 /// <summary>
 /// Computes a stable left-aligned popup position and flips above the anchor when the preferred
@@ -89,6 +187,24 @@ public readonly record struct RibbonPopupFocusItem(bool IsFocusable, bool IsEnab
 
 public static class RibbonPopupInteractionPlanner
 {
+    public static RibbonPopupDismissal PlanDismissal(
+        RibbonPopupDismissKey key,
+        bool isNestedSubmenu,
+        RibbonPopupInteractionContract? contract = null)
+    {
+        contract ??= RibbonPopupInteractionContract.CollapsedGroup;
+        var submenu = contract.Submenu;
+        var enabled = isNestedSubmenu
+            ? key == RibbonPopupDismissKey.Escape ? submenu.DismissOnEscape : submenu.DismissOnLeft
+            : key == RibbonPopupDismissKey.Escape ? contract.DismissOnEscape : contract.DismissOnLeft;
+        if (!enabled)
+            return RibbonPopupDismissal.None;
+
+        return isNestedSubmenu
+            ? RibbonPopupDismissal.CloseSubmenu
+            : RibbonPopupDismissal.ClosePopup;
+    }
+
     public static int FindFirstFocusableItem(IReadOnlyList<RibbonPopupFocusItem> items) =>
         FindFocusableItem(items, start: 0, step: 1);
 

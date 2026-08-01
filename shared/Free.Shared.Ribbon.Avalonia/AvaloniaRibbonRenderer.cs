@@ -2489,7 +2489,7 @@ public static class AvaloniaRibbonRenderer
             _ => PlacementMode.Bottom,
         };
         flyout.HorizontalOffset = 0;
-        flyout.VerticalOffset = 0;
+        flyout.VerticalOffset = contract.AnchorGap;
         if (contract.RepositionAtScreenEdge)
         {
             flyout.PlacementConstraintAdjustment =
@@ -2506,11 +2506,9 @@ public static class AvaloniaRibbonRenderer
                 return new object();
             });
         }
-        foreach (var item in flyout.Items.OfType<MenuItem>())
-        {
-            item.MinHeight = chrome.ItemMinHeight;
-            item.Padding = ToThickness(chrome.ItemPadding);
-        }
+        var topLevelItems = flyout.Items.OfType<MenuItem>().ToArray();
+        foreach (var item in topLevelItems)
+            ConfigureMenuItem(item, parent: null, topLevelItems, flyout, contract, chrome);
         flyout.Opened += (_, _) =>
         {
             if (!contract.FocusFirstEnabledItemOnOpen)
@@ -2530,14 +2528,28 @@ public static class AvaloniaRibbonRenderer
                 anchor.Focus(NavigationMethod.Tab);
         };
 
-        foreach (var item in flyout.Items.OfType<MenuItem>())
-        {
-            item.AddHandler(
-                InputElement.KeyDownEvent,
-                (_, args) => HandleCollapsedGroupFlyoutKey(flyout, contract, item, args),
-                RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
-                handledEventsToo: true);
-        }
+    }
+
+    private static void ConfigureMenuItem(
+        MenuItem item,
+        MenuItem? parent,
+        IReadOnlyList<MenuItem> siblings,
+        MenuFlyout flyout,
+        RibbonPopupInteractionContract contract,
+        RibbonPopupChromeMetrics chrome)
+    {
+        item.MinHeight = parent is null ? chrome.ItemMinHeight : chrome.Submenu.ItemMinHeight;
+        item.Padding = ToThickness(parent is null ? chrome.ItemPadding : chrome.Submenu.ItemPadding);
+
+        var children = item.Items.OfType<MenuItem>().ToArray();
+        foreach (var child in children)
+            ConfigureMenuItem(child, item, children, flyout, contract, chrome);
+
+        item.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) => HandleMenuItemKey(flyout, contract, item, parent, siblings, args),
+            RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
+            handledEventsToo: true);
     }
 
     private static Style CreatePopupPresenterStyle(
@@ -2579,33 +2591,63 @@ public static class AvaloniaRibbonRenderer
         new(insets.Left, insets.Top, insets.Right, insets.Bottom);
 
 
-    private static void HandleCollapsedGroupFlyoutKey(
+    private static void HandleMenuItemKey(
         MenuFlyout flyout,
         RibbonPopupInteractionContract contract,
         MenuItem currentItem,
+        MenuItem? parent,
+        IReadOnlyList<MenuItem> siblings,
         KeyEventArgs args)
     {
-        if (args.Key == Key.Escape && contract.DismissOnEscape)
+        if (args.Handled)
+            return;
+
+        var dismissal = args.Key switch
+        {
+            Key.Escape => RibbonPopupInteractionPlanner.PlanDismissal(
+                RibbonPopupDismissKey.Escape, parent is not null, contract),
+            Key.Left => RibbonPopupInteractionPlanner.PlanDismissal(
+                RibbonPopupDismissKey.Left, parent is not null, contract),
+            _ => RibbonPopupDismissal.None,
+        };
+        if (dismissal == RibbonPopupDismissal.CloseSubmenu && parent is not null)
+        {
+            parent.IsSubMenuOpen = false;
+            if (contract.Submenu.RestoreFocusToParentOnClose)
+            {
+                parent.Focusable = true;
+                parent.IsSelected = true;
+                TopLevel.GetTopLevel(parent)?.FocusManager?.Focus(parent, NavigationMethod.Tab);
+            }
+            args.Handled = true;
+            return;
+        }
+
+        if (dismissal == RibbonPopupDismissal.ClosePopup)
         {
             flyout.Hide();
             args.Handled = true;
             return;
         }
 
-        // Nested submenu items remain under Avalonia's native directional navigation. Only the
-        // top-level collapsed-group scope participates in the shared wraparound policy.
-        if (!ReferenceEquals(args.Source, currentItem))
+        if (parent is not null && !contract.Submenu.TraverseEnabledItems ||
+            parent is null && !contract.TraverseEnabledItems ||
+            args.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
             return;
 
-        if (!contract.TraverseEnabledItems || args.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
-            return;
-
-        var items = flyout.Items.OfType<MenuItem>().ToArray();
-        var currentIndex = Array.IndexOf(items, currentItem);
+        var currentIndex = -1;
+        for (var siblingIndex = 0; siblingIndex < siblings.Count; siblingIndex++)
+        {
+            if (ReferenceEquals(siblings[siblingIndex], currentItem))
+            {
+                currentIndex = siblingIndex;
+                break;
+            }
+        }
         if (currentIndex < 0)
             return;
 
-        var states = items
+        var states = siblings
             .Select(item => new RibbonPopupFocusItem(item.Focusable, item.IsEnabled))
             .ToArray();
         var targetIndex = args.Key switch
@@ -2618,7 +2660,7 @@ public static class AvaloniaRibbonRenderer
         };
         if (targetIndex >= 0)
         {
-            items[targetIndex].Focus(NavigationMethod.Directional);
+            siblings[targetIndex].Focus(NavigationMethod.Directional);
             args.Handled = true;
         }
     }

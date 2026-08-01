@@ -113,6 +113,29 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
     }
 
     [Fact]
+    public void PopupInteractionPlanner_UsesNestedDismissalAndSubmenuChromeContract()
+    {
+        var contract = RibbonPopupInteractionContract.CollapsedGroup;
+
+        contract.DismissOnLeft.Should().BeTrue();
+        contract.Submenu.DismissOnEscape.Should().BeTrue();
+        contract.Submenu.DismissOnLeft.Should().BeTrue();
+        RibbonPopupInteractionPlanner.PlanDismissal(
+                RibbonPopupDismissKey.Escape,
+                isNestedSubmenu: true,
+                contract)
+            .Should().Be(RibbonPopupDismissal.CloseSubmenu);
+        RibbonPopupInteractionPlanner.PlanDismissal(
+                RibbonPopupDismissKey.Left,
+                isNestedSubmenu: false,
+                contract)
+            .Should().Be(RibbonPopupDismissal.ClosePopup);
+        RibbonVisualMetrics.PopupChrome.Submenu.ItemMinHeight.Should()
+            .Be(RibbonVisualMetrics.PopupChrome.ItemMinHeight);
+        RibbonVisualMetrics.PopupChrome.Submenu.AnchorGap.Should().Be(2);
+    }
+
+    [Fact]
     public void PopupChrome_UsesOneSharedRendererNeutralMetricSet()
     {
         var chrome = RibbonVisualMetrics.PopupChrome;
@@ -139,6 +162,32 @@ public sealed class RibbonCollapsedGroupPresentationPlannerTests
         result.Placement.Should().Be(RibbonPopupPlacement.AboveAnchor);
         result.X.Should().Be(580);
         result.Y.Should().Be(449);
+    }
+
+    [Fact]
+    public void PopupMonitorPlanner_SelectsContainingMonitorAndNormalizesDeviceWorkArea()
+    {
+        var selected = RibbonPopupMonitorPlanner.SelectWorkArea(
+            new RibbonPopupRect(1920, 400, 80, 40),
+            new[]
+            {
+                new RibbonPopupMonitorWorkArea(
+                    new RibbonPopupRect(0, 0, 1920, 1080),
+                    new RibbonPopupRect(0, 0, 1920, 1040)),
+                new RibbonPopupMonitorWorkArea(
+                    new RibbonPopupRect(1920, 0, 2560, 1440),
+                    new RibbonPopupRect(1280, 0, 1706.6667, 1400)),
+            },
+            new RibbonPopupRect(0, 0, 1, 1));
+
+        selected.Should().Be(new RibbonPopupRect(1280, 0, 1706.6667, 1400));
+        RibbonPopupMonitorPlanner.NormalizeFromDevicePixels(
+                new RibbonPopupRect(1920, 120, 300, 600),
+                new RibbonPopupPoint(1920, 0),
+                new RibbonPopupPoint(1280, 0),
+                scaleX: 1.5,
+                scaleY: 1.5)
+            .Should().Be(new RibbonPopupRect(1280, 80, 200, 400));
     }
 
     private static RibbonGroup CreateGroup(string header, params RibbonControl[] controls) =>

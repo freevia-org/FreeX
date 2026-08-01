@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
+using System.Runtime.InteropServices;
 using Free.Shared.Ribbon;
 
 namespace Free.Shared.Ribbon.Wpf;
@@ -196,12 +197,9 @@ public sealed class RibbonGroupHost : ContentControl
             Opacity = chrome.ShadowOpacity,
         };
         contextMenu.SnapsToDevicePixels = true;
-        foreach (var item in contextMenu.Items.OfType<MenuItem>())
-        {
-            item.MinHeight = chrome.ItemMinHeight;
-            item.Padding = ToThickness(chrome.ItemPadding);
-            item.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        }
+        var topLevelItems = contextMenu.Items.OfType<MenuItem>().ToArray();
+        foreach (var item in topLevelItems)
+            ConfigureMenuItem(item, parent: null, topLevelItems, contextMenu, contract, chrome);
 
         if (contract.RepositionAtScreenEdge)
         {
@@ -216,11 +214,7 @@ public sealed class RibbonGroupHost : ContentControl
                 var result = RibbonPopupPlacementPlanner.Plan(
                     new RibbonPopupRect(screenAnchor.X, screenAnchor.Y, targetSize.Width, targetSize.Height),
                     new RibbonPopupRect(0, 0, popupSize.Width, popupSize.Height),
-                    new RibbonPopupRect(
-                        SystemParameters.WorkArea.Left,
-                        SystemParameters.WorkArea.Top,
-                        SystemParameters.WorkArea.Width,
-                        SystemParameters.WorkArea.Height),
+                    ResolveWorkArea(screenAnchorPixels, anchor),
                     contract);
                 return
                 [
@@ -263,23 +257,90 @@ public sealed class RibbonGroupHost : ContentControl
             Keyboard.PreviewKeyDownEvent,
             new KeyEventHandler((_, args) =>
             {
-                if (args.Key == Key.Escape && contract.DismissOnEscape)
+                if (args.Source is MenuItem)
+                    return;
+                var dismissal = args.Key switch
+                {
+                    Key.Escape => RibbonPopupInteractionPlanner.PlanDismissal(
+                        RibbonPopupDismissKey.Escape, isNestedSubmenu: false, contract),
+                    Key.Left => RibbonPopupInteractionPlanner.PlanDismissal(
+                        RibbonPopupDismissKey.Left, isNestedSubmenu: false, contract),
+                    _ => RibbonPopupDismissal.None,
+                };
+                if (dismissal == RibbonPopupDismissal.ClosePopup)
+                {
+                    contextMenu.IsOpen = false;
+                    args.Handled = true;
+                }
+            }),
+            handledEventsToo: true);
+    }
+
+    private static void ConfigureMenuItem(
+        MenuItem item,
+        MenuItem? parent,
+        IReadOnlyList<MenuItem> siblings,
+        ContextMenu contextMenu,
+        RibbonPopupInteractionContract contract,
+        RibbonPopupChromeMetrics chrome)
+    {
+        item.MinHeight = parent is null ? chrome.ItemMinHeight : chrome.Submenu.ItemMinHeight;
+        item.Padding = ToThickness(parent is null ? chrome.ItemPadding : chrome.Submenu.ItemPadding);
+        item.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+
+        var children = item.Items.OfType<MenuItem>().ToArray();
+        foreach (var child in children)
+            ConfigureMenuItem(child, item, children, contextMenu, contract, chrome);
+
+        item.AddHandler(
+            Keyboard.PreviewKeyDownEvent,
+            new KeyEventHandler((_, args) =>
+            {
+                if (args.Handled)
+                    return;
+
+                var dismissal = args.Key switch
+                {
+                    Key.Escape => RibbonPopupInteractionPlanner.PlanDismissal(
+                        RibbonPopupDismissKey.Escape, parent is not null, contract),
+                    Key.Left => RibbonPopupInteractionPlanner.PlanDismissal(
+                        RibbonPopupDismissKey.Left, parent is not null, contract),
+                    _ => RibbonPopupDismissal.None,
+                };
+                if (dismissal == RibbonPopupDismissal.CloseSubmenu && parent is not null)
+                {
+                    parent.IsSubmenuOpen = false;
+                    if (contract.Submenu.RestoreFocusToParentOnClose)
+                        parent.Focus();
+                    args.Handled = true;
+                    return;
+                }
+
+                if (dismissal == RibbonPopupDismissal.ClosePopup)
                 {
                     contextMenu.IsOpen = false;
                     args.Handled = true;
                     return;
                 }
 
-                if (!contract.TraverseEnabledItems || args.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
+                if (!contract.Submenu.TraverseEnabledItems && parent is not null ||
+                    !contract.TraverseEnabledItems && parent is null ||
+                    args.Key is not (Key.Up or Key.Down or Key.Home or Key.End))
                     return;
 
-                var items = contextMenu.Items.OfType<MenuItem>().ToArray();
-                var currentIndex = Array.FindIndex(items, item => ReferenceEquals(Keyboard.FocusedElement, item));
+                var currentIndex = -1;
+                for (var siblingIndex = 0; siblingIndex < siblings.Count; siblingIndex++)
+                {
+                    if (ReferenceEquals(siblings[siblingIndex], item))
+                    {
+                        currentIndex = siblingIndex;
+                        break;
+                    }
+                }
                 if (currentIndex < 0)
                     return;
-
-                var states = items
-                    .Select(item => new RibbonPopupFocusItem(item.Focusable, item.IsEnabled))
+                var states = siblings
+                    .Select(candidate => new RibbonPopupFocusItem(candidate.Focusable, candidate.IsEnabled))
                     .ToArray();
                 var targetIndex = args.Key switch
                 {
@@ -289,11 +350,89 @@ public sealed class RibbonGroupHost : ContentControl
                     Key.Down => RibbonPopupInteractionPlanner.FindAdjacentFocusableItem(states, currentIndex, 1),
                     _ => -1,
                 };
-                if (targetIndex >= 0 && items[targetIndex].Focus())
+                if (targetIndex >= 0 && siblings[targetIndex].Focus())
                     args.Handled = true;
             }),
             handledEventsToo: true);
     }
+
+    private static RibbonPopupRect ResolveWorkArea(Point anchorDevicePoint, FrameworkElement anchor)
+    {
+        var fallback = new RibbonPopupRect(
+            SystemParameters.WorkArea.Left,
+            SystemParameters.WorkArea.Top,
+            SystemParameters.WorkArea.Width,
+            SystemParameters.WorkArea.Height);
+        var monitor = MonitorFromPoint(
+            new Win32Point((int)Math.Round(anchorDevicePoint.X), (int)Math.Round(anchorDevicePoint.Y)),
+            MonitorDefaultToNearest);
+        if (monitor == IntPtr.Zero)
+            return fallback;
+
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        if (!GetMonitorInfo(monitor, ref info))
+            return fallback;
+
+        var transform = PresentationSource.FromVisual(anchor)?.CompositionTarget?.TransformFromDevice
+            ?? Matrix.Identity;
+        var workArea = NormalizeDeviceRect(info.WorkArea, transform);
+        var selected = RibbonPopupMonitorPlanner.SelectWorkArea(
+            new RibbonPopupRect(anchorDevicePoint.X, anchorDevicePoint.Y, 1, 1),
+            new[]
+            {
+                new RibbonPopupMonitorWorkArea(
+                    new RibbonPopupRect(info.Monitor.Left, info.Monitor.Top, info.Monitor.Width, info.Monitor.Height),
+                    workArea),
+            },
+            fallback);
+        return selected;
+    }
+
+    private static RibbonPopupRect NormalizeDeviceRect(Win32Rect rect, Matrix transform)
+    {
+        return RibbonPopupMonitorPlanner.NormalizeFromDevicePixels(
+            new RibbonPopupRect(rect.Left, rect.Top, rect.Width, rect.Height),
+            new RibbonPopupPoint(0, 0),
+            new RibbonPopupPoint(transform.OffsetX, transform.OffsetY),
+            scaleX: 1 / transform.M11,
+            scaleY: 1 / transform.M22);
+    }
+
+    private const uint MonitorDefaultToNearest = 2;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private readonly struct Win32Point(int x, int y)
+    {
+        public readonly int X = x;
+        public readonly int Y = y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Win32Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+        public readonly int Width => Right - Left;
+        public readonly int Height => Bottom - Top;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MonitorInfo
+    {
+        public int Size;
+        public Win32Rect Monitor;
+        public Win32Rect WorkArea;
+        public uint Flags;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromPoint(Win32Point point, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
 
     private static Thickness ToThickness(RibbonPopupInsets insets) =>
         new(insets.Left, insets.Top, insets.Right, insets.Bottom);

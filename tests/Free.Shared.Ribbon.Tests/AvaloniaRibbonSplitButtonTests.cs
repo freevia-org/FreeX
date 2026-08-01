@@ -295,6 +295,54 @@ public sealed class AvaloniaRibbonSplitButtonTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task CollapsedGroupPopup_NestedMenuUsesSharedChromeAndLeftRestoresParentFocus()
+    {
+        await Session.Dispatch(() =>
+        {
+            var registry = new RibbonCommandRegistry();
+            registry.Register("child", new RecordingCommand(() => { }));
+            var content = AvaloniaRibbonRenderer.BuildRibbon(
+                new RibbonDefinitionBuilder()
+                    .Tab("home", "Home", "H", tab => tab.Group("group", "Group", "G", 1, group =>
+                        group.Dropdown("more", "More", new RibbonMenu(new[]
+                        {
+                            new RibbonMenuItem("More", Children: new[]
+                            {
+                                new RibbonMenuItem("Child", "child")
+                            }),
+                        }))))
+                    .Build(),
+                registry);
+            var window = Show(content, 90);
+            try
+            {
+                var collapsed = content.GetLogicalDescendants().OfType<Button>()
+                    .First(button => button.Classes.Contains("freex-ribbon-collapsed-group") &&
+                                     Equals(button.Tag, "collapsed:group"));
+                var flyout = Assert.IsType<MenuFlyout>(collapsed.Flyout);
+                var parent = Assert.Single(flyout.Items.OfType<MenuItem>());
+                var child = Assert.Single(parent.Items.OfType<MenuItem>());
+
+                Assert.Equal(RibbonVisualMetrics.PopupChrome.ItemMinHeight, parent.MinHeight);
+                Assert.Equal(RibbonVisualMetrics.PopupChrome.Submenu.ItemMinHeight, child.MinHeight);
+                Assert.Equal(new Thickness(10, 5, 10, 5), child.Padding);
+
+                flyout.ShowAt(collapsed);
+                parent.IsSubMenuOpen = true;
+                child.Focus(NavigationMethod.Directional);
+                RaiseKey(child, Key.Left);
+
+                Assert.False(parent.IsSubMenuOpen);
+                Assert.True(parent.IsSelected);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
     private static RibbonTab BuildSplitTab(RibbonCommandLayoutKind layout) =>
         BuildSplitDefinition(layout)
             .FindTab("home")!;
