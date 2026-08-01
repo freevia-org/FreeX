@@ -21,6 +21,18 @@ internal sealed class StyleDialog : FreeWDialogWindow
             ControlHeight = 21,
             ButtonHeight = 21,
             ButtonPadding = new Thickness(10, 1),
+            ComboBoxBackgroundBrush = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new global::Avalonia.Media.GradientStop(Color.FromRgb(240, 240, 240), 0),
+                    new global::Avalonia.Media.GradientStop(Color.FromRgb(229, 229, 229), 1),
+                },
+            },
+            InputBorderBrush = new SolidColorBrush(Color.FromRgb(172, 172, 172)),
+            ButtonBorderBrush = new SolidColorBrush(Color.FromRgb(112, 112, 112)),
         };
 
     private readonly IReadOnlyList<KeyValuePair<string, string>> _basedOnEntries;
@@ -94,7 +106,7 @@ internal sealed class StyleDialog : FreeWDialogWindow
             () => _ = AcceptAsync(),
             () => Close(null),
             buttonWidth: 72,
-            margin: new Thickness(0, 12, 0, 0),
+            margin: new Thickness(0, 12, -1, 0),
             style: DialogChromeStyle);
         panel.Children.Add(actionRow);
         Content = panel;

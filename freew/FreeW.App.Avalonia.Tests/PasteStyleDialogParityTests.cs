@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Free.Shared.Shell;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -66,6 +67,7 @@ public sealed class PasteStyleDialogParityTests
                 ShellStrings.Current.Cancel);
             buttons[0].IsDefault.Should().BeTrue();
             buttons[1].IsCancel.Should().BeTrue();
+            ((SolidColorBrush)buttons[1].BorderBrush!).Color.Should().Be(Color.FromRgb(112, 112, 112));
             dialog.Close();
         }, CancellationToken.None);
     }
@@ -89,6 +91,11 @@ public sealed class PasteStyleDialogParityTests
             textBox.MinWidth.Should().Be(280);
             combos.Select(combo => combo.MinWidth).Should().Equal(280, 280, 100, 160, 160);
             combos.Skip(2).Should().OnlyContain(combo => combo.HorizontalAlignment == global::Avalonia.Layout.HorizontalAlignment.Stretch);
+            Assert.All(combos, combo => combo.Background.Should().BeOfType<LinearGradientBrush>());
+            var gradients = combos.Select(combo => (LinearGradientBrush)combo.Background!).ToArray();
+            gradients.Should().OnlyContain(gradient => gradient.GradientStops[0].Color == Color.FromRgb(240, 240, 240));
+            gradients.Should().OnlyContain(gradient => gradient.GradientStops[gradient.GradientStops.Count - 1].Color == Color.FromRgb(229, 229, 229));
+            Assert.All(combos, combo => ((SolidColorBrush)combo.BorderBrush!).Color.Should().Be(Color.FromRgb(172, 172, 172)));
             textBox.CornerRadius.Should().Be(new CornerRadius(0));
             combos.Should().OnlyContain(combo => combo.CornerRadius == new CornerRadius(0));
             Buttons(dialog).Should().OnlyContain(button => button.CornerRadius == new CornerRadius(0));
@@ -131,7 +138,7 @@ public sealed class PasteStyleDialogParityTests
         source.Should().Contain("or \"style\" or \"manage-styles\"");
         source.Should().Contain("authorityCapture!.LogicalWidth");
         source.Should().Contain("authorityCapture!.LogicalHeight");
-        source.Should().Contain("Where(button => button is not ToggleButton)");
+        source.Should().Contain("Where(button => button is not ToggleButton and not RepeatButton)");
         source.Should().Contain("scenario.RouteId == \"style\"");
         source.Should().Contain("Sample Style");
         source.Should().Contain("name.Focus(NavigationMethod.Tab)");
