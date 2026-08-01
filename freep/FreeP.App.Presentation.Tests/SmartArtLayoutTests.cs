@@ -68,6 +68,25 @@ public sealed class SmartArtLayoutTests
     private static SrgbColor SolidDrawFill(DrawOp op) =>
         ((ResolvedFill.Solid)((DrawOp.Shape)op).Fill).Color;
 
+    [Fact]
+    public void WhiteOutlineQuickStyle_UsesWhiteNodeAndConnectorOutlines()
+    {
+        var plan = SmartArtStylePlanner.Build(
+            SmartArtFamily.List,
+            new SmartArtQuickStyleMetadata
+            {
+                UniqueId = "simple2",
+                Title = "White Outline",
+                Category = "Simple"
+            },
+            colors: null,
+            DefaultTheme());
+
+        plan.GetNodeStyle(0, 0, SmartArtFamily.List).Outline.Resolved.Should().Be(SrgbColor.White);
+        plan.Connector.Outline.Resolved.Should().Be(SrgbColor.White);
+        plan.Connector.WidthPt.Should().Be(1.25);
+    }
+
     // ── Family classification tests ───────────────────────────────────────────────
 
     [Theory]

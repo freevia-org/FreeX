@@ -72,18 +72,27 @@ public sealed class SmartArtStylePlan
     private SrgbColor ApplyStyleOutline(SrgbColor color) =>
         _profile switch
         {
+            SmartArtStyleProfile.WhiteOutline => SrgbColor.White,
             SmartArtStyleProfile.Subtle => ThemeColorTransform.ApplyShade(color, 0.72),
             SmartArtStyleProfile.Intense => ThemeColorTransform.ApplyShade(color, 0.45),
             _ => ThemeColorTransform.ApplyShade(color, 0.62)
         };
 
     private SrgbColor ConnectorColor() =>
-        _profile == SmartArtStyleProfile.Subtle
-            ? ThemeColorTransform.ApplyShade(_palette[0], 0.68)
-            : ThemeColorTransform.ApplyShade(_palette[0], 0.50);
+        _profile switch
+        {
+            SmartArtStyleProfile.WhiteOutline => SrgbColor.White,
+            SmartArtStyleProfile.Subtle => ThemeColorTransform.ApplyShade(_palette[0], 0.68),
+            _ => ThemeColorTransform.ApplyShade(_palette[0], 0.50)
+        };
 
     private double ConnectorWidthPt() =>
-        _profile == SmartArtStyleProfile.Intense ? 1.75 : 1.35;
+        _profile switch
+        {
+            SmartArtStyleProfile.WhiteOutline => 1.25,
+            SmartArtStyleProfile.Intense => 1.75,
+            _ => 1.35
+        };
 
     private static SrgbColor PickReadableText(SrgbColor fill)
     {
@@ -163,6 +172,10 @@ public static class SmartArtStylePlanner
             ? string.Empty
             : JoinHints(quickStyle.UniqueId, quickStyle.Title, quickStyle.Category, quickStyle.StyleLabels);
 
+        if (hint.Contains("white", StringComparison.OrdinalIgnoreCase)
+            && hint.Contains("outline", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.WhiteOutline;
+
         if (hint.Contains("subtle", StringComparison.OrdinalIgnoreCase)
             || hint.Contains("simple", StringComparison.OrdinalIgnoreCase))
             return SmartArtStyleProfile.Subtle;
@@ -185,6 +198,7 @@ public static class SmartArtStylePlanner
 internal enum SmartArtStyleProfile
 {
     Subtle,
+    WhiteOutline,
     Moderate,
     Intense
 }
