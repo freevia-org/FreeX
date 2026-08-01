@@ -102,12 +102,27 @@ public sealed class FreeXTextBoxInlinePhysicalValidationToolTests
         properties.GetProperty("results").GetProperty("maxItems").GetInt32().Should().Be(6);
         properties.GetProperty("summary").GetProperty("properties")
             .GetProperty("passed").GetProperty("const").GetInt32().Should().Be(6);
-        properties.GetProperty("runtime").GetProperty("properties")
-            .GetProperty("events").GetProperty("items").GetProperty("properties")
+        var runtime = properties.GetProperty("runtime");
+        var runtimeRequired = runtime.GetProperty("required").EnumerateArray()
+            .Select(item => item.GetString())
+            .ToArray();
+        runtimeRequired.Should().Contain("platform");
+        runtimeRequired.Should().Contain("shell");
+        runtimeRequired.Should().Contain("app");
+        runtime.GetProperty("additionalProperties").GetBoolean().Should().BeFalse();
+
+        var runtimeContractProperties = runtime.GetProperty("properties");
+        runtimeContractProperties.GetProperty("platform").GetProperty("const").GetString()
+            .Should().Be("linux");
+        runtimeContractProperties.GetProperty("shell").GetProperty("const").GetString()
+            .Should().Be("avalonia");
+        runtimeContractProperties.GetProperty("app").GetProperty("const").GetString()
+            .Should().Be("FreeX");
+        runtimeContractProperties.GetProperty("events").GetProperty("items").GetProperty("properties")
             .GetProperty("editorAutomationId").GetProperty("const").GetString()
             .Should().Be("TextBoxInlineEditor");
 
-        var runtimeProperties = properties.GetProperty("runtime").GetProperty("properties")
+        var runtimeProperties = runtimeContractProperties
             .GetProperty("events").GetProperty("items").GetProperty("properties");
         runtimeProperties.GetProperty("editorVisible").GetProperty("type").GetString().Should().Be("boolean");
         runtimeProperties.GetProperty("nonZeroBounds").GetProperty("const").GetBoolean().Should().BeTrue();

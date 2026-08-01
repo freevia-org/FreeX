@@ -49,10 +49,13 @@
     },
     "runtime": {
       "type": "object",
-      "required": ["schemaVersion", "suite", "events"],
+      "required": ["schemaVersion", "suite", "platform", "shell", "app", "events"],
       "properties": {
         "schemaVersion": { "const": 1 },
         "suite": { "const": "freex-linux-textbox-inline-edit-physical" },
+        "platform": { "const": "linux" },
+        "shell": { "const": "avalonia" },
+        "app": { "const": "FreeX" },
         "events": {
           "type": "array",
           "minItems": 3,
