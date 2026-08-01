@@ -315,6 +315,81 @@ public sealed class CanvasEditingTests
         adorner.SelectionRects.Should().HaveCount(2);
     }
 
+    [StaFact]
+    public void WpfLiveMultiTransformPreview_ClearsOnCancelCaptureLossCommitAndDispose()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Clear();
+        var first = new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100 * 9525L,
+            OffsetYEmu = 100 * 9525L,
+            ExtentCxEmu = 100 * 9525L,
+            ExtentCyEmu = 50 * 9525L,
+            Fill = new ShapeFill.Solid(new SrgbColor(0xD9, 0x2F, 0x2F)),
+        };
+        var second = new SlideShape
+        {
+            Id = 2,
+            OffsetXEmu = 300 * 9525L,
+            OffsetYEmu = 100 * 9525L,
+            ExtentCxEmu = 50 * 9525L,
+            ExtentCyEmu = 50 * 9525L,
+            Fill = new ShapeFill.Solid(new SrgbColor(0x2F, 0x6F, 0xD9)),
+        };
+        slide.Shapes.Add(first);
+        slide.Shapes.Add(second);
+
+        var editor = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        editor.Select(first.Id);
+        editor.Select(second.Id, addToSelection: true);
+        var canvas = new SlideCanvas { Presentation = presentation, Slide = slide };
+        var handler = new CanvasGestureHandler(canvas, editor);
+        var resizePlan = CanvasGesturePlanner.PlanMultiResize(new CanvasMultiResizeRequest(
+            new CanvasGesturePoint(0, 0),
+            new CanvasGesturePoint(50, 25),
+            new SlideTransformCore(1, 0, 0, 1280, 720),
+            CanvasGestureHandleKind.ResizeSE,
+            CanvasGesturePlanner.CaptureTransformState(slide, editor.SelectedShapeIds),
+            slide,
+            false,
+            false,
+            false));
+        var rotatePlan = CanvasGesturePlanner.PlanMultiRotate(new CanvasMultiRotateRequest(
+            new CanvasGesturePoint(225, 25),
+            new CanvasGesturePoint(325, 125),
+            new SlideTransformCore(1, 0, 0, 1280, 720),
+            CanvasGesturePlanner.CaptureTransformState(slide, editor.SelectedShapeIds),
+            false));
+
+        canvas.UpdateTransformPreview(resizePlan);
+        canvas.HasLiveTransformPreviewForTests.Should().BeTrue();
+        handler.SeedResizeStateForTests(new Point(100, 100), first, CanvasGestureHandleKind.ResizeSE);
+        handler.HandleEscapeForTests().Should().BeTrue();
+        canvas.HasLiveTransformPreviewForTests.Should().BeFalse();
+
+        canvas.UpdateTransformPreview(rotatePlan);
+        handler.SeedResizeStateForTests(new Point(100, 100), first, CanvasGestureHandleKind.ResizeSE);
+        canvas.RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0)
+        {
+            RoutedEvent = UIElement.LostMouseCaptureEvent,
+        });
+        canvas.HasLiveTransformPreviewForTests.Should().BeFalse();
+
+        canvas.UpdateTransformPreview(resizePlan);
+        handler.SeedMoveStateForTests(new Point(100, 100));
+        handler.CompleteGestureForTests(new Point(110, 100));
+        canvas.HasLiveTransformPreviewForTests.Should().BeFalse();
+
+        canvas.UpdateTransformPreview(rotatePlan);
+        handler.Dispose();
+        canvas.HasLiveTransformPreviewForTests.Should().BeFalse();
+    }
+
     [Fact]
     public void SlideTransform_Compute_CorrectScale_CenteredSlide()
     {

@@ -113,6 +113,7 @@ public sealed class SlideCanvas : Control
     // ── Cached draw ops ──────────────────────────────────────────────────────
 
     private IReadOnlyList<DrawOp>? _cachedOps;
+    private IReadOnlyDictionary<uint, DrawOp>? _liveTransformPreviewOps;
     private double _slideWidthDip;
     private double _slideHeightDip;
     private PresentationViewZoomState _viewZoomState = PresentationViewZoomState.FitToWindow;
@@ -167,12 +168,29 @@ public sealed class SlideCanvas : Control
     public void Refresh()
     {
         _cachedOps = null;
+        _liveTransformPreviewOps = null;
         // Slide/presentation changes can also change the canvas' desired aspect-ratio size.
         // InvalidateMeasure is required here because the canvas may already have been measured
         // before a slideshow window assigns its first slide.
         InvalidateMeasure();
         InvalidateVisual();
     }
+
+    /// <summary>
+    /// Replaces selected source draw operations with compositor-created copies for a live
+    /// multi-selection transform. Passing an empty plan clears the transient preview.
+    /// </summary>
+    public void UpdateTransformPreview(CanvasMultiTransformPlan plan)
+    {
+        EnsureOps();
+        _liveTransformPreviewOps = plan.Shapes.Count == 0 || _cachedOps is null
+            ? null
+            : CanvasTransformPreviewComposer.Compose(_cachedOps, plan);
+        InvalidateVisual();
+    }
+
+    internal bool HasLiveTransformPreviewForTests =>
+        _liveTransformPreviewOps is { Count: > 0 };
 
     // ── Layout: maintain slide aspect ratio ──────────────────────────────────
 
@@ -234,6 +252,19 @@ public sealed class SlideCanvas : Control
     }
 
     private void RenderOp(DrawingContext dc, DrawOp op)
+    {
+        if (_liveTransformPreviewOps is not null
+            && CanvasTransformPreviewComposer.TryGetShapeId(op, out var shapeId)
+            && _liveTransformPreviewOps.TryGetValue(shapeId, out var preview))
+        {
+            RenderOpCore(dc, preview);
+            return;
+        }
+
+        RenderOpCore(dc, op);
+    }
+
+    private void RenderOpCore(DrawingContext dc, DrawOp op)
     {
         switch (op)
         {

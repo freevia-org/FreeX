@@ -200,6 +200,7 @@ public sealed class SlideCanvas : FrameworkElement
     // ── Cached draw ops (invalidated on model change) ─────────────────────────
 
     private IReadOnlyList<DrawOp>? _cachedOps;
+    private IReadOnlyDictionary<uint, DrawOp>? _liveTransformPreviewOps;
     private double _slideWidthDip;
     private double _slideHeightDip;
 
@@ -207,8 +208,25 @@ public sealed class SlideCanvas : FrameworkElement
     public void Refresh()
     {
         _cachedOps = null;
+        _liveTransformPreviewOps = null;
         InvalidateVisual();
     }
+
+    /// <summary>
+    /// Replaces selected source draw operations with compositor-created copies for a live
+    /// multi-selection transform. Passing an empty plan clears the transient preview.
+    /// </summary>
+    public void UpdateTransformPreview(CanvasMultiTransformPlan plan)
+    {
+        EnsureOps();
+        _liveTransformPreviewOps = plan.Shapes.Count == 0 || _cachedOps is null
+            ? null
+            : CanvasTransformPreviewComposer.Compose(_cachedOps, plan);
+        InvalidateVisual();
+    }
+
+    internal bool HasLiveTransformPreviewForTests =>
+        _liveTransformPreviewOps is { Count: > 0 };
 
     // ── Layout: maintain slide aspect ratio ────────────────────────────────────
 
@@ -289,6 +307,19 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     private void RenderOp(DrawingContext dc, DrawOp op)
+    {
+        if (_liveTransformPreviewOps is not null
+            && CanvasTransformPreviewComposer.TryGetShapeId(op, out var shapeId)
+            && _liveTransformPreviewOps.TryGetValue(shapeId, out var preview))
+        {
+            RenderOpCore(dc, preview);
+            return;
+        }
+
+        RenderOpCore(dc, op);
+    }
+
+    private void RenderOpCore(DrawingContext dc, DrawOp op)
     {
         switch (op)
         {

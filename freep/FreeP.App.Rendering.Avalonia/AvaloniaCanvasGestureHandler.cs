@@ -256,6 +256,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         _geometryBoundsDip = default;
         _geometryDragStartScreen = default;
         _marqueeStartSlide = default;
+        _canvas.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
         _adorner.UpdatePreview(null);
         _adorner.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
         _adorner.UpdateGeometryPreview(null, null);
@@ -584,6 +585,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
                 SnapToShapes,
                 (modifiers & KeyModifiers.Alt) != 0));
             _adorner.UpdateTransformPreview(plan);
+            _canvas.UpdateTransformPreview(plan);
             return;
         }
 
@@ -696,6 +698,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
                 _multiTransformStartShapes,
                 (modifiers & KeyModifiers.Shift) != 0));
             _adorner.UpdateTransformPreview(plan);
+            _canvas.UpdateTransformPreview(plan);
             return;
         }
 
@@ -1099,7 +1102,8 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         _geometryHandleName is not null;
 
     internal bool HasTransientInteractionVisualsForTests =>
-        _adorner.HasTransientInteractionVisualsForTests;
+        _adorner.HasTransientInteractionVisualsForTests ||
+        _canvas.HasLiveTransformPreviewForTests;
 
     internal void SimulateCaptureLossForTests() => CancelActiveGesture(releaseCapture: false);
 
@@ -1108,6 +1112,24 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
 
     internal void SeedTransientInteractionVisualsForTests()
     {
+        if (_editor.CurrentSlide is { } slide)
+        {
+            var states = CanvasGesturePlanner.CaptureTransformState(slide, _editor.SelectedShapeIds);
+            if (states.Count > 0)
+            {
+                _canvas.UpdateTransformPreview(CanvasGesturePlanner.PlanMultiResize(
+                    new CanvasMultiResizeRequest(
+                        new CanvasGesturePoint(0, 0),
+                        new CanvasGesturePoint(1, 1),
+                        _canvas.CurrentTransform,
+                        CanvasGestureHandleKind.ResizeSE,
+                        states,
+                        slide,
+                        false,
+                        false,
+                        false)));
+            }
+        }
         _adorner.UpdatePreview(new Rect(1, 1, 10, 10));
         _adorner.UpdateGeometryPreview("test", new Point(2, 2));
         _adorner.UpdateMarquee(new Rect(3, 3, 8, 8));

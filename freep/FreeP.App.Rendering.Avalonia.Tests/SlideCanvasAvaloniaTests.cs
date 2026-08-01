@@ -49,9 +49,10 @@ public sealed class SlideCanvasAvaloniaTests
     private static Task Run(Action action) =>
         Session.Dispatch(action, CancellationToken.None);
 
-    private static byte[] RenderPixels(SlideCanvas canvas, int width, int height)
+    private static byte[] RenderPixels(SlideCanvas canvas, int width, int height, bool refresh = true)
     {
-        canvas.Refresh();
+        if (refresh)
+            canvas.Refresh();
         canvas.Measure(new Size(width, height));
         canvas.Arrange(new Rect(0, 0, width, height));
         using var bitmap = new RenderTargetBitmap(new PixelSize(width, height));
@@ -691,6 +692,77 @@ public sealed class SlideCanvasAvaloniaTests
             .Should().BeGreaterThan(0, "the active shape base text should be removed");
         CountPixelDifferences(before!, suppressed!, 960, 360, 0, 960, 260)
             .Should().Be(0, "a different shape must remain unchanged");
+    }
+
+    [Fact]
+    public async Task SlideCanvas_MultiTransformPreview_PaintsFilledCopiesAndClears()
+    {
+        byte[]? baseline = null;
+        byte[]? transformed = null;
+        byte[]? cleared = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(presence =>
+            {
+                presence.Slides[0].Shapes.Clear();
+                presence.Slides[0].Shapes.Add(new SlideShape
+                {
+                    Id = 1,
+                    Kind = SlideShapeKind.AutoShape,
+                    AutoShapeKind = DrawingShapeKind.Rectangle,
+                    OffsetXEmu = 100 * 9525L,
+                    OffsetYEmu = 100 * 9525L,
+                    ExtentCxEmu = 100 * 9525L,
+                    ExtentCyEmu = 50 * 9525L,
+                    Fill = new ShapeFill.Solid(new SrgbColor(0xD9, 0x2F, 0x2F)),
+                });
+                presence.Slides[0].Shapes.Add(new SlideShape
+                {
+                    Id = 2,
+                    Kind = SlideShapeKind.AutoShape,
+                    AutoShapeKind = DrawingShapeKind.Rectangle,
+                    OffsetXEmu = 300 * 9525L,
+                    OffsetYEmu = 100 * 9525L,
+                    ExtentCxEmu = 50 * 9525L,
+                    ExtentCyEmu = 50 * 9525L,
+                    Fill = new ShapeFill.Solid(new SrgbColor(0x2F, 0x6F, 0xD9)),
+                });
+            });
+            var canvas = new SlideCanvas
+            {
+                Presentation = presentation,
+                Slide = presentation.Slides[0],
+            };
+
+            baseline = RenderPixels(canvas, 960, 540);
+            canvas.UpdateTransformPreview(new CanvasMultiTransformPlan(
+                [
+                    new CanvasShapeTransform(1, 150 * 9525L, 150 * 9525L, 120 * 9525L, 60 * 9525L, 0),
+                    new CanvasShapeTransform(2, 350 * 9525L, 150 * 9525L, 60 * 9525L, 60 * 9525L, 20),
+                ],
+                [
+                    new CanvasShapeTransformPreview(1, new SlideScreenRect(150, 150, 120, 60), 0),
+                    new CanvasShapeTransformPreview(2, new SlideScreenRect(350, 150, 60, 60), 20),
+                ],
+                new SlideScreenRect(150, 150, 260, 60),
+                0));
+            canvas.HasLiveTransformPreviewForTests.Should().BeTrue();
+            transformed = RenderPixels(canvas, 960, 540, refresh: false);
+
+            canvas.UpdateTransformPreview(CanvasMultiTransformPlan.Empty);
+            cleared = RenderPixels(canvas, 960, 540, refresh: false);
+        });
+
+        baseline.Should().NotBeNullOrEmpty();
+        transformed.Should().NotBeNullOrEmpty();
+        cleared.Should().NotBeNullOrEmpty();
+        CountPixelDifferences(baseline!, transformed!, 960, 90, 90, 220, 180)
+            .Should().BeGreaterThan(0, "the original filled member should be replaced during preview");
+        CountPixelDifferences(baseline!, transformed!, 960, 140, 140, 290, 225)
+            .Should().BeGreaterThan(0, "the resized filled duplicate should be visible at its preview bounds");
+        CountPixelDifferences(baseline!, cleared!, 960, 0, 0, 960, 540)
+            .Should().Be(0, "clearing the transient plan should restore the composed slide");
     }
 
     [Fact]
@@ -3800,11 +3872,16 @@ public sealed class GestureHandlerAltSnapTests
                 new Point(100, 100),
                 shape,
                 CanvasGestureHandleKind.ResizeSE);
+            handler.SeedTransientInteractionVisualsForTests();
             handler.IsGestureActiveForTests.Should().BeTrue();
+            handler.HasTransientInteractionVisualsForTests.Should().BeTrue();
 
             handler.SimulateCaptureLossForTests();
 
             handler.IsGestureActiveForTests.Should().BeFalse();
+            handler.HasTransientInteractionVisualsForTests.Should().BeFalse();
+            handler.Dispose();
+            handler.HasTransientInteractionVisualsForTests.Should().BeFalse();
         });
     }
 
