@@ -9214,7 +9214,21 @@ public sealed class DocumentView : RichTextBox
                         && table.CellSpacingPt is > 0
                         && wpfCell.Background is { } spacedCellBackground)
                     {
-                        cellContentHost.Background = spacedCellBackground;
+                        var spacingDip = table.CellSpacingPt.Value * PxPerPoint;
+                        var surfaceMargin = new Thickness(
+                            cellIndex == 0 ? spacingDip / 2 : -spacingDip,
+                            0,
+                            cellIndex == modelRow.Cells.Count - 1 ? spacingDip : 0,
+                            0);
+                        var fillSurface = new Border
+                        {
+                            Background = spacedCellBackground,
+                            IsHitTestVisible = false,
+                            Margin = surfaceMargin
+                        };
+                        System.Windows.Controls.Panel.SetZIndex(fillSurface, -1);
+                        cellContentHost.Children.Insert(0, fillSurface);
+                        cellContentHost.Children.OfType<TableCellBorderChrome>().Single().Margin = surfaceMargin;
                         wpfCell.Background = null;
                     }
                     wpfCell.Blocks.Add(new BlockUIContainer(cellContentHost));
