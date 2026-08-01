@@ -160,7 +160,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
-    public void OutlineGroupPhysicalLaneRequiresRealSelectionRibbonAndGutterRestorationEvidence()
+    public void OutlineGroupPhysicalLaneRequiresHeaderContextMenuAndStructuralHidingEvidence()
     {
         var runner = File.ReadAllText(RepositoryFileLocator.Find(
             "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
@@ -170,9 +170,12 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         runner.Should().Contain("\"outline-group\"");
         runner.Should().Contain("outline-group-physical");
         probe.Should().Contain("probe_outline_group_physical()");
-        probe.Should().Contain("send_key shift+space");
-        probe.Should().Contain("send_key alt+a");
-        probe.Should().Contain("outline_green_score");
+        probe.Should().Contain("selection-gesture=row-header-drag-2:4");
+        probe.Should().Contain("group-gesture=row-header-right-click,End,Up,Up,Up,Enter");
+        probe.Should().Contain("outline_toggle_visible");
+        probe.Should().Contain("row-gutter-width=$row_gutter_width");
+        probe.Should().Contain("collapsed-visible-slot=$collapsed_slot");
+        probe.Should().Contain("collapse-structural=$collapsed_structurally");
         probe.Should().Contain("outline-collapsed.png");
         probe.Should().Contain("outline-expanded.png");
         probe.Should().Contain("values-restored=$values_restored");
@@ -195,12 +198,25 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         runner.Should().Contain("outline-nested-columns-group-physical");
         probe.Should().Contain("probe_outline_nested_rows_physical()");
         probe.Should().Contain("probe_outline_nested_columns_physical()");
-        probe.Should().Contain("inner-selection=rows-11:12");
+        probe.Should().Contain("inner-selection=row-header-drag-11:12");
+        probe.Should().Contain("outer-selection=row-header-drag-10:14");
         probe.Should().Contain("inner-selection=column-header-drag-I:K");
-        probe.Should().Contain("inner-collapse-screen-changed=$inner_collapsed");
-        probe.Should().Contain("outer-expand-screen-changed=$outer_expanded");
+        probe.Should().Contain("refresh_grid_origin \"outline-nested-rows-inner-origin.png\"");
+        probe.Should().Contain("[[ ! \"$target_x\" =~ ^[0-9]+$ || ! \"$target_y\" =~ ^[0-9]+$ ]]");
+        probe.Should().Contain("row-gutter-width=$row_gutter_width");
+        probe.Should().Contain("column-gutter-height=$column_gutter_height");
+        probe.Should().Contain("inner-collapsed-visible-slot=$inner_collapsed_slot");
+        probe.Should().Contain("outer-expanded-visible-slot=$outer_expanded_slot");
+        probe.Should().Contain("inner-collapse-structural=$inner_collapsed");
+        probe.Should().Contain("outer-expand-structural=$outer_expanded");
         probe.Should().Contain("inner_collapsed_y=\"$(cell_center_y 10)\"");
         probe.Should().Contain("outer_collapsed_y=\"$(cell_center_y 9)\"");
+        probe.Should().Contain("[[ \"$inner_collapsed_slot\" == \"NestedRow13\" ]]");
+        probe.Should().Contain("[[ \"$outer_collapsed_slot\" == \"NestedRowOuterSummary\" ]]");
+        probe.Should().Contain("[[ \"$inner_collapsed_slot\" == \"NestedColumnL\" ]]");
+        probe.Should().Contain("[[ \"$outer_collapsed_slot\" == \"NestedColumnOuterSummary\" ]]");
+        probe.Should().NotContain("outline-green=$grouped_score");
+        probe.Should().NotContain("inner-collapse-screen-changed=$inner_collapsed");
         probe.Should().Contain("outline-nested-rows-inner-collapsed.png");
         probe.Should().Contain("outline-nested-columns-outer-expanded.png");
         probe.Should().Contain("NestedRow10,NestedRow11,NestedRow12,NestedRow13,NestedRow14");
