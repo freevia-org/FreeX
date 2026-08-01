@@ -45,12 +45,14 @@ internal sealed class AvaloniaRichTextEditor : Grid
     private bool _pointerDragActive;
     private AvaloniaRichTextEditor? _activeInlineTableCellEditor;
     private AvaloniaRichTextEditingSurface.InlineTableCellHit? _activeInlineTableCellHit;
+    private readonly Func<bool, bool>? _navigateInlineTableCell;
 
     internal AvaloniaRichTextEditor(
         TextBody? body,
         byte backgroundAlpha,
         string fallbackFontFamily = InCanvasRichTextEditorDefaults.FallbackFontFamily,
-        double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt)
+        double fallbackFontSizePt = InCanvasRichTextEditorDefaults.ShapeFallbackFontSizePt,
+        Func<bool, bool>? navigateInlineTableCell = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fallbackFontFamily);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(fallbackFontSizePt);
@@ -58,6 +60,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
         _buffer = new InCanvasRichTextEditBuffer(body);
         _fallbackFontFamily = fallbackFontFamily;
         _fallbackFontSizePt = fallbackFontSizePt;
+        _navigateInlineTableCell = navigateInlineTableCell;
         _richTextView = new AvaloniaRichTextEditingSurface();
         var textWrapping = body?.Wrap == false
             ? TextWrapping.NoWrap
@@ -548,33 +551,85 @@ internal sealed class AvaloniaRichTextEditor : Grid
     {
         if (!_richTextView.TryHitTestInlineTableCell(point, out var hit)
             || hit.Table.Table.Rows.ElementAtOrDefault(hit.RowIndex)?
-                .Cells.ElementAtOrDefault(hit.ColumnIndex)?.TextBody is not { } body)
+                .Cells.ElementAtOrDefault(hit.ColumnIndex)?.TextBody is null)
             return false;
 
-        CommitInlineTableCellEdit(focusParent: false);
-        var cellEditor = new AvaloniaRichTextEditor(
-            body,
-            backgroundAlpha: 0,
-            fallbackFontFamily: _fallbackFontFamily,
-            fallbackFontSizePt: _fallbackFontSizePt)
+        return BeginInlineTableCellEdit(hit);
+    }
+
+    private bool NavigateInlineTableCell(bool backwards)
+    {
+        if (_activeInlineTableCellHit is not { } current)
+            return false;
+
+        var table = current.Table.Table;
+        int rowCount = Math.Max(1, table.Rows.Count);
+        int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
+        int row = current.RowIndex;
+        int column = current.ColumnIndex;
+        int rowStep = backwards ? -1 : 1;
+        int columnStep = backwards ? -1 : 1;
+
+        for (int attempt = 0; attempt <= rowCount * columnCount; attempt++)
         {
-            Width = Math.Max(1, hit.Bounds.Width),
-            Height = Math.Max(1, hit.Bounds.Height),
-            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
-            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
-            Margin = new Thickness(
-                hit.Bounds.X - _richTextView.ScrollOffsetX,
-                hit.Bounds.Y - _richTextView.ScrollOffsetY,
+            column += columnStep;
+            if (column >= columnCount)
+            {
+                column = 0;
+                row++;
+            }
+            else if (column < 0)
+            {
+                column = columnCount - 1;
+                row--;
+            }
+
+            if (row >= rowCount)
+            {
+                if (backwards)
+                    return false;
+
+                return AppendInlineTableRow(current, columnCount);
+            }
+            if (row < 0)
+                return false;
+
+            if (table.Rows.ElementAtOrDefault(row)?
+                    .Cells.ElementAtOrDefault(column)?.TextBody is null
+                || !_richTextView.TryFindInlineTableCell(
+                    current,
+                    row,
+                    column,
+                    out var next))
+            {
+                continue;
+            }
+
+            return BeginInlineTableCellEdit(next);
+        }
+
+        return false;
+    }
+
+    private bool AppendInlineTableRow(
+        AvaloniaRichTextEditingSurface.InlineTableCellHit current,
+        int columnCount)
+    {
+        CommitInlineTableCellEdit(focusParent: false);
+        var table = current.Table.Table;
+        long rowHeight = table.Rows.LastOrDefault()?.HeightEmu ?? 0;
+        var row = new TableRow { HeightEmu = rowHeight };
+        for (int column = 0; column < columnCount; column++)
+            row.Cells.Add(new TableCell { TextBody = new TextBody() });
+        table.Rows.Add(row);
+        RenderBody();
+
+        return _richTextView.TryFindInlineTableCell(
+                current,
+                table.Rows.Count - 1,
                 0,
-                0),
-        };
-        cellEditor.SetValue(Panel.ZIndexProperty, 2);
-        cellEditor.InputBox.LostFocus += OnInlineTableCellEditorLostFocus;
-        _activeInlineTableCellEditor = cellEditor;
-        _activeInlineTableCellHit = hit;
-        Children.Add(cellEditor);
-        cellEditor.FocusEditor();
-        return true;
+                out var next)
+            && BeginInlineTableCellEdit(next);
     }
 
     private void OnInlineTableCellEditorLostFocus(object? sender, RoutedEventArgs e)
@@ -601,6 +656,42 @@ internal sealed class AvaloniaRichTextEditor : Grid
         RenderBody();
         if (focusParent)
             FocusEditor();
+    }
+
+    private bool BeginInlineTableCellEdit(
+        AvaloniaRichTextEditingSurface.InlineTableCellHit hit)
+    {
+        if (hit.Table.Table.Rows.ElementAtOrDefault(hit.RowIndex)?
+                .Cells.ElementAtOrDefault(hit.ColumnIndex)?.TextBody is not { } body)
+        {
+            return false;
+        }
+
+        CommitInlineTableCellEdit(focusParent: false);
+        var cellEditor = new AvaloniaRichTextEditor(
+            body,
+            backgroundAlpha: 0,
+            fallbackFontFamily: _fallbackFontFamily,
+            fallbackFontSizePt: _fallbackFontSizePt,
+            navigateInlineTableCell: NavigateInlineTableCell)
+        {
+            Width = Math.Max(1, hit.Bounds.Width),
+            Height = Math.Max(1, hit.Bounds.Height),
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+            Margin = new Thickness(
+                hit.Bounds.X - _richTextView.ScrollOffsetX,
+                hit.Bounds.Y - _richTextView.ScrollOffsetY,
+                0,
+                0),
+        };
+        cellEditor.SetValue(Panel.ZIndexProperty, 2);
+        cellEditor.InputBox.LostFocus += OnInlineTableCellEditorLostFocus;
+        _activeInlineTableCellEditor = cellEditor;
+        _activeInlineTableCellHit = hit;
+        Children.Add(cellEditor);
+        cellEditor.FocusEditor();
+        return true;
     }
 
     private bool TryActivateInlineOleAt(int logicalPosition)
@@ -693,6 +784,12 @@ internal sealed class AvaloniaRichTextEditor : Grid
     {
         bool control = (e.KeyModifiers & KeyModifiers.Control) != 0;
         bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
+
+        if (e.Key == Key.Tab && _navigateInlineTableCell is not null)
+        {
+            e.Handled = _navigateInlineTableCell(shift);
+            return;
+        }
 
         if (control)
         {

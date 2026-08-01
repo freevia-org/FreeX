@@ -201,6 +201,100 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task InlineTableCellEditor_TabNavigationCommitsAndMovesAcrossCells()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var table = new TableShape();
+            table.ColumnWidthsEmu.Add(457200);
+            table.ColumnWidthsEmu.Add(457200);
+            table.Rows.Add(new TableRow
+            {
+                HeightEmu = 228600,
+                Cells =
+                {
+                    new TableCell { TextBody = BodyWithText("First") },
+                    new TableCell { TextBody = BodyWithText("Second") },
+                },
+            });
+            var editor = new AvaloniaRichTextEditor(new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs =
+                        {
+                            new Run
+                            {
+                                Text = "\uFFFC",
+                                InlineTable = new InlineTableInfo { Table = table },
+                            },
+                        },
+                    },
+                },
+            }, backgroundAlpha: 0xCC)
+            {
+                Width = 150,
+                Height = 50,
+            };
+            var window = Show(editor, 150, 50);
+            try
+            {
+                var firstCellPoint = new Point(10, 10);
+                window.MouseMove(firstCellPoint, RawInputModifiers.None);
+                window.MouseDown(firstCellPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(firstCellPoint, MouseButton.Left, RawInputModifiers.None);
+                window.MouseDown(firstCellPoint, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+                window.MouseUp(firstCellPoint, MouseButton.Left, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                var firstEditor = editor.Children.OfType<AvaloniaRichTextEditor>().Single();
+                firstEditor.Text.Should().Be("First");
+                firstEditor.SelectionStart = firstEditor.Text.Length;
+                firstEditor.SelectionEnd = firstEditor.Text.Length;
+                RaiseRawTextInput(firstEditor.InputBox, "!");
+                await DrainInputAsync();
+
+                Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                var secondEditor = editor.Children.OfType<AvaloniaRichTextEditor>().Single();
+                secondEditor.Should().NotBeSameAs(firstEditor);
+                secondEditor.Text.Should().Be("Second");
+                secondEditor.InputBox.IsFocused.Should().BeTrue();
+
+                Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.Shift);
+                await DrainInputAsync();
+
+                var returnedEditor = editor.Children.OfType<AvaloniaRichTextEditor>().Single();
+                returnedEditor.Text.Should().Be("First!");
+                returnedEditor.Should().NotBeSameAs(secondEditor);
+
+                Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.None);
+                await DrainInputAsync();
+                Press(window, Key.Tab, PhysicalKey.Tab, RawInputModifiers.None);
+                await DrainInputAsync();
+
+                var appendedEditor = editor.Children.OfType<AvaloniaRichTextEditor>().Single();
+                appendedEditor.Text.Should().BeEmpty();
+                table.Rows.Should().HaveCount(2);
+
+                var edited = editor.EditedBody;
+                var editedTable = edited.Paragraphs.Single().Runs.Single().InlineTable!.Table;
+                PlainText(editedTable.Rows[0].Cells[0].TextBody).Should().Be("First!");
+                PlainText(editedTable.Rows[0].Cells[1].TextBody).Should().Be("Second");
+                editedTable.Rows[1].Cells.Should().HaveCount(2);
+                PlainText(editedTable.Rows[1].Cells[0].TextBody).Should().BeEmpty();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineImageRun_ReservesAuthoredWidthForFollowingText()
     {
         await Session.Dispatch(async () =>
@@ -1663,6 +1757,17 @@ public sealed class AvaloniaRichTextEditorTests
         });
         return body;
     }
+
+    private static TextBody BodyWithText(string text) => new()
+    {
+        Paragraphs = { new Paragraph { Runs = { new Run { Text = text } } } },
+    };
+
+    private static string PlainText(TextBody? body) => body is null
+        ? string.Empty
+        : string.Join(
+            "\n",
+            body.Paragraphs.Select(paragraph => string.Concat(paragraph.Runs.Select(run => run.Text))));
 
     private static TextBody TextBodyWithParagraphs(string first, string second)
     {
