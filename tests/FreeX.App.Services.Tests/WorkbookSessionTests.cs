@@ -841,6 +841,51 @@ public sealed class WorkbookSessionTests
         session.ActiveSheet.Id.Should().Be(dataSheet.Id);
     }
 
+    // Shell call-site coverage for the same fix: the Avalonia shell's OpenSelectedHyperlinkAsync
+    // (and the WPF host's TryOpenSelectedHyperlink) do not call OpenSelectedHyperlink() -- they
+    // resolve an address themselves and route it through TryGetHyperlinkPlan/OpenHyperlink, so the
+    // ActiveCell-vs-SelectedRange.Start choice lives in the shells. This asserts the address the
+    // shells now pass (ActiveCell) resolves the active cell's hyperlink for an upward/leftward
+    // selection, while the pre-fix address (SelectedRange.Start) resolves nothing.
+    [Fact]
+    public void OpenHyperlink_ForActiveCellAddress_ResolvesActiveCellNotNormalizedSelectionStart()
+    {
+        var workbook = CreateWorkbook();
+        var dataSheet = workbook.AddSheet("Data Sheet");
+        var sheet = workbook.Sheets.First();
+        var anchor = new CellAddress(sheet.Id, 4, 4); // D4: the true active cell of the drag.
+        var topLeft = new CellAddress(sheet.Id, 1, 1); // A1: SelectedRange.Start after normalization.
+        var expectedRange = new GridRange(
+            new CellAddress(dataSheet.Id, 2, 2),
+            new CellAddress(dataSheet.Id, 4, 3));
+        sheet.Hyperlinks[anchor] = " 'Data Sheet'!B2:C4 ";
+        sheet.HyperlinkMetadata[anchor] = new HyperlinkMetadata(HyperlinkTargetKind.PlaceInThisDocument);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+
+        // Drag from D4 up-left to A1 so the two addresses actually diverge.
+        session.SelectAnchoredRange(anchor, topLeft);
+        session.ActiveCell.Should().Be(anchor);
+        session.SelectedRange.Start.Should().Be(topLeft);
+
+        // Pre-fix address (the normalized top-left) has no hyperlink at all.
+        session.TryGetHyperlinkPlan(session.SelectedRange.Start, out var startPlan).Should().BeFalse();
+        startPlan.Should().BeNull();
+
+        // Post-fix address (the active cell) resolves and navigates, as Excel does.
+        session.TryGetHyperlinkPlan(session.ActiveCell, out var activePlan).Should().BeTrue();
+        activePlan!.Kind.Should().Be(HyperlinkNavigationKind.WorksheetCell);
+
+        var result = session.OpenHyperlink(session.ActiveCell);
+
+        result.Success.Should().BeTrue();
+        result.SelectedRange.Should().Be(expectedRange);
+        session.ActiveSheet.Id.Should().Be(dataSheet.Id);
+    }
+
     [Fact]
     public void GoToSpecial_SelectsBlanksWithoutDirtyingWorkbook()
     {

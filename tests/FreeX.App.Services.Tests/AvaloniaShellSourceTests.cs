@@ -3822,6 +3822,11 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("Item(NativeMenuItemId.OpenHyperlink)");
         catalogSource.Should().Contain("new(NativeMenuItemId.OpenHyperlink, context.IsIdle && context.CanOpenSelectedHyperlink)");
         source.Should().Contain("private async Task OpenSelectedHyperlinkAsync()");
+        // ...and the shell's own call site passes the ACTIVE cell, not _session.SelectedRange.Start:
+        // an upward/leftward selection (drag D4 -> A1) pins ActiveCell at D4 while the normalized
+        // Start collapses to A1, and Excel opens the active cell's hyperlink.
+        source.Should().Contain("=> await OpenHyperlinkAsync(_session.ActiveCell);");
+        source.Should().NotContain("=> await OpenHyperlinkAsync(_session.SelectedRange.Start);");
         source.Should().Contain("private async Task OpenHyperlinkAsync(CellAddress address)");
         source.Should().Contain("if (!_session.TryGetHyperlinkPlan(address, out var plan) || plan is null)");
         source.Should().Contain("await OpenExternalHyperlinkAsync(plan.Target);");
