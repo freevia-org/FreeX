@@ -220,6 +220,7 @@ internal static class FreePRibbonIcons
             ["freep.anim.motion.up"]        = RibbonCommandIconKind.ArrowUp,
             ["freep.anim.motion.down"]      = RibbonCommandIconKind.ArrowDown,
             ["freep.anim.motion.arc-right"] = RibbonCommandIconKind.Effects,
+            ["freep.anim.motion.arc-left"]  = RibbonCommandIconKind.Effects,
 
             // Wave 4C: Animation none / timing / pane
             ["freep.anim.none"]         = RibbonCommandIconKind.Clear,
