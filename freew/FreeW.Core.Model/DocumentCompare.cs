@@ -355,6 +355,10 @@ public static class DocumentCompare
                 ri++;
         }
 
+        BookmarkBoundaryMapper.CopyMapped(
+            revised,
+            result,
+            static run => run.Revision != RevisionKind.Deleted);
         return result;
     }
 

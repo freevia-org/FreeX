@@ -33,6 +33,31 @@ public sealed class CommentCommandTests
     }
 
     [Fact]
+    public void AddCommentCommand_RemapsBookmarkAfterSplitRuns_AndUndoRestoresExactBoundary()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("HelloWorld"));
+        paragraph.Runs.Add(new Run("Tail"));
+        paragraph.BookmarkNames.Add("TailBookmark");
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("4", BookmarkBoundaryKind.Start, 1, "TailBookmark"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("4", BookmarkBoundaryKind.End, 2));
+        doc.Blocks.Add(paragraph);
+        var bus = new DocumentCommandBus(new TestContext(doc));
+
+        bus.Execute(new AddCommentCommand(0, 0, 5, 3, new Comment(3, "note", "Ann", "A")));
+
+        paragraph.Runs.Select(run => run.Text).Should().Equal("Hello", "", "World", "Tail");
+        paragraph.BookmarkBoundaries.Select(boundary => boundary.RunIndex).Should().Equal(3, 4);
+        paragraph.Runs[paragraph.BookmarkBoundaries[0].RunIndex].Text.Should().Be("Tail");
+
+        bus.Undo().Should().BeTrue();
+        paragraph.Runs.Select(run => run.Text).Should().Equal("HelloWorld", "Tail");
+        paragraph.BookmarkBoundaries.Select(boundary => boundary.RunIndex).Should().Equal(1, 2);
+    }
+
+    [Fact]
     public void DeleteCommentCommand_IsCommentHistory_AndUndoRedoRestoresTableCellAnchors()
     {
         var doc = TextDocument.CreateEmpty();

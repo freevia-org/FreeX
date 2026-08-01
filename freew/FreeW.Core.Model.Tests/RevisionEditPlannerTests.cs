@@ -96,6 +96,29 @@ public sealed class RevisionEditPlannerTests
     }
 
     [Fact]
+    public void MarkRevisionRange_RemapsBookmarkAfterSplitRuns()
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("abcdef"));
+        paragraph.Runs.Add(new Run("tail"));
+        paragraph.BookmarkNames.Add("TailBookmark");
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("5", BookmarkBoundaryKind.Start, 1, "TailBookmark"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("5", BookmarkBoundaryKind.End, 2));
+
+        RevisionEditPlanner.MarkRevisionRange(
+            paragraph,
+            2,
+            5,
+            RevisionKind.Inserted,
+            "Alice",
+            "2026-07-06T12:00:00Z").Should().BeTrue();
+
+        paragraph.Runs.Select(run => run.Text).Should().Equal("ab", "cde", "f", "tail");
+        paragraph.BookmarkBoundaries.Select(boundary => boundary.RunIndex).Should().Equal(3, 4);
+        paragraph.Runs[paragraph.BookmarkBoundaries[0].RunIndex].Text.Should().Be("tail");
+    }
+
+    [Fact]
     public void DeleteRangeAsRevision_RemovesOwnPendingInsertion()
     {
         var paragraph = new Paragraph();

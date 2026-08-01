@@ -149,6 +149,31 @@ public class DocumentCombineTests
         runs.Where(r => r.RevisionAuthor == AuthorA).Should().BeEmpty();
     }
 
+    [Fact]
+    public void OnlyBChanged_MapsReviewerBookmarkToCombinedRunBoundary()
+    {
+        var original = DocWith("the quick brown fox");
+        var revisedA = DocWith("the quick brown fox");
+        var revisedB = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("the quick "));
+        paragraph.Runs.Add(new Run("red "));
+        paragraph.Runs.Add(new Run("fox"));
+        paragraph.BookmarkNames.Add("Fox");
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("11", BookmarkBoundaryKind.Start, 2, "Fox"));
+        paragraph.BookmarkBoundaries.Add(new BookmarkBoundary("11", BookmarkBoundaryKind.End, 3));
+        revisedB.Blocks.Add(paragraph);
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        var combined = result.Paragraphs.Single();
+        combined.BookmarkBoundaries.Should().HaveCount(2);
+        var start = combined.BookmarkBoundaries[0];
+        var end = combined.BookmarkBoundaries[1];
+        combined.Runs[start.RunIndex].Text.Should().Be("fox");
+        end.RunIndex.Should().Be(start.RunIndex + 1);
+    }
+
     // -----------------------------------------------------------------------
     // Two-author cases — both changed the same paragraph in different ways
     // -----------------------------------------------------------------------
