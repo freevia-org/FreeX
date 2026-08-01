@@ -8080,12 +8080,18 @@ public sealed partial class MainWindow : Window
         _presentation = presentation;
 
         RebuildEditorAndRewireInteraction();
+        // A visible pane is a projection of the active editor. Rebind it after New/Open so
+        // rows and playback state cannot remain attached to the previous presentation.
+        _selectedAnimationIndex = -1;
+        _animationPanePlaybackSessionPlan = null;
+        _animationPanePlaybackWorkflowEvidencePlan = null;
         HideLayoutPicker();
         HideTablePicker();
         RefreshSlidePane();
         RefreshCanvas();
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();
+        RefreshVisibleAnimationPane();
         UpdateStatus();
     }
 

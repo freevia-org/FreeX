@@ -3334,6 +3334,44 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task New_WhileAnimationPaneVisible_RebindsPaneToNewPresentation()
+    {
+        var paneRowsBeforeNew = Array.Empty<string>();
+        var paneRowsAfterNew = Array.Empty<string>();
+        var renderedCountAfterNew = -1;
+        var newResult = false;
+
+        var ran = await OnUiThread(async () =>
+        {
+            var window = new MainWindow(
+                Array.Empty<string>(),
+                loadRecentFilesStore: null,
+                options: null,
+                promptSaveChangesAsync: _ => Task.FromResult(SaveChangesPrompt.DontSave));
+            var shape = window.Editor.InsertDefaultRectangle();
+            shape.Name = "Old animation";
+            window.Editor.Select(shape.Id);
+
+            var registry = window.BuildCommandRegistry();
+            registry.TryGet("freep.anim.entrance.fade", out var fade).Should().BeTrue();
+            fade!.Execute(RibbonCommandContext.Empty);
+            window.ShowAnimationPane();
+            paneRowsBeforeNew = window.AnimationPaneRenderedRows.ToArray();
+
+            newResult = await window.FileNewAsyncForTests();
+            paneRowsAfterNew = window.AnimationPaneRenderedRows.ToArray();
+            renderedCountAfterNew = window.AnimationPaneRenderedItemCount;
+        });
+
+        if (!ran) return;
+        newResult.Should().BeTrue();
+        paneRowsBeforeNew.Should().ContainSingle()
+            .Which.Should().Contain("Old animation");
+        paneRowsAfterNew.Should().BeEmpty();
+        renderedCountAfterNew.Should().Be(1, "the replacement presentation has no animations but still renders its empty-state row");
+    }
+
+    [Fact]
     public async Task Ribbon_motion_command_creates_motion_path_animation()
     {
         MotionPath? motion = null;
