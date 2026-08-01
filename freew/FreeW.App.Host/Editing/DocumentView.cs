@@ -9203,13 +9203,21 @@ public sealed class DocumentView : RichTextBox
                 var vAlign = modelCell.VerticalAlignment;
                 if (hasPlannedCellBorders)
                 {
-                    wpfCell.Blocks.Add(new BlockUIContainer(BuildCellContentHost(
+                    var cellContentHost = BuildCellContentHost(
                         modelCell,
                         document,
                         vAlign,
                         rowHeightPx,
                         cellBorderPlan,
-                        preservedNumberingMarkers)));
+                        preservedNumberingMarkers);
+                    if (isPaginationSegment
+                        && table.CellSpacingPt is > 0
+                        && wpfCell.Background is { } spacedCellBackground)
+                    {
+                        cellContentHost.Background = spacedCellBackground;
+                        wpfCell.Background = null;
+                    }
+                    wpfCell.Blocks.Add(new BlockUIContainer(cellContentHost));
                 }
                 else if (rowHeightPx is not null)
                 {

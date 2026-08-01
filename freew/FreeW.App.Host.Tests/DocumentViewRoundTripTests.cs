@@ -1471,6 +1471,8 @@ public sealed class DocumentViewRoundTripTests
         double.IsNaN(rendered.Margin.Left).Should().BeTrue();
         rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
             .BeApproximately(2 + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0), 0.01);
+        rendered.RowGroups[0].Rows[0].Cells[0].Background.Should().NotBeNull(
+            "ordinary flow tables retain their existing WPF cell-surface ownership");
     }
 
     [StaFact]
@@ -1530,6 +1532,11 @@ public sealed class DocumentViewRoundTripTests
             .BeApproximately(expectedVerticalPadding, 0.01);
         tables[0].RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
             .BeApproximately(expectedVerticalPadding, 0.01);
+        var spacedCell = tables[1].RowGroups[0].Rows[1].Cells[0];
+        spacedCell.Background.Should().BeNull(
+            "paginated tables reserve the authored cell-spacing gutter outside the inner surface");
+        spacedCell.Blocks.OfType<BlockUIContainer>().Single().Child
+            .Should().BeOfType<System.Windows.Controls.Grid>().Which.Background.Should().NotBeNull();
         RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");
         RenderedRowText(pageRows[0][2]).Should().Contain("Segment 2");
