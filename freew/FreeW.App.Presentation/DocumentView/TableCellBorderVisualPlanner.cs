@@ -10,6 +10,8 @@ public enum TableCellBorderVisualEdge
     Right
 }
 
+public sealed record TableCellBorderWavePoint(double AlongDip, double OutwardDip);
+
 public sealed record TableCellBorderEdgeVisualPlan(
     TableCellBorderVisualEdge Edge,
     bool IsVisible,
@@ -21,6 +23,8 @@ public sealed record TableCellBorderEdgeVisualPlan(
     public bool IsDashed => Style == BorderLineStyle.Dashed;
     public bool IsDotted => Style == BorderLineStyle.Dotted;
     public bool IsDouble => Style == BorderLineStyle.Double;
+    public bool IsWave => Style == BorderLineStyle.Wave;
+    public double StrokeOpacity => IsWave ? TableCellBorderVisualPlanner.WaveStrokeOpacity : 1.0;
 }
 
 public sealed record TableCellBorderVisualPlan(IReadOnlyList<TableCellBorderEdgeVisualPlan> Edges)
@@ -45,6 +49,9 @@ public static class TableCellBorderVisualPlanner
 {
     public const double MinimumBorderWidthDip = 0.5;
     public const double MinimumThickBorderWidthDip = 1.5;
+    public const double WaveLengthDip = 8.0;
+    public const double WaveAmplitudeDip = 4.0;
+    public const double WaveStrokeOpacity = 86.0 / 255.0;
 
     public static TableCellBorderVisualPlan Build(CellBorders? borders, double dipPerPoint = 1.0)
     {
@@ -56,6 +63,27 @@ public static class TableCellBorderVisualPlanner
             BuildEdge(TableCellBorderVisualEdge.Left, borders?.Left, scale),
             BuildEdge(TableCellBorderVisualEdge.Right, borders?.Right, scale),
         ]);
+    }
+
+    public static IReadOnlyList<TableCellBorderWavePoint> BuildWaveOffsets(double lengthDip)
+    {
+        var length = Math.Max(0, lengthDip);
+        if (length <= 0)
+            return [];
+
+        var points = new List<TableCellBorderWavePoint>((int)Math.Ceiling(length) + 1)
+        {
+            new(0, 0)
+        };
+        for (var along = 1.0; along < length; along += 1.0)
+        {
+            var phase = (along % WaveLengthDip) / WaveLengthDip;
+            var outward = WaveAmplitudeDip * (1 - Math.Cos(phase * Math.PI * 2)) / 2;
+            points.Add(new TableCellBorderWavePoint(along, outward));
+        }
+
+        points.Add(new TableCellBorderWavePoint(length, 0));
+        return points;
     }
 
     private static TableCellBorderEdgeVisualPlan BuildEdge(
@@ -84,9 +112,7 @@ public static class TableCellBorderVisualPlanner
             modelEdge.Style,
             NormalizeColor(modelEdge.ColorHex),
             widthDip,
-            modelEdge.Style == BorderLineStyle.Wave
-                ? "Wave cell borders are planned explicitly but rendered with the host solid-line fallback."
-                : null);
+            null);
     }
 
     private static string NormalizeColor(string? colorHex)
