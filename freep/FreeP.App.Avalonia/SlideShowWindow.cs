@@ -648,7 +648,10 @@ public sealed class SlideShowWindow : Window
                 break;
             case SlideShowPointerClickIntentKind.Zoom when pointerIntent.TargetSlideIndex is int targetSlideIndex:
                 ApplyHostCommand(SlideShowHostPlanner.PlanZoomNavigation(
-                    _controller, _presentation.Slides, targetSlideIndex));
+                    _controller,
+                    _presentation.Slides,
+                    targetSlideIndex,
+                    pointerIntent.ReturnToParent));
                 break;
             case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
                 ActivateHyperlink(pointerIntent.Hyperlink);

@@ -16,7 +16,13 @@ public static class ZoomNavigationService
         Presentation presentation,
         PreservedObjectInfo? zoom,
         out int slideIndex)
-        => TryGetTargetSlideIndex(presentation, zoom, null, null, out slideIndex);
+        => TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            null,
+            null,
+            out slideIndex,
+            out _);
 
     /// <summary>
     /// Resolves a Summary Zoom target using coordinates normalized to the containing shape's
@@ -28,10 +34,32 @@ public static class ZoomNavigationService
         double? relativeX,
         double? relativeY,
         out int slideIndex)
+        => TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            relativeX,
+            relativeY,
+            out slideIndex,
+            out _);
+
+    /// <summary>
+    /// Resolves a Zoom target and returns the authored Return to Parent behavior.
+    /// An omitted PowerPoint returnToParent attribute uses the application default (true).
+    /// </summary>
+    public static bool TryGetTargetSlideIndex(
+        Presentation presentation,
+        PreservedObjectInfo? zoom,
+        double? relativeX,
+        double? relativeY,
+        out int slideIndex,
+        out bool returnToParent)
     {
         slideIndex = -1;
+        returnToParent = false;
         if (presentation is null || zoom?.ObjectKind != PreservedObjectKind.Zoom)
             return false;
+
+        returnToParent = zoom.ZoomProperties?.ReturnToParent ?? true;
 
         if (zoom.SummaryZoomTargets.Count > 0)
         {
