@@ -4790,6 +4790,32 @@ public sealed partial class MainWindow : Window
                 SelectWindowsPrinter(printerName);
         };
         _printOptionsPaneRowsPanel.Children.Add(_nativePrinterPicker);
+
+        var nativeDialogButton = new Button
+        {
+            Content = "Windows printer dialog",
+            MinWidth = 180,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        AutomationProperties.SetAutomationId(nativeDialogButton, "FreePWindowsPrinterDialog");
+        nativeDialogButton.Click += (_, _) => ShowWindowsPrinterDialog();
+        _printOptionsPaneRowsPanel.Children.Add(nativeDialogButton);
+    }
+
+    private void ShowWindowsPrinterDialog()
+    {
+        if (!WindowsNativePrintOutput.TryShowPrinterSelectionDialog(
+                _nativeOutputCapabilities.Print.PrinterName,
+                out var selectedPrinter) ||
+            string.IsNullOrWhiteSpace(selectedPrinter))
+        {
+            return;
+        }
+
+        SelectWindowsPrinter(selectedPrinter);
+        if (_nativePrinterPicker is not null)
+            _nativePrinterPicker.SelectedItem = selectedPrinter;
     }
 
     private void SelectWindowsPrinter(string printerName)
@@ -4989,9 +5015,13 @@ public sealed partial class MainWindow : Window
 
     private static PresentationNativePrintHandoffHostCapabilities BuildNativePrintHostCapabilities(
         LinuxNativePrintCapability capability) =>
-        capability.CanPrint
+        capability.CanPrint &&
+        OperatingSystem.IsWindows() &&
+        string.Equals(capability.ExecutablePath, "windows-shell-print", StringComparison.Ordinal)
+            ? PresentationNativePrintHandoffHostCapabilities.Available("Avalonia Windows print host")
+            : capability.CanPrint
             ? PresentationNativePrintHandoffHostCapabilities.NativePrinterSubmissionAvailable(
-                OperatingSystem.IsWindows() ? "Avalonia Windows print host" : "Avalonia Linux print host")
+                "Avalonia Linux print host")
             : PresentationNativePrintHandoffHostCapabilities.Deferred(
                 OperatingSystem.IsWindows() ? "Avalonia Windows print host" : "Avalonia Linux print host",
                 capability.Reason);
