@@ -24,6 +24,44 @@ public sealed class DocumentViewTrackEditTests
     }
 
     [StaFact]
+    public void LoadModel_UsesAuthoredTrackRevisionsState()
+    {
+        var enabled = TextDocument.CreateEmpty();
+        enabled.TrackRevisions = true;
+        var view = new DocumentView();
+
+        view.LoadModel(enabled);
+
+        view.TrackChangesEnabled.Should().BeTrue();
+        view.Model.TrackRevisions.Should().BeTrue();
+
+        var disabled = TextDocument.CreateEmpty();
+        view.LoadModel(disabled);
+
+        view.TrackChangesEnabled.Should().BeFalse();
+        view.Model.TrackRevisions.Should().BeFalse();
+    }
+
+    [StaFact]
+    public void TrackChangesToggle_PersistsAuthoredDocumentState()
+    {
+        var view = BuildView("Hello world");
+        var changed = 0;
+        view.TextChanged += (_, _) => changed++;
+
+        view.TrackChangesEnabled = true;
+        view.Model.TrackRevisions.Should().BeTrue();
+        changed.Should().Be(1);
+
+        view.TrackChangesEnabled = false;
+        view.Model.TrackRevisions.Should().BeFalse();
+        changed.Should().Be(2);
+
+        view.TrackChangesEnabled = false;
+        changed.Should().Be(2, "assigning the current state must not dirty the document again");
+    }
+
+    [StaFact]
     public void InsertText_WithTrackChangesOn_RecordsInsertedRevision()
     {
         var view = BuildView("Hello ");

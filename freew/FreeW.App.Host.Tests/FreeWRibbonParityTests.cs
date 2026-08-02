@@ -856,6 +856,7 @@ public sealed class FreeWRibbonParityTests
         trackChanges!.Execute(RibbonCommandContext.Empty);
 
         editor.TrackChangesEnabled.Should().BeTrue();
+        editor.Model.TrackRevisions.Should().BeTrue();
         trackChangesState.GetState().IsChecked.Should().BeTrue();
 
         foreach (var commandId in new[]

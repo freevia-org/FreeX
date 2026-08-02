@@ -574,8 +574,7 @@ public sealed class DocumentView : Control
         _floatDragState   = null;
         _shapeEditPointsTarget = null;
         _shapeEditPointDragState = null;
-        if (RestrictEditingPolicy.ShouldForceTrackChanges)
-            TrackChangesEnabled = true;
+        _trackChangesEnabled = _doc.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         RaiseFloatingSelectionChangedIfIdentityChanged();
         InvalidateLayoutAndVisual();
         DocumentChanged?.Invoke();
@@ -664,7 +663,7 @@ public sealed class DocumentView : Control
 
         _doc.Protection = settings;
         if (RestrictEditingPolicy.ShouldForceTrackChanges)
-            TrackChangesEnabled = true;
+            _trackChangesEnabled = true;
         OnProtectionStateChanged();
     }
 
@@ -18233,7 +18232,17 @@ public sealed class DocumentView : Control
     /// is kept and struck, per Word) rather than removing it — except deleting one's own still-pending tracked
     /// insertion, which is removed outright. Accept/Reject of existing revisions work regardless of this flag.
     /// </summary>
-    public bool TrackChangesEnabled { get; private set; }
+    private bool _trackChangesEnabled;
+
+    public bool TrackChangesEnabled
+    {
+        get => _trackChangesEnabled;
+        private set
+        {
+            _trackChangesEnabled = value;
+            _doc.TrackRevisions = value;
+        }
+    }
 
     /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
     public string RevisionAuthor { get; set; } = "FreeW User";
