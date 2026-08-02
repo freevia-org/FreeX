@@ -117,6 +117,33 @@ public class ManualHyphenationPlannerTests
         document.FirstFooter.PlainText.Should().Be("hyphenation");
     }
 
+    [Fact]
+    public void Session_ReviewsFootnotesAndEndnotesInStableStoryOrder()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("the"));
+        document.Footnotes[2] = new Footnote(2, "rabbit");
+        document.Footnotes[1] = new Footnote(1, "characterization");
+        document.Footnotes[-1] = new Footnote(-1, "hyphenation");
+        document.Endnotes[1] = new Endnote(1, "hyphenation");
+
+        var session = ManualHyphenationPlanner.CreateSession(document);
+
+        session.CandidateCount.Should().Be(3);
+        session.Current!.Word.Should().Be("characterization");
+        session.Accept(session.Current.Options[0].BreakPoint);
+        session.Current!.Word.Should().Be("rabbit");
+        session.Skip();
+        session.Current!.Word.Should().Be("hyphenation");
+        session.Skip();
+
+        new ApplyManualHyphenationCommand(session.Edits).Apply(new Context(document));
+        document.Footnotes[1].PlainText.Should().Contain(Hyphenator.SoftHyphen.ToString());
+        document.Footnotes[2].PlainText.Should().Be("rabbit");
+        document.Footnotes[-1].PlainText.Should().Be("hyphenation");
+        document.Endnotes[1].PlainText.Should().Be("hyphenation");
+    }
+
     private sealed class Context(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document { get; } = document;

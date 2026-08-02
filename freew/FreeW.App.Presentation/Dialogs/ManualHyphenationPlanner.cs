@@ -105,6 +105,24 @@ public static class ManualHyphenationPlanner
                         yield return paragraph;
             }
         }
+
+        foreach (var paragraph in document.Footnotes
+                     .Where(note => note.Key > 0)
+                     .OrderBy(note => note.Key)
+                     .SelectMany(note => note.Value.Content))
+        {
+            if (seen.Add(paragraph))
+                yield return paragraph;
+        }
+
+        foreach (var paragraph in document.Endnotes
+                     .Where(note => note.Key > 0)
+                     .OrderBy(note => note.Key)
+                     .SelectMany(note => note.Value.Content))
+        {
+            if (seen.Add(paragraph))
+                yield return paragraph;
+        }
     }
 
     private static IEnumerable<HeaderFooter?> HeaderFooterStories(SectionHeadersFooters stories)
