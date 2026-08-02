@@ -3108,6 +3108,14 @@ public sealed class PageSettings
     public bool MirrorMargins { get; set; }
 
     /// <summary>
+    /// Whether the section gutter is positioned at the top edge of each page instead of the side edge. Maps to
+    /// the document-wide <c>w:settings/w:gutterAtTop</c> toggle and applies to every section's
+    /// <see cref="GutterPt"/> value. False is Word's default and is omitted from newly authored packages.
+    /// Word determines the gutter position automatically when mirror margins or book-fold printing is active.
+    /// </summary>
+    public bool GutterAtTop { get; set; }
+
+    /// <summary>
     /// The number of equal-width text columns the page content flows into (w:sectPr/w:cols w:num).
     /// Defaults to 1 (single column) so existing documents are unaffected. Always at least 1.
     /// </summary>
@@ -3314,6 +3322,7 @@ public sealed class PageSettings
         HeaderDistancePt = HeaderDistancePt,
         FooterDistancePt = FooterDistancePt,
         MirrorMargins = MirrorMargins,
+        GutterAtTop = GutterAtTop,
         ColumnCount = ColumnCount,
         ColumnSpacingPt = ColumnSpacingPt,
         ColumnsLineBetween = ColumnsLineBetween,

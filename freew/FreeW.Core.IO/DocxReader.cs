@@ -223,6 +223,11 @@ public static class DocxReader
         // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
         document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
 
+        // Top gutter (w:gutterAtTop): moves each section's w:pgMar/@w:gutter from the side edge to the top
+        // edge. Absent or explicitly off is Word's default. Word ignores this when mirror/book-fold layout
+        // determines the binding edge automatically.
+        document.Page.GutterAtTop = ReadToggle(root, "gutterAtTop");
+
         // Hide print-layout page boundaries (w:doNotDisplayPageBoundaries): absent or explicitly off is
         // Word's default. The setting is a document view preference rather than page geometry.
         document.DoNotDisplayPageBoundaries = ReadToggle(root, "doNotDisplayPageBoundaries");
