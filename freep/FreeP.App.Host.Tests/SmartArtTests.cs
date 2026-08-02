@@ -2885,8 +2885,8 @@ public sealed class SmartArtTests : IDisposable
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
-            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
-            parOfConnections: [("R", "C1"), ("R", "C2")]);
+            nodes: [("R", "Company"), ("C1", "Product"), ("G1", "Platform"), ("C2", "Operations")],
+            parOfConnections: [("R", "C1"), ("R", "C2"), ("C1", "G1")]);
 
         var sa = PptxPackageReader.Read(pptxPath)
             .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
@@ -2897,8 +2897,9 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "basicHierarchy is in the bounded shared live-layout planner");
         sa.Data.Nodes.Should().ContainSingle();
-        sa.Data.Nodes[0].Text.Should().Be("CEO");
-        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Sales", "Engineering" });
+        sa.Data.Nodes[0].Text.Should().Be("Company");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Product", "Operations" });
+        sa.Data.Nodes[0].Children[0].Children.Should().ContainSingle().Which.Text.Should().Be("Platform");
     }
 
     [Fact]
@@ -4575,8 +4576,8 @@ public sealed class SmartArtTests : IDisposable
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
-            nodes: [("R", "CEO"), ("C1", "Sales"), ("C2", "Engineering")],
-            parOfConnections: [("R", "C1"), ("R", "C2")]);
+            nodes: [("R", "Company"), ("C1", "Product"), ("G1", "Platform"), ("C2", "Operations")],
+            parOfConnections: [("R", "C1"), ("R", "C2"), ("C1", "G1")]);
 
         var pres = PptxPackageReader.Read(pptxPath);
         var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
@@ -4588,15 +4589,21 @@ public sealed class SmartArtTests : IDisposable
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
         var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
 
-        liveShapes.Should().HaveCount(5, "three basic-hierarchy boxes plus two connectors should render from shared live data");
+        liveShapes.Should().HaveCount(7, "four basic-hierarchy role boxes plus three connectors should render from shared live data");
         var renderedText = liveShapes
             .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .ToList();
-        renderedText.Should().Contain("CEO");
-        renderedText.Should().Contain("Sales");
-        renderedText.Should().Contain("Engineering");
+        renderedText.Should().Contain(["Company", "Product", "Platform", "Operations"]);
         liveShapes.Where(op => op.Text is null)
-            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared connector DrawOps");
+            .Should().HaveCount(3, "WPF and Avalonia hosts consume shared BasicHierarchy connector DrawOps");
+        var boxesByText = liveShapes
+            .Where(op => op.Text is not null)
+            .ToDictionary(
+                op => op.Text!.Paragraphs.First().Runs.First().Text,
+                StringComparer.Ordinal);
+        boxesByText["Company"].BoundsDip.Y.Should().BeLessThan(boxesByText["Product"].BoundsDip.Y);
+        boxesByText["Product"].BoundsDip.Y.Should().BeLessThan(boxesByText["Platform"].BoundsDip.Y);
+        boxesByText["Operations"].BoundsDip.Y.Should().Be(boxesByText["Product"].BoundsDip.Y);
     }
 
     [Fact]

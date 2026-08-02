@@ -186,6 +186,9 @@ public static class SmartArtLayoutEngine
         if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy3Layout(data.LayoutUniqueId))
             return LayoutHierarchy3(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (data.Family == SmartArtFamily.Hierarchy && IsBasicHierarchyLayout(data.LayoutUniqueId))
+            return LayoutBasicHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (data.Family == SmartArtFamily.Hierarchy && IsOrgChartLayout(data.LayoutUniqueId))
             return LayoutOrgChart(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -3021,6 +3024,177 @@ public static class SmartArtLayoutEngine
             useOrgChartAssistantLayout: true,
             useOrgChartBoxStyle: true);
 
+    /// <summary>
+    /// Basic Hierarchy keeps the standard top-down tree, but owns its node and connector
+    /// roles instead of entering the generic hierarchy fallback. Empty template leaves
+    /// are omitted from the live plan while the raw native diagram remains preserved.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutBasicHierarchy(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var roots = data.Nodes
+            .Select(CloneVisibleHierarchyNode)
+            .Where(node => node is not null)
+            .Cast<SmartArtNode>()
+            .ToList();
+        if (roots.Count == 0)
+            return [];
+
+        long padX = (long)(fcx * OuterPaddingFrac);
+        long padY = (long)(fcy * OuterPaddingFrac);
+        long availW = Math.Max(fcx - 2 * padX, 1L);
+        long availH = Math.Max(fcy - 2 * padY, 1L);
+        int treeDepth = Math.Max(roots.Max(GetTreeDepth), 1);
+        int treeWidth = Math.Max(roots.Sum(GetTreeWidth), 1);
+        long gapX = Math.Max((long)(fcx * GapFrac), 1L);
+        long gapY = Math.Max((long)(fcy * GapFrac), 1L);
+        long boxH = Math.Max(
+            (availH - Math.Max(treeDepth - 1, 0) * gapY) / treeDepth,
+            (long)(fcy * 0.10));
+        long boxW = Math.Max(
+            availW / treeWidth - gapX,
+            (long)(fcx * 0.08));
+
+        var shapes = new List<SlideShape>();
+        uint idCounter = 380;
+        long startX = fx + padX;
+        long startY = fy + padY;
+        long currentX = startX;
+
+        foreach (var root in roots)
+        {
+            int rootWidth = GetTreeWidth(root);
+            long rootSlotW = Math.Max(
+                (long)((double)rootWidth / treeWidth * availW),
+                1L);
+            RenderBasicHierarchyNode(
+                root,
+                0,
+                currentX,
+                startY,
+                rootSlotW,
+                boxW,
+                boxH,
+                gapX,
+                gapY,
+                shapes,
+                stylePlan,
+                ref idCounter,
+                parentCenterX: -1,
+                parentBottomY: -1);
+            currentX += rootSlotW;
+        }
+
+        return shapes;
+    }
+
+    private enum BasicHierarchyNodeRole
+    {
+        Root,
+        Branch,
+        Leaf,
+    }
+
+    private static void RenderBasicHierarchyNode(
+        SmartArtNode node,
+        int levelIndex,
+        long startX,
+        long levelY,
+        long availW,
+        long boxW,
+        long boxH,
+        long gapX,
+        long gapY,
+        List<SlideShape> shapes,
+        SmartArtStylePlan stylePlan,
+        ref uint idCounter,
+        long parentCenterX,
+        long parentBottomY)
+    {
+        long slotW = Math.Max(availW, 1L);
+        long nodeBoxW = Math.Min(boxW, Math.Max(slotW - gapX, 1L));
+        long boxX = startX + (slotW - nodeBoxW) / 2;
+        var role = levelIndex == 0
+            ? BasicHierarchyNodeRole.Root
+            : node.Children.Count == 0
+                ? BasicHierarchyNodeRole.Leaf
+                : BasicHierarchyNodeRole.Branch;
+        var nodeStyle = stylePlan.GetNodeStyle(0, node.Level, SmartArtFamily.Hierarchy);
+
+        shapes.Add(MakeBasicHierarchyBox(
+            idCounter++, node.Text, nodeStyle, boxX, levelY, nodeBoxW, boxH, role,
+            levelIndex == 0 ? NodeFontSizeLargePt : NodeFontSizePt));
+
+        long boxCenterX = boxX + nodeBoxW / 2;
+        long boxBottomY = levelY + boxH;
+        if (parentCenterX >= 0 && parentBottomY >= 0)
+        {
+            shapes.Add(MakeBasicHierarchyConnector(
+                idCounter++, parentCenterX, parentBottomY, boxCenterX, levelY, stylePlan.Connector));
+        }
+
+        if (node.Children.Count == 0)
+            return;
+
+        int totalChildWidth = Math.Max(node.Children.Sum(GetTreeWidth), 1);
+        long childLevelY = boxBottomY + gapY;
+        long childStartX = startX;
+        foreach (var child in node.Children)
+        {
+            int childWidth = GetTreeWidth(child);
+            long childSlotW = Math.Max(
+                (long)((double)childWidth / totalChildWidth * slotW),
+                1L);
+            RenderBasicHierarchyNode(
+                child,
+                levelIndex + 1,
+                childStartX,
+                childLevelY,
+                childSlotW,
+                boxW,
+                boxH,
+                gapX,
+                gapY,
+                shapes,
+                stylePlan,
+                ref idCounter,
+                boxCenterX,
+                boxBottomY);
+            childStartX += childSlotW;
+        }
+    }
+
+    private static SlideShape MakeBasicHierarchyBox(
+        uint id,
+        string text,
+        SmartArtNodeStyle style,
+        long x,
+        long y,
+        long cx,
+        long cy,
+        BasicHierarchyNodeRole role,
+        double fontSizePt)
+    {
+        var shape = MakeBox(id, text, style, x, y, cx, cy, fontSizePt);
+        shape.Name = $"SmartArt_BasicHierarchy_{role}_{id}";
+        return shape;
+    }
+
+    private static SlideShape MakeBasicHierarchyConnector(
+        uint id,
+        long x1,
+        long y1,
+        long x2,
+        long y2,
+        SmartArtConnectorStyle style)
+    {
+        var shape = MakeConnector(id, x1, y1, x2, y2, style);
+        shape.Name = $"SmartArt_BasicHierarchy_Connector_{id}";
+        return shape;
+    }
+
     private static SmartArtNode? CloneVisibleHierarchyNode(SmartArtNode node)
     {
         var visibleChildren = node.Children
@@ -3585,6 +3759,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return id.Split('/').Last() is "orgchart" or "nameandtitleorgchart";
+    }
+
+    private static bool IsBasicHierarchyLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "basichierarchy", StringComparison.Ordinal);
     }
 
     private static bool IsHorizontalHierarchyLayout(string uniqueId)

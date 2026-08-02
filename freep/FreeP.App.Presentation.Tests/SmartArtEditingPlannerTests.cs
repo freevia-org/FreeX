@@ -1724,6 +1724,49 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void RegenerateDrawingCache_BasicHierarchyUsesDedicatedRolePlan()
+    {
+        var root = new SmartArtNode { ModelId = "root", Text = "Company", Level = 0 };
+        var branch = new SmartArtNode { ModelId = "branch", Text = "Product", Level = 1 };
+        branch.Children.Add(new SmartArtNode { ModelId = "leaf", Text = "Platform", Level = 2 });
+        root.Children.Add(branch);
+        root.Children.Add(new SmartArtNode { ModelId = "operations", Text = "Operations", Level = 1 });
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
+            IsLiveLayoutSupported = true,
+        };
+        data.Nodes.Add(root);
+
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.NodeCount.Should().Be(4);
+        result.ShapeCount.Should().Be(7, "the dedicated plan caches four role boxes and three connectors");
+        smartArt.FallbackShapes
+            .Where(shape => shape.TextBody is not null)
+            .Should().OnlyContain(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_", StringComparison.Ordinal));
+        smartArt.FallbackShapes
+            .Where(shape => shape.TextBody is null)
+            .Should().OnlyContain(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_Connector_", StringComparison.Ordinal));
+
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        doc.Descendants(dsp + "sp").Should().HaveCount(7);
+    }
+
+    [Fact]
     public void RegenerateDrawingCache_TableHierarchyUsesSharedCellPlan()
     {
         var root = new SmartArtNode { ModelId = "root", Text = "Portfolio", Level = 0 };

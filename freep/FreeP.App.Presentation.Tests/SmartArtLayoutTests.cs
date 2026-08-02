@@ -1110,6 +1110,43 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicHierarchy_UsesDedicatedRootBranchLeafRoles()
+    {
+        var root = new SmartArtNode { Text = "Company", Level = 0 };
+        var branch = new SmartArtNode { Text = "Product", Level = 1 };
+        branch.Children.Add(new SmartArtNode { Text = "Platform", Level = 2 });
+        root.Children.Add(branch);
+        root.Children.Add(new SmartArtNode { Text = "Operations", Level = 1 });
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy",
+            IsLiveLayoutSupported = true,
+        };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("BasicHierarchy now has a dedicated shared live plan");
+        var boxes = shapes!.Where(shape => shape.TextBody is not null).ToArray();
+        boxes.Should().HaveCount(4);
+        boxes.Should().ContainSingle(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_Root_", StringComparison.Ordinal));
+        boxes.Should().ContainSingle(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_Branch_", StringComparison.Ordinal));
+        boxes.Count(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_Leaf_", StringComparison.Ordinal))
+            .Should().Be(2);
+        shapes.Where(shape => shape.TextBody is null)
+            .Should().HaveCount(3, "each parent-child edge remains an editable shared connector");
+        shapes.Where(shape => shape.TextBody is null)
+            .Should().OnlyContain(shape => shape.Name.StartsWith("SmartArt_BasicHierarchy_Connector_", StringComparison.Ordinal));
+
+        var byText = boxes.ToDictionary(shape => shape.PlainText, StringComparer.Ordinal);
+        byText["Company"].OffsetYEmu.Should().BeLessThan(byText["Product"].OffsetYEmu);
+        byText["Product"].OffsetYEmu.Should().BeLessThan(byText["Platform"].OffsetYEmu);
+        byText["Operations"].OffsetYEmu.Should().Be(byText["Product"].OffsetYEmu);
+    }
+
+    [Fact]
     public void SmartArtLiveBoxesPreserveAuthoredNodeParagraphs()
     {
         var data = MakeHierarchyData("Jane Doe\nChief Executive Officer", "Sales", "Engineering");
