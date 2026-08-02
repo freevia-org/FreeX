@@ -11,6 +11,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly CheckBox _showBackground;
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
+    private readonly TextBox _cropEdges;
 
     internal ZoomObjectProperties Properties { get; private set; }
 
@@ -45,19 +46,26 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             Text = current.TransitionDuration ?? string.Empty,
             MinWidth = 180,
         };
+        _cropEdges = new TextBox
+        {
+            Text = ZoomObjectPropertiesPlanner.FormatCropEdges(current),
+            MinWidth = 180,
+            ToolTip = "left, top, right, bottom as percentages; for example 0, 5, 0, 5",
+        };
 
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 5; i++)
+        for (var i = 0; i < 6; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         AddRow(grid, 0, "Image source:", _imageType);
         AddRow(grid, 1, "Transition duration:", _transitionDuration);
-        Grid.SetRow(_returnToParent, 2);
+        AddRow(grid, 2, "Preview crop (%):", _cropEdges);
+        Grid.SetRow(_returnToParent, 3);
         Grid.SetColumnSpan(_returnToParent, 2);
         grid.Children.Add(_returnToParent);
-        Grid.SetRow(_showBackground, 3);
+        Grid.SetRow(_showBackground, 4);
         Grid.SetColumnSpan(_showBackground, 2);
         grid.Children.Add(_showBackground);
 
@@ -71,7 +79,7 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         ok.Click += (_, _) => Apply();
         buttons.Children.Add(ok);
         buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 });
-        Grid.SetRow(buttons, 4);
+        Grid.SetRow(buttons, 5);
         Grid.SetColumnSpan(buttons, 2);
         grid.Children.Add(buttons);
         Content = grid;
@@ -91,11 +99,25 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private void Apply()
     {
         var imageType = _imageType.SelectedItem as string ?? "preview";
+        if (!ZoomObjectPropertiesPlanner.TryParseCropEdges(
+                _cropEdges.Text, out var cropLeft, out var cropTop, out var cropRight, out var cropBottom))
+        {
+            MessageBox.Show(this,
+                "Crop edges must be four percentages: left, top, right, bottom.",
+                ZoomObjectPropertiesPlanner.DialogTitle,
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
         Properties = new ZoomObjectProperties(
             _returnToParent.IsChecked == true,
             imageType,
             string.IsNullOrWhiteSpace(_transitionDuration.Text) ? null : _transitionDuration.Text.Trim(),
-            _showBackground.IsChecked == true);
+            _showBackground.IsChecked == true,
+            cropLeft,
+            cropTop,
+            cropRight,
+            cropBottom);
         DialogResult = true;
     }
 }

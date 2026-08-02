@@ -763,7 +763,19 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
         {
             ImageType = properties.ImageType?.Trim().ToLowerInvariant(),
             TransitionDuration = properties.TransitionDuration?.Trim(),
+            CropLeft = ValidateCrop(properties.CropLeft, nameof(properties.CropLeft)),
+            CropTop = ValidateCrop(properties.CropTop, nameof(properties.CropTop)),
+            CropRight = ValidateCrop(properties.CropRight, nameof(properties.CropRight)),
+            CropBottom = ValidateCrop(properties.CropBottom, nameof(properties.CropBottom)),
         };
+    }
+
+    private static int? ValidateCrop(int? value, string parameterName)
+    {
+        if (value is < 0 or > 100000)
+            throw new ArgumentOutOfRangeException(parameterName, value,
+                "Zoom crop edges must be between 0 and 100000 (thousandths of a percent).");
+        return value;
     }
 
     private static bool TryPatchRawXml(
@@ -792,6 +804,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             SetAttribute(zoomProperty, "imageType", properties.ImageType);
             SetAttribute(zoomProperty, "transitionDur", properties.TransitionDuration);
             SetAttribute(zoomProperty, "showBg", properties.ShowBackground);
+            SetCrop(zoomProperty, properties);
         }
         patchedXml = root.ToString(SaveOptions.DisableFormatting);
         return true;
@@ -811,6 +824,48 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             element.Attribute(name)?.Remove();
         else
             element.SetAttributeValue(name, value);
+    }
+
+    private static void SetCrop(XElement zoomProperty, ZoomObjectProperties properties)
+    {
+        XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var blipFill = zoomProperty.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "blipFill",
+                StringComparison.OrdinalIgnoreCase));
+        if (blipFill is null)
+            return;
+
+        var values = new[] { properties.CropLeft, properties.CropTop, properties.CropRight, properties.CropBottom };
+        var srcRect = blipFill.Element(drawing + "srcRect");
+        if (values.All(value => value is null))
+        {
+            srcRect?.Remove();
+            return;
+        }
+
+        srcRect ??= new XElement(drawing + "srcRect");
+        SetAttribute(srcRect, "l", properties.CropLeft);
+        SetAttribute(srcRect, "t", properties.CropTop);
+        SetAttribute(srcRect, "r", properties.CropRight);
+        SetAttribute(srcRect, "b", properties.CropBottom);
+        if (srcRect.Parent is null)
+        {
+            var trailingContent = blipFill.Elements().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "tile", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(element.Name.LocalName, "stretch", StringComparison.OrdinalIgnoreCase));
+            if (trailingContent is null)
+                blipFill.Add(srcRect);
+            else
+                trailingContent.AddBeforeSelf(srcRect);
+        }
+    }
+
+    private static void SetAttribute(XElement element, string name, int? value)
+    {
+        if (value is null)
+            element.Attribute(name)?.Remove();
+        else
+            element.SetAttributeValue(name, value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 }
 
