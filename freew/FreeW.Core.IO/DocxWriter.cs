@@ -199,6 +199,7 @@ public static class DocxWriter
 
         var hasSettings = hasProtection
             || document.UpdateFieldsOnOpen
+            || document.TrackRevisions
             || document.Page.AutoHyphenation
             || anyDifferentOddEvenPages
             || document.Page.MirrorMargins
@@ -257,7 +258,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.UpdateFieldsOnOpen, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.UpdateFieldsOnOpen, document.TrackRevisions, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8204,7 +8205,7 @@ public static class DocxWriter
         "alignBordersAndEdges", "bordersDoNotSurroundHeader", "bordersDoNotSurroundFooter", "gutterAtTop",
         "hideSpellingErrors", "hideGrammaticalErrors", "activeWritingStyle", "proofState", "formsDesign",
         "attachedTemplate", "linkStyles", "stylePaneFormatFilter", "stylePaneSortMethod", "documentType",
-        "mailMerge", "revisionView", "trackChanges", "doNotTrackMoves", "doNotTrackFormatting",
+        "mailMerge", "revisionView", "trackRevisions", "doNotTrackMoves", "doNotTrackFormatting",
         "documentProtection", "autoFormatOverride", "styleLockTheme", "styleLockQFSet", "defaultTabStop",
         "autoHyphenation", "consecutiveHyphenLimit", "hyphenationZone", "doNotHyphenateCaps", "showEnvelope",
         "summaryLength", "clickAndTypeStyle", "defaultTableStyle", "evenAndOddHeaders",
@@ -8216,8 +8217,8 @@ public static class DocxWriter
     /// toggle (w:displayBackgroundShape, when <paramref name="displayBackground"/> so Word paints the
     /// w:background), the automatic-hyphenation toggle (w:autoHyphenation), the different-odd/even-headers
     /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>), the embed-TrueType-fonts
-    /// toggle (w:embedTrueTypeFonts) and the document-protection element (w:documentProtection: w:edit +
-    /// w:enforcement="1").
+    /// toggle (w:embedTrueTypeFonts), the revision-tracking toggle (w:trackRevisions), and the
+    /// document-protection element (w:documentProtection: w:edit + w:enforcement="1").
     ///
     /// <para>
     /// When <paramref name="original"/> is null (an authored-from-scratch document) a FRESH minimal part is
@@ -8228,7 +8229,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool updateFieldsOnOpen, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool updateFieldsOnOpen, bool trackRevisions, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8267,6 +8268,8 @@ public static class DocxWriter
             // in CT_Settings schema order.
             if (mirrorMargins)
                 fresh.Add(new XElement(W + "mirrorMargins"));
+            if (trackRevisions)
+                fresh.Add(new XElement(W + "trackRevisions"));
             if (defaultTabStop is not null)
                 fresh.Add(defaultTabStop);
             if (autoHyphenation)
@@ -8301,6 +8304,7 @@ public static class DocxWriter
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
+        OverlaySetting(settings, "trackRevisions", trackRevisions ? new XElement(W + "trackRevisions") : null);
         OverlaySetting(settings, "defaultTabStop", defaultTabStop);
         OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);
         OverlaySetting(settings, "consecutiveHyphenLimit", consecutiveLimit);

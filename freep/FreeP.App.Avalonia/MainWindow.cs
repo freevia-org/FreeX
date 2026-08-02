@@ -2420,6 +2420,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => _ = OpenSummaryZoomDialogAsync()));
         r.Register(ZoomObjectPropertiesPlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenZoomObjectPropertiesDialogAsync()));
+        r.Register(ZoomCoverImagePlanner.CommandId,
+            new ActionRibbonCommand(() => _ = OpenZoomCoverImagePickerAsync()));
         r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
             PresentationDesignCommandPlanner.TryApply(
                 Editor,
@@ -4193,6 +4195,46 @@ public sealed partial class MainWindow : Window
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
             Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+    }
+
+    internal async Task OpenZoomCoverImagePickerAsync()
+    {
+        if (Editor.SelectedShapeIds.Count != 1)
+            return;
+        if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
+                ZoomCoverImagePlanner.DialogTitle);
+            return;
+        }
+
+        var file = await AvaloniaFilePickerService.PickSingleOpenFileAsync(
+            StorageProvider,
+            AvaloniaFilePickerOpenRequest.FromFileTypes(
+                ZoomCoverImagePlanner.DialogTitle,
+                [PictureFileType]));
+        if (file is null)
+            return;
+
+        try
+        {
+            await using var source = await file.OpenReadAsync();
+            using var memory = new MemoryStream();
+            await source.CopyToAsync(memory);
+            var contentType = SlideObjectInsertionPlanner.InferPictureContentType(file.Name);
+            if (Editor.SetSelectedZoomCoverImage(memory.ToArray(), contentType))
+            {
+                _fileWorkflow.MarkDirty();
+                RefreshCanvas();
+                UpdateStatus();
+            }
+        }
+        catch (Exception ex)
+        {
+            _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
+                ZoomCoverImagePlanner.DialogTitle,
+                ex.Message);
+        }
     }
 
     internal void OpenFindDialog() =>

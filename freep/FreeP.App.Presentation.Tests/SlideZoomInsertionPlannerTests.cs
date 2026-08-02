@@ -44,6 +44,32 @@ public sealed class SlideZoomInsertionPlannerTests
     }
 
     [Fact]
+    public void Cover_image_is_a_single_undoable_native_relationship()
+    {
+        var presentation = BuildPresentation();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSlideZoom("slide-2");
+        var image = new byte[] { 1, 2, 3, 4 };
+
+        session.SetZoomCoverImage(shape.Id, image, "image/png").Should().BeTrue();
+        shape.PreservedObject!.ZoomProperties!.ImageType.Should().Be("cover");
+        shape.PreservedObject.RawXml.Should().Contain("imageType=\"cover\"");
+        shape.PreservedObject.RawXml.Should().Contain("blipFill");
+        shape.PreservedObject.Parts.Values.Should().ContainSingle().Which.Should().BeEquivalentTo(image);
+        shape.PreservedObject.SlideRels.Values.Should().ContainSingle(rel =>
+            rel.RelType.EndsWith("/image", StringComparison.OrdinalIgnoreCase));
+
+        session.Undo();
+        shape.PreservedObject.ZoomProperties!.ImageType.Should().Be("preview");
+        shape.PreservedObject.RawXml.Should().NotContain("embed=");
+        shape.PreservedObject.Parts.Should().BeEmpty();
+
+        session.Redo();
+        shape.PreservedObject.ZoomProperties!.ImageType.Should().Be("cover");
+        shape.PreservedObject.Parts.Values.Should().ContainSingle().Which.Should().BeEquivalentTo(image);
+    }
+
+    [Fact]
     public void Rejects_current_slide_as_zoom_target()
     {
         var presentation = BuildPresentation();
