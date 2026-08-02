@@ -5286,12 +5286,11 @@ public static class PptxPackageWriter
         try { el = XElement.Parse(info.RawXml); }
         catch { return null; }
 
-        // Zooms are preserved as native graphic-frame XML, but their position and
-        // size remain ordinary SlideShape state so canvas transforms can edit them.
-        // Keep the preserved payload synchronized at the final write boundary; other
-        // preserved object kinds remain verbatim by design.
-        if (shape is { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom })
-            SynchronizeZoomTransform(el, shape);
+        // Preserved modern objects keep their native XML, but their position, size,
+        // rotation, and flips remain ordinary SlideShape state so canvas transforms
+        // can edit them. Synchronize only a recognized root transform; payloads
+        // without one remain verbatim by design.
+        SynchronizePreservedTransform(el, shape);
 
         // Patch r-namespace id attributes to use the fresh relIds
         var rNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -5382,8 +5381,7 @@ public static class PptxPackageWriter
             {
                 clone = new XElement(el);
             }
-            if (shape is { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom })
-                SynchronizeZoomTransform(clone, shape);
+            SynchronizePreservedTransform(clone, shape);
             return new XElement(MC + "AlternateContent",
                 new XAttribute(XNamespace.Xmlns + "mc",
                     "http://schemas.openxmlformats.org/markup-compatibility/2006"),
@@ -5395,7 +5393,7 @@ public static class PptxPackageWriter
         return el;
     }
 
-    private static void SynchronizeZoomTransform(XElement root, SlideShape shape)
+    private static void SynchronizePreservedTransform(XElement root, SlideShape shape)
     {
         XElement? xfrm = root.Name == P + "graphicFrame"
             ? root.Element(P + "xfrm")
