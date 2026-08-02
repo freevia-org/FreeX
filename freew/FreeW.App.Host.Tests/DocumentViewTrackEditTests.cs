@@ -1,6 +1,8 @@
 using FreeW.App.Host.Editing;
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
+using WpfParagraph = System.Windows.Documents.Paragraph;
+using WpfRun = System.Windows.Documents.Run;
 
 namespace FreeW.App.Host.Tests;
 
@@ -105,6 +107,70 @@ public sealed class DocumentViewTrackEditTests
 
         ((Paragraph)excluded.Model.Blocks[0]).Runs.Should().OnlyContain(run => run.FormatRevision == null);
     }
+
+    [StaFact]
+    public void RibbonBold_SelectedRangeTracksActiveAuthorAndUndoRedoRestoresExactFormatting()
+    {
+        var view = BuildView("Hello world");
+        view.RevisionAuthor = "Ada Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.bold"), out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.PlainText.Should().Be("Hello world");
+        var formatted = paragraph.Runs.Single(run => run.Text == "world");
+        formatted.Formatting.Bold.Should().BeTrue();
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Ada Reviewer");
+        formatted.FormatRevision.PreviousFormatting.Bold.Should().BeFalse();
+        var revisionDate = formatted.FormatRevision.DateXml;
+        RenderedRun(view, "world").FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            !run.Formatting.Bold && run.FormatRevision == null);
+        RenderedRun(view, "Hello world").FontWeight.Should().Be(System.Windows.FontWeights.Normal);
+
+        view.Redo();
+        formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
+        formatted.Formatting.Bold.Should().BeTrue();
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Ada Reviewer");
+        formatted.FormatRevision.DateXml.Should().Be(revisionDate);
+        RenderedRun(view, "world").FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+    }
+
+    [StaFact]
+    public void RibbonItalic_SelectedRangeHonorsTrackFormattingSuppressionAndRemainsUndoable()
+    {
+        var view = BuildView("Hello world");
+        view.TrackChangesEnabled = true;
+        view.TrackFormattingEnabled = false;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.italic"), out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
+        formatted.Formatting.Italic.Should().BeTrue();
+        formatted.FormatRevision.Should().BeNull();
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run => !run.Formatting.Italic);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world").Formatting.Italic.Should().BeTrue();
+    }
+
+    private static WpfRun RenderedRun(DocumentView view, string text) =>
+        view.Document.Blocks.OfType<WpfParagraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())
+            .Single(run => run.Text == text);
 
     [StaFact]
     public void InsertText_WithTrackChangesOn_RecordsInsertedRevision()

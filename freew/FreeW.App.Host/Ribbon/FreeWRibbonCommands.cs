@@ -207,9 +207,14 @@ internal static class FreeWRibbonCommands
         void Routed(string id, RoutedCommand command) =>
             registry.Register(id, new RoutedEditCommand(editor, command));
 
-        void Toggle(string id, RoutedCommand command, DependencyProperty property, Func<object?, bool> isOn)
+        void Toggle(
+            string id,
+            RoutedCommand command,
+            DependencyProperty property,
+            Func<object?, bool> isOn,
+            Func<bool>? tryModelToggle = null)
         {
-            var cmd = new ToggleFormatCommand(editor, command, property, isOn);
+            var cmd = new ToggleFormatCommand(editor, command, property, isOn, tryModelToggle);
             registry.Register(id, cmd);
             stateful.Add((id, cmd));
         }
@@ -223,11 +228,14 @@ internal static class FreeWRibbonCommands
         }
 
         Toggle("freew.bold", EditingCommands.ToggleBold, TextElement.FontWeightProperty,
-            v => v is FontWeight w && w >= FontWeights.Bold);
+            v => v is FontWeight w && w >= FontWeights.Bold,
+            () => editor.TryToggleSelectedRunFormatting(f => f.Bold, (f, value) => f with { Bold = value }));
         Toggle("freew.italic", EditingCommands.ToggleItalic, TextElement.FontStyleProperty,
-            v => v is FontStyle s && s == FontStyles.Italic);
+            v => v is FontStyle s && s == FontStyles.Italic,
+            () => editor.TryToggleSelectedRunFormatting(f => f.Italic, (f, value) => f with { Italic = value }));
         Toggle("freew.underline", EditingCommands.ToggleUnderline, Inline.TextDecorationsProperty,
-            v => v is TextDecorationCollection d && d.Count > 0);
+            v => v is TextDecorationCollection d && d.Count > 0,
+            () => editor.TryToggleSelectedRunFormatting(f => f.Underline, (f, value) => f with { Underline = value }));
 
         // Live ribbon state: when the caret/selection moves, recompute the toggle states and push
         // them into the shared RibbonStateStore, which the toggle buttons observe.
@@ -8910,11 +8918,14 @@ internal static class FreeWRibbonCommands
         DocumentView editor,
         RoutedCommand command,
         DependencyProperty property,
-        Func<object?, bool> isOn) : IRibbonStatefulCommand
+        Func<object?, bool> isOn,
+        Func<bool>? tryModelToggle) : IRibbonStatefulCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            if (tryModelToggle?.Invoke() == true)
+                return;
             if (command.CanExecute(null, editor))
                 command.Execute(null, editor);
         }
