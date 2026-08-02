@@ -144,7 +144,7 @@ internal sealed class BackstageView : UserControl
             _backstage.HideThen<string>(_actions.SaveAsType),
             exportText);
 
-        return Panes.BuildExportActionPane(ToActionPaneSpec(surface));
+        return BackstagePaneRenderer.BuildActionPane(Kit, surface);
     }
 
     private UIElement BuildPrintPane()
@@ -296,7 +296,7 @@ internal sealed class BackstageView : UserControl
             _backstage.HideThen(_actions.SaveCopy),
             _backstage.HideThen(_actions.ExportPdf));
 
-        return Panes.BuildActionPane(ToActionPaneSpec(surface));
+        return BackstagePaneRenderer.BuildActionPane(Kit, surface);
     }
 
     private UIElement BuildHomePane()
@@ -442,14 +442,14 @@ internal sealed class BackstageView : UserControl
     {
         var surface = BackstagePaneSurfacePlanner.BuildAccountPane(
             new SisterBackstageAccountPaneContext(
-                AppProduct.Current.ProductName,
+                BackstageViewTextResources.ProductName,
                 EntryAssemblyVersion.Resolve(),
                 Environment.UserName,
                 Environment.MachineName,
                 _actions.DataFolder()),
             _backstage.HideThen(_actions.EditOptions));
 
-        return Panes.BuildAccountPane(ToAccountPaneSpec(surface));
+        return BackstagePaneRenderer.BuildAccountPane(Kit, surface);
     }
 
     private static string PrintEvidenceKindLabel(BackstagePrintEvidenceKind kind) => kind switch
@@ -477,9 +477,6 @@ internal sealed class BackstageView : UserControl
             _backstage.HideThen(_actions.Open),
             _backstage.HideThen(_actions.RecoverUnsaved));
 
-    private static BackstageActionPaneSpec ToActionPaneSpec(BackstageActionPaneSurfaceSpec surface) =>
-        new(surface.Title, surface.Description, surface.Groups);
-
     private static IReadOnlyList<BackstageActionGroup> ToActionGroups(
         IReadOnlyList<BackstageSurfaceActionGroup> groups) =>
         groups.Select(group => new BackstageActionGroup(
@@ -488,14 +485,6 @@ internal sealed class BackstageView : UserControl
                 .Where(action => action.Invoke is not null)
                 .Select(action => new BackstageActionRow(action.Label, action.Description, action.Invoke!))
                 .ToArray())).ToArray();
-
-    private static BackstageAccountPaneSpec ToAccountPaneSpec(BackstageAccountPaneSurfaceSpec surface) =>
-        new(
-            surface.Title,
-            surface.Description,
-            surface.Groups,
-            surface.OptionsAction.Label,
-            surface.OptionsAction.Invoke);
 
     private UIElement SurfaceActionRow(BackstageSurfaceActionRow action)
     {

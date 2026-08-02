@@ -254,10 +254,29 @@ public sealed class BackstagePaneSurfacePlannerTests
         surface.OptionsAction.Label.Should().Be("FreeW Options...");
         surface.OptionsAction.AutomationId.Should().Be("AccountOptionsButton");
         surface.OptionsAction.IsEnabled.Should().BeTrue();
+        surface.VisualMetrics.Should().Be(BackstagePaneSurfacePlanner.AccountPaneVisualMetrics);
 
         surface.OptionsAction.Invoke!();
 
         openedOptions.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GenericActionPane_Exposes_shared_visual_metrics_and_planner_order()
+    {
+        var surface = BackstagePaneSurfacePlanner.BuildSharePane(
+            currentPath: null,
+            fileExists: static _ => false,
+            saveAs: static () => { },
+            openContainingFolder: static _ => { },
+            saveCopy: static () => { },
+            exportPdf: static () => { });
+
+        surface.VisualMetrics.Should().Be(BackstagePaneSurfacePlanner.ActionPaneVisualMetrics);
+        surface.Groups.SelectMany(group => group.Actions).Select(action => action.Label)
+            .Should().Equal("Save As", "Save a Copy", "Create PDF/XPS");
+        surface.Groups.SelectMany(group => group.Actions).Select(action => action.Description)
+            .Should().NotContain(string.Empty);
     }
 
     [Fact]
