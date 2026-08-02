@@ -2595,7 +2595,17 @@ public sealed class EditingSession
     /// <paramref name="chartType"/> with three sample categories and two series so it
     /// renders immediately.  Undoable.
     /// </summary>
-    public SlideShape InsertChart(ChartType chartType = ChartType.ColumnClustered)
+    public SlideShape InsertChart(ChartType chartType = ChartType.ColumnClustered) =>
+        InsertChartCore(chartType, isCombo: false);
+
+    /// <summary>
+    /// Creates and inserts a default column-plus-line combination chart as one undoable
+    /// object. The second sample series is authored on the secondary axis with a line
+    /// override, matching the OOXML combo-chart plot-group model.
+    /// </summary>
+    public SlideShape InsertComboChart() => InsertChartCore(ChartType.ColumnClustered, isCombo: true);
+
+    private SlideShape InsertChartCore(ChartType chartType, bool isCombo)
     {
         var (x, y, cx, cy) = DefaultShapeBounds();
 
@@ -2605,6 +2615,8 @@ public sealed class EditingSession
             Title     = "Chart Title",
             Legend    = LegendPosition.Bottom,
         };
+        if (isCombo)
+            chart.SecondaryValueAxis = new ChartAxis();
 
         if (chartType == ChartType.Stock)
         {
@@ -2647,6 +2659,11 @@ public sealed class EditingSession
 
             var s2 = new ChartSeries { Name = "Series 2" };
             s2.Values.AddRange([2.4, 4.4, 1.8]);
+            if (isCombo)
+            {
+                s2.OverrideChartType = ChartType.LineMarkers;
+                s2.OnSecondaryAxis = true;
+            }
             chart.Series.Add(s2);
         }
 
