@@ -1962,6 +1962,74 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_PreservesInlineAndFloatingImageFlipsThroughSharedTransforms() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            document.Page.WidthPt = 240;
+            document.Page.HeightPt = 180;
+            document.Page.MarginLeftPt = 18;
+            document.Page.MarginRightPt = 18;
+            document.Page.MarginTopPt = 18;
+            document.Page.MarginBottomPt = 18;
+
+            var inline = new InlineImage(SplitPng(SKColors.Red, SKColors.Blue), 48, 24)
+            {
+                FlipH = true,
+            };
+            var floating = new InlineImage(SplitPng(SKColors.Green, SKColors.Yellow), 36, 24)
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalAnchor = HorizontalAnchor.Page,
+                HorizontalOffsetPt = 120,
+                VerticalAnchor = VerticalAnchor.Page,
+                VerticalOffsetPt = 72,
+                RotationAngle = 17,
+                FlipV = true,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(inline));
+            paragraph.Runs.Add(Run.FromImage(floating));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            view.Measure(new global::Avalonia.Size(800, 1000));
+
+            var pdf = view.BuildPdfContent();
+            var transforms = pdf.Pages.Single().Ops.OfType<PdfRotationGroup>().ToList();
+            var inlineTransform = transforms.Single(group => group.FlipH);
+            var floatingTransform = transforms.Single(group => group.FlipV);
+
+            inlineTransform.RotationDegrees.Should().Be(0);
+            var inlineImage = inlineTransform.Ops.Should().ContainSingle().Which.Should().BeOfType<PdfImage>()
+                .Which;
+            inlineImage.RotationDegrees.Should().Be(0);
+            floatingTransform.RotationDegrees.Should().BeApproximately(17, 0.001);
+            floatingTransform.Ops.Should().ContainSingle().Which.Should().BeOfType<PdfImage>()
+                .Which.RotationDegrees.Should().Be(0);
+
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            SkiaPdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+
+            using var rendered = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var scale = 96.0 / 72.0;
+            var sampleY = (int)Math.Round((pdf.Pages[0].HeightPoints
+                - (inlineImage.Y + inlineImage.Height / 2.0)) * scale);
+            var leftPixel = rendered.GetPixel(
+                (int)Math.Round((inlineImage.X + inlineImage.Width * 0.25) * scale),
+                sampleY);
+            var rightPixel = rendered.GetPixel(
+                (int)Math.Round((inlineImage.X + inlineImage.Width * 0.75) * scale),
+                sampleY);
+            leftPixel.Blue.Should().BeGreaterThan(200, "the blue source half must move to the left");
+            leftPixel.Red.Should().BeLessThan(80);
+            rightPixel.Red.Should().BeGreaterThan(200, "the red source half must move to the right");
+            rightPixel.Blue.Should().BeLessThan(80);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesFloatingShapesAsVectorGeometryTextAndMergedLayering() =>
         Session.Dispatch(() =>
         {
@@ -2517,6 +2585,18 @@ public sealed class DocumentViewPdfExportTests
     {
         using var bitmap = new SKBitmap(16, 8, SKColorType.Bgra8888, SKAlphaType.Premul);
         bitmap.Erase(color);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
+    }
+
+    private static byte[] SplitPng(SKColor left, SKColor right)
+    {
+        using var bitmap = new SKBitmap(16, 8, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using var canvas = new SKCanvas(bitmap);
+        canvas.Clear(left);
+        using var paint = new SKPaint { Color = right };
+        canvas.DrawRect(8, 0, 8, 8, paint);
         using var image = SKImage.FromBitmap(bitmap);
         using var data = image.Encode(SKEncodedImageFormat.Png, 100);
         return data.ToArray();
