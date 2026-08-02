@@ -32,4 +32,22 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
         source.Should().MatchRegex(
             @"if\s*\(IsSmartArtTextPaneVisible\)\s*ShowSmartArtTextPane\(\);");
     }
+
+    [Fact]
+    public void AvaloniaSmartArtAuthoring_RejectsFailedNativeRefreshBeforeUndoCommit()
+    {
+        var sourcePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+        var source = File.ReadAllText(sourcePath);
+
+        source.Should().Contain(
+            "private bool CommitSmartArtTextPaneMutation(");
+        source.Should().Contain(
+            "if (LastSmartArtDataPartRewriteResult is not { Applied: true })");
+        source.Should().Contain(
+            "return LastSmartArtDrawingCacheRegenerationResult is { Applied: true };");
+        source.Should().Contain(
+            "Message = \"SmartArt native data or drawing cache refresh failed.\"");
+    }
 }
