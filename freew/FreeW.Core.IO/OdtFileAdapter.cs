@@ -465,6 +465,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         Italic = overlay.Italic || baseFmt.Italic,
         Underline = overlay.Underline || baseFmt.Underline,
         Strikethrough = overlay.Strikethrough || baseFmt.Strikethrough,
+        NoProof = overlay.NoProof || baseFmt.NoProof,
         Hidden = overlay.Hidden || baseFmt.Hidden,
         WebHidden = overlay.WebHidden || baseFmt.WebHidden,
         FontFamily = overlay.FontFamily ?? baseFmt.FontFamily,

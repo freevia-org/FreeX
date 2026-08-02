@@ -952,6 +952,31 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task Proofing_diagnostics_skip_no_proof_run_but_keep_adjacent_typo_glyphs()
+    {
+        IReadOnlyList<ProofingDiagnostic> diagnostics = [];
+        IReadOnlyList<(int Block, int Offset, Rect Rect)> glyphs = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("teh", RunFormatting.Default with { NoProof = true }));
+            paragraph.Runs.Add(new Run(" teh"));
+            doc.Blocks.Add(paragraph);
+            var view = Build(doc);
+
+            diagnostics = view.ProofingDiagnosticsForTest;
+            glyphs = view.ProofingSquiggleGlyphsForTest;
+        });
+        if (!ran) return;
+
+        diagnostics.Should().ContainSingle().Which.ParagraphOffset.Should().Be(4);
+        glyphs.Select(g => g.Offset).Should().Equal(4, 5, 6);
+    }
+
+    [Fact]
     public async Task Proofing_diagnostics_surface_repeated_word_grammar_through_existing_glyphs()
     {
         IReadOnlyList<ProofingDiagnostic> diagnostics = [];
