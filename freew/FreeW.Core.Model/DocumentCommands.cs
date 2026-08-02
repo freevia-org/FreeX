@@ -6,6 +6,9 @@ namespace FreeW.Core.Model;
 public interface IDocumentCommandContext
 {
     TextDocument Document { get; }
+
+    /// <summary>The active review author for revisions created by document commands.</summary>
+    string? RevisionAuthor => null;
 }
 
 /// <summary>A reversible edit to a <see cref="TextDocument"/>.</summary>

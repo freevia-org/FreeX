@@ -8085,6 +8085,7 @@ public sealed class DocumentView : RichTextBox
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
         public TextDocument Document => view._model;
+        public string? RevisionAuthor => view.CurrentRevisionAuthor();
     }
 
     /// <summary>
