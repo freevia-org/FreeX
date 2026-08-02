@@ -266,6 +266,10 @@ public static class DocxReader
         // from tracked revisions. It remains independent in the model even when revision tracking is off.
         document.DoNotTrackFormatting = ReadToggle(root, "doNotTrackFormatting");
 
+        // Do not automatically compress pictures (w:doNotAutoCompressPictures): an empty element or any
+        // valid on token requires consuming applications to retain the embedded image data when saving.
+        document.DoNotAutoCompressPictures = ReadToggle(root, "doNotAutoCompressPictures");
+
         // Footnote numbering options (w:footnotePr in settings.xml): number format, start-at, restart.
         if (root.Element(W + "footnotePr") is { } footnotePr)
             ReadNoteNumberingOptions(footnotePr, document.FootnoteNumbering);
