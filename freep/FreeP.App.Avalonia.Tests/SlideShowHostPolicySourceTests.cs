@@ -176,6 +176,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowPlaybackPlanner.DissolveColumnCount");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation(");
+        source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackVisibility(animation);");
+        source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(animation.ShapeId);");
+        source.Should().Contain("RevealShape(animation.ShapeId);");
         source.Should().Contain("SlideShowPlaybackFramePlanner.PlanFrame(");
         source.Should().Contain("SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(");
         source.Should().Contain("SlideShowPlaybackFramePlanner.BuildAnimationStepPlaybackReadinessPlan(");
@@ -253,7 +256,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("BuildReverseAnimationPlan(currentPlan)");
         source.Should().Contain("PlayShapeAnimationPass(element, basePlan, onReveal, passCount, passIndex + 1)");
         source.Should().Contain("MotionKeyFrames = SlideShowPlaybackPlanner.ReverseMotionPathKeyFrames(plan.MotionKeyFrames)");
-        source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));");
+        source.Should().Contain("PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);");
+        source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(animation, delayMs));");
 
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Appear:");
         source.Should().Contain("AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));");
