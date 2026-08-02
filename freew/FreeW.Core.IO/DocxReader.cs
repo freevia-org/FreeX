@@ -178,7 +178,8 @@ public static class DocxReader
     /// <see cref="TextDocument.RemovePersonalInformation"/>, the revision-tracking toggles into
     /// <see cref="TextDocument.TrackRevisions"/>, <see cref="TextDocument.DoNotTrackMoves"/>, and
     /// <see cref="TextDocument.DoNotTrackFormatting"/>, the spelling-indicator toggle into
-    /// <see cref="TextDocument.HideSpellingErrors"/>,
+    /// <see cref="TextDocument.HideSpellingErrors"/> and the grammar-indicator toggle into
+    /// <see cref="TextDocument.HideGrammaticalErrors"/>,
     /// and the w:autoHyphenation toggle into
     /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
@@ -226,6 +227,10 @@ public static class DocxReader
         // Hide spelling errors (w:hideSpellingErrors): controls document-level proofing indicators without
         // removing proofing metadata. Absent or explicitly off is Word's default.
         document.HideSpellingErrors = ReadToggle(root, "hideSpellingErrors");
+
+        // Hide grammatical errors (w:hideGrammaticalErrors): the grammar counterpart to
+        // w:hideSpellingErrors. Absent or explicitly off is Word's default.
+        document.HideGrammaticalErrors = ReadToggle(root, "hideGrammaticalErrors");
 
         // Update fields on open (w:updateFields): absent/explicitly-off is Word's default; an empty element
         // or any valid on token asks the consuming application to recalculate fields when opening the file.
