@@ -43,6 +43,9 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
         style.StrokeColor = _newOptions.StrokeColor;
         style.StrokeWidthPt = _newOptions.StrokeWidthPt;
         style.DataLabels = CloneDataLabels(_newOptions.DataLabels);
+        style.ExplosionPercent = _newOptions.ExplosionPercent.HasValue
+            ? Math.Clamp(_newOptions.ExplosionPercent.Value, 0, 100)
+            : null;
 
         var symbol = _newOptions.MarkerSymbol;
         if (symbol is not null || _newOptions.MarkerSizePt is not null)
@@ -93,6 +96,7 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
         style.StrokeColor is not null ||
         style.StrokeWidthPt is not null ||
         style.DataLabels is not null ||
+        style.ExplosionPercent is not null ||
         style.Marker is not null;
 
     private static ChartPointStyle? ClonePointStyle(ChartPointStyle? source) => source is null
@@ -104,6 +108,7 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
             Fill = source.Fill,
             StrokeColor = source.StrokeColor,
             StrokeWidthPt = source.StrokeWidthPt,
+            ExplosionPercent = source.ExplosionPercent,
             Marker = CloneMarkerStyle(source.Marker),
         };
 

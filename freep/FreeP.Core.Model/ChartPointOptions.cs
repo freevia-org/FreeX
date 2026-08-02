@@ -11,4 +11,5 @@ public sealed record ChartPointOptions(
     ChartMarkerSymbol? MarkerSymbol,
     double? MarkerSizePt,
     ChartDataLabels? DataLabels = null,
-    bool ShowBubbleSize = false);
+    bool ShowBubbleSize = false,
+    int? ExplosionPercent = null);

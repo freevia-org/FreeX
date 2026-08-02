@@ -33,6 +33,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly TextBox _labelColorBox;
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
+    private readonly TextBox _explosionBox;
 
     public ChartPointOptionsDialog(EditingSession editor)
     {
@@ -104,6 +105,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             MinWidth = 160,
         };
         _markerSizeBox = new TextBox { MinWidth = 120 };
+        _explosionBox = new TextBox { MinWidth = 120 };
         RefreshPoints();
         LoadControls();
 
@@ -143,6 +145,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         content.Children.Add(MakeRow(surface.LabelColorLabel, _labelColorBox));
         content.Children.Add(MakeRow(surface.MarkerLabel, _markerCombo));
         content.Children.Add(MakeRow(surface.MarkerSizeLabel, _markerSizeBox));
+        content.Children.Add(MakeRow(surface.ExplosionLabel, _explosionBox));
         content.Children.Add(new TextBlock { Text = surface.AutoHint, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -176,7 +179,8 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         bool? labelBold = null,
         bool? labelItalic = null,
         string? labelColor = null,
-        bool showBubbleSize = false)
+        bool showBubbleSize = false,
+        int? explosionPercent = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         RefreshPoints();
@@ -201,6 +205,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _labelColorBox.Text = labelColor ?? string.Empty;
         _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
         _markerSizeBox.Text = Format(markerSizePt);
+        _explosionBox.Text = Format(explosionPercent);
     }
 
     private void OnOk()
@@ -244,6 +249,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _labelColorBox.Text = _planner.LabelColorText;
         _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
         _markerSizeBox.Text = Format(_planner.MarkerSizePt);
+        _explosionBox.Text = Format(_planner.ExplosionPercent);
     }
 
     private void UpdatePlannerFromControls()
@@ -270,6 +276,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         var marker = _markerCombo.SelectedItem as ChartMarkerSymbolOption;
         _planner.SetMarkerSymbol(marker is null || marker.Value == ChartMarkerSymbol.Auto ? null : marker.Value);
         _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));
+        _planner.SetExplosionPercent(ParseOptionalInt(_explosionBox.Text, "Explosion"));
     }
 
     private static double? ParseOptional(string? text, string label)
@@ -283,6 +290,18 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private static string Format(double? value) =>
         value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static string Format(int? value) =>
+        value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static int? ParseOptionalInt(string? text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) &&
+            value is >= 0 and <= 100)
+            return value;
+        throw new FormatException($"{label} must be an integer from 0 to 100 or blank.");
+    }
 
     private static int FindMarkerIndex(ChartMarkerSymbol? symbol)
     {
