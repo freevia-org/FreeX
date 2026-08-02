@@ -991,6 +991,13 @@ public static partial class ChartRenderPlanner
     private static double ResolveBarCategoryLabelWidth(ChartShape chart) =>
         UsesImportedTextMetrics(chart) ? 60.0 : BarCategoryLabelWidth;
 
+    private static double ResolveCategoryAxisLabelGap(ChartShape chart)
+    {
+        double authoredPercent = Math.Clamp(chart.CategoryAxis.LabelOffsetPercent ?? 100, 0, 100) / 100.0;
+        double defaultGap = UsesImportedTextMetrics(chart) ? 4.0 : 2.0;
+        return defaultGap * authoredPercent;
+    }
+
     private static double ResolveLegendLineHeight(ChartShape chart) =>
         UsesImportedPieLegendDefaults(chart)
             ? ImportedPieLegendLineHeight
@@ -2936,9 +2943,14 @@ public static partial class ChartRenderPlanner
                     ? categoryIndex
                     : categoryCount - 1 - categoryIndex;
                 double y = plot.Y + renderRow * categoryStep;
+                double labelGap = ResolveCategoryAxisLabelGap(chart);
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
-                    new ChartPlanRect(plot.X - ResolveBarCategoryLabelWidth(chart), y, ResolveBarCategoryLabelWidth(chart) - 4, categoryStep),
+                    new ChartPlanRect(
+                        plot.X - ResolveBarCategoryLabelWidth(chart),
+                        y,
+                        ResolveBarCategoryLabelWidth(chart) - labelGap,
+                        categoryStep),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Right,
@@ -2950,7 +2962,7 @@ public static partial class ChartRenderPlanner
             double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
             double labelOffset = UsesImportedTextMetrics(chart)
                 ? ImportedCartesianCategoryLabelOffset
-                : 2.0;
+                : ResolveCategoryAxisLabelGap(chart);
             for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
             {
                 int renderCategoryIndex = ResolveCategoryRenderIndex(

@@ -704,6 +704,42 @@ public sealed class ChartRenderPlannerTests
             label.AxisLabelFormat == new ChartAxisLabelFormatPlan("[$-409]d\\-mmm;@", false));
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(50, 1)]
+    [InlineData(100, 2)]
+    public void CategoryAxisLabelPlans_HonorAuthoredLabelOffsetPercent(int offsetPercent, double expectedGap)
+    {
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Jan", "Feb" });
+        chart.Series.Add(series);
+        chart.CategoryAxis.LabelOffsetPercent = offsetPercent;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var labels = ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame);
+
+        labels.Should().HaveCount(2);
+        labels[0].Bounds.Y.Should().BeApproximately(frame.Plot.Bottom + expectedGap, 0.0001);
+    }
+
+    [Fact]
+    public void BarCategoryAxisLabelPlans_HonorAuthoredLabelOffsetPercent()
+    {
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        var chart = new ChartShape { ChartType = ChartType.BarClustered };
+        chart.Categories.AddRange(new[] { "Jan", "Feb" });
+        chart.Series.Add(series);
+        chart.CategoryAxis.LabelOffsetPercent = 0;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var label = ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame).First();
+
+        (label.Bounds.X + label.Bounds.Width).Should().BeApproximately(frame.Plot.X, 0.0001);
+    }
+
     [Fact]
     public void SecondaryValueAxisPlan_FormatsTextAndCarriesNumberFormatMetadata()
     {
