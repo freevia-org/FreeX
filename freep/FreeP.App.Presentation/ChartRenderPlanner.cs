@@ -6886,7 +6886,7 @@ public static partial class ChartRenderPlanner
             return new(
                 primary,
                 Array.Empty<ChartPieSlicePrimitive>(),
-                BuildOfPieBarPrimitives(chart.Series[0], secondaryIndices, secondaryPlot, seriesColors, fillPlans));
+                BuildOfPieBarPrimitives(chart.Series[0], secondaryIndices, secondaryPlot, seriesColors, fillPlans, ShouldVaryPointColors(chart)));
         }
 
         var secondary = BuildSlicePrimitivesForSeries(
@@ -6930,7 +6930,8 @@ public static partial class ChartRenderPlanner
         IReadOnlySet<int> pointIndices,
         ChartPlanRect plot,
         IReadOnlyList<SrgbColor>? seriesColors,
-        ChartFillPlanSet? fillPlans)
+        ChartFillPlanSet? fillPlans,
+        bool varyByPoint)
     {
         var values = GetVisiblePieValues(series)
             .Where(value => pointIndices.Contains(value.PointIndex))
@@ -6954,15 +6955,12 @@ public static partial class ChartRenderPlanner
                 0,
                 value.PointIndex,
                 bounds,
-                ResolvePointFill(series, 0, value.PointIndex, seriesColors, RectSeriesFillAlpha, fillPlans, ShouldVaryPointColorsForOfPie(series)),
+                ResolvePointFill(series, 0, value.PointIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
                 new ChartStrokePlan(new SrgbColor(0xFF, 0xFF, 0xFF), 230, 0.8)));
         }
 
         return bars;
     }
-
-    private static bool ShouldVaryPointColorsForOfPie(ChartSeries series) =>
-        series.FillColor is null && series.Fill is null;
 
     public static (double min, double max, double majorUnit) ComputePrimaryValueAxisRange(
         ChartShape chart)
