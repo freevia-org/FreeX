@@ -72,6 +72,24 @@ public static class ProofingDiagnosticPlanner
         CustomDictionary customDictionary) =>
         Build(document, spellCheckEnabled, customDictionary.Words);
 
+    /// <summary>
+    /// Builds the diagnostics whose visual indicators are enabled by the document settings. The underlying
+    /// diagnostics remain available through <see cref="Build(TextDocument, bool, IEnumerable{string}?)"/> so
+    /// hiding squiggles does not discard proofing information or disable proofing commands.
+    /// </summary>
+    public static IReadOnlyList<ProofingDiagnostic> BuildVisibleIndicators(
+        TextDocument document,
+        bool spellCheckEnabled,
+        IEnumerable<string>? customDictionaryWords = null) =>
+        Build(document, spellCheckEnabled, customDictionaryWords)
+            .Where(diagnostic => diagnostic.Kind switch
+            {
+                ProofingDiagnosticKind.Spelling => !document.HideSpellingErrors,
+                ProofingDiagnosticKind.Grammar => !document.HideGrammaticalErrors,
+                _ => true,
+            })
+            .ToArray();
+
     public static string? NormalizeWord(string? word)
     {
         if (string.IsNullOrWhiteSpace(word))

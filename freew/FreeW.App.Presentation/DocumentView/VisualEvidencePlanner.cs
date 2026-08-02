@@ -2284,7 +2284,7 @@ public static class FreeWVisualEvidencePlanner
         if (document is null)
             return EmptyProofingDiagnosticExpectation;
 
-        var diagnostics = ProofingDiagnosticPlanner.Build(document, spellCheckEnabled: true);
+        var diagnostics = ProofingDiagnosticPlanner.BuildVisibleIndicators(document, spellCheckEnabled: true);
         if (diagnostics.Count == 0)
             return EmptyProofingDiagnosticExpectation;
 

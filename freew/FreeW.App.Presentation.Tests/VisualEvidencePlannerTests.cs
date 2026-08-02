@@ -892,6 +892,28 @@ public sealed class VisualEvidencePlannerTests
         ]);
     }
 
+    [Theory]
+    [InlineData(true, false, 0, 1)]
+    [InlineData(false, true, 1, 0)]
+    public void BuildProofingDiagnosticExpectation_honors_document_indicator_visibility(
+        bool hideSpelling,
+        bool hideGrammar,
+        int spellingCount,
+        int grammarCount)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("teh the the"));
+        document.HideSpellingErrors = hideSpelling;
+        document.HideGrammaticalErrors = hideGrammar;
+
+        var expectation = FreeWVisualEvidencePlanner.BuildProofingDiagnosticExpectation(document);
+
+        expectation.SpellingCount.Should().Be(spellingCount);
+        expectation.GrammarCount.Should().Be(grammarCount);
+        expectation.AdornmentCount.Should().Be(spellingCount + grammarCount);
+    }
+
     [Fact]
     public void SharedFieldPageNumberFactory_BuildsFieldVariantContracts()
     {

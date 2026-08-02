@@ -1009,6 +1009,35 @@ public sealed class DocumentViewReviewTests
         addedToDictionary.Should().BeFalse("grammar diagnostics are not custom-dictionary spelling entries");
     }
 
+    [Theory]
+    [InlineData(true, false, 8, 9, 10)]
+    [InlineData(false, true, 0, 1, 2)]
+    public async Task Proofing_visibility_flags_hide_only_their_squiggle_glyphs(
+        bool hideSpelling,
+        bool hideGrammar,
+        params int[] expectedOffsets)
+    {
+        IReadOnlyList<ProofingDiagnostic> diagnostics = [];
+        IReadOnlyList<(int Block, int Offset, Rect Rect)> glyphs = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("teh the the"));
+            doc.HideSpellingErrors = hideSpelling;
+            doc.HideGrammaticalErrors = hideGrammar;
+            var view = Build(doc);
+
+            diagnostics = view.ProofingDiagnosticsForTest;
+            glyphs = view.ProofingSquiggleGlyphsForTest;
+        });
+        if (!ran) return;
+
+        diagnostics.Should().HaveCount(2, "hidden indicators must not remove proofing diagnostics");
+        glyphs.Select(glyph => glyph.Offset).Should().Equal(expectedOffsets);
+    }
+
     [Fact]
     public async Task AddCurrentWordToDictionary_requires_active_diagnostic()
     {
