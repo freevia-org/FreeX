@@ -401,6 +401,7 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetShowSeriesLabels(true);
         planner.SetShowLegendKeys(true);
         planner.SetShowBubbleSize(true);
+        planner.SetShowLeaderLines(true);
         planner.SetLabelPosition(DataLabelPosition.OutsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
