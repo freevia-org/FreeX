@@ -268,6 +268,25 @@ public sealed class FontDialogPlannerTests
     }
 
     [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void BuildInitialState_ProjectsSingleAndDoubleStrikethroughIndependently(
+        bool strikethrough,
+        bool doubleStrikethrough)
+    {
+        var current = new RunFormatting
+        {
+            Strikethrough = strikethrough,
+            DoubleStrikethrough = doubleStrikethrough,
+        };
+
+        var state = FontDialogPlanner.BuildInitialState(current, CultureInfo.InvariantCulture);
+
+        state.Strikethrough.Should().Be(strikethrough);
+        state.DoubleStrikethrough.Should().Be(doubleStrikethrough);
+    }
+
+    [Theory]
     [InlineData("0", "0", "0", "", "Enter a positive font size in points.")]
     [InlineData("bad", "0", "0", "", "Enter a positive font size in points.")]
     [InlineData("11", "bad", "0", "", "Enter a valid character spacing in points.")]
@@ -415,6 +434,33 @@ public sealed class FontDialogPlannerTests
         result.Ligatures.Should().Be(LigatureMode.None);
         result.NumberForm.Should().Be(NumberForm.Default);
         result.NumberSpacing.Should().Be(NumberSpacing.Default);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void TryBuildResult_AppliesSingleAndDoubleStrikethroughIndependently(
+        bool strikethrough,
+        bool doubleStrikethrough)
+    {
+        var input = ValidInput() with
+        {
+            Strikethrough = strikethrough,
+            DoubleStrikethrough = doubleStrikethrough,
+        };
+
+        FontDialogPlanner.TryBuildResult(
+                input,
+                RunFormatting.Default,
+                CultureInfo.InvariantCulture,
+                out var result,
+                out var errorMessage)
+            .Should().BeTrue();
+
+        errorMessage.Should().BeNull();
+        result.Should().NotBeNull();
+        result!.Strikethrough.Should().Be(strikethrough);
+        result.DoubleStrikethrough.Should().Be(doubleStrikethrough);
     }
 
     private static FontDialogInput ValidInput() => new(

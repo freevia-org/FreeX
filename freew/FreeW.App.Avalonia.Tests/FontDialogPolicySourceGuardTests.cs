@@ -19,6 +19,8 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("new FontDialogInput(");
         source.Should().Contain("FontDialogPlanner.TryBuildResult(");
         source.Should().Contain("ToDialogResult(planned!)");
+        source.Should().Contain("Double strikethrough");
+        source.Should().Contain("DoubleStrikethroughIndeterminate");
     }
 
     [Fact]
