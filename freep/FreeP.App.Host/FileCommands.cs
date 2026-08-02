@@ -409,7 +409,8 @@ internal sealed class FileCommands
         LastVideoFramePackage = PresentationVideoFramePackageExecutor.BuildPackage(
             _getModel(),
             request,
-            WpfPresentationSlideImageRenderer.RenderSlideToPng);
+            WpfPresentationSlideImageRenderer.RenderSlideToPng,
+            _videoExportHostCapabilities);
         LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
             LastVideoFramePackage,
             _videoExportHostCapabilities,
