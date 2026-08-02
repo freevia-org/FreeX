@@ -2716,19 +2716,31 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
-            var owner = Window.GetWindow(editor);
-            var chosen = ShowPicker(owner);
+            var parameterValue = context.Parameters.TryGetValue("value", out var raw)
+                ? raw as string
+                : context.SelectedValue;
+            var chosen = parameterValue is null
+                ? ShowPicker(Window.GetWindow(editor))
+                : string.IsNullOrWhiteSpace(parameterValue)
+                    ? ColorChoice.Clear
+                    : new ColorChoice(parameterValue);
             if (chosen is null)
                 return;
 
-            var property = isHighlight ? TextElement.BackgroundProperty : TextElement.ForegroundProperty;
-            editor.Focus();
             if (chosen == ColorChoice.Clear)
-                // Clear the override: foreground falls back to black, highlight to no background.
-                editor.Selection.ApplyPropertyValue(property, isHighlight ? null! : Brushes.Black);
+            {
+                if (isHighlight)
+                    editor.SetHighlightColor(null);
+                else
+                    editor.SetTextColor(null);
+            }
             else
-                editor.Selection.ApplyPropertyValue(property,
-                    new SolidColorBrush((Color)ColorConverter.ConvertFromString(chosen.Hex)));
+            {
+                if (isHighlight)
+                    editor.SetHighlightColor(chosen.Hex);
+                else
+                    editor.SetTextColor(chosen.Hex);
+            }
         }
 
         private sealed record ColorChoice(string Hex)

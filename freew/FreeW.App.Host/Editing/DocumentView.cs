@@ -4640,6 +4640,58 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set or clear the text foreground colour on the exact selected text. A collapsed caret uses WPF's native
+    /// pending foreground so subsequently typed text inherits the choice.
+    /// </summary>
+    public void SetTextColor(string? colorHex) =>
+        SetSelectionColor(colorHex, isHighlight: false);
+
+    /// <summary>
+    /// Set or clear the text highlight colour on the exact selected text. A collapsed caret uses WPF's native
+    /// pending background so subsequently typed text inherits the choice.
+    /// </summary>
+    public void SetHighlightColor(string? colorHex) =>
+        SetSelectionColor(colorHex, isHighlight: true);
+
+    private void SetSelectionColor(string? colorHex, bool isHighlight)
+    {
+        string? normalizedColor = null;
+        Color color = default;
+        if (!string.IsNullOrWhiteSpace(colorHex))
+        {
+            if (!TryParseColor(colorHex, out color))
+                return;
+            normalizedColor = ToHex(color);
+        }
+
+        if (TrySetSelectedRunFormatting(
+                formatting => string.Equals(
+                    isHighlight ? formatting.HighlightColorHex : formatting.ColorHex,
+                    normalizedColor,
+                    StringComparison.OrdinalIgnoreCase),
+                formatting => isHighlight
+                    ? formatting with { HighlightColorHex = normalizedColor }
+                    : formatting with { ColorHex = normalizedColor }))
+        {
+            return;
+        }
+
+        Focus();
+        if (isHighlight)
+        {
+            Selection.ApplyPropertyValue(
+                TextElement.BackgroundProperty,
+                normalizedColor is null ? null! : new SolidColorBrush(color));
+        }
+        else
+        {
+            Selection.ApplyPropertyValue(
+                TextElement.ForegroundProperty,
+                normalizedColor is null ? Brushes.Black : new SolidColorBrush(color));
+        }
+    }
+
+    /// <summary>
     /// Set (or clear when <paramref name="languageTag"/> is null/empty) the proofing language on the
     /// selected text range, or on the current proofing word when the caret is collapsed inside one.
     /// </summary>
