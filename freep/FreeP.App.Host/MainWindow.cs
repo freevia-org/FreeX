@@ -488,6 +488,7 @@ public sealed partial class MainWindow : Window
             onInsertSectionZoom: () => OpenSectionZoomDialog(),
             onInsertSummaryZoom: () => OpenSummaryZoomDialog(),
             onFormatZoom:       () => OpenZoomObjectPropertiesDialog(),
+            onSetZoomCoverImage: () => OpenZoomCoverImagePicker(),
             // Wave 12B: Find & Replace dialogs.
             onFind:             () => OpenFindDialog(),
             onFindReplace:      () => OpenFindReplaceDialog(),
@@ -4833,6 +4834,38 @@ public sealed partial class MainWindow : Window
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
             Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+    }
+
+    internal void OpenZoomCoverImagePicker()
+    {
+        if (Editor.SelectedShapeIds.Count != 1)
+            return;
+
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = ZoomCoverImagePlanner.DialogTitle,
+            Filter = "Picture files|*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.svg;*.webp|All files|*.*",
+            Multiselect = false,
+        };
+        if (dialog.ShowDialog(this) != true)
+            return;
+
+        try
+        {
+            var bytes = System.IO.File.ReadAllBytes(dialog.FileName);
+            var contentType = SlideObjectInsertionPlanner.InferPictureContentType(dialog.FileName);
+            if (Editor.SetSelectedZoomCoverImage(bytes, contentType))
+            {
+                _file.MarkDirty();
+                RefreshCanvas();
+                UpdateTitle();
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, ZoomCoverImagePlanner.DialogTitle,
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private void AttachSummaryZoomPreviews(SlideShape shape)

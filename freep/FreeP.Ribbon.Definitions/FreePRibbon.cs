@@ -574,6 +574,8 @@ public static class FreePRibbon
                 RibbonCommandIconKind.Zoom, FreePRibbonText.InsertSummaryZoomKeyTip);
             group.Medium(ZoomObjectPropertiesPlanner.CommandId, FreePRibbonText.FormatZoomLabel,
                 RibbonCommandIconKind.Effects, FreePRibbonText.FormatZoomKeyTip);
+            group.Medium(ZoomCoverImagePlanner.CommandId, FreePRibbonText.SetZoomCoverImageLabel,
+                RibbonCommandIconKind.Picture, FreePRibbonText.SetZoomCoverImageKeyTip);
             group.Medium("freep.remove-link", FreePRibbonText.RemoveLinkLabel, RibbonCommandIconKind.Delete, FreePRibbonText.RemoveLinkKeyTip);
         });
         tab.Group("illustrations", FreePRibbonText.IllustrationsGroupLabel, FreePRibbonText.IllustrationsGroupKeyTip, 90, group =>

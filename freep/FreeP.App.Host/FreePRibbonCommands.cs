@@ -133,7 +133,8 @@ internal static class FreePRibbonCommands
         Action?             onTransitionSound = null,
         Func<bool>?          getEditPointsEnabled = null,
         Action<bool>?         setEditPointsEnabled = null,
-        Action?             onFormatZoom = null)
+        Action?             onFormatZoom = null,
+        Action?             onSetZoomCoverImage = null)
     {
         var registry = new RibbonCommandRegistry();
         registry.Register("freep.undo",
@@ -167,6 +168,9 @@ internal static class FreePRibbonCommands
         registry.Register(
             ZoomObjectPropertiesPlanner.CommandId,
             new ActionRibbonCommand(() => onFormatZoom?.Invoke()));
+        registry.Register(
+            ZoomCoverImagePlanner.CommandId,
+            new ActionRibbonCommand(() => onSetZoomCoverImage?.Invoke()));
         registry.Register(
             OleInsertionPlanner.InsertEmbeddedObjectCommandId,
             new ActionRibbonCommand(() => onInsertEmbeddedObject?.Invoke()));

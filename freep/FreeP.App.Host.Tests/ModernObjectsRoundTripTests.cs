@@ -219,6 +219,29 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void AuthoredSlideZoom_CoverImage_WritesRelationshipAndReopens()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var inserted = session.InsertSlideZoom("slide-2");
+        var image = new byte[] { 4, 3, 2, 1 };
+
+        session.SetZoomCoverImage(inserted.Id, image, "image/png").Should().BeTrue();
+
+        var roundTripped = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        var zoom = roundTripped.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
+
+        zoom.PreservedObject!.ZoomProperties!.ImageType.Should().Be("cover");
+        zoom.PreservedObject.RawXml.Should().Contain("imageType=\"cover\"");
+        zoom.PreservedObject.RawXml.Should().Contain("blipFill");
+        zoom.PreservedObject.Parts.Values.Should().ContainSingle().Which.Should().BeEquivalentTo(image);
+        zoom.PreservedObject.SlideRels.Values.Should().ContainSingle(rel =>
+            rel.RelType.EndsWith("/image", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void AuthoredSummaryZoom_WritesAllTargetsAndReopens()
     {
         var presentation = new Presentation();

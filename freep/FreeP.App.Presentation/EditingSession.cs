@@ -709,6 +709,29 @@ public sealed class EditingSession
         _selectedShapeIds.Count == 1
         && SetZoomObjectProperties(_selectedShapeIds[0], properties);
 
+    /// <summary>Sets a user-authored cover image on one Slide or Section Zoom.</summary>
+    public bool SetZoomCoverImage(uint shapeId, byte[] imageBytes, string contentType)
+    {
+        var slide = CurrentSlide;
+        var shape = slide is null ? null : FindShape(slide.Shapes, shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom }
+            || shape.PreservedObject?.ObjectKind != PreservedObjectKind.Zoom
+            || shape.PreservedObject.SummaryZoomTargets.Count != 0)
+            return false;
+
+        Bus.Execute(new SetZoomCoverImageCommand(
+            _currentSlideIndex,
+            shapeId,
+            imageBytes,
+            contentType));
+        return shape.PreservedObject.ZoomProperties?.ImageType == "cover";
+    }
+
+    /// <summary>Sets a cover image on the single selected Slide or Section Zoom.</summary>
+    public bool SetSelectedZoomCoverImage(byte[] imageBytes, string contentType) =>
+        _selectedShapeIds.Count == 1
+        && SetZoomCoverImage(_selectedShapeIds[0], imageBytes, contentType);
+
     /// <summary>Renames an object through the shared undo bus, including grouped children.</summary>
     public bool SetShapeName(uint shapeId, string? name)
     {
