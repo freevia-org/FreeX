@@ -991,6 +991,13 @@ public static partial class ChartRenderPlanner
     private static double ResolveBarCategoryLabelWidth(ChartShape chart) =>
         UsesImportedTextMetrics(chart) ? 60.0 : BarCategoryLabelWidth;
 
+    private static double ResolveCategoryAxisLabelGap(ChartShape chart)
+    {
+        double authoredPercent = Math.Clamp(chart.CategoryAxis.LabelOffsetPercent ?? 100, 0, 100) / 100.0;
+        double defaultGap = UsesImportedTextMetrics(chart) ? 4.0 : 2.0;
+        return defaultGap * authoredPercent;
+    }
+
     private static double ResolveLegendLineHeight(ChartShape chart) =>
         UsesImportedPieLegendDefaults(chart)
             ? ImportedPieLegendLineHeight
@@ -1938,7 +1945,10 @@ public static partial class ChartRenderPlanner
 
                 var current = new ChartPlanPoint(
                     plot.X + xFraction * plot.Width,
-                    plot.Bottom - yFraction * plot.Height);
+                    MapCartesianFractionToY(
+                        yFraction,
+                        plot,
+                        IsValueAxisReversed(chart, series.OnSecondaryAxis)));
                 if (previous is { } start)
                 {
                     segments.Add(new ChartLineSegmentPrimitive(
@@ -2787,14 +2797,20 @@ public static partial class ChartRenderPlanner
         {
             if (frame.IsBar)
             {
-                double x = plot.X + plot.Width * index / steps;
+                double x = MapCartesianFractionToX(
+                    index / steps,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 lines.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(x, plot.Y),
                     new ChartPlanPoint(x, plot.Bottom)));
             }
             else
             {
-                double y = plot.Bottom - plot.Height * index / steps +
+                double y = MapCartesianFractionToY(
+                    index / steps,
+                    plot,
+                    chart.ValueAxis.ReverseOrder) +
                     ((UsesImportedCartesianAxisStrokes(chart) && chart.ChartType != ChartType.Stock) ||
                         UsesImportedComboDefaults(chart)
                         ? ImportedCartesianGridLinePixelOffset
@@ -2870,14 +2886,20 @@ public static partial class ChartRenderPlanner
             double fraction = (value - minValue) / (maxValue - minValue);
             if (frame.IsBar)
             {
-                double x = plot.X + plot.Width * fraction;
+                double x = MapCartesianFractionToX(
+                    fraction,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 lines.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(x, plot.Y),
                     new ChartPlanPoint(x, plot.Bottom)));
             }
             else
             {
-                double y = plot.Bottom - plot.Height * fraction;
+                double y = MapCartesianFractionToY(
+                    fraction,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 lines.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(plot.X, y),
                     new ChartPlanPoint(plot.Right, y)));
@@ -2936,9 +2958,14 @@ public static partial class ChartRenderPlanner
                     ? categoryIndex
                     : categoryCount - 1 - categoryIndex;
                 double y = plot.Y + renderRow * categoryStep;
+                double labelGap = ResolveCategoryAxisLabelGap(chart);
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
-                    new ChartPlanRect(plot.X - ResolveBarCategoryLabelWidth(chart), y, ResolveBarCategoryLabelWidth(chart) - 4, categoryStep),
+                    new ChartPlanRect(
+                        plot.X - ResolveBarCategoryLabelWidth(chart),
+                        y,
+                        ResolveBarCategoryLabelWidth(chart) - labelGap,
+                        categoryStep),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Right,
@@ -2950,7 +2977,7 @@ public static partial class ChartRenderPlanner
             double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
             double labelOffset = UsesImportedTextMetrics(chart)
                 ? ImportedCartesianCategoryLabelOffset
-                : 2.0;
+                : ResolveCategoryAxisLabelGap(chart);
             for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
             {
                 int renderCategoryIndex = ResolveCategoryRenderIndex(
@@ -3057,7 +3084,10 @@ public static partial class ChartRenderPlanner
             double value = minValue + majorUnit * tickIndex;
             if (frame.IsBar)
             {
-                double x = plot.X + plot.Width * tickIndex / steps;
+                double x = MapCartesianFractionToX(
+                    tickIndex / steps,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 labels.Add(new ChartTextPlan(
                     FormatChartAxisLabelValue(chart, value, chart.ValueAxis),
                     new ChartPlanRect(x - ResolveAxisLabelWidth(chart) / 2, plot.Bottom + 2, ResolveAxisLabelWidth(chart), ResolveCategoryLabelHeight(chart)),
@@ -3072,7 +3102,12 @@ public static partial class ChartRenderPlanner
                     ? plot.Bottom - (ImportedThreeDBarBaseLift - 8.0)
                     : plot.Bottom;
                 double axisTop = plot.Y;
-                double y = axisY - (axisY - axisTop) * tickIndex / steps;
+                double y = UsesImportedThreeDColumnDefaults(chart)
+                    ? axisY - (axisY - axisTop) * tickIndex / steps
+                    : MapCartesianFractionToY(
+                        tickIndex / steps,
+                        plot,
+                        chart.ValueAxis.ReverseOrder);
                 double rightGap = UsesImportedTextMetrics(chart)
                     ? ImportedCartesianValueLabelRightGap
                     : 0.0;
@@ -3202,14 +3237,20 @@ public static partial class ChartRenderPlanner
         {
             if (frame.IsBar)
             {
-                double x = plot.X + plot.Width * tickIndex / steps;
+                double x = MapCartesianFractionToX(
+                    tickIndex / steps,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 ticks.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(x, plot.Bottom),
                     new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
             }
             else
             {
-                double y = plot.Bottom - plot.Height * tickIndex / steps;
+                double y = MapCartesianFractionToY(
+                    tickIndex / steps,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 ticks.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(plot.X - AxisMajorTickLength, y),
                     new ChartPlanPoint(plot.X, y)));
@@ -3227,7 +3268,10 @@ public static partial class ChartRenderPlanner
                 if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
                     continue;
 
-                double y = plot.Bottom - plot.Height * (value - minValue) / (maxValue - minValue);
+                double y = MapCartesianFractionToY(
+                    (value - minValue) / (maxValue - minValue),
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 ticks.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(plot.X - AxisMinorTickLength, y),
                     new ChartPlanPoint(plot.X, y)));
@@ -3248,14 +3292,20 @@ public static partial class ChartRenderPlanner
                 double fraction = (value - minValue) / (maxValue - minValue);
                 if (frame.IsBar)
                 {
-                    double x = plot.X + plot.Width * fraction;
+                    double x = MapCartesianFractionToX(
+                        fraction,
+                        plot,
+                        chart.ValueAxis.ReverseOrder);
                     ticks.Add(new ChartGridLinePlan(
                         new ChartPlanPoint(x, plot.Bottom),
                         new ChartPlanPoint(x, plot.Bottom + AxisMinorTickLength)));
                 }
                 else
                 {
-                    double y = plot.Bottom - plot.Height * fraction;
+                    double y = MapCartesianFractionToY(
+                        fraction,
+                        plot,
+                        chart.ValueAxis.ReverseOrder);
                     ticks.Add(new ChartGridLinePlan(
                         new ChartPlanPoint(plot.X - AxisMinorTickLength, y),
                         new ChartPlanPoint(plot.X, y)));
@@ -3539,7 +3589,10 @@ public static partial class ChartRenderPlanner
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
         {
             double value = niceMin + majorUnit * tickIndex;
-            double y = plot.Bottom - plot.Height * tickIndex / steps;
+            double y = MapCartesianFractionToY(
+                tickIndex / steps,
+                plot,
+                chart.SecondaryValueAxis.ReverseOrder);
             ticks.Add(new ChartGridLinePlan(
                 new ChartPlanPoint(plot.Right, y),
                 new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
@@ -3559,7 +3612,10 @@ public static partial class ChartRenderPlanner
                 for (int minorIndex = 1; minorIndex < ImportedComboSecondaryMinorTickDivisions; minorIndex++)
                 {
                     double minorFraction = minorIndex / (double)ImportedComboSecondaryMinorTickDivisions;
-                    double y = plot.Bottom - plot.Height * (majorIndex + minorFraction) / steps;
+                    double y = MapCartesianFractionToY(
+                        (majorIndex + minorFraction) / steps,
+                        plot,
+                        chart.SecondaryValueAxis.ReverseOrder);
                     ticks.Add(new ChartGridLinePlan(
                         new ChartPlanPoint(plot.Right, y),
                         new ChartPlanPoint(plot.Right + AxisMinorTickLength, y)));
@@ -3634,7 +3690,7 @@ public static partial class ChartRenderPlanner
             var slot = ResolveBarClusterSlot(plot.X, renderCategoryIndex, spacing);
             if (importedPercentStackedCluster)
                 slot = ResolveImportedPercentStackedClusterSlot(slot);
-            double stackedY = plot.Bottom;
+            double stackedY = chart.ValueAxis.ReverseOrder ? plot.Y : plot.Bottom;
 
             for (int columnSeriesIndex = 0; columnSeriesIndex < columnSeriesIndices.Length; columnSeriesIndex++)
             {
@@ -3686,7 +3742,11 @@ public static partial class ChartRenderPlanner
                         isHorizontalBar: false,
                         stacked && !importedPercentStackedCluster);
                     var bounds = ApplyColumnDepthProjection(
-                        new ChartPlanRect(x, stackedY - height, drawWidth, height),
+                        new ChartPlanRect(
+                            x,
+                            chart.ValueAxis.ReverseOrder ? stackedY : stackedY - height,
+                            drawWidth,
+                            height),
                         depth,
                         categoryIndex,
                         columnSeriesIndex);
@@ -3699,7 +3759,7 @@ public static partial class ChartRenderPlanner
                     {
                         Depth = depth
                     });
-                    stackedY -= height;
+                    stackedY += chart.ValueAxis.ReverseOrder ? height : -height;
                 }
                 else
                 {
@@ -3716,8 +3776,15 @@ public static partial class ChartRenderPlanner
                                 percentStacked)
                             : Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Height));
                     double y = percentStacked
-                        ? plot.Bottom - height
-                        : plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
+                        ? (IsValueAxisReversed(chart, series.OnSecondaryAxis) ? plot.Y : plot.Bottom - height)
+                        : IsValueAxisReversed(chart, series.OnSecondaryAxis)
+                            ? plot.Y
+                        : MapCartesianValueToY(
+                            rawValue.Value,
+                            effectiveMin,
+                            effectiveRange,
+                            plot,
+                            IsValueAxisReversed(chart, series.OnSecondaryAxis));
                     var depth = BuildBarGapDepthPlan(
                         chart,
                         categoryWidth,
@@ -3828,8 +3895,18 @@ public static partial class ChartRenderPlanner
             int renderCategoryIndex = ResolveCategoryRenderIndex(chart.CategoryAxis, categoryIndex, categoryCount);
             var slot = ResolveBarClusterSlot(plot.X, renderCategoryIndex, spacing);
             double next = cumulative + value;
-            double startY = MapCartesianValueToY(cumulative, minimum, range, plot);
-            double endY = MapCartesianValueToY(next, minimum, range, plot);
+            double startY = MapCartesianValueToY(
+                cumulative,
+                minimum,
+                range,
+                plot,
+                chart.ValueAxis.ReverseOrder);
+            double endY = MapCartesianValueToY(
+                next,
+                minimum,
+                range,
+                plot,
+                chart.ValueAxis.ReverseOrder);
             var bounds = new ChartPlanRect(
                 slot.ClusterStart,
                 Math.Min(startY, endY),
@@ -3935,12 +4012,15 @@ public static partial class ChartRenderPlanner
                 int renderSeries = stacked && !importedPercentStackedCluster
                     ? seriesIndex
                     : seriesCount - 1 - seriesIndex;
+                bool reverseValueAxis = IsValueAxisReversed(chart, series.OnSecondaryAxis);
                 double y = stacked
                     ? importedPercentStackedCluster
                         ? slot.ClusterStart + renderSeries * slot.SeriesStep
                         : slot.ClusterStart
                     : slot.ClusterStart + renderSeries * slot.SeriesStep;
-                double x = stacked ? stackedX : plot.X;
+                double x = stacked
+                    ? (reverseValueAxis ? plot.Right - (stackedX - plot.X) - width : stackedX)
+                    : (reverseValueAxis ? plot.Right - width : plot.X);
                 double height = Math.Max(
                     1,
                     slot.SeriesSize - (stacked && !importedPercentStackedCluster ? 0 : 1));
@@ -4010,8 +4090,12 @@ public static partial class ChartRenderPlanner
             int renderCategoryIndex = ResolveCategoryRenderIndex(
                 chart.CategoryAxis, categoryIndex, categoryCount);
             double x = plot.X + (renderCategoryIndex + 0.5) * categoryWidth;
-            var lowPoint = new ChartPlanPoint(x, MapCartesianValueToY(low.Value, primaryMin, primaryRange, plot));
-            var highPoint = new ChartPlanPoint(x, MapCartesianValueToY(high.Value, primaryMin, primaryRange, plot));
+            var lowPoint = new ChartPlanPoint(
+                x,
+                MapCartesianValueToY(low.Value, primaryMin, primaryRange, plot, chart.ValueAxis.ReverseOrder));
+            var highPoint = new ChartPlanPoint(
+                x,
+                MapCartesianValueToY(high.Value, primaryMin, primaryRange, plot, chart.ValueAxis.ReverseOrder));
             highLowLines.Add(new ChartLineSegmentPrimitive(
                 highSeriesIndex,
                 categoryIndex,
@@ -4022,7 +4106,12 @@ public static partial class ChartRenderPlanner
 
             if (open is not null)
             {
-                double y = MapCartesianValueToY(open.Value, primaryMin, primaryRange, plot);
+                double y = MapCartesianValueToY(
+                    open.Value,
+                    primaryMin,
+                    primaryRange,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 var priceMove = ResolveStockPriceMove(open, close);
                 openTicks.Add(new ChartStockTickPrimitive(
                     new ChartLineSegmentPrimitive(
@@ -4037,7 +4126,12 @@ public static partial class ChartRenderPlanner
 
             if (close is not null)
             {
-                double y = MapCartesianValueToY(close.Value, primaryMin, primaryRange, plot);
+                double y = MapCartesianValueToY(
+                    close.Value,
+                    primaryMin,
+                    primaryRange,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 var priceMove = ResolveStockPriceMove(open, close);
                 closeTicks.Add(new ChartStockTickPrimitive(
                     new ChartLineSegmentPrimitive(
@@ -4094,7 +4188,12 @@ public static partial class ChartRenderPlanner
 
                 points[categoryIndex] = new ChartPlanPoint(
                     plot.X + (categoryIndex + 0.5) * categoryWidth,
-                    MapCartesianValueToY(value.Value, minimum, range, plot));
+                    MapCartesianValueToY(
+                        value.Value,
+                        minimum,
+                        range,
+                        plot,
+                        chart.ValueAxis.ReverseOrder));
             }
 
             primitives.Add(BuildLineSeriesPrimitive(
@@ -5613,8 +5712,30 @@ public static partial class ChartRenderPlanner
         double value,
         double min,
         double range,
-        ChartPlanRect plot) =>
-        plot.Bottom - (value - min) / range * plot.Height;
+        ChartPlanRect plot,
+        bool reverseOrder = false) =>
+        MapCartesianFractionToY((value - min) / range, plot, reverseOrder);
+
+    private static bool IsValueAxisReversed(ChartShape chart, bool secondaryAxis) =>
+        secondaryAxis
+            ? chart.SecondaryValueAxis?.ReverseOrder == true
+            : chart.ValueAxis.ReverseOrder;
+
+    private static double MapCartesianFractionToY(
+        double fraction,
+        ChartPlanRect plot,
+        bool reverseOrder) =>
+        reverseOrder
+            ? plot.Y + fraction * plot.Height
+            : plot.Bottom - fraction * plot.Height;
+
+    private static double MapCartesianFractionToX(
+        double fraction,
+        ChartPlanRect plot,
+        bool reverseOrder) =>
+        reverseOrder
+            ? plot.Right - fraction * plot.Width
+            : plot.X + fraction * plot.Width;
 
     private static SrgbColor InterpolateSurfaceColor(SrgbColor baseColor, double normalized)
     {
@@ -5680,7 +5801,12 @@ public static partial class ChartRenderPlanner
                 double x = importedLineMarkers
                     ? plot.X + (renderCategoryIndex + 0.5) * stepX
                     : plot.X + renderCategoryIndex * stepX;
-                double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
+                double y = MapCartesianValueToY(
+                    rawValue.Value,
+                    effectiveMin,
+                    effectiveRange,
+                    plot,
+                    IsValueAxisReversed(chart, series.OnSecondaryAxis));
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
 
@@ -5749,7 +5875,12 @@ public static partial class ChartRenderPlanner
                 int renderCategoryIndex = ResolveCategoryRenderIndex(
                     chart.CategoryAxis, categoryIndex, categoryCount);
                 double x = plot.X + (renderCategoryIndex + 0.5) * stepX;
-                double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
+                double y = MapCartesianValueToY(
+                    rawValue.Value,
+                    effectiveMin,
+                    effectiveRange,
+                    plot,
+                    IsValueAxisReversed(chart, series.OnSecondaryAxis));
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
 
@@ -5988,7 +6119,12 @@ public static partial class ChartRenderPlanner
                 int renderCategoryIndex = ResolveCategoryRenderIndex(
                     chart.CategoryAxis, categoryIndex, categoryCount);
                 double x = plot.X + renderCategoryIndex * stepX;
-                double y = plot.Bottom - (value.Value - minValue) / range * plot.Height;
+                double y = MapCartesianValueToY(
+                    value.Value,
+                    minValue,
+                    range,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 pointSlots[categoryIndex] = new ChartPlanPoint(x, y);
             }
 
@@ -6051,8 +6187,18 @@ public static partial class ChartRenderPlanner
                 int renderCategoryIndex = ResolveCategoryRenderIndex(
                     chart.CategoryAxis, categoryIndex, categoryCount);
                 double x = plot.X + renderCategoryIndex * stepX;
-                double baselineY = plot.Bottom - (baselineValue - minValue) / range * plot.Height;
-                double y = plot.Bottom - (plottedValue - minValue) / range * plot.Height;
+                double baselineY = MapCartesianValueToY(
+                    baselineValue,
+                    minValue,
+                    range,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
+                double y = MapCartesianValueToY(
+                    plottedValue,
+                    minValue,
+                    range,
+                    plot,
+                    chart.ValueAxis.ReverseOrder);
                 baselineSlots[categoryIndex] = new ChartPlanPoint(x, baselineY);
                 pointSlots[categoryIndex] = new ChartPlanPoint(x, y);
             }
@@ -6224,7 +6370,8 @@ public static partial class ChartRenderPlanner
             BuildAxisLabelFormatPlan(chart.CategoryAxis),
             BuildAxisLabelFormatPlan(chart.ValueAxis),
             UsesImportedSmoothScatterDefaults(chart),
-            chart.ValueAxis.HasMajorGridlines);
+            chart.ValueAxis.HasMajorGridlines,
+            chart.ValueAxis.ReverseOrder);
 
         var seriesPrimitives = new List<ChartScatterSeriesPrimitive>();
         var dataLabels = new List<ChartDataLabelPlan>();
@@ -6252,7 +6399,12 @@ public static partial class ChartRenderPlanner
 
                 points[pointIndex] = new ChartPlanPoint(
                     plot.X + (xValue.Value - xMin) / xRange * plot.Width,
-                    plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height);
+                    MapCartesianValueToY(
+                        yValue.Value,
+                        yMin,
+                        yRange,
+                        plot,
+                        chart.ValueAxis.ReverseOrder));
             }
 
             int? previousPointIndex = null;
@@ -6403,7 +6555,12 @@ public static partial class ChartRenderPlanner
                     pointIndex,
                     new ChartPlanPoint(
                         plot.X + (xValue - xMin) / xRange * plot.Width,
-                        plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height),
+                        MapCartesianValueToY(
+                            yValue.Value,
+                            yMin,
+                            yRange,
+                            plot,
+                            chart.ValueAxis.ReverseOrder)),
                     radius,
                     ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, BubbleFillAlpha, fillPlans, ShouldVaryPointColors(chart)),
                     stroke));
@@ -6421,7 +6578,8 @@ public static partial class ChartRenderPlanner
             BuildAxisLabelFormatPlan(chart.CategoryAxis),
             BuildAxisLabelFormatPlan(chart.ValueAxis),
             importedMinorValueGridlines: false,
-            includeXGridlines: chart.ValueAxis.HasMajorGridlines);
+            includeXGridlines: chart.ValueAxis.HasMajorGridlines,
+            reverseValueAxis: chart.ValueAxis.ReverseOrder);
 
         return new ChartBubblePrimitivePlan(
             gridLines,
@@ -8098,9 +8256,10 @@ public static partial class ChartRenderPlanner
             double yRange,
             double yUnit,
             ChartAxisLabelFormatPlan? xAxisLabelFormat,
-            ChartAxisLabelFormatPlan? yAxisLabelFormat,
-            bool importedMinorValueGridlines = false,
-            bool includeXGridlines = true)
+        ChartAxisLabelFormatPlan? yAxisLabelFormat,
+        bool importedMinorValueGridlines = false,
+        bool includeXGridlines = true,
+        bool reverseValueAxis = false)
     {
         double xSteps = xRange / xUnit;
         double ySteps = yRange / yUnit;
@@ -8139,7 +8298,10 @@ public static partial class ChartRenderPlanner
 
         for (int tickIndex = 0; tickIndex <= yGridTickCount; tickIndex++)
         {
-            double y = plot.Bottom - plot.Height * tickIndex / yGridTickCount;
+            double y = MapCartesianFractionToY(
+                tickIndex / (double)yGridTickCount,
+                plot,
+                reverseValueAxis);
             gridLines.Add(new ChartGridLinePlan(
                 new ChartPlanPoint(plot.X, y),
                 new ChartPlanPoint(plot.Right, y)));
@@ -8618,7 +8780,12 @@ public static partial class ChartRenderPlanner
             else
             {
                 barHeight = Math.Abs((value - effectiveMin) / effectiveRange * plot.Height);
-                barY = plot.Bottom - (value - effectiveMin) / effectiveRange * plot.Height;
+                barY = MapCartesianValueToY(
+                    value,
+                    effectiveMin,
+                    effectiveRange,
+                    plot,
+                    IsValueAxisReversed(chart, series.OnSecondaryAxis));
             }
 
             double total = ComputeDataLabelTotal(chart, series, categoryIndex, stacked || percentStacked, labels);
@@ -8730,7 +8897,12 @@ public static partial class ChartRenderPlanner
                 continue;
 
             double x = plot.X + categoryIndex * stepX;
-            double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
+            double y = MapCartesianValueToY(
+                rawValue.Value,
+                effectiveMin,
+                effectiveRange,
+                plot,
+                IsValueAxisReversed(chart, series.OnSecondaryAxis));
             string categoryName = categoryIndex < chart.Categories.Count
                 ? chart.Categories[categoryIndex]
                 : string.Empty;

@@ -39,9 +39,11 @@ public sealed class MailMergeCheckErrorsParityTests
             "Select recipients first (Mailings > Select Recipients), then check for errors.");
         source.Should().Contain("if (mode is not { } selected)\n            return;");
         source.Should().Contain(
-            "await FreeWInfoDialog.ShowAsync(this, $\"Mail merge error check selected: {selected}.\");");
+            "var result = _mailMerge.CheckForErrors(selected);");
         source.Should().Contain(
-            "await FreeWInfoDialog.ShowAsync(this, $\"Mail merge error check selected: {selected}.\");\n        _editor.Focus();");
+            "OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));");
+        source.Should().Contain(
+            "else\n                await FreeWInfoDialog.ShowAsync(this, result.Message);");
         source.Should().NotContain(
             "_status.Text = $\"Mail merge error check selected: {selected}.\";");
     }

@@ -199,7 +199,8 @@ internal static class FreeWRibbonCommands
         // W25 — Local Thesaurus pane + Balloons review mode.
         Action? onToggleThesaurus = null,
         Action? onToggleBalloons = null,
-        Func<bool, string, string?>? askHeaderFooterText = null)
+        Func<bool, string, string?>? askHeaderFooterText = null,
+        Action<TextDocument>? onOpenMailMergeErrorReport = null)
     {
         var registry = new RibbonCommandRegistry();
         var stateful = new List<(RibbonCommandId Id, IRibbonStatefulCommand Command)>();
@@ -1912,7 +1913,10 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-preview-next", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Next));
         registry.Register("freew.merge-preview-last", new NavigateMergePreviewCommand(editor, mergeSession, MailMergePreviewNavigationAction.Last));
         registry.Register("freew.merge-find-recipient", new FindMergeRecipientCommand(editor, mergeSession));
-        registry.Register("freew.merge-check-errors", new CheckMergeErrorsCommand(editor, mergeSession));
+        registry.Register("freew.merge-check-errors", new CheckMergeErrorsCommand(
+            editor,
+            mergeSession,
+            openReportDocument: onOpenMailMergeErrorReport));
         registry.Register("freew.merge-finish", new FinishMergeCommand(editor, mergeSession));
         registry.Register("freew.merge-email", new EmailMergeCommand(editor, mergeSession));
         // Filter & Sort: refines the active session's MergeData (include/exclude rows, sort column/direction)
@@ -6872,11 +6876,15 @@ internal static class FreeWRibbonCommands
         DocumentView editor,
         MailMergeSession session,
         Func<Window?, MailMergeCheckForErrorsMode?>? ask = null,
-        Action<Window?, string>? showInfo = null) : IRibbonCommand
+        Action<Window?, string>? showInfo = null,
+        Action<RibbonCommandContext>? completeMerge = null,
+        Action<TextDocument>? openReportDocument = null) : IRibbonCommand
     {
         private readonly Func<Window?, MailMergeCheckForErrorsMode?> _ask = ask ?? MailMergeCheckForErrorsDialog.Ask;
         private readonly Action<Window?, string> _showInfo = showInfo ??
             ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+        private readonly Action<RibbonCommandContext> _completeMerge = completeMerge ??
+            (context => new FinishMergeCommand(editor, session).Execute(context));
 
         public void Execute(RibbonCommandContext context)
         {
@@ -6890,7 +6898,22 @@ internal static class FreeWRibbonCommands
             if (_ask(owner) is not { } selected)
                 return;
 
-            _showInfo(owner, $"Mail merge error check selected: {selected}.");
+            if (!session.IsPreviewing)
+                editor.CommitToModel();
+            var template = session.IsPreviewing ? session.Template! : editor.Model;
+            var rows = session.Data.Rows.Select(row => session.AugmentRow(row)).ToList();
+            var result = MailMergeCheckForErrorsPlanner.Check(template, rows, selected);
+            if (selected == MailMergeCheckForErrorsMode.SimulateAndReport
+                && openReportDocument is not null)
+            {
+                openReportDocument(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
+            }
+            else
+            {
+                _showInfo(owner, result.Message);
+            }
+            if (result.ShouldCompleteMerge)
+                _completeMerge(context);
             editor.Focus();
         }
     }

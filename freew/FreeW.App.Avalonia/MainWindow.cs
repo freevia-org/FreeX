@@ -1284,6 +1284,17 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void OpenMailMergeErrorReport(TextDocument report)
+    {
+        var reportWindow = new MainWindow
+        {
+            Title = "FreeW - Mail Merge Error Report"
+        };
+        reportWindow.LoadDocumentContent(report);
+        reportWindow.Show();
+        reportWindow._editor.Focus();
+    }
+
     /// <summary>
     /// AV-VIEW: Window > Arrange All. Tiles every visible FreeW top-level window on the screen that
     /// owns this window, using the screen working area so desktop panels/taskbars remain unobscured.
@@ -2145,7 +2156,14 @@ public sealed partial class MainWindow : Window
         if (mode is not { } selected)
             return;
 
-        await FreeWInfoDialog.ShowAsync(this, $"Mail merge error check selected: {selected}.");
+        var result = _mailMerge.CheckForErrors(selected);
+        if (result is not null)
+        {
+            if (selected == MailMergeCheckForErrorsMode.SimulateAndReport)
+                OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
+            else
+                await FreeWInfoDialog.ShowAsync(this, result.Message);
+        }
         _editor.Focus();
     }
 

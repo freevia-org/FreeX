@@ -110,6 +110,35 @@ public readonly record struct MergeRuleResult(
 public static class MergeRuleEvaluator
 {
     /// <summary>
+    /// Returns the recipient field referenced by a valid conditional rule. Rules without a recipient-field
+    /// operand (Set, Ref, Fill-in, Ask, and Merge Sequence #) return false.
+    /// </summary>
+    public static bool TryGetReferencedFieldName(string instruction, out string fieldName)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+        var span = instruction.AsSpan().Trim();
+        MergeCondition? condition = null;
+        if (TryParsePrefix(span, "If ", out var afterIf)
+            && TryParseConditionAndBranches(afterIf, out var ifCondition, out _, out _))
+        {
+            condition = ifCondition;
+        }
+        else if (TryParsePrefix(span, "Skip Record If ", out var afterSkip)
+                 && TryParseCondition(afterSkip, out var skipCondition))
+        {
+            condition = skipCondition;
+        }
+        else if (TryParsePrefix(span, "Next Record If ", out var afterNext)
+                 && TryParseCondition(afterNext, out var nextCondition))
+        {
+            condition = nextCondition;
+        }
+
+        fieldName = condition?.FieldName ?? string.Empty;
+        return fieldName.Length > 0;
+    }
+
+    /// <summary>
     /// Evaluate a single field-instruction string (the text <em>between</em> the guillemets) against
     /// <paramref name="row"/> and <paramref name="state"/>. Returns a <see cref="MergeRuleResult"/>
     /// describing the text to emit and any control effects (skip/advance). Returns
@@ -1371,8 +1400,8 @@ public static class MailMerge
             doc.Styles[id] = style;
 
         CopyPageSettings(template.Page, doc.Page);
-        doc.Header = CloneHeaderFooter(template.Header, row);
-        doc.Footer = CloneHeaderFooter(template.Footer, row);
+        CopySectionHeadersFooters(template.FinalSectionHeadersFooters, doc.FinalSectionHeadersFooters,
+            source => CloneHeaderFooter(source, row));
 
         foreach (var block in template.Blocks)
             doc.Blocks.Add(CloneBlock(block, row));
@@ -1474,8 +1503,8 @@ public static class MailMerge
             doc.Styles[id] = style;
 
         CopyPageSettings(template.Page, doc.Page);
-        doc.Header = CloneHeaderFooterWithRules(template.Header, row, state, recordIndex);
-        doc.Footer = CloneHeaderFooterWithRules(template.Footer, row, state, recordIndex);
+        CopySectionHeadersFooters(template.FinalSectionHeadersFooters, doc.FinalSectionHeadersFooters,
+            source => CloneHeaderFooterWithRules(source, row, state, recordIndex));
 
         foreach (var block in template.Blocks)
             doc.Blocks.Add(CloneBlockWithRules(block, row, state, recordIndex));
@@ -1710,6 +1739,7 @@ public static class MailMerge
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
+            SectionBreak = source.SectionBreak is { } section ? CloneSection(section, row) : null,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
@@ -1798,6 +1828,9 @@ public static class MailMerge
             Formatting = source.Formatting,
             StyleId = source.StyleId,
             DropCap = source.DropCap,
+            SectionBreak = source.SectionBreak is { } section
+                ? CloneSectionWithRules(section, row, state, recordIndex)
+                : null,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
@@ -1886,6 +1919,46 @@ public static class MailMerge
         return clone;
     }
 
+    private static Section CloneSection(Section source, IReadOnlyDictionary<string, string> row) =>
+        new(source.Page.Clone(), source.BreakKind)
+        {
+            HeadersFooters = CloneSectionHeadersFooters(source.HeadersFooters,
+                headerFooter => CloneHeaderFooter(headerFooter, row))
+        };
+
+    private static Section CloneSectionWithRules(
+        Section source,
+        IReadOnlyDictionary<string, string> row,
+        MergeState state,
+        int recordIndex) =>
+        new(source.Page.Clone(), source.BreakKind)
+        {
+            HeadersFooters = CloneSectionHeadersFooters(source.HeadersFooters,
+                headerFooter => CloneHeaderFooterWithRules(headerFooter, row, state, recordIndex))
+        };
+
+    private static SectionHeadersFooters CloneSectionHeadersFooters(
+        SectionHeadersFooters source,
+        Func<HeaderFooter?, HeaderFooter?> clone)
+    {
+        var target = new SectionHeadersFooters();
+        CopySectionHeadersFooters(source, target, clone);
+        return target;
+    }
+
+    private static void CopySectionHeadersFooters(
+        SectionHeadersFooters source,
+        SectionHeadersFooters target,
+        Func<HeaderFooter?, HeaderFooter?> clone)
+    {
+        target.Header = clone(source.Header);
+        target.Footer = clone(source.Footer);
+        target.EvenHeader = clone(source.EvenHeader);
+        target.EvenFooter = clone(source.EvenFooter);
+        target.FirstHeader = clone(source.FirstHeader);
+        target.FirstFooter = clone(source.FirstFooter);
+    }
+
     private static void CopyPageSettings(PageSettings from, PageSettings to)
     {
         to.WidthPt = from.WidthPt;
@@ -1895,17 +1968,33 @@ public static class MailMerge
         to.MarginTopPt = from.MarginTopPt;
         to.MarginBottomPt = from.MarginBottomPt;
         to.Landscape = from.Landscape;
+        to.GutterPt = from.GutterPt;
+        to.HeaderDistancePt = from.HeaderDistancePt;
+        to.FooterDistancePt = from.FooterDistancePt;
+        to.MirrorMargins = from.MirrorMargins;
+        to.GutterAtTop = from.GutterAtTop;
         to.ColumnCount = from.ColumnCount;
         to.ColumnSpacingPt = from.ColumnSpacingPt;
         to.ColumnsLineBetween = from.ColumnsLineBetween;
         to.ColumnWidthsPt = from.ColumnWidthsPt is null ? null : new List<double>(from.ColumnWidthsPt);
         to.PageBorder = from.PageBorder;
         to.Watermark = from.Watermark;
+        to.WatermarkOptions = PageSettings.CloneWatermarkOptions(from.WatermarkOptions);
         to.LineNumberMode = from.LineNumberMode;
         to.LineNumberCountBy = from.LineNumberCountBy;
         to.LineNumberStartAt = from.LineNumberStartAt;
+        to.PageNumberFormat = from.PageNumberFormat;
+        to.PageNumberStartAt = from.PageNumberStartAt;
+        to.PageNumberChapterStyleLevel = from.PageNumberChapterStyleLevel;
+        to.PageNumberChapterSeparator = from.PageNumberChapterSeparator;
         to.AutoHyphenation = from.AutoHyphenation;
+        to.HyphenationZonePt = from.HyphenationZonePt;
+        to.ConsecutiveHyphenLimit = from.ConsecutiveHyphenLimit;
+        to.DoNotHyphenateCaps = from.DoNotHyphenateCaps;
+        to.DefaultTabStopPt = from.DefaultTabStopPt;
         to.VerticalAlignment = from.VerticalAlignment;
         to.DifferentFirstPage = from.DifferentFirstPage;
+        to.DifferentOddEvenPages = from.DifferentOddEvenPages;
+        to.BackgroundColorHex = from.BackgroundColorHex;
     }
 }

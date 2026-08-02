@@ -1241,10 +1241,12 @@ public sealed class FreeWRibbonParityTests
             editor,
             session,
             ask: _ => MailMergeCheckForErrorsMode.CompleteAndPause,
-            showInfo: (_, message) => messages.Add(message));
+            showInfo: (_, message) => messages.Add(message),
+            completeMerge: _ => messages.Add("completed"));
         checkErrors.Execute(RibbonCommandContext.Empty);
 
-        messages.Should().Contain("Mail merge error check selected: CompleteAndPause.");
+        messages.Should().Contain("Checked 2 recipient(s). No mail merge errors were found.");
+        messages.Should().Contain("completed");
     }
 
     [StaFact]
@@ -1288,6 +1290,38 @@ public sealed class FreeWRibbonParityTests
         prompts.Should().Be(0);
         messages.Should().HaveCount(2);
         messages[^1].Should().Contain("Select recipients first");
+    }
+
+    [StaFact]
+    public void MailingsCheckErrors_SimulationOpensEditableReportInsteadOfCompletingMerge()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(new TextDocument
+        {
+            Blocks = { new Paragraph($"Dear {MailMerge.FieldOpen}Missing{MailMerge.FieldClose}") }
+        });
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("Name\nAda")
+        };
+        var messages = new List<string>();
+        TextDocument? report = null;
+        var completed = false;
+        var command = new FreeWRibbonCommands.CheckMergeErrorsCommand(
+            editor,
+            session,
+            ask: _ => MailMergeCheckForErrorsMode.SimulateAndReport,
+            showInfo: (_, message) => messages.Add(message),
+            completeMerge: _ => completed = true,
+            openReportDocument: document => report = document);
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        report.Should().NotBeNull();
+        report!.Properties.Title.Should().Be("Mail Merge Error Report");
+        report.PlainText.Should().Contain("Merge field 'Missing'");
+        messages.Should().BeEmpty();
+        completed.Should().BeFalse();
     }
 
     [StaFact]

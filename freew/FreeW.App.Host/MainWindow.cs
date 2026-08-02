@@ -348,7 +348,8 @@ public sealed class MainWindow : Window
             onNewWindow: OpenNewWindow,
             onArrangeAll: ArrangeAllWindows,
             onToggleThesaurus: ToggleThesaurusPane,
-            onToggleBalloons: ToggleBalloons);
+            onToggleBalloons: ToggleBalloons,
+            onOpenMailMergeErrorReport: OpenMailMergeErrorReport);
         _file = new FileCommands(this, editor, UpdateTitle, _options, messageService: _messageService);
         editor.TextChanged += (_, _) =>
         {
@@ -2126,6 +2127,15 @@ public sealed class MainWindow : Window
             newWindow.Title = "FreeW — (second view)";
             newWindow.Show();
         }
+    }
+
+    private void OpenMailMergeErrorReport(TextDocument report)
+    {
+        var reportWindow = new MainWindow(_options, messageService: _messageService);
+        reportWindow._editor.LoadModel(report);
+        reportWindow.Title = "FreeW — Mail Merge Error Report";
+        reportWindow.Show();
+        reportWindow._editor.Focus();
     }
 
     // Feature 5 — Arrange All: tile all open FreeW windows across the work area.

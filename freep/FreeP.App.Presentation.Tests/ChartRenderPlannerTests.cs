@@ -704,6 +704,42 @@ public sealed class ChartRenderPlannerTests
             label.AxisLabelFormat == new ChartAxisLabelFormatPlan("[$-409]d\\-mmm;@", false));
     }
 
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(50, 1)]
+    [InlineData(100, 2)]
+    public void CategoryAxisLabelPlans_HonorAuthoredLabelOffsetPercent(int offsetPercent, double expectedGap)
+    {
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Jan", "Feb" });
+        chart.Series.Add(series);
+        chart.CategoryAxis.LabelOffsetPercent = offsetPercent;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var labels = ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame);
+
+        labels.Should().HaveCount(2);
+        labels[0].Bounds.Y.Should().BeApproximately(frame.Plot.Bottom + expectedGap, 0.0001);
+    }
+
+    [Fact]
+    public void BarCategoryAxisLabelPlans_HonorAuthoredLabelOffsetPercent()
+    {
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        var chart = new ChartShape { ChartType = ChartType.BarClustered };
+        chart.Categories.AddRange(new[] { "Jan", "Feb" });
+        chart.Series.Add(series);
+        chart.CategoryAxis.LabelOffsetPercent = 0;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var label = ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame).First();
+
+        (label.Bounds.X + label.Bounds.Width).Should().BeApproximately(frame.Plot.X, 0.0001);
+    }
+
     [Fact]
     public void SecondaryValueAxisPlan_FormatsTextAndCarriesNumberFormatMetadata()
     {
@@ -2319,6 +2355,83 @@ public sealed class ChartRenderPlannerTests
 
         var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
         first.Bounds.X.Should().BeApproximately(121.4286, 0.0001);
+    }
+
+    [Fact]
+    public void BuildColumnPrimitives_ReverseValueAxisMirrorsValuePositions()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.Add("Jan");
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.Add(5);
+        chart.Series.Add(series);
+        var plot = new ChartPlanRect(0, 0, 200, 100);
+
+        var normal = ChartRenderPlanner.BuildColumnPrimitives(chart, plot).Single();
+        chart.ValueAxis.ReverseOrder = true;
+        var reversed = ChartRenderPlanner.BuildColumnPrimitives(chart, plot).Single();
+
+        (normal.Bounds.Y + normal.Bounds.Height).Should().BeApproximately(plot.Bottom, 0.0001);
+        reversed.Bounds.Y.Should().BeApproximately(plot.Y, 0.0001);
+        reversed.Bounds.Height.Should().BeApproximately(normal.Bounds.Height, 0.0001);
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_ReverseValueAxisMirrorsValuePositions()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Line };
+        chart.Categories.AddRange(new[] { "Jan", "Feb" });
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.AddRange(new double?[] { 5, 20 });
+        chart.Series.Add(series);
+        var plot = new ChartPlanRect(0, 0, 200, 100);
+
+        var normal = ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers: true).Single();
+        chart.ValueAxis.ReverseOrder = true;
+        var reversed = ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers: true).Single();
+
+        (normal.Points[0]!.Value.Y + reversed.Points[0]!.Value.Y).Should().BeApproximately(plot.Height, 0.0001);
+        (normal.Points[1]!.Value.Y + reversed.Points[1]!.Value.Y).Should().BeApproximately(plot.Height, 0.0001);
+    }
+
+    [Fact]
+    public void BuildBarPrimitives_ReverseValueAxisMovesBarsToTheOppositeValueEdge()
+    {
+        var chart = new ChartShape { ChartType = ChartType.BarClustered };
+        chart.Categories.Add("Jan");
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.Add(5);
+        chart.Series.Add(series);
+        var plot = new ChartPlanRect(0, 0, 200, 100);
+
+        var normal = ChartRenderPlanner.BuildBarPrimitives(chart, plot).Single();
+        chart.ValueAxis.ReverseOrder = true;
+        var reversed = ChartRenderPlanner.BuildBarPrimitives(chart, plot).Single();
+
+        normal.Bounds.X.Should().BeApproximately(0, 0.0001);
+        reversed.Bounds.X.Should().BeApproximately(plot.Right - normal.Bounds.Width, 0.0001);
+        reversed.Bounds.Width.Should().BeApproximately(normal.Bounds.Width, 0.0001);
+    }
+
+    [Fact]
+    public void ValueAxisAnnotations_ReverseTogetherWithValueGeometry()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.Add("Jan");
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.Add(5);
+        chart.Series.Add(series);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var normalGrid = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame).GridLines;
+        var normalLabels = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+        chart.ValueAxis.ReverseOrder = true;
+        var reversedGrid = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame).GridLines;
+        var reversedLabels = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+
+        normalGrid[0].Start.Y.Should().BeApproximately(frame.Plot.Bottom, 0.0001);
+        reversedGrid[0].Start.Y.Should().BeApproximately(frame.Plot.Y, 0.0001);
+        normalLabels[0].Bounds.Y.Should().BeGreaterThan(reversedLabels[0].Bounds.Y);
     }
 
     [Fact]

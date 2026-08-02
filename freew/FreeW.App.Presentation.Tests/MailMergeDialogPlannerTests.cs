@@ -128,4 +128,103 @@ public sealed class MailMergeDialogPlannerTests
         MailMergeCheckForErrorsPlanner.GetMode(99)
             .Should().Be(MailMergeCheckForErrorsMode.SimulateAndReport);
     }
+
+    [Fact]
+    public void CheckForErrors_SimulatesRowsAndFindsMissingFieldsAndInvalidRules()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.Paragraphs.Single().Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose} "
+            + $"{MailMerge.FieldOpen}Missing{MailMerge.FieldClose} "
+            + $"{MailMerge.FieldOpen}If City Broken{MailMerge.FieldClose}"));
+        template.Header = new HeaderFooter($"{MailMerge.FieldOpen}HeaderMissing{MailMerge.FieldClose}");
+        IReadOnlyDictionary<string, string>[] rows =
+        [
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["Name"] = "Ada",
+                ["City"] = "London"
+            }
+        ];
+
+        var paused = MailMergeCheckForErrorsPlanner.Check(
+            template, rows, MailMergeCheckForErrorsMode.CompleteAndPause);
+        var forced = MailMergeCheckForErrorsPlanner.Check(
+            template, rows, MailMergeCheckForErrorsMode.CompleteWithoutPausing);
+
+        paused.RecordsChecked.Should().Be(1);
+        paused.Issues.Select(issue => issue.Instruction)
+            .Should().BeEquivalentTo("Missing", "If City Broken", "HeaderMissing");
+        paused.ShouldCompleteMerge.Should().BeFalse();
+        paused.Message.Should().Contain("Found 3 error(s)");
+        forced.ShouldCompleteMerge.Should().BeTrue();
+    }
+
+    [Fact]
+    public void CheckForErrors_AllowsCleanConditionalMergeToComplete()
+    {
+        var template = TextDocument.CreateEmpty();
+        var instruction = MergeRuleEvaluator.BuildIfInstruction(
+            "City", MergeConditionOperator.Equal, "London", "Local", "Remote");
+        template.Paragraphs.Single().Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose} "
+            + $"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}"));
+        IReadOnlyDictionary<string, string>[] rows =
+        [new Dictionary<string, string> { ["Name"] = "Ada", ["City"] = "London" }];
+
+        var result = MailMergeCheckForErrorsPlanner.Check(
+            template, rows, MailMergeCheckForErrorsMode.CompleteAndPause);
+
+        result.HasErrors.Should().BeFalse();
+        result.ShouldCompleteMerge.Should().BeTrue();
+        result.Message.Should().Be("Checked 1 recipient(s). No mail merge errors were found.");
+    }
+
+    [Fact]
+    public void CheckForErrors_BuildsEditableReportDocumentWithEveryIssue()
+    {
+        var result = new MailMergeErrorCheckResult(
+            MailMergeCheckForErrorsMode.SimulateAndReport,
+            2,
+            [
+                new("Missing", "Merge field 'Missing' is not in the recipient data source."),
+                new("If Broken", "Merge rule 'If Broken' is invalid.")
+            ],
+            ShouldCompleteMerge: false);
+
+        var report = MailMergeCheckForErrorsPlanner.BuildReportDocument(result);
+
+        report.Properties.Title.Should().Be("Mail Merge Error Report");
+        report.Paragraphs.First().StyleId.Should().Be("Title");
+        report.PlainText.Should().Contain("Records checked: 2");
+        report.PlainText.Should().Contain("Error 1: Merge field 'Missing'");
+        report.PlainText.Should().Contain("Instruction: If Broken");
+    }
+
+    [Fact]
+    public void CheckForErrors_InspectsFirstEvenAndEverySectionHeaderFooterStory()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.FirstHeader = new HeaderFooter($"{MailMerge.FieldOpen}FirstMissing{MailMerge.FieldClose}");
+        template.EvenFooter = new HeaderFooter($"{MailMerge.FieldOpen}EvenMissing{MailMerge.FieldClose}");
+        template.Blocks.Insert(0, new Paragraph("Section end")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+            {
+                HeadersFooters = new SectionHeadersFooters
+                {
+                    Header = new HeaderFooter(
+                        $"{MailMerge.FieldOpen}SectionMissing{MailMerge.FieldClose}")
+                }
+            }
+        });
+        IReadOnlyDictionary<string, string>[] rows =
+        [new Dictionary<string, string> { ["Name"] = "Ada" }];
+
+        var result = MailMergeCheckForErrorsPlanner.Check(
+            template, rows, MailMergeCheckForErrorsMode.SimulateAndReport);
+
+        result.Issues.Select(issue => issue.Instruction).Should().BeEquivalentTo(
+            "SectionMissing", "FirstMissing", "EvenMissing");
+    }
 }

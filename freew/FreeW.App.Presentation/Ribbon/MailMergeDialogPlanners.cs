@@ -261,8 +261,38 @@ public enum MailMergeCheckForErrorsMode
     CompleteWithoutPausing,
 }
 
+public sealed record MailMergeErrorCheckIssue(string Instruction, string Message);
+
+public sealed record MailMergeErrorCheckResult(
+    MailMergeCheckForErrorsMode Mode,
+    int RecordsChecked,
+    IReadOnlyList<MailMergeErrorCheckIssue> Issues,
+    bool ShouldCompleteMerge)
+{
+    public bool HasErrors => Issues.Count > 0;
+
+    public string Message
+    {
+        get
+        {
+            var prefix = $"Checked {RecordsChecked} recipient(s).";
+            if (!HasErrors)
+                return prefix + " No mail merge errors were found.";
+
+            var details = string.Join(" ", Issues.Take(3).Select(issue => issue.Message));
+            var remainder = Issues.Count > 3 ? $" {Issues.Count - 3} more error(s)." : string.Empty;
+            return $"{prefix} Found {Issues.Count} error(s). {details}{remainder}";
+        }
+    }
+}
+
 public static class MailMergeCheckForErrorsPlanner
 {
+    private static readonly string[] RulePrefixes =
+    [
+        "If ", "Skip Record If ", "Next Record If ", "Set ", "Ref ", "Fill-in ", "Ask "
+    ];
+
     private static readonly MailMergeCheckForErrorsChoice[] Choices =
     [
         new(MailMergeCheckForErrorsMode.SimulateAndReport, "Simulate the merge and report errors in a new document"),
@@ -278,4 +308,125 @@ public static class MailMergeCheckForErrorsPlanner
         selectedIndex >= 0 && selectedIndex < Choices.Length
             ? Choices[selectedIndex].Mode
             : DefaultMode;
+
+    public static MailMergeErrorCheckResult Check(
+        TextDocument template,
+        IReadOnlyList<IReadOnlyDictionary<string, string>> rows,
+        MailMergeCheckForErrorsMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        ArgumentNullException.ThrowIfNull(rows);
+
+        var issues = new List<MailMergeErrorCheckIssue>();
+        var firstRow = rows.FirstOrDefault()
+            ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var instructions = MailMerge.FieldNames(template).ToList();
+        foreach (var section in template.Sections)
+            AddInstructions(section.HeadersFooters, instructions);
+
+        foreach (var instruction in instructions.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (IsSpecialInstruction(instruction))
+                continue;
+
+            var rule = MergeRuleEvaluator.Evaluate(instruction, firstRow, new MergeState(), 1);
+            if (rule is not null)
+            {
+                if (MergeRuleEvaluator.TryGetReferencedFieldName(instruction, out var fieldName)
+                    && !firstRow.ContainsKey(fieldName))
+                {
+                    issues.Add(new(instruction,
+                        $"Rule '{instruction}' references missing recipient field '{fieldName}'."));
+                }
+                continue;
+            }
+
+            if (RulePrefixes.Any(prefix => instruction.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
+            {
+                issues.Add(new(instruction, $"Merge rule '{instruction}' is invalid."));
+            }
+            else if (!firstRow.ContainsKey(instruction))
+            {
+                issues.Add(new(instruction,
+                    $"Merge field '{instruction}' is not in the recipient data source."));
+            }
+        }
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            try
+            {
+                MailMerge.MergeRecordWithRules(template, rows[index], new MergeState(), index + 1);
+            }
+            catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+            {
+                issues.Add(new($"Record {index + 1}",
+                    $"Record {index + 1} could not be merged: {exception.Message}"));
+            }
+        }
+
+        var distinct = issues.DistinctBy(issue => (issue.Instruction, issue.Message)).ToList();
+        var shouldComplete = mode == MailMergeCheckForErrorsMode.CompleteWithoutPausing
+            || mode == MailMergeCheckForErrorsMode.CompleteAndPause && distinct.Count == 0;
+        return new(mode, rows.Count, distinct, shouldComplete);
+    }
+
+    public static TextDocument BuildReportDocument(MailMergeErrorCheckResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        var report = TextDocument.CreateEmpty();
+        report.Blocks.Clear();
+        report.Properties.Title = "Mail Merge Error Report";
+        report.Blocks.Add(new Paragraph("Mail Merge Error Report") { StyleId = "Title" });
+        report.Blocks.Add(new Paragraph($"Records checked: {result.RecordsChecked}"));
+
+        if (!result.HasErrors)
+        {
+            report.Blocks.Add(new Paragraph("No mail merge errors were found."));
+            return report;
+        }
+
+        report.Blocks.Add(new Paragraph($"Errors found: {result.Issues.Count}") { StyleId = "Heading1" });
+        for (var index = 0; index < result.Issues.Count; index++)
+        {
+            var issue = result.Issues[index];
+            report.Blocks.Add(new Paragraph($"Error {index + 1}: {issue.Message}"));
+            report.Blocks.Add(new Paragraph($"Instruction: {issue.Instruction}"));
+        }
+
+        return report;
+    }
+
+    private static void AddInstructions(string text, ICollection<string> instructions)
+    {
+        foreach (var instruction in MailMerge.FieldNames(text))
+            instructions.Add(instruction);
+    }
+
+    private static void AddInstructions(
+        SectionHeadersFooters headersFooters,
+        ICollection<string> instructions)
+    {
+        foreach (var story in new[]
+                 {
+                     headersFooters.Header,
+                     headersFooters.Footer,
+                     headersFooters.EvenHeader,
+                     headersFooters.EvenFooter,
+                     headersFooters.FirstHeader,
+                     headersFooters.FirstFooter
+                 })
+        {
+            if (story is not null)
+                AddInstructions(story.PlainText, instructions);
+        }
+    }
+
+    private static bool IsSpecialInstruction(string instruction) =>
+        instruction.Equals(MailMerge.NextRecordField, StringComparison.OrdinalIgnoreCase)
+        || instruction.Equals(MailMerge.MergeRecordNumberField, StringComparison.OrdinalIgnoreCase)
+        || instruction.Equals(MailMerge.MergeSequenceNumberField, StringComparison.OrdinalIgnoreCase)
+        || instruction.Equals("AddressBlock", StringComparison.OrdinalIgnoreCase)
+        || instruction.Equals("GreetingLine", StringComparison.OrdinalIgnoreCase);
 }
