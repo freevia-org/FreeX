@@ -270,6 +270,11 @@ public sealed record MailMergeErrorCheckResult(
     bool ShouldCompleteMerge)
 {
     public bool HasErrors => Issues.Count > 0;
+    public bool ShouldPauseForErrors =>
+        Mode == MailMergeCheckForErrorsMode.CompleteAndPause && HasErrors;
+    public bool ShouldOpenReportDocument =>
+        Mode == MailMergeCheckForErrorsMode.SimulateAndReport
+        || Mode == MailMergeCheckForErrorsMode.CompleteWithoutPausing && HasErrors;
 
     public string Message
     {
@@ -366,8 +371,7 @@ public static class MailMergeCheckForErrorsPlanner
         }
 
         var distinct = issues.DistinctBy(issue => (issue.Instruction, issue.Message)).ToList();
-        var shouldComplete = mode == MailMergeCheckForErrorsMode.CompleteWithoutPausing
-            || mode == MailMergeCheckForErrorsMode.CompleteAndPause && distinct.Count == 0;
+        var shouldComplete = mode != MailMergeCheckForErrorsMode.SimulateAndReport;
         return new(mode, rows.Count, distinct, shouldComplete);
     }
 

@@ -1325,6 +1325,67 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void MailingsCheckErrors_PauseReportsEachErrorThenCompletes()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(new TextDocument
+        {
+            Blocks =
+            {
+                new Paragraph(
+                    $"{MailMerge.FieldOpen}MissingOne{MailMerge.FieldClose} "
+                    + $"{MailMerge.FieldOpen}MissingTwo{MailMerge.FieldClose}")
+            }
+        });
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("Name\nAda")
+        };
+        var events = new List<string>();
+        var command = new FreeWRibbonCommands.CheckMergeErrorsCommand(
+            editor,
+            session,
+            ask: _ => MailMergeCheckForErrorsMode.CompleteAndPause,
+            showInfo: (_, message) => events.Add(message),
+            completeMerge: _ => events.Add("completed"));
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        events.Should().HaveCount(3);
+        events[0].Should().Contain("MissingOne");
+        events[1].Should().Contain("MissingTwo");
+        events[2].Should().Be("completed");
+    }
+
+    [StaFact]
+    public void MailingsCheckErrors_NoPauseCompletesAndOpensErrorReport()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(new TextDocument
+        {
+            Blocks = { new Paragraph($"{MailMerge.FieldOpen}Missing{MailMerge.FieldClose}") }
+        });
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("Name\nAda")
+        };
+        var completed = false;
+        TextDocument? report = null;
+        var command = new FreeWRibbonCommands.CheckMergeErrorsCommand(
+            editor,
+            session,
+            ask: _ => MailMergeCheckForErrorsMode.CompleteWithoutPausing,
+            showInfo: (_, _) => throw new InvalidOperationException("No-pause errors belong in the report document."),
+            completeMerge: _ => completed = true,
+            openReportDocument: document => report = document);
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        completed.Should().BeTrue();
+        report!.PlainText.Should().Contain("Missing");
+    }
+
+    [StaFact]
     public void MailingsRulesSpecialFields_InsertSharedInstructionsThroughRegistry()
     {
         var editor = new DocumentView();

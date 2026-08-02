@@ -155,9 +155,13 @@ public sealed class MailMergeDialogPlannerTests
         paused.RecordsChecked.Should().Be(1);
         paused.Issues.Select(issue => issue.Instruction)
             .Should().BeEquivalentTo("Missing", "If City Broken", "HeaderMissing");
-        paused.ShouldCompleteMerge.Should().BeFalse();
+        paused.ShouldCompleteMerge.Should().BeTrue();
+        paused.ShouldPauseForErrors.Should().BeTrue();
+        paused.ShouldOpenReportDocument.Should().BeFalse();
         paused.Message.Should().Contain("Found 3 error(s)");
         forced.ShouldCompleteMerge.Should().BeTrue();
+        forced.ShouldPauseForErrors.Should().BeFalse();
+        forced.ShouldOpenReportDocument.Should().BeTrue();
     }
 
     [Fact]
@@ -177,6 +181,8 @@ public sealed class MailMergeDialogPlannerTests
 
         result.HasErrors.Should().BeFalse();
         result.ShouldCompleteMerge.Should().BeTrue();
+        result.ShouldPauseForErrors.Should().BeFalse();
+        result.ShouldOpenReportDocument.Should().BeFalse();
         result.Message.Should().Be("Checked 1 recipient(s). No mail merge errors were found.");
     }
 

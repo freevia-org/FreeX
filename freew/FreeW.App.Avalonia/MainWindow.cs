@@ -2156,13 +2156,24 @@ public sealed partial class MainWindow : Window
         if (mode is not { } selected)
             return;
 
-        var result = _mailMerge.CheckForErrors(selected);
+        var result = _mailMerge.CheckForErrors(selected, completeMerge: false);
         if (result is not null)
         {
-            if (selected == MailMergeCheckForErrorsMode.SimulateAndReport)
-                OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
-            else
+            if (result.ShouldPauseForErrors)
+            {
+                foreach (var issue in result.Issues)
+                    await FreeWInfoDialog.ShowAsync(this, issue.Message);
+            }
+            else if (!result.ShouldOpenReportDocument)
+            {
                 await FreeWInfoDialog.ShowAsync(this, result.Message);
+            }
+
+            if (result.ShouldCompleteMerge)
+                _mailMerge.FinishMerge();
+
+            if (result.ShouldOpenReportDocument)
+                OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
         }
         _editor.Focus();
     }

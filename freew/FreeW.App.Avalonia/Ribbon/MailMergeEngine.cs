@@ -507,7 +507,9 @@ internal sealed class MailMergeEngine
     /// Simulate every selected recipient against the current merge template. Complete modes load the
     /// merged document only when their Word-compatible pause policy permits it.
     /// </summary>
-    public MailMergeErrorCheckResult? CheckForErrors(MailMergeCheckForErrorsMode mode)
+    public MailMergeErrorCheckResult? CheckForErrors(
+        MailMergeCheckForErrorsMode mode,
+        bool completeMerge = true)
     {
         if (Session.Data is not { Count: > 0 } data)
         {
@@ -518,7 +520,7 @@ internal sealed class MailMergeEngine
         var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
         var rows = data.Rows.Select(row => Session.AugmentRow(row)).ToList();
         var result = MailMergeCheckForErrorsPlanner.Check(template, rows, mode);
-        if (result.ShouldCompleteMerge)
+        if (completeMerge && result.ShouldCompleteMerge)
             FinishMerge();
         return result;
     }

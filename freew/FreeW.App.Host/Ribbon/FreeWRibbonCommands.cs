@@ -6903,17 +6903,21 @@ internal static class FreeWRibbonCommands
             var template = session.IsPreviewing ? session.Template! : editor.Model;
             var rows = session.Data.Rows.Select(row => session.AugmentRow(row)).ToList();
             var result = MailMergeCheckForErrorsPlanner.Check(template, rows, selected);
-            if (selected == MailMergeCheckForErrorsMode.SimulateAndReport
-                && openReportDocument is not null)
+            if (result.ShouldPauseForErrors)
             {
-                openReportDocument(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
+                foreach (var issue in result.Issues)
+                    _showInfo(owner, issue.Message);
             }
-            else
+            else if (!result.ShouldOpenReportDocument || openReportDocument is null)
             {
                 _showInfo(owner, result.Message);
             }
+
             if (result.ShouldCompleteMerge)
                 _completeMerge(context);
+
+            if (result.ShouldOpenReportDocument && openReportDocument is not null)
+                openReportDocument(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));
             editor.Focus();
         }
     }
