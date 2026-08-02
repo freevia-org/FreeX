@@ -174,7 +174,8 @@ public static class DocxReader
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
     /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
-    /// into <see cref="TextDocument.Protection"/> and the w:autoHyphenation toggle into
+    /// into <see cref="TextDocument.Protection"/>, w:trackRevisions into
+    /// <see cref="TextDocument.TrackRevisions"/>, and the w:autoHyphenation toggle into
     /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
     /// autoHyphenation leaves it disabled.
@@ -217,6 +218,10 @@ public static class DocxReader
         // Update fields on open (w:updateFields): absent/explicitly-off is Word's default; an empty element
         // or any valid on token asks the consuming application to recalculate fields when opening the file.
         document.UpdateFieldsOnOpen = ReadToggle(root, "updateFields");
+
+        // Track revisions (w:trackRevisions): controls whether subsequent edits should be recorded as
+        // revisions. Existing revision content is represented separately by the document's runs/properties.
+        document.TrackRevisions = ReadToggle(root, "trackRevisions");
 
         // Footnote numbering options (w:footnotePr in settings.xml): number format, start-at, restart.
         if (root.Element(W + "footnotePr") is { } footnotePr)

@@ -3604,6 +3604,13 @@ public sealed class TextDocument
     public bool UpdateFieldsOnOpen { get; set; }
 
     /// <summary>
+    /// Whether consuming applications should track subsequent document revisions. Maps to
+    /// <c>w:settings/w:trackRevisions</c>. False is Word's default and is omitted from newly authored
+    /// packages; this setting is independent of revision content already present in the document.
+    /// </summary>
+    public bool TrackRevisions { get; set; }
+
+    /// <summary>
     /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
     /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
     /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);
