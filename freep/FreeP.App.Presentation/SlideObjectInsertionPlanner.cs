@@ -122,6 +122,8 @@ public static class SlideObjectInsertionPlanner
     public const string ChartStockCommandId = "freep.insert-chart-stock";
     public const string ChartSurfaceCommandId = "freep.insert-chart-surface";
     public const string ChartSurface3DCommandId = "freep.insert-chart-surface-3d";
+    public const string ChartFunnelCommandId = "freep.insert-chart-funnel";
+    public const string ChartWaterfallCommandId = "freep.insert-chart-waterfall";
     public const string SmartArtBasicProcessCommandId = "freep.insert-smartart-basic-process";
 
     public static IReadOnlyList<SmartArtLayoutPreset> InsertableSmartArtLayouts { get; } =
@@ -207,6 +209,8 @@ public static class SlideObjectInsertionPlanner
         new(ChartStockCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Stock),
         new(ChartSurfaceCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Surface),
         new(ChartSurface3DCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Surface3D),
+        new(ChartFunnelCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Funnel),
+        new(ChartWaterfallCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Waterfall),
         new(SmartArtBasicProcessCommandId, SlideObjectInsertionKind.SmartArt,
             SmartArtLayout: SmartArtLayoutPreset.BasicProcess),
     ];

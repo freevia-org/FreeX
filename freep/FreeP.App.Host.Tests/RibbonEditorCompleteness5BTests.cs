@@ -402,6 +402,8 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains("freep.insert-chart-stock", ids);
         Assert.Contains("freep.insert-chart-surface", ids);
         Assert.Contains("freep.insert-chart-surface-3d", ids);
+        Assert.Contains("freep.insert-chart-funnel", ids);
+        Assert.Contains("freep.insert-chart-waterfall", ids);
     }
 
     [Fact]
