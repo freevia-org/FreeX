@@ -814,6 +814,228 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
     }
 }
 
+/// <summary>Replaces the native cover image on a single-target Zoom.</summary>
+public sealed class SetZoomCoverImageCommand : IPresentationCommand
+{
+    private const string ImageRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly byte[] _imageBytes;
+    private readonly string _contentType;
+    private string? _oldRawXml;
+    private ZoomObjectProperties? _oldProperties;
+    private Dictionary<string, byte[]>? _oldParts;
+    private Dictionary<string, string>? _oldPartContentTypes;
+    private Dictionary<string, (string RelType, string TargetPath)>? _oldSlideRels;
+
+    public SetZoomCoverImageCommand(
+        int slideIndex,
+        uint shapeId,
+        byte[] imageBytes,
+        string contentType)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _imageBytes = imageBytes is { Length: > 0 }
+            ? imageBytes.ToArray()
+            : throw new ArgumentException("The cover image cannot be empty.", nameof(imageBytes));
+        _contentType = NormalizeContentType(contentType);
+    }
+
+    public string Label => "Set Zoom Cover Image";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        if (!TryGetSingleTargetZoom(presentation, out var shape)
+            || shape.PreservedObject is not { } info)
+            return false;
+
+        return !TryGetCurrentImage(info, out var current)
+            || current is null
+            || !current.SequenceEqual(_imageBytes);
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        if (!TryGetSingleTargetZoom(presentation, out var shape)
+            || shape.PreservedObject is not { } info
+            || !TryParseZoomProperties(info.RawXml, out var document, out var blip))
+            return;
+
+        _oldRawXml = info.RawXml;
+        _oldProperties = info.ZoomProperties;
+        _oldParts = CloneBytes(info.Parts);
+        _oldPartContentTypes = new Dictionary<string, string>(info.PartContentTypes, StringComparer.OrdinalIgnoreCase);
+        _oldSlideRels = new Dictionary<string, (string RelType, string TargetPath)>(info.SlideRels, StringComparer.Ordinal);
+
+        var relId = blip.Attribute(RelationshipAttribute("embed"))?.Value;
+        if (string.IsNullOrWhiteSpace(relId))
+        {
+            relId = NextRelationshipId(info);
+            blip.SetAttributeValue(RelationshipAttribute("embed"), relId);
+        }
+
+        var mediaPath = $"ppt/media/freep-zoom-cover-{shape.Id}{ExtensionFor(_contentType)}";
+        if (info.SlideRels.TryGetValue(relId, out var oldRelation)
+            && !string.Equals(oldRelation.TargetPath, mediaPath, StringComparison.OrdinalIgnoreCase))
+        {
+            info.SlideRels[relId] = (ImageRelationshipType, mediaPath);
+            RemoveUnreferencedPart(info, oldRelation.TargetPath);
+        }
+        else
+            info.SlideRels[relId] = (ImageRelationshipType, mediaPath);
+        info.Parts[mediaPath] = _imageBytes.ToArray();
+        info.PartContentTypes[mediaPath] = _contentType;
+        info.ZoomProperties = (info.ZoomProperties ?? new ZoomObjectProperties()) with { ImageType = "cover" };
+        document.Descendants()
+            .First(element => string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase))
+            .SetAttributeValue("imageType", "cover");
+        info.RawXml = document.Root!.ToString(SaveOptions.DisableFormatting);
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        if (!TryGetSingleTargetZoom(presentation, out var shape)
+            || shape.PreservedObject is not { } info
+            || _oldRawXml is null
+            || _oldParts is null
+            || _oldPartContentTypes is null
+            || _oldSlideRels is null)
+            return;
+
+        info.RawXml = _oldRawXml;
+        info.ZoomProperties = _oldProperties;
+        Restore(info.Parts, _oldParts);
+        Restore(info.PartContentTypes, _oldPartContentTypes);
+        Restore(info.SlideRels, _oldSlideRels);
+    }
+
+    private bool TryGetSingleTargetZoom(Presentation presentation, out SlideShape shape)
+    {
+        shape = null!;
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return false;
+
+        shape = FindShape(presentation.Slides[_slideIndex].Shapes, _shapeId)!;
+        return shape is { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom }
+            && shape.PreservedObject!.SummaryZoomTargets.Count == 0;
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
+    private static bool TryParseZoomProperties(
+        string rawXml,
+        out XDocument document,
+        out XElement blip)
+    {
+        document = null!;
+        blip = null!;
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return false;
+
+        try { document = XDocument.Parse(rawXml, LoadOptions.PreserveWhitespace); }
+        catch { return false; }
+
+        var properties = document.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase));
+        if (properties is null)
+            return false;
+
+        XNamespace p166 = "http://schemas.microsoft.com/office/powerpoint/2016/6/main";
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var blipFill = properties.Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "blipFill");
+        if (blipFill is null)
+        {
+            blipFill = new XElement(p166 + "blipFill",
+                new XElement(a + "stretch", new XElement(a + "fillRect")));
+            properties.Add(blipFill);
+        }
+
+        blip = blipFill.Descendants().FirstOrDefault(element => element.Name.LocalName == "blip")!;
+        if (blip is null)
+        {
+            blip = new XElement(a + "blip");
+            blipFill.AddFirst(blip);
+        }
+
+        return true;
+    }
+
+    private static bool TryGetCurrentImage(PreservedObjectInfo info, out byte[]? bytes)
+    {
+        bytes = null;
+        var imageRelation = info.SlideRels.Values.FirstOrDefault(relation =>
+            string.Equals(relation.RelType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(imageRelation.TargetPath))
+            return false;
+
+        return info.Parts.TryGetValue(imageRelation.TargetPath, out bytes);
+    }
+
+    private static void RemoveUnreferencedPart(PreservedObjectInfo info, string targetPath)
+    {
+        if (info.SlideRels.Values.Any(relation =>
+                string.Equals(relation.TargetPath, targetPath, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        info.Parts.Remove(targetPath);
+        info.PartContentTypes.Remove(targetPath);
+    }
+
+    private static string NextRelationshipId(PreservedObjectInfo info)
+    {
+        var suffix = 1;
+        var id = $"rIdFreePZoomCover{suffix}";
+        while (info.SlideRels.ContainsKey(id))
+            id = $"rIdFreePZoomCover{++suffix}";
+        return id;
+    }
+
+    private static XName RelationshipAttribute(string localName) =>
+        XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships") + localName;
+
+    private static string NormalizeContentType(string contentType)
+    {
+        var normalized = contentType?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized) || !normalized.StartsWith("image/", StringComparison.Ordinal))
+            throw new ArgumentException("Zoom cover images must use an image content type.", nameof(contentType));
+        return normalized;
+    }
+
+    private static string ExtensionFor(string contentType) => contentType switch
+    {
+        "image/jpeg" => ".jpg",
+        "image/gif" => ".gif",
+        "image/bmp" => ".bmp",
+        "image/svg+xml" => ".svg",
+        "image/webp" => ".webp",
+        _ => ".png",
+    };
+
+    private static Dictionary<string, byte[]> CloneBytes(Dictionary<string, byte[]> source) =>
+        source.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray(), StringComparer.OrdinalIgnoreCase);
+
+    private static void Restore<T>(Dictionary<string, T> destination, Dictionary<string, T> source)
+    {
+        destination.Clear();
+        foreach (var pair in source)
+            destination[pair.Key] = pair.Value;
+    }
+}
+
 /// <summary>Renames a slide object, including a grouped child, as one undoable edit.</summary>
 public sealed class SetShapeNameCommand : IPresentationCommand
 {
