@@ -3,14 +3,23 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Merges a rectangular range into a single cell region.</summary>
-public sealed class MergeCellsCommand : IWorkbookCommand
+public sealed class MergeCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
     private List<GridRange>? _absorbedRegions;
+    private IReadOnlyList<CellAddress> _affectedCells = [];
 
     public string Label => "Merge Cells";
+
+    // R116: every non-top-left cell in _range that Apply actually blanked (ClearCell/SetCell
+    // below) must be surfaced here -- without it, WorkbookCellEditService.UpdateFormulaDependencies
+    // never re-registers/clears the swallowed cell's own dependency edges, and RecalcEngine.
+    // Recalculate short-circuits to an EmptyReport when there is nothing else dirty, leaving any
+    // formula elsewhere that referenced the discarded value showing its stale pre-merge result
+    // indefinitely. Mirrors the same fix already applied to ResizeStructuredTableCommand.
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public MergeCellsCommand(SheetId sheetId, GridRange range)
     {
@@ -20,6 +29,8 @@ public sealed class MergeCellsCommand : IWorkbookCommand
 
     public CommandOutcome Apply(ICommandContext ctx)
     {
+        _affectedCells = [];
+
         // Guard the same worksheet ceiling CopyRangeCommand/MoveRangeCommand already enforce for
         // their own destination ranges. Every caller of this command derives _range from a
         // UI selection (already bounded) EXCEPT FormatPainterCommandFactory's merge-tiling path,
@@ -102,6 +113,7 @@ public sealed class MergeCellsCommand : IWorkbookCommand
         // preserved-style blanking pattern ClearContentsCommand.Apply already uses); a plain,
         // unstyled value cell has nothing to preserve, so it is still fully removed as before.
         var topLeft = _range.Start;
+        var affected = new List<CellAddress>();
         foreach (var addr in _range.AllCells())
         {
             if (addr == topLeft) continue;
@@ -109,16 +121,20 @@ public sealed class MergeCellsCommand : IWorkbookCommand
             if (oldCell is null || oldCell.StyleId == StyleId.Default)
             {
                 sheet.ClearCell(addr);
+                if (oldCell is not null)
+                    affected.Add(addr);
                 continue;
             }
 
             var cleared = Cell.FromValue(BlankValue.Instance);
             cleared.StyleId = oldCell.StyleId;
             sheet.SetCell(addr, cleared);
+            affected.Add(addr);
         }
+        _affectedCells = affected;
 
         sheet.AddMergedRegion(_range);
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, AffectedCells: affected);
     }
 
     public void Revert(ICommandContext ctx)
@@ -169,8 +185,14 @@ public sealed class UnmergeCellsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;
 
+        // R116: matches CellMergePlanner's NoOpWorkbookCommand convention -- unmerging a range that
+        // was never actually merged must report IsNoOp so CommandBus skips pushing an undo entry,
+        // rather than leaving a phantom "Unmerge Cells" entry that Revert then correctly no-ops on
+        // anyway. Today's production callers (CellMergePlanner.CreateUnmergeCommands and the Merge
+        // & Center / Merge Cells toggle-to-unmerge branches) already pre-filter to real merged
+        // regions, but this command is public and must not rely on that caller discipline.
         _removed = sheet.RemoveMergedRegion(_range);
-        return new CommandOutcome(true);
+        return new CommandOutcome(true, IsNoOp: !_removed);
     }
 
     public void Revert(ICommandContext ctx)

@@ -817,6 +817,18 @@
   <data name="Ribbon_Command_Shape3dStrong_KeyTip" xml:space="preserve">
     <value>S3H</value>
   </data>
+  <data name="Ribbon_Command_ShapeFillTransparency_Label" xml:space="preserve">
+    <value>Fill Transparency</value>
+  </data>
+  <data name="Ribbon_Command_ShapeFillTransparency_KeyTip" xml:space="preserve">
+    <value>FT</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineTransparency_Label" xml:space="preserve">
+    <value>Outline Transparency</value>
+  </data>
+  <data name="Ribbon_Command_ShapeOutlineTransparency_KeyTip" xml:space="preserve">
+    <value>OT</value>
+  </data>
   <data name="Ribbon_Command_Picture_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>

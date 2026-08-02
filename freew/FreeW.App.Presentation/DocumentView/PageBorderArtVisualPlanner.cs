@@ -493,18 +493,25 @@ public static class PageBorderArtVisualPlanner
             new(inset, frameHeight - inset - size, railWidth, size, 0, 0, 0),
             new(inset - 1, inset, size, railHeight, 0, 0, 0),
             new(frameWidth - inset - size, inset, size, railHeight, 0, 0, 0),
+            new(inset - 1 + size, 128, 1, 800, 0, 0, 0),
         };
         var polygons = new List<PageBorderArtPolygon>();
         AddRibbonHorizontalStripes(polygons, inset, inset, railWidth, size, slash: true, phaseDip: size * 0.375);
         AddRibbonHorizontalStripes(polygons, inset, frameHeight - inset - size, railWidth, size, slash: true, phaseDip: 0);
         const double verticalMiddleTop = 128;
         const double verticalMiddleBottom = 928;
-        AddRibbonVerticalStripes(polygons, inset - 1, inset, verticalMiddleTop - inset, size, slash: false, phaseDip: 0);
-        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.75);
-        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleBottom, frameHeight - inset - verticalMiddleBottom, size, slash: false, phaseDip: 0);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, inset, verticalMiddleTop - inset, size, slash: false, phaseDip: 0);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.34375);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleBottom, frameHeight - inset - verticalMiddleBottom, size, slash: false, phaseDip: 0);
+        var verticalTopMaterialEnd = inset + 2 * size;
+        var verticalBottomMaterialStart = frameHeight - inset - 2 * size;
+        AddRibbonVerticalStripes(polygons, inset - 1, inset, verticalTopMaterialEnd - inset, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalTopMaterialEnd, verticalMiddleTop - verticalTopMaterialEnd, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.75, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleBottom, verticalBottomMaterialStart - verticalMiddleBottom, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalBottomMaterialStart, frameHeight - inset - verticalBottomMaterialStart, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, inset, verticalTopMaterialEnd - inset, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalTopMaterialEnd, verticalMiddleTop - verticalTopMaterialEnd, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.34375, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleBottom, verticalBottomMaterialStart - verticalMiddleBottom, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalBottomMaterialStart, frameHeight - inset - verticalBottomMaterialStart, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
         plan = new PageBorderArtFilledShapePlan(fills, polygons);
         return true;
     }
@@ -1029,7 +1036,7 @@ public static class PageBorderArtVisualPlanner
         Add(0xFF, 0x99, 0xC2,
             (8, 6), (13, 5), (19, 7), (22, 4), (25, 5), (26, 8), (29, 10), (29, 14),
             (27, 16), (24, 13), (20, 10), (14, 9), (9, 9));
-        Add(0xFF, 0x99, 0xC2,
+        Add(0, 0, 0,
             (9, 14), (15, 15), (21, 18), (25, 20), (25, 22), (21, 21), (15, 18), (9, 16));
         Add(0xFF, 0xEE, 0xCA,
             (4, 19), (8, 17), (14, 20), (22, 23), (26, 25), (25, 28), (21, 29),
@@ -1068,22 +1075,33 @@ public static class PageBorderArtVisualPlanner
         void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
             polygons.Add(new PageBorderArtPolygon(
                 points.Select(point => Point(point.X, point.Y)).ToList(), red, green, blue));
+        void AddPatch(params (double X, double Y)[] points)
+        {
+            const double scaleFromCenter = 0.70;
+            var centerX = points.Average(point => point.X);
+            var centerY = points.Average(point => point.Y);
+            Add(0, 0, 0, points
+                .Select(point => (
+                    centerX + (point.X - centerX) * scaleFromCenter,
+                    centerY + (point.Y - centerY) * scaleFromCenter))
+                .ToArray());
+        }
 
         Add(0, 0, 0,
-            (6, 24), (14, 26), (22, 25), (28, 23), (32, 26), (29, 30), (22, 32),
-            (13, 32), (7, 29));
+            (6, 24), (14, 26), (22, 25), (28, 23), (32, 26), (29, 30), (22, 30),
+            (13, 30), (7, 29));
         Add(0, 0, 0,
-            (11, 0), (18, -2), (24, 2), (28, 8), (29, 15), (26, 22), (21, 27),
+            (11, 0), (18, 0), (24, 2), (28, 8), (29, 15), (26, 22), (21, 27),
             (14, 29), (7, 26), (1, 21), (0, 14), (3, 8), (7, 3));
         Add(0xFF, 0xFF, 0xFF,
-            (12, 2), (18, 0), (23, 4), (27, 9), (27, 15), (24, 21), (19, 25),
+            (12, 2), (18, 0), (24, 4), (28, 9), (28, 15), (25, 21), (19, 25),
             (13, 27), (7, 24), (3, 19), (2, 14), (5, 8), (8, 4));
-        Add(0, 0, 0, (8, 4), (13, 1), (17, 4), (16, 9), (11, 8));
-        Add(0, 0, 0, (18, 1), (23, 3), (26, 8), (23, 10), (19, 7));
-        Add(0, 0, 0, (5, 12), (9, 9), (12, 10), (10, 15), (6, 16));
-        Add(0, 0, 0, (14, 12), (18, 10), (21, 13), (18, 17), (14, 16));
-        Add(0, 0, 0, (21, 17), (25, 16), (26, 21), (23, 24), (20, 22));
-        Add(0, 0, 0, (3, 18), (8, 18), (12, 22), (10, 26), (6, 24));
+        AddPatch((8, 4), (13, 1), (17, 4), (16, 9), (11, 8));
+        AddPatch((18, 1), (23, 3), (26, 8), (23, 10), (19, 7));
+        AddPatch((5, 12), (9, 9), (12, 10), (10, 15), (6, 16));
+        AddPatch((14, 12), (18, 10), (21, 13), (18, 17), (14, 16));
+        AddPatch((21, 17), (25, 16), (26, 21), (23, 24), (20, 22));
+        AddPatch((3, 18), (8, 18), (12, 22), (10, 26), (6, 24));
     }
 
     private static void AddCandyCorn(
@@ -1297,7 +1315,8 @@ public static class PageBorderArtVisualPlanner
         double height,
         double size,
         bool slash,
-        double phaseDip)
+        double phaseDip,
+        bool parallelWhiteBand)
     {
         var end = y + height;
         for (var tileY = y + phaseDip; tileY < end; tileY += size)
@@ -1312,6 +1331,16 @@ public static class PageBorderArtVisualPlanner
                     (x + size, tileY),
                     (x + size * 0.65625, tileY),
                 }
+                : parallelWhiteBand
+                    ? new[]
+                    {
+                        (x, tileY),
+                        (x + size * 0.25, tileY),
+                        (x + size, tileY + size * 0.75),
+                        (x + size, tileY + size),
+                        (x + size * 0.75, tileY + size),
+                        (x, tileY + size * 0.25),
+                    }
                 : new[]
                 {
                     (x, tileY),

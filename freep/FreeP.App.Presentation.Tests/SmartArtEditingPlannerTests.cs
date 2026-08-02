@@ -122,8 +122,14 @@ public sealed class SmartArtEditingPlannerTests
         result.Family.Should().Be(expectedFamily);
         smartArt.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
         smartArt.Data.Family.Should().Be(expectedFamily);
-        XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes))
-            .Root!.Attribute("uniqueId")!.Value.Should().Be(result.LayoutUniqueId);
+        var layout = XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes));
+        layout.Root!.Attribute("uniqueId")!.Value.Should().Be(result.LayoutUniqueId);
+        layout.Root.Element(XName.Get("title", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Attribute("val")!.Value.Should().Be(ToLayoutTitle(preset));
+        layout.Root
+            .Element(XName.Get("catLst", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Element(XName.Get("cat", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Attribute("type")!.Value.Should().Be(expectedFamily.ToString().ToLowerInvariant());
     }
 
     [Fact]
@@ -152,8 +158,33 @@ public sealed class SmartArtEditingPlannerTests
             part.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase));
         var layout = XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes));
         layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/layout/basicCycle");
+        layout.Root.Element(XName.Get("title", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Attribute("val")!.Value.Should().Be("Basic Cycle");
+        layout.Root
+            .Element(XName.Get("catLst", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Element(XName.Get("cat", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Attribute("type")!.Value.Should().Be("cycle");
         layout.Root.Element(XName.Get("layoutNode", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))
             .Should().NotBeNull();
+    }
+
+    private static string ToLayoutTitle(SmartArtLayoutPreset preset)
+    {
+        var name = preset.ToString();
+        var title = new StringBuilder(name.Length + 8);
+        for (var index = 0; index < name.Length; index++)
+        {
+            if (index > 0 && char.IsUpper(name[index]) &&
+                (char.IsLower(name[index - 1]) ||
+                 index + 1 < name.Length && char.IsLower(name[index + 1])))
+            {
+                title.Append(' ');
+            }
+
+            title.Append(name[index]);
+        }
+
+        return title.ToString();
     }
 
     [Fact]
@@ -245,13 +276,11 @@ public sealed class SmartArtEditingPlannerTests
         smartArt.Parts.Keys.Should().Contain(path => path.StartsWith("ppt/media/freep-smartart-picture", StringComparison.Ordinal));
 
         var drawing = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts[smartArt.DrawingPartPath!].Bytes));
-        drawing.Descendants(XName.Get("pic", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
-            .Should().ContainSingle("picture nodes must remain native dsp:pic elements after cache regeneration");
         drawing.Descendants(XName.Get("sp", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
             .Where(shape => shape.Element(XName.Get("spPr", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
-                ?.Element(XName.Get("blipFill", "http://schemas.microsoft.com/office/drawing/2008/diagram")) is not null)
-            .Should().BeEmpty("picture payloads must not be downgraded to generic dsp:sp shapes");
-        drawing.Descendants(XName.Get("blipFill", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+                ?.Element(XName.Get("blipFill", "http://schemas.openxmlformats.org/drawingml/2006/main")) is not null)
+            .Should().ContainSingle("picture payloads must remain image-filled diagram shapes");
+        drawing.Descendants(XName.Get("blipFill", "http://schemas.openxmlformats.org/drawingml/2006/main"))
             .Should().ContainSingle()
             .Which.Descendants(XName.Get("blip", "http://schemas.openxmlformats.org/drawingml/2006/main"))
             .Single().Attribute(XName.Get("embed", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"))
@@ -1236,7 +1265,7 @@ public sealed class SmartArtEditingPlannerTests
             .Select(t => t.Element(a + "bodyPr") is not null && t.Element(a + "lstStyle") is not null)
             .Should().OnlyContain(value => value);
         var cacheDocument = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
-        cacheDocument.Descendants(dsp + "pic")
+        cacheDocument.Descendants(dsp + "sp")
             .SelectMany(shape => shape.Descendants(a + "blip"))
             .Select(blip => (string?)blip.Attribute(r + "embed"))
             .Where(id => id is not null)

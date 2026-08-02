@@ -173,4 +173,43 @@ public class MergeCellsCommandTests
         sheet.MergedRegions.Should().BeEmpty();
     }
 
+    // R116: UnmergeCellsCommand.Apply must report IsNoOp when the target range was never actually
+    // merged, so CommandBus (Success && !IsNoOp gate) skips pushing an undo entry -- matching the
+    // NoOpWorkbookCommand convention CellMergePlanner already documents for this exact scenario
+    // ("Unmerge Cells run over a plain, never-merged selection... matching Excel, which leaves the
+    // workbook and undo history untouched rather than recording a phantom edit"). Before the fix,
+    // Apply always returned CommandOutcome(true) with IsNoOp defaulting to false.
+    [Fact]
+    public void R116_Unmerge_ReportsIsNoOp_WhenRangeWasNeverMerged()
+    {
+        var (_, sheet, ctx) = Setup();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+
+        var outcome = new UnmergeCellsCommand(sheet.Id, range).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.IsNoOp.Should().BeTrue();
+        sheet.MergedRegions.Should().BeEmpty();
+    }
+
+    // Sibling/no-regression: when the range WAS actually merged, Apply must still report a real
+    // (non-no-op) success so the removal is correctly recorded on the undo stack.
+    [Fact]
+    public void R116_Unmerge_DoesNotReportIsNoOp_WhenRangeWasActuallyMerged()
+    {
+        var (_, sheet, ctx) = Setup();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 2, 2));
+        sheet.AddMergedRegion(range);
+
+        var outcome = new UnmergeCellsCommand(sheet.Id, range).Apply(ctx);
+
+        outcome.Success.Should().BeTrue();
+        outcome.IsNoOp.Should().BeFalse();
+        sheet.MergedRegions.Should().BeEmpty();
+    }
+
 }

@@ -1244,27 +1244,31 @@ public static class SmartArtEditingPlanner
     private static XElement BuildDrawingCachePicture(SlideShape shape, string relationshipId)
     {
         var id = shape.Id == 0 ? 1u : shape.Id;
-        return new XElement(Dsp + "pic",
+        // The diagram drawing schema does not allow dsp:pic directly under
+        // dsp:spTree.  SmartArt picture caches use a regular dsp:sp whose
+        // shape properties carry the image fill, while the relationship and
+        // geometry remain the same.
+        return new XElement(Dsp + "sp",
             new XAttribute("modelId", id),
-            new XElement(Dsp + "nvPicPr",
+            new XElement(Dsp + "nvSpPr",
                 new XElement(Dsp + "cNvPr",
                     new XAttribute("id", id),
                     new XAttribute("name", string.IsNullOrWhiteSpace(shape.Name) ? $"SmartArt Picture {id}" : shape.Name)),
-                new XElement(Dsp + "cNvPicPr")),
-            new XElement(Dsp + "blipFill",
-                new XElement(A + "blip", new XAttribute(R + "embed", relationshipId)),
-                new XElement(A + "stretch", new XElement(A + "fillRect"))),
+                new XElement(Dsp + "cNvSpPr")),
             new XElement(Dsp + "spPr",
                 new XElement(A + "xfrm",
                     new XElement(A + "off",
-                        new XAttribute("x", shape.OffsetXEmu),
-                        new XAttribute("y", shape.OffsetYEmu)),
+                    new XAttribute("x", shape.OffsetXEmu),
+                    new XAttribute("y", shape.OffsetYEmu)),
                     new XElement(A + "ext",
                         new XAttribute("cx", shape.ExtentCxEmu),
                         new XAttribute("cy", shape.ExtentCyEmu))),
                 new XElement(A + "prstGeom",
                     new XAttribute("prst", "rect"),
-                    new XElement(A + "avLst"))));
+                    new XElement(A + "avLst")),
+                new XElement(A + "blipFill",
+                    new XElement(A + "blip", new XAttribute(R + "embed", relationshipId)),
+                    new XElement(A + "stretch", new XElement(A + "fillRect")))));
     }
 
     private static IReadOnlyList<string> GetPictureRelationshipIds(

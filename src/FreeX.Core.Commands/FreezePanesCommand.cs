@@ -28,6 +28,20 @@ public sealed class SetFreezePanesCommand : IWorkbookCommand
             return new CommandOutcome(false, "Freeze pane position is outside the worksheet bounds.");
 
         var sheet = ctx.GetSheet(_sheetId);
+
+        // R116-freeze-panes-noop-1: re-issuing the same freeze position is a very plausible user
+        // action (there is no "already frozen" indicator on the ribbon/menu item, unlike Excel's
+        // combined Freeze/Unfreeze toggle), and it produces no visible change. Without this check
+        // every redundant call still pushed a phantom entry onto the undo stack (CommandBus only
+        // skips the push when IsNoOp is set) and left the file wanting a needless double Ctrl+Z /
+        // save prompt. Mirrors MoveSheetCommand's _fromIndex == _toIndex no-op guard. Guard the
+        // split-clearing side effect too: if a freeze is actually requested (frozenRows/Cols > 0)
+        // and it would still clear a lingering split, that is a real mutation, not a no-op.
+        var wouldClearSplit = (_frozenRows > 0 || _frozenCols > 0) &&
+            (sheet.SplitRow is not null || sheet.SplitColumn is not null);
+        if (sheet.FrozenRows == _frozenRows && sheet.FrozenCols == _frozenCols && !wouldClearSplit)
+            return new CommandOutcome(true, IsNoOp: true);
+
         _previousFrozenRows = sheet.FrozenRows;
         _previousFrozenCols = sheet.FrozenCols;
         _previousSplitRow = sheet.SplitRow;

@@ -229,6 +229,41 @@ internal static class PivotCacheFieldFactory
         };
     }
 
+    /// <summary>
+    /// R116-commands-pivot-slicer-changesource: single choke point for reconciling an EXISTING cache's
+    /// field list against a (possibly reordered/expanded/narrowed) live header set, preserving every
+    /// surviving field's <see cref="PivotCacheFieldModel.SharedItems"/> order/index via
+    /// <see cref="MergeFromSourceData"/> instead of discarding it. Used by both
+    /// <c>PivotTableRefreshService.ReconcileCacheFields</c> (ordinary refresh / table-growth) and
+    /// <c>ChangePivotTableSourceCommand</c> (explicit "Change Data Source", both the same-SourceType
+    /// in-place mutation and the cross-SourceType <c>BuildRedirectedCache</c> replacement) so neither
+    /// path can drift from the other and silently reintroduce a full SharedItems rebuild that renumbers
+    /// a pivot-bound slicer's <see cref="SlicerModel.CacheItems"/> indices out from under it.
+    /// A field whose header has no existing same-named match (a truly new column) still gets a
+    /// brand-new field built from scratch via <see cref="BuildFromSourceData"/>, exactly as before.
+    /// </summary>
+    internal static List<PivotCacheFieldModel> ReconcileFields(
+        IEnumerable<PivotCacheFieldModel> existingFields,
+        IReadOnlyList<string> liveHeaders,
+        Sheet sourceSheet,
+        GridRange sourceRange)
+    {
+        var existingByName = new Dictionary<string, PivotCacheFieldModel>(StringComparer.Ordinal);
+        foreach (var field in existingFields)
+            existingByName.TryAdd(field.Name, field);
+
+        var reconciled = new List<PivotCacheFieldModel>(liveHeaders.Count);
+        for (var index = 0; index < liveHeaders.Count; index++)
+        {
+            var header = liveHeaders[index];
+            reconciled.Add(existingByName.TryGetValue(header, out var existing)
+                ? MergeFromSourceData(existing, sourceSheet, sourceRange, index)
+                : BuildFromSourceData(header, sourceSheet, sourceRange, index));
+        }
+
+        return reconciled;
+    }
+
     private static double? MinOrNull(double? a, double? b) =>
         a is null ? b : b is null ? a : Math.Min(a.Value, b.Value);
 

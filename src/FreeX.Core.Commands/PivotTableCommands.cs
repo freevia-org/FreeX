@@ -259,6 +259,7 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
     private readonly string _pivotTableName;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
     private GridRange? _lastRenderedRangeSnapshot;
+    private RefreshFieldSnapshot? _fieldSnapshot;
 
     public RefreshPivotTableCommand(SheetId sheetId, string pivotTableName)
     {
@@ -279,7 +280,23 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
 
         _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
         _lastRenderedRangeSnapshot = pivotTable.LastRenderedRange;
-        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+        // R116-commands-pivot-refresh-revert: Refresh (below) prunes pivotTable.RowFields/ColumnFields/
+        // PageFields/DataFields (RemoveAll) and rebuilds cache.Fields (Clear+AddRange) in place on the
+        // SAME live PivotTableModel/PivotCacheModel objects whenever a field's source column has
+        // disappeared since the pivot was last refreshed -- neither list is ever swapped for a new
+        // instance, so nothing but an explicit capture/restore here can undo that pruning on Undo. This
+        // is the identical mutation ChangePivotTableSourceCommand's own call to Refresh triggers, which
+        // is why its PivotSourceSnapshot restores cache.Fields the same way; this command additionally
+        // has no equivalent of that command's pre-check that every field already fits the (unchanged)
+        // source range, so its own RemoveAll calls are frequently NOT no-ops and the field lists must be
+        // captured here too.
+        var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
+        _fieldSnapshot = RefreshFieldSnapshot.Capture(pivotTable, cache);
+        // R116-commands-pivot-refresh-scope: this command IS the F5 / "Refresh PivotTable" action --
+        // the one genuine "source data may have changed" entry point -- so it is the only caller that
+        // asks Refresh to re-derive cache.Fields' SharedItems from the live source (see
+        // PivotTableRefreshService.Refresh's rescanCacheSharedItems parameter doc).
+        PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable, rescanCacheSharedItems: true);
         UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
@@ -294,12 +311,14 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
         {
             PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
             pivotTable.LastRenderedRange = _lastRenderedRangeSnapshot;
+            _fieldSnapshot?.Restore(pivotTable, ctx.Workbook);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
         if (pivotTable is not null)
             UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         _targetSnapshot = null;
         _lastRenderedRangeSnapshot = null;
+        _fieldSnapshot = null;
     }
 
     private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
@@ -312,6 +331,49 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
         {
             chart.DataRange = outputRange;
             chart.PivotCacheId = pivotTable.CacheId;
+        }
+    }
+
+    /// <summary>
+    /// Captures exactly the state <see cref="PivotTableRefreshService.Refresh"/> may prune or rebuild in
+    /// place -- the pivot's four field lists and its cache's field list -- so Revert can restore it even
+    /// though Refresh mutates the live <see cref="PivotTableModel"/>/<see cref="PivotCacheModel"/>
+    /// objects rather than replacing them. Mirrors <c>ChangePivotTableSourceCommand.PivotSourceSnapshot</c>
+    /// for the cache.Fields half of this same mutation.
+    /// </summary>
+    private sealed record RefreshFieldSnapshot(
+        IReadOnlyList<PivotFieldModel> RowFields,
+        IReadOnlyList<PivotFieldModel> ColumnFields,
+        IReadOnlyList<PivotFieldModel> PageFields,
+        IReadOnlyList<PivotDataFieldModel> DataFields,
+        int? CacheId,
+        IReadOnlyList<PivotCacheFieldModel> CacheFields)
+    {
+        public static RefreshFieldSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
+            new(
+                pivotTable.RowFields.ToList(),
+                pivotTable.ColumnFields.ToList(),
+                pivotTable.PageFields.ToList(),
+                pivotTable.DataFields.ToList(),
+                cache?.CacheId,
+                cache?.Fields.ToList() ?? []);
+
+        public void Restore(PivotTableModel pivotTable, Workbook workbook)
+        {
+            PivotTableCommandCollections.Replace(pivotTable.RowFields, RowFields);
+            PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
+            PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
+            PivotTableCommandCollections.Replace(pivotTable.DataFields, DataFields);
+
+            if (CacheId is not { } cacheId)
+                return;
+
+            var cache = workbook.PivotCaches.FirstOrDefault(existing => existing.CacheId == cacheId);
+            if (cache is null)
+                return;
+
+            cache.Fields.Clear();
+            cache.Fields.AddRange(CacheFields);
         }
     }
 }

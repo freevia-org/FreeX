@@ -112,6 +112,65 @@ internal static partial class RowColumnShiftHelpers
         }
     }
 
+    /// <summary>
+    /// Workbook-wide variant of <see cref="RewriteRuleFormulas(Sheet, RewriteOperation, Dictionary{Guid, string}, Dictionary{ValueTuple{Guid, int}, string}, Dictionary{ValueTuple{Guid, int}, string})"/>:
+    /// applies the same per-sheet rewrite to EVERY sheet in the workbook, not just the one whose
+    /// rows/columns/cells were structurally edited. A ConditionalFormat/DataValidation rule can live on
+    /// any sheet while its FormulaText/Formula1/Formula2/threshold formula holds a cross-sheet
+    /// reference into the sheet actually being shifted (e.g. a List validation on Sheet1 sourced from
+    /// "=Sheet2!$A$1:$A$10" when rows are inserted on Sheet2) -- exactly like an ordinary cell formula
+    /// on any sheet can reference the shifted sheet and already gets rewritten workbook-wide by
+    /// <see cref="RewriteAllFormulas"/>. Insert/Delete Rows/Columns/Cells and same-sheet MoveRange all
+    /// call this overload (mirroring RenameSheetCommand/DeleteSheetCommand's own explicit
+    /// <c>foreach (var s in ctx.Workbook.Sheets)</c> loop around the single-sheet primitive) so a
+    /// surviving rule elsewhere in the workbook keeps pointing at the shifted range instead of being
+    /// silently left stale.
+    /// <para>
+    /// The three snapshot dictionaries are flat and keyed by the rule's own globally-unique <c>Id</c>
+    /// (or <c>(Id, Slot)</c>), so entries from every sheet safely coexist in the same dictionaries --
+    /// this is the same convention SheetCommands.cs's RenameSheetCommand/DeleteSheetCommand already
+    /// rely on when they merge per-sheet snapshots from this same primitive.
+    /// </para>
+    /// </summary>
+    internal static void RewriteRuleFormulas(
+        Workbook workbook,
+        RewriteOperation op,
+        Dictionary<Guid, string?> cfSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> dvSnapshot)
+    {
+        foreach (var s in workbook.Sheets)
+        {
+            var cfCountBefore = cfSnapshot.Count;
+            var cfThresholdCountBefore = cfThresholdSnapshot.Count;
+            RewriteRuleFormulas(s, op, cfSnapshot, cfThresholdSnapshot, dvSnapshot);
+
+            // Mirrors RenameSheetCommand's T7/R102 cache-invalidation: the CF viewport context cache
+            // is keyed on (sheet.Id, sheet.ContentVersion, sheet.ConditionalFormats.Version) and caches
+            // a precompiled AST per CF rule, so mutating FormulaText/threshold values in place above
+            // never invalidates it on its own -- bump Version explicitly so a stale cache hit doesn't
+            // keep evaluating the old formula after this structural edit.
+            if (cfSnapshot.Count > cfCountBefore || cfThresholdSnapshot.Count > cfThresholdCountBefore)
+                s.ConditionalFormats.NotifyRulesChanged();
+        }
+    }
+
+    /// <summary>
+    /// Workbook-wide variant of <see cref="RestoreRuleFormulas(Sheet, Dictionary{Guid, string}, Dictionary{ValueTuple{Guid, int}, string}, Dictionary{ValueTuple{Guid, int}, string})"/>,
+    /// undoing a rewrite performed by the workbook-wide <see cref="RewriteRuleFormulas(Workbook, RewriteOperation, Dictionary{Guid, string}, Dictionary{ValueTuple{Guid, int}, string}, Dictionary{ValueTuple{Guid, int}, string})"/>
+    /// overload above. Looks up each rule by Id across every sheet, since the snapshot dictionaries may
+    /// hold entries captured from any sheet in the workbook.
+    /// </summary>
+    internal static void RestoreRuleFormulas(
+        Workbook workbook,
+        Dictionary<Guid, string?> cfSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> cfThresholdSnapshot,
+        Dictionary<(Guid Id, int Slot), string?> dvSnapshot)
+    {
+        foreach (var s in workbook.Sheets)
+            RestoreRuleFormulas(s, cfSnapshot, cfThresholdSnapshot, dvSnapshot);
+    }
+
     private static void RewriteThreshold(
         ConditionalFormat rule,
         int slot,

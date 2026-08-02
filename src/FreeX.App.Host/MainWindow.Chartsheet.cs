@@ -114,4 +114,22 @@ public partial class MainWindow
         if (IsChartsheet(sheet) && ChartsheetView.Visibility == Visibility.Visible)
             RenderActiveChartsheet(sheet!);
     }
+
+    /// <summary>
+    /// Re-rasterizes the active chartsheet's chart after a WM_DPICHANGED notification (see
+    /// <see cref="MainWindow_WndProc"/>). A per-monitor DPI change that happens without the window's
+    /// DIP size changing (dragging across monitors while docked/maximized) never raises
+    /// <see cref="ChartsheetView_SizeChanged"/>, so without this the baked bitmap keeps the stale,
+    /// pre-move DPI scale and renders blurry/pixelated until the user manually resizes the window or
+    /// navigates away from and back to the chartsheet.
+    /// </summary>
+    private void RefreshChartsheetForDpiChange()
+    {
+        if (ChartsheetView is null)
+            return;
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (IsChartsheet(sheet) && ChartsheetView.Visibility == Visibility.Visible)
+            RenderActiveChartsheet(sheet!);
+    }
 }

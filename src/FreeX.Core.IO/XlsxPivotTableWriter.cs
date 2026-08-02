@@ -38,6 +38,7 @@ internal static partial class XlsxPivotTableWriter
             .Where(cache => cache.CacheId > 0)
             .ToDictionary(cache => cache.CacheId);
         var calculatedFieldsByCacheId = GetCalculatedFieldsByCacheId(workbook);
+        var calculatedItemsByCacheId = GetCalculatedItemsByCacheId(workbook);
         var calculatedFieldIndexesByCacheId = new Dictionary<int, IReadOnlyDictionary<string, int>>();
         var pivotCacheElements = new List<XElement>();
         var cacheIndex = 1;
@@ -53,13 +54,16 @@ internal static partial class XlsxPivotTableWriter
             var calculatedFields = calculatedFieldsByCacheId.TryGetValue(cache.CacheId, out var cacheCalculatedFields)
                 ? cacheCalculatedFields
                 : [];
+            var calculatedItems = calculatedItemsByCacheId.TryGetValue(cache.CacheId, out var cacheCalculatedItems)
+                ? cacheCalculatedItems
+                : [];
             calculatedFieldIndexesByCacheId[cache.CacheId] = CreateCalculatedFieldIndexMap(cache, calculatedFields);
             var cacheRecords = ToPivotCacheRecordsXml(cache, workbook, workbookNs);
             // Resync cache.Fields' type/range metadata against the live source data (which the records
             // above were just generated from) so the saved cache definition doesn't contradict its own
             // records when the underlying cells were edited since the cache was loaded/created.
             ResyncPivotCacheFieldTypeMetadata(cache, workbook);
-            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, calculatedFields, workbookNs, relNs, recordsRelId, cacheRecords.RecordCount, numberFormatIdMap));
+            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, calculatedFields, calculatedItems, workbookNs, relNs, recordsRelId, cacheRecords.RecordCount, numberFormatIdMap));
             XlsxPackageXmlEditor.ReplaceXml(archive, recordsPath, cacheRecords.Document);
             XlsxPackageXmlEditor.ReplaceXml(archive, XlsxPackagePath.GetRelationshipPartPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs, cachePath, recordsPath, recordsRelId));
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");
@@ -154,6 +158,46 @@ internal static partial class XlsxPivotTableWriter
         return result.ToDictionary(
             pair => pair.Key,
             pair => (IReadOnlyList<PivotCalculatedFieldModel>)pair.Value);
+    }
+
+    // R116-io-pivot-calcitem-part: Calculated Items are modeled per-PivotTableModel (mirroring
+    // CalculatedFields above), but the real OOXML home for them is the shared pivotCacheDefinition part
+    // (CT_PivotCacheDefinition.calculatedItems, ECMA-376 18.10.1.3) -- every pivot table built on the same
+    // cache shows the same calculated items in real Excel. Union the (field, formula) pairs across every
+    // pivot table sharing a cache so the single write of that cache's calculatedItems reflects whichever
+    // pivot(s) the user actually defined the item on, deduped so two pivots on the same cache that both
+    // carry the identical item (the common case) don't double it up.
+    private static Dictionary<int, IReadOnlyList<PivotCalculatedItemModel>> GetCalculatedItemsByCacheId(Workbook workbook)
+    {
+        var result = new Dictionary<int, List<PivotCalculatedItemModel>>();
+        foreach (var pivot in workbook.Sheets.SelectMany(sheet => sheet.PivotTables))
+        {
+            if (pivot.CacheId <= 0 || pivot.CalculatedItems.Count == 0)
+                continue;
+
+            if (!result.TryGetValue(pivot.CacheId, out var items))
+            {
+                items = [];
+                result[pivot.CacheId] = items;
+            }
+
+            foreach (var item in pivot.CalculatedItems)
+            {
+                if (string.IsNullOrWhiteSpace(item.Name) ||
+                    string.IsNullOrWhiteSpace(item.Formula) ||
+                    items.Any(existing => existing.SourceFieldIndex == item.SourceFieldIndex &&
+                                           string.Equals(existing.Name, item.Name, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                items.Add(item);
+            }
+        }
+
+        return result.ToDictionary(
+            pair => pair.Key,
+            pair => (IReadOnlyList<PivotCalculatedItemModel>)pair.Value);
     }
 
     // CT_Workbook elements that must come after <pivotCaches>. The element is inserted immediately
@@ -332,7 +376,14 @@ internal static partial class XlsxPivotTableWriter
             ToPivotFieldCollectionXml("colFields", pivot.ColumnFields, workbookNs),
             ToPivotPageFieldsXml(pivot.PageFields, pivotCache, workbookNs),
             ToPivotDataFieldsXml(pivot.DataFields, calculatedFieldIndexes, workbookNs, numberFormatIdMap),
-            ToPivotCalculatedItemsXml(pivot.CalculatedItems, workbookNs),
+            // R116-io-pivot-calcitem-part: calculatedItems is NOT a child of CT_pivotTableDefinition at
+            // all (verified via reflection against DocumentFormat.OpenXml.Spreadsheet.PivotTableDefinition
+            // -- it has no CalculatedItems property). It is a child of CT_PivotCacheDefinition instead
+            // (PivotCacheDefinition.CalculatedItems exists, positioned after tupleCache/before
+            // calculatedMembers), so it is now emitted by ToPivotCacheDefinitionXml
+            // (XlsxPivotTableWriter.Cache.cs) into the pivotCacheDefinitionN.xml part. Emitting it here
+            // produced schema-invalid pivotTableDefinition XML that real Excel's repair flow silently
+            // dropped the calculated item from on every open.
             // R82-io-pivot-layout-5-2: CT_pivotTableDefinition's real child sequence (verified via
             // OpenXmlValidator against the OpenXml SDK's own PivotTableDefinition property order) places
             // pivotTableStyleInfo BEFORE filters -- the OLD code emitted the (also-invented) valueFilters/
@@ -507,7 +558,17 @@ internal static partial class XlsxPivotTableWriter
                     // display -- gating it on ShowSubtotals would silently forget a user's Bottom choice
                     // (defaulting back to Top on read) the moment subtotals are toggled off.
                     new XAttribute("subtotalTop", (metadataField?.SubtotalPlacement ?? pivot.SubtotalPlacement) == PivotSubtotalPlacement.Top ? "1" : "0"),
-                    new XAttribute("showAll", metadataField?.ShowAll == true ? "1" : "0"),
+                    // R116-io-pivot-showall: CT_PivotField's showAll defaults to TRUE when omitted
+                    // (ECMA-376 18.3.1.66). Unlike defaultSubtotal/subtotalTop above (which are written
+                    // unconditionally because their table-wide fallback is always known), showAll has no
+                    // such fallback -- ShowAll is null whenever the source file legitimately omitted the
+                    // attribute (relying on the true default) and the user never touched the field's
+                    // filter settings. Collapsing that null to "0" (the old `== true ? "1" : "0"` ternary)
+                    // silently flipped the field to showAll=false on the very next save. Use the optional
+                    // form, matching every other unknown-default attribute on this element
+                    // (includeNewItemsInFilter, multipleItemSelectionAllowed, dragTo*, showDropDowns
+                    // below), so an unset ShowAll stays omitted and the true default is preserved.
+                    ToOptionalBoolAttribute("showAll", metadataField?.ShowAll),
                     ToOptionalBoolAttribute("includeNewItemsInFilter", metadataField?.IncludeNewItemsInFilter),
                     ToOptionalBoolAttribute("multipleItemSelectionAllowed", metadataField?.MultipleItemSelectionAllowed),
                     ToOptionalBoolAttribute("dragToRow", metadataField?.DragToRow),
@@ -763,35 +824,9 @@ internal static partial class XlsxPivotTableWriter
         return Math.Max(0, field.SourceFieldIndex);
     }
 
-    private static XElement? ToPivotCalculatedItemsXml(IReadOnlyList<PivotCalculatedItemModel> items, XNamespace workbookNs) =>
-        items.Count == 0
-            ? null
-            : new XElement(
-                workbookNs + "calculatedItems",
-                new XAttribute("count", items.Count.ToString(CultureInfo.InvariantCulture)),
-                items.Select(item => new XElement(
-                    workbookNs + "calculatedItem",
-                    new XAttribute("field", item.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
-                    new XAttribute("name", item.Name),
-                    new XAttribute("formula", item.Formula),
-                    // CT_CalculatedItem declares pivotArea as a required child (minOccurs="1") that
-                    // identifies which field the calculated item targets; without it the part is
-                    // structurally invalid and real Excel repairs/drops the calculated item on open.
-                    new XElement(
-                        workbookNs + "pivotArea",
-                        new XAttribute("type", "normal"),
-                        new XAttribute("dataOnly", "0"),
-                        new XAttribute("labelOnly", "1"),
-                        new XAttribute("outline", "0"),
-                        new XAttribute("fieldPosition", "0"),
-                        new XElement(
-                            workbookNs + "references",
-                            new XAttribute("count", "1"),
-                            new XElement(
-                                workbookNs + "reference",
-                                new XAttribute("field", item.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
-                                new XAttribute("count", "0"),
-                                new XAttribute("selected", "0")))))));
+    // R116-io-pivot-calcitem-part: the calculatedItems emitter now lives in XlsxPivotTableWriter.Cache.cs
+    // (ToPivotCacheCalculatedItemsXml) since CT_CalculatedItem is a child of CT_PivotCacheDefinition, not
+    // CT_pivotTableDefinition -- see the comment on the ToPivotTableDefinitionXml call site above.
 
     // Internal (not private): also called from XlsxFileAdapter.SavePostProcessing.cs's
     // RewritePreservedPivotValueAndLabelFilters to regenerate these elements on the hasSourcePackage

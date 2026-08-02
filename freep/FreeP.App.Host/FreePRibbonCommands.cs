@@ -840,6 +840,19 @@ internal static class FreePRibbonCommands
             new ActionRibbonCommand(() => onEditChartAreaOptions?.Invoke()));
         registry.Register(ChartProtectionOptionsPlanner.CommandId,
             new ActionRibbonCommand(() => onEditChartProtectionOptions?.Invoke()));
+        registry.Register(ShapeTransparencyPlanner.FillCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedFillTransparency(0)));
+        registry.Register(ShapeTransparencyPlanner.OutlineCommandId,
+            new ActionRibbonCommand(() => editor.SetSelectedOutlineTransparency(0)));
+        foreach (var option in ShapeTransparencyPlanner.Options)
+        {
+            registry.Register(
+                ShapeTransparencyPlanner.OptionCommandId(ShapeTransparencyTarget.Fill, option.Percent),
+                new ActionRibbonCommand(() => editor.SetSelectedFillTransparency(option.Percent)));
+            registry.Register(
+                ShapeTransparencyPlanner.OptionCommandId(ShapeTransparencyTarget.Outline, option.Percent),
+                new ActionRibbonCommand(() => editor.SetSelectedOutlineTransparency(option.Percent)));
+        }
 
         // ── Wave 11A: Hyperlinks ──────────────────────────────────────────────────
 

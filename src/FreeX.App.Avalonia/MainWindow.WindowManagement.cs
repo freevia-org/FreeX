@@ -98,6 +98,11 @@ public sealed partial class MainWindow : Window
         var previousSession = _session;
         previousSession.WorkbookChanged -= Session_WorkbookChanged;
         _session = replacement;
+        // Every session replacement (New, Open, recovery-snapshot load) starts a fresh document
+        // identity -- any external-modification write-time snapshot captured for the PREVIOUS
+        // document must not leak into this one (R116-avalonia-external-modification-detection).
+        // OpenWorkbookFromTargetAsync re-populates it immediately afterward for a real file open.
+        _currentFileSourceLastWriteTimeUtc = null;
         _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
         _session.WorkbookChanged += Session_WorkbookChanged;
         ResetSlicerTimelinePaneState();

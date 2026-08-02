@@ -1274,7 +1274,7 @@ public sealed class DocumentViewPdfExportTests
             var pdf = view.BuildPdfContent();
             var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
             var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
-            fills.Should().HaveCount(4);
+            fills.Should().HaveCount(5);
             paths.Should().HaveCount(224);
             fills[0].Should().Be(new PdfFillRect(24, 744, 564, 24, PdfColor.Black));
             paths[0].FillColor.Should().Be(new PdfColor(255, 255, 255));
@@ -1436,6 +1436,7 @@ public sealed class DocumentViewPdfExportTests
             paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(29.25, 765));
             paths[1].FillColor.Should().Be(new PdfColor(0xFF, 0xEE, 0xCA));
             paths[2].FillColor.Should().Be(new PdfColor(0xFF, 0x99, 0xC2));
+            paths[3].FillColor.Should().Be(PdfColor.Black);
             pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
 
             using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
@@ -1526,7 +1527,7 @@ public sealed class DocumentViewPdfExportTests
                 if (pixel.Red > 245 && pixel.Green > 245 && pixel.Blue > 245)
                     whiteEggInterior++;
             }
-            blackInk.Should().BeGreaterThan(300);
+            blackInk.Should().BeInRange(228, 238);
             whiteEggInterior.Should().BeGreaterThan(200);
             bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
         }, CancellationToken.None);

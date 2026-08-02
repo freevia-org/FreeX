@@ -4,14 +4,30 @@ namespace FreeX.Core.Formula;
 
 public static partial class BuiltInFunctions
 {
+    // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary arithmetic
+    // result (FormulaEvaluator.Operators.cs), mirroring the fix already applied to Sum(),
+    // Sumproduct(), Average() and Product(): round the accumulated total the same way SUM
+    // would, then round the quotient the same way the '/' operator would. Used for the mean in
+    // every VAR/STDEV variant below so e.g. VARP(0.1,0.1,0.1) sees the same rounded mean AVERAGE()
+    // would produce (exactly 0.1) instead of raw IEEE-754 summation noise, and its sum-of-squared-
+    // deviations comes out exactly 0 like Excel's, not a residual ~1.9e-34.
+    private static double RoundedMean(IReadOnlyList<double> nums)
+    {
+        double total = 0;
+        foreach (var n in nums) total += n;
+        double roundedTotal = FormulaEvaluator.RoundTo15SignificantDigits(total);
+        return FormulaEvaluator.RoundTo15SignificantDigits(roundedTotal / nums.Count);
+    }
+
     private static ScalarValue Stdev(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var (numsOrNull, err) = CollectNumbers(args);
         if (err is not null) return err;
         var nums = numsOrNull!;
         if (nums.Count < 2) return ErrorValue.DivByZero;
-        double mean = nums.Average();
-        double variance = nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1);
+        double mean = RoundedMean(nums);
+        double variance = FormulaEvaluator.RoundTo15SignificantDigits(
+            nums.Sum(x => (x - mean) * (x - mean)) / (nums.Count - 1));
         return NumberResult(Math.Sqrt(variance));
     }
 
@@ -62,8 +78,9 @@ public static partial class BuiltInFunctions
         var (list, err) = CollectNumbers(args);
         if (err is not null) return err;
         if (list!.Count < 2) return ErrorValue.DivByZero;
-        double mean = list.Average();
-        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
+        double mean = RoundedMean(list);
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(
+            list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1)));
     }
 
     private static ScalarValue VarA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -71,8 +88,9 @@ public static partial class BuiltInFunctions
         var (list, err) = CollectAValues(args);
         if (err is not null) return err;
         if (list!.Count < 2) return ErrorValue.DivByZero;
-        double mean = list.Average();
-        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1));
+        double mean = RoundedMean(list);
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(
+            list.Sum(x => (x - mean) * (x - mean)) / (list.Count - 1)));
     }
 
     private static ScalarValue VarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -80,8 +98,9 @@ public static partial class BuiltInFunctions
         var (list, err) = CollectNumbers(args);
         if (err is not null) return err;
         if (list!.Count == 0) return ErrorValue.DivByZero;
-        double mean = list.Average();
-        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / list.Count);
+        double mean = RoundedMean(list);
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(
+            list.Sum(x => (x - mean) * (x - mean)) / list.Count));
     }
 
     private static ScalarValue VarPA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -89,8 +108,9 @@ public static partial class BuiltInFunctions
         var (list, err) = CollectAValues(args);
         if (err is not null) return err;
         if (list!.Count == 0) return ErrorValue.DivByZero;
-        double mean = list.Average();
-        return NumberResult(list.Sum(x => (x - mean) * (x - mean)) / list.Count);
+        double mean = RoundedMean(list);
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(
+            list.Sum(x => (x - mean) * (x - mean)) / list.Count));
     }
 
     private static ScalarValue StdevP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -120,7 +140,7 @@ public static partial class BuiltInFunctions
             }
         }
         if (nums.Count == 0) return ErrorValue.DivByZero;
-        double mean = nums.Average();
-        return NumberResult(nums.Sum(x => (x - mean) * (x - mean)));
+        double mean = RoundedMean(nums);
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(nums.Sum(x => (x - mean) * (x - mean))));
     }
 }

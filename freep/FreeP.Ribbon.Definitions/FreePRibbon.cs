@@ -649,6 +649,26 @@ public static class FreePRibbon
             group.Medium(ShapeEffectAuthoringPlanner.Shape3dStrongCommandId,
                 FreePRibbonText.Shape3dStrongCommand.Label, RibbonCommandIconKind.Effects,
                 FreePRibbonText.Shape3dStrongCommand.KeyTip);
+            group.Dropdown(
+                ShapeTransparencyPlanner.FillCommandId,
+                FreePRibbonText.ShapeFillTransparencyCommand.Label,
+                BuildShapeTransparencyMenu(ShapeTransparencyTarget.Fill),
+                dropdown => dropdown with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Medium,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.Fill),
+                    KeyTip = FreePRibbonText.ShapeFillTransparencyCommand.KeyTip
+                });
+            group.Dropdown(
+                ShapeTransparencyPlanner.OutlineCommandId,
+                FreePRibbonText.ShapeOutlineTransparencyCommand.Label,
+                BuildShapeTransparencyMenu(ShapeTransparencyTarget.Outline),
+                dropdown => dropdown with
+                {
+                    PreferredLayout = RibbonCommandLayoutKind.Medium,
+                    Icon = new RibbonCommandIcon(RibbonCommandIconKind.Border),
+                    KeyTip = FreePRibbonText.ShapeOutlineTransparencyCommand.KeyTip
+                });
             group.Medium(OleInsertionPlanner.InsertEmbeddedObjectCommandId,
                 FreePRibbonText.InsertEmbeddedObjectCommand.Label, RibbonCommandIconKind.RibbonShape,
                 FreePRibbonText.InsertEmbeddedObjectCommand.KeyTip);
@@ -760,6 +780,12 @@ public static class FreePRibbon
                 $"S{++index}");
         }
     }
+
+    private static RibbonMenu BuildShapeTransparencyMenu(ShapeTransparencyTarget target) =>
+        new(ShapeTransparencyPlanner.Options.Select((option, index) => new RibbonMenuItem(
+            option.Label,
+            new RibbonCommandId(ShapeTransparencyPlanner.OptionCommandId(target, option.Percent)),
+            KeyTip: (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture))).ToArray());
 
     private static void AddDesignGroups(RibbonTabBuilder tab)
     {

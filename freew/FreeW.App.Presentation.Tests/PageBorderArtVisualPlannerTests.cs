@@ -63,7 +63,7 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void CakeSlice_UsesWordCadenceAndSharedCreamPinkLayerGeometry()
+    public void CakeSlice_UsesWordCadenceAndSharedCreamPinkBlackLayerGeometry()
     {
         PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(3, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
@@ -79,6 +79,8 @@ public sealed class PageBorderArtVisualPlannerTests
             polygon.Red == 0xFF && polygon.Green == 0xEE && polygon.Blue == 0xCA);
         plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
             polygon.Red == 0xFF && polygon.Green == 0x99 && polygon.Blue == 0xC2);
+        plan.Polygons[3].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0 && polygon.Green == 0 && polygon.Blue == 0);
         plan.Polygons[115].Points[0].Should().Be(new PageBorderArtPoint(39, 996));
     }
 
@@ -109,12 +111,21 @@ public sealed class PageBorderArtVisualPlannerTests
         plan.Fills.Should().BeEmpty();
         plan.Polygons.Should().HaveCount(918);
         plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(38, 56));
+        plan.Polygons[0].Points.Skip(6).Take(2).Should().Equal(
+            new PageBorderArtPoint(54, 62),
+            new PageBorderArtPoint(45, 62));
         plan.Polygons[1].Points.Take(3).Should().Equal(
             new PageBorderArtPoint(43, 32),
-            new PageBorderArtPoint(50, 30),
+            new PageBorderArtPoint(50, 32),
             new PageBorderArtPoint(56, 34));
         plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
             polygon.Red == 0xFF && polygon.Green == 0xFF && polygon.Blue == 0xFF);
+        plan.Polygons[2].Points.Skip(2).Take(4).Should().Equal(
+            new PageBorderArtPoint(56, 36),
+            new PageBorderArtPoint(60, 41),
+            new PageBorderArtPoint(60, 47),
+            new PageBorderArtPoint(57, 53));
+        plan.Polygons[3].Points[0].Should().Be(new PageBorderArtPoint(41.5, 36.36));
         plan.Polygons[207].Points[0].Should().Be(new PageBorderArtPoint(38, 1016));
     }
 
@@ -269,7 +280,8 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtFillRectangle(32, 32, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(31, 32, 32, 992, 0, 0, 0),
-            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
+            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0),
+            new PageBorderArtFillRectangle(63, 128, 1, 800, 0, 0, 0));
         plan.Polygons.Should().HaveCount(224);
         plan.Polygons[0].Points.Should().Equal(
             new PageBorderArtPoint(44, 63),
@@ -278,6 +290,13 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtPoint(76, 43),
             new PageBorderArtPoint(76, 32),
             new PageBorderArtPoint(65, 32));
+        plan.Polygons[96].Points.Should().Equal(
+            new PageBorderArtPoint(31, 32),
+            new PageBorderArtPoint(39, 32),
+            new PageBorderArtPoint(63, 56),
+            new PageBorderArtPoint(63, 64),
+            new PageBorderArtPoint(55, 64),
+            new PageBorderArtPoint(31, 40));
         plan.Polygons[104].Points.Should().Equal(
             new PageBorderArtPoint(31, 136),
             new PageBorderArtPoint(42, 136),

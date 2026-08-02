@@ -11,6 +11,7 @@ internal static partial class XlsxPivotTableWriter
     private static XDocument ToPivotCacheDefinitionXml(
         PivotCacheModel cache,
         IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,
+        IReadOnlyList<PivotCalculatedItemModel> calculatedItems,
         XNamespace workbookNs,
         XNamespace relNs,
         string recordsRelId,
@@ -77,7 +78,65 @@ internal static partial class XlsxPivotTableWriter
                 workbookNs + "cacheFields",
                 new XAttribute("count", cacheFields.Count.ToString(CultureInfo.InvariantCulture)),
                 cacheFields.Select(field => ToPivotCacheFieldXml(field, workbookNs, numberFormatIdMap))),
+            // R116-io-pivot-calcitem-part: per CT_PivotCacheDefinition's real child sequence (ECMA-376
+            // 18.10.1.3: cacheSource, cacheFields, cacheHierarchies, kpis, tupleCache, calculatedItems,
+            // calculatedMembers, dimensions, measureGroups, maps, extLst), calculatedItems comes after
+            // cacheFields (FreeX writes none of the optional cacheHierarchies/kpis/tupleCache in between)
+            // and before extLst. It was previously emitted as a (schema-invalid) child of
+            // pivotTableDefinition instead -- see the R116 comment on XlsxPivotTableWriter.
+            // ToPivotTableDefinitionXml's call site.
+            ToPivotCacheCalculatedItemsXml(calculatedItems, workbookNs),
             FreeXPivotCacheExtension(cache, workbookNs)));
+    }
+
+    // FreeX-private ext URI for a calculated item's display Name, which CT_CalculatedItem (ECMA-376
+    // 18.10.1.10) has no attribute for (only field/formula attributes plus a required pivotArea child --
+    // confirmed via reflection: DocumentFormat.OpenXml.Spreadsheet.CalculatedItem exposes only
+    // Field/Formula/PivotArea/ExtensionList). Real Excel derives an item's display text from a new shared-
+    // item entry it also adds to the target field's cacheField/sharedItems list -- a much larger, currently
+    // unmodeled mechanism. Until that is implemented, preserve the FreeX-authored Name in the item's own
+    // (schema-legal) extLst so a FreeX-to-FreeX round trip does not silently lose it; real Excel simply
+    // ignores the unrecognized extension.
+    private const string FreeXPivotCalculatedItemExtensionUri = "{FREEX-PIVOT-CALCITEM-EXT}";
+
+    private static XElement? ToPivotCacheCalculatedItemsXml(IReadOnlyList<PivotCalculatedItemModel> items, XNamespace workbookNs)
+    {
+        if (items.Count == 0)
+            return null;
+
+        XNamespace freeXNs = FreeXPivotExtensionNamespace;
+        return new XElement(
+            workbookNs + "calculatedItems",
+            new XAttribute("count", items.Count.ToString(CultureInfo.InvariantCulture)),
+            items.Select(item => new XElement(
+                workbookNs + "calculatedItem",
+                new XAttribute("field", item.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                new XAttribute("formula", item.Formula),
+                // CT_CalculatedItem declares pivotArea as a required child (minOccurs="1") that
+                // identifies which field the calculated item targets; without it the part is
+                // structurally invalid and real Excel repairs/drops the calculated item on open.
+                new XElement(
+                    workbookNs + "pivotArea",
+                    new XAttribute("type", "normal"),
+                    new XAttribute("dataOnly", "0"),
+                    new XAttribute("labelOnly", "1"),
+                    new XAttribute("outline", "0"),
+                    new XAttribute("fieldPosition", "0"),
+                    new XElement(
+                        workbookNs + "references",
+                        new XAttribute("count", "1"),
+                        new XElement(
+                            workbookNs + "reference",
+                            new XAttribute("field", item.SourceFieldIndex.ToString(CultureInfo.InvariantCulture)),
+                            new XAttribute("count", "0"),
+                            new XAttribute("selected", "0")))),
+                new XElement(
+                    workbookNs + "extLst",
+                    new XElement(
+                        workbookNs + "ext",
+                        new XAttribute("uri", FreeXPivotCalculatedItemExtensionUri),
+                        new XAttribute(XNamespace.Xmlns + "fx", freeXNs),
+                        new XElement(freeXNs + "calculatedItemProps", new XAttribute("name", item.Name)))))));
     }
 
     private static List<PivotCacheFieldModel> GetEffectivePivotCacheFields(

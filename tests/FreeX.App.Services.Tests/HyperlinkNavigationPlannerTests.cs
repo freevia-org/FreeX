@@ -266,4 +266,27 @@ public sealed class HyperlinkNavigationPlannerTests
         HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeFalse();
         plan.Should().BeNull();
     }
+
+    // R116 (full chain): a file:// target whose decoded local path is too long for
+    // Path.GetFullPath to normalize (verified to throw PathTooLongException on this repo's actual
+    // net10.0 runtime -- not merely a documentation claim) makes TryNormalizeExplicitLocalPath bail
+    // out here exactly as designed, so the planner correctly falls through to External instead of
+    // LocalFile. That is the precondition for the ExternalUriLauncher gap: this test proves the
+    // planner really does produce External for this shape, and Free.Shared.AppServices.ExternalUriLauncherTests
+    // proves the shared allowlist that External-kind hyperlinks are handed to (in both shells) now
+    // refuses the identical shape too, instead of silently shell-executing it.
+    [Fact]
+    public void TryCreatePlan_FallsBackToExternalForFileUriWithPathTooLongLocalPath()
+    {
+        var sheetId = SheetId.New();
+        var sheet = new Sheet(sheetId, "Sheet1");
+        var address = new CellAddress(sheetId, 1, 1);
+        var target = "file:///C:/" + new string('a', 40_000) + ".exe";
+        sheet.Hyperlinks[address] = target;
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+
+        HyperlinkNavigationPlanner.TryCreatePlan(sheet, address, out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(HyperlinkNavigationKind.External, target, null));
+    }
 }

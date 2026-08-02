@@ -289,7 +289,16 @@ public sealed class FormulaEvaluatorPerformanceTests
         var evaluator = new FormulaEvaluator();
         var sheet = MakeNumericSheet();
 
-        ((NumberValue)evaluator.Evaluate(formula, sheet)).Value.Should().BeApproximately(expected, 1e-7);
+        // R116: EvaluateFastRangeOnlyVariance now rounds its final variance to 15 significant
+        // digits (matching Excel and the already-rounded SUM/AVERAGE fast paths -- see
+        // R116_AggregateFunctions15SigRoundingTests), which shifts this ~8.3e8-magnitude
+        // result by up to ~1 part in 1e9 relative to the un-rounded raw Welford accumulation
+        // this idealized closed-form `expected` was derived from. The tolerance here only
+        // needs to be loose enough to accommodate that deliberate final rounding step, not to
+        // hide a real correctness regression -- this test's actual purpose (guarded by the
+        // allocation/elapsed assertions below) is verifying VAR/STDEV over a 100k-cell range
+        // avoids list materialization, not bit-exact precision.
+        ((NumberValue)evaluator.Evaluate(formula, sheet)).Value.Should().BeApproximately(expected, 1e-6);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -301,7 +310,7 @@ public sealed class FormulaEvaluatorPerformanceTests
         stopwatch.Stop();
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - beforeBytes;
 
-        ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-7);
+        ((NumberValue)result).Value.Should().BeApproximately(expected, 1e-6);
         _output.WriteLine($"{formula}: elapsed={stopwatch.Elapsed.TotalMilliseconds:F2}ms allocated={allocatedBytes:N0} bytes");
         allocatedBytes.Should().BeLessThan(1_000_000);
         stopwatch.Elapsed.Should().BeLessThan(MaxElapsedForPerformanceAssertion());

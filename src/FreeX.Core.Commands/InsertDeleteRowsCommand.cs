@@ -224,7 +224,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         _cfFormulaSnapshot.Clear();
         _cfThresholdSnapshot.Clear();
         _dvFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new InsertRowsOp(sheet.Name, _beforeRow, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, new InsertRowsOp(sheet.Name, _beforeRow, _count), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
         // R26-table-structured-ref-deep-2: the address-bearing shift above already grows a
         // structured table's Range (via ShiftStructuredTables) when the insert point falls inside
@@ -434,7 +434,7 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
         // R20-array-dynamic-spill-1: mirror MoveCellsForInsert's spill-relocation fix for undo —
         // capture any live spill rooted at the shifted-up address before clearing it back.
