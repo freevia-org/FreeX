@@ -1244,13 +1244,16 @@ public static class SmartArtEditingPlanner
     private static XElement BuildDrawingCachePicture(SlideShape shape, string relationshipId)
     {
         var id = shape.Id == 0 ? 1u : shape.Id;
-        return new XElement(Dsp + "sp",
+        return new XElement(Dsp + "pic",
             new XAttribute("modelId", id),
-            new XElement(Dsp + "nvSpPr",
+            new XElement(Dsp + "nvPicPr",
                 new XElement(Dsp + "cNvPr",
                     new XAttribute("id", id),
                     new XAttribute("name", string.IsNullOrWhiteSpace(shape.Name) ? $"SmartArt Picture {id}" : shape.Name)),
-                new XElement(Dsp + "cNvSpPr")),
+                new XElement(Dsp + "cNvPicPr")),
+            new XElement(Dsp + "blipFill",
+                new XElement(A + "blip", new XAttribute(R + "embed", relationshipId)),
+                new XElement(A + "stretch", new XElement(A + "fillRect"))),
             new XElement(Dsp + "spPr",
                 new XElement(A + "xfrm",
                     new XElement(A + "off",
@@ -1261,10 +1264,7 @@ public static class SmartArtEditingPlanner
                         new XAttribute("cy", shape.ExtentCyEmu))),
                 new XElement(A + "prstGeom",
                     new XAttribute("prst", "rect"),
-                    new XElement(A + "avLst")),
-                new XElement(A + "blipFill",
-                    new XElement(A + "blip", new XAttribute(R + "embed", relationshipId)),
-                    new XElement(A + "stretch", new XElement(A + "fillRect")))));
+                    new XElement(A + "avLst"))));
     }
 
     private static IReadOnlyList<string> GetPictureRelationshipIds(
