@@ -144,6 +144,35 @@ public class ManualHyphenationPlannerTests
         document.Endnotes[1].PlainText.Should().Be("hyphenation");
     }
 
+    [Fact]
+    public void Session_ReviewsTextInsideShapesAndNestedDrawingGroups()
+    {
+        var document = new TextDocument();
+        var body = new Paragraph();
+        var inlineShape = Shape.TextBoxWith("rabbit", 120, 40);
+        body.Runs.Add(Run.FromShape(inlineShape));
+        var nestedTextBox = Shape.TextBoxWith("hyphenation", 120, 40);
+        var nestedGroup = new DrawingGroup();
+        nestedGroup.Children.Add(nestedTextBox);
+        var group = new DrawingGroup();
+        group.Children.Add(nestedGroup);
+        group.Children.Add(inlineShape);
+        body.Runs.Add(Run.FromDrawingGroup(group));
+        document.Blocks.Add(body);
+
+        var session = ManualHyphenationPlanner.CreateSession(document);
+
+        session.CandidateCount.Should().Be(2);
+        session.Current!.Word.Should().Be("rabbit");
+        session.Skip();
+        session.Current!.Word.Should().Be("hyphenation");
+        session.Accept(session.Current.Options[0].BreakPoint);
+
+        new ApplyManualHyphenationCommand(session.Edits).Apply(new Context(document));
+        inlineShape.TextParagraphs.Single().PlainText.Should().Be("rabbit");
+        nestedTextBox.TextParagraphs.Single().PlainText.Should().Contain(Hyphenator.SoftHyphen.ToString());
+    }
+
     private sealed class Context(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document { get; } = document;
