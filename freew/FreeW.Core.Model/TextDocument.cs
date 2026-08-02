@@ -3617,6 +3617,13 @@ public sealed class TextDocument
     public bool HideGrammaticalErrors { get; set; }
 
     /// <summary>
+    /// Whether styles should be refreshed automatically from the attached document template when Word opens
+    /// the document. Maps to <c>w:settings/w:linkStyles</c>. False is Word's default and is omitted from newly
+    /// authored packages; true emits the non-default setting independently of the attached-template payload.
+    /// </summary>
+    public bool AutomaticallyUpdateStylesFromTemplate { get; set; }
+
+    /// <summary>
     /// Whether Word should refresh fields when the document opens. Maps to
     /// <c>w:settings/w:updateFields</c>. False is Word's default and is omitted from newly authored
     /// packages; true emits the non-default setting so references, page numbers, and other fields can

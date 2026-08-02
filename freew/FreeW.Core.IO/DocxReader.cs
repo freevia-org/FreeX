@@ -180,6 +180,8 @@ public static class DocxReader
     /// <see cref="TextDocument.DoNotTrackFormatting"/>, the spelling-indicator toggle into
     /// <see cref="TextDocument.HideSpellingErrors"/> and the grammar-indicator toggle into
     /// <see cref="TextDocument.HideGrammaticalErrors"/>,
+    /// the template-style refresh toggle into
+    /// <see cref="TextDocument.AutomaticallyUpdateStylesFromTemplate"/>,
     /// and the w:autoHyphenation toggle into
     /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
@@ -231,6 +233,10 @@ public static class DocxReader
         // Hide grammatical errors (w:hideGrammaticalErrors): the grammar counterpart to
         // w:hideSpellingErrors. Absent or explicitly off is Word's default.
         document.HideGrammaticalErrors = ReadToggle(root, "hideGrammaticalErrors");
+
+        // Automatically update styles from the attached template (w:linkStyles). The attached-template
+        // relationship is preserved independently; absent or explicitly off is Word's default.
+        document.AutomaticallyUpdateStylesFromTemplate = ReadToggle(root, "linkStyles");
 
         // Update fields on open (w:updateFields): absent/explicitly-off is Word's default; an empty element
         // or any valid on token asks the consuming application to recalculate fields when opening the file.

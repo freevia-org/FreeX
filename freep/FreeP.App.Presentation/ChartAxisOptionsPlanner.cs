@@ -166,6 +166,7 @@ public sealed class ChartAxisOptionsPlanner
         new(ChartAxisDisplayUnit.HundredMillions, "Hundred millions"),
         new(ChartAxisDisplayUnit.Billions, "Billions"),
         new(ChartAxisDisplayUnit.Trillions, "Trillions"),
+        new(ChartAxisDisplayUnit.Custom, "Custom"),
         new(ChartAxisDisplayUnit.Unsupported, "Preserve unknown source unit"),
     ];
 
@@ -180,6 +181,7 @@ public sealed class ChartAxisOptionsPlanner
     private string _numberFormat = string.Empty;
     private ChartAxisDisplayUnit _displayUnit;
     private string? _rawDisplayUnitToken;
+    private double? _customDisplayUnit;
     private bool _majorGridlines;
     private bool _minorGridlines;
     private ChartTickMark? _majorTickMark;
@@ -259,6 +261,7 @@ public sealed class ChartAxisOptionsPlanner
     public string NumberFormatCode => _numberFormat;
     public ChartAxisDisplayUnit DisplayUnit => _displayUnit;
     public string? RawDisplayUnitToken => _rawDisplayUnitToken;
+    public double? CustomDisplayUnit => _customDisplayUnit;
     public bool MajorGridlines => _majorGridlines;
     public bool MinorGridlines => _minorGridlines;
     public ChartTickMark? MajorTickMark => _majorTickMark;
@@ -291,6 +294,7 @@ public sealed class ChartAxisOptionsPlanner
         _numberFormat = axis.NumberFormatCode ?? string.Empty;
         _displayUnit = axis.DisplayUnit;
         _rawDisplayUnitToken = axis.RawDisplayUnitToken;
+        _customDisplayUnit = axis.CustomDisplayUnit;
         _majorGridlines = axis.HasMajorGridlines;
         _minorGridlines = axis.HasMinorGridlines;
         _majorTickMark = axis.MajorTickMark;
@@ -319,6 +323,8 @@ public sealed class ChartAxisOptionsPlanner
     public void SetMinorUnit(double? minorUnit) => _minorUnit = minorUnit;
     public void SetNumberFormatCode(string? formatCode) => _numberFormat = formatCode ?? string.Empty;
     public void SetDisplayUnit(ChartAxisDisplayUnit value) => _displayUnit = value;
+    public void SetCustomDisplayUnit(double? value) => _customDisplayUnit =
+        value is null ? null : Math.Clamp(value.Value, 0.000001, 1_000_000_000_000d);
     public void SetMajorGridlines(bool show) => _majorGridlines = show;
     public void SetMinorGridlines(bool show) => _minorGridlines = show;
     public void SetMajorTickMark(ChartTickMark? value) => _majorTickMark = value;
@@ -364,7 +370,8 @@ public sealed class ChartAxisOptionsPlanner
         _minorGridlines,
         BuildTitleStyle(),
         _displayUnit,
-        _displayUnit == ChartAxisDisplayUnit.Unsupported ? _rawDisplayUnitToken : null);
+        _displayUnit == ChartAxisDisplayUnit.Unsupported ? _rawDisplayUnitToken : null,
+        _displayUnit == ChartAxisDisplayUnit.Custom ? _customDisplayUnit : null);
 
     private ChartTextStyle? BuildTitleStyle() =>
         _titleFontFamily is null && _titleFontSizePt is null && _titleBold is null &&

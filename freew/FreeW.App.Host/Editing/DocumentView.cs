@@ -4640,6 +4640,58 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
+    /// Set or clear the text foreground colour on the exact selected text. A collapsed caret uses WPF's native
+    /// pending foreground so subsequently typed text inherits the choice.
+    /// </summary>
+    public void SetTextColor(string? colorHex) =>
+        SetSelectionColor(colorHex, isHighlight: false);
+
+    /// <summary>
+    /// Set or clear the text highlight colour on the exact selected text. A collapsed caret uses WPF's native
+    /// pending background so subsequently typed text inherits the choice.
+    /// </summary>
+    public void SetHighlightColor(string? colorHex) =>
+        SetSelectionColor(colorHex, isHighlight: true);
+
+    private void SetSelectionColor(string? colorHex, bool isHighlight)
+    {
+        string? normalizedColor = null;
+        Color color = default;
+        if (!string.IsNullOrWhiteSpace(colorHex))
+        {
+            if (!TryParseColor(colorHex, out color))
+                return;
+            normalizedColor = ToHex(color);
+        }
+
+        if (TrySetSelectedRunFormatting(
+                formatting => string.Equals(
+                    isHighlight ? formatting.HighlightColorHex : formatting.ColorHex,
+                    normalizedColor,
+                    StringComparison.OrdinalIgnoreCase),
+                formatting => isHighlight
+                    ? formatting with { HighlightColorHex = normalizedColor }
+                    : formatting with { ColorHex = normalizedColor }))
+        {
+            return;
+        }
+
+        Focus();
+        if (isHighlight)
+        {
+            Selection.ApplyPropertyValue(
+                TextElement.BackgroundProperty,
+                normalizedColor is null ? null! : new SolidColorBrush(color));
+        }
+        else
+        {
+            Selection.ApplyPropertyValue(
+                TextElement.ForegroundProperty,
+                normalizedColor is null ? Brushes.Black : new SolidColorBrush(color));
+        }
+    }
+
+    /// <summary>
     /// Set (or clear when <paramref name="languageTag"/> is null/empty) the proofing language on the
     /// selected text range, or on the current proofing word when the caret is collapsed inside one.
     /// </summary>
@@ -4684,30 +4736,27 @@ public sealed class DocumentView : RichTextBox
     /// properties (bold, italic, underline, strikethrough, font family, size, colour, super/subscript,
     /// small/all caps) and model-only advanced typography fields (character spacing, kerning, position,
     /// ligatures, stylistic set, number form, number spacing). Used by the Font dialog-launcher
-    /// (freew.font-dialog). Both layers are applied atomically from the caller's perspective: the WPF
-    /// properties change the live surface immediately; the model-only fields are pushed through the
-    /// undo/redo bus via <see cref="FormatSelectedModelRuns"/>. A subsequent <see cref="CommitToModel"/>
-    /// call merges the WPF surface back into the model, so both sets of changes survive the round-trip.
+    /// (freew.font-dialog). A non-empty selection applies the complete snapshot through one exact range command,
+    /// including tracked-format metadata and undo/redo. A collapsed caret keeps WPF's native pending visible
+    /// formatting behavior without rewriting model-only advanced fields across the existing paragraph.
     /// </summary>
     public void ApplyFontFormatting(RunFormatting fmt)
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
             return;
 
-        Focus();
-        // Apply the WPF-visible fields via the selection property bag (the normal path for bold/size/…).
-        ApplyRunFormattingToSelection(fmt);
-        // Apply model-only advanced fields via the bus so they are undoable and round-trip through docx.
-        FormatSelectedModelRuns(f => f with
+        if (TrySetSelectedRunFormatting(
+                formatting => formatting == fmt,
+                _ => fmt))
         {
-            CharacterSpacingPt = fmt.CharacterSpacingPt,
-            KerningMinSizePt   = fmt.KerningMinSizePt,
-            PositionPt         = fmt.PositionPt,
-            Ligatures          = fmt.Ligatures,
-            StylisticSet       = fmt.StylisticSet,
-            NumberForm         = fmt.NumberForm,
-            NumberSpacing      = fmt.NumberSpacing,
-        });
+            return;
+        }
+
+        Focus();
+        // A collapsed caret has no model text range. Preserve WPF's pending visible formatting for text typed
+        // next; model-only advanced typography needs a dedicated pending-run model rather than paragraph-wide
+        // mutation.
+        ApplyRunFormattingToSelection(fmt);
     }
 
     /// <summary>

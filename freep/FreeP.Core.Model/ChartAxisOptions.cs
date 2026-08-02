@@ -33,4 +33,5 @@ public sealed record ChartAxisOptions(
     bool MinorGridlines = false,
     ChartTextStyle? TitleStyle = null,
     ChartAxisDisplayUnit DisplayUnit = ChartAxisDisplayUnit.None,
-    string? RawDisplayUnitToken = null);
+    string? RawDisplayUnitToken = null,
+    double? CustomDisplayUnit = null);

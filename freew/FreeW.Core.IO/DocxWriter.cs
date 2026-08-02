@@ -201,6 +201,7 @@ public static class DocxWriter
             || document.RemovePersonalInformation
             || document.HideSpellingErrors
             || document.HideGrammaticalErrors
+            || document.AutomaticallyUpdateStylesFromTemplate
             || document.UpdateFieldsOnOpen
             || document.TrackRevisions
             || document.DoNotTrackMoves
@@ -269,7 +270,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8249,7 +8250,7 @@ public static class DocxWriter
     /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>), the embed-TrueType-fonts
     /// toggle (w:embedTrueTypeFonts), the personal-information removal toggle
     /// (w:removePersonalInformation), the proofing-indicator toggles (w:hideSpellingErrors and
-    /// w:hideGrammaticalErrors),
+    /// w:hideGrammaticalErrors), the template-style refresh toggle (w:linkStyles),
     /// the revision-tracking toggles (w:trackRevisions,
     /// w:doNotTrackMoves, and w:doNotTrackFormatting), and the document-protection element
     /// (w:documentProtection: w:edit + w:enforcement="1").
@@ -8263,7 +8264,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8308,6 +8309,8 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "hideSpellingErrors"));
             if (hideGrammaticalErrors)
                 fresh.Add(new XElement(W + "hideGrammaticalErrors"));
+            if (automaticallyUpdateStylesFromTemplate)
+                fresh.Add(new XElement(W + "linkStyles"));
             if (trackRevisions)
                 fresh.Add(new XElement(W + "trackRevisions"));
             if (doNotTrackMoves)
@@ -8351,6 +8354,7 @@ public static class DocxWriter
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
         OverlaySetting(settings, "hideSpellingErrors", hideSpellingErrors ? new XElement(W + "hideSpellingErrors") : null);
         OverlaySetting(settings, "hideGrammaticalErrors", hideGrammaticalErrors ? new XElement(W + "hideGrammaticalErrors") : null);
+        OverlaySetting(settings, "linkStyles", automaticallyUpdateStylesFromTemplate ? new XElement(W + "linkStyles") : null);
         OverlaySetting(settings, "trackRevisions", trackRevisions ? new XElement(W + "trackRevisions") : null);
         OverlaySetting(settings, "doNotTrackMoves", doNotTrackMoves ? new XElement(W + "doNotTrackMoves") : null);
         OverlaySetting(settings, "doNotTrackFormatting", doNotTrackFormatting ? new XElement(W + "doNotTrackFormatting") : null);
