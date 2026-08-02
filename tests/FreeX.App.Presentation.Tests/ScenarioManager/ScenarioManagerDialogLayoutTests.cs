@@ -16,5 +16,11 @@ public sealed class ScenarioManagerDialogLayoutTests
         ScenarioManagerDialogLayout.ActionButtonWidth.Should().Be(82);
         ScenarioManagerDialogLayout.CloseButtonWidth.Should().Be(72);
         ScenarioManagerDialogLayout.CloseButtonWidth.Should().BeLessThan(ScenarioManagerDialogLayout.ActionButtonWidth);
+        ScenarioManagerDialogLayout.ScenarioListHeaderBottomMargin.Should().Be(4);
+        ScenarioManagerDialogLayout.FieldBottomMargin.Should().Be(8);
+        ScenarioManagerDialogLayout.LockedCheckBoxBottomMargin.Should().Be(6);
+        ScenarioManagerDialogLayout.HiddenCheckBoxBottomMargin.Should().Be(8);
+        ScenarioManagerDialogLayout.GroupTopMargin.Should().Be(12);
+        ScenarioManagerDialogLayout.CloseRowTopMargin.Should().Be(12);
     }
 }
