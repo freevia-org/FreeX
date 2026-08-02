@@ -77,7 +77,8 @@ public sealed record FontDialogInitialState(
     string StylisticSetText,
     int NumberFormIndex,
     int NumberSpacingIndex,
-    bool DoubleStrikethrough = false);
+    bool DoubleStrikethrough = false,
+    bool Hidden = false);
 
 public sealed record FontDialogInput(
     string? FontFamilyText,
@@ -98,7 +99,8 @@ public sealed record FontDialogInput(
     string? StylisticSetText,
     int NumberFormIndex,
     int NumberSpacingIndex,
-    bool DoubleStrikethrough = false);
+    bool DoubleStrikethrough = false,
+    bool Hidden = false);
 
 public static class FontDialogPlanner
 {
@@ -335,7 +337,8 @@ public static class FontDialogPlanner
             StylisticSetText: current.StylisticSet?.ToString(culture) ?? string.Empty,
             NumberFormIndex: NumberFormIndexFor(current.NumberForm),
             NumberSpacingIndex: NumberSpacingIndexFor(current.NumberSpacing),
-            DoubleStrikethrough: current.DoubleStrikethrough);
+            DoubleStrikethrough: current.DoubleStrikethrough,
+            Hidden: current.Hidden);
     }
 
     public static bool TryBuildResult(
@@ -414,6 +417,7 @@ public static class FontDialogPlanner
             Underline = input.Underline,
             Strikethrough = input.Strikethrough,
             DoubleStrikethrough = input.DoubleStrikethrough,
+            Hidden = input.Hidden,
             SmallCaps = input.SmallCaps,
             AllCaps = input.AllCaps,
             VerticalAlign = input.Superscript

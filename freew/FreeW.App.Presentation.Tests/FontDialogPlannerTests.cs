@@ -216,6 +216,7 @@ public sealed class FontDialogPlannerTests
             StylisticSet = 7,
             NumberForm = NumberForm.OldStyle,
             NumberSpacing = NumberSpacing.Tabular,
+            Hidden = true,
         };
 
         var state = FontDialogPlanner.BuildInitialState(current, CultureInfo.InvariantCulture);
@@ -238,6 +239,7 @@ public sealed class FontDialogPlannerTests
         state.StylisticSetText.Should().Be("7");
         state.NumberFormIndex.Should().Be(2);
         state.NumberSpacingIndex.Should().Be(2);
+        state.Hidden.Should().BeTrue();
     }
 
     [Fact]
@@ -461,6 +463,26 @@ public sealed class FontDialogPlannerTests
         result.Should().NotBeNull();
         result!.Strikethrough.Should().Be(strikethrough);
         result.DoubleStrikethrough.Should().Be(doubleStrikethrough);
+    }
+
+    [Fact]
+    public void TryBuildResult_AppliesHiddenWithoutChangingWebHidden()
+    {
+        var input = ValidInput() with { Hidden = true };
+        var current = RunFormatting.Default with { WebHidden = true };
+
+        FontDialogPlanner.TryBuildResult(
+                input,
+                current,
+                CultureInfo.InvariantCulture,
+                out var result,
+                out var errorMessage)
+            .Should().BeTrue();
+
+        errorMessage.Should().BeNull();
+        result.Should().NotBeNull();
+        result!.Hidden.Should().BeTrue();
+        result.WebHidden.Should().BeTrue();
     }
 
     private static FontDialogInput ValidInput() => new(

@@ -314,6 +314,46 @@ public sealed class FontAndParagraphDialogTests
     }
 
     [Fact]
+    public void FontDialog_apply_sets_hidden_without_setting_web_hidden()
+    {
+        var doc = MakeDoc("Hide this");
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll();
+
+        var original = RunFormatting.Default;
+        var result = new FontDialog.FontDialogResult(
+            Family: null, SizePt: null,
+            Bold: false, Italic: false, Underline: false, Strikethrough: false,
+            VerticalAlign: VerticalAlign.Baseline,
+            SmallCaps: false, AllCaps: false,
+            ColorHex: null, HighlightHex: null,
+            Hidden: true);
+
+        FontDialog.ApplyResult(view, result, original);
+
+        var formatting = ((Paragraph)view.Document.Blocks[0]).Runs.Single().Formatting;
+        formatting.Hidden.Should().BeTrue();
+        formatting.WebHidden.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FontDialog_selection_state_reports_mixed_hidden_text()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("hidden", RunFormatting.Default with { Hidden = true }));
+        paragraph.Runs.Add(new Run(" visible"));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.SelectAll();
+
+        view.GetSelectionFormatting().HiddenIndeterminate.Should().BeTrue();
+    }
+
+    [Fact]
     public void FontDialog_apply_sets_font_family()
     {
         var doc = MakeDoc("Family");
