@@ -393,6 +393,23 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void Compare_RevisedDocumentDoNotTrackFormatting_KeepsFormattingWithoutRevisionAndPreservesPolicy()
+    {
+        var original = DocWith("same text");
+        var revised = DocWith("same text");
+        revised.Paragraphs.Single().Runs.Single().Formatting = RunFormatting.Default with { Underline = true };
+        revised.DoNotTrackFormatting = true;
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+        var run = result.Paragraphs.Single().Runs.Single();
+
+        result.DoNotTrackFormatting.Should().BeTrue();
+        run.Formatting.Underline.Should().BeTrue();
+        run.FormatRevision.Should().BeNull();
+        TrackChanges.HasRevisions(result).Should().BeFalse();
+    }
+
+    [Fact]
     public void Compare_UniqueUnchangedParagraphMove_UsesPairedMoveRevisionId()
     {
         var original = DocWith("Alpha", "Bravo", "Charlie");

@@ -259,6 +259,24 @@ public class CompareRevisionRoundTripTests
     }
 
     [Fact]
+    public void Compare_DoNotTrackFormatting_OmitsFormatRevisionAndPreservesSetting()
+    {
+        var original = DocWith("same text");
+        var revised = DocWith("same text");
+        revised.Paragraphs.Single().Runs.Single().Formatting = RunFormatting.Default with { Bold = true };
+        revised.DoNotTrackFormatting = true;
+
+        var compared = DocumentCompare.Compare(original, revised, Author, DateXml);
+        var documentXml = DocumentXDoc(compared);
+        var reloaded = RoundTrip(compared);
+
+        documentXml.Descendants(W + "rPrChange").Should().BeEmpty();
+        reloaded.DoNotTrackFormatting.Should().BeTrue();
+        reloaded.Paragraphs.Single().Runs.Single().Formatting.Bold.Should().BeTrue();
+        reloaded.Paragraphs.Single().Runs.Single().FormatRevision.Should().BeNull();
+    }
+
+    [Fact]
     public void Compare_RoundTripped_CanBeRejected_ToYieldOriginalText()
     {
         var original = DocWith("one two three");

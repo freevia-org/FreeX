@@ -184,7 +184,7 @@ public static class DocumentCompare
                     revisedParagraph,
                     author,
                     dateXml,
-                    settings));
+                    settings.Formatting && !revised.DoNotTrackFormatting));
                 prevOriginalAnchor = anchorOriginalIndex;
             }
             else
@@ -592,6 +592,7 @@ public static class DocumentCompare
         target.DefaultRun = source.DefaultRun;
         target.DefaultParagraph = source.DefaultParagraph;
         target.DoNotTrackMoves = source.DoNotTrackMoves;
+        target.DoNotTrackFormatting = source.DoNotTrackFormatting;
         target.DoNotAutoCompressPictures = source.DoNotAutoCompressPictures;
         target.EmbedSystemFonts = source.EmbedSystemFonts;
         target.SaveSubsetFonts = source.SaveSubsetFonts;
@@ -774,10 +775,10 @@ public static class DocumentCompare
         Paragraph revised,
         string author,
         string? dateXml,
-        CompareSettings settings)
+        bool trackFormatting)
     {
         var clone = ClonePlain(revised);
-        if (!settings.Formatting
+        if (!trackFormatting
             || !string.Equals(original.PlainText, revised.PlainText, StringComparison.Ordinal)
             || original.Runs.Count != revised.Runs.Count)
             return clone;
