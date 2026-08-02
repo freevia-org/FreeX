@@ -5640,9 +5640,9 @@ public sealed class DocumentView : RichTextBox
             HorizontalAlignment = HorizontalAlignment.Center;
             Padding = new Thickness(
                 pageMetrics.MarginLeftDip,
-                pageMetrics.MarginTopDip,
+                _model.DoNotDisplayPageBoundaries ? 0 : pageMetrics.MarginTopDip,
                 pageMetrics.MarginRightDip,
-                pageMetrics.MarginBottomDip);
+                _model.DoNotDisplayPageBoundaries ? 0 : pageMetrics.MarginBottomDip);
             Effect = PageShadow;
         }
         else
@@ -17628,6 +17628,7 @@ public sealed class DocumentView : RichTextBox
     private sealed class PageBreakAdorner : Adorner
     {
         private static readonly Pen BreakPen = CreateBreakPen();
+        private static readonly Pen CollapsedBoundaryPen = CreateCollapsedBoundaryPen();
         private static readonly Brush LabelBrush = CreateLabelBrush();
 
         private readonly DocumentView _view;
@@ -17665,6 +17666,13 @@ public sealed class DocumentView : RichTextBox
             var brush = new SolidColorBrush(Color.FromRgb(0x90, 0x90, 0x90));
             brush.Freeze();
             return brush;
+        }
+
+        private static Pen CreateCollapsedBoundaryPen()
+        {
+            var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)), 1.0);
+            pen.Freeze();
+            return pen;
         }
 
         protected override void OnRender(DrawingContext drawingContext)
@@ -17767,6 +17775,12 @@ public sealed class DocumentView : RichTextBox
         // "— Page N —" label, so it reads as a low-key boundary cue rather than real content.
         private void DrawMarker(DrawingContext dc, double y, int pageNumber, Rect bounds, double pixelsPerDip)
         {
+            if (_view._model.DoNotDisplayPageBoundaries)
+            {
+                dc.DrawLine(CollapsedBoundaryPen, new Point(bounds.Left, y), new Point(bounds.Right, y));
+                return;
+            }
+
             dc.DrawLine(BreakPen, new Point(bounds.Left, y), new Point(bounds.Right, y));
 
             var label = new FormattedText(

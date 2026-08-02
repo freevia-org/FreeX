@@ -1648,6 +1648,9 @@ public static class PptxPackageReader
             OffsetYEmu      = offY,
             ExtentCxEmu     = extCx,
             ExtentCyEmu     = extCy,
+            RotationDeg     = ParseLong(gfEl.Element(P + "xfrm")?.Attribute("rot")?.Value) / 60000.0,
+            FlipH           = gfEl.Element(P + "xfrm")?.Attribute("flipH")?.Value is "1" or "true",
+            FlipV           = gfEl.Element(P + "xfrm")?.Attribute("flipV")?.Value is "1" or "true",
             Picture         = fallbackImage,
             PreservedObject = info,
         };

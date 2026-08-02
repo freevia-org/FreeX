@@ -1999,6 +1999,7 @@ public sealed class ChartDataCommandTests
                         Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
                     },
                     ShowBubbleSize = true,
+                    ShowLeaderLines = true,
                 },
                 ExplosionPercent: 35)));
 
@@ -2015,6 +2016,7 @@ public sealed class ChartDataCommandTests
         style.DataLabels.ShowCategoryName.Should().BeTrue();
         style.DataLabels.ShowLegendKey.Should().BeTrue();
         style.DataLabels.ShowBubbleSize.Should().BeTrue();
+        style.DataLabels.ShowLeaderLines.Should().BeTrue();
         style.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         style.DataLabels.TextStyle.Should().NotBeNull();
         style.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");
@@ -2037,6 +2039,7 @@ public sealed class ChartDataCommandTests
         roundTrippedLabels!.ShowValue.Should().BeTrue();
         roundTrippedLabels.ShowCategoryName.Should().BeTrue();
         roundTrippedLabels.ShowLegendKey.Should().BeTrue();
+        roundTrippedLabels.ShowLeaderLines.Should().BeTrue();
         roundTrippedLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         roundTrippedLabels.NumberFormat.Should().Be("0.0%");
         roundTrippedLabels.Separator.Should().Be(" | ");

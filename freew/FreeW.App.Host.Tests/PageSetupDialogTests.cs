@@ -44,6 +44,7 @@ public sealed class PageSetupDialogTests
             MarginTopPt = 50,
             MarginLeftPt = 40,
             GutterPt = 18,
+            GutterAtTop = true,
             MirrorMargins = true,
             HeaderDistancePt = 30,
             FooterDistancePt = 40,
@@ -58,6 +59,7 @@ public sealed class PageSetupDialogTests
         Assert.Equal(50, result!.MarginTopPt);
         Assert.Equal(40, result.MarginLeftPt);
         Assert.Equal(18, result.GutterPt);
+        Assert.True(result.GutterAtTop);
         Assert.True(result.Landscape);
         Assert.True(result.MirrorMargins);
         Assert.True(result.DifferentFirstPage);
@@ -81,6 +83,7 @@ public sealed class PageSetupDialogTests
             MarginLeftPt: 66,
             MarginRightPt: 70,
             GutterPt: 12,
+            GutterAtTop: true,
             Landscape: true,
             MirrorMargins: true,
             WidthPt: 1008,   // legal landscape width (legal portrait height)
@@ -99,6 +102,7 @@ public sealed class PageSetupDialogTests
             page.MarginLeftPt = result.MarginLeftPt;
             page.MarginRightPt = result.MarginRightPt;
             page.GutterPt = result.GutterPt;
+            page.GutterAtTop = result.GutterAtTop;
             page.Landscape = result.Landscape;
             page.MirrorMargins = result.MirrorMargins;
             page.WidthPt = result.WidthPt;
@@ -116,6 +120,7 @@ public sealed class PageSetupDialogTests
         Assert.Equal(66, p.MarginLeftPt);
         Assert.Equal(70, p.MarginRightPt);
         Assert.Equal(12, p.GutterPt);
+        Assert.True(p.GutterAtTop);
         Assert.True(p.Landscape);
         Assert.True(p.MirrorMargins);
         Assert.Equal(1008, p.WidthPt);

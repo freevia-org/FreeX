@@ -728,6 +728,7 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetShowValueLabels(true);
         planner.SetShowCategoryLabels(true);
         planner.SetShowLegendKeys(true);
+        planner.SetShowLeaderLines(true);
         planner.SetLabelPosition(DataLabelPosition.InsideEnd);
         planner.SetLabelNumberFormat("0.0%");
         planner.SetLabelSeparator(" | ");
@@ -750,6 +751,7 @@ public sealed class ChartDataDialogPlannerTests
         options.DataLabels!.ShowValue.Should().BeTrue();
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
+        options.DataLabels.ShowLeaderLines.Should().BeTrue();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.NumberFormat.Should().Be("0.0%");
         options.DataLabels.Separator.Should().Be(" | ");

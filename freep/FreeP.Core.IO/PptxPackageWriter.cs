@@ -5286,6 +5286,13 @@ public static class PptxPackageWriter
         try { el = XElement.Parse(info.RawXml); }
         catch { return null; }
 
+        // Zooms are preserved as native graphic-frame XML, but their position and
+        // size remain ordinary SlideShape state so canvas transforms can edit them.
+        // Keep the preserved payload synchronized at the final write boundary; other
+        // preserved object kinds remain verbatim by design.
+        if (shape is { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom })
+            SynchronizeZoomTransform(el, shape);
+
         // Patch r-namespace id attributes to use the fresh relIds
         var rNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         foreach (var attr in el.DescendantsAndSelf()
@@ -5375,6 +5382,8 @@ public static class PptxPackageWriter
             {
                 clone = new XElement(el);
             }
+            if (shape is { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom })
+                SynchronizeZoomTransform(clone, shape);
             return new XElement(MC + "AlternateContent",
                 new XAttribute(XNamespace.Xmlns + "mc",
                     "http://schemas.openxmlformats.org/markup-compatibility/2006"),
@@ -5384,6 +5393,43 @@ public static class PptxPackageWriter
         }
 
         return el;
+    }
+
+    private static void SynchronizeZoomTransform(XElement root, SlideShape shape)
+    {
+        XElement? xfrm = root.Name == P + "graphicFrame"
+            ? root.Element(P + "xfrm")
+            : root.Name == P + "sp"
+                ? root.Element(P + "spPr")?.Element(A + "xfrm")
+                : null;
+        if (xfrm is null)
+            return;
+
+        if (Math.Abs(shape.RotationDeg) > 0.0001)
+            xfrm.SetAttributeValue("rot", (long)Math.Round(shape.RotationDeg * 60000));
+        else
+            xfrm.Attribute("rot")?.Remove();
+
+        if (shape.FlipH)
+            xfrm.SetAttributeValue("flipH", "1");
+        else
+            xfrm.Attribute("flipH")?.Remove();
+        if (shape.FlipV)
+            xfrm.SetAttributeValue("flipV", "1");
+        else
+            xfrm.Attribute("flipV")?.Remove();
+
+        var off = xfrm.Element(A + "off") ?? new XElement(A + "off");
+        off.SetAttributeValue("x", shape.OffsetXEmu);
+        off.SetAttributeValue("y", shape.OffsetYEmu);
+        if (off.Parent is null)
+            xfrm.AddFirst(off);
+
+        var ext = xfrm.Element(A + "ext") ?? new XElement(A + "ext");
+        ext.SetAttributeValue("cx", shape.ExtentCxEmu);
+        ext.SetAttributeValue("cy", shape.ExtentCyEmu);
+        if (ext.Parent is null)
+            xfrm.Add(ext);
     }
 
     /// <summary>

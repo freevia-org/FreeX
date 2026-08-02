@@ -41,6 +41,30 @@ public sealed class ViewModeTests
     }
 
     [StaFact]
+    public void PrintLayout_HonorsHiddenPageBoundariesWithoutChangingHorizontalMargins()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.DoNotDisplayPageBoundaries = true;
+        doc.Page.MarginLeftPt = 54;
+        doc.Page.MarginRightPt = 63;
+        doc.Page.MarginTopPt = 72;
+        doc.Page.MarginBottomPt = 81;
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.Padding.Left.Should().BeApproximately(72, 0.01);
+        view.Padding.Right.Should().BeApproximately(84, 0.01);
+        view.Padding.Top.Should().Be(0);
+        view.Padding.Bottom.Should().Be(0);
+
+        view.SetViewMode(DocumentViewMode.Draft);
+        view.SetViewMode(DocumentViewMode.PrintLayout);
+        view.Padding.Top.Should().Be(0);
+        view.Padding.Bottom.Should().Be(0);
+    }
+
+    [StaFact]
     public void WebLayout_HidesPageChrome()
     {
         var view = NewEditor();

@@ -61,7 +61,8 @@ public sealed class PageSetupDialogTests
         double MarginRightPt,
         bool Landscape,
         double WidthPt,
-        double HeightPt) =>
+        double HeightPt,
+        bool GutterAtTop = false) =>
         new(
             MarginTopPt,
             MarginBottomPt,
@@ -77,7 +78,8 @@ public sealed class PageSetupDialogTests
             DifferentOddEvenPages: false,
             HeaderDistancePt: 36,
             FooterDistancePt: 36,
-            VerticalAlignment: PageVerticalAlignment.Top);
+            VerticalAlignment: PageVerticalAlignment.Top,
+            GutterAtTop: GutterAtTop);
 
     // ── Command registry ──────────────────────────────────────────────────────
 
@@ -360,6 +362,19 @@ public sealed class PageSetupDialogTests
         view.Document.Page.MarginBottomPt.Should().BeApproximately(48, 0.01, "bottom margin should be 48pt");
         view.Document.Page.MarginLeftPt.Should().BeApproximately(54, 0.01, "left margin should be 54pt");
         view.Document.Page.MarginRightPt.Should().BeApproximately(60, 0.01, "right margin should be 60pt");
+    }
+
+    [Fact]
+    public void ApplyResult_sets_top_gutter_position()
+    {
+        var doc = MakeDoc();
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        var result = Result(72, 72, 72, 72, false, 612, 792, GutterAtTop: true);
+
+        PageSetupDialog.ApplyResult(view, result);
+
+        view.Document.Page.GutterAtTop.Should().BeTrue();
     }
 
     [Fact]

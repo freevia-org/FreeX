@@ -94,13 +94,13 @@ public static class DocxReader
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships, numbering);
         ReadComments(archive, document, hyperlinkRelationships, numbering);
         ReadSettings(archive, document);
-        // w:evenAndOddHeaders and w:mirrorMargins are document-global toggles stored in settings.xml, read
+        // w:evenAndOddHeaders, w:mirrorMargins, and w:gutterAtTop are document-global toggles stored in settings.xml, read
         // into document.Page by ReadSettings. Non-final sections' PageSettings are constructed earlier (during
         // body parsing), before ReadSettings runs, so their DifferentOddEvenPages/MirrorMargins stay false.
         // Propagate the document-wide values now so the writer's per-section even-part emission gate
         // (which keys off section.Page.DifferentOddEvenPages) correctly emits even header/footer parts for
         // every non-final section whose sectPr carried even header/footer references.
-        if (document.Page.DifferentOddEvenPages || document.Page.MirrorMargins)
+        if (document.Page.DifferentOddEvenPages || document.Page.MirrorMargins || document.Page.GutterAtTop)
         {
             foreach (var block in document.Blocks)
             {
@@ -110,6 +110,8 @@ public static class DocxReader
                         section.Page.DifferentOddEvenPages = true;
                     if (document.Page.MirrorMargins)
                         section.Page.MirrorMargins = true;
+                    if (document.Page.GutterAtTop)
+                        section.Page.GutterAtTop = true;
                 }
             }
         }
@@ -222,6 +224,11 @@ public static class DocxReader
 
         // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
         document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
+
+        // Top gutter (w:gutterAtTop): moves each section's w:pgMar/@w:gutter from the side edge to the top
+        // edge. Absent or explicitly off is Word's default. Word ignores this when mirror/book-fold layout
+        // determines the binding edge automatically.
+        document.Page.GutterAtTop = ReadToggle(root, "gutterAtTop");
 
         // Hide print-layout page boundaries (w:doNotDisplayPageBoundaries): absent or explicitly off is
         // Word's default. The setting is a document view preference rather than page geometry.

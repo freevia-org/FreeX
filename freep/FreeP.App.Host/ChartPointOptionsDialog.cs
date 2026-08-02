@@ -23,6 +23,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly CheckBox _showSeriesLabelsCheck;
     private readonly CheckBox _showLegendKeysCheck;
     private readonly CheckBox _showBubbleSizeCheck;
+    private readonly CheckBox _showLeaderLinesCheck;
     private readonly ComboBox _labelPositionCombo;
     private readonly TextBox _labelNumberFormatBox;
     private readonly TextBox _labelSeparatorBox;
@@ -85,6 +86,12 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showBubbleSizeCheck = new CheckBox { Content = surface.BubbleSizeLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showLeaderLinesCheck = new CheckBox
+        {
+            Content = surface.LeaderLinesLabel,
+            Margin = new Thickness(20, 0, 0, 0),
+            IsThreeState = true,
+        };
         _labelPositionCombo = new ComboBox
         {
             ItemsSource = ChartDisplayOptionsPlanner.LabelPositionOptions,
@@ -135,6 +142,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         content.Children.Add(_showSeriesLabelsCheck);
         content.Children.Add(_showLegendKeysCheck);
         content.Children.Add(_showBubbleSizeCheck);
+        content.Children.Add(_showLeaderLinesCheck);
         content.Children.Add(MakeRow(surface.LabelPositionLabel, _labelPositionCombo));
         content.Children.Add(MakeRow(surface.NumberFormatLabel, _labelNumberFormatBox));
         content.Children.Add(MakeRow(surface.SeparatorLabel, _labelSeparatorBox));
@@ -180,7 +188,8 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         bool? labelItalic = null,
         string? labelColor = null,
         bool showBubbleSize = false,
-        int? explosionPercent = null)
+        int? explosionPercent = null,
+        bool? showLeaderLines = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         RefreshPoints();
@@ -195,6 +204,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _showSeriesLabelsCheck.IsChecked = showSeriesLabels;
         _showLegendKeysCheck.IsChecked = showLegendKeys;
         _showBubbleSizeCheck.IsChecked = showBubbleSize;
+        _showLeaderLinesCheck.IsChecked = showLeaderLines;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(labelPosition);
         _labelNumberFormatBox.Text = labelNumberFormat ?? string.Empty;
         _labelSeparatorBox.Text = labelSeparator ?? string.Empty;
@@ -239,6 +249,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
         _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
         _showBubbleSizeCheck.IsChecked = _planner.ShowBubbleSize;
+        _showLeaderLinesCheck.IsChecked = _planner.ShowLeaderLines;
         _labelPositionCombo.SelectedIndex = FindLabelPositionIndex(_planner.LabelPosition);
         _labelNumberFormatBox.Text = _planner.LabelNumberFormat;
         _labelSeparatorBox.Text = _planner.LabelSeparator;
@@ -264,6 +275,7 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
         _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
+        _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
         if (_labelPositionCombo.SelectedItem is ChartDisplayLabelPositionOption position)
             _planner.SetLabelPosition(position.Value);
         _planner.SetLabelNumberFormat(_labelNumberFormatBox.Text);

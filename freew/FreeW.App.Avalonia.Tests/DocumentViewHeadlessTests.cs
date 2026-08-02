@@ -590,6 +590,34 @@ public sealed class DocumentViewHeadlessTests
         pageCount.Should().Be(1, $"{mode} is a continuous-column mode — no discrete pages");
     }
 
+    [Fact]
+    public async Task Print_layout_hides_page_whitespace_and_header_footer_when_document_requests_it()
+    {
+        double? firstGlyphY = null;
+        var headerFooterCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = SampleDocument.Create();
+            doc.DoNotDisplayPageBoundaries = true;
+            doc.FinalSectionHeadersFooters.Header = new HeaderFooter("Hidden header");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.ViewMode = DocumentViewMode.PrintLayout;
+            view.Measure(new Size(800, 4000));
+
+            firstGlyphY = view.GetPlacedForBlock(0).FirstOrDefault().Y;
+            headerFooterCount = view.HeaderFooterItems.Count;
+        });
+
+        if (!ran)
+            return;
+        firstGlyphY.Should().BeApproximately(24, 0.01,
+            "the body begins at the page desk inset when vertical page whitespace is hidden");
+        headerFooterCount.Should().Be(0,
+            "headers and footers belong to the hidden page-boundary whitespace");
+    }
+
     /// <summary>
     /// WebLayout and Draft content height must be less than the PrintLayout height for the same
     /// document because they have no inter-page gaps and no DeskPadding.

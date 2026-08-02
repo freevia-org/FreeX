@@ -210,6 +210,7 @@ public static class DocxWriter
             || document.Page.AutoHyphenation
             || anyDifferentOddEvenPages
             || document.Page.MirrorMargins
+            || document.Page.GutterAtTop
             || HasCustomDefaultTabStop(document.Page)
             || hasBackground
             || hasEmbeddedFonts
@@ -8252,7 +8253,8 @@ public static class DocxWriter
     /// toggle (w:embedTrueTypeFonts), the personal-information removal toggle
     /// (w:removePersonalInformation), the page-boundary view toggle
     /// (w:doNotDisplayPageBoundaries), the proofing-indicator toggles (w:hideSpellingErrors and
-    /// w:hideGrammaticalErrors), the template-style refresh toggle (w:linkStyles),
+    /// w:hideGrammaticalErrors), the top-gutter toggle (w:gutterAtTop), the template-style refresh toggle
+    /// (w:linkStyles),
     /// the revision-tracking toggles (w:trackRevisions,
     /// w:doNotTrackMoves, and w:doNotTrackFormatting), and the document-protection element
     /// (w:documentProtection: w:edit + w:enforcement="1").
@@ -8273,6 +8275,7 @@ public static class DocxWriter
         // non-final section with DifferentOddEvenPages=true still sets the document-global toggle.
         var differentOddEvenPages = anyDifferentOddEvenPages || page.DifferentOddEvenPages;
         var mirrorMargins = page.MirrorMargins;
+        var gutterAtTop = page.GutterAtTop;
         var defaultTabStop = HasCustomDefaultTabStop(page)
             ? new XElement(W + "defaultTabStop", new XAttribute(W + "val", PointsToDxa(page.DefaultTabStopPt)))
             : null;
@@ -8309,6 +8312,8 @@ public static class DocxWriter
             // in CT_Settings schema order.
             if (mirrorMargins)
                 fresh.Add(new XElement(W + "mirrorMargins"));
+            if (gutterAtTop)
+                fresh.Add(new XElement(W + "gutterAtTop"));
             if (hideSpellingErrors)
                 fresh.Add(new XElement(W + "hideSpellingErrors"));
             if (hideGrammaticalErrors)
@@ -8357,6 +8362,7 @@ public static class DocxWriter
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
+        OverlaySetting(settings, "gutterAtTop", gutterAtTop ? new XElement(W + "gutterAtTop") : null);
         OverlaySetting(settings, "hideSpellingErrors", hideSpellingErrors ? new XElement(W + "hideSpellingErrors") : null);
         OverlaySetting(settings, "hideGrammaticalErrors", hideGrammaticalErrors ? new XElement(W + "hideGrammaticalErrors") : null);
         OverlaySetting(settings, "linkStyles", automaticallyUpdateStylesFromTemplate ? new XElement(W + "linkStyles") : null);

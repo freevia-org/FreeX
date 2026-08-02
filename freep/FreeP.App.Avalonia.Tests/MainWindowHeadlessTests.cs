@@ -7855,7 +7855,8 @@ public sealed class MainWindowHeadlessTests
             var dialog = new ChartPointOptionsDialog(window.Editor);
             dialog.SetOptionsForTests(0, 0, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-                "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, explosionPercent: 35);
+                "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, explosionPercent: 35,
+                showLeaderLines: true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -7875,6 +7876,7 @@ public sealed class MainWindowHeadlessTests
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
         options.DataLabels.ShowBubbleSize.Should().BeTrue();
+        options.DataLabels.ShowLeaderLines.Should().BeTrue();
         options.DataLabels.Position.Should().Be(DataLabelPosition.InsideEnd);
         options.DataLabels.TextStyle.Should().NotBeNull();
         options.DataLabels.TextStyle!.FontFamily.Should().Be("Aptos");

@@ -34,6 +34,37 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildSurfacePlan_CollapsedPageBoundaries_HidesVerticalWhitespaceWithoutChangingPagination()
+    {
+        var page = new PageSettings
+        {
+            WidthPt = 612,
+            HeightPt = 792,
+            MarginLeftPt = 72,
+            MarginRightPt = 72,
+            MarginTopPt = 72,
+            MarginBottomPt = 72,
+        };
+
+        var plan = DocumentViewLayoutPlanner.BuildSurfacePlan(
+            page,
+            DocumentViewLayoutKind.PrintLayout,
+            availableWidthDip: 816,
+            collapsePageBoundaries: true);
+
+        plan.PageWidthDip.Should().BeApproximately(816, 0.01);
+        plan.PageHeightDip.Should().BeApproximately(864, 0.01);
+        plan.MarginTopDip.Should().Be(0);
+        plan.MarginBottomDip.Should().Be(0);
+        plan.PageGapDip.Should().Be(0);
+        plan.ContentLeftDip.Should().BeApproximately(120, 0.01);
+        plan.ContentWidthDip.Should().BeApproximately(624, 0.01);
+        plan.TextAreaHeightDip.Should().BeApproximately(864, 0.01,
+            "the view setting must not change pagination capacity");
+        plan.PageTopDip(1).Should().BeApproximately(888, 0.01);
+    }
+
+    [Fact]
     public void BuildSurfacePlan_WebAndDraftKeepContinuousSingleSurfaceGeometry()
     {
         var page = new PageSettings();

@@ -40,7 +40,8 @@ public sealed record PageSetupInitialState(
     bool DifferentOddEvenPages,
     string HeaderDistanceText,
     string FooterDistanceText,
-    int VerticalAlignmentIndex);
+    int VerticalAlignmentIndex,
+    int GutterPositionIndex = 0);
 
 public sealed record PageSetupDialogInput(
     string? MarginTopText,
@@ -61,7 +62,8 @@ public sealed record PageSetupDialogInput(
     int VerticalAlignmentIndex,
     bool UseSelectedPaperPreset,
     PageSetupGeometryMode GeometryMode,
-    PageSetupValidationProfile ValidationProfile);
+    PageSetupValidationProfile ValidationProfile,
+    int GutterPositionIndex = 0);
 
 public sealed record PageSetupDialogResult(
     double MarginTopPt,
@@ -78,7 +80,8 @@ public sealed record PageSetupDialogResult(
     bool DifferentOddEvenPages,
     double HeaderDistancePt,
     double FooterDistancePt,
-    PageVerticalAlignment VerticalAlignment);
+    PageVerticalAlignment VerticalAlignment,
+    bool GutterAtTop = false);
 
 public static class PageSetupDialogPlanner
 {
@@ -88,6 +91,8 @@ public static class PageSetupDialogPlanner
     public const string BottomMarginLabel = "Bottom:";
     public const string LeftMarginLabel = "Left:";
     public const string RightMarginLabel = "Right:";
+    public const string GutterPositionLabel = "Gutter position:";
+    public static readonly IReadOnlyList<string> GutterPositionNames = ["Left", "Top"];
     public const string OrientationSectionLabel = "Orientation";
     public const string PaperSizeSectionLabel = "Paper Size";
     public const string CustomWidthLabel = "Width (pt):";
@@ -161,7 +166,8 @@ public static class PageSetupDialogPlanner
             DifferentOddEvenPages: page.DifferentOddEvenPages,
             HeaderDistanceText: FormatPoints(page.HeaderDistancePt > 0 ? page.HeaderDistancePt : 36, culture),
             FooterDistanceText: FormatPoints(page.FooterDistancePt > 0 ? page.FooterDistancePt : 36, culture),
-            VerticalAlignmentIndex: Math.Max(0, IndexOf(VerticalAlignmentValues, page.VerticalAlignment)));
+            VerticalAlignmentIndex: Math.Max(0, IndexOf(VerticalAlignmentValues, page.VerticalAlignment)),
+            GutterPositionIndex: page.GutterAtTop ? 1 : 0);
     }
 
     public static int PaperIndexFor(
@@ -277,7 +283,8 @@ public static class PageSetupDialogPlanner
             DifferentOddEvenPages: input.DifferentOddEvenPages,
             HeaderDistancePt: headerDistance,
             FooterDistancePt: footerDistance,
-            VerticalAlignment: ValueAtOrDefault(VerticalAlignmentValues, input.VerticalAlignmentIndex));
+            VerticalAlignment: ValueAtOrDefault(VerticalAlignmentValues, input.VerticalAlignmentIndex),
+            GutterAtTop: input.GutterPositionIndex == 1);
         return true;
     }
 
@@ -291,6 +298,7 @@ public static class PageSetupDialogPlanner
         page.MarginLeftPt = result.MarginLeftPt;
         page.MarginRightPt = result.MarginRightPt;
         page.GutterPt = result.GutterPt;
+        page.GutterAtTop = result.GutterAtTop;
         page.Landscape = result.Landscape;
         page.MirrorMargins = result.MirrorMargins;
         page.WidthPt = result.WidthPt;

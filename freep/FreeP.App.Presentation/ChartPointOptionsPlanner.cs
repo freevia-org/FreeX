@@ -20,6 +20,7 @@ public sealed record ChartPointOptionsSurfacePlan(
     string SeriesLabelsLabel,
     string LegendKeysLabel,
     string BubbleSizeLabelsLabel,
+    string LeaderLinesLabel,
     string LabelPositionLabel,
     string NumberFormatLabel,
     string SeparatorLabel,
@@ -55,6 +56,7 @@ public sealed class ChartPointOptionsPlanner
     public const string SeriesLabelsLabel = "Series labels";
     public const string LegendKeysLabel = "Legend keys";
     public const string BubbleSizeLabelsLabel = "Bubble size labels";
+    public const string LeaderLinesLabel = "Leader lines";
     public const string LabelPositionLabel = "Label position";
     public const string NumberFormatLabel = "Number format";
     public const string SeparatorLabel = "Separator";
@@ -123,6 +125,7 @@ public sealed class ChartPointOptionsPlanner
         SeriesLabelsLabel,
         LegendKeysLabel,
         BubbleSizeLabelsLabel,
+        LeaderLinesLabel,
         LabelPositionLabel,
         NumberFormatLabel,
         SeparatorLabel,
@@ -166,6 +169,7 @@ public sealed class ChartPointOptionsPlanner
     public bool ShowSeriesLabels => _showSeriesLabels;
     public bool ShowLegendKeys => _showLegendKeys;
     public bool ShowBubbleSize => _showBubbleSize;
+    public bool? ShowLeaderLines => _showLeaderLines;
     public DataLabelPosition LabelPosition => _labelPosition;
     public string LabelNumberFormat => _labelNumberFormat;
     public string LabelSeparator => _labelSeparator;
@@ -218,6 +222,7 @@ public sealed class ChartPointOptionsPlanner
     public void SetShowSeriesLabels(bool value) => _showSeriesLabels = value;
     public void SetShowLegendKeys(bool value) => _showLegendKeys = value;
     public void SetShowBubbleSize(bool value) => _showBubbleSize = value;
+    public void SetShowLeaderLines(bool? value) => _showLeaderLines = value;
     public void SetLabelPosition(DataLabelPosition value) => _labelPosition = value;
     public void SetLabelNumberFormat(string? value) => _labelNumberFormat = value ?? string.Empty;
     public void SetLabelSeparator(string? value) => _labelSeparator = value ?? string.Empty;
@@ -257,7 +262,8 @@ public sealed class ChartPointOptionsPlanner
                 TextStyle = BuildLabelTextStyle(),
             }
             : null,
-        ExplosionPercent: _explosionPercent);
+        ExplosionPercent: _explosionPercent,
+        ShowLeaderLines: _showLeaderLines);
 
     public static ThemeAwareColor? ParseColor(string? text, string label)
     {
@@ -286,6 +292,7 @@ public sealed class ChartPointOptionsPlanner
         _showSeriesLabels = false;
         _showLegendKeys = false;
         _showBubbleSize = false;
+        _showLeaderLines = null;
         _labelPosition = DataLabelPosition.OutsideEnd;
         _labelNumberFormat = string.Empty;
         _labelSeparator = string.Empty;

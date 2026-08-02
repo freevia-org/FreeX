@@ -16,6 +16,7 @@ public sealed class PageSetupDialogPlannerTests
             MarginTopPt = 50,
             MarginLeftPt = 40,
             GutterPt = 18,
+            GutterAtTop = true,
             MirrorMargins = true,
             HeaderDistancePt = 30,
             FooterDistancePt = 40,
@@ -32,6 +33,7 @@ public sealed class PageSetupDialogPlannerTests
 
         state.OrientationIndex.Should().Be(1);
         state.MultiplePagesIndex.Should().Be(1);
+        state.GutterPositionIndex.Should().Be(1);
         state.WidthText.Should().Be("1224");
         state.HeightText.Should().Be("792");
         state.PaperSizeIndex.Should().Be(PageSetupDialogPlanner.CustomIndex(PageSetupDialogPlanner.HostPaperOptions));
@@ -62,7 +64,8 @@ public sealed class PageSetupDialogPlannerTests
             VerticalAlignmentIndex: 1,
             UseSelectedPaperPreset: false,
             GeometryMode: PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
-            ValidationProfile: PageSetupValidationProfile.UnifiedDialog);
+            ValidationProfile: PageSetupValidationProfile.UnifiedDialog,
+            GutterPositionIndex: 1);
 
         PageSetupDialogPlanner.TryBuildResult(
                 input,
@@ -77,6 +80,7 @@ public sealed class PageSetupDialogPlannerTests
         result!.WidthPt.Should().Be(792);
         result.HeightPt.Should().Be(1224);
         result.MirrorMargins.Should().BeTrue();
+        result.GutterAtTop.Should().BeTrue();
         result.DifferentFirstPage.Should().BeTrue();
         result.VerticalAlignment.Should().Be(PageVerticalAlignment.Center);
     }
@@ -179,7 +183,8 @@ public sealed class PageSetupDialogPlannerTests
             DifferentOddEvenPages: true,
             HeaderDistancePt: 24,
             FooterDistancePt: 30,
-            VerticalAlignment: PageVerticalAlignment.Justified);
+            VerticalAlignment: PageVerticalAlignment.Justified,
+            GutterAtTop: true);
 
         PageSetupDialogPlanner.ApplyToPageSettings(page, result);
 
@@ -188,6 +193,7 @@ public sealed class PageSetupDialogPlannerTests
         page.MarginLeftPt.Should().Be(66);
         page.MarginRightPt.Should().Be(70);
         page.GutterPt.Should().Be(12);
+        page.GutterAtTop.Should().BeTrue();
         page.Landscape.Should().BeTrue();
         page.MirrorMargins.Should().BeTrue();
         page.WidthPt.Should().Be(1008);
