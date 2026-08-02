@@ -640,6 +640,12 @@
   <data name="Ribbon_Command_InsertSlideZoom_KeyTip" xml:space="preserve">
     <value>Z</value>
   </data>
+  <data name="Ribbon_Command_InsertSectionZoom_Label" xml:space="preserve">
+    <value>Section Zoom</value>
+  </data>
+  <data name="Ribbon_Command_InsertSectionZoom_KeyTip" xml:space="preserve">
+    <value>SZ</value>
+  </data>
   <data name="Ribbon_Command_RemoveLink_Label" xml:space="preserve">
     <value>Remove Link</value>
   </data>
