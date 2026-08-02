@@ -4736,30 +4736,27 @@ public sealed class DocumentView : RichTextBox
     /// properties (bold, italic, underline, strikethrough, font family, size, colour, super/subscript,
     /// small/all caps) and model-only advanced typography fields (character spacing, kerning, position,
     /// ligatures, stylistic set, number form, number spacing). Used by the Font dialog-launcher
-    /// (freew.font-dialog). Both layers are applied atomically from the caller's perspective: the WPF
-    /// properties change the live surface immediately; the model-only fields are pushed through the
-    /// undo/redo bus via <see cref="FormatSelectedModelRuns"/>. A subsequent <see cref="CommitToModel"/>
-    /// call merges the WPF surface back into the model, so both sets of changes survive the round-trip.
+    /// (freew.font-dialog). A non-empty selection applies the complete snapshot through one exact range command,
+    /// including tracked-format metadata and undo/redo. A collapsed caret keeps WPF's native pending visible
+    /// formatting behavior without rewriting model-only advanced fields across the existing paragraph.
     /// </summary>
     public void ApplyFontFormatting(RunFormatting fmt)
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
             return;
 
-        Focus();
-        // Apply the WPF-visible fields via the selection property bag (the normal path for bold/size/…).
-        ApplyRunFormattingToSelection(fmt);
-        // Apply model-only advanced fields via the bus so they are undoable and round-trip through docx.
-        FormatSelectedModelRuns(f => f with
+        if (TrySetSelectedRunFormatting(
+                formatting => formatting == fmt,
+                _ => fmt))
         {
-            CharacterSpacingPt = fmt.CharacterSpacingPt,
-            KerningMinSizePt   = fmt.KerningMinSizePt,
-            PositionPt         = fmt.PositionPt,
-            Ligatures          = fmt.Ligatures,
-            StylisticSet       = fmt.StylisticSet,
-            NumberForm         = fmt.NumberForm,
-            NumberSpacing      = fmt.NumberSpacing,
-        });
+            return;
+        }
+
+        Focus();
+        // A collapsed caret has no model text range. Preserve WPF's pending visible formatting for text typed
+        // next; model-only advanced typography needs a dedicated pending-run model rather than paragraph-wide
+        // mutation.
+        ApplyRunFormattingToSelection(fmt);
     }
 
     /// <summary>
