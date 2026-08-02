@@ -86,7 +86,10 @@ public static class SummaryZoomPreviewPlanner
             info.PartContentTypes[mediaPath] = ImageContentType;
             info.SlideRels[relId] = (ImageRelationshipType, mediaPath);
 
-            AttachRelationship(objects[index], relId);
+            var properties = objects[index].Descendants()
+                .First(element => string.Equals(element.Name.LocalName, "zmPr",
+                    StringComparison.OrdinalIgnoreCase));
+            AttachRelationship(properties, relId);
             attached++;
         }
 
@@ -94,6 +97,60 @@ public static class SummaryZoomPreviewPlanner
             info.RawXml = raw.ToString(SaveOptions.DisableFormatting);
 
         return attached;
+    }
+
+    /// <summary>
+    /// Renders and attaches the single preview used by a Slide or Section Zoom.
+    /// The native target remains authoritative; this only adds the optional image
+    /// relationship consumed by PowerPoint and by the host renderers.
+    /// </summary>
+    public static bool AttachPreviewImage(
+        Presentation presentation,
+        SlideShape zoomShape,
+        int targetSlideIndex,
+        Func<int, byte[]?> renderSlideToPng)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(zoomShape);
+        ArgumentNullException.ThrowIfNull(renderSlideToPng);
+
+        if (targetSlideIndex < 0 || targetSlideIndex >= presentation.Slides.Count)
+            return false;
+
+        var info = zoomShape.PreservedObject;
+        if (zoomShape.Kind != SlideShapeKind.Zoom
+            || info?.ObjectKind != PreservedObjectKind.Zoom
+            || string.IsNullOrWhiteSpace(info.RawXml))
+            return false;
+
+        XElement raw;
+        try { raw = XElement.Parse(info.RawXml); }
+        catch { return false; }
+
+        var properties = raw.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
+                StringComparison.OrdinalIgnoreCase));
+        if (properties is null)
+            return false;
+
+        byte[]? preview;
+        try { preview = renderSlideToPng(targetSlideIndex); }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            preview = null;
+        }
+
+        if (preview is not { Length: > 0 })
+            return false;
+
+        var relId = NextRelationshipId(info, 1);
+        var mediaPath = $"ppt/media/freep-zoom-preview-{zoomShape.Id}.png";
+        info.Parts[mediaPath] = preview;
+        info.PartContentTypes[mediaPath] = ImageContentType;
+        info.SlideRels[relId] = (ImageRelationshipType, mediaPath);
+        AttachRelationship(properties, relId);
+        info.RawXml = raw.ToString(SaveOptions.DisableFormatting);
+        return true;
     }
 
     public static bool TryResolveTargetSlideIndex(
@@ -124,17 +181,11 @@ public static class SummaryZoomPreviewPlanner
                 StringComparison.OrdinalIgnoreCase));
     }
 
-    private static void AttachRelationship(XElement summaryObject, string relId)
+    private static void AttachRelationship(XElement properties, string relId)
     {
         XNamespace p166 = "http://schemas.microsoft.com/office/powerpoint/2016/6/main";
         XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
         XNamespace r = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-
-        var properties = summaryObject.Descendants()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
-                StringComparison.OrdinalIgnoreCase));
-        if (properties is null)
-            return;
 
         var blipFill = properties.Descendants()
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "blipFill",
