@@ -829,6 +829,56 @@ public sealed class EditingSession
         && ResetSummaryZoomTileCoverImage(
             _selectedShapeIds[0], sectionId, previewBytes, contentType);
 
+    /// <summary>Sets one Summary Zoom tile's native offset and scale factors through undo.</summary>
+    public bool SetSummaryZoomTileLayout(
+        uint shapeId,
+        string sectionId,
+        int offsetFactorX,
+        int offsetFactorY,
+        int scaleFactorX,
+        int scaleFactorY)
+    {
+        var slide = CurrentSlide;
+        var shape = slide is null ? null : FindShape(slide.Shapes, shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom }
+            || shape.PreservedObject?.ObjectKind != PreservedObjectKind.Zoom
+            || string.IsNullOrWhiteSpace(sectionId)
+            || shape.PreservedObject.SummaryZoomTargets.All(target =>
+                !string.Equals(target.SectionId, sectionId, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        Bus.Execute(new SetSummaryZoomTileLayoutCommand(
+            _currentSlideIndex,
+            shapeId,
+            sectionId,
+            offsetFactorX,
+            offsetFactorY,
+            scaleFactorX,
+            scaleFactorY));
+        var target = shape.PreservedObject.SummaryZoomTargets.First(candidate =>
+            string.Equals(candidate.SectionId, sectionId, StringComparison.OrdinalIgnoreCase));
+        return target.OffsetFactorX == offsetFactorX
+            && target.OffsetFactorY == offsetFactorY
+            && target.ScaleFactorX == scaleFactorX
+            && target.ScaleFactorY == scaleFactorY;
+    }
+
+    /// <summary>Sets one selected Summary Zoom tile's native offset and scale factors.</summary>
+    public bool SetSelectedSummaryZoomTileLayout(
+        string sectionId,
+        int offsetFactorX,
+        int offsetFactorY,
+        int scaleFactorX,
+        int scaleFactorY) =>
+        _selectedShapeIds.Count == 1
+        && SetSummaryZoomTileLayout(
+            _selectedShapeIds[0],
+            sectionId,
+            offsetFactorX,
+            offsetFactorY,
+            scaleFactorX,
+            scaleFactorY);
+
     private static bool HasSummaryTileCover(PreservedObjectInfo info, string sectionId)
     {
         try
