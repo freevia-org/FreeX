@@ -1617,6 +1617,8 @@ public static class PptxPackageReader
         if (mcRequiresNsUris is not null)
             foreach (var kv in mcRequiresNsUris)
                 info.McRequiresNsUris[kv.Key] = kv.Value;
+        if (kind == PreservedObjectKind.Zoom)
+            info.SummaryZoomTargets.AddRange(ReadSummaryZoomTargets(gfEl));
 
         // Capture all referenced parts via the slide's rels
         var slideRels2 = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(partPath));
@@ -1656,6 +1658,26 @@ public static class PptxPackageReader
             .FirstOrDefault(element => string.Equals(
                 element.Name.LocalName, "sectionZmObj", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("sectionId")?.Value;
+
+    private static IEnumerable<SummaryZoomTarget> ReadSummaryZoomTargets(XElement graphicFrame)
+    {
+        foreach (var element in graphicFrame.Descendants().Where(candidate =>
+                     string.Equals(candidate.Name.LocalName, "summaryZmObj", StringComparison.OrdinalIgnoreCase)))
+        {
+            var sectionId = element.Attribute("sectionId")?.Value;
+            if (string.IsNullOrWhiteSpace(sectionId))
+                continue;
+
+            yield return new SummaryZoomTarget(
+                sectionId,
+                element.Attribute("title")?.Value ?? string.Empty,
+                element.Attribute("descr")?.Value ?? string.Empty,
+                ParseNullableInt(element.Attribute("offsetFactorX")?.Value) ?? 0,
+                ParseNullableInt(element.Attribute("offsetFactorY")?.Value) ?? 0,
+                ParseNullableInt(element.Attribute("scaleFactorX")?.Value) ?? 100000,
+                ParseNullableInt(element.Attribute("scaleFactorY")?.Value) ?? 100000);
+        }
+    }
 
     /// <summary>
     /// Reads a p:contentPart element (ink annotation). May be wrapped in mc:AlternateContent.
