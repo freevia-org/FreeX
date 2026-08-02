@@ -27494,7 +27494,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         if (_zoomText.IsFocused)
             return ShellFocusTarget.StatusBar;
 
-        if (IsPivotFieldPaneFocused() || IsSlicerTimelinePaneFocused())
+        if (IsPivotFieldPaneFocused())
+            return ShellFocusTarget.TaskPane;
+
+        if (IsSlicerTimelinePaneFocused())
             return ShellFocusTarget.TaskPane;
 
         if (IsAnyToolbarControlFocused())

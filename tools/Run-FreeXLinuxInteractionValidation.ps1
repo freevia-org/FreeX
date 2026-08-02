@@ -1109,13 +1109,13 @@ try {
             throw "outline-nested-filter-save-reopen requires an existing .xlsx PhysicalDocumentPath."
         }
     }
-    if ($PhysicalProbeSelector -eq "pivot-table-details-double-click") {
+    if ($PhysicalProbeSelector -in @("pivot-field-list", "pivot-table-details-double-click")) {
         if ([string]::IsNullOrWhiteSpace($PhysicalDocumentPath)) {
             $PhysicalDocumentPath = $pivotDetailsFixturePath
         }
         if (-not (Test-Path -LiteralPath $PhysicalDocumentPath -PathType Leaf) -or
             [IO.Path]::GetExtension($PhysicalDocumentPath) -ine ".xlsx") {
-            throw "pivot-table-details-double-click requires an existing .xlsx PhysicalDocumentPath."
+            throw "$PhysicalProbeSelector requires an existing .xlsx PhysicalDocumentPath."
         }
     }
     if ($SkipX11) {
