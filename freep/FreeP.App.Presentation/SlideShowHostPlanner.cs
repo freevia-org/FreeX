@@ -34,7 +34,8 @@ public sealed record SlideShowPointerClickIntent(
     SlideShowPointerClickIntentKind Kind,
     uint? TriggerShapeId = null,
     Hyperlink? Hyperlink = null,
-    int? TargetSlideIndex = null)
+    int? TargetSlideIndex = null,
+    bool ReturnToParent = false)
 {
     public bool IsHandled => Kind is
         SlideShowPointerClickIntentKind.Trigger or
@@ -319,11 +320,17 @@ public static class SlideShowHostPlanner
         }
 
         if (presentation is not null &&
-            TryGetZoomTargetSlideIndex(presentation, slide, slidePoint, out var targetSlideIndex))
+            TryGetZoomTargetSlideIndex(
+                presentation,
+                slide,
+                slidePoint,
+                out var targetSlideIndex,
+                out var returnToParent))
         {
             return new SlideShowPointerClickIntent(
                 SlideShowPointerClickIntentKind.Zoom,
-                TargetSlideIndex: targetSlideIndex);
+                TargetSlideIndex: targetSlideIndex,
+                ReturnToParent: returnToParent);
         }
 
         var hyperlink = HitTestHyperlink(slide, slidePoint);
@@ -337,11 +344,24 @@ public static class SlideShowHostPlanner
     public static SlideShowHostCommand PlanZoomNavigation(
         SlideShowController controller,
         IReadOnlyList<Slide> slides,
-        int targetSlideIndex)
+        int targetSlideIndex,
+        bool returnToParent = false)
     {
         ArgumentNullException.ThrowIfNull(controller);
         ArgumentNullException.ThrowIfNull(slides);
-        return PlanJump(controller, slides, targetSlideIndex, animateSlide: false, stopAutoAdvance: true);
+
+        if (slides.Count == 0 || targetSlideIndex < 0)
+            return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+
+        controller.EnterZoomNavigation(targetSlideIndex, returnToParent);
+        var slide = controller.CurrentSlide;
+        return slide is null
+            ? SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true)
+            : SlideShowHostCommand.Navigate(
+                slide,
+                controller.CurrentSlideIndex,
+                animateSlide: false,
+                stopAutoAdvance: true);
     }
 
     public static SlideShowHostCommand PlanInternalSlideJump(
@@ -566,7 +586,8 @@ public static class SlideShowHostPlanner
         Presentation presentation,
         Slide slide,
         SlideShowPoint slidePoint,
-        out int targetSlideIndex)
+        out int targetSlideIndex,
+        out bool returnToParent)
     {
         foreach (var shape in slide.Shapes)
         {
@@ -579,19 +600,21 @@ public static class SlideShowHostPlanner
                     shape.PreservedObject,
                     RelativeShapeX(shape, slidePoint),
                     RelativeShapeY(shape, slidePoint),
-                    out targetSlideIndex))
+                    out targetSlideIndex,
+                    out returnToParent))
             {
                 return true;
             }
 
             if (shape.Children.Count > 0 && TryGetZoomTargetSlideIndexInShapes(
-                    presentation, shape.Children, slidePoint, out targetSlideIndex))
+                    presentation, shape.Children, slidePoint, out targetSlideIndex, out returnToParent))
             {
                 return true;
             }
         }
 
         targetSlideIndex = -1;
+        returnToParent = false;
         return false;
     }
 
@@ -599,7 +622,8 @@ public static class SlideShowHostPlanner
         Presentation presentation,
         IReadOnlyList<SlideShape> shapes,
         SlideShowPoint slidePoint,
-        out int targetSlideIndex)
+        out int targetSlideIndex,
+        out bool returnToParent)
     {
         foreach (var shape in shapes)
         {
@@ -612,19 +636,21 @@ public static class SlideShowHostPlanner
                     shape.PreservedObject,
                     RelativeShapeX(shape, slidePoint),
                     RelativeShapeY(shape, slidePoint),
-                    out targetSlideIndex))
+                    out targetSlideIndex,
+                    out returnToParent))
             {
                 return true;
             }
 
             if (shape.Children.Count > 0 && TryGetZoomTargetSlideIndexInShapes(
-                    presentation, shape.Children, slidePoint, out targetSlideIndex))
+                    presentation, shape.Children, slidePoint, out targetSlideIndex, out returnToParent))
             {
                 return true;
             }
         }
 
         targetSlideIndex = -1;
+        returnToParent = false;
         return false;
     }
 
@@ -640,6 +666,7 @@ public static class SlideShowHostPlanner
             return SlideShowHostCommand.HandledNoOp(stopAutoAdvance);
         }
 
+        controller.ClearZoomReturnPath();
         controller.GoToSlide(slideIndex);
         var slide = controller.CurrentSlide;
         return slide is null

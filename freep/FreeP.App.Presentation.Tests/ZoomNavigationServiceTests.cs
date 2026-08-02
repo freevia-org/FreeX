@@ -22,6 +22,52 @@ public sealed class ZoomNavigationServiceTests
     }
 
     [Fact]
+    public void Uses_powerpoint_default_return_to_parent_when_zoom_attribute_is_omitted()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { NumericId = 256 });
+        var zoom = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSlideNumericId = 256,
+        };
+
+        ZoomNavigationService.TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            null,
+            null,
+            out var index,
+            out var returnToParent).Should().BeTrue();
+
+        index.Should().Be(0);
+        returnToParent.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Preserves_explicit_return_to_parent_false()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { NumericId = 256 });
+        var zoom = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSlideNumericId = 256,
+            ZoomProperties = new ZoomObjectProperties(ReturnToParent: false),
+        };
+
+        ZoomNavigationService.TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            null,
+            null,
+            out _,
+            out var returnToParent).Should().BeTrue();
+
+        returnToParent.Should().BeFalse();
+    }
+
+    [Fact]
     public void Resolves_target_from_preserved_raw_xml_when_reader_metadata_is_absent()
     {
         var presentation = new Presentation();

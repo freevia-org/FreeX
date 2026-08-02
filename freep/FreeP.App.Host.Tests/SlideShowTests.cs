@@ -342,6 +342,38 @@ public sealed class SlideShowControllerTests
     }
 
     [Fact]
+    public void Controller_Advance_ReturnsToZoomParentBeforeNextSlide()
+    {
+        var pres = MakePresentation(3);
+        var ctrl = new SlideShowController(pres.Slides, 0);
+
+        ctrl.EnterZoomNavigation(2, returnToParent: true);
+        ctrl.CurrentSlideIndex.Should().Be(2);
+
+        var result = ctrl.Advance();
+
+        result.Should().BeOfType<AdvanceResult.NavigateToSlide>()
+            .Which.SlideIndex.Should().Be(0);
+        ctrl.CurrentSlideIndex.Should().Be(0);
+        ctrl.HasZoomReturnPath.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Controller_Back_ReturnsToZoomParentBeforePreviousSlide()
+    {
+        var pres = MakePresentation(3);
+        var ctrl = new SlideShowController(pres.Slides, 0);
+
+        ctrl.EnterZoomNavigation(2, returnToParent: true);
+
+        var result = ctrl.Back();
+
+        result.Should().BeOfType<BackResult.NavigateToSlide>()
+            .Which.SlideIndex.Should().Be(0);
+        ctrl.HasZoomReturnPath.Should().BeFalse();
+    }
+
+    [Fact]
     public void Controller_Advance_WithAnimations_PlaysStepsFirst()
     {
         var pres = MakePresentation(2);

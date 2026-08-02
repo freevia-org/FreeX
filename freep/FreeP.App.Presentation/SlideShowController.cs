@@ -42,6 +42,12 @@ public sealed class SlideShowController
     /// </summary>
     private readonly Dictionary<uint, int> _triggerStepCursors = new();
 
+    /// <summary>
+    /// Parent slides for active PowerPoint Zoom objects whose ReturnToParent flag is set.
+    /// A stack permits a Zoom target to contain another return-to-parent Zoom.
+    /// </summary>
+    private readonly Stack<int> _zoomReturnStack = new();
+
     // ── Construction ─────────────────────────────────────────────────────────────
 
     /// <param name="slides">The ordered slide list from Presentation.Slides.</param>
@@ -86,6 +92,9 @@ public sealed class SlideShowController
     /// <summary>The ordered click-steps for the current slide (read-only).</summary>
     public IReadOnlyList<AnimationStep> CurrentSteps => _currentSteps;
 
+    /// <summary>Whether advancing can return from the current Zoom target to its parent.</summary>
+    public bool HasZoomReturnPath => _zoomReturnStack.Count > 0;
+
     // ── Navigation ────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -104,6 +113,13 @@ public sealed class SlideShowController
             return new AdvanceResult.PlayStep(step);
         }
 
+        if (_zoomReturnStack.Count > 0)
+        {
+            var parentIndex = _zoomReturnStack.Pop();
+            GoToSlide(parentIndex);
+            return new AdvanceResult.NavigateToSlide(parentIndex, _slides[parentIndex]);
+        }
+
         if (CurrentSlideIndex < _slides.Count - 1)
         {
             int nextIdx = CurrentSlideIndex + 1;
@@ -120,6 +136,13 @@ public sealed class SlideShowController
     /// </summary>
     public BackResult Back()
     {
+        if (_zoomReturnStack.Count > 0)
+        {
+            var parentIndex = _zoomReturnStack.Pop();
+            GoToSlide(parentIndex);
+            return new BackResult.NavigateToSlide(parentIndex, _slides[parentIndex]);
+        }
+
         if (CurrentSlideIndex <= 0)
             return BackResult.AtStart.Instance;
 
@@ -135,6 +158,24 @@ public sealed class SlideShowController
         CurrentSlideIndex = Math.Clamp(index, 0, _slides.Count - 1);
         RebuildSteps();
     }
+
+    /// <summary>
+    /// Enters a Zoom target, optionally recording the current slide for PowerPoint's
+    /// Return to Parent behavior.
+    /// </summary>
+    public void EnterZoomNavigation(int targetIndex, bool returnToParent)
+    {
+        if (_slides.Count == 0)
+            return;
+
+        if (returnToParent && CurrentSlideIndex >= 0)
+            _zoomReturnStack.Push(CurrentSlideIndex);
+
+        GoToSlide(targetIndex);
+    }
+
+    /// <summary>Clears any active Zoom return path before an unrelated direct jump.</summary>
+    public void ClearZoomReturnPath() => _zoomReturnStack.Clear();
 
     /// <summary>
     /// Starts the current slide's animation sequence at a selected flat animation
