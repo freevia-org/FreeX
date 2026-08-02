@@ -4451,6 +4451,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfFilledShapeBorderOps(peoplePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var rosePlan))
+        {
+            return BuildPdfFilledShapeBorderOps(rosePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -10443,6 +10453,18 @@ public sealed class DocumentView : Control
                 out var peoplePlan))
         {
             DrawFilledShapePlan(context, frame, peoplePlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var rosePlan))
+        {
+            DrawFilledShapePlan(context, frame, rosePlan);
             return true;
         }
 

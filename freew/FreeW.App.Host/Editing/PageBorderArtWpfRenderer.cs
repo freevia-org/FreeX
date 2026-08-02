@@ -200,6 +200,18 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var rosePlan))
+        {
+            DrawFilledShapePlan(context, frame, rosePlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
