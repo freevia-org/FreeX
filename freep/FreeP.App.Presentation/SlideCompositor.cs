@@ -567,7 +567,11 @@ public static class SlideCompositor
                 boundsDip.Width * target.ScaleFactorX / 100000d,
                 boundsDip.Height * target.ScaleFactorY / 100000d);
 
-            var relId = objects[index].Descendants()
+            var properties = objects[index].Descendants()
+                .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
+                    StringComparison.OrdinalIgnoreCase));
+            var crop = ResolveZoomCrop(properties, info.ZoomProperties);
+            var relId = properties?.Descendants()
                 .SelectMany(element => element.Attributes())
                 .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
                     StringComparison.OrdinalIgnoreCase))?.Value;
@@ -589,6 +593,10 @@ public static class SlideCompositor
                     : "image/png",
                 DestDip = tileBounds,
                 RotationDeg = rotationDeg,
+                CropLeft = crop.Left,
+                CropTop = crop.Top,
+                CropRight = crop.Right,
+                CropBottom = crop.Bottom,
                 Outline = ResolvedOutline.None.Instance,
             });
             composed = true;
@@ -623,6 +631,7 @@ public static class SlideCompositor
         var properties = raw.Descendants()
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
                 StringComparison.OrdinalIgnoreCase));
+        var crop = ResolveZoomCrop(properties, info.ZoomProperties);
         var relId = properties?.Descendants()
             .SelectMany(element => element.Attributes())
             .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
@@ -644,10 +653,40 @@ public static class SlideCompositor
                 : "image/png",
             DestDip = boundsDip,
             RotationDeg = rotationDeg,
+            CropLeft = crop.Left,
+            CropTop = crop.Top,
+            CropRight = crop.Right,
+            CropBottom = crop.Bottom,
             Outline = ResolvedOutline.None.Instance,
         });
         return true;
     }
+
+    private static (double Left, double Top, double Right, double Bottom) ResolveZoomCrop(
+        XElement? properties,
+        ZoomObjectProperties? fallback)
+    {
+        var sourceRect = properties?.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "srcRect",
+                StringComparison.OrdinalIgnoreCase));
+
+        return (
+            NormalizeZoomCrop(ReadCropValue(sourceRect, "l", fallback?.CropLeft)),
+            NormalizeZoomCrop(ReadCropValue(sourceRect, "t", fallback?.CropTop)),
+            NormalizeZoomCrop(ReadCropValue(sourceRect, "r", fallback?.CropRight)),
+            NormalizeZoomCrop(ReadCropValue(sourceRect, "b", fallback?.CropBottom)));
+    }
+
+    private static int? ReadCropValue(XElement? sourceRect, string attributeName, int? fallback)
+    {
+        var text = sourceRect?.Attribute(attributeName)?.Value;
+        return int.TryParse(text, out var value) ? value : fallback;
+    }
+
+    private static double NormalizeZoomCrop(int? value) =>
+        value.HasValue
+            ? Math.Clamp(value.Value / 100000d, 0, 1)
+            : 0;
 
     private static void AddSummaryZoomPlaceholder(
         uint shapeId,
