@@ -409,9 +409,44 @@ public static class DocumentNoteRegionPlanner
     private static string ResolvePlainText(TextDocument document, int id, bool isFootnote)
     {
         if (isFootnote)
-            return document.Footnotes.TryGetValue(id, out var footnote) ? footnote.PlainText : string.Empty;
+            return document.Footnotes.TryGetValue(id, out var footnote)
+                ? ResolveVisiblePlainText(document, footnote.Content)
+                : string.Empty;
 
-        return document.Endnotes.TryGetValue(id, out var endnote) ? endnote.PlainText : string.Empty;
+        return document.Endnotes.TryGetValue(id, out var endnote)
+            ? ResolveVisiblePlainText(document, endnote.Content)
+            : string.Empty;
+    }
+
+    public static string ResolveVisiblePlainText(TextDocument document, IReadOnlyList<Paragraph> content)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(content);
+
+        return string.Join(
+            Environment.NewLine,
+            content.Select(paragraph => string.Concat(paragraph.Runs
+                .Where(run => !IsRunHidden(document, paragraph, run))
+                .Select(run => run.Text))));
+    }
+
+    private static bool IsRunHidden(TextDocument document, Paragraph paragraph, Run run)
+    {
+        if (run.Formatting.Hidden || document.DefaultRun.Hidden)
+            return true;
+
+        var styleId = paragraph.StyleId;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (!string.IsNullOrWhiteSpace(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (style.Run.Hidden)
+                return true;
+            styleId = style.BasedOnStyleId;
+        }
+
+        return false;
     }
 
     private static double EstimateRegionHeight(

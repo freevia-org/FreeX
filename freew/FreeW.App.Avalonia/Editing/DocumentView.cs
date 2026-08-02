@@ -3337,7 +3337,7 @@ public sealed class DocumentView : Control
 
         // Group consecutive same-line, same-format glyphs (excluding the page-left offset) into runs.
         var glyphs = _placed
-            .Where(p => !p.Sentinel && p.Ch != '\0')
+            .Where(p => !p.Sentinel && p.Ch != '\0' && !p.Fmt.Hidden)
             .OrderBy(p => p.Y)
             .ThenBy(p => p.X)
             .ToList();
@@ -7080,11 +7080,20 @@ public sealed class DocumentView : Control
             for (var runIndex = 0; runIndex < para.Runs.Count; runIndex++)
             {
                 var run = para.Runs[runIndex];
+                var effectiveFormatting = ResolveRunFmt(run.Formatting, para);
+                if (effectiveFormatting.Hidden)
+                {
+                    FlushText();
+                    modelOffset += run.Text.Length;
+                    segModelStart = modelOffset;
+                    continue;
+                }
+
                 var fieldText = ResolveHfField(run, pageNumberText, pageCount);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
-                if (run.Formatting.FontSizePt.HasValue)
-                    segFmt = run.Formatting;
+                if (effectiveFormatting.FontSizePt.HasValue)
+                    segFmt = effectiveFormatting;
 
                 if (run.Image is { } image)
                 {
@@ -7104,7 +7113,7 @@ public sealed class DocumentView : Control
                             runIndex,
                             image,
                             pf.Alignment),
-                        Fmt = run.Formatting,
+                        Fmt = effectiveFormatting,
                         ModelStart = modelOffset,
                         Width = width,
                         Height = height,
@@ -7388,7 +7397,8 @@ public sealed class DocumentView : Control
             }
             first = false;
 
-            var words = para.PlainText.Split(' ');
+            var visibleText = DocumentNoteRegionPlanner.ResolveVisiblePlainText(_doc, [para]);
+            var words = visibleText.Split(' ');
             for (var wi = 0; wi < words.Length; wi++)
             {
                 var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
@@ -7542,7 +7552,8 @@ public sealed class DocumentView : Control
             }
             first = false;
 
-            var words = para.PlainText.Split(' ');
+            var visibleText = DocumentNoteRegionPlanner.ResolveVisiblePlainText(_doc, [para]);
+            var words = visibleText.Split(' ');
             for (var wi = 0; wi < words.Length; wi++)
             {
                 var word = wi == words.Length - 1 ? words[wi] : words[wi] + " ";
@@ -8222,9 +8233,11 @@ public sealed class DocumentView : Control
         foreach (var run in paragraph.Runs)
         {
             if (run.Image is not null || run.Shape is not null) continue; // skip non-text
+            var effectiveFormatting = ResolveRunFmt(run.Formatting, paragraph);
+            if (effectiveFormatting.Hidden) continue;
             foreach (var ch in run.Text)
             {
-                var h = BuildForLayout(ch.ToString(), ResolveRunFmt(run.Formatting, paragraph)).Height;
+                var h = BuildForLayout(ch.ToString(), effectiveFormatting).Height;
                 if (h > firstLineNaturalH) firstLineNaturalH = h;
                 // VV1: do NOT break — scan all chars across ALL text runs (max over all cells).
             }
@@ -8279,6 +8292,13 @@ public sealed class DocumentView : Control
 
         for (var c = 0; c < cells.Count; c++)
         {
+            if (cells[c].Fmt.Hidden)
+            {
+                measured[c] = 0;
+                heights[c] = 0;
+                continue;
+            }
+
             if (cells[c].EquationElement is { } equationElement)
             {
                 var equationSize = MeasureEquationVisualElement(equationElement, cells[c].Fmt);
@@ -8736,7 +8756,7 @@ public sealed class DocumentView : Control
             !string.Equals(styleId, "Normal", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        return cells.Count > 0 && cells.All(cell =>
+        return cells.Count > 0 && cells.Where(cell => !cell.Fmt.Hidden).All(cell =>
             string.Equals(cell.Fmt.FontFamily, "Calibri", StringComparison.OrdinalIgnoreCase) &&
             Math.Abs((cell.Fmt.FontSizePt ?? DefaultFontSizePt) - 11.0) < 0.01);
     }
@@ -8916,7 +8936,7 @@ public sealed class DocumentView : Control
                     prCellWidth += colWidths[prCol + s];
 
                 var prFmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
-                    ? cell.Paragraphs[0].Runs[0].Formatting
+                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0].Formatting, cell.Paragraphs[0])
                     : RunFormatting.Default;
                 if (EffectiveFillFor(pr, cellIndex).EffectiveBold)
                     prFmt = prFmt with { Bold = true };
@@ -8928,7 +8948,7 @@ public sealed class DocumentView : Control
                 var prCellHeight = prParagraphs.Sum(paragraph =>
                 {
                     var spacing = CellParagraphSpacing(paragraph);
-                    return WrapCellLines(paragraph.PlainText, prFmt, prInnerW).Sum(line => line.Height)
+                    return WrapCellLines(paragraph, prFmt, prInnerW).Sum(line => line.Height)
                         + spacing.Before + spacing.After;
                 }) + 2 * pad;
                 if (prCellHeight > prRowHeight)
@@ -8972,7 +8992,7 @@ public sealed class DocumentView : Control
             // AV-TBL: carry the TableCell model reference and actual column index so we can emit
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
-            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
+            var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W, bool Hidden)> Chars)>> CellParas, List<(double Before, double After)> ParagraphSpacings, List<double> MarkerInsets, RunFormatting Fmt)>();
             var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
@@ -8986,7 +9006,7 @@ public sealed class DocumentView : Control
                     cellWidth += colWidths[col + s];
 
                 var fmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
-                    ? cell.Paragraphs[0].Runs[0].Formatting
+                    ? ResolveRunFmt(cell.Paragraphs[0].Runs[0].Formatting, cell.Paragraphs[0])
                     : RunFormatting.Default;
                 var cellAppearance = EffectiveFillFor(r, cellIndex);
                 if (cellAppearance.EffectiveBold)
@@ -9004,7 +9024,7 @@ public sealed class DocumentView : Control
                         : 0d).ToList();
                 var paragraphSpacings = cellParagraphs.Select(CellParagraphSpacing).ToList();
                 var cellParas = cellParagraphs.Select((paragraph, paragraphIndex) =>
-                    WrapCellLines(paragraph.PlainText, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
+                    WrapCellLines(paragraph, fmt, Math.Max(10, innerW - markerInsets[paragraphIndex]))).ToList();
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
                 var cellHeight = lines.Sum(l => l.Height)
                     + paragraphSpacings.Sum(spacing => spacing.Before + spacing.After)
@@ -9103,9 +9123,10 @@ public sealed class DocumentView : Control
                     foreach (var (lineHeight, chars) in paraLines)
                     {
                         var tx = rect.Left + pad + markerInset;
-                        foreach (var (ch, w) in chars)
+                        foreach (var (ch, w, hidden) in chars)
                         {
-                            _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
+                            var placedFormatting = hidden ? fmt with { Hidden = true } : fmt;
+                            _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, placedFormatting, ch,
                                 Sentinel: false, CellRow: r, CellCol: startCol, CellParaIdx: pIdx, CellParaOffset: paraCharOffset));
                             glyphOffset++;
                             paraCharOffset++;
@@ -9118,7 +9139,7 @@ public sealed class DocumentView : Control
                     ty += paragraphSpacing.After;
 
                     // BE1: sentinel at end of this paragraph (at the end of its last visual line).
-                    (double Height, List<(char Ch, double W)> Chars)? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
+                    (double Height, List<(char Ch, double W, bool Hidden)> Chars)? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
                     var sentinelX = rect.Left + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
                     var sentinelY = lastParaLine.HasValue
                         ? ty - paragraphSpacing.After - lastParaLine.Value.Height
@@ -9276,7 +9297,10 @@ public sealed class DocumentView : Control
             // Plain text run: use text-line height as the Peek estimate.
             if (!string.IsNullOrEmpty(run.Text))
             {
-                firstObjHeight = Build("Ag", run.Formatting).Height;
+                var formatting = ResolveRunFmt(run.Formatting, paragraph);
+                if (formatting.Hidden)
+                    continue;
+                firstObjHeight = Build("Ag", formatting).Height;
                 break;
             }
         }
@@ -9428,7 +9452,19 @@ public sealed class DocumentView : Control
             //  with text + inline objects still show the text.)
             if (!string.IsNullOrEmpty(run.Text))
             {
-                var fmt = run.Formatting;
+                var fmt = ResolveRunFmt(run.Formatting, paragraph);
+                if (fmt.Hidden)
+                {
+                    var hiddenY = ContentYToPageSpaceY(_layoutContentY);
+                    var hiddenX = ColumnLeftFor(_layoutContentY);
+                    foreach (var ch in run.Text)
+                    {
+                        _placed.Add(new PlacedChar(blockIndex, glyphOffset++, hiddenX, hiddenY,
+                            0, 0, fmt, ch, Sentinel: false));
+                    }
+                    continue;
+                }
+
                 var lineH = Build("Ag", fmt).Height;
                 var contentY   = ReserveContentY(lineH);
                 var pageSpaceY = ContentYToPageSpaceY(contentY);
@@ -9915,30 +9951,37 @@ public sealed class DocumentView : Control
         return widths;
     }
 
-    private List<(double Height, List<(char Ch, double W)> Chars)> WrapCellLines(string text, RunFormatting fmt, double maxInner)
+    private List<(double Height, List<(char Ch, double W, bool Hidden)> Chars)> WrapCellLines(
+        Paragraph paragraph,
+        RunFormatting fmt,
+        double maxInner)
     {
-        var result = new List<(double, List<(char, double)>)>();
+        var result = new List<(double, List<(char, double, bool)>)>();
         var lineHeight = Build("Ag", fmt).Height;
-        var current = new List<(char, double)>();
+        var current = new List<(char, double, bool)>();
         double currentWidth = 0;
         var lastSpace = -1;
 
-        foreach (var ch in text)
+        foreach (var run in paragraph.Runs)
         {
-            var w = Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
-            if (ch == ' ')
-                lastSpace = current.Count;
-            if (currentWidth + w > maxInner && current.Count > 0)
+            var hidden = ResolveRunFmt(run.Formatting, paragraph).Hidden;
+            foreach (var ch in run.Text)
             {
-                var breakAt = lastSpace > 0 ? lastSpace : current.Count;
-                result.Add((lineHeight, current.Take(breakAt).ToList()));
-                current = current.Skip(breakAt).ToList();
-                currentWidth = current.Sum(c => c.Item2);
-                lastSpace = -1;
-            }
+                var w = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
+                if (!hidden && ch == ' ')
+                    lastSpace = current.Count;
+                if (currentWidth + w > maxInner && current.Count > 0)
+                {
+                    var breakAt = lastSpace > 0 ? lastSpace : current.Count;
+                    result.Add((lineHeight, current.Take(breakAt).ToList()));
+                    current = current.Skip(breakAt).ToList();
+                    currentWidth = current.Sum(c => c.Item2);
+                    lastSpace = -1;
+                }
 
-            current.Add((ch, w));
-            currentWidth += w;
+                current.Add((ch, w, hidden));
+                currentWidth += w;
+            }
         }
 
         if (current.Count > 0 || result.Count == 0)
@@ -10962,7 +11005,7 @@ public sealed class DocumentView : Control
         // AV-TAB: draw tab leader spans (dots/dashes/underline) before the glyph text.
         foreach (var (x1, x2, spanY, lineH, leader, spanFmt) in _tabLeaderSpans)
         {
-            if (leader == TabLeader.None || x2 <= x1) continue;
+            if (leader == TabLeader.None || x2 <= x1 || spanFmt.Hidden) continue;
             DrawTabLeader(context, x1, x2, spanY, lineH, leader, spanFmt);
         }
 
@@ -10977,6 +11020,8 @@ public sealed class DocumentView : Control
                 continue;
             var revisionDecision = reviewPolicy.RevisionDecision(pc.Revision);
             if (!revisionDecision.IsTextVisible)
+                continue;
+            if (pc.Fmt.Hidden)
                 continue;
             var decorationPlan = RunDecorationVisualPlanner.Build(pc.Fmt, PxPerPoint);
 
@@ -21509,6 +21554,7 @@ public sealed class DocumentView : Control
         Italic        = baseRun.Italic || styleRun.Italic,
         Underline     = baseRun.Underline || styleRun.Underline,
         Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
+        Hidden        = baseRun.Hidden || styleRun.Hidden,
         SmallCaps     = baseRun.SmallCaps || styleRun.SmallCaps,
         AllCaps       = baseRun.AllCaps || styleRun.AllCaps,
         FontFamily    = styleRun.FontFamily ?? baseRun.FontFamily,
@@ -23122,6 +23168,7 @@ public sealed class DocumentView : Control
         Italic = baseRun.Italic || over.Italic,
         Underline = baseRun.Underline || over.Underline,
         Strikethrough = baseRun.Strikethrough || over.Strikethrough,
+        Hidden = baseRun.Hidden || over.Hidden,
         SmallCaps = baseRun.SmallCaps || over.SmallCaps,
         AllCaps = baseRun.AllCaps || over.AllCaps,
     };
