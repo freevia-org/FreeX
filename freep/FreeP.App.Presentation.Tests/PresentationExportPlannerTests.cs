@@ -2091,6 +2091,35 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void VideoFramePackageExecutor_UsesHostCapabilityWhenBuildingHostPackage()
+    {
+        var presentation = BuildHandoutDeck(1);
+        var host = new PresentationVideoExportHandoffHostCapabilities(
+            "WPF video export host",
+            CanEncodeMp4: true,
+            CanCaptureNarration: true,
+            CanCaptureCameraAndMedia: false,
+            UnavailableReason: string.Empty);
+
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            presentation,
+            new PresentationVideoExportRequest(IncludeNarration: true),
+            (_, _, _, _) => TinyPng.ToArray(),
+            host);
+
+        package.Plan.ExportPlan.IsImplemented.Should().BeTrue();
+        package.Plan.ExportPlan.CanExecute.Should().BeTrue();
+        package.Plan.ExportPlan.DisabledReason.Should().BeNull();
+
+        var handoff = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
+            package,
+            host);
+        handoff.HandoffPlan.Status.Should().Be(PresentationVideoExportHandoffStatus.HostEncoderReady);
+        handoff.HandoffPlan.CanOpenHostEncoder.Should().BeTrue();
+        handoff.HandoffPlan.Mp4EncoderDeferredByHost.Should().BeFalse();
+    }
+
+    [Fact]
     public void VideoFramePackageExecutionDescriptor_ValidatesAndMaterializesEncoderInputZip()
     {
         var package = PresentationVideoFramePackageExecutor.BuildPackage(

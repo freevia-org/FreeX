@@ -5383,7 +5383,8 @@ public sealed partial class MainWindow : Window
             PresentationVideoFramePackageExecutor.BuildPackage(
                 _presentation,
                 request,
-                SlideRenderer.RenderToBytes);
+                SlideRenderer.RenderToBytes,
+                _videoExportHostCapabilities);
         LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
         LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
             LastVideoFramePackage,

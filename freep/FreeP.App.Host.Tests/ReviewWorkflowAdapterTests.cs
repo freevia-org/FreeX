@@ -2056,8 +2056,9 @@ public sealed class ReviewWorkflowAdapterTests
             plan.Storyboard.OutputHeightPx.Should().Be(480);
             plan.Storyboard.FrameRateHint.Should().Be(24);
             plan.Storyboard.TotalDuration.Should().Be(plan.EstimatedDuration);
-            plan.CanExecute.Should().BeFalse();
-            plan.DisabledReason.Should().Be(PresentationExportPlanner.VideoExportDeferredMessage);
+            plan.IsImplemented.Should().BeTrue();
+            plan.CanExecute.Should().BeTrue();
+            plan.DisabledReason.Should().BeNull();
             package.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.EncoderDeferred);
             package.Plan.DeferredCapabilities.Should().Contain(PresentationVideoFramePackageExecutor.Mp4EncoderDeferred);
             package.Frames.Select(frame => frame.FileName)

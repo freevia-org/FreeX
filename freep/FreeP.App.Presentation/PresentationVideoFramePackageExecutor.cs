@@ -147,23 +147,28 @@ public static class PresentationVideoFramePackageExecutor
 
     public static PresentationVideoFramePackagePlan BuildPackagePlan(
         PresentationVideoExportRequest? request,
-        Presentation presentation)
+        Presentation presentation,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
 
-        var exportPlan = PresentationExportPlanner.BuildVideoExportPlan(request, presentation);
+        var exportPlan = PresentationExportPlanner.BuildVideoExportPlan(
+            request,
+            presentation,
+            hostCapabilities);
         return BuildPackagePlan(exportPlan);
     }
 
     public static PresentationVideoFramePackage BuildPackage(
         Presentation presentation,
         PresentationVideoExportRequest? request,
-        PresentationSlideImageRenderer renderSlideToPng)
+        PresentationSlideImageRenderer renderSlideToPng,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(renderSlideToPng);
 
-        var plan = BuildPackagePlan(request, presentation);
+        var plan = BuildPackagePlan(request, presentation, hostCapabilities);
         if (!plan.CanBuildPackage)
             return new PresentationVideoFramePackage(plan, [], []);
 
