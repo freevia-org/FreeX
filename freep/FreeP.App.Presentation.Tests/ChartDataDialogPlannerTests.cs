@@ -720,6 +720,7 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetStrokeWidth(1.5);
         planner.SetMarkerSymbol(ChartMarkerSymbol.Diamond);
         planner.SetMarkerSize(7);
+        planner.SetExplosionPercent(35);
         planner.SetUsePointDataLabels(true);
         planner.SetShowValueLabels(true);
         planner.SetShowCategoryLabels(true);
@@ -741,6 +742,7 @@ public sealed class ChartDataDialogPlannerTests
         options.StrokeWidthPt.Should().Be(1.5);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(7);
+        options.ExplosionPercent.Should().Be(35);
         options.DataLabels.Should().NotBeNull();
         options.DataLabels!.ShowValue.Should().BeTrue();
         options.DataLabels.ShowCategoryName.Should().BeTrue();

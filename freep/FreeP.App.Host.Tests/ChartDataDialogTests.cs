@@ -272,7 +272,7 @@ public sealed class ChartDataDialogTests : IDisposable
         var dialog = new ChartPointOptionsDialog(sess);
         dialog.SetOptionsForTests(1, 2, "#C00000", "#1F4E79", 1.5, ChartMarkerSymbol.Diamond, 7,
             true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
-            "Aptos", 9, true, false, "#2F5496", showBubbleSize: true);
+            "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, explosionPercent: 35);
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -283,6 +283,7 @@ public sealed class ChartDataDialogTests : IDisposable
         options.StrokeWidthPt.Should().Be(1.5);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);
         options.MarkerSizePt.Should().Be(7);
+        options.ExplosionPercent.Should().Be(35);
         options.DataLabels.Should().NotBeNull();
         options.DataLabels!.ShowValue.Should().BeTrue();
         options.DataLabels.ShowCategoryName.Should().BeTrue();

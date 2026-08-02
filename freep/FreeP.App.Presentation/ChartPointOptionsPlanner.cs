@@ -30,6 +30,7 @@ public sealed record ChartPointOptionsSurfacePlan(
     string LabelColorLabel,
     string MarkerLabel,
     string MarkerSizeLabel,
+    string ExplosionLabel,
     string AutoHint,
     string OkLabel,
     string CancelLabel);
@@ -64,6 +65,7 @@ public sealed class ChartPointOptionsPlanner
     public const string LabelColorLabel = "Label color (#RRGGBB)";
     public const string MarkerLabel = "Marker";
     public const string MarkerSizeLabel = "Marker size (pt)";
+    public const string ExplosionLabel = "Explosion (%)";
     public const string AutoHint = "Blank colors and sizes preserve automatic point formatting.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
@@ -98,6 +100,7 @@ public sealed class ChartPointOptionsPlanner
     private ThemeAwareColor? _labelColor;
     private ChartMarkerSymbol? _markerSymbol;
     private double? _markerSizePt;
+    private int? _explosionPercent;
 
     private ChartPointOptionsPlanner(ChartShape chart)
     {
@@ -130,6 +133,7 @@ public sealed class ChartPointOptionsPlanner
         LabelColorLabel,
         MarkerLabel,
         MarkerSizeLabel,
+        ExplosionLabel,
         AutoHint,
         OkLabel,
         CancelLabel);
@@ -172,6 +176,7 @@ public sealed class ChartPointOptionsPlanner
     public string LabelColorText => FormatColor(_labelColor);
     public ChartMarkerSymbol? MarkerSymbol => _markerSymbol;
     public double? MarkerSizePt => _markerSizePt;
+    public int? ExplosionPercent => _explosionPercent;
 
     public void SetSeriesIndex(int index)
     {
@@ -223,6 +228,9 @@ public sealed class ChartPointOptionsPlanner
     public void SetLabelColor(string? text) => _labelColor = ParseColor(text, LabelColorLabel);
     public void SetMarkerSymbol(ChartMarkerSymbol? value) => _markerSymbol = value;
     public void SetMarkerSize(double? value) => _markerSizePt = value;
+    public void SetExplosionPercent(int? value) => _explosionPercent = value.HasValue
+        ? Math.Clamp(value.Value, 0, 100)
+        : null;
 
     public ChartPointOptions BuildCommitPlan() => new(
         _seriesIndex,
@@ -248,7 +256,8 @@ public sealed class ChartPointOptionsPlanner
                 Separator = string.IsNullOrEmpty(_labelSeparator) ? null : _labelSeparator,
                 TextStyle = BuildLabelTextStyle(),
             }
-            : null);
+            : null,
+        ExplosionPercent: _explosionPercent);
 
     public static ThemeAwareColor? ParseColor(string? text, string label)
     {
@@ -287,6 +296,7 @@ public sealed class ChartPointOptionsPlanner
         _labelColor = null;
         _markerSymbol = null;
         _markerSizePt = null;
+        _explosionPercent = null;
 
         var series = _chart.Series.ElementAtOrDefault(_seriesIndex);
         if (series is null)
@@ -319,6 +329,7 @@ public sealed class ChartPointOptionsPlanner
         _labelColor = labels?.TextStyle?.Color;
         _markerSymbol = style.Marker?.Symbol;
         _markerSizePt = style.Marker?.SizePt;
+        _explosionPercent = style.ExplosionPercent;
     }
 
     private string PointLabelText(int index)

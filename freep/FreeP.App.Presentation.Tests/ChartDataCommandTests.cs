@@ -1994,7 +1994,8 @@ public sealed class ChartDataCommandTests
                         Color = new ThemeAwareColor(SrgbColor.FromRgb(0x2F5496)),
                     },
                     ShowBubbleSize = true,
-                })));
+                },
+                ExplosionPercent: 35)));
 
         var style = chart.Series[0].PointStyles[1];
         chart.Series[0].PointColors[1].Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
@@ -2003,6 +2004,7 @@ public sealed class ChartDataCommandTests
         style.StrokeWidthPt.Should().Be(2.25);
         style.Marker!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
         style.Marker.SizePt.Should().Be(8);
+        style.ExplosionPercent.Should().Be(35);
         style.DataLabels.Should().NotBeNull();
         style.DataLabels!.ShowValue.Should().BeTrue();
         style.DataLabels.ShowCategoryName.Should().BeTrue();
@@ -2024,6 +2026,7 @@ public sealed class ChartDataCommandTests
         roundTrippedSeries.PointStyles[1].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
         roundTrippedSeries.PointStyles[1].StrokeWidthPt.Should().Be(2.25);
         roundTrippedSeries.PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Diamond);
+        roundTrippedSeries.PointStyles[1].ExplosionPercent.Should().Be(35);
         var roundTrippedLabels = roundTrippedSeries.PointStyles[1].DataLabels;
         roundTrippedLabels.Should().NotBeNull();
         roundTrippedLabels!.ShowValue.Should().BeTrue();
@@ -2044,6 +2047,7 @@ public sealed class ChartDataCommandTests
         chart.Series[0].PointStyles[1].StrokeColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x808080));
         chart.Series[0].PointStyles[1].StrokeWidthPt.Should().Be(0.75);
         chart.Series[0].PointStyles[1].Marker!.Symbol.Should().Be(ChartMarkerSymbol.Circle);
+        chart.Series[0].PointStyles[1].ExplosionPercent.Should().BeNull();
         chart.Series[0].PointStyles[1].DataLabels.Should().BeNull();
     }
 
