@@ -9523,6 +9523,7 @@ public sealed class DocumentView : RichTextBox
         var wpf = new WpfTable
         {
             BreakPageBefore = isPaginationSegment && segmentIndex > 0,
+            Margin = ResolveTableBlockMargin(table, document),
             Tag = new WpfTableTag(
                 table.Formatting,
                 table.TableStyleId,
@@ -9535,7 +9536,6 @@ public sealed class DocumentView : RichTextBox
         };
         if (isPaginationSegment)
         {
-            wpf.Margin = ResolveTableBlockMargin(table, document);
             wpf.CellSpacing = 0;
         }
         // WPF Table.CellSpacing grows both axes and breaks Word's fixed-width paginated tables.
@@ -9870,7 +9870,7 @@ public sealed class DocumentView : RichTextBox
             : table.ColumnWidthsPt.Count > 0
                 ? table.ColumnWidthsPt.Where(width => width > 0).Sum()
                 : 0;
-        if (widthPt <= 0 || table.Alignment == TableAlignment.Left)
+        if (widthPt <= 0)
             return new Thickness(indent, 0, 0, 0);
 
         var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
@@ -9878,8 +9878,12 @@ public sealed class DocumentView : RichTextBox
             ? DocumentViewLayoutPlanner.BuildColumnPlan(document.Page, metrics.ContentWidthDip, usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
         var slack = Math.Max(0, contentWidth - widthPt * PxPerPoint - indent);
-        var alignmentOffset = table.Alignment == TableAlignment.Center ? slack / 2 : slack;
-        return new Thickness(indent + alignmentOffset, 0, 0, 0);
+        return table.Alignment switch
+        {
+            TableAlignment.Center => new Thickness(indent + slack / 2, 0, slack / 2, 0),
+            TableAlignment.Right => new Thickness(indent + slack, 0, 0, 0),
+            _ => new Thickness(indent, 0, slack, 0)
+        };
     }
 
     private static System.Windows.Controls.Grid BuildCellContentHost(
