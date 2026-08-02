@@ -3833,6 +3833,42 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildPieSlicePrimitives_ExplodesOnlyTheAuthoredPointAlongItsBisector()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 1, 3 });
+        series.PointStyles[0] = new ChartPointStyle { ExplosionPercent = 20 };
+        var chart = new ChartShape { ChartType = ChartType.Pie };
+        chart.Series.Add(series);
+
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        slices[0].Center.X.Should().BeApproximately(106.0104, 0.0001);
+        slices[0].Center.Y.Should().BeApproximately(43.9896, 0.0001);
+        slices[1].Center.Should().Be(new ChartPlanPoint(100, 50));
+    }
+
+    [Fact]
+    public void BuildDoughnutSlicePrimitives_AppliesExplosionPerRingAndPoint()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Doughnut, DoughnutHolePercent = 50 };
+        var inner = new ChartSeries { Name = "Inner" };
+        inner.Values.AddRange(new double?[] { 1, 1 });
+        inner.PointStyles[1] = new ChartPointStyle { ExplosionPercent = 50 };
+        chart.Series.Add(inner);
+
+        var slices = ChartRenderPlanner.BuildDoughnutSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        slices[0].Center.Should().Be(new ChartPlanPoint(100, 50));
+        slices[1].Center.X.Should().BeApproximately(78.75, 0.0001);
+        slices[1].Center.Y.Should().BeApproximately(50, 0.0001);
+    }
+
+    [Fact]
     public void BuildPieSlicePrimitives_ThreeDPiePlansBoundedCompressedTopFace()
     {
         var series = new ChartSeries { Name = "Share" };
