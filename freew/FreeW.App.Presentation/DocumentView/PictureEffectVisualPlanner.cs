@@ -11,7 +11,12 @@ public sealed record PictureShadowVisualPlan(
     double Opacity,
     string ColorHex);
 
-public sealed record PictureReflectionVisualPlan(double Opacity, double DistanceDip);
+public sealed record PictureReflectionVisualPlan(
+    double Opacity,
+    double StartPosition,
+    double EndOpacity,
+    double EndPosition,
+    double DistanceDip);
 
 public static class PictureEffectVisualPlanner
 {
@@ -25,16 +30,19 @@ public static class PictureEffectVisualPlanner
         {
             return new PictureReflectionVisualPlan(
                 Math.Clamp(imported.ReflectionStartAlpha / 100000d, 0, 1),
+                Math.Clamp(imported.ReflectionStartPosition / 100000d, 0, 1),
+                Math.Clamp(imported.ReflectionEndAlpha / 100000d, 0, 1),
+                Math.Clamp(imported.ReflectionEndPosition / 100000d, 0, 1),
                 Math.Max(0, imported.ReflectionDist / 12700d) * 96d / 72d);
         }
 
         return image.ReflectionPreset switch
         {
-            1 => new PictureReflectionVisualPlan(0.5, 0),
-            2 => new PictureReflectionVisualPlan(0.5, 4 * 96d / 72d),
-            3 => new PictureReflectionVisualPlan(0.5, 8 * 96d / 72d),
-            4 => new PictureReflectionVisualPlan(1, 0),
-            5 => new PictureReflectionVisualPlan(1, 4 * 96d / 72d),
+            1 => new PictureReflectionVisualPlan(0.5, 0, 0, 1, 0),
+            2 => new PictureReflectionVisualPlan(0.5, 0, 0, 1, 4 * 96d / 72d),
+            3 => new PictureReflectionVisualPlan(0.5, 0, 0, 1, 8 * 96d / 72d),
+            4 => new PictureReflectionVisualPlan(1, 0, 0, 1, 0),
+            5 => new PictureReflectionVisualPlan(1, 0, 0, 1, 4 * 96d / 72d),
             _ => null,
         };
     }

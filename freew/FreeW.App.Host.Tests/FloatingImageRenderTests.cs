@@ -234,6 +234,9 @@ public sealed class FloatingImageRenderTests
         {
             HasReflection = true,
             ReflectionStartAlpha = 35000,
+            ReflectionStartPosition = 20000,
+            ReflectionEndAlpha = 10000,
+            ReflectionEndPosition = 80000,
             ReflectionDist = 38100,
         };
 
@@ -247,6 +250,9 @@ public sealed class FloatingImageRenderTests
         surface.Margin.Top.Should().Be(4);
         var mask = surface.OpacityMask.Should().BeOfType<System.Windows.Media.LinearGradientBrush>().Subject;
         mask.GradientStops[0].Color.A.Should().Be((byte)(0.35 * 255));
+        mask.GradientStops[0].Offset.Should().Be(0.2);
+        mask.GradientStops[1].Color.A.Should().Be((byte)(0.1 * 255));
+        mask.GradientStops[1].Offset.Should().Be(0.8);
     }
 
     [StaFact]

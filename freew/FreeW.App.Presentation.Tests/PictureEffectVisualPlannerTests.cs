@@ -15,6 +15,9 @@ public sealed class PictureEffectVisualPlannerTests
             {
                 HasReflection = true,
                 ReflectionStartAlpha = 35000,
+                ReflectionStartPosition = 20000,
+                ReflectionEndAlpha = 10000,
+                ReflectionEndPosition = 80000,
                 ReflectionDist = 38100,
             },
         };
@@ -23,6 +26,9 @@ public sealed class PictureEffectVisualPlannerTests
 
         plan.Should().NotBeNull();
         plan!.Opacity.Should().Be(0.35);
+        plan.StartPosition.Should().Be(0.2);
+        plan.EndOpacity.Should().Be(0.1);
+        plan.EndPosition.Should().Be(0.8);
         plan.DistanceDip.Should().Be(4);
     }
 
@@ -36,6 +42,9 @@ public sealed class PictureEffectVisualPlannerTests
 
         plan.Should().NotBeNull();
         plan!.Opacity.Should().Be(0.5);
+        plan.StartPosition.Should().Be(0);
+        plan.EndOpacity.Should().Be(0);
+        plan.EndPosition.Should().Be(1);
         plan.DistanceDip.Should().BeApproximately(5.3333333333, 0.000001);
     }
 

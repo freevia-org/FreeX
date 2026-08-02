@@ -11598,10 +11598,9 @@ public sealed class DocumentView : Control
         if (parameters is null)
             return;
 
-        var (opacity, distance) = parameters;
         var reflectionRect = new Rect(
             imageRect.X,
-            imageRect.Bottom + distance,
+            imageRect.Bottom + parameters.DistanceDip,
             imageRect.Width,
             imageRect.Height);
         var fadeMask = new LinearGradientBrush
@@ -11610,8 +11609,11 @@ public sealed class DocumentView : Control
             EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
         };
         fadeMask.GradientStops.Add(new global::Avalonia.Media.GradientStop(
-            Color.FromArgb((byte)Math.Round(opacity * 255), 0, 0, 0), 0));
-        fadeMask.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromArgb(0, 0, 0, 0), 1));
+            Color.FromArgb((byte)Math.Round(parameters.Opacity * 255), 0, 0, 0),
+            parameters.StartPosition));
+        fadeMask.GradientStops.Add(new global::Avalonia.Media.GradientStop(
+            Color.FromArgb((byte)Math.Round(parameters.EndOpacity * 255), 0, 0, 0),
+            parameters.EndPosition));
 
         var mirror = Matrix.Identity;
         mirror = mirror * Matrix.CreateTranslation(0, -imageRect.Bottom);

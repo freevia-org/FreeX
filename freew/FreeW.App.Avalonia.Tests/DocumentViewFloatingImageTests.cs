@@ -34,12 +34,18 @@ public sealed class DocumentViewFloatingImageTests
             {
                 HasReflection = true,
                 ReflectionStartAlpha = 35000,
+                ReflectionStartPosition = 20000,
+                ReflectionEndAlpha = 10000,
+                ReflectionEndPosition = 80000,
                 ReflectionDist = 38100,
             },
         });
 
         parameters.Should().NotBeNull();
         parameters!.Opacity.Should().Be(0.35);
+        parameters.StartPosition.Should().Be(0.2);
+        parameters.EndOpacity.Should().Be(0.1);
+        parameters.EndPosition.Should().Be(0.8);
         parameters.DistanceDip.Should().Be(4);
     }
 
