@@ -1333,6 +1333,47 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedPeoplePageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.PeopleArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            pdf.Pages.Single().Ops.OfType<PdfFillRect>().Should().BeEmpty();
+            paths.Should().HaveCount(408);
+            paths[0].FillColor.Should().Be(PdfColor.Black);
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(36, 767.25));
+            paths[1].FillColor.Should().Be(new PdfColor(255, 255, 255));
+            paths[2].FillColor.Should().Be(PdfColor.Black);
+            paths[2].Contours.Single().Start.Should().Be(new PdfPathPoint(34.5, 761.25));
+            paths[3].FillColor.Should().Be(new PdfColor(255, 255, 255));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var outlineInk = 0;
+            for (var y = 32; y < 64; y++)
+            for (var x = 32; x < 64; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red < 60 && pixel.Green < 60 && pixel.Blue < 60)
+                    outlineInk++;
+            }
+            outlineInk.Should().BeGreaterThan(60);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {

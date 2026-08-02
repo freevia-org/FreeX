@@ -153,6 +153,21 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void People_UsesWordCadenceAndOrderedOutlineInteriorGeometry()
+    {
+        PageBorderArtVisualPlanner.TryBuildPeopleFrame(84, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(408);
+        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(48, 33));
+        plan.Polygons[0].Red.Should().Be(0);
+        plan.Polygons[1].Red.Should().Be(0xFF);
+        plan.Polygons[2].Points[0].Should().Be(new PageBorderArtPoint(46, 41));
+        plan.Polygons[3].Red.Should().Be(0xFF);
+    }
+
+    [Fact]
     public void ShorebirdTracks_UsesMeasuredAlternatingFootprintCadenceAndSharedSegments()
     {
         PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(83, 3, 816, 1056, 32, out var motifs)
