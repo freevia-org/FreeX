@@ -423,6 +423,7 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
             Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Skip)));
         var cancel = Button("Cancel", isDefault: false, () =>
             Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Cancel)));
+        cancel.IsCancel = true;
 
         var buttons = new StackPanel
         {
@@ -443,7 +444,13 @@ public sealed class ManualHyphenationDialog : FreeWDialogWindow
         content.Children.Add(buttons);
         Content = content;
 
-        PageLayoutDialogChrome.WireEscape<ManualHyphenationDialogResult?>(this);
+        KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Escape)
+                return;
+            Close(new ManualHyphenationDialogResult(ManualHyphenationDialogAction.Cancel));
+            e.Handled = true;
+        };
     }
 
     private static Button Button(string label, bool isDefault, Action action)
