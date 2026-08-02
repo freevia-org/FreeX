@@ -444,6 +444,23 @@ public sealed class EditingSession5ATests
     }
 
     [Fact]
+    public void InsertChart_StockHasEditableOhlcSampleData()
+    {
+        var sess = Make();
+        var shape = sess.InsertChart(ChartType.Stock);
+
+        shape.Chart!.Categories.Should().Equal("Day 1", "Day 2", "Day 3");
+        shape.Chart.Series.Select(series => series.Name)
+            .Should().Equal("Open", "High", "Low", "Close");
+        shape.Chart.Series[1].Values.Should().Equal(14, 16, 15);
+        shape.Chart.Series[2].Values.Should().Equal(8, 9, 10);
+        ChartRenderPlanner.BuildStockPrimitivePlan(
+                shape.Chart,
+                new ChartPlanRect(0, 0, 320, 180))
+            .HighLowLines.Should().HaveCount(3);
+    }
+
+    [Fact]
     public void InsertChart_IsUndoable()
     {
         var sess = Make();

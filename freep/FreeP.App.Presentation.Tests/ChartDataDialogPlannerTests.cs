@@ -299,6 +299,25 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void SetChartType_StockShapesOrdinaryDataAsEditableOhlcSeries()
+    {
+        var planner = ChartDataDialogPlanner.FromChart(MakeChart());
+
+        planner.SetChartType(ChartType.Stock);
+
+        var table = planner.BuildTableProjection();
+        table.SeriesColumns.Select(column => column.Header)
+            .Should().Equal("Open", "High", "Low", "Close");
+        table.Rows[0].Values.Select(cell => cell.Value)
+            .Should().Equal(1.0, 4.0, null, null);
+
+        var commit = planner.BuildCommitPlan();
+        commit.ChartType.Should().Be(ChartType.Stock);
+        commit.SeriesNames.Should().Equal("Open", "High", "Low", "Close");
+        commit.Values.Should().HaveCount(4);
+    }
+
+    [Fact]
     public void BuildSurfacePlan_ExposesSharedDialogLabelsAndCommandId()
     {
         var plan = ChartDataDialogPlanner.BuildSurfacePlan();

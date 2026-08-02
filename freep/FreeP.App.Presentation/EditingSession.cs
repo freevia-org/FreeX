@@ -2606,16 +2606,35 @@ public sealed class EditingSession
             Legend    = LegendPosition.Bottom,
         };
 
-        // Default sample data — 3 categories, 2 series.
-        chart.Categories.AddRange(["Q1", "Q2", "Q3"]);
+        if (chartType == ChartType.Stock)
+        {
+            chart.Categories.AddRange(["Day 1", "Day 2", "Day 3"]);
+            foreach (var (name, values) in new[]
+            {
+                ("Open",  new double?[] { 10, 12, 11 }),
+                ("High",  new double?[] { 14, 16, 15 }),
+                ("Low",   new double?[] { 8, 9, 10 }),
+                ("Close", new double?[] { 13, 11, 14 }),
+            })
+            {
+                var series = new ChartSeries { Name = name };
+                series.Values.AddRange(values);
+                chart.Series.Add(series);
+            }
+        }
+        else
+        {
+            // Default sample data — 3 categories, 2 series.
+            chart.Categories.AddRange(["Q1", "Q2", "Q3"]);
 
-        var s1 = new ChartSeries { Name = "Series 1" };
-        s1.Values.AddRange([4.3, 2.5, 3.5]);
-        chart.Series.Add(s1);
+            var s1 = new ChartSeries { Name = "Series 1" };
+            s1.Values.AddRange([4.3, 2.5, 3.5]);
+            chart.Series.Add(s1);
 
-        var s2 = new ChartSeries { Name = "Series 2" };
-        s2.Values.AddRange([2.4, 4.4, 1.8]);
-        chart.Series.Add(s2);
+            var s2 = new ChartSeries { Name = "Series 2" };
+            s2.Values.AddRange([2.4, 4.4, 1.8]);
+            chart.Series.Add(s2);
+        }
 
         var shape = new SlideShape
         {
