@@ -27,7 +27,8 @@ public sealed class IconPickerDialogVisualParityTests
             dialog.Height.Should().Be(480);
             category.Width.Should().Be(120);
             search.Width.Should().Be(160);
-            tiles.Children.Should().HaveCountGreaterThan(0);
+            tiles.Children.Should().HaveCount(61);
+            Field<TextBlock>(dialog, "_status").Text.Should().Be("61 icons");
             foreach (var tile in tiles.Children)
             {
                 tile.Should().BeOfType<Border>();
@@ -35,8 +36,13 @@ public sealed class IconPickerDialogVisualParityTests
                 border.Width.Should().Be(54);
                 border.Height.Should().Be(54);
                 border.Child.Should().BeOfType<Image>();
-                ((Image)border.Child!).Width.Should().Be(38);
-                ((Image)border.Child!).Height.Should().Be(38);
+                var image = (Image)border.Child!;
+                image.Width.Should().Be(38);
+                image.Height.Should().Be(38);
+                image.Source.Should().BeOfType<DrawingImage>();
+                image.RenderTransform.Should().BeOfType<ScaleTransform>();
+                ((ScaleTransform)image.RenderTransform!).ScaleX.Should().Be(38d / 32d);
+                ((ScaleTransform)image.RenderTransform!).ScaleY.Should().Be(38d / 32d);
             }
             actions.Select(button => button.Content?.ToString()).Should().Equal("OK", "Cancel");
             actions.Single(button => button.IsDefault).Content.Should().Be("OK");
