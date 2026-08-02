@@ -77,6 +77,7 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.ChartBarCommandId, SlideObjectInsertionKind.Chart)]
     [InlineData(SlideObjectInsertionPlanner.ChartLineCommandId, SlideObjectInsertionKind.Chart)]
     [InlineData(SlideObjectInsertionPlanner.ChartPieCommandId, SlideObjectInsertionKind.Chart)]
+    [InlineData(SlideObjectInsertionPlanner.ChartOfPieCommandId, SlideObjectInsertionKind.Chart)]
     [InlineData(SlideObjectInsertionPlanner.SmartArtBasicProcessCommandId, SlideObjectInsertionKind.SmartArt)]
     public void TryCreatePlan_MapsKnownObjectCommandIds(
         string commandId,
@@ -205,6 +206,7 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.ChartBarCommandId, ChartType.BarClustered)]
     [InlineData(SlideObjectInsertionPlanner.ChartLineCommandId, ChartType.Line)]
     [InlineData(SlideObjectInsertionPlanner.ChartPieCommandId, ChartType.Pie)]
+    [InlineData(SlideObjectInsertionPlanner.ChartOfPieCommandId, ChartType.OfPie)]
     [InlineData(SlideObjectInsertionPlanner.ChartColumnStackedCommandId, ChartType.ColumnStacked)]
     [InlineData(SlideObjectInsertionPlanner.ChartColumnStacked100CommandId, ChartType.ColumnStacked100)]
     [InlineData(SlideObjectInsertionPlanner.ChartBarStackedCommandId, ChartType.BarStacked)]

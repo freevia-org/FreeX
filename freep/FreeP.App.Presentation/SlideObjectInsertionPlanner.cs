@@ -109,6 +109,7 @@ public static class SlideObjectInsertionPlanner
     public const string ChartBarCommandId = "freep.insert-chart-bar";
     public const string ChartLineCommandId = "freep.insert-chart-line";
     public const string ChartPieCommandId = "freep.insert-chart-pie";
+    public const string ChartOfPieCommandId = "freep.insert-chart-of-pie";
     public const string ChartColumnStackedCommandId = "freep.insert-chart-column-stacked";
     public const string ChartColumnStacked100CommandId = "freep.insert-chart-column-stacked-100";
     public const string ChartBarStackedCommandId = "freep.insert-chart-bar-stacked";
@@ -197,6 +198,7 @@ public static class SlideObjectInsertionPlanner
         new(ChartBarCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.BarClustered),
         new(ChartLineCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Line),
         new(ChartPieCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Pie),
+        new(ChartOfPieCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.OfPie),
         new(ChartColumnStackedCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.ColumnStacked),
         new(ChartColumnStacked100CommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.ColumnStacked100),
         new(ChartBarStackedCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.BarStacked),

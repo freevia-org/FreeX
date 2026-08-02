@@ -448,6 +448,12 @@
   <data name="Ribbon_Command_InsertChartPie_KeyTip" xml:space="preserve">
     <value>P</value>
   </data>
+  <data name="Ribbon_Command_InsertChartOfPie_Label" xml:space="preserve">
+    <value>Pie of Pie / Bar of Pie</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartOfPie_KeyTip" xml:space="preserve">
+    <value>OP</value>
+  </data>
   <data name="Ribbon_Command_InsertChartColumnStacked_Label" xml:space="preserve">
     <value>Stacked Column</value>
   </data>

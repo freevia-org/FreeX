@@ -165,6 +165,8 @@ internal static class FreePRibbonText
     public static string InsertChartLineKeyTip => Get("Ribbon_Command_InsertChartLine_KeyTip");
     public static string InsertChartPieLabel => Get("Ribbon_Command_InsertChartPie_Label");
     public static string InsertChartPieKeyTip => Get("Ribbon_Command_InsertChartPie_KeyTip");
+    public static string InsertChartOfPieLabel => Get("Ribbon_Command_InsertChartOfPie_Label");
+    public static string InsertChartOfPieKeyTip => Get("Ribbon_Command_InsertChartOfPie_KeyTip");
     public static string InsertChartColumnStackedLabel => Get("Ribbon_Command_InsertChartColumnStacked_Label");
     public static string InsertChartColumnStackedKeyTip => Get("Ribbon_Command_InsertChartColumnStacked_KeyTip");
     public static string InsertChartColumnStacked100Label => Get("Ribbon_Command_InsertChartColumnStacked100_Label");
