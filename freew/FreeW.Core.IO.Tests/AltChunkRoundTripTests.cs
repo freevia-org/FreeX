@@ -124,7 +124,7 @@ public class AltChunkRoundTripTests
         {
             Id = "NestedBase",
             Name = "Nested base",
-            Run = new RunFormatting { Italic = true }
+            Run = new RunFormatting { Italic = true, Hidden = true }
         };
         nested.Styles["ImportedHeading"] = new DocumentStyle
         {
@@ -160,6 +160,9 @@ public class AltChunkRoundTripTests
         document.Styles["ImportedHeading"].Run.Italic.Should().BeTrue();
         document.Styles[importedHeading.StyleId!].Run.Bold.Should().BeTrue();
         document.Styles[importedHeading.StyleId!].Run.Italic.Should().BeTrue();
+        document.Styles[importedHeading.StyleId!].Run.Hidden.Should().BeTrue();
+        importedHeading.Runs.Single().Formatting.Hidden.Should().BeFalse(
+            "a direct false toggle does not cancel the inherited hidden style in FreeW's bool model");
         document.Styles[importedHeading.StyleId!].Run.FontSizePt.Should().Be(18);
         document.Styles[importedHeading.StyleId!].Run.ColorHex.Should().Be("#336699");
         document.Blocks[2].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Nested body");
@@ -176,6 +179,7 @@ public class AltChunkRoundTripTests
         var reopenedHeading = reopened.Blocks[1].Should().BeOfType<Paragraph>().Which;
         reopenedHeading.PlainText.Should().Be("Nested heading");
         reopened.Styles[reopenedHeading.StyleId!].Run.Bold.Should().BeTrue();
+        reopened.Styles[reopenedHeading.StyleId!].Run.Hidden.Should().BeTrue();
     }
 
     [Fact]
@@ -205,7 +209,7 @@ public class AltChunkRoundTripTests
     {
         var nested = new TextDocument
         {
-            DefaultRun = new RunFormatting { FontFamily = "Times New Roman", FontSizePt = 14 },
+            DefaultRun = new RunFormatting { FontFamily = "Times New Roman", FontSizePt = 14, Hidden = true },
             DefaultParagraph = new ParagraphFormatting { SpaceAfterPt = 12, SpaceAfterIsSet = true }
         };
         nested.Blocks.Add(new Paragraph("Nested body"));
@@ -223,6 +227,7 @@ public class AltChunkRoundTripTests
         var importedDefaults = document.Styles[imported.StyleId!];
         importedDefaults.Run.FontFamily.Should().Be("Times New Roman");
         importedDefaults.Run.FontSizePt.Should().Be(14);
+        importedDefaults.Run.Hidden.Should().BeTrue();
         importedDefaults.Paragraph.SpaceAfterPt.Should().Be(12);
 
         var rewrittenBytes = WriteDocument(document);

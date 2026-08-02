@@ -10752,6 +10752,7 @@ public sealed class DocumentView : RichTextBox
         bool suppressFloatingWrapReservation = false)
     {
         var effectSet = DocumentEffectSet.FromTheme(document.Theme);
+        var effectiveFormatting = Resolve(run, paragraph, document);
 
         if (run.Image is { } image)
         {
@@ -10803,25 +10804,26 @@ public sealed class DocumentView : RichTextBox
             return WrapHyperlinkIfNeeded(run, BuildEmbeddedObjectRun(embedded));
 
         if (run.FootnoteId is { } footnoteId)
-            return BuildFootnoteReference(footnoteId, document);
+            return HideTextInlineWhenNeeded(BuildFootnoteReference(footnoteId, document), effectiveFormatting);
 
         if (run.EndnoteId is { } endnoteId)
-            return BuildEndnoteReference(endnoteId, document);
+            return HideTextInlineWhenNeeded(BuildEndnoteReference(endnoteId, document), effectiveFormatting);
 
         if (run.TableFormula is not null)
-            return BuildTableFormulaRun(run, document);
+            return HideTextInlineWhenNeeded(BuildTableFormulaRun(run, document), effectiveFormatting);
 
         if (run.CrossReference is not null)
-            return BuildCrossReferenceRun(run, document);
+            return HideTextInlineWhenNeeded(BuildCrossReferenceRun(run, document), effectiveFormatting);
 
         if (run.ComplexField is not null)
         {
             var complexRun = BuildComplexFieldRun(run, document);
-            if (run.HyperlinkUrl is { Length: > 0 } cfUrl)
-                return BuildHyperlink(complexRun, cfUrl, run.HyperlinkTooltip);
-            if (run.HyperlinkAnchor is { Length: > 0 } cfAnchor)
-                return BuildInternalHyperlink(complexRun, cfAnchor, run.HyperlinkTooltip);
-            return complexRun;
+            Inline complexInline = run.HyperlinkUrl is { Length: > 0 } cfUrl
+                ? BuildHyperlink(complexRun, cfUrl, run.HyperlinkTooltip)
+                : run.HyperlinkAnchor is { Length: > 0 } cfAnchor
+                    ? BuildInternalHyperlink(complexRun, cfAnchor, run.HyperlinkTooltip)
+                    : complexRun;
+            return HideTextInlineWhenNeeded(complexInline, effectiveFormatting);
         }
 
         if (run.FieldKind != RunFieldKind.None)
@@ -10830,11 +10832,12 @@ public sealed class DocumentView : RichTextBox
             // the resolved field run in the same Hyperlink chrome ordinary runs get so its link survives
             // the next CommitToModel (ReadInline's FieldMarker case carries the url/anchor back).
             var fieldRun = BuildFieldRun(run, document);
-            if (run.HyperlinkUrl is { Length: > 0 } fieldUrl)
-                return BuildHyperlink(fieldRun, fieldUrl, run.HyperlinkTooltip);
-            if (run.HyperlinkAnchor is { Length: > 0 } fieldAnchor)
-                return BuildInternalHyperlink(fieldRun, fieldAnchor, run.HyperlinkTooltip);
-            return fieldRun;
+            Inline fieldInline = run.HyperlinkUrl is { Length: > 0 } fieldUrl
+                ? BuildHyperlink(fieldRun, fieldUrl, run.HyperlinkTooltip)
+                : run.HyperlinkAnchor is { Length: > 0 } fieldAnchor
+                    ? BuildInternalHyperlink(fieldRun, fieldAnchor, run.HyperlinkTooltip)
+                    : fieldRun;
+            return HideTextInlineWhenNeeded(fieldInline, effectiveFormatting);
         }
 
         // The textless comment anchor round-trips as an empty, tagged run carrying its reference flag.
@@ -10856,7 +10859,7 @@ public sealed class DocumentView : RichTextBox
         if (run.IsColumnBreak)
             return new WpfRun(string.Empty) { Tag = new ColumnBreakMarker() };
 
-        var fmt = Resolve(run, paragraph, document);
+        var fmt = effectiveFormatting;
         // Automatic hyphenation: when the document has it on and this paragraph is not suppressed, insert
         // soft hyphens (U+00AD) at the pure helper's break points so the layout engine can break long words
         // at line ends. Soft hyphens are zero-width unless a line break lands on one, and are stripped on
@@ -11025,12 +11028,60 @@ public sealed class DocumentView : RichTextBox
             ApplyContentControlMarker(wpf, control, location);
         }
 
-        if (run.HyperlinkUrl is { Length: > 0 } url)
-            return BuildHyperlink(wpf, url, run.HyperlinkTooltip);
-        if (run.HyperlinkAnchor is { Length: > 0 } anchor)
-            return BuildInternalHyperlink(wpf, anchor, run.HyperlinkTooltip);
+        if (fmt.Hidden)
+        {
+            wpf.Foreground = Brushes.Transparent;
+            wpf.Background = null;
+            wpf.TextDecorations = null;
+            wpf.FontSize = 0.015;
+        }
 
-        return wpf;
+        if (run.HyperlinkUrl is { Length: > 0 } url)
+            return HideTextInlineWhenNeeded(BuildHyperlink(wpf, url, run.HyperlinkTooltip), fmt);
+        if (run.HyperlinkAnchor is { Length: > 0 } anchor)
+            return HideTextInlineWhenNeeded(BuildInternalHyperlink(wpf, anchor, run.HyperlinkTooltip), fmt);
+
+        return HideTextInlineWhenNeeded(wpf, fmt);
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<WpfRun, RunFormatting>
+        HiddenRunFormatting = new();
+
+    private static Inline HideTextInlineWhenNeeded(Inline inline, RunFormatting formatting)
+    {
+        if (!formatting.Hidden)
+            return inline;
+
+        RetainHiddenRunFormatting(inline, formatting);
+        inline.Foreground = Brushes.Transparent;
+        inline.Background = null;
+        inline.TextDecorations = null;
+        inline.FontSize = 0.015;
+        return inline;
+    }
+
+    private static void RetainHiddenRunFormatting(Inline inline, RunFormatting formatting)
+    {
+        if (inline is WpfRun run)
+        {
+            HiddenRunFormatting.Remove(run);
+            HiddenRunFormatting.Add(run, formatting);
+            run.Foreground = Brushes.Transparent;
+            run.Background = null;
+            run.TextDecorations = null;
+            run.FontSize = 0.015;
+            return;
+        }
+
+        if (inline is Span span)
+        {
+            span.Foreground = Brushes.Transparent;
+            span.Background = null;
+            span.TextDecorations = null;
+            span.FontSize = 0.015;
+            foreach (var child in span.Inlines)
+                RetainHiddenRunFormatting(child, formatting);
+        }
     }
 
     private static Inline BuildFloatingAnchorRun(ModelRun run, TextDocument document, AnchorMarker marker)
@@ -16796,7 +16847,10 @@ public sealed class DocumentView : RichTextBox
 
         // Recover the complete model snapshot set by BuildRun. Live WPF properties are overlaid below;
         // model-only Word properties remain authoritative through an edit/commit round-trip.
-        var retained = (run.Tag as RunMarkers)?.CharacterFormat?.Formatting ?? RunFormatting.Default;
+        var retained = (run.Tag as RunMarkers)?.CharacterFormat?.Formatting
+            ?? (HiddenRunFormatting.TryGetValue(run, out var hiddenFormatting)
+                ? hiddenFormatting
+                : RunFormatting.Default);
         var charBorder = retained.CharacterBorder;
         var charShadingHex = retained.CharacterShadingHex;
 
@@ -16834,8 +16888,10 @@ public sealed class DocumentView : RichTextBox
             // Right-to-left run direction reads back off the WPF run's FlowDirection (set in BuildRun).
             Rtl = run.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             FontFamily = run.FontFamily.Source,
-            FontSizePt = fontSizePt,
-            ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
+            FontSizePt = retained.Hidden ? retained.FontSizePt : fontSizePt,
+            ColorHex = retained.Hidden
+                ? retained.ColorHex
+                : run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
             HighlightColorHex = highlightHex,
         };
     }
@@ -17011,6 +17067,7 @@ public sealed class DocumentView : RichTextBox
             Italic = r.Italic || style.Italic || d.Italic,
             Underline = r.Underline || style.Underline || d.Underline,
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
+            Hidden = r.Hidden || style.Hidden || d.Hidden,
             SmallCaps = r.SmallCaps || style.SmallCaps || d.SmallCaps,
             AllCaps = r.AllCaps || style.AllCaps || d.AllCaps,
             Rtl = r.Rtl || style.Rtl || d.Rtl,

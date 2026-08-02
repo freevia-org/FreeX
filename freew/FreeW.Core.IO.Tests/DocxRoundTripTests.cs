@@ -81,6 +81,7 @@ public class DocxRoundTripTests
             AllCaps = true,
             SmallCaps = true,
             Strikethrough = true,
+            Hidden = true,
             ColorHex = "#112233",
             FontSizePt = 14,
             Underline = true,
@@ -94,7 +95,7 @@ public class DocxRoundTripTests
         var names = rPr.Elements().Select(e => e.Name.LocalName).ToList();
 
         // Canonical EG_RPrBase order for the elements FreeW emits.
-        var canonical = new[] { "rFonts", "b", "i", "caps", "smallCaps", "strike", "color", "sz", "szCs", "highlight", "u", "shd", "vertAlign" };
+        var canonical = new[] { "rFonts", "b", "i", "caps", "smallCaps", "strike", "vanish", "color", "sz", "szCs", "highlight", "u", "shd", "vertAlign" };
         var expected = canonical.Where(names.Contains).ToList();
         names.Should().Equal(expected);
     }

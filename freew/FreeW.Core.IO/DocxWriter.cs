@@ -7520,7 +7520,7 @@ public static class DocxWriter
     {
         // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
         // validator rejects the run. The relevant slots, in order, are:
-        //   rFonts, b, i, caps, smallCaps, strike, color, spacing, kern, position, sz, szCs, u, shd,
+        //   rFonts, b, i, caps, smallCaps, strike, vanish, color, spacing, kern, position, sz, szCs, u, shd,
         //   vertAlign, <w14 extension region>.
         // The advanced-typography elements added for Z1 occupy these slots:
         //   * w:spacing / w:kern / w:position are core EG_RPrBase elements that sit AFTER w:color and
@@ -7542,6 +7542,8 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "smallCaps"));
         if (f.Strikethrough)
             rPr.Add(new XElement(W + "strike"));
+        if (f.Hidden)
+            rPr.Add(new XElement(W + "vanish"));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
         // w:spacing (character spacing, expand/condense) — value in twentieths of a point (dxa), signed.
@@ -9186,6 +9188,8 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "b"));
         if (f.Italic)
             rPr.Add(new XElement(W + "i"));
+        if (f.Hidden)
+            rPr.Add(new XElement(W + "vanish"));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
         if (f.FontSizePt is { } size)

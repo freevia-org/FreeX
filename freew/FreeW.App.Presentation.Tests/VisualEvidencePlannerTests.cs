@@ -2680,6 +2680,36 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedNoteRegionPlanner_ExcludesDirectAndInheritedHiddenRuns()
+    {
+        var document = new TextDocument();
+        document.Styles["HiddenNote"] = new DocumentStyle
+        {
+            Id = "HiddenNote",
+            Name = "Hidden Note",
+            Run = RunFormatting.Default with { Hidden = true },
+        };
+        var note = new Footnote(1);
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Visible "));
+        paragraph.Runs.Add(new Run("DIRECT_SECRET", RunFormatting.Default with { Hidden = true }));
+        paragraph.Runs.Add(new Run("tail"));
+        note.Content.Add(paragraph);
+        note.Content.Add(new Paragraph("STYLE_SECRET") { StyleId = "HiddenNote" });
+        document.Footnotes[1] = note;
+
+        var region = DocumentNoteRegionPlanner.BuildFootnoteRegion(document, [1], 1, 480);
+        var continuation = DocumentNoteRegionPlanner.BuildFootnoteContinuation(document, [1], 1, 480, 48, 48);
+
+        region.Rows.Should().ContainSingle();
+        region.Rows[0].Text.Should().Contain("Visible tail");
+        region.Rows[0].Text.Should().NotContain("DIRECT_SECRET");
+        region.Rows[0].Text.Should().NotContain("STYLE_SECRET");
+        string.Join(" ", continuation.Pages.SelectMany(page => page.Fragments).Select(fragment => fragment.Text))
+            .Should().NotContain("SECRET");
+    }
+
+    [Fact]
     public void TextWatermarkLayoutPlanner_SuppressesUnverifiedSerializedNativeVmlTextPath()
     {
         var plan = WatermarkVisualPlanner.BuildTextLayout(

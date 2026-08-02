@@ -687,6 +687,16 @@ public static class SmartArtEditingPlanner
         }
 
         var node = siblings[location.Index];
+        if (data.Family == SmartArtFamily.Hierarchy
+            && AssistantReorderingWouldCrossReportBoundary(siblings, location.Index, destination))
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                offset < 0 ? SmartArtNodeEditKind.MoveUp : SmartArtNodeEditKind.MoveDown,
+                targetId,
+                "SmartArt assistants must remain before regular reports.",
+                BuildOutline(data));
+        }
+
         siblings.RemoveAt(location.Index);
         siblings.Insert(destination, node);
         NormalizeLevels(data);
@@ -697,6 +707,33 @@ public static class SmartArtEditingPlanner
             targetId,
             node.ModelId,
             offset < 0 ? "SmartArt node moved up." : "SmartArt node moved down.");
+    }
+
+    private static bool AssistantReorderingWouldCrossReportBoundary(
+        IReadOnlyList<SmartArtNode> siblings,
+        int sourceIndex,
+        int destinationIndex)
+    {
+        var firstReportIndex = -1;
+        for (var index = 0; index < siblings.Count; index++)
+        {
+            if (!siblings[index].IsAssistant)
+            {
+                firstReportIndex = index;
+                break;
+            }
+        }
+
+        // Preserve the existing generic reorder behavior for malformed/imported
+        // sibling lists. The guard applies to the normal assistant-prefix shape.
+        if (firstReportIndex < 0
+            || siblings.Skip(firstReportIndex).Any(node => node.IsAssistant))
+            return false;
+
+        var movingAssistant = siblings[sourceIndex].IsAssistant;
+        return movingAssistant
+            ? destinationIndex >= firstReportIndex
+            : destinationIndex < firstReportIndex;
     }
 
     private static SmartArtNodeEditResult Promote(
