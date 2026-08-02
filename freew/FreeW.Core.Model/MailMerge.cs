@@ -1359,7 +1359,8 @@ public static class MailMerge
         var doc = new TextDocument
         {
             DefaultRun = template.DefaultRun,
-            DefaultParagraph = template.DefaultParagraph
+            DefaultParagraph = template.DefaultParagraph,
+            DoNotAutoCompressPictures = template.DoNotAutoCompressPictures
         };
 
         foreach (var (id, style) in template.Styles)
@@ -1457,7 +1458,8 @@ public static class MailMerge
         var doc = new TextDocument
         {
             DefaultRun = template.DefaultRun,
-            DefaultParagraph = template.DefaultParagraph
+            DefaultParagraph = template.DefaultParagraph,
+            DoNotAutoCompressPictures = template.DoNotAutoCompressPictures
         };
 
         foreach (var (id, style) in template.Styles)
