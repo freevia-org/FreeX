@@ -740,6 +740,7 @@ public sealed class DocumentViewPdfExportTests
             document.Page.MarginRightPt = 54;
             document.Page.MarginBottomPt = 60;
             document.Page.HeaderDistancePt = 36;
+            document.PageBordersDoNotSurroundFooter = true;
             document.Page.PageBorder = new PageBorder("#A020F0", 2)
             {
                 OffsetFrom = PageBorderOffsetFrom.Text,
@@ -755,6 +756,80 @@ public sealed class DocumentViewPdfExportTests
             borders.Should().HaveCount(2);
             borders[0].Should().Be(new PdfStrokeRect(65, 53, 500, 710, new PdfColor(0xA0, 0x20, 0xF0), 2));
             borders[1].Should().Be(new PdfStrokeRect(68.125, 56.125, 493.75, 703.75, new PdfColor(0xA0, 0x20, 0xF0), 2));
+        }, CancellationToken.None);
+
+    [Theory]
+    [InlineData(false, false, 23, 740)]
+    [InlineData(true, false, 23, 704)]
+    [InlineData(false, true, 53, 710)]
+    [InlineData(true, true, 53, 674)]
+    public Task BuildPdfContent_AppliesTextRelativeHeaderAndFooterExclusions(
+        bool doNotSurroundHeader,
+        bool doNotSurroundFooter,
+        double expectedBottom,
+        double expectedHeight) =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.MarginLeftPt = 72;
+            document.Page.MarginRightPt = 54;
+            document.Page.MarginTopPt = 72;
+            document.Page.MarginBottomPt = 60;
+            document.Page.HeaderDistancePt = 36;
+            document.Page.FooterDistancePt = 30;
+            document.PageBordersDoNotSurroundHeader = doNotSurroundHeader;
+            document.PageBordersDoNotSurroundFooter = doNotSurroundFooter;
+            document.Page.PageBorder = new PageBorder("#A020F0", 2)
+            {
+                OffsetFrom = PageBorderOffsetFrom.Text,
+                SpacePt = 6,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var border = view.BuildPdfContent().Pages.Single().Ops
+                .OfType<PdfStrokeRect>()
+                .Single();
+
+            border.Should().Be(new PdfStrokeRect(
+                65,
+                expectedBottom,
+                500,
+                expectedHeight,
+                new PdfColor(0xA0, 0x20, 0xF0),
+                2));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_IgnoresHeaderAndFooterExclusionsForPageRelativeBorders() =>
+        Session.Dispatch(() =>
+        {
+            PdfStrokeRect Render(bool exclusionsEnabled)
+            {
+                var document = TextDocument.CreateEmpty();
+                document.Page.WidthPt = 612;
+                document.Page.HeightPt = 792;
+                document.Page.MarginTopPt = 90;
+                document.Page.MarginBottomPt = 90;
+                document.Page.HeaderDistancePt = 18;
+                document.Page.FooterDistancePt = 18;
+                document.PageBordersDoNotSurroundHeader = exclusionsEnabled;
+                document.PageBordersDoNotSurroundFooter = exclusionsEnabled;
+                document.Page.PageBorder = new PageBorder("#A020F0", 2)
+                {
+                    OffsetFrom = PageBorderOffsetFrom.Page,
+                    SpacePt = 6,
+                };
+
+                var view = new DocumentView();
+                view.LoadDocument(document);
+                return view.BuildPdfContent().Pages.Single().Ops.OfType<PdfStrokeRect>().Single();
+            }
+
+            Render(exclusionsEnabled: true).Should().Be(Render(exclusionsEnabled: false));
         }, CancellationToken.None);
 
     [Fact]
