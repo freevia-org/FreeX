@@ -275,7 +275,8 @@ public static class PresentationExportPlanner
         new FileDialogFormatDescriptor(VideoExportExtension, "MPEG-4 videos"),
     ];
 
-    public static IReadOnlyList<PresentationExportFormatDescriptor> BuildFormatDescriptors() =>
+    public static IReadOnlyList<PresentationExportFormatDescriptor> BuildFormatDescriptors(
+        bool videoExportAvailable = false) =>
     [
         new(
             PresentationExportFormat.Pdf,
@@ -304,7 +305,7 @@ public static class PresentationExportPlanner
             "Video",
             "MP4 video export with slide range, quality, timings, and narration intent.",
             VideoExportExtension,
-            IsImplemented: false),
+            IsImplemented: videoExportAvailable),
         new(
             PresentationExportFormat.Print,
             PrintCommandId,
@@ -841,9 +842,10 @@ public static class PresentationExportPlanner
                 VideoExportExtension),
             VideoExportExtension);
 
-    public static PresentationBackstageExportPlan BuildBackstageExportPlan()
+    public static PresentationBackstageExportPlan BuildBackstageExportPlan(
+        bool videoExportAvailable = false)
     {
-        var formats = BuildFormatDescriptors();
+        var formats = BuildFormatDescriptors(videoExportAvailable);
         var pdf = formats.Single(format => format.Format == PresentationExportFormat.Pdf);
         var notesPagePdf = formats.Single(format => format.Format == PresentationExportFormat.NotesPagePdf);
 
