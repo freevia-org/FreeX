@@ -7042,10 +7042,18 @@ public static class DocxReader
                 LanguageTag = defaultRun.LanguageTag ?? document.DefaultRun.LanguageTag,
                 Bold = defaultRun.Bold,
                 Italic = defaultRun.Italic,
+                AllCaps = defaultRun.AllCaps || document.DefaultRun.AllCaps,
+                SmallCaps = defaultRun.SmallCaps || document.DefaultRun.SmallCaps,
+                Strikethrough = defaultRun.Strikethrough || document.DefaultRun.Strikethrough,
                 DoubleStrikethrough = defaultRun.DoubleStrikethrough || document.DefaultRun.DoubleStrikethrough,
                 NoProof = defaultRun.NoProof || document.DefaultRun.NoProof,
                 Hidden = defaultRun.Hidden || document.DefaultRun.Hidden,
                 WebHidden = defaultRun.WebHidden || document.DefaultRun.WebHidden,
+                Underline = defaultRun.Underline || document.DefaultRun.Underline,
+                VerticalAlign = defaultRun.VerticalAlign != VerticalAlign.Baseline
+                    ? defaultRun.VerticalAlign
+                    : document.DefaultRun.VerticalAlign,
+                Rtl = defaultRun.Rtl || document.DefaultRun.Rtl,
             };
         }
 

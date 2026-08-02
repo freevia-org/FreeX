@@ -168,4 +168,48 @@ public class DocDefaultsRoundTripTests
         doc2.DefaultRun.FontFamily.Should().Be("Calibri");
         doc2.DefaultRun.FontSizePt.Should().Be(11);
     }
+
+    [Fact]
+    public void DocDefaults_ClassicCharacterProperties_RoundTripInCanonicalOrder()
+    {
+        var doc = Read(
+            "<w:rPr>" +
+            "<w:rFonts w:ascii=\"Aptos\"/><w:b/><w:i/>" +
+            "<w:caps/><w:smallCaps/><w:strike/><w:dstrike/>" +
+            "<w:noProof/><w:vanish/><w:webHidden/><w:color w:val=\"123456\"/>" +
+            "<w:sz w:val=\"22\"/>" +
+            "<w:u w:val=\"single\"/>" +
+            "<w:vertAlign w:val=\"superscript\"/><w:rtl/><w:lang w:val=\"ar-SA\"/>" +
+            "</w:rPr>");
+
+        doc.DefaultRun.AllCaps.Should().BeTrue();
+        doc.DefaultRun.SmallCaps.Should().BeTrue();
+        doc.DefaultRun.Strikethrough.Should().BeTrue();
+        doc.DefaultRun.Underline.Should().BeTrue();
+        doc.DefaultRun.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+        doc.DefaultRun.Rtl.Should().BeTrue();
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "rFonts", "b", "i", "caps", "smallCaps", "strike", "dstrike", "noProof",
+            "vanish", "webHidden", "color", "sz", "szCs", "u", "vertAlign", "rtl", "lang");
+        rPr.Element(W + "u")!.Attribute(W + "val")!.Value.Should().Be("single");
+        rPr.Element(W + "vertAlign")!.Attribute(W + "val")!.Value.Should().Be("superscript");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.AllCaps.Should().BeTrue();
+        reopened.DefaultRun.SmallCaps.Should().BeTrue();
+        reopened.DefaultRun.Strikethrough.Should().BeTrue();
+        reopened.DefaultRun.Underline.Should().BeTrue();
+        reopened.DefaultRun.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+        reopened.DefaultRun.Rtl.Should().BeTrue();
+    }
 }
