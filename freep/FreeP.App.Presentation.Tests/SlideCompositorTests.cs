@@ -211,6 +211,53 @@ public sealed class SlideCompositorTests
         bg.BoundsDip.Height.Should().BeApproximately(p.SlideSizeCyEmu / 9525.0, 0.1);
     }
 
+    [Fact]
+    public void Compose_SummaryZoom_UsesAttachedPreviewTilesAndNativeLayout()
+    {
+        var presentation = new PresentationModel();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Id = "slide-1" });
+        presentation.Slides.Add(new Slide { Id = "slide-2" });
+        presentation.Sections.Add(new PresentationSection { Id = "section-1", Name = "One", SlideIds = { "slide-1" } });
+        presentation.Sections.Add(new PresentationSection { Id = "section-2", Name = "Two", SlideIds = { "slide-2" } });
+
+        var summaryZoom = SummaryZoomInsertionPlanner.CreateShape(
+            presentation,
+            new[] { "section-1", "section-2" });
+        presentation.Slides[0].Shapes.Add(summaryZoom);
+
+        var firstPreview = new byte[] { 1, 2, 3 };
+        var secondPreview = new byte[] { 4, 5, 6 };
+        SummaryZoomPreviewPlanner.AttachPreviewImages(
+            presentation,
+            summaryZoom,
+            slideIndex => slideIndex == 0 ? firstPreview : secondPreview)
+            .Should().Be(2);
+        var allOps = SlideCompositor.Compose(presentation, presentation.Slides[0]);
+        var pictures = allOps
+            .OfType<DrawOp.Picture>()
+            .ToArray();
+
+        pictures.Should().HaveCount(2);
+        pictures.Select(picture => picture.Bytes).Should().ContainInOrder(firstPreview, secondPreview);
+
+        var fullBounds = new LayoutRect(
+            summaryZoom.OffsetXEmu / 9525d,
+            summaryZoom.OffsetYEmu / 9525d,
+            summaryZoom.ExtentCxEmu / 9525d,
+            summaryZoom.ExtentCyEmu / 9525d);
+        pictures[0].DestDip.Should().Be(new LayoutRect(
+            fullBounds.X,
+            fullBounds.Y,
+            fullBounds.Width / 2,
+            fullBounds.Height));
+        pictures[1].DestDip.Should().Be(new LayoutRect(
+            fullBounds.X + fullBounds.Width / 2,
+            fullBounds.Y,
+            fullBounds.Width / 2,
+            fullBounds.Height));
+    }
+
     private static TextBody BodyWithText(string text)
     {
         var body = new TextBody();
