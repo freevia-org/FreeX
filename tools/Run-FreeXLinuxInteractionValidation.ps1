@@ -1244,6 +1244,7 @@ try {
         @(
             "split-pane-divider-drag-physical",
             "split-pane-active-pane-wheel-physical",
+            "split-pane-bottom-left-wheel-physical",
             "split-pane-mini-scrollbar-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
@@ -1282,6 +1283,7 @@ try {
         "outline-nested-columns-group-physical",
         "split-pane-divider-drag-physical",
         "split-pane-active-pane-wheel-physical",
+        "split-pane-bottom-left-wheel-physical",
         "split-pane-mini-scrollbar-physical",
         "dialog-format-cells-keyboard",
         "native-save-as-f12-cancel",
@@ -1369,6 +1371,7 @@ try {
         @(
             "split-pane-divider-drag-physical",
             "split-pane-active-pane-wheel-physical",
+            "split-pane-bottom-left-wheel-physical",
             "split-pane-mini-scrollbar-physical"
         )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
@@ -1396,6 +1399,7 @@ try {
         "outline-nested-columns-group-physical",
         "split-pane-divider-drag-physical",
         "split-pane-active-pane-wheel-physical",
+        "split-pane-bottom-left-wheel-physical",
         "split-pane-mini-scrollbar-physical",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",

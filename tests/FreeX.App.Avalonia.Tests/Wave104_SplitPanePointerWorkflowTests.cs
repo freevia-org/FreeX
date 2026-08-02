@@ -38,7 +38,7 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
     }
 
     [Fact]
-    public void MiniScrollbarsExposeIndependentPaneTargetsAndPageClicks()
+    public void MiniScrollbarsExposeSharedScrollTargetsAndPageClicks()
     {
         var viewport = BuildSplitViewport();
         var chrome = SplitPanePointerPlanner.CalculateScrollbarChrome(viewport, 640, 420, 44, 20);
@@ -68,7 +68,7 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
     }
 
     [Fact]
-    public void WheelOwnershipOnlyAllowsTheAxesThatTheActiveSplitPaneCanScroll()
+    public void WheelOwnershipAllowsOnlySharedScrollbarAxes()
     {
         var viewport = BuildSplitViewport();
 
@@ -108,11 +108,16 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
         source.Should().Contain("InputElement.PointerPressedEvent");
         source.Should().Contain("args.Pointer.Capture(_sheetGridHost)");
         source.Should().Contain("CalculatePageTarget");
-        source.Should().Contain("SetSplitPaneTopRightLeftCol");
-        source.Should().Contain("SetSplitPaneBottomLeftTopRow");
+        source.Should().Contain("PanViewport(0, delta)");
+        source.Should().Contain("PanViewport(delta, 0)");
+        source.Should().NotContain("SetSplitPaneTopRightLeftCol");
+        source.Should().NotContain("SetSplitPaneBottomLeftTopRow");
         source.Should().Contain("ResetSplitPaneOffsets");
         windowSource.Should().Contain("SplitPanePointerPlanner.ResolveWheelTarget");
         windowSource.Should().Contain("CanScrollSplitPane(target.Region, target.Horizontal)");
+        windowSource.Should().Contain("PanViewport(rowDelta * step, colDelta * step)");
+        windowSource.Should().NotContain("ScrollSplitPaneTopRight");
+        windowSource.Should().NotContain("ScrollSplitPaneBottomLeft");
     }
 
     private static ViewportModel BuildSplitViewport() =>

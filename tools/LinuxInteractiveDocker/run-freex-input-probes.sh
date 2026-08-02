@@ -2369,12 +2369,13 @@ probe_split_pane_pointer() {
     local split_before="split-pane-before.png" split_after="split-pane-open.png"
     local divider_before="split-pane-divider-before.png" divider_after="split-pane-divider-after.png"
     local wheel_before="split-pane-wheel-before.png" wheel_after="split-pane-wheel-after.png"
+    local bottom_wheel_before="split-pane-bottom-left-wheel-before.png" bottom_wheel_after="split-pane-bottom-left-wheel-after.png"
     local scrollbar_before="split-pane-scrollbar-before.png" scrollbar_after="split-pane-scrollbar-after.png"
     local postcondition="split-pane-pointer-postcondition.txt"
-    local artifacts="$split_before;$split_after;$divider_before;$divider_after;$wheel_before;$wheel_after;$scrollbar_before;$scrollbar_after;$postcondition"
-    local split_open=false divider_passed=false wheel_passed=false scrollbar_passed=false
+    local artifacts="$split_before;$split_after;$divider_before;$divider_after;$wheel_before;$wheel_after;$bottom_wheel_before;$bottom_wheel_after;$scrollbar_before;$scrollbar_after;$postcondition"
+    local split_open=false divider_passed=false wheel_passed=false bottom_wheel_passed=false scrollbar_passed=false
     local split_row_y split_column_x drag_y top_right_left top_right_width top_right_top top_right_height
-    local scrollbar_x scrollbar_y
+    local bottom_left_left bottom_left_width bottom_left_top bottom_left_height scrollbar_x scrollbar_y
 
     # C5 gives the real View > Split command a deterministic two-axis anchor. The coordinates
     # below deliberately come from the calibrated cell pitch, so the probe remains bounded and
@@ -2415,8 +2416,9 @@ probe_split_pane_pointer() {
         capture "$divider_after"
     fi
 
-    # The top-right pane owns vertical wheel input. Compare only that quadrant so a changed
-    # selection or footer cannot accidentally satisfy the postcondition.
+    # The top-right pane owns the shared horizontal scrollbar. Shift+wheel is the physical
+    # horizontal-wheel equivalent used by WPF; compare only that quadrant so a changed selection
+    # or footer cannot accidentally satisfy the postcondition.
     top_right_left="$split_column_x"
     top_right_width="$((window_x + window_width - top_right_left))"
     top_right_top="$a1_y"
@@ -2426,7 +2428,9 @@ probe_split_pane_pointer() {
         crop_region "$wheel_before" "split-pane-wheel-before-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
         focus_app
         xdotool_mousemove_sync "$((top_right_left + top_right_width * 3 / 4))" "$((top_right_top + top_right_height / 2))"
+        xdotool keydown --window "$window_id" Shift_L
         xdotool click 5
+        xdotool keyup --window "$window_id" Shift_L
         sleep "$settle_seconds"
         capture "$wheel_after"
         crop_region "$wheel_after" "split-pane-wheel-after-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
@@ -2438,8 +2442,32 @@ probe_split_pane_pointer() {
         capture "$wheel_after"
     fi
 
+    # The bottom-left pane owns the shared vertical scrollbar. Its vertical wheel must move the
+    # same row band as BottomRight, so capture only the bottom-left quadrant for this proof.
+    bottom_left_left="$a1_x"
+    bottom_left_width="$((split_column_x - bottom_left_left))"
+    bottom_left_top="$split_row_y"
+    bottom_left_height="$((window_y + window_height - bottom_left_top))"
+    if $split_open && (( bottom_left_width > 40 && bottom_left_height > 40 )); then
+        capture "$bottom_wheel_before"
+        crop_region "$bottom_wheel_before" "split-pane-bottom-left-wheel-before-crop.png" "$bottom_left_left" "$bottom_left_top" "$bottom_left_width" "$bottom_left_height"
+        focus_app
+        xdotool_mousemove_sync "$((bottom_left_left + bottom_left_width / 2))" "$((bottom_left_top + bottom_left_height / 2))"
+        xdotool click 5
+        sleep "$settle_seconds"
+        capture "$bottom_wheel_after"
+        crop_region "$bottom_wheel_after" "split-pane-bottom-left-wheel-after-crop.png" "$bottom_left_left" "$bottom_left_top" "$bottom_left_width" "$bottom_left_height"
+        if region_changed "$output/split-pane-bottom-left-wheel-before-crop.png" "$output/split-pane-bottom-left-wheel-after-crop.png" 80; then
+            bottom_wheel_passed=true
+        fi
+    else
+        capture "$bottom_wheel_before"
+        capture "$bottom_wheel_after"
+    fi
+
     # The top-right mini-scrollbar is the horizontal track immediately above the horizontal
-    # divider. A track click must move its independent pane and visibly change that quadrant.
+    # divider. A track click must move the shared main horizontal position and visibly change
+    # that quadrant.
     scrollbar_x="$((split_column_x + top_right_width * 3 / 4))"
     scrollbar_y="$((split_row_y - 5))"
     if $split_open && (( top_right_width > 40 )); then
@@ -2459,7 +2487,7 @@ probe_split_pane_pointer() {
     fi
 
     write_artifact "$postcondition" \
-        "schema-version=1\nselector=split-pane-pointer\nsplit-open=$split_open\ndivider-gesture=horizontal-divider-drag\ndivider-coordinate=$((split_column_x + cell_width)),$split_row_y\ndivider-target-y=$drag_y\ndivider-postcondition=$divider_passed\nactive-pane-gesture=top-right-wheel-down\nactive-pane-crop=$top_right_left,$top_right_top,${top_right_width}x${top_right_height}\nactive-pane-postcondition=$wheel_passed\nmini-scrollbar-gesture=top-right-horizontal-track-click\nmini-scrollbar-coordinate=$scrollbar_x,$scrollbar_y\nmini-scrollbar-postcondition=$scrollbar_passed\n"
+        "schema-version=1\nselector=split-pane-pointer\nsplit-open=$split_open\ndivider-gesture=horizontal-divider-drag\ndivider-coordinate=$((split_column_x + cell_width)),$split_row_y\ndivider-target-y=$drag_y\ndivider-postcondition=$divider_passed\nactive-pane-gesture=top-right-shift-wheel-down\nactive-pane-crop=$top_right_left,$top_right_top,${top_right_width}x${top_right_height}\nactive-pane-shared-column-band-postcondition=$wheel_passed\nbottom-left-gesture=bottom-left-wheel-down\nbottom-left-crop=$bottom_left_left,$bottom_left_top,${bottom_left_width}x${bottom_left_height}\nbottom-left-shared-row-band-postcondition=$bottom_wheel_passed\nmini-scrollbar-gesture=top-right-horizontal-track-click\nmini-scrollbar-coordinate=$scrollbar_x,$scrollbar_y\nmini-scrollbar-shared-column-band-postcondition=$scrollbar_passed\n"
 
     if $divider_passed; then
         record "split-pane-divider-drag-physical" "passed" \
@@ -2475,12 +2503,23 @@ probe_split_pane_pointer() {
     if $wheel_passed; then
         record "split-pane-active-pane-wheel-physical" "passed" \
             "$wheel_before; $wheel_after; split-pane-wheel-before-crop.png; split-pane-wheel-after-crop.png; $postcondition" \
-            "A real X11 wheel event over the top-right quadrant changed that quadrant's rendered content." \
+            "A real X11 Shift+wheel event over the top-right quadrant changed the shared rendered column band." \
             "$artifacts;split-pane-wheel-before-crop.png;split-pane-wheel-after-crop.png"
     else
         record "split-pane-active-pane-wheel-physical" "failed" \
             "$wheel_before; $wheel_after; $postcondition" \
-            "The active-pane wheel route did not produce an observable top-right quadrant change." \
+            "The physical TopRight Shift+wheel route did not prove shared column-band movement." \
+            "$artifacts"
+    fi
+    if $bottom_wheel_passed; then
+        record "split-pane-bottom-left-wheel-physical" "passed" \
+            "$bottom_wheel_before; $bottom_wheel_after; split-pane-bottom-left-wheel-before-crop.png; split-pane-bottom-left-wheel-after-crop.png; $postcondition" \
+            "A real X11 vertical wheel event over the bottom-left quadrant changed the shared rendered row band." \
+            "$artifacts;split-pane-bottom-left-wheel-before-crop.png;split-pane-bottom-left-wheel-after-crop.png"
+    else
+        record "split-pane-bottom-left-wheel-physical" "failed" \
+            "$bottom_wheel_before; $bottom_wheel_after; $postcondition" \
+            "The physical BottomLeft vertical wheel route did not prove shared row-band movement." \
             "$artifacts"
     fi
     if $scrollbar_passed; then

@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 using System.Windows;
 
@@ -5,8 +6,8 @@ namespace FreeX.App.UI;
 
 public static class SplitPaneScrollbarLayoutPlanner
 {
-    public const double Thickness = 10;
-    public const double MinThumbLength = 24;
+    public const double Thickness = SplitPanePointerPlanner.ScrollbarThickness;
+    public const double MinThumbLength = SplitPanePointerPlanner.ScrollbarMinThumbLength;
 
     /// <summary>
     /// R76-render-freeze-scroll-4-2: default rows/cols scrolled per wheel notch when no explicit
@@ -24,44 +25,43 @@ public static class SplitPaneScrollbarLayoutPlanner
         int visibleCount,
         uint maxIndex)
     {
-        var trackLength = InnerTrackLength(orientation, track);
-        var effectiveMaxIndex = Math.Max(1, maxIndex);
-        var effectiveVisibleCount = Math.Min(effectiveMaxIndex, (uint)Math.Max(1, visibleCount));
-        var thumbLength = Math.Min(
-            trackLength,
-            Math.Max(MinThumbLength, trackLength * effectiveVisibleCount / effectiveMaxIndex));
-        var available = Math.Max(0, InnerTrackLength(orientation, track) - thumbLength);
-        var maxStartIndex = effectiveMaxIndex - effectiveVisibleCount + 1;
-        var clampedFirstVisibleIndex = Math.Min(maxStartIndex, Math.Max(1, firstVisibleIndex));
-        var ratio = maxStartIndex <= 1
-            ? 0
-            : (double)(clampedFirstVisibleIndex - 1) / (maxStartIndex - 1);
-
-        return orientation == SplitPaneScrollbarOrientation.Horizontal
-            ? new Rect(track.X + 1 + available * ratio, track.Y + 1, thumbLength, Math.Max(0, track.Height - 2))
-            : new Rect(track.X + 1, track.Y + 1 + available * ratio, Math.Max(0, track.Width - 2), thumbLength);
+        return ToRect(SplitPanePointerPlanner.CalculateThumb(
+            ToGridRect(track),
+            orientation == SplitPaneScrollbarOrientation.Horizontal,
+            firstVisibleIndex,
+            visibleCount,
+            maxIndex));
     }
 
     public static SplitPaneScrollbarHit? HitTestScrollbar(SplitPaneScrollbar? scrollbar, Point pos)
     {
-        if (scrollbar is not { } value || !IsRenderableTrack(value.Track) || !RectHitTest.ContainsInclusive(value.Track, pos))
+        if (scrollbar is not { } value || !IsRenderableTrack(value.Track))
             return null;
 
-        var part = RectHitTest.ContainsInclusive(value.Thumb, pos)
-            ? SplitPaneScrollbarPart.Thumb
-            : SplitPaneScrollbarPart.Track;
-        return new SplitPaneScrollbarHit(part, value.Orientation, value.Region);
+        var hit = SplitPanePointerPlanner.HitTestScrollbar(
+            ToChrome(value),
+            new GridPoint(pos.X, pos.Y));
+        return hit is { } sharedHit
+            ? new SplitPaneScrollbarHit(
+                (SplitPaneScrollbarPart)sharedHit.Part,
+                (SplitPaneScrollbarOrientation)sharedHit.Orientation,
+                (SplitPaneRegion)sharedHit.Region)
+            : null;
     }
 
     public static SplitPaneScrollbarScrollTarget? CalculateScrollTarget(
         SplitPaneScrollbar? scrollbar,
         Point pos)
     {
-        if (scrollbar is not { } value || !IsRenderableTrack(value.Track) || !RectHitTest.ContainsInclusive(value.Track, pos))
+        if (scrollbar is not { } value ||
+            !IsRenderableTrack(value.Track) ||
+            !RectHitTest.ContainsInclusive(value.Track, pos))
             return null;
 
-        var index = IndexFromTrackPosition(value, TrackPosition(value.Orientation, pos));
-        return new SplitPaneScrollbarScrollTarget(value.Region, value.Orientation, index);
+        var target = SplitPanePointerPlanner.CalculateTrackTarget(
+            ToShared(value),
+            new GridPoint(pos.X, pos.Y));
+        return ToWpf(target);
     }
 
     public static SplitPaneScrollbarScrollTarget CalculateThumbDragTarget(
@@ -69,10 +69,10 @@ public static class SplitPaneScrollbarLayoutPlanner
         Point pos,
         double pointerOffset)
     {
-        var index = IndexFromTrackPosition(
-            scrollbar,
-            TrackPosition(scrollbar.Orientation, pos) - pointerOffset);
-        return new SplitPaneScrollbarScrollTarget(scrollbar.Region, scrollbar.Orientation, index);
+        return ToWpfRequired(SplitPanePointerPlanner.CalculateThumbDragTarget(
+            ToShared(scrollbar),
+            new GridPoint(pos.X, pos.Y),
+            pointerOffset));
     }
 
     public static SplitPaneScrollbarScrollTarget CalculateWheelTarget(
@@ -81,9 +81,8 @@ public static class SplitPaneScrollbarLayoutPlanner
         int notches,
         uint step = DefaultWheelScrollStep)
     {
-        var next = (long)Math.Max(1, currentIndex) - (long)notches * step;
-        var clamped = ClampStartIndex(scrollbar.MaxStartIndex, next);
-        return new SplitPaneScrollbarScrollTarget(scrollbar.Region, scrollbar.Orientation, clamped);
+        return ToWpfRequired(SplitPanePointerPlanner.CalculateWheelTarget(
+            ToShared(scrollbar), currentIndex, notches, step));
     }
 
     public static SplitPaneScrollbarScrollTarget CalculatePageTarget(
@@ -91,35 +90,43 @@ public static class SplitPaneScrollbarLayoutPlanner
         uint currentIndex,
         Point pos)
     {
-        var page = (uint)Math.Max(1, scrollbar.VisibleSpan);
-        var beforeThumb = TrackPosition(scrollbar.Orientation, pos) < TrackStart(scrollbar.Orientation, scrollbar.Thumb);
-        var next = beforeThumb
-            ? currentIndex > page ? currentIndex - page : 1
-            : Math.Min(scrollbar.MaxStartIndex, currentIndex + page);
-        return new SplitPaneScrollbarScrollTarget(scrollbar.Region, scrollbar.Orientation, next);
+        return ToWpfRequired(SplitPanePointerPlanner.CalculatePageTarget(
+            ToShared(scrollbar),
+            currentIndex,
+            new GridPoint(pos.X, pos.Y)));
     }
 
-    private static uint IndexFromTrackPosition(SplitPaneScrollbar scrollbar, double position)
-    {
-        var available = Math.Max(1, InnerTrackLength(scrollbar.Orientation, scrollbar.Track) - TrackLength(scrollbar.Orientation, scrollbar.Thumb));
-        var ratio = Math.Max(0, Math.Min(1, (position - TrackStart(scrollbar.Orientation, scrollbar.Track) - 1) / available));
-        return ClampStartIndex(scrollbar.MaxStartIndex, (long)(1 + Math.Round(ratio * (scrollbar.MaxStartIndex - 1))));
-    }
+    private static SplitPanePointerScrollbarChrome ToChrome(SplitPaneScrollbar scrollbar) =>
+        scrollbar.Orientation == SplitPaneScrollbarOrientation.Horizontal
+            ? new SplitPanePointerScrollbarChrome(ToShared(scrollbar), null)
+            : new SplitPanePointerScrollbarChrome(null, ToShared(scrollbar));
 
-    private static double InnerTrackLength(SplitPaneScrollbarOrientation orientation, Rect rect) =>
-        Math.Max(0, TrackLength(orientation, rect) - 2);
+    private static SplitPanePointerScrollbar ToShared(SplitPaneScrollbar scrollbar) =>
+        new(
+            (SplitPanePointerScrollbarOrientation)scrollbar.Orientation,
+            (SplitPanePointerRegion)scrollbar.Region,
+            ToGridRect(scrollbar.Track),
+            ToGridRect(scrollbar.Thumb),
+            scrollbar.VisibleSpan,
+            scrollbar.MaxStartIndex);
 
-    private static uint ClampStartIndex(uint maxStartIndex, long index) =>
-        (uint)Math.Max(1, Math.Min(maxStartIndex, index));
+    private static SplitPaneScrollbarScrollTarget? ToWpf(SplitPanePointerScrollTarget? target) =>
+        target is { } value
+            ? new SplitPaneScrollbarScrollTarget(
+                (SplitPaneRegion)value.Region,
+                (SplitPaneScrollbarOrientation)value.Orientation,
+                value.Index)
+            : null;
 
-    private static double TrackStart(SplitPaneScrollbarOrientation orientation, Rect rect) =>
-        orientation == SplitPaneScrollbarOrientation.Horizontal ? rect.Left : rect.Top;
+    private static SplitPaneScrollbarScrollTarget ToWpfRequired(SplitPanePointerScrollTarget target) =>
+        new(
+            (SplitPaneRegion)target.Region,
+            (SplitPaneScrollbarOrientation)target.Orientation,
+            target.Index);
 
-    private static double TrackLength(SplitPaneScrollbarOrientation orientation, Rect rect) =>
-        orientation == SplitPaneScrollbarOrientation.Horizontal ? rect.Width : rect.Height;
+    private static Rect ToRect(GridRect rect) => new(rect.Left, rect.Top, rect.Width, rect.Height);
 
-    private static double TrackPosition(SplitPaneScrollbarOrientation orientation, Point pos) =>
-        orientation == SplitPaneScrollbarOrientation.Horizontal ? pos.X : pos.Y;
+    private static GridRect ToGridRect(Rect rect) => new(rect.Left, rect.Top, rect.Width, rect.Height);
 
     private static bool IsRenderableTrack(Rect rect) =>
         rect.Width > 0 && rect.Height > 0;

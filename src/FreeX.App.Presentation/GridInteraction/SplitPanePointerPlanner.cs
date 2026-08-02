@@ -307,20 +307,21 @@ public static class SplitPanePointerPlanner
             ? region is SplitPanePointerRegion.TopRight or SplitPanePointerRegion.BottomRight
             : region is SplitPanePointerRegion.BottomLeft or SplitPanePointerRegion.BottomRight;
 
-    private static GridRect CalculateThumb(
+    /// <summary>Calculates the shared scrollbar thumb geometry for either desktop host.</summary>
+    public static GridRect CalculateThumb(
         GridRect track,
         bool horizontal,
         uint firstVisibleIndex,
         int visibleCount,
         uint maxIndex)
     {
-        var trackLength = horizontal ? track.Width : track.Height;
+        var trackLength = Math.Max(0, (horizontal ? track.Width : track.Height) - 2);
         var effectiveMaxIndex = Math.Max(1, maxIndex);
         var effectiveVisibleCount = Math.Min(effectiveMaxIndex, (uint)Math.Max(1, visibleCount));
         var thumbLength = Math.Min(
             trackLength,
             Math.Max(ScrollbarMinThumbLength, trackLength * effectiveVisibleCount / effectiveMaxIndex));
-        var available = Math.Max(0, trackLength - 2 - thumbLength);
+        var available = Math.Max(0, trackLength - thumbLength);
         var maxStartIndex = effectiveMaxIndex - effectiveVisibleCount + 1;
         var clamped = Math.Min(maxStartIndex, Math.Max(1, firstVisibleIndex));
         var ratio = maxStartIndex <= 1 ? 0 : (double)(clamped - 1) / (maxStartIndex - 1);

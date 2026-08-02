@@ -58,15 +58,18 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         runner.Should().Contain("\"split-pane-pointer\"");
         runner.Should().Contain("split-pane-divider-drag-physical");
         runner.Should().Contain("split-pane-active-pane-wheel-physical");
+        runner.Should().Contain("split-pane-bottom-left-wheel-physical");
         runner.Should().Contain("split-pane-mini-scrollbar-physical");
         probe.Should().Contain("probe_split_pane_pointer()");
         probe.Should().Contain("enter_view_keytip");
         probe.Should().Contain("xdotool mousedown 1");
+        probe.Should().Contain("xdotool keydown --window \"$window_id\" Shift_L");
         probe.Should().Contain("xdotool click 5");
         probe.Should().Contain("split-pane-pointer-postcondition.txt");
         probe.Should().Contain("divider-postcondition=$divider_passed");
-        probe.Should().Contain("active-pane-postcondition=$wheel_passed");
-        probe.Should().Contain("mini-scrollbar-postcondition=$scrollbar_passed");
+        probe.Should().Contain("active-pane-shared-column-band-postcondition=$wheel_passed");
+        probe.Should().Contain("bottom-left-shared-row-band-postcondition=$bottom_wheel_passed");
+        probe.Should().Contain("mini-scrollbar-shared-column-band-postcondition=$scrollbar_passed");
     }
 
     [Fact]

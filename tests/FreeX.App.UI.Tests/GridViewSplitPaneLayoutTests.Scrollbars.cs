@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.UI;
 using FreeX.Core.Model;
 using System.Windows;
@@ -7,6 +8,32 @@ namespace FreeX.App.UI.Tests;
 
 public sealed partial class GridViewSplitPaneLayoutTests
 {
+    [Fact]
+    public void WpfSplitChromeAndDividerAreAdaptersOfThePortablePlanner()
+    {
+        var viewport = SplitViewport();
+        var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
+        var sharedDivider = SplitPanePointerPlanner.CalculateDividerLayout(
+            viewport,
+            rowHeaderWidth,
+            GridView.ColHeaderHeight);
+        var wpfDivider = GridView.CalculateSplitDividerLayout(viewport);
+        var sharedChrome = SplitPanePointerPlanner.CalculateScrollbarChrome(
+            viewport,
+            actualWidth: 500,
+            actualHeight: 300,
+            rowHeaderWidth: rowHeaderWidth,
+            columnHeaderHeight: GridView.ColHeaderHeight);
+        var wpfChrome = GridView.CalculateSplitPaneScrollbarChrome(viewport, 500, 300);
+
+        wpfDivider.HorizontalY.Should().Be(sharedDivider.HorizontalY);
+        wpfDivider.VerticalX.Should().Be(sharedDivider.VerticalX);
+        wpfChrome.HorizontalTopRight!.Value.Track.Should().Be(ToRect(sharedChrome.HorizontalTopRight!.Value.Track));
+        wpfChrome.HorizontalTopRight.Value.Thumb.Should().Be(ToRect(sharedChrome.HorizontalTopRight.Value.Thumb));
+        wpfChrome.VerticalBottomLeft!.Value.Track.Should().Be(ToRect(sharedChrome.VerticalBottomLeft!.Value.Track));
+        wpfChrome.VerticalBottomLeft.Value.Thumb.Should().Be(ToRect(sharedChrome.VerticalBottomLeft.Value.Thumb));
+    }
+
     [Fact]
     public void CalculateSplitPaneScrollbarChrome_AddsIndependentPaneTracksAndThumbs()
     {
@@ -25,6 +52,8 @@ public sealed partial class GridViewSplitPaneLayoutTests
         vertical.Thumb.Height.Should().BeGreaterThanOrEqualTo(24);
         vertical.Thumb.X.Should().Be(vertical.Track.X + 1);
     }
+
+    private static Rect ToRect(GridRect rect) => new(rect.Left, rect.Top, rect.Width, rect.Height);
 
     [Fact]
     public void SplitPaneViewportChrome_CalculatesScrollbarChromeOutsideGridView()

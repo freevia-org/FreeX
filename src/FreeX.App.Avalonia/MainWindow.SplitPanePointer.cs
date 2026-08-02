@@ -252,8 +252,8 @@ public partial class MainWindow
         SplitPanePointerScrollbar scrollbar)
     {
         var currentIndex = scrollbar.Orientation == SplitPanePointerScrollbarOrientation.Horizontal
-            ? (viewport.SplitPanes?.TopRightColumns ?? viewport.ColMetrics).FirstOrDefault()?.Col ?? 1
-            : (viewport.SplitPanes?.BottomLeftRows ?? viewport.RowMetrics).FirstOrDefault()?.Row ?? 1;
+            ? viewport.ColMetrics.FirstOrDefault()?.Col ?? 1
+            : viewport.RowMetrics.FirstOrDefault()?.Row ?? 1;
         ApplySplitPaneScrollbarTarget(SplitPanePointerPlanner.CalculatePageTarget(
             scrollbar,
             currentIndex,
@@ -262,9 +262,15 @@ public partial class MainWindow
 
     private void ApplySplitPaneScrollbarTarget(SplitPanePointerScrollTarget target)
     {
+        var currentIndex = target.Orientation == SplitPanePointerScrollbarOrientation.Horizontal
+            ? _session.ViewportOrigin.LeftCol
+            : _session.ViewportOrigin.TopRow;
+        var delta = target.Index > currentIndex
+            ? (int)Math.Min(target.Index - currentIndex, int.MaxValue)
+            : -(int)Math.Min(currentIndex - target.Index, int.MaxValue);
         var changed = target.Orientation == SplitPanePointerScrollbarOrientation.Horizontal
-            ? _session.SetSplitPaneTopRightLeftCol(target.Index)
-            : _session.SetSplitPaneBottomLeftTopRow(target.Index);
+            ? _session.PanViewport(0, delta)
+            : _session.PanViewport(delta, 0);
         if (changed)
         {
             RefreshShellForViewportPan(UiText.Get("MainLoc_Ready"));

@@ -31,18 +31,12 @@ public sealed partial class GridViewSplitPaneLayoutTests
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var calculateSplitDividerLayout = source[
             source.IndexOf("public static SplitDividerLayout CalculateSplitDividerLayout", StringComparison.Ordinal)..
-            source.IndexOf("private static double SumRowHeights", StringComparison.Ordinal)];
+            source.IndexOf("private static RowMetric? FindRowMetric", StringComparison.Ordinal)];
 
         calculateSplitDividerLayout.Should().Contain("var rowHeaderWidth = CalculateRowHeaderWidth(viewport);");
-        calculateSplitDividerLayout.Should().Contain("? rowHeaderWidth + SumColumnWidths(pinnedColumns)");
-        calculateSplitDividerLayout.Should().Contain(": FindColMetric(viewport.ColMetrics, splitColumn)?.LeftOffset + rowHeaderWidth");
-        calculateSplitDividerLayout.IndexOf("var rowHeaderWidth = CalculateRowHeaderWidth(viewport);", StringComparison.Ordinal)
-            .Should()
-            .BeGreaterThan(calculateSplitDividerLayout.IndexOf("if (splitPanes.Column is { } splitColumn)", StringComparison.Ordinal));
-        calculateSplitDividerLayout[
-            calculateSplitDividerLayout.IndexOf("var pinnedColumns = splitPanes.LeftColumns ?? [];", StringComparison.Ordinal)..]
-            .Should()
-            .NotContain("CalculateRowHeaderWidth(viewport)");
+        calculateSplitDividerLayout.Should().Contain("SplitPanePointerPlanner.CalculateDividerLayout");
+        calculateSplitDividerLayout.Should().Contain("rowHeaderWidth,");
+        calculateSplitDividerLayout.Should().NotContain("SumColumnWidths");
     }
 
     [Fact]

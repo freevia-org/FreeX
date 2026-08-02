@@ -28198,17 +28198,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
-        var changed = splitTarget is
-            { Region: SplitPanePointerRegion.TopRight, Horizontal: true } &&
-            _session.ScrollSplitPaneTopRight(-colDelta * step);
-        if (!changed)
-        {
-            changed = splitTarget is
-                { Region: SplitPanePointerRegion.BottomLeft, Horizontal: false } &&
-                _session.ScrollSplitPaneBottomLeft(-rowDelta * step);
-        }
-        if (!changed)
-            changed = _session.PanViewport(rowDelta * step, colDelta * step);
+        // Split-pane scrollbar chrome is only a second visual for the shared main scrollbar. WPF
+        // deliberately removed independent TopRight/BottomLeft offsets (r56), so every permitted
+        // split-pane wheel route must use the same PanViewport delta as BottomRight.
+        var routesToSharedScrollbar = splitTarget is null ||
+            splitTarget is { Region: SplitPanePointerRegion.BottomRight } ||
+            splitTarget is { Region: SplitPanePointerRegion.TopRight, Horizontal: true } ||
+            splitTarget is { Region: SplitPanePointerRegion.BottomLeft, Horizontal: false };
+        var changed = routesToSharedScrollbar
+            ? _session.PanViewport(rowDelta * step, colDelta * step)
+            : false;
 
         if (changed)
         {
