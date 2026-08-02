@@ -185,6 +185,24 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void Handmade2_UsesMeasuredDoubleWobbledFrame()
+    {
+        PageBorderArtVisualPlanner.TryBuildHandmade2Frame(160, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Strokes.Should().HaveCount(8);
+        plan.Strokes[0].StartXDip.Should().Be(36);
+        plan.Strokes[0].StartYDip.Should().Be(37);
+        plan.Strokes[0].EndXDip.Should().Be(779);
+        plan.Strokes[0].WidthDip.Should().Be(3);
+        plan.Strokes[4].StartXDip.Should().Be(44);
+        plan.Strokes[4].StartYDip.Should().Be(45);
+        plan.Strokes[4].EndXDip.Should().Be(772);
+        plan.Strokes[4].WidthDip.Should().Be(2);
+    }
+
+    [Fact]
     public void ShorebirdTracks_UsesMeasuredAlternatingFootprintCadenceAndSharedSegments()
     {
         PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(83, 3, 816, 1056, 32, out var motifs)

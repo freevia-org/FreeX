@@ -86,6 +86,7 @@ public static class PageBorderArtVisualPlanner
     public const int PapyrusArtId = 92;
     public const int VineArtId = 47;
     public const int WeavingRibbonArtId = 95;
+    public const int Handmade2ArtId = 160;
     public const byte AppleFillRed = 0xB5;
     public const byte AppleStemRed = 0x66;
     public const byte AppleHighlightRed = 0xD8;
@@ -661,6 +662,83 @@ public static class PageBorderArtVisualPlanner
         AddDecorativeArchCorner(fills, strokes, frameWidth - inset - size, frameHeight - inset - size, size, flipX: true, flipY: true);
         plan = new PageBorderDecorativeArchPlan(fills, strokes);
         return true;
+    }
+
+    public static bool TryBuildHandmade2Frame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderDecorativeArchPlan plan)
+    {
+        if (artId != Handmade2ArtId)
+        {
+            plan = new PageBorderDecorativeArchPlan([], []);
+            return false;
+        }
+
+        var width = Math.Max(0, frameWidthDip);
+        var height = Math.Max(0, frameHeightDip);
+        var inset = Math.Max(0, edgeInsetDip);
+        var scale = ResolveMotifSize(modelWidthPt) / 32.0;
+        var outerLeft = inset + 4 * scale;
+        var outerTop = inset + 5 * scale;
+        var outerRight = width - inset - 5 * scale;
+        var outerBottom = height - inset - 5 * scale;
+        var innerLeft = inset + 12 * scale;
+        var innerTop = inset + 13 * scale;
+        var innerRight = width - inset - 12 * scale;
+        var innerBottom = height - inset - 13 * scale;
+        if (outerRight <= outerLeft || outerBottom <= outerTop
+            || innerRight <= innerLeft || innerBottom <= innerTop)
+        {
+            plan = new PageBorderDecorativeArchPlan([], []);
+            return true;
+        }
+
+        var strokes = new List<PageBorderArtCubicStroke>();
+        AddHandmadeFrame(strokes, outerLeft, outerTop, outerRight, outerBottom, 3 * scale, 2.5 * scale);
+        AddHandmadeFrame(strokes, innerLeft, innerTop, innerRight, innerBottom, 2 * scale, 1.5 * scale);
+        plan = new PageBorderDecorativeArchPlan([], strokes);
+        return true;
+    }
+
+    private static void AddHandmadeFrame(
+        List<PageBorderArtCubicStroke> strokes,
+        double left,
+        double top,
+        double right,
+        double bottom,
+        double strokeWidth,
+        double wobble)
+    {
+        var horizontal = right - left;
+        var vertical = bottom - top;
+        strokes.Add(new PageBorderArtCubicStroke(
+            left, top,
+            left + horizontal * 0.33, top - wobble,
+            left + horizontal * 0.67, top + wobble * 0.4,
+            right, top,
+            strokeWidth, 0, 0, 0));
+        strokes.Add(new PageBorderArtCubicStroke(
+            right, top,
+            right - wobble * 0.6, top + vertical * 0.33,
+            right + wobble, top + vertical * 0.67,
+            right, bottom,
+            strokeWidth, 0, 0, 0));
+        strokes.Add(new PageBorderArtCubicStroke(
+            right, bottom,
+            right - horizontal * 0.33, bottom + wobble,
+            left + horizontal * 0.33, bottom - wobble * 0.4,
+            left, bottom,
+            strokeWidth, 0, 0, 0));
+        strokes.Add(new PageBorderArtCubicStroke(
+            left, bottom,
+            left + wobble * 0.6, bottom - vertical * 0.33,
+            left - wobble, top + vertical * 0.33,
+            left, top,
+            strokeWidth, 0, 0, 0));
     }
 
     private static IReadOnlyList<PageBorderArtPlacement> BuildFrame(
