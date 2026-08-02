@@ -1410,6 +1410,40 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void MergeAllWithRules_NextRecord_ConsumesOneAdditionalSourceRow()
+    {
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}" +
+            $"{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}"));
+        var data = new MergeData(
+            ["Name"],
+            [["Ada"], ["Grace"], ["Linus"], ["Margaret"]]);
+
+        var merged = MailMerge.MergeAllWithRules(template, data, new MergeState());
+
+        merged.Select(document => document.PlainText).Should().Equal("Ada", "Linus");
+    }
+
+    [Fact]
+    public void MergeAllWithRules_NextRecordIf_AdvancesOnlyWhenConditionMatches()
+    {
+        var instruction = MergeRuleEvaluator.BuildNextRecordIfInstruction(
+            "Advance", MergeConditionOperator.Equal, "Yes");
+        var template = new TextDocument();
+        template.Blocks.Add(new Paragraph(
+            $"{MailMerge.FieldOpen}Name{MailMerge.FieldClose}" +
+            $"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}"));
+        var data = new MergeData(
+            ["Name", "Advance"],
+            [["Ada", "Yes"], ["Grace", "No"], ["Linus", "No"], ["Margaret", "No"]]);
+
+        var merged = MailMerge.MergeAllWithRules(template, data, new MergeState());
+
+        merged.Select(document => document.PlainText).Should().Equal("Ada", "Linus", "Margaret");
+    }
+
+    [Fact]
     public void MergeRecordWithRules_NextRecordIf_PreservesAdvanceRequestForCaller()
     {
         var template = new TextDocument();
