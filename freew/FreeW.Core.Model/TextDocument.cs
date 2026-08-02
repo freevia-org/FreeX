@@ -3603,6 +3603,13 @@ public sealed class TextDocument
     public bool RemovePersonalInformation { get; set; }
 
     /// <summary>
+    /// Whether spelling-error indicators should be hidden for this document. Maps to
+    /// <c>w:settings/w:hideSpellingErrors</c>. False is Word's default and is omitted from newly authored
+    /// packages; true suppresses spelling-error visual cues without changing the document's proofing data.
+    /// </summary>
+    public bool HideSpellingErrors { get; set; }
+
+    /// <summary>
     /// Whether Word should refresh fields when the document opens. Maps to
     /// <c>w:settings/w:updateFields</c>. False is Word's default and is omitted from newly authored
     /// packages; true emits the non-default setting so references, page numbers, and other fields can
