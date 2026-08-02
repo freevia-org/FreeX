@@ -130,6 +130,8 @@ internal static class FreePRibbonIcons
             ["freep.insert-chart-stock"] = RibbonCommandIconKind.ChartLine,
             ["freep.insert-chart-surface"] = RibbonCommandIconKind.ChartColumn,
             ["freep.insert-chart-surface-3d"] = RibbonCommandIconKind.ChartColumn,
+            ["freep.insert-chart-funnel"] = RibbonCommandIconKind.ChartColumn,
+            ["freep.insert-chart-waterfall"] = RibbonCommandIconKind.ChartColumn,
 
             // ── Wave 5B: Design tab — Themes ─────────────────────────────────────────
             ["freep.theme.office"] = RibbonCommandIconKind.Color,
