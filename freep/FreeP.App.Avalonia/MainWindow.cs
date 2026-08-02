@@ -4139,7 +4139,21 @@ public sealed partial class MainWindow : Window
         var dialog = new SummaryZoomDialog(options);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
-            Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
+        {
+            var shape = Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
+            AttachSummaryZoomPreviews(shape);
+        }
+    }
+
+    private void AttachSummaryZoomPreviews(SlideShape shape)
+    {
+        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
+        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(Editor.Presentation, widthPx);
+        SummaryZoomPreviewPlanner.AttachPreviewImages(
+            Editor.Presentation,
+            shape,
+            slideIndex => SlideRenderer.RenderToBytes(
+                Editor.Presentation, slideIndex, widthPx, heightPx));
     }
 
     internal void OpenFindDialog() =>
