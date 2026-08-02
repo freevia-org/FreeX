@@ -1046,6 +1046,7 @@ internal static class FreeWAvaloniaRibbonDefinition
                 tab.Group("tracking", "Tracking", null, 90, g =>
                 {
                     g.Toggle("freew.track-changes", "Track Changes");
+                    g.Toggle("freew.track-formatting", "Track Formatting");
                     g.Toggle("freew.reviewing-pane", "Reviewing Pane");
                     g.Dropdown("freew.display-for-review", "All Markup", BuildDisplayForReviewMenu());
                     g.Dropdown("freew.show-markup", "Show Markup", BuildShowMarkupMenu());

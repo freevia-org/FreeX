@@ -18244,6 +18244,12 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>
+    /// Whether formatting-only edits participate in tracked revisions. Word persists the inverse policy
+    /// as <c>w:doNotTrackFormatting</c>.
+    /// </summary>
+    public bool TrackFormattingEnabled => !_doc.DoNotTrackFormatting;
+
     /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
     public string RevisionAuthor { get; set; } = "FreeW User";
 
@@ -18333,6 +18339,13 @@ public sealed class DocumentView : Control
         InvalidateVisual();
         DocumentChanged?.Invoke();
         return TrackChangesEnabled;
+    }
+
+    public bool ToggleTrackFormatting()
+    {
+        _doc.DoNotTrackFormatting = TrackFormattingEnabled;
+        DocumentChanged?.Invoke();
+        return TrackFormattingEnabled;
     }
 
     /// <summary>

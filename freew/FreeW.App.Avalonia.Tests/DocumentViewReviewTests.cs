@@ -1074,6 +1074,7 @@ public sealed class DocumentViewReviewTests
         foreach (var id in new[]
         {
             "freew.track-changes",
+            "freew.track-formatting",
             "freew.display-for-review",
             "freew.display-for-review-all-markup",
             "freew.display-for-review-simple-markup",
@@ -1250,7 +1251,7 @@ public sealed class DocumentViewReviewTests
 
         foreach (var id in new[]
         {
-            "freew.track-changes", "freew.reviewing-pane", "freew.statistics",
+            "freew.track-changes", "freew.track-formatting", "freew.reviewing-pane", "freew.statistics",
             "freew.display-for-review", "freew.show-markup", "freew.show-markup-balloons",
             "freew.spellcheck-toggle", "freew.add-to-dictionary",
             "freew.thesaurus", "freew.set-proofing-language",

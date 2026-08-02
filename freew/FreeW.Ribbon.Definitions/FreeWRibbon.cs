@@ -752,6 +752,7 @@ public static class FreeWRibbon
                     // Track Changes is the big toggle; the Reviewing Pane toggle opens the dockable revisions
                     // list. Accept/Reject live in Changes, mirroring Word's group geography.
                     g.MediumToggle("freew.track-changes", "Track Changes", RibbonCommandIconKind.History);
+                    g.MediumToggle("freew.track-formatting", "Track Formatting", RibbonCommandIconKind.History);
                     g.MediumToggle("freew.reviewing-pane", "Reviewing Pane", RibbonCommandIconKind.History);
                     g.RowBreak();
                     // Display for Review: dropdown with All Markup (default), Simple Markup, No Markup,

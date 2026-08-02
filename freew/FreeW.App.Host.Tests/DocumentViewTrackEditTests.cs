@@ -62,6 +62,26 @@ public sealed class DocumentViewTrackEditTests
     }
 
     [StaFact]
+    public void TrackFormattingToggle_PersistsInverseWordSettingAndDirtiesOnce()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.DoNotTrackFormatting = true;
+        var view = new DocumentView();
+        view.LoadModel(document);
+        var changed = 0;
+        view.TextChanged += (_, _) => changed++;
+
+        view.TrackFormattingEnabled.Should().BeFalse();
+        view.TrackFormattingEnabled = true;
+
+        view.Model.DoNotTrackFormatting.Should().BeFalse();
+        changed.Should().Be(1);
+
+        view.TrackFormattingEnabled = true;
+        changed.Should().Be(1);
+    }
+
+    [StaFact]
     public void InsertText_WithTrackChangesOn_RecordsInsertedRevision()
     {
         var view = BuildView("Hello ");

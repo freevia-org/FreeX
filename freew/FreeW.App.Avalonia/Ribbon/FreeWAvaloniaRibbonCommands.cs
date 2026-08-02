@@ -554,6 +554,7 @@ internal static class FreeWAvaloniaRibbonCommands
         // AV-REVIEW: Track Changes uses the same selection transition as the WPF command: enabling it
         // over a non-empty selection immediately records that selection as an insertion.
         r.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
+        r.Register("freew.track-formatting", new TrackFormattingToggleCommand(editor));
         var displayAllMarkup = new DisplayForReviewCommand(editor, ReviewDisplayMode.AllMarkup);
         r.Register("freew.display-for-review", displayAllMarkup);
         r.Register("freew.display-for-review-all-markup", displayAllMarkup);
@@ -873,6 +874,13 @@ internal static class FreeWAvaloniaRibbonCommands
         }
 
         public RibbonCommandState GetState() => new(IsChecked: editor.TrackChangesEnabled);
+    }
+
+    private sealed class TrackFormattingToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context) => editor.ToggleTrackFormatting();
+
+        public RibbonCommandState GetState() => new(IsChecked: editor.TrackFormattingEnabled);
     }
 
     private sealed class ProofingLanguageCommand(DocumentView editor, RibbonHostCallbacks callbacks) : IRibbonCommand
