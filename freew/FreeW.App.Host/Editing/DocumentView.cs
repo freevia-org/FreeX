@@ -7796,8 +7796,13 @@ public sealed class DocumentView : RichTextBox
         if (options.IsPicture)
             return BuildPictureWatermarkBrush(options, pageColor, pageWidthDip, pageHeightDip);
 
-        var baseColor = ParseColor(options.FontColorHex, Color.FromRgb(0x80, 0x80, 0x80));
-        var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
+        var baseColor = ParseColor(
+            WatermarkVisualPlanner.ResolveTextColorHex(options),
+            Color.FromRgb(0x80, 0x80, 0x80));
+        var alpha = (byte)Math.Clamp(
+            (int)Math.Round(WatermarkVisualPlanner.ResolveTextOpacity(options) * 255),
+            0,
+            255);
         var foreground = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
 
         var width = Math.Max(1, pageWidthDip);
@@ -7807,7 +7812,7 @@ public sealed class DocumentView : RichTextBox
             return new SolidColorBrush(pageColor);
 
         var typeface = new Typeface(
-            new System.Windows.Media.FontFamily(options.FontFamily),
+            new System.Windows.Media.FontFamily(WatermarkVisualPlanner.ResolveTextFontFamily(options)),
             FontStyles.Normal,
             FontWeights.Normal,
             FontStretches.Normal);
@@ -7819,7 +7824,7 @@ public sealed class DocumentView : RichTextBox
             1,
             foreground,
             1);
-        var fontSize = WatermarkVisualPlanner.ResolveTextPathFontSize(plan, unitText.Width);
+        var fontSize = WatermarkVisualPlanner.ResolveTextPathFontSize(options, plan, unitText.Width);
         var text = new FormattedText(
             options.Text,
             System.Globalization.CultureInfo.InvariantCulture,
@@ -7835,8 +7840,15 @@ public sealed class DocumentView : RichTextBox
             null,
             new RectangleGeometry(new Rect(0, 0, width, height))));
         var geometry = text.BuildGeometry(new Point(plan.CenterXDip - text.Width / 2, plan.CenterYDip - text.Height / 2));
+        var transform = new TransformGroup();
+        var scaleX = WatermarkVisualPlanner.ResolveTextPathScaleX(options);
+        var scaleY = WatermarkVisualPlanner.ResolveTextPathScaleY(options);
+        if (Math.Abs(scaleX - 1) > 0.001 || Math.Abs(scaleY - 1) > 0.001)
+            transform.Children.Add(new ScaleTransform(scaleX, scaleY, plan.CenterXDip, plan.CenterYDip));
         if (Math.Abs(plan.RotationDegrees) > 0.01)
-            geometry.Transform = new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip);
+            transform.Children.Add(new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip));
+        if (transform.Children.Count > 0)
+            geometry.Transform = transform;
         drawing.Children.Add(new GeometryDrawing(foreground, null, geometry));
 
         return new DrawingBrush(drawing)

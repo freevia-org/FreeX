@@ -5364,7 +5364,17 @@ public static class PptxPackageWriter
                 return el;
             }
 
-            var clone = new XElement(el);   // deep clone for the Fallback branch
+            XElement clone;
+            try
+            {
+                clone = string.IsNullOrWhiteSpace(info.AlternateContentFallbackXml)
+                    ? new XElement(el)
+                    : XElement.Parse(info.AlternateContentFallbackXml);
+            }
+            catch
+            {
+                clone = new XElement(el);
+            }
             return new XElement(MC + "AlternateContent",
                 new XAttribute(XNamespace.Xmlns + "mc",
                     "http://schemas.openxmlformats.org/markup-compatibility/2006"),

@@ -97,7 +97,12 @@ public static class SummaryZoomInsertionPlanner
         {
             ObjectKind = PreservedObjectKind.Zoom,
             RawXml = BuildRawXml(shapeId, plan.Targets),
+            AlternateContentFallbackXml = BuildFallbackXml(shapeId),
+            WasAlternateContent = true,
+            McRequiresToken = "p14",
+            McRequiresNsUri = "http://schemas.microsoft.com/office/powerpoint/2010/main",
         };
+        preserved.McRequiresNsUris["p14"] = preserved.McRequiresNsUri;
         preserved.SummaryZoomTargets.AddRange(plan.Targets);
 
         return new SlideShape
@@ -155,6 +160,39 @@ public static class SummaryZoomInsertionPlanner
                     new XElement(psuz + "summaryZm",
                         summaryObjects,
                         new XElement(psuz + "fixedLayout")))))
+            .ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string BuildFallbackXml(uint shapeId)
+    {
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+
+        return new XElement(p + "sp",
+            new XAttribute(XNamespace.Xmlns + "p", p.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "a", a.NamespaceName),
+            new XElement(p + "nvSpPr",
+                new XElement(p + "cNvPr", new XAttribute("id", shapeId), new XAttribute("name", ShapeName)),
+                new XElement(p + "cNvSpPr"),
+                new XElement(p + "nvPr")),
+            new XElement(p + "spPr",
+                new XElement(a + "xfrm",
+                    new XElement(a + "off", new XAttribute("x", DefaultOffsetXEmu), new XAttribute("y", DefaultOffsetYEmu)),
+                    new XElement(a + "ext", new XAttribute("cx", DefaultWidthEmu), new XAttribute("cy", DefaultHeightEmu))),
+                new XElement(a + "prstGeom", new XAttribute("prst", "roundRect"), new XElement(a + "avLst")),
+                new XElement(a + "solidFill", new XElement(a + "srgbClr", new XAttribute("val", "4472C4"))),
+                new XElement(a + "ln", new XAttribute("w", 12700),
+                    new XElement(a + "solidFill", new XElement(a + "srgbClr", new XAttribute("val", "2F5597"))))),
+            new XElement(p + "txBody",
+                new XElement(a + "bodyPr", new XAttribute("wrap", "square")),
+                new XElement(a + "lstStyle"),
+                new XElement(a + "p",
+                    new XElement(a + "pPr", new XAttribute("algn", "ctr")),
+                    new XElement(a + "r",
+                        new XElement(a + "rPr", new XAttribute("lang", "en-US"), new XAttribute("sz", 1800), new XAttribute("b", 1)),
+                        new XElement(a + "solidFill", new XElement(a + "srgbClr", new XAttribute("val", "FFFFFF"))),
+                        new XElement(a + "t", "Summary Zoom")),
+                    new XElement(a + "endParaRPr", new XAttribute("lang", "en-US")))))
             .ToString(SaveOptions.DisableFormatting);
     }
 

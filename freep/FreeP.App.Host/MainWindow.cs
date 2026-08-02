@@ -4817,7 +4817,21 @@ public sealed partial class MainWindow : Window
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
-            Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
+        {
+            var shape = Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
+            AttachSummaryZoomPreviews(shape);
+        }
+    }
+
+    private void AttachSummaryZoomPreviews(SlideShape shape)
+    {
+        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
+        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(Editor.Presentation, widthPx);
+        SummaryZoomPreviewPlanner.AttachPreviewImages(
+            Editor.Presentation,
+            shape,
+            slideIndex => WpfPresentationSlideImageRenderer.RenderSlideToPng(
+                Editor.Presentation, slideIndex, widthPx, heightPx));
     }
 
     // ── Find & Replace dialog (Wave 12B) ──────────────────────────────────────────

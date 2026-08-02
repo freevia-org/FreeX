@@ -676,7 +676,16 @@ static void RenderDocumentComposite(
 
                 // Layer 1b: Word's one fixed-size VML text-path watermark over the page background.
                 var wm = thisPageSettings.EffectiveWatermark;
-                if (wm is not null)
+                var hasVisibleHeaderFooter = panel is not null
+                    && i < panel.PageBoxes.Count
+                    && (panel.PageBoxes[i].HeaderSubEditor is not null
+                        || panel.PageBoxes[i].FooterSubEditor is not null);
+                var paintTextWatermarkOverBody = wm is { IsPicture: false }
+                    && WatermarkVisualPlanner.UsesImportedDraftVisual(wm)
+                    && !hasVisibleHeaderFooter
+                    && floatingCanvas.Children.Count == 0
+                    && !doc.Blocks.OfType<FreeW.Core.Model.Table>().Any();
+                if (wm is not null && !paintTextWatermarkOverBody)
                 {
                     var wmBmp = RenderWatermarkPage(wm, pageColor, thisPixW, thisPixH);
                     dc.DrawImage(wmBmp, new Rect(0, 0, thisPixW, thisPixH));
@@ -695,6 +704,16 @@ static void RenderDocumentComposite(
                 // that the WPF paginator has already laid out; it works correctly headlessly.
                 dc.DrawRectangle(new VisualBrush(docPage.Visual) { Stretch = Stretch.None },
                     null, new Rect(0, 0, pageWDip, pageHDip));
+
+                // WPF's detached paginator paints an opaque page surface. On an otherwise plain
+                // body page that surface must not erase Word's header-owned watermark. Structured
+                // surfaces keep the behind-body path above so table fills and foreground owners
+                // retain their authored occlusion.
+                if (paintTextWatermarkOverBody)
+                {
+                    var wmBmp = RenderWatermarkPage(wm!, pageColor, thisPixW, thisPixH);
+                    dc.DrawImage(wmBmp, new Rect(0, 0, thisPixW, thisPixH));
+                }
             }
             bmp.Render(composite);
         }
@@ -2186,8 +2205,13 @@ static RenderTargetBitmap RenderWatermarkPage(WatermarkOptions options, Color pa
     if (options.IsPicture)
         return RenderPictureWatermark(options, pageColor, pixW, pixH);
 
-    var baseColor = ParseHexColor(options.FontColorHex, Color.FromRgb(0x80, 0x80, 0x80));
-    var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
+    var baseColor = ParseHexColor(
+        WatermarkVisualPlanner.ResolveTextColorHex(options),
+        Color.FromRgb(0x80, 0x80, 0x80));
+    var alpha = (byte)Math.Clamp(
+        (int)Math.Round(WatermarkVisualPlanner.ResolveTextOpacity(options) * 255),
+        0,
+        255);
     var foreground = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
 
     var pageBmp = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
@@ -2197,14 +2221,25 @@ static RenderTargetBitmap RenderWatermarkPage(WatermarkOptions options, Color pa
         var plan = WatermarkVisualPlanner.BuildTextLayout(options, pixW, pixH);
         if (plan is not null)
         {
-            var typeface = new Typeface(new FontFamily(options.FontFamily), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            var typeface = new Typeface(
+                new FontFamily(WatermarkVisualPlanner.ResolveTextFontFamily(options)),
+                FontStyles.Normal,
+                FontWeights.Normal,
+                FontStretches.Normal);
             var unitText = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 1, foreground, 1);
-            var fontSize = WatermarkVisualPlanner.ResolveTextPathFontSize(plan, unitText.Width);
+            var fontSize = WatermarkVisualPlanner.ResolveTextPathFontSize(options, plan, unitText.Width);
             var text = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, foreground, 1);
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, pixW, pixH)));
             if (Math.Abs(plan.RotationDegrees) > 0.01)
                 dc.PushTransform(new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip));
+            var scaleX = WatermarkVisualPlanner.ResolveTextPathScaleX(options);
+            var scaleY = WatermarkVisualPlanner.ResolveTextPathScaleY(options);
+            var hasScale = Math.Abs(scaleX - 1) > 0.001 || Math.Abs(scaleY - 1) > 0.001;
+            if (hasScale)
+                dc.PushTransform(new ScaleTransform(scaleX, scaleY, plan.CenterXDip, plan.CenterYDip));
             dc.DrawText(text, new Point(plan.CenterXDip - text.Width / 2, plan.CenterYDip - text.Height / 2));
+            if (hasScale)
+                dc.Pop();
             if (Math.Abs(plan.RotationDegrees) > 0.01)
                 dc.Pop();
             dc.Pop();
