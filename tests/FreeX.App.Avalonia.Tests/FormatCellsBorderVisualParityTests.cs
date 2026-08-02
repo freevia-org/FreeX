@@ -35,16 +35,33 @@ public sealed class FormatCellsBorderVisualParityTests
         source.Should().Contain("Margin = new Thickness(0, 8, 0, 0)");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWpfExpander(borderDetailsExpander)");
         source.Should().Contain("dialog.MinHeight = targetHeight");
+        source.Should().Contain("internal void ResizeClient(Size size) => ClientSize = size");
+        source.Should().Contain("dialog.ResizeClient(targetSize)");
         source.Should().Contain("borderInsideHorizontalToggle.IsVisible = false");
         source.Should().Contain("borderInsideVerticalToggle.IsVisible = false");
         source.Should().NotContain("Children = { borderInsideHorizontalToggle, borderInsideVerticalToggle }");
     }
 
     [Fact]
-    public void ParityCapture_PrefersRequestedBorderHeightOverStaleX11Bounds()
+    public void ParityCapture_RejectsStaleX11BoundsInsteadOfPaddingToRequestedSize()
     {
-        MainWindow.ResolveParityDialogCaptureDimension(596.5, 540).Should().Be(597);
-        MainWindow.ResolveParityDialogCaptureDimension(double.NaN, 540).Should().Be(540);
+        var captureSource = File.ReadAllText(
+            RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        captureSource.Should().Contain(
+            "dialog.MinHeight,");
+        captureSource.Should().NotContain("ResolveParityDialogCaptureDimension");
+
+        var action = () => MainWindow.ResolveParityDialogCaptureSize(
+            requestedWidth: 620,
+            requestedHeight: 540,
+            minimumWidth: 620,
+            minimumHeight: 596.5,
+            arrangedSize: new Size(620, 540));
+
+        action.Should().Throw<InvalidOperationException>()
+            .WithMessage("*refusing to pad an undersized capture*");
+        MainWindow.ResolveParityDialogCaptureSize(620, 596.5, 620, 596.5, new Size(620, 596.5))
+            .Should().Be(new Size(620, 596.5));
     }
 
     [Fact]
@@ -63,13 +80,16 @@ public sealed class FormatCellsBorderVisualParityTests
                 var dialogTask = window.ShowFormatCellsInputDialogAsync(probe =>
                 {
                     probe.TabStrip.SelectedIndex = 3;
-                    var renderWidth = MainWindow.ResolveParityDialogCaptureDimension(probe.Dialog.Width, 620);
-                    var renderHeight = MainWindow.ResolveParityDialogCaptureDimension(probe.Dialog.Height, 540);
-                    renderWidth.Should().Be(620);
-                    renderHeight.Should().Be(597);
+                    probe.Dialog.ClientSize.Should().Be(new Size(620, 596.5));
+                    var renderSize = MainWindow.ResolveParityDialogCaptureSize(
+                        probe.Dialog.Width,
+                        probe.Dialog.Height,
+                        probe.Dialog.MinWidth,
+                        probe.Dialog.MinHeight,
+                        probe.Dialog.ClientSize);
 
-                    probe.Dialog.Measure(new Size(renderWidth, renderHeight));
-                    probe.Dialog.Arrange(new Rect(0, 0, renderWidth, renderHeight));
+                    probe.Dialog.Measure(renderSize);
+                    probe.Dialog.Arrange(new Rect(renderSize));
                     probe.Dialog.UpdateLayout();
                     Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
 

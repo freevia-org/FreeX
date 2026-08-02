@@ -277,6 +277,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         TextBlock NumberPreview,
         Button OkButton,
         Button CancelButton);
+    private sealed class FormatCellsDialogWindow : Window
+    {
+        internal void ResizeClient(Size size) => ClientSize = size;
+    }
 
     private const double CellIndentLevelWidth = 12;
     private const string CommaNumberFormat = "#,##0.00";
@@ -16649,7 +16653,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var currentSubscript = currentStyle.Subscript ?? CellStyle.Default.Subscript;
         var currentFillStyle = _session.SelectedRangeStartStyle;
 
-        var dialog = new Window
+        var dialog = new FormatCellsDialogWindow
         {
             Title = UiText.Get("FormatCells_Title"),
             Width = formatCellsDialogWidth,
@@ -18117,9 +18121,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var targetHeight = tabStrip.SelectedIndex == 3
                 ? formatCellsBorderDialogHeight
                 : formatCellsDefaultDialogHeight;
+            var targetSize = new Size(formatCellsDialogWidth, targetHeight);
             dialog.Width = formatCellsDialogWidth;
             dialog.MinHeight = targetHeight;
             dialog.Height = targetHeight;
+            // Width/Height update layout constraints, but an already-open non-resizable X11
+            // top-level does not reliably turn that change into a native resize request.
+            // ClientSize is the Avalonia top-level API that drives IWindowImpl.Resize.
+            dialog.ResizeClient(targetSize);
         }
 
         tabStrip.SelectionChanged += (_, _) => ApplyFormatCellsDialogFrameForSelectedTab();

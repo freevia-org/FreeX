@@ -2601,10 +2601,7 @@ public sealed partial class MainWindow
             // Default surface first (whatever tab the dialog opens on). Pump once before
             // rendering so SizeToContent tab dialogs settle to the same frame the tab
             // captures use after changing SelectedIndex.
-            await Task.Delay(ParityCaptureDialogPollMilliseconds);
-            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
-            try { dialog.UpdateLayout(); } catch { /* best-effort */ }
-            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+            await WaitForParityDialogLayoutAsync(dialog);
             results.Add(RenderParityDialogTab(outputDirectory, dialog, surfaceId, defaultPng, kind));
 
             // A real TabControl drives selection via SelectedIndex; the Options dialog instead carries an
@@ -2636,10 +2633,7 @@ public sealed partial class MainWindow
                 }
 
                 // Pump a layout pass so the newly-selected tab's pane is measured/arranged before render.
-                await Task.Delay(ParityCaptureDialogPollMilliseconds);
-                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
-                try { dialog.UpdateLayout(); } catch { /* best-effort */ }
-                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+                await WaitForParityDialogLayoutAsync(dialog);
 
                 results.Add(RenderParityDialogTab(outputDirectory, dialog, $"{surfaceId}.{tabNames[i]}", pngName, kind));
             }
@@ -2671,12 +2665,14 @@ public sealed partial class MainWindow
     {
         try
         {
-            // X11 applies top-level resizes asynchronously. Immediately after selecting the taller
-            // Format Cells Border tab, Bounds can still report the previous 620x540 frame even though
-            // Width/Height already carry the authoritative 620x596.5 request. Render the requested
-            // size when it is explicit so one tab cannot inherit the preceding tab's stale bounds.
-            var width = ResolveParityDialogCaptureDimension(dialog.Width, dialog.Bounds.Width);
-            var height = ResolveParityDialogCaptureDimension(dialog.Height, dialog.Bounds.Height);
+            var captureSize = ResolveParityDialogCaptureSize(
+                dialog.Width,
+                dialog.Height,
+                dialog.MinWidth,
+                dialog.MinHeight,
+                dialog.Bounds.Size);
+            var width = Math.Max(1, (int)Math.Ceiling(captureSize.Width));
+            var height = Math.Max(1, (int)Math.Ceiling(captureSize.Height));
             RenderVisualToPng(dialog, width, height, Path.Combine(outputDirectory, pngName));
             return ParityCaptureOutputGuard.ResultForPng(surfaceId, kind, outputDirectory, pngName);
         }
@@ -2686,12 +2682,67 @@ public sealed partial class MainWindow
         }
     }
 
-    internal static int ResolveParityDialogCaptureDimension(double requestedSize, double arrangedSize)
+    private static async Task WaitForParityDialogLayoutAsync(Window dialog)
     {
-        var size = double.IsFinite(requestedSize) && requestedSize > 0
-            ? requestedSize
-            : arrangedSize;
-        return Math.Max(1, (int)Math.Ceiling(size));
+        const int resizePollCount = 10;
+        for (var attempt = 0; attempt < resizePollCount; attempt++)
+        {
+            await Task.Delay(ParityCaptureDialogPollMilliseconds);
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+            try { dialog.UpdateLayout(); } catch { /* best-effort */ }
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+            if (ParityDialogLayoutMatchesRequest(
+                    dialog.Width,
+                    dialog.Height,
+                    dialog.MinWidth,
+                    dialog.MinHeight,
+                    dialog.Bounds.Size))
+                return;
+        }
+    }
+
+    internal static Size ResolveParityDialogCaptureSize(
+        double requestedWidth,
+        double requestedHeight,
+        double minimumWidth,
+        double minimumHeight,
+        Size arrangedSize)
+    {
+        if (!ParityDialogLayoutMatchesRequest(
+                requestedWidth,
+                requestedHeight,
+                minimumWidth,
+                minimumHeight,
+                arrangedSize))
+        {
+            throw new InvalidOperationException(
+                $"Dialog layout is {arrangedSize.Width:0.##}x{arrangedSize.Height:0.##}, " +
+                $"but requested {requestedWidth:0.##}x{requestedHeight:0.##}; refusing to pad an undersized capture.");
+        }
+
+        return arrangedSize;
+    }
+
+    private static bool ParityDialogLayoutMatchesRequest(
+        double requestedWidth,
+        double requestedHeight,
+        double minimumWidth,
+        double minimumHeight,
+        Size arrangedSize)
+    {
+        const double layoutTolerance = 1;
+        if (arrangedSize.Width <= 0 || arrangedSize.Height <= 0)
+            return false;
+
+        return arrangedSize.Width + layoutTolerance >= minimumWidth
+            && arrangedSize.Height + layoutTolerance >= minimumHeight
+            && (!double.IsFinite(requestedWidth)
+                || requestedWidth <= 0
+                || Math.Abs(requestedWidth - arrangedSize.Width) <= layoutTolerance)
+            && (!double.IsFinite(requestedHeight)
+                || requestedHeight <= 0
+                || Math.Abs(requestedHeight - arrangedSize.Height) <= layoutTolerance);
     }
 
     /// <summary>
