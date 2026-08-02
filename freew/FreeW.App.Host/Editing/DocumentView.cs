@@ -12667,22 +12667,15 @@ public sealed class DocumentView : RichTextBox
         // Shadow overrides glow if both are set; WPF Effect is a single Effect per element.
         if (image.ShadowPreset > 0)
         {
-            var (blur, dist, opacity) = image.ShadowPreset switch
-            {
-                1 => (4.0, 3.0, 0.50),
-                2 => (6.0, 5.0, 0.55),
-                3 => (8.0, 7.0, 0.60),
-                4 => (4.0, 4.0, 0.50),
-                _ => (10.0, 10.0, 0.65)
-            };
+            var shadow = PictureEffectVisualPlanner.BuildShadowPlan(image);
             root.Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
-                BlurRadius   = blur,
-                ShadowDepth  = dist,
-                Direction    = 315,
-                Opacity      = PictureEffectVisualPlanner.ResolveShadowOpacity(image, opacity),
+                BlurRadius   = shadow.BlurPoints,
+                ShadowDepth  = shadow.DistancePoints,
+                Direction    = shadow.DirectionDegrees,
+                Opacity      = shadow.Opacity,
                 Color        = TryParseColor(
-                    "#" + PictureEffectVisualPlanner.ResolveShadowColorHex(image),
+                    "#" + shadow.ColorHex,
                     out var shadowColor)
                     ? shadowColor
                     : System.Windows.Media.Colors.Black

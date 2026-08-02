@@ -346,6 +346,32 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingImageShadow_UsesImportedBlurDistanceAndDirection()
+    {
+        var doc = DocWithFloating();
+        var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        image.ShadowPreset = 1;
+        image.ImportedEffects = new ShapeEffectLst
+        {
+            HasShadow = true,
+            ShadowBlurRad = 76200,
+            ShadowDist = 63500,
+            ShadowDir = 5400000,
+        };
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+
+        var effect = canvas.Children.OfType<Image>().Single().Effect
+            .Should().BeOfType<DropShadowEffect>().Subject;
+        effect.BlurRadius.Should().Be(6);
+        effect.ShadowDepth.Should().Be(5);
+        effect.Direction.Should().Be(90);
+    }
+
+    [StaFact]
     public void ObjectFormatSquareImage_UsesItsPositionedFigureForWordWrap()
     {
         var view = new DocumentView();
