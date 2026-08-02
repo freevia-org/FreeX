@@ -335,15 +335,17 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Switch the editing surface to a new <see cref="DocumentViewMode"/> and re-apply the page chrome
     /// (padding/width/shadow) plus the page-break and line-number overlays so the change shows immediately.
-    /// No-op (and no re-render) when already in that mode. Never mutates the model.
+    /// No-op when already in that mode. Pending live edits are committed before the mode-specific
+    /// run tree is rebuilt, so Web Layout-only visibility can change without losing text.
     /// </summary>
     public void SetViewMode(DocumentViewMode mode)
     {
         if (ViewMode == mode)
             return;
+        CommitToModel();
         ViewMode = mode;
         _viewDepthLayout = DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
-        ApplyPageChrome();
+        Render();
         SyncPageBreakAdorner();
         SyncColumnRuleAdorner();
         SyncPageBorderAdorner();
@@ -5135,6 +5137,7 @@ public sealed class DocumentView : RichTextBox
         _renderFileName = CurrentFileName;
         _renderReviewDisplayPolicy = CurrentReviewDisplayPolicy;
         _renderPageBreakMarkers = RenderPageBreakMarkers;
+        _renderViewMode = ViewMode;
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
@@ -11028,7 +11031,7 @@ public sealed class DocumentView : RichTextBox
             ApplyContentControlMarker(wpf, control, location);
         }
 
-        if (fmt.Hidden)
+        if (IsTextHiddenInCurrentView(fmt))
         {
             wpf.Foreground = Brushes.Transparent;
             wpf.Background = null;
@@ -11049,7 +11052,7 @@ public sealed class DocumentView : RichTextBox
 
     private static Inline HideTextInlineWhenNeeded(Inline inline, RunFormatting formatting)
     {
-        if (!formatting.Hidden)
+        if (!IsTextHiddenInCurrentView(formatting))
             return inline;
 
         RetainHiddenRunFormatting(inline, formatting);
@@ -16075,6 +16078,12 @@ public sealed class DocumentView : RichTextBox
     [ThreadStatic]
     private static ReviewDisplayPolicy _renderReviewDisplayPolicy;
 
+    [ThreadStatic]
+    private static DocumentViewMode _renderViewMode;
+
+    private static bool IsTextHiddenInCurrentView(RunFormatting formatting) =>
+        formatting.Hidden || (formatting.WebHidden && _renderViewMode == DocumentViewMode.WebLayout);
+
     /// <summary>
     /// Apply a change to the Show Markup Insertions/Deletions flag and re-render so the updated
     /// decoration (or lack of it) becomes visible immediately. Pending edits are committed first.
@@ -16847,10 +16856,9 @@ public sealed class DocumentView : RichTextBox
 
         // Recover the complete model snapshot set by BuildRun. Live WPF properties are overlaid below;
         // model-only Word properties remain authoritative through an edit/commit round-trip.
+        var wasVisuallyHidden = HiddenRunFormatting.TryGetValue(run, out var hiddenFormatting);
         var retained = (run.Tag as RunMarkers)?.CharacterFormat?.Formatting
-            ?? (HiddenRunFormatting.TryGetValue(run, out var hiddenFormatting)
-                ? hiddenFormatting
-                : RunFormatting.Default);
+            ?? (wasVisuallyHidden ? hiddenFormatting! : RunFormatting.Default);
         var charBorder = retained.CharacterBorder;
         var charShadingHex = retained.CharacterShadingHex;
 
@@ -16888,8 +16896,8 @@ public sealed class DocumentView : RichTextBox
             // Right-to-left run direction reads back off the WPF run's FlowDirection (set in BuildRun).
             Rtl = run.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             FontFamily = run.FontFamily.Source,
-            FontSizePt = retained.Hidden ? retained.FontSizePt : fontSizePt,
-            ColorHex = retained.Hidden
+            FontSizePt = wasVisuallyHidden ? retained.FontSizePt : fontSizePt,
+            ColorHex = wasVisuallyHidden
                 ? retained.ColorHex
                 : run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
             HighlightColorHex = highlightHex,
@@ -17068,6 +17076,7 @@ public sealed class DocumentView : RichTextBox
             Underline = r.Underline || style.Underline || d.Underline,
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
             Hidden = r.Hidden || style.Hidden || d.Hidden,
+            WebHidden = r.WebHidden || style.WebHidden || d.WebHidden,
             SmallCaps = r.SmallCaps || style.SmallCaps || d.SmallCaps,
             AllCaps = r.AllCaps || style.AllCaps || d.AllCaps,
             Rtl = r.Rtl || style.Rtl || d.Rtl,
