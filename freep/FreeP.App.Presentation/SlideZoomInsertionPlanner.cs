@@ -35,7 +35,7 @@ public static class SlideZoomInsertionPlanner
         ArgumentNullException.ThrowIfNull(slides);
         return slides
             .Select((slide, index) => (slide, index))
-            .Where(item => item.index != currentSlideIndex && item.slide.NumericId != 0)
+            .Where(item => item.index != currentSlideIndex)
             .Select(item => (
                 item.slide.Id,
                 DisplayName: $"{item.index + 1}. {(string.IsNullOrWhiteSpace(item.slide.Title)
@@ -54,15 +54,15 @@ public static class SlideZoomInsertionPlanner
         plan = null!;
 
         var target = presentation.Slides.FirstOrDefault(slide =>
-            string.Equals(slide.Id, targetSlideId?.Trim(), StringComparison.Ordinal) &&
-            slide.NumericId != 0);
+            string.Equals(slide.Id, targetSlideId?.Trim(), StringComparison.Ordinal));
         if (target is null || presentation.Slides.IndexOf(target) == currentSlideIndex)
             return false;
 
         var index = presentation.Slides.IndexOf(target);
+        var targetNumericId = EffectiveNumericId(presentation, target);
         plan = new SlideZoomInsertionPlan(
             target.Id,
-            target.NumericId!.Value,
+            targetNumericId,
             $"{index + 1}. {(string.IsNullOrWhiteSpace(target.Title) ? "Untitled slide" : target.Title)}",
             DefaultOffsetXEmu,
             DefaultOffsetYEmu,
@@ -79,9 +79,10 @@ public static class SlideZoomInsertionPlanner
         if (!TryBuildPlan(presentation, currentSlideIndex, targetSlideId, out var plan))
             throw new InvalidOperationException("Choose a different slide as the Slide Zoom target.");
 
+        var shapeId = NextShapeId(presentation);
         return new SlideShape
         {
-            Id = NextShapeId(presentation),
+            Id = shapeId,
             Name = ShapeName,
             Kind = SlideShapeKind.Zoom,
             AlternativeTextTitle = "Slide Zoom",
@@ -94,12 +95,12 @@ public static class SlideZoomInsertionPlanner
             {
                 ObjectKind = PreservedObjectKind.Zoom,
                 ZoomTargetSlideNumericId = plan.TargetSlideNumericId,
-                RawXml = BuildRawXml(plan.TargetSlideNumericId),
+                RawXml = BuildRawXml(shapeId, plan.TargetSlideNumericId),
             },
         };
     }
 
-    private static string BuildRawXml(uint targetNumericId)
+    private static string BuildRawXml(uint shapeId, uint targetNumericId)
     {
         XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
         XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
@@ -110,7 +111,7 @@ public static class SlideZoomInsertionPlanner
             new XAttribute(XNamespace.Xmlns + "a", a.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "pslz", pslz.NamespaceName),
             new XElement(p + "nvGraphicFramePr",
-                new XElement(p + "cNvPr", new XAttribute("id", "0"), new XAttribute("name", ShapeName)),
+                new XElement(p + "cNvPr", new XAttribute("id", shapeId), new XAttribute("name", ShapeName)),
                 new XElement(p + "cNvGraphicFramePr"),
                 new XElement(p + "nvPr")),
             new XElement(p + "xfrm",
@@ -131,6 +132,31 @@ public static class SlideZoomInsertionPlanner
             .Select(shape => shape.Id)
             .DefaultIfEmpty(0u)
             .Max() + 1;
+
+    // PptxPackageWriter uses the same 256-upward allocation for new/duplicate slide IDs.
+    // Resolve that value here so an authored zoom can carry a valid target before the first save.
+    private static uint EffectiveNumericId(Presentation presentation, Slide target)
+    {
+        uint next = 256;
+        var used = new HashSet<uint>();
+        foreach (var slide in presentation.Slides)
+        {
+            var numericId = slide.NumericId.GetValueOrDefault();
+            if (numericId == 0 || !used.Add(numericId))
+            {
+                do { numericId = next++; } while (!used.Add(numericId));
+            }
+            else if (numericId >= next)
+            {
+                next = numericId + 1;
+            }
+
+            if (ReferenceEquals(slide, target))
+                return numericId;
+        }
+
+        throw new InvalidOperationException("The target slide is not part of the presentation.");
+    }
 
     private static IEnumerable<SlideShape> Enumerate(IEnumerable<SlideShape> shapes)
     {

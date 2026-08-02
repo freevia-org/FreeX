@@ -146,6 +146,25 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject!.ZoomTargetSectionId.Should().Be("{SECTION-ONE}");
     }
 
+    [Fact]
+    public void AuthoredSlideZoom_WritesNativeTargetAndReopens()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.InsertSlideZoom("slide-2");
+
+        var roundTripped = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        var zoom = roundTripped.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
+
+        zoom.PreservedObject!.ObjectKind.Should().Be(PreservedObjectKind.Zoom);
+        zoom.PreservedObject.ZoomTargetSlideNumericId.Should().Be(257);
+        zoom.PreservedObject.RawXml.Should().Contain("slidezoom");
+        zoom.PreservedObject.RawXml.Should().Contain("sldId=\"257\"");
+    }
+
     // ── Ink contentPart round-trip ────────────────────────────────────────────
 
     [Fact]

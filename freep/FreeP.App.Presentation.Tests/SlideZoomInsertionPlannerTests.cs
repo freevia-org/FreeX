@@ -55,6 +55,22 @@ public sealed class SlideZoomInsertionPlannerTests
             out _).Should().BeFalse();
     }
 
+    [Fact]
+    public void Predicts_writer_slide_id_for_unsaved_target()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        SlideZoomInsertionPlanner.TryBuildPlan(
+            presentation,
+            currentSlideIndex: 0,
+            targetSlideId: "slide-2",
+            out var plan).Should().BeTrue();
+
+        plan.TargetSlideNumericId.Should().Be(257);
+    }
+
     private static Presentation BuildPresentation()
     {
         var presentation = new Presentation();

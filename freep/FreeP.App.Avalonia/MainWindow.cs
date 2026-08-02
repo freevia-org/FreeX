@@ -2412,6 +2412,8 @@ public sealed partial class MainWindow : Window
         r.Register("freep.new-slide",       new ActionRibbonCommand(() => Editor.InsertSlide()));
         r.Register("freep.duplicate-slide", new ActionRibbonCommand(() => Editor.DuplicateCurrentSlide()));
         r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
+        r.Register(SlideZoomInsertionPlanner.CommandId,
+            new ActionRibbonCommand(() => _ = OpenSlideZoomDialogAsync()));
         r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
             PresentationDesignCommandPlanner.TryApply(
                 Editor,
@@ -4086,6 +4088,22 @@ public sealed partial class MainWindow : Window
 
         dialog.Show();
         return null;
+    }
+
+    internal async void OpenSlideZoomDialog() => await OpenSlideZoomDialogAsync();
+
+    internal async Task OpenSlideZoomDialogAsync()
+    {
+        var options = SlideZoomInsertionPlanner.BuildTargetOptions(
+            Editor.Presentation.Slides,
+            Editor.CurrentSlideIndex);
+        if (options.Count == 0 || !IsVisible)
+            return;
+
+        var dialog = new SlideZoomDialog(options);
+        var result = await dialog.ShowDialog<bool?>(this);
+        if (result == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId)
+            Editor.InsertSlideZoom(targetSlideId);
     }
 
     internal void OpenFindDialog() =>
