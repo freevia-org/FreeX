@@ -74,6 +74,10 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("var execution = SlideSectionPlanner.BuildExecutionPlan(action)");
         source.Should().Contain("SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName)");
         source.Should().Contain("PointerPressed += OnSlidePaneItemPointerPressed");
+        source.Should().Contain("Editor.SelectSlide(sourceSlideIndex);");
+        source.IndexOf("Editor.SelectSlide(sourceSlideIndex);", StringComparison.Ordinal)
+            .Should().BeGreaterThan(source.IndexOf("SlidePanePlanner.BeginDragSession(", StringComparison.Ordinal),
+                "the clicked thumbnail must be selected as part of the same WPF-equivalent pointer-press route");
         source.Should().Contain("PointerMoved += OnSlidePaneItemPointerMoved");
         source.Should().Contain("PointerReleased += OnSlidePaneItemPointerReleased");
         source.Should().Contain("SlidePanePlanner.BeginDragSession(");

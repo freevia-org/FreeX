@@ -9097,6 +9097,9 @@ public sealed partial class MainWindow : Window
                 sourceSlideIndex,
                 e.GetPosition(item).Y)
         };
+        // Match WPF: a left-click selects the thumbnail before a possible drag
+        // starts, so a click-and-hold always operates on the clicked slide.
+        Editor.SelectSlide(sourceSlideIndex);
     }
 
     private void OnSlidePaneItemPointerMoved(object? sender, PointerEventArgs e)

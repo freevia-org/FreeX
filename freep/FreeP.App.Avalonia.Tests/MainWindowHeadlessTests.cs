@@ -2777,6 +2777,39 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_selection_and_drag_keep_clicked_slide_active()
+    {
+        var selectedBeforeDrag = -1;
+        var selectedAfterDrag = -1;
+        var moved = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Second";
+            window.SlidePaneForAccessibilityTests.SelectedIndex = 0;
+            selectedBeforeDrag = window.CurrentSlideIndex;
+
+            // The headless harness cannot synthesize a native PointerPressedEventArgs;
+            // exercise the same ListBox selection transition that the pointer route
+            // must preserve before entering the shared drag planner.
+            window.SlidePaneForAccessibilityTests.SelectedIndex = 1;
+            selectedAfterDrag = window.CurrentSlideIndex;
+            moved = window.PreviewSlidePaneDragForTests(
+                sourceSlideIndex: 1,
+                startPointerY: 0,
+                pointerYWithinItem: SlidePanePlanner.DefaultDragStartThreshold + 1,
+                pointerYWithinPane: SlidePanePlanner.DefaultSlideItemHeight * 2).IsMoveEnabled;
+        });
+
+        if (!ran) return;
+        selectedBeforeDrag.Should().Be(0);
+        selectedAfterDrag.Should().Be(1, "a thumbnail press must select its slide before drag evaluation");
+        moved.Should().BeFalse("starting a drag on the already selected last slide has no valid move target");
+    }
+
+    [Fact]
     public async Task SlidePane_keyboard_actions_route_through_shared_planner()
     {
         var deletedSingleSlide = true;
