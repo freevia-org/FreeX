@@ -7753,6 +7753,7 @@ public sealed class MainWindowHeadlessTests
             dialog.SetOptionsForTests(0, true, true, 2.25, ChartMarkerSymbol.Diamond, 8, "#4472C4", "#1F4E79", OutlineDash.DashDot, true,
                 true, true, false, true, false, true, DataLabelPosition.InsideEnd, "0.0%", " | ",
             "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, errorBars: true,
+            showLeaderLines: true,
             trendline: true, trendlineType: ChartTrendlineType.Polynomial, trendlineOrder: 3,
             trendlineForward: 1.5, trendlineBackward: 0.5,
             trendlineEquation: true, trendlineRSquared: true, overrideChartType: ChartType.LineMarkers,
@@ -7780,6 +7781,7 @@ public sealed class MainWindowHeadlessTests
         options.DataLabels.ShowCategoryName.Should().BeTrue();
         options.DataLabels.ShowLegendKey.Should().BeTrue();
         options.DataLabels.ShowBubbleSize.Should().BeTrue();
+        options.DataLabels.ShowLeaderLines.Should().BeTrue();
         options.ErrorBars.Should().NotBeNull();
         options.Trendline.Should().NotBeNull();
         options.Trendline!.Type.Should().Be(ChartTrendlineType.Polynomial);

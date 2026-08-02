@@ -32,6 +32,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private readonly CheckBox _showSeriesLabelsCheck;
     private readonly CheckBox _showLegendKeysCheck;
     private readonly CheckBox _showBubbleSizeCheck;
+    private readonly CheckBox _showLeaderLinesCheck;
     private readonly CheckBox _errorBarsCheck;
     private readonly ComboBox _errorDirectionCombo;
     private readonly ComboBox _errorBarTypeCombo;
@@ -111,6 +112,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showBubbleSizeCheck = new CheckBox { Content = surface.BubbleSizeLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showLeaderLinesCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.LeaderLinesLabel, IsThreeState = true, Margin = new Thickness(20, 0, 0, 0) };
         _errorBarsCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.ErrorBarsLabel };
         _errorDirectionCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorDirectionOptions.Select(option => option.Label).ToArray(), MinWidth = 160 };
         _errorBarTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorBarTypeOptions.Select(option => option.Label).ToArray(), MinWidth = 160 };
@@ -181,6 +183,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 _showSeriesLabelsCheck,
                 _showLegendKeysCheck,
                 _showBubbleSizeCheck,
+                _showLeaderLinesCheck,
                 _errorBarsCheck,
                 MakeRow(ChartSeriesOptionsPlanner.ErrorDirectionLabel, _errorDirectionCombo),
                 MakeRow(ChartSeriesOptionsPlanner.ErrorBarTypeLabel, _errorBarTypeCombo),
@@ -257,6 +260,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         bool? labelItalic = null,
         string? labelColor = null,
         bool showBubbleSize = false,
+        bool? showLeaderLines = null,
         bool errorBars = false,
         bool trendline = false,
         ChartTrendlineType trendlineType = ChartTrendlineType.Linear,
@@ -289,6 +293,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _showSeriesLabelsCheck.IsChecked = showSeriesLabels;
         _showLegendKeysCheck.IsChecked = showLegendKeys;
         _showBubbleSizeCheck.IsChecked = showBubbleSize;
+        _showLeaderLinesCheck.IsChecked = showLeaderLines;
         _errorBarsCheck.IsChecked = errorBars;
         _trendlineCheck.IsChecked = trendline;
         _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(trendlineType);
@@ -339,6 +344,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
         _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
         _showBubbleSizeCheck.IsChecked = _planner.ShowBubbleSize;
+        _showLeaderLinesCheck.IsChecked = _planner.ShowLeaderLines;
         _errorBarsCheck.IsChecked = _planner.ErrorBarsEnabled;
         _errorDirectionCombo.SelectedIndex = FindErrorDirectionIndex(_planner.ErrorDirection);
         _errorBarTypeCombo.SelectedIndex = FindErrorBarTypeIndex(_planner.ErrorBarType);
@@ -386,6 +392,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
         _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
+        _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
         _planner.SetErrorBarsEnabled(_errorBarsCheck.IsChecked == true);
         if (_errorDirectionCombo.SelectedIndex >= 0 && _errorDirectionCombo.SelectedIndex < ChartSeriesOptionsPlanner.ErrorDirectionOptions.Count)
             _planner.SetErrorDirection(ChartSeriesOptionsPlanner.ErrorDirectionOptions[_errorDirectionCombo.SelectedIndex].Value);
