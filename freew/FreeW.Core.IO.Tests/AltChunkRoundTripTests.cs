@@ -124,7 +124,7 @@ public class AltChunkRoundTripTests
         {
             Id = "NestedBase",
             Name = "Nested base",
-            Run = new RunFormatting { Italic = true, NoProof = true, Hidden = true, WebHidden = true }
+            Run = new RunFormatting { Italic = true, DoubleStrikethrough = true, NoProof = true, Hidden = true, WebHidden = true }
         };
         nested.Styles["ImportedHeading"] = new DocumentStyle
         {
@@ -160,6 +160,7 @@ public class AltChunkRoundTripTests
         document.Styles["ImportedHeading"].Run.Italic.Should().BeTrue();
         document.Styles[importedHeading.StyleId!].Run.Bold.Should().BeTrue();
         document.Styles[importedHeading.StyleId!].Run.Italic.Should().BeTrue();
+        document.Styles[importedHeading.StyleId!].Run.DoubleStrikethrough.Should().BeTrue();
         document.Styles[importedHeading.StyleId!].Run.NoProof.Should().BeTrue();
         document.Styles[importedHeading.StyleId!].Run.Hidden.Should().BeTrue();
         document.Styles[importedHeading.StyleId!].Run.WebHidden.Should().BeTrue();
@@ -181,6 +182,7 @@ public class AltChunkRoundTripTests
         var reopenedHeading = reopened.Blocks[1].Should().BeOfType<Paragraph>().Which;
         reopenedHeading.PlainText.Should().Be("Nested heading");
         reopened.Styles[reopenedHeading.StyleId!].Run.Bold.Should().BeTrue();
+        reopened.Styles[reopenedHeading.StyleId!].Run.DoubleStrikethrough.Should().BeTrue();
         reopened.Styles[reopenedHeading.StyleId!].Run.NoProof.Should().BeTrue();
         reopened.Styles[reopenedHeading.StyleId!].Run.Hidden.Should().BeTrue();
         reopened.Styles[reopenedHeading.StyleId!].Run.WebHidden.Should().BeTrue();
@@ -217,6 +219,7 @@ public class AltChunkRoundTripTests
             {
                 FontFamily = "Times New Roman",
                 FontSizePt = 14,
+                DoubleStrikethrough = true,
                 NoProof = true,
                 Hidden = true,
                 WebHidden = true
@@ -238,6 +241,7 @@ public class AltChunkRoundTripTests
         var importedDefaults = document.Styles[imported.StyleId!];
         importedDefaults.Run.FontFamily.Should().Be("Times New Roman");
         importedDefaults.Run.FontSizePt.Should().Be(14);
+        importedDefaults.Run.DoubleStrikethrough.Should().BeTrue();
         importedDefaults.Run.NoProof.Should().BeTrue();
         importedDefaults.Run.Hidden.Should().BeTrue();
         importedDefaults.Run.WebHidden.Should().BeTrue();

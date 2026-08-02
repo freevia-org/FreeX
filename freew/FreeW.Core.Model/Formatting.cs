@@ -212,6 +212,12 @@ public sealed record RunFormatting
     public bool Strikethrough { get; init; }
 
     /// <summary>
+    /// Whether the run uses Word's double strikethrough decoration (<c>w:rPr/w:dstrike</c>).
+    /// The single and double flags are retained independently; double strike wins only at paint time.
+    /// </summary>
+    public bool DoubleStrikethrough { get; init; }
+
+    /// <summary>
     /// Whether the run is hidden text (<c>w:rPr/w:vanish</c>). Defaults to false. As with the other
     /// non-nullable run toggles, style and document-default inheritance resolves this property with
     /// logical OR; a direct false value therefore means "not set here", not an explicit inheritance reset.

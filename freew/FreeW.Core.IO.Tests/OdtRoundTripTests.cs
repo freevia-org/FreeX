@@ -1,6 +1,7 @@
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace FreeW.Core.IO.Tests;
 
@@ -71,6 +72,34 @@ public class OdtRoundTripTests
         var run = reloaded.Blocks.OfType<Paragraph>().SelectMany(x => x.Runs).Single(r => r.Text == "strong");
         run.Formatting.Bold.Should().BeTrue();
         run.Formatting.Italic.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesDoubleStrikethroughDistinctFromOrdinaryStrikethrough()
+    {
+        XNamespace style = "urn:oasis:names:tc:opendocument:xmlns:style:1.0";
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("double", new RunFormatting { DoubleStrikethrough = true }));
+        paragraph.Runs.Add(new Run("single", new RunFormatting { Strikethrough = true }));
+        document.Blocks.Add(paragraph);
+
+        var bytes = Save(document);
+        using (var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read))
+        using (var stream = archive.GetEntry("content.xml")!.Open())
+        {
+            var content = XDocument.Load(stream);
+            var doubleProperties = content.Descendants(style + "text-properties")
+                .Single(properties => (string?)properties.Attribute(style + "text-line-through-type") == "double");
+            doubleProperties.Attribute(style + "text-line-through-style")!.Value.Should().Be("solid");
+        }
+
+        var reloadedRuns = Load(bytes).Blocks.OfType<Paragraph>().Single().Runs;
+        reloadedRuns[0].Formatting.DoubleStrikethrough.Should().BeTrue();
+        reloadedRuns[0].Formatting.Strikethrough.Should().BeFalse();
+        reloadedRuns[1].Formatting.Strikethrough.Should().BeTrue();
+        reloadedRuns[1].Formatting.DoubleStrikethrough.Should().BeFalse();
     }
 
     [Fact]
