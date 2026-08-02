@@ -2135,6 +2135,15 @@ public static class PptxPackageReader
         try
         {
             smart.Data = ReadSmartArtData(smart);
+            if (smart.Data is { } data
+                && IsGroupedListLayout(data.LayoutUniqueId)
+                && CanUseSimpleGroupedListCache(smart, data))
+            {
+                // Grouped List has a bounded live layout implementation.  Imported
+                // caches may still contain backgrounds/connectors that it cannot model,
+                // so admit only the exact node-only cache shape proven by this guard.
+                data.IsLiveLayoutSupported = true;
+            }
             TryAttachPictureNodePictures(smart, archive);
         }
         catch
@@ -2779,6 +2788,35 @@ public static class PptxPackageReader
             foreach (var child in node.Children)
                 Collect(child);
         }
+    }
+
+    private static bool IsGroupedListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "groupedlist";
+    }
+
+    private static bool CanUseSimpleGroupedListCache(SmartArtShape smart, SmartArtData data)
+    {
+        var nodes = FlattenSmartArtNodes(data);
+        if (nodes.Count == 0 || smart.FallbackShapes.Count != nodes.Count)
+            return false;
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            var cached = smart.FallbackShapes[i];
+            if (cached.Kind != SlideShapeKind.AutoShape
+                || string.IsNullOrEmpty(cached.PlainText)
+                || !string.Equals(cached.PlainText, nodes[i].Text, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static List<(string? ModelId, ImagePart Picture)> ReadSmartArtDrawingPictures(SmartArtShape smart, ZipArchive archive)
