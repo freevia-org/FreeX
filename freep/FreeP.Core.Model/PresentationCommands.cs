@@ -400,6 +400,60 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     private sealed record CustomShowSnapshot(uint Id, string Name, IReadOnlyList<string> SlideIds);
 }
 
+/// <summary>Replaces the complete named custom-show collection as one undoable edit.</summary>
+public sealed class ReplaceCustomShowsCommand : IPresentationCommand
+{
+    private readonly IReadOnlyList<PresentationCustomShow> _before;
+    private readonly IReadOnlyList<PresentationCustomShow> _after;
+
+    public ReplaceCustomShowsCommand(
+        IEnumerable<PresentationCustomShow> before,
+        IEnumerable<PresentationCustomShow> after)
+    {
+        _before = CloneShows(before);
+        _after = CloneShows(after);
+    }
+
+    public string Label => "Edit Custom Show";
+
+    public bool HasEffect(Presentation presentation) =>
+        !ShowsEqual(presentation.CustomShows, _after);
+
+    public void Apply(Presentation presentation) => Replace(presentation, _after);
+
+    public void Revert(Presentation presentation) => Replace(presentation, _before);
+
+    private static void Replace(
+        Presentation presentation,
+        IReadOnlyList<PresentationCustomShow> shows)
+    {
+        presentation.CustomShows.Clear();
+        presentation.CustomShows.AddRange(CloneShows(shows));
+    }
+
+    private static List<PresentationCustomShow> CloneShows(
+        IEnumerable<PresentationCustomShow> shows) =>
+        shows.Select(show =>
+        {
+            var clone = new PresentationCustomShow { Id = show.Id, Name = show.Name };
+            clone.SlideIds.AddRange(show.SlideIds);
+            return clone;
+        }).ToList();
+
+    private static bool ShowsEqual(
+        IReadOnlyList<PresentationCustomShow> left,
+        IReadOnlyList<PresentationCustomShow> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        return left.Zip(right).All(pair =>
+            pair.First.Id == pair.Second.Id
+            && pair.First.Name == pair.Second.Name
+            && pair.First.SlideIds.SequenceEqual(pair.Second.SlideIds));
+    }
+}
+
 /// <summary>
 /// Deep-clones the slide at <paramref name="sourceIndex"/> and inserts it immediately after.
 /// Undo removes the duplicate.

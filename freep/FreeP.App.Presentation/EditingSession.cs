@@ -2173,6 +2173,37 @@ public sealed class EditingSession
         return result;
     }
 
+    /// <summary>
+    /// Runs a custom-show authoring mutation against a staged snapshot and commits the resulting
+    /// collection through the shared undo bus. The planner remains responsible for validation and
+    /// normalization; the command bus owns the reversible presentation state transition.
+    /// </summary>
+    public T ApplyCustomShowMutation<T>(Func<Presentation, T> mutation)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+
+        var before = CloneCustomShows(Presentation.CustomShows);
+        T result;
+        try
+        {
+            result = mutation(Presentation);
+        }
+        catch
+        {
+            RestoreCustomShows(Presentation, before);
+            throw;
+        }
+
+        var after = CloneCustomShows(Presentation.CustomShows);
+        RestoreCustomShows(Presentation, before);
+        if (!CustomShowsEqual(before, after))
+        {
+            Bus.Execute(new ReplaceCustomShowsCommand(before, after));
+        }
+
+        return result;
+    }
+
     private static List<MediaCaptionTrackInfo> CloneCaptionTracks(
         IEnumerable<MediaCaptionTrackInfo> tracks) =>
         tracks.Select(track => new MediaCaptionTrackInfo
@@ -2185,6 +2216,37 @@ public sealed class EditingSession
             Label = track.Label,
             IsExternal = track.IsExternal
         }).ToList();
+
+    private static List<PresentationCustomShow> CloneCustomShows(
+        IEnumerable<PresentationCustomShow> shows) =>
+        shows.Select(show =>
+        {
+            var clone = new PresentationCustomShow { Id = show.Id, Name = show.Name };
+            clone.SlideIds.AddRange(show.SlideIds);
+            return clone;
+        }).ToList();
+
+    private static void RestoreCustomShows(
+        Presentation presentation,
+        IReadOnlyList<PresentationCustomShow> shows)
+    {
+        presentation.CustomShows.Clear();
+        foreach (var show in CloneCustomShows(shows))
+            presentation.CustomShows.Add(show);
+    }
+
+    private static bool CustomShowsEqual(
+        IReadOnlyList<PresentationCustomShow> left,
+        IReadOnlyList<PresentationCustomShow> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        return left.Zip(right).All(pair =>
+            pair.First.Id == pair.Second.Id
+            && pair.First.Name == pair.Second.Name
+            && pair.First.SlideIds.SequenceEqual(pair.Second.SlideIds));
+    }
 
     /// <summary>
     /// Creates and inserts an embedded OLE package from raw file bytes. The package payload
