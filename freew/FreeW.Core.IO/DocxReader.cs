@@ -174,7 +174,8 @@ public static class DocxReader
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
     /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
-    /// into <see cref="TextDocument.Protection"/>, the personal-information removal toggle into
+    /// into <see cref="TextDocument.Protection"/>, the page-boundary view toggle into
+    /// <see cref="TextDocument.DoNotDisplayPageBoundaries"/>, the personal-information removal toggle into
     /// <see cref="TextDocument.RemovePersonalInformation"/>, the revision-tracking toggles into
     /// <see cref="TextDocument.TrackRevisions"/>, <see cref="TextDocument.DoNotTrackMoves"/>, and
     /// <see cref="TextDocument.DoNotTrackFormatting"/>, the spelling-indicator toggle into
@@ -221,6 +222,10 @@ public static class DocxReader
 
         // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
         document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
+
+        // Hide print-layout page boundaries (w:doNotDisplayPageBoundaries): absent or explicitly off is
+        // Word's default. The setting is a document view preference rather than page geometry.
+        document.DoNotDisplayPageBoundaries = ReadToggle(root, "doNotDisplayPageBoundaries");
 
         // Preserve Word's w:removePersonalInformation package instruction. Metadata removal itself remains
         // the responsibility of the consuming application when it saves.

@@ -3596,6 +3596,13 @@ public sealed class TextDocument
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
 
     /// <summary>
+    /// Whether page boundaries should be hidden in print-layout views. Maps to
+    /// <c>w:settings/w:doNotDisplayPageBoundaries</c>. False is Word's default and is omitted from newly
+    /// authored packages; true preserves Word's document-level view preference.
+    /// </summary>
+    public bool DoNotDisplayPageBoundaries { get; set; }
+
+    /// <summary>
     /// Whether personal information should be removed from document metadata when saving.
     /// Maps to <c>w:settings/w:removePersonalInformation</c>. False is Word's default and is omitted from
     /// newly authored packages. The DOCX writer applies Word's author anonymization policy when enabled.
