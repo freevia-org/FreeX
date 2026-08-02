@@ -214,7 +214,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 case XElement e when e.Name == Text + "span":
                 {
                     var spanFmt = ctx.Styles.Resolve((string?)e.Attribute(Text + "style-name")).Run;
-                    var merged = MergeRun(inherited, spanFmt);
+                    var merged = MergeRunFormatting(inherited, spanFmt);
                     ReadInline(e, paragraph, ctx, merged);
                     break;
                 }
@@ -459,13 +459,14 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         return XDocument.Load(reader);
     }
 
-    private static RunFormatting MergeRun(RunFormatting baseFmt, RunFormatting overlay) => baseFmt with
+    internal static RunFormatting MergeRunFormatting(RunFormatting baseFmt, RunFormatting overlay) => baseFmt with
     {
         Bold = overlay.Bold || baseFmt.Bold,
         Italic = overlay.Italic || baseFmt.Italic,
         Underline = overlay.Underline || baseFmt.Underline,
         Strikethrough = overlay.Strikethrough || baseFmt.Strikethrough,
         Hidden = overlay.Hidden || baseFmt.Hidden,
+        WebHidden = overlay.WebHidden || baseFmt.WebHidden,
         FontFamily = overlay.FontFamily ?? baseFmt.FontFamily,
         FontSizePt = overlay.FontSizePt ?? baseFmt.FontSizePt,
         ColorHex = overlay.ColorHex ?? baseFmt.ColorHex,
@@ -1022,7 +1023,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             string? mapped = null;
             foreach (var entry in chain)
             {
-                run = MergeRunOverlay(run, entry.Run);
+                run = OdtFileAdapter.MergeRunFormatting(run, entry.Run);
                 para = MergeParaOverlay(para, entry.Paragraph);
                 if (MapStyleId(entry.DisplayName) is { } m)
                     mapped = m;
@@ -1098,20 +1099,6 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
                 fmt = fmt with { SpaceAfterPt = mb };
             return fmt;
         }
-
-        private static RunFormatting MergeRunOverlay(RunFormatting b, RunFormatting o) => b with
-        {
-            Bold = o.Bold || b.Bold,
-            Italic = o.Italic || b.Italic,
-            Underline = o.Underline || b.Underline,
-            Strikethrough = o.Strikethrough || b.Strikethrough,
-            Hidden = o.Hidden || b.Hidden,
-            FontFamily = o.FontFamily ?? b.FontFamily,
-            FontSizePt = o.FontSizePt ?? b.FontSizePt,
-            ColorHex = o.ColorHex ?? b.ColorHex,
-            HighlightColorHex = o.HighlightColorHex ?? b.HighlightColorHex,
-            VerticalAlign = o.VerticalAlign != VerticalAlign.Baseline ? o.VerticalAlign : b.VerticalAlign
-        };
 
         private static ParagraphFormatting MergeParaOverlay(ParagraphFormatting b, ParagraphFormatting o) => b with
         {

@@ -1623,6 +1623,50 @@ public sealed class DocumentViewRoundTripTests
         recovered[2].Formatting.Hidden.Should().BeFalse();
     }
 
+    [StaFact]
+    public void WebHiddenText_CollapsesOnlyInWebLayoutAndSurvivesRoundTrip()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Visible A"));
+        paragraph.Runs.Add(new Run("WEB_ONLY", RunFormatting.Default with
+        {
+            WebHidden = true,
+            FontSizePt = 16,
+            ColorHex = "#345678",
+        }));
+        paragraph.Runs.Add(new Run("Visible B"));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        System.Windows.Documents.Run RenderedWebRun() => view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .Single()
+            .Inlines
+            .OfType<System.Windows.Documents.Run>()
+            .Single(run => run.Text == "WEB_ONLY");
+
+        RenderedWebRun().FontSize.Should().BeGreaterThan(1);
+
+        view.SetViewMode(DocumentViewMode.WebLayout);
+        RenderedWebRun().FontSize.Should().Be(0.015);
+        RenderedWebRun().Foreground.Should().BeSameAs(System.Windows.Media.Brushes.Transparent);
+
+        view.SetViewMode(DocumentViewMode.Draft);
+        RenderedWebRun().FontSize.Should().BeGreaterThan(1);
+        RenderedWebRun().Foreground.Should().NotBeSameAs(System.Windows.Media.Brushes.Transparent);
+
+        view.CommitToModel();
+        var recovered = view.Model.Paragraphs.Single().Runs.Single(run => run.Text == "WEB_ONLY");
+        recovered.Formatting.WebHidden.Should().BeTrue();
+        recovered.Formatting.Hidden.Should().BeFalse();
+        recovered.Formatting.FontSizePt.Should().Be(16);
+        recovered.Formatting.ColorHex.Should().Be("#345678");
+    }
+
     private static System.Windows.Controls.Border SpacedCellSurface(System.Windows.Documents.TableCell cell) =>
         cell.Blocks.OfType<BlockUIContainer>().Single().Child
             .Should().BeOfType<System.Windows.Controls.Grid>().Subject.Children
