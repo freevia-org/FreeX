@@ -568,6 +568,8 @@ public static class FreePRibbon
             group.Large("freep.insert-link", FreePRibbonText.InsertLinkLabel, RibbonCommandIconKind.Link, FreePRibbonText.InsertLinkKeyTip);
             group.Medium(SlideZoomInsertionPlanner.CommandId, FreePRibbonText.InsertSlideZoomLabel,
                 RibbonCommandIconKind.Zoom, FreePRibbonText.InsertSlideZoomKeyTip);
+            group.Medium(SectionZoomInsertionPlanner.CommandId, FreePRibbonText.InsertSectionZoomLabel,
+                RibbonCommandIconKind.Zoom, FreePRibbonText.InsertSectionZoomKeyTip);
             group.Medium("freep.remove-link", FreePRibbonText.RemoveLinkLabel, RibbonCommandIconKind.Delete, FreePRibbonText.RemoveLinkKeyTip);
         });
         tab.Group("illustrations", FreePRibbonText.IllustrationsGroupLabel, FreePRibbonText.IllustrationsGroupKeyTip, 90, group =>
