@@ -449,6 +449,23 @@ public class DocumentCompareTests
     }
 
     [Fact]
+    public void Compare_RevisedDocumentDoNotTrackMoves_UsesOrdinaryRevisionPairsAndPreservesPolicy()
+    {
+        var original = DocWith("Alpha", "Bravo", "Charlie");
+        var revised = DocWith("Bravo", "Alpha", "Charlie");
+        revised.DoNotTrackMoves = true;
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.DoNotTrackMoves.Should().BeTrue();
+        result.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.MoveRevisionId != null);
+        result.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().Contain(run => run.Revision == RevisionKind.Deleted)
+            .And.Contain(run => run.Revision == RevisionKind.Inserted);
+    }
+
+    [Fact]
     public void Compare_DuplicateParagraphMove_FallsBackToOrdinaryRevisionPairs()
     {
         var original = DocWith("Repeat", "Repeat", "Tail");

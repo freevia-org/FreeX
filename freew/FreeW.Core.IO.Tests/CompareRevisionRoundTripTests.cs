@@ -239,6 +239,26 @@ public class CompareRevisionRoundTripTests
     }
 
     [Fact]
+    public void Compare_DoNotTrackMoves_EmitsOrdinaryRevisionsAndPreservesSetting()
+    {
+        var original = DocWith("Alpha", "Bravo", "Charlie");
+        var revised = DocWith("Bravo", "Alpha", "Charlie");
+        revised.DoNotTrackMoves = true;
+
+        var compared = DocumentCompare.Compare(original, revised, Author, DateXml);
+        var documentXml = DocumentXDoc(compared);
+        var reloaded = RoundTrip(compared);
+
+        documentXml.Descendants(W + "moveFrom").Should().BeEmpty();
+        documentXml.Descendants(W + "moveTo").Should().BeEmpty();
+        documentXml.Descendants(W + "del").Should().NotBeEmpty();
+        documentXml.Descendants(W + "ins").Should().NotBeEmpty();
+        reloaded.DoNotTrackMoves.Should().BeTrue();
+        reloaded.Paragraphs.SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.MoveRevisionId != null);
+    }
+
+    [Fact]
     public void Compare_RoundTripped_CanBeRejected_ToYieldOriginalText()
     {
         var original = DocWith("one two three");
