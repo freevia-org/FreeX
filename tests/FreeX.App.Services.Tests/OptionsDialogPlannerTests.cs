@@ -5,9 +5,21 @@ namespace FreeX.App.Services.Tests;
 public sealed class OptionsDialogPlannerTests
 {
     [Fact]
+    public void ParityFixtureUsesProductionViewDefaultsWithoutPersistingState()
+    {
+        var options = OptionsDialogParityFixture.Create();
+
+        options.ShowFormulaBar.Should().BeTrue();
+        options.FormulaBarExpanded.Should().BeFalse();
+        options.ShowGridlines.Should().BeTrue();
+        options.ShowHeadings.Should().BeTrue();
+    }
+
+    [Fact]
     public void AdvancedLayout_UsesSharedWpfCaptureMetrics()
     {
         OptionsDialogPlanner.CategoryColumnWidth.Should().Be(220);
+        OptionsDialogPlanner.CategoryItemHeight.Should().Be(37.36);
         OptionsDialogPlanner.ContentPaddingHorizontal.Should().Be(28);
         OptionsDialogPlanner.ContentPaddingVertical.Should().Be(20);
         OptionsDialogPlanner.FooterHeight.Should().Be(46);

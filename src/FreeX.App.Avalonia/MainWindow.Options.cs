@@ -52,8 +52,11 @@ public sealed partial class MainWindow
         const double optionsFormulasDialogWidth = OptionsDialogPlanner.CaptureWidth;
         const double optionsFormulasDialogHeight = OptionsDialogPlanner.FormulasCaptureHeight;
 
-        // Edit a snapshot loaded from the shared store so unmanaged fields round-trip untouched.
-        var current = AppOptionsStore.Load();
+        // Edit a snapshot loaded from the shared store during normal use. The capture route swaps
+        // in a deterministic shared fixture so paired screenshots do not inherit user-local state.
+        var current = App.ParityCaptureOptions is null
+            ? AppOptionsStore.Load()
+            : OptionsDialogParityFixture.Create();
         var quickAccessCommandIds = QuickAccessToolbarCatalog.NormalizeCommandIds(current.QuickAccessToolbarCommands).ToList();
         var customDictionaryWords = AppOptions.NormalizeSpellCheckCustomDictionaryWords(current.SpellCheckCustomDictionaryWords);
         var warningText = new TextBlock
@@ -410,9 +413,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(showHeadingsBox, "OptionsShowHeadingsCheckBox");
 
         var viewPanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_WorkbookViewOptions")),
+            OptionsSectionHeader(OptionsText("Options_WorkbookViewOptions"), topMargin: 0, bottomMargin: 12),
             showFormulaBarBox,
             OptionsCheckBox(OptionsText("Options_ExpandFormulaBar"), isEnabled: showFormulaBarBox.IsChecked == true));
+        viewPanel.Spacing = 0;
 
         // ── Save ────────────────────────────────────────────────────────────────
         var defaultFormatBox = new ComboBox
@@ -984,6 +988,11 @@ public sealed partial class MainWindow
         for (var i = 0; i < categoryNames.Length; i++)
         {
             var index = i;
+            // Avalonia rounds each row independently. Match WPF's 37.36 px logical row at
+            // 96 DPI by carrying the first five rows at 38 px and the remaining rows at 37 px.
+            var categoryItemHeight = index < 5
+                ? Math.Ceiling(OptionsDialogPlanner.CategoryItemHeight)
+                : Math.Floor(OptionsDialogPlanner.CategoryItemHeight);
             var row = new Border
             {
                 Padding = new Thickness(
@@ -992,6 +1001,10 @@ public sealed partial class MainWindow
                 BorderThickness = new Thickness(1),
                 BorderBrush = Brushes.Transparent,
                 Background = Brushes.Transparent,
+                Margin = new Thickness(1, 0, 1, 0),
+                Height = categoryItemHeight,
+                MinHeight = categoryItemHeight,
+                MaxHeight = categoryItemHeight,
                 Child = new TextBlock
                 {
                     Text = categoryNames[i],
@@ -1226,8 +1239,6 @@ public sealed partial class MainWindow
             MaxHeight = OptionsDialogPlanner.FooterHeight,
             Child = footerActions,
         };
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
-
         var body = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions($"{OptionsDialogPlanner.CategoryColumnWidth},*"),
@@ -1257,11 +1268,14 @@ public sealed partial class MainWindow
         body.Children.Add(categoryFrame);
         body.Children.Add(scrollHost);
 
-        dialog.Content = new DockPanel
+        dialog.Content = new Grid
         {
             Background = Brushes.White,
-            Children = { buttonRow, body },
+            RowDefinitions = new RowDefinitions("*,Auto"),
+            Children = { body, buttonRow },
         };
+        Grid.SetRow(body, 0);
+        Grid.SetRow(buttonRow, 1);
 
         await dialog.ShowDialog(this);
     }

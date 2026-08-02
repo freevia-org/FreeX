@@ -35,6 +35,22 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     }
 
     [Fact]
+    public void ViewOptions_UsesWpfHeaderRhythmAndCaptureFixture()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
+        var fixture = File.ReadAllText(RepoFile("src", "FreeX.App.Services", "OptionsDialogParityFixture.cs"));
+
+        source.Should().Contain("OptionsDialogParityFixture.Create()");
+        source.Should().Contain("OptionsSectionHeader(OptionsText(\"Options_WorkbookViewOptions\"), topMargin: 0, bottomMargin: 12)");
+        source.Should().Contain("viewPanel.Spacing = 0;");
+        source.Should().Contain("RowDefinitions = new RowDefinitions(\"*,Auto\")");
+        wpf.Should().Contain("OptionsDialogParityFixture.Create()");
+        fixture.Should().Contain("ShowFormulaBar = true");
+        fixture.Should().Contain("FormulaBarExpanded = false");
+    }
+
+    [Fact]
     public void AdvancedOptions_PreservesInteractiveStatesAndObjectsSelection()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));

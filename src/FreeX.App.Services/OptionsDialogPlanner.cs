@@ -41,6 +41,7 @@ public static class OptionsDialogPlanner
     public const double CategoryTopMargin = 8;
     public const double CategoryItemHorizontalPadding = 16;
     public const double CategoryItemVerticalPadding = 9;
+    public const double CategoryItemHeight = 37.36;
     public const double ContentPaddingHorizontal = 28;
     public const double ContentPaddingVertical = 20;
     public const double FooterPaddingHorizontal = 16;

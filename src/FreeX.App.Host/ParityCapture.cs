@@ -619,7 +619,7 @@ internal static class ParityCapture
                 string.Equals(targetSurfaceId, "dialog.Options.TrustCenter", StringComparison.Ordinal))
             {
                 CaptureDialogTabs(results, "dialog.Options", outDir,
-                    () => new OptionsDialog(FreeXOptions.Load()),
+                    () => new OptionsDialog(FreeXOptions.FromAppOptions(OptionsDialogParityFixture.Create())),
                     ["General", "Formulas", "Proofing", "Save", "Language", "EaseOfAccess",
                         "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View"],
                     captureSizeResolver: surfaceId =>
@@ -850,7 +850,7 @@ internal static class ParityCapture
             () => new HeaderFooterDialog(sheet));
 
         CaptureDialogTabs(results, "dialog.Options", outDir,
-            () => new OptionsDialog(FreeXOptions.Load()),
+            () => new OptionsDialog(FreeXOptions.FromAppOptions(OptionsDialogParityFixture.Create())),
             [
                 "General", "Formulas", "Proofing", "Save", "Language", "EaseOfAccess",
                 "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View",
