@@ -335,6 +335,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(");
+        artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildCandyCornFrame(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildVineFrame(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildPapyrusFrame(");
         artSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");
@@ -344,6 +345,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(");
         renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(");
         renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(");
+        renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildCandyCornFrame(");
         renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildVineFrame(");
         renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildPapyrusFrame(");
         renderSource.Should().Contain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");

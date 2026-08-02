@@ -73,6 +73,7 @@ public static class PageBorderArtVisualPlanner
     public const int ApplesArtId = 1;
     public const int MapleMuffinsArtId = 2;
     public const int CakeSliceArtId = 3;
+    public const int CandyCornArtId = 4;
     public const int BirdsFlightArtId = 35;
     public const int PaintedEggsArtId = 66;
     public const int ShadowedSquaresArtId = 57;
@@ -217,6 +218,56 @@ public static class PageBorderArtVisualPlanner
         var polygons = new List<PageBorderArtPolygon>();
         foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
             AddPaintedEgg(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
+        plan = new PageBorderArtFilledShapePlan([], polygons);
+        return true;
+    }
+
+    public static bool TryBuildCandyCornFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != CandyCornArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var frameWidth = Math.Max(0, frameWidthDip);
+        var frameHeight = Math.Max(0, frameHeightDip);
+        var inset = Math.Max(0, edgeInsetDip);
+        var scale = ResolveMotifSize(modelWidthPt) / 32.0;
+        var candySize = 14 * scale;
+        var tileSize = 32 * scale;
+        var polygons = new List<PageBorderArtPolygon>();
+
+        for (var x = inset + 16 * scale; x <= frameWidth - inset - tileSize; x += tileSize)
+        {
+            AddCandyCorn(polygons, x + scale, inset + scale, candySize, 0);
+            AddCandyCorn(polygons, x + 17 * scale, inset + scale, candySize, 2);
+            AddCandyCorn(polygons, x + 9 * scale, inset + 17 * scale, candySize, 1);
+
+            var bottom = frameHeight - inset - tileSize;
+            AddCandyCorn(polygons, x + scale, bottom + 17 * scale, candySize, 2);
+            AddCandyCorn(polygons, x + 17 * scale, bottom + 17 * scale, candySize, 0);
+            AddCandyCorn(polygons, x + 9 * scale, bottom + scale, candySize, 3);
+        }
+
+        for (var y = inset + 16 * scale; y <= frameHeight - inset - tileSize; y += tileSize)
+        {
+            AddCandyCorn(polygons, inset + scale, y + 17 * scale, candySize, 3);
+            AddCandyCorn(polygons, inset + scale, y + scale, candySize, 1);
+            AddCandyCorn(polygons, inset + 17 * scale, y + 9 * scale, candySize, 0);
+
+            var right = frameWidth - inset - tileSize;
+            AddCandyCorn(polygons, right + 17 * scale, y + scale, candySize, 1);
+            AddCandyCorn(polygons, right + 17 * scale, y + 17 * scale, candySize, 3);
+            AddCandyCorn(polygons, right + scale, y + 9 * scale, candySize, 2);
+        }
+
         plan = new PageBorderArtFilledShapePlan([], polygons);
         return true;
     }
@@ -883,6 +934,35 @@ public static class PageBorderArtVisualPlanner
         Add(0, 0, 0, (14, 12), (18, 10), (21, 13), (18, 17), (14, 16));
         Add(0, 0, 0, (21, 17), (25, 16), (26, 21), (23, 24), (20, 22));
         Add(0, 0, 0, (3, 18), (8, 18), (12, 22), (10, 26), (6, 24));
+    }
+
+    private static void AddCandyCorn(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size,
+        int quarterTurns)
+    {
+        var scale = size / 16.0;
+        PageBorderArtPoint Point(double px, double py)
+        {
+            var rotated = Rotate((px - 8) * scale, (py - 8) * scale, quarterTurns);
+            return new PageBorderArtPoint(x + 8 * scale + rotated.X, y + 8 * scale + rotated.Y);
+        }
+
+        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
+            polygons.Add(new PageBorderArtPolygon(
+                points.Select(point => Point(point.X, point.Y)).ToList(), red, green, blue));
+
+        Add(0, 0, 0,
+            (8, 0), (11, 2), (14, 6), (16, 11), (14, 14), (11, 16),
+            (5, 16), (2, 14), (0, 11), (2, 6), (5, 2));
+        Add(0xF5, 0xC6, 0x0A,
+            (2, 10), (14, 10), (14, 13), (11, 15), (5, 15), (2, 13));
+        Add(0xFE, 0x45, 0x01,
+            (3, 4), (13, 4), (15, 10), (1, 10));
+        Add(0xFF, 0xFF, 0xFF,
+            (8, 1), (11, 3), (13, 5), (3, 5), (5, 3));
     }
 
     private static void AddVineCorner(
