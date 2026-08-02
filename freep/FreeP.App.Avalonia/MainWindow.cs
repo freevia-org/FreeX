@@ -4808,7 +4808,7 @@ public sealed partial class MainWindow : Window
             new PresentationPrintRequest(
                 PresentationPrintLayoutKind.Handouts,
                 HandoutSlidesPerPage: slidesPerPage),
-            _presentation.Slides.Count,
+            _presentation,
             _presentation.SlideSizeCxEmu,
             _presentation.SlideSizeCyEmu);
         _statusText.Text = "Print handout layout planned";

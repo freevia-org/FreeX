@@ -427,6 +427,35 @@ public sealed class PresentationExportPlannerTests
     }
 
     [Fact]
+    public void PresentationAwareHandoutLayout_ExcludesHiddenSlidesUnlessRequested()
+    {
+        var presentation = BuildHandoutDeck(5);
+        presentation.Slides[1].IsHidden = true;
+        presentation.Slides[3].IsHidden = true;
+
+        var hiddenExcluded = PresentationExportPlanner.BuildHandoutLayoutPlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                HandoutSlidesPerPage: 3),
+            presentation);
+
+        hiddenExcluded.Pages.SelectMany(page => page.Slots)
+            .Select(slot => slot.SlideNumber)
+            .Should().Equal(1, 3, 5);
+
+        var withHidden = PresentationExportPlanner.BuildHandoutLayoutPlan(
+            new PresentationPrintRequest(
+                PresentationPrintLayoutKind.Handouts,
+                HandoutSlidesPerPage: 3,
+                PrintHiddenSlides: true),
+            presentation);
+
+        withHidden.Pages.SelectMany(page => page.Slots)
+            .Select(slot => slot.SlideNumber)
+            .Should().Equal(1, 2, 3, 4, 5);
+    }
+
+    [Fact]
     public void PrintOutputPackagePlan_SelectsSharedRoutesAndBuildsNativeHandoffPlan()
     {
         var fullPage = PresentationPrintOutputPackageExecutor.BuildPackagePlan(
