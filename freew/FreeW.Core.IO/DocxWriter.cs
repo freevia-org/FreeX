@@ -2876,6 +2876,8 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "temporary"));
         if (metadata.Id is { Length: > 0 } id)
             sdtPr.Add(new XElement(W + "id", new XAttribute(W + "val", id)));
+        if (metadata.TabIndex is not null)
+            sdtPr.Add(new XElement(W + "tabIndex", new XAttribute(W + "val", metadata.TabIndex)));
         if (metadata.Color is { Length: > 0 } color)
             sdtPr.Add(new XElement(W15 + "color", new XAttribute(W + "val", color)));
         if (metadata.Appearance is { Length: > 0 } appearance)
