@@ -652,7 +652,9 @@ public sealed class SlideShowWindow : Window
                     _controller,
                     _presentation.Slides,
                     targetSlideIndex,
-                    pointerIntent.ReturnToParent));
+                    pointerIntent.ReturnToParent,
+                    pointerIntent.TransitionDurationMs,
+                    pointerIntent.ShowBackground));
                 break;
             case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
                 ActivateHyperlink(pointerIntent.Hyperlink);
