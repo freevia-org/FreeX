@@ -24,17 +24,42 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
         SplitPanePointerPlanner.CalculateDividerDragTarget(
                 viewport,
                 SplitPanePointerHandle.Horizontal,
-                new GridPoint(250, 112),
+                new GridPoint(250, 132),
                 44,
                 20)
             .Should().Be(new SplitPanePointerDividerDragTarget(6, null));
         SplitPanePointerPlanner.CalculateDividerDragTarget(
                 viewport,
                 SplitPanePointerHandle.Vertical,
-                new GridPoint(236, 200),
+                new GridPoint(268, 200),
                 44,
                 20)
-            .Should().Be(new SplitPanePointerDividerDragTarget(null, 5));
+            .Should().Be(new SplitPanePointerDividerDragTarget(null, 4));
+    }
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(20, 10)]
+    public void DividerDragTargetsStayRelativeToSplitAnchorAcrossMainViewportOrigins(
+        int mainRowOrigin,
+        int mainColumnOrigin)
+    {
+        var viewport = BuildProductionSplitViewport((uint)mainRowOrigin, (uint)mainColumnOrigin);
+
+        SplitPanePointerPlanner.CalculateDividerDragTarget(
+                viewport,
+                SplitPanePointerHandle.Intersection,
+                new GridPoint(204, 110),
+                44,
+                20)
+            .Should().Be(new SplitPanePointerDividerDragTarget(5, 3));
+        SplitPanePointerPlanner.CalculateDividerDragTarget(
+                viewport,
+                SplitPanePointerHandle.Intersection,
+                new GridPoint(268, 130),
+                44,
+                20)
+            .Should().Be(new SplitPanePointerDividerDragTarget(6, 4));
     }
 
     [Fact]
@@ -140,6 +165,30 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
                 [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)],
                 TopRightColumns: [new ColMetric(3, 64, 0), new ColMetric(4, 64, 64)],
                 BottomLeftRows: [new RowMetric(5, 20, 0), new RowMetric(6, 20, 20)]));
+
+    private static ViewportModel BuildProductionSplitViewport(uint mainRowOrigin, uint mainColumnOrigin) =>
+        new(
+            [],
+            [
+                new RowMetric(mainRowOrigin, 20, 0),
+                new RowMetric(mainRowOrigin + 1, 20, 20),
+                new RowMetric(mainRowOrigin + 2, 20, 40)
+            ],
+            [
+                new ColMetric(mainColumnOrigin, 64, 0),
+                new ColMetric(mainColumnOrigin + 1, 64, 64),
+                new ColMetric(mainColumnOrigin + 2, 64, 128)
+            ],
+            SplitPanes: new SplitPaneState(
+                5,
+                3,
+                [
+                    new RowMetric(1, 20, 0),
+                    new RowMetric(2, 20, 20),
+                    new RowMetric(3, 20, 40),
+                    new RowMetric(4, 20, 60)
+                ],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 64, 64)]));
 
     private static string FindRepositoryFile(params string[] parts)
     {

@@ -86,10 +86,10 @@ public static class SplitPanePointerPlanner
 
         var scale = metricScale > 0 ? metricScale : 1;
         uint? row = handle is SplitPanePointerHandle.Horizontal or SplitPanePointerHandle.Intersection
-            ? FindSplitRow(splitPanes.TopRows ?? [], viewport.RowMetrics, position.Y, columnHeaderHeight, scale)
+            ? FindSplitRow(splitPanes.Row, splitPanes.TopRows ?? [], viewport.RowMetrics, position.Y, columnHeaderHeight, scale)
             : null;
         uint? column = handle is SplitPanePointerHandle.Vertical or SplitPanePointerHandle.Intersection
-            ? FindSplitColumn(splitPanes.LeftColumns ?? [], viewport.ColMetrics, position.X, rowHeaderWidth, scale)
+            ? FindSplitColumn(splitPanes.Column, splitPanes.LeftColumns ?? [], viewport.ColMetrics, position.X, rowHeaderWidth, scale)
             : null;
 
         return new SplitPanePointerDividerDragTarget(row, column);
@@ -344,6 +344,7 @@ public static class SplitPanePointerPlanner
     }
 
     private static uint? FindSplitRow(
+        uint? splitRow,
         IReadOnlyList<RowMetric> topRows,
         IReadOnlyList<RowMetric> mainRows,
         double y,
@@ -362,18 +363,27 @@ public static class SplitPanePointerPlanner
                     return IncrementWithinLimit(row.Row, CellAddress.MaxRow);
             }
         }
+        if (splitRow is not { } splitAnchor || mainRows.Count == 0)
+            return null;
+
+        var metricOrigin = mainRows[0].Row;
         foreach (var row in mainRows)
         {
             var top = headerHeight + topHeight + row.TopOffset * scale;
             if (y < top)
                 break;
             if (y <= top + row.Height * scale)
-                return row.Row;
+                return TranslateMetricIndexFromSplitAnchor(
+                    splitAnchor,
+                    metricOrigin,
+                    row.Row,
+                    CellAddress.MaxRow);
         }
         return null;
     }
 
     private static uint? FindSplitColumn(
+        uint? splitColumn,
         IReadOnlyList<ColMetric> leftColumns,
         IReadOnlyList<ColMetric> mainColumns,
         double x,
@@ -392,15 +402,35 @@ public static class SplitPanePointerPlanner
                     return IncrementWithinLimit(column.Col, CellAddress.MaxCol);
             }
         }
+        if (splitColumn is not { } splitAnchor || mainColumns.Count == 0)
+            return null;
+
+        var metricOrigin = mainColumns[0].Col;
         foreach (var column in mainColumns)
         {
             var left = headerWidth + leftWidth + column.LeftOffset * scale;
             if (x < left)
                 break;
             if (x <= left + column.Width * scale)
-                return column.Col;
+                return TranslateMetricIndexFromSplitAnchor(
+                    splitAnchor,
+                    metricOrigin,
+                    column.Col,
+                    CellAddress.MaxCol);
         }
         return null;
+    }
+
+    private static uint TranslateMetricIndexFromSplitAnchor(
+        uint splitAnchor,
+        uint metricOrigin,
+        uint metricIndex,
+        uint limit)
+    {
+        // Main metrics follow the shared scrollbar origin; only their relative distance belongs
+        // below/right of the divider, whose worksheet anchor remains the current split row/column.
+        var relativeOffset = metricIndex >= metricOrigin ? metricIndex - metricOrigin : 0;
+        return (uint)Math.Min((ulong)limit, (ulong)splitAnchor + relativeOffset);
     }
 
     private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row) =>
