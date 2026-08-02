@@ -1544,7 +1544,7 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderPieChart(DrawingContext dc, ChartScenePlan scene)
     {
-        foreach (var primitive in scene.PieSlices)
+        foreach (var primitive in scene.PieSlices.Concat(scene.OfPieSecondarySlices))
         {
             var fill = primitive.Fill!.Value;
             if (primitive.DepthFill is { } depthFill)
@@ -1580,6 +1580,9 @@ public sealed class SlideCanvas : FrameworkElement
 
             dc.DrawGeometry(brush, borderPen, geo);
         }
+
+        if (scene.OfPieSecondaryType == OfPieType.Bar)
+            RenderColumnChart(dc, scene);
     }
 
     private static StreamGeometry ToPieSliceGeometry(ChartPieSlicePrimitive primitive, double offsetY = 0)
