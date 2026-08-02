@@ -174,7 +174,8 @@ public static class DocxReader
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
     /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
-    /// into <see cref="TextDocument.Protection"/>, the revision-tracking toggles into
+    /// into <see cref="TextDocument.Protection"/>, the personal-information removal toggle into
+    /// <see cref="TextDocument.RemovePersonalInformation"/>, the revision-tracking toggles into
     /// <see cref="TextDocument.TrackRevisions"/>, <see cref="TextDocument.DoNotTrackMoves"/>, and
     /// <see cref="TextDocument.DoNotTrackFormatting"/>,
     /// and the w:autoHyphenation toggle into
@@ -216,6 +217,10 @@ public static class DocxReader
 
         // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
         document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
+
+        // Preserve Word's w:removePersonalInformation package instruction. Metadata removal itself remains
+        // the responsibility of the consuming application when it saves.
+        document.RemovePersonalInformation = ReadToggle(root, "removePersonalInformation");
 
         // Update fields on open (w:updateFields): absent/explicitly-off is Word's default; an empty element
         // or any valid on token asks the consuming application to recalculate fields when opening the file.
