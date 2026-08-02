@@ -154,7 +154,12 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
         var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
 
-        session.InsertSlideZoom("slide-2");
+        var inserted = session.InsertSlideZoom("slide-2");
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation,
+            inserted,
+            targetSlideIndex: 1,
+            _ => MinPng).Should().BeTrue();
 
         var roundTripped = PptxPackageReader.Read(WritePptxToMemory(presentation));
         var zoom = roundTripped.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
@@ -165,6 +170,11 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.RawXml.Should().Contain("sldId=\"257\"");
         zoom.PreservedObject.RawXml.Should().Contain("zmPr");
         zoom.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+        zoom.PreservedObject.RawXml.Should().Contain("blipFill");
+        zoom.PreservedObject.Parts.Keys.Should().ContainSingle(key =>
+            key.StartsWith("ppt/media/freep-zoom-preview-", StringComparison.OrdinalIgnoreCase));
+        zoom.PreservedObject.ZoomProperties.Should()
+            .Be(new ZoomObjectProperties(true, "preview", null, true));
         zoom.PreservedObject.RawXml.Should().Contain("blipFill");
         zoom.PreservedObject.RawXml.Should().Contain("spPr");
     }
@@ -182,7 +192,12 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         presentation.Sections.Add(section);
         var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
 
-        session.InsertSectionZoom(section.Id);
+        var inserted = session.InsertSectionZoom(section.Id);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation,
+            inserted,
+            targetSlideIndex: 1,
+            _ => MinPng).Should().BeTrue();
 
         var roundTripped = PptxPackageReader.Read(WritePptxToMemory(presentation));
         var zoom = roundTripped.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
@@ -193,6 +208,11 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.RawXml.Should().Contain("sectionId=\"{SECTION-TARGET}\"");
         zoom.PreservedObject.RawXml.Should().Contain("zmPr");
         zoom.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+        zoom.PreservedObject.RawXml.Should().Contain("blipFill");
+        zoom.PreservedObject.Parts.Keys.Should().ContainSingle(key =>
+            key.StartsWith("ppt/media/freep-zoom-preview-", StringComparison.OrdinalIgnoreCase));
+        zoom.PreservedObject.ZoomProperties.Should()
+            .Be(new ZoomObjectProperties(true, "preview", null, true));
         zoom.PreservedObject.RawXml.Should().Contain("blipFill");
         zoom.PreservedObject.RawXml.Should().Contain("spPr");
         roundTripped.Sections.Should().ContainSingle(item => item.Id == section.Id);
@@ -235,6 +255,8 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.RawXml.Should().Contain("summaryZmObj");
         zoom.PreservedObject.Parts.Should().HaveCount(3);
         zoom.PreservedObject.RawXml.Should().Contain("embed=");
+        zoom.PreservedObject.ZoomProperties.Should()
+            .Be(new ZoomObjectProperties(true, "preview", null, true));
         zoom.PreservedObject.WasAlternateContent.Should().BeTrue();
         zoom.PreservedObject.McRequiresToken.Should().Be("p14");
         zoom.PreservedObject.AlternateContentFallbackXml.Should().Contain("<p:sp");

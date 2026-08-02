@@ -94,6 +94,7 @@ public static class SectionZoomInsertionPlanner
             {
                 ObjectKind = PreservedObjectKind.Zoom,
                 ZoomTargetSectionId = plan.TargetSectionId,
+                ZoomProperties = new ZoomObjectProperties(true, "preview", null, true),
                 RawXml = BuildRawXml(shapeId, plan.TargetSectionId),
             },
         };

@@ -487,6 +487,7 @@ public sealed partial class MainWindow : Window
             onInsertSlideZoom:  () => OpenSlideZoomDialog(),
             onInsertSectionZoom: () => OpenSectionZoomDialog(),
             onInsertSummaryZoom: () => OpenSummaryZoomDialog(),
+            onFormatZoom:       () => OpenZoomObjectPropertiesDialog(),
             // Wave 12B: Find & Replace dialogs.
             onFind:             () => OpenFindDialog(),
             onFindReplace:      () => OpenFindReplaceDialog(),
@@ -4787,7 +4788,12 @@ public sealed partial class MainWindow : Window
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId)
-            Editor.InsertSlideZoom(targetSlideId);
+        {
+            var shape = Editor.InsertSlideZoom(targetSlideId);
+            var targetSlideIndex = Editor.Presentation.Slides.FindIndex(slide =>
+                string.Equals(slide.Id, targetSlideId, StringComparison.OrdinalIgnoreCase));
+            AttachZoomPreview(shape, targetSlideIndex);
+        }
     }
 
     internal void OpenSectionZoomDialog()
@@ -4802,7 +4808,12 @@ public sealed partial class MainWindow : Window
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId)
-            Editor.InsertSectionZoom(targetSectionId);
+        {
+            var shape = Editor.InsertSectionZoom(targetSectionId);
+            if (SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
+                    Editor.Presentation, targetSectionId, out var targetSlideIndex))
+                AttachZoomPreview(shape, targetSlideIndex);
+        }
     }
 
     internal void OpenSummaryZoomDialog()
@@ -4823,6 +4834,19 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    internal void OpenZoomObjectPropertiesDialog()
+    {
+        var current = Editor.SelectedZoomObjectProperties;
+        if (current is null)
+            return;
+
+        var dialog = new ZoomObjectPropertiesDialog(current);
+        if (IsVisible)
+            dialog.Owner = this;
+        if (dialog.ShowDialog() == true)
+            Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+    }
+
     private void AttachSummaryZoomPreviews(SlideShape shape)
     {
         var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
@@ -4830,6 +4854,21 @@ public sealed partial class MainWindow : Window
         SummaryZoomPreviewPlanner.AttachPreviewImages(
             Editor.Presentation,
             shape,
+            slideIndex => WpfPresentationSlideImageRenderer.RenderSlideToPng(
+                Editor.Presentation, slideIndex, widthPx, heightPx));
+    }
+
+    private void AttachZoomPreview(SlideShape shape, int targetSlideIndex)
+    {
+        if (targetSlideIndex < 0)
+            return;
+
+        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
+        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(Editor.Presentation, widthPx);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            Editor.Presentation,
+            shape,
+            targetSlideIndex,
             slideIndex => WpfPresentationSlideImageRenderer.RenderSlideToPng(
                 Editor.Presentation, slideIndex, widthPx, heightPx));
     }
