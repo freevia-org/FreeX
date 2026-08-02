@@ -342,6 +342,8 @@ public sealed class ChartDataDialogPlannerTests
             option.Value == ChartType.LineMarkers && option.Label == "Line with Markers");
         ChartDataDialogPlanner.ChartTypeOptions.Should().Contain(option =>
             option.Value == ChartType.Funnel && option.Label == "Funnel");
+        ChartDataDialogPlanner.ChartTypeOptions.Should().Contain(option =>
+            option.Value == ChartType.Waterfall && option.Label == "Waterfall");
     }
 
     [Fact]

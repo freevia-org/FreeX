@@ -31,6 +31,8 @@ public enum ChartType
     Surface3D,
     /// <summary>Funnel chart with one category/value series.</summary>
     Funnel,
+    /// <summary>Waterfall chart with one category/value series.</summary>
+    Waterfall,
     Unknown
 }
 

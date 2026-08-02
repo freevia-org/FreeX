@@ -2629,6 +2629,13 @@ public sealed class EditingSession
             series.Values.AddRange([100, 68, 42, 18]);
             chart.Series.Add(series);
         }
+        else if (chartType == ChartType.Waterfall)
+        {
+            chart.Categories.AddRange(["Starting value", "Reduction", "Growth", "Ending value"]);
+            var series = new ChartSeries { Name = "Value" };
+            series.Values.AddRange([100, -30, 20, 90]);
+            chart.Series.Add(series);
+        }
         else
         {
             // Default sample data — 3 categories, 2 series.

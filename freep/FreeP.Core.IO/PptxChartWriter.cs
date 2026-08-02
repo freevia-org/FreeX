@@ -434,6 +434,8 @@ internal static class PptxChartWriter
                 BuildStockChartEl(chart, seriesEls, catAxId, valAxId),
             ChartType.Funnel =>
                 BuildFunnelChartEl(chart, seriesEls),
+            ChartType.Waterfall =>
+                BuildWaterfallChartEl(chart, seriesEls),
             ChartType.Surface or ChartType.Surface3D =>
                 BuildSurfaceChartEl(chart, seriesEls, catAxId, valAxId, PrimarySerAxId),
             _ =>
@@ -446,6 +448,16 @@ internal static class PptxChartWriter
             C + "funnelChart",
             BuildVaryColorsEl(chart),
             seriesEls,
+            chart.BarGapWidthPercent is { } gapWidth
+                ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
+                : null);
+
+    private static XElement BuildWaterfallChartEl(ChartShape chart, List<XElement> seriesEls) =>
+        new(
+            C + "waterfallChart",
+            BuildVaryColorsEl(chart),
+            seriesEls,
+            new XElement(C + "showConnectorLines", new XAttribute("val", "1")),
             chart.BarGapWidthPercent is { } gapWidth
                 ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
                 : null);
