@@ -55,7 +55,7 @@ public sealed class MailMergeDialogSurfaceTests
         source.Should().Contain("if (query is null)");
         source.Should().Contain("OpenCheckForErrorsAsync");
         source.Should().Contain("MailMergeDialogs.AskCheckForErrorsAsync(this)");
-        source.Should().Contain("_mailMerge.CheckForErrors(selected)");
+        source.Should().Contain("_mailMerge.CheckForErrors(selected, completeMerge: false)");
         source.Should().Contain("FreeWInfoDialog.ShowAsync(this, result.Message)");
     }
 
