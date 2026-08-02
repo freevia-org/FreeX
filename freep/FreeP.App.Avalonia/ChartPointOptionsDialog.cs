@@ -36,6 +36,7 @@ internal sealed class ChartPointOptionsDialog : Window
     private readonly TextBox _labelColorBox;
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
+    private readonly TextBox _explosionBox;
 
     internal ChartPointOptionsDialog(EditingSession editor)
     {
@@ -98,6 +99,7 @@ internal sealed class ChartPointOptionsDialog : Window
             MinWidth = 160,
         };
         _markerSizeBox = new TextBox { MinWidth = 120 };
+        _explosionBox = new TextBox { MinWidth = 120 };
         RefreshPoints();
         LoadControls();
 
@@ -142,6 +144,7 @@ internal sealed class ChartPointOptionsDialog : Window
                 MakeRow(surface.LabelColorLabel, _labelColorBox),
                 MakeRow(surface.MarkerLabel, _markerCombo),
                 MakeRow(surface.MarkerSizeLabel, _markerSizeBox),
+                MakeRow(surface.ExplosionLabel, _explosionBox),
                 new TextBlock { Text = surface.AutoHint, Opacity = 0.7 },
                 buttons,
             },
@@ -176,7 +179,8 @@ internal sealed class ChartPointOptionsDialog : Window
         bool? labelBold = null,
         bool? labelItalic = null,
         string? labelColor = null,
-        bool showBubbleSize = false)
+        bool showBubbleSize = false,
+        int? explosionPercent = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         RefreshPoints();
@@ -201,6 +205,7 @@ internal sealed class ChartPointOptionsDialog : Window
         _labelColorBox.Text = labelColor ?? string.Empty;
         _markerCombo.SelectedIndex = FindMarkerIndex(markerSymbol);
         _markerSizeBox.Text = Format(markerSizePt);
+        _explosionBox.Text = Format(explosionPercent);
     }
 
     private void OnOk()
@@ -244,6 +249,7 @@ internal sealed class ChartPointOptionsDialog : Window
         _labelColorBox.Text = _planner.LabelColorText;
         _markerCombo.SelectedIndex = FindMarkerIndex(_planner.MarkerSymbol);
         _markerSizeBox.Text = Format(_planner.MarkerSizePt);
+        _explosionBox.Text = Format(_planner.ExplosionPercent);
     }
 
     private void UpdatePlannerFromControls()
@@ -274,6 +280,7 @@ internal sealed class ChartPointOptionsDialog : Window
             : ChartMarkerSymbol.Auto;
         _planner.SetMarkerSymbol(marker == ChartMarkerSymbol.Auto ? null : marker);
         _planner.SetMarkerSize(ParseOptional(_markerSizeBox.Text, "Marker size"));
+        _planner.SetExplosionPercent(ParseOptionalInt(_explosionBox.Text, "Explosion"));
     }
 
     private static double? ParseOptional(string? text, string label)
@@ -286,6 +293,17 @@ internal sealed class ChartPointOptionsDialog : Window
     }
 
     private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static string Format(int? value) => value?.ToString(CultureInfo.CurrentCulture) ?? string.Empty;
+
+    private static int? ParseOptionalInt(string? text, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) &&
+            value is >= 0 and <= 100)
+            return value;
+        throw new FormatException($"{label} must be an integer from 0 to 100 or blank.");
+    }
 
     private static int FindMarkerIndex(ChartMarkerSymbol? symbol)
     {
