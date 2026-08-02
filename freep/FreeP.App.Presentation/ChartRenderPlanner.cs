@@ -6898,15 +6898,15 @@ public static partial class ChartRenderPlanner
             chart.Series.Any(series => series.OnSecondaryAxis) &&
             string.IsNullOrWhiteSpace(numberFormatCode))
         {
-            return FormatAxisValueWithoutScale(value / DisplayUnitDivisor(axis.DisplayUnit));
+            return FormatAxisValueWithoutScale(value / DisplayUnitDivisor(axis));
         }
 
-        value /= DisplayUnitDivisor(axis.DisplayUnit);
+        value /= DisplayUnitDivisor(axis);
 
         return FormatAxisLabelValue(value, numberFormatCode);
     }
 
-    private static double DisplayUnitDivisor(ChartAxisDisplayUnit displayUnit) => displayUnit switch
+    private static double DisplayUnitDivisor(ChartAxis axis) => axis.DisplayUnit switch
     {
         ChartAxisDisplayUnit.Hundreds => 100,
         ChartAxisDisplayUnit.Thousands => 1_000,
@@ -6917,6 +6917,7 @@ public static partial class ChartRenderPlanner
         ChartAxisDisplayUnit.HundredMillions => 100_000_000,
         ChartAxisDisplayUnit.Billions => 1_000_000_000,
         ChartAxisDisplayUnit.Trillions => 1_000_000_000_000,
+        ChartAxisDisplayUnit.Custom when axis.CustomDisplayUnit is > 0 => axis.CustomDisplayUnit.Value,
         _ => 1,
     };
 

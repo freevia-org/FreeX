@@ -1264,11 +1264,23 @@ internal static class PptxChartReader
                 ParseNullableBoolAttr(numFmt.Attribute("sourceLinked")?.Value);
         }
 
-        var displayUnitToken = axEl.Element(C + "dispUnits")?.Element(C + "builtInUnit")?.Attribute("val")?.Value;
-        axis.DisplayUnit = ParseDisplayUnit(displayUnitToken);
-        axis.RawDisplayUnitToken = axis.DisplayUnit == ChartAxisDisplayUnit.Unsupported
-            ? displayUnitToken
-            : null;
+        var displayUnits = axEl.Element(C + "dispUnits");
+        var displayUnitToken = displayUnits?.Element(C + "builtInUnit")?.Attribute("val")?.Value;
+        var customDisplayUnit = ParseDouble(displayUnits?.Element(C + "customUnit")?.Attribute("val")?.Value);
+        if (string.IsNullOrWhiteSpace(displayUnitToken) && customDisplayUnit is > 0)
+        {
+            axis.DisplayUnit = ChartAxisDisplayUnit.Custom;
+            axis.CustomDisplayUnit = customDisplayUnit;
+            axis.RawDisplayUnitToken = null;
+        }
+        else
+        {
+            axis.DisplayUnit = ParseDisplayUnit(displayUnitToken);
+            axis.CustomDisplayUnit = null;
+            axis.RawDisplayUnitToken = axis.DisplayUnit == ChartAxisDisplayUnit.Unsupported
+                ? displayUnitToken
+                : null;
+        }
 
         var scaling = axEl.Element(C + "scaling");
         if (scaling is not null)

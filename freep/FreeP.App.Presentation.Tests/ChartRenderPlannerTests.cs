@@ -636,6 +636,25 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void AxisLabelPlans_ApplyCustomDisplayUnitToValueLabels()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 0, 2_500 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 2_500;
+        chart.ValueAxis.MajorUnit = 2_500;
+        chart.ValueAxis.DisplayUnit = ChartAxisDisplayUnit.Custom;
+        chart.ValueAxis.CustomDisplayUnit = 2_500;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame)
+            .Select(label => label.Text)
+            .Should().Equal("0", "1");
+    }
+
+    [Fact]
     public void FormatWithCode_UnsupportedFormatFallsBackWithoutThrowing()
     {
         var act = () => ChartRenderPlanner.FormatWithCode(1200, "unsupported text");

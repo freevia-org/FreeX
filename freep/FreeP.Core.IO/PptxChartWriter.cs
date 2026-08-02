@@ -1501,9 +1501,17 @@ internal static class PptxChartWriter
     private static IEnumerable<XElement> BuildAxisUnitElements(ChartAxis axis)
     {
         var displayUnit = DisplayUnitValue(axis);
-        if (displayUnit is not null)
+        var customDisplayUnit = axis.DisplayUnit == ChartAxisDisplayUnit.Custom
+            && axis.CustomDisplayUnit is { } custom
+            && custom > 0
+            ? custom
+            : (double?)null;
+        if (displayUnit is not null || customDisplayUnit is not null)
             yield return new XElement(C + "dispUnits",
-                new XElement(C + "builtInUnit", new XAttribute("val", displayUnit)));
+                displayUnit is not null
+                    ? new XElement(C + "builtInUnit", new XAttribute("val", displayUnit))
+                    : new XElement(C + "customUnit", new XAttribute(
+                        "val", customDisplayUnit!.Value.ToString("G", CultureInfo.InvariantCulture))));
         if (axis.MajorUnit is { } majorUnit)
             yield return new XElement(C + "majorUnit", new XAttribute("val", majorUnit.ToString("G", CultureInfo.InvariantCulture)));
         if (axis.MinorUnit is { } minorUnit)
@@ -1522,6 +1530,7 @@ internal static class PptxChartWriter
         ChartAxisDisplayUnit.HundredMillions => "hundredMillions",
         ChartAxisDisplayUnit.Billions => "billions",
         ChartAxisDisplayUnit.Trillions => "trillions",
+        ChartAxisDisplayUnit.Custom => null,
         ChartAxisDisplayUnit.Unsupported => string.IsNullOrWhiteSpace(axis.RawDisplayUnitToken)
             ? null
             : axis.RawDisplayUnitToken,
