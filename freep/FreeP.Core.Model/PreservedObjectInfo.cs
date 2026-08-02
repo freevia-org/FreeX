@@ -41,12 +41,20 @@ public sealed record ZoomObjectProperties(
     bool? ReturnToParent = null,
     string? ImageType = null,
     string? TransitionDuration = null,
-    bool? ShowBackground = null)
+    bool? ShowBackground = null,
+    int? CropLeft = null,
+    int? CropTop = null,
+    int? CropRight = null,
+    int? CropBottom = null)
 {
     public bool IsEmpty => ReturnToParent is null
         && ImageType is null
         && TransitionDuration is null
-        && ShowBackground is null;
+        && ShowBackground is null
+        && CropLeft is null
+        && CropTop is null
+        && CropRight is null
+        && CropBottom is null;
 }
 
 /// <summary>

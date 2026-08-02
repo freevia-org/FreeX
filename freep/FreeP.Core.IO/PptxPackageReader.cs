@@ -1679,7 +1679,15 @@ public static class PptxPackageReader
             ParseNullableBoolean(properties.Attribute("returnToParent")?.Value),
             properties.Attribute("imageType")?.Value,
             properties.Attribute("transitionDur")?.Value,
-            ParseNullableBoolean(properties.Attribute("showBg")?.Value));
+            ParseNullableBoolean(properties.Attribute("showBg")?.Value),
+            ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
+                element.Name.LocalName == "srcRect")?.Attribute("l")?.Value),
+            ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
+                element.Name.LocalName == "srcRect")?.Attribute("t")?.Value),
+            ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
+                element.Name.LocalName == "srcRect")?.Attribute("r")?.Value),
+            ParseNullableInt(properties.Descendants().FirstOrDefault(element =>
+                element.Name.LocalName == "srcRect")?.Attribute("b")?.Value));
         return value.IsEmpty ? null : value;
     }
 

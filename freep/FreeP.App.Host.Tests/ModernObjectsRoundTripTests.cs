@@ -328,6 +328,41 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void ZoomPreviewCrop_IsUndoableAndRoundTripsAsDrawingMlSourceRect()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSlideZoom("slide-2");
+        var cropped = new ZoomObjectProperties(
+            ReturnToParent: true,
+            ImageType: "preview",
+            ShowBackground: true,
+            CropLeft: 12500,
+            CropTop: 25000,
+            CropRight: 37500,
+            CropBottom: 50000);
+
+        session.SetZoomObjectProperties(zoom.Id, cropped).Should().BeTrue();
+        var srcRect = XElement.Parse(zoom.PreservedObject!.RawXml)
+            .Descendants().Single(element => element.Name.LocalName == "srcRect");
+        srcRect.Attributes().Select(attribute => (attribute.Name.LocalName, attribute.Value))
+            .Should().ContainInOrder(
+                ("l", "12500"), ("t", "25000"), ("r", "37500"), ("b", "50000"));
+
+        session.Undo();
+        zoom.PreservedObject.RawXml.Should().NotContain("srcRect");
+        session.Redo();
+        zoom.PreservedObject.RawXml.Should().Contain("srcRect");
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomProperties.Should().Be(cropped);
+    }
+
+    [Fact]
     public void AuthoredSummaryZoom_CoverImageTargetsSingleTileAndReopens()
     {
         var presentation = new Presentation();
