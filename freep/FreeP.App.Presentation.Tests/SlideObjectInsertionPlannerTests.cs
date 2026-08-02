@@ -234,6 +234,27 @@ public sealed class SlideObjectInsertionPlannerTests
     }
 
     [Fact]
+    public void ApplyCommand_InsertsDefaultComboChartWithSecondaryLineAndUndo()
+    {
+        var editor = MakeSession();
+        var before = editor.CurrentSlide!.Shapes.Count;
+
+        var added = SlideObjectInsertionPlanner.ApplyCommand(
+            editor,
+            SlideObjectInsertionPlanner.ChartComboCommandId);
+
+        added.Should().NotBeNull();
+        added!.Chart!.ChartType.Should().Be(ChartType.ColumnClustered);
+        added.Chart.Series.Should().HaveCount(2);
+        added.Chart.Series[1].OverrideChartType.Should().Be(ChartType.LineMarkers);
+        added.Chart.Series[1].OnSecondaryAxis.Should().BeTrue();
+        editor.CurrentSlide.Shapes.Should().HaveCount(before + 1);
+
+        editor.Undo();
+        editor.CurrentSlide.Shapes.Should().HaveCount(before);
+    }
+
+    [Fact]
     public void ApplyCommand_PictureWithoutPayload_IsNoOp()
     {
         var editor = MakeSession();
