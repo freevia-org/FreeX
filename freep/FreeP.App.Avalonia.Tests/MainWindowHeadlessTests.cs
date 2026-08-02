@@ -7550,6 +7550,30 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartPieOptionsDialog_authors_OfPie_settings_through_shared_planner()
+    {
+        ChartPieOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.OfPie);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartPieOptionsDialog(window.Editor);
+            dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2");
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options!.OfPieType.Should().Be(OfPieType.Bar);
+        options.OfPieSplitType.Should().Be(OfPieSplitType.Custom);
+        options.OfPieSplitPosition.Should().Be(2);
+        options.OfPieSecondPieSizePercent.Should().Be(75);
+        options.OfPieCustomPointIndices.Should().Equal(1, 2);
+    }
+
+    [Fact]
     public async Task ChartPlotStyleOptionsDialog_constructs_and_commits_shared_options()
     {
         ChartPlotStyleOptions? options = null;

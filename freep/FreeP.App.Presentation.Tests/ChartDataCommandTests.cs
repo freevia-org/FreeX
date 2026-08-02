@@ -1916,6 +1916,34 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartPieOptions_AuthorsOfPieSettingsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.OfPie;
+        chart.OfPieType = OfPieType.Pie;
+        chart.OfPieSplitType = OfPieSplitType.Auto;
+
+        bus.Execute(new SetChartPieOptionsCommand(
+            0,
+            id,
+            new ChartPieOptions(0, 40, OfPieType.Bar, OfPieSplitType.Custom, 2, 75, new[] { 1, 3 })));
+
+        chart.OfPieType.Should().Be(OfPieType.Bar);
+        chart.OfPieSplitType.Should().Be(OfPieSplitType.Custom);
+        chart.OfPieSplitPosition.Should().Be(2);
+        chart.OfPieSecondPieSizePercent.Should().Be(75);
+        chart.OfPieCustomPointIndices.Should().Equal(1, 3);
+
+        bus.Undo();
+        chart.OfPieType.Should().Be(OfPieType.Pie);
+        chart.OfPieSplitType.Should().Be(OfPieSplitType.Auto);
+        chart.OfPieSplitPosition.Should().BeNull();
+        chart.OfPieSecondPieSizePercent.Should().BeNull();
+        chart.OfPieCustomPointIndices.Should().BeEmpty();
+    }
+
+    [Fact]
     public void OfPieChart_PreservesNativeFamilyAndSplitControlsThroughPptxRoundTrip()
     {
         var (p, _, _) = MakeChartPresentation();

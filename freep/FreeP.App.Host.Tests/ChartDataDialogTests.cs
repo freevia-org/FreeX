@@ -395,6 +395,24 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartPieOptionsDialog_AuthorsOfPieSettingsThroughSharedPlanner()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.ChartType = ChartType.OfPie;
+
+        var dialog = new ChartPieOptionsDialog(sess);
+        dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2");
+        var options = dialog.BuildCommitPlanForTests();
+
+        dialog.Should().NotBeNull();
+        options.OfPieType.Should().Be(OfPieType.Bar);
+        options.OfPieSplitType.Should().Be(OfPieSplitType.Custom);
+        options.OfPieSplitPosition.Should().Be(2);
+        options.OfPieSecondPieSizePercent.Should().Be(75);
+        options.OfPieCustomPointIndices.Should().Equal(1, 2);
+    }
+
+    [StaFact]
     public void ChartPlotStyleOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();
