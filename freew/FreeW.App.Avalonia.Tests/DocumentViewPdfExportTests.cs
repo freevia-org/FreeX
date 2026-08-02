@@ -929,6 +929,46 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedHandmade2PageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.Handmade2ArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            pdf.Pages.Single().Ops.OfType<PdfFillRect>().Should().BeEmpty();
+            paths.Should().HaveCount(8);
+            paths[0].StrokeColor.Should().Be(PdfColor.Black);
+            paths[0].StrokeWidth.Should().Be(2.25);
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(27, 764.25));
+            paths[4].StrokeColor.Should().Be(PdfColor.Black);
+            paths[4].StrokeWidth.Should().Be(1.5);
+            paths[4].Contours.Single().Start.Should().Be(new PdfPathPoint(33, 758.25));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var topInk = 0;
+            for (var y = 32; y < 52; y++)
+            for (var x = 80; x < 736; x++)
+            {
+                if (bitmap.GetPixel(x, y).Red < 80)
+                    topInk++;
+            }
+            topInk.Should().BeGreaterThan(1_000);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_UsesSharedBatsPageBorderMotifs() =>
         Session.Dispatch(() =>
         {
@@ -1370,6 +1410,50 @@ public sealed class DocumentViewPdfExportTests
                     outlineInk++;
             }
             outlineInk.Should().BeGreaterThan(60);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_UsesSharedFlowersRosesPageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.FlowersRosesArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            pdf.Pages.Single().Ops.OfType<PdfFillRect>().Should().BeEmpty();
+            paths.Should().HaveCount(1326);
+            paths[0].FillColor.Should().Be(new PdfColor(0x40, 0x40, 0x40));
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(33.75, 757.5));
+            paths[3].FillColor.Should().Be(new PdfColor(0x1A, 0xB3, 0));
+            paths[6].FillColor.Should().Be(new PdfColor(0xE9, 0x6A, 0xD3));
+            paths[7].FillColor.Should().Be(new PdfColor(0xA0, 0x49, 0x91));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var pinkInk = 0;
+            var greenInk = 0;
+            for (var y = 30; y < 66; y++)
+            for (var x = 30; x < 66; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red > 160 && pixel.Blue > 120 && pixel.Green < 180)
+                    pinkInk++;
+                if (pixel.Green > 100 && pixel.Red < 80 && pixel.Blue < 80)
+                    greenInk++;
+            }
+            pinkInk.Should().BeGreaterThan(80);
+            greenInk.Should().BeGreaterThan(25);
             bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
         }, CancellationToken.None);
 

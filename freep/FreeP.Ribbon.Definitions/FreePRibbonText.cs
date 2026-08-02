@@ -228,6 +228,8 @@ internal static class FreePRibbonText
     public static string LinksGroupKeyTip => Get("Ribbon_Group_Links_KeyTip");
     public static string InsertLinkLabel => Get("Ribbon_Command_InsertLink_Label");
     public static string InsertLinkKeyTip => Get("Ribbon_Command_InsertLink_KeyTip");
+    public static string InsertSlideZoomLabel => Get("Ribbon_Command_InsertSlideZoom_Label");
+    public static string InsertSlideZoomKeyTip => Get("Ribbon_Command_InsertSlideZoom_KeyTip");
     public static string RemoveLinkLabel => Get("Ribbon_Command_RemoveLink_Label");
     public static string RemoveLinkKeyTip => Get("Ribbon_Command_RemoveLink_KeyTip");
 

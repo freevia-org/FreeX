@@ -4451,6 +4451,16 @@ public sealed class DocumentView : Control
         {
             return BuildPdfFilledShapeBorderOps(peoplePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var rosePlan))
+        {
+            return BuildPdfFilledShapeBorderOps(rosePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -4490,6 +4500,16 @@ public sealed class DocumentView : Control
                 out var archPlan))
         {
             return BuildPdfDecorativeArchBorderOps(archPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
+        if (PageBorderArtVisualPlanner.TryBuildHandmade2Frame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var handmadePlan))
+        {
+            return BuildPdfDecorativeArchBorderOps(handmadePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
 
         if (border.LineStyle == BorderLineStyle.Wave)
@@ -10446,6 +10466,18 @@ public sealed class DocumentView : Control
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var rosePlan))
+        {
+            DrawFilledShapePlan(context, frame, rosePlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -10490,40 +10522,59 @@ public sealed class DocumentView : Control
                 edgeInsetDip,
                 out var archPlan))
         {
-            foreach (var fill in archPlan.Fills)
-            {
-                context.FillRectangle(
-                    new SolidColorBrush(Color.FromRgb(fill.Red, fill.Green, fill.Blue)),
-                    new Rect(
-                        frame.X + fill.Xdip,
-                        frame.Y + fill.Ydip,
-                        fill.WidthDip,
-                        fill.HeightDip));
-            }
-            foreach (var stroke in archPlan.Strokes)
-            {
-                var geometry = new StreamGeometry();
-                using (var path = geometry.Open())
-                {
-                    path.BeginFigure(
-                        new Point(frame.X + stroke.StartXDip, frame.Y + stroke.StartYDip),
-                        false);
-                    path.CubicBezierTo(
-                        new Point(frame.X + stroke.Control1XDip, frame.Y + stroke.Control1YDip),
-                        new Point(frame.X + stroke.Control2XDip, frame.Y + stroke.Control2YDip),
-                        new Point(frame.X + stroke.EndXDip, frame.Y + stroke.EndYDip));
-                    path.EndFigure(false);
-                }
-                context.DrawGeometry(
-                    null,
-                    new Pen(new SolidColorBrush(Color.FromRgb(stroke.Red, stroke.Green, stroke.Blue)), stroke.WidthDip),
-                    geometry);
-            }
+            DrawCubicStrokePlan(context, frame, archPlan);
+            return true;
+        }
 
+        if (PageBorderArtVisualPlanner.TryBuildHandmade2Frame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var handmadePlan))
+        {
+            DrawCubicStrokePlan(context, frame, handmadePlan);
             return true;
         }
 
         return false;
+    }
+
+    private static void DrawCubicStrokePlan(
+        DrawingContext context,
+        Rect frame,
+        PageBorderDecorativeArchPlan plan)
+    {
+        foreach (var fill in plan.Fills)
+        {
+            context.FillRectangle(
+                new SolidColorBrush(Color.FromRgb(fill.Red, fill.Green, fill.Blue)),
+                new Rect(
+                    frame.X + fill.Xdip,
+                    frame.Y + fill.Ydip,
+                    fill.WidthDip,
+                    fill.HeightDip));
+        }
+        foreach (var stroke in plan.Strokes)
+        {
+            var geometry = new StreamGeometry();
+            using (var path = geometry.Open())
+            {
+                path.BeginFigure(
+                    new Point(frame.X + stroke.StartXDip, frame.Y + stroke.StartYDip),
+                    false);
+                path.CubicBezierTo(
+                    new Point(frame.X + stroke.Control1XDip, frame.Y + stroke.Control1YDip),
+                    new Point(frame.X + stroke.Control2XDip, frame.Y + stroke.Control2YDip),
+                    new Point(frame.X + stroke.EndXDip, frame.Y + stroke.EndYDip));
+                path.EndFigure(false);
+            }
+            context.DrawGeometry(
+                null,
+                new Pen(new SolidColorBrush(Color.FromRgb(stroke.Red, stroke.Green, stroke.Blue)), stroke.WidthDip),
+                geometry);
+        }
     }
 
     private static void DrawFilledShapePlan(

@@ -484,6 +484,7 @@ public sealed partial class MainWindow : Window
             osClipboard:        _osClipboard,
             // Wave 11A: Insert Hyperlink dialog.
             onInsertLink:       () => OpenHyperlinkDialog(),
+            onInsertSlideZoom:  () => OpenSlideZoomDialog(),
             // Wave 12B: Find & Replace dialogs.
             onFind:             () => OpenFindDialog(),
             onFindReplace:      () => OpenFindReplaceDialog(),
@@ -4770,6 +4771,21 @@ public sealed partial class MainWindow : Window
             return;
 
         Editor.SetShapeHyperlink(applyPlan.Url, applyPlan.TargetSlideId, applyPlan.Tooltip);
+    }
+
+    internal void OpenSlideZoomDialog()
+    {
+        var options = SlideZoomInsertionPlanner.BuildTargetOptions(
+            Editor.Presentation.Slides,
+            Editor.CurrentSlideIndex);
+        if (options.Count == 0)
+            return;
+
+        var dialog = new SlideZoomDialog(options);
+        if (IsVisible)
+            dialog.Owner = this;
+        if (dialog.ShowDialog() == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId)
+            Editor.InsertSlideZoom(targetSlideId);
     }
 
     // ── Find & Replace dialog (Wave 12B) ──────────────────────────────────────────

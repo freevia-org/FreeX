@@ -168,6 +168,41 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void FlowersRoses_UsesWordCadenceAndMeasuredSourcePalette()
+    {
+        PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(38, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(1326);
+        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(45, 46));
+        plan.Polygons[3].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0x1A && polygon.Green == 0xB3 && polygon.Blue == 0);
+        plan.Polygons[6].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xE9 && polygon.Green == 0x6A && polygon.Blue == 0xD3);
+        plan.Polygons[7].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xA0 && polygon.Green == 0x49 && polygon.Blue == 0x91);
+    }
+
+    [Fact]
+    public void Handmade2_UsesMeasuredDoubleWobbledFrame()
+    {
+        PageBorderArtVisualPlanner.TryBuildHandmade2Frame(160, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Strokes.Should().HaveCount(8);
+        plan.Strokes[0].StartXDip.Should().Be(36);
+        plan.Strokes[0].StartYDip.Should().Be(37);
+        plan.Strokes[0].EndXDip.Should().Be(779);
+        plan.Strokes[0].WidthDip.Should().Be(3);
+        plan.Strokes[4].StartXDip.Should().Be(44);
+        plan.Strokes[4].StartYDip.Should().Be(45);
+        plan.Strokes[4].EndXDip.Should().Be(772);
+        plan.Strokes[4].WidthDip.Should().Be(2);
+    }
+
+    [Fact]
     public void ShorebirdTracks_UsesMeasuredAlternatingFootprintCadenceAndSharedSegments()
     {
         PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(83, 3, 816, 1056, 32, out var motifs)

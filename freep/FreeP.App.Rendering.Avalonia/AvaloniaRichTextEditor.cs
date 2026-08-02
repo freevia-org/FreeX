@@ -321,6 +321,23 @@ internal sealed class AvaloniaRichTextEditor : Grid
             || (position > 0 && tryActivateAt(position - 1));
     }
 
+    internal bool TryGetInlineOleHit(
+        int logicalPosition,
+        out AvaloniaInlineOleHostRequest hit)
+    {
+        foreach (var candidate in _richTextView.GetInlineOleHits())
+        {
+            if (candidate.LogicalPosition == logicalPosition)
+            {
+                hit = candidate;
+                return true;
+            }
+        }
+
+        hit = null!;
+        return false;
+    }
+
     internal bool UpdateInlineOleObjectAt(
         int logicalPosition,
         IReadOnlyList<byte> embeddedBytes) =>

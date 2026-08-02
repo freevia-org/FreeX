@@ -79,6 +79,7 @@ internal static class FreePRibbonCommands
         Action?             onCustomSlideSize  = null,
         OsClipboardService? osClipboard        = null,
         Action?             onInsertLink       = null,
+        Action?             onInsertSlideZoom = null,
         // Wave 12B: Find & Replace dialog launchers.
         Action?             onFind             = null,
         Action?             onFindReplace      = null,
@@ -151,6 +152,9 @@ internal static class FreePRibbonCommands
         // ── Insert shapes ────────────────────────────────────────────────────────
 
         RegisterSlideObjectInsertionCommands(registry, editor, includePictureCommand: true, onTablePicker);
+        registry.Register(
+            SlideZoomInsertionPlanner.CommandId,
+            new ActionRibbonCommand(() => onInsertSlideZoom?.Invoke()));
         registry.Register(
             OleInsertionPlanner.InsertEmbeddedObjectCommandId,
             new ActionRibbonCommand(() => onInsertEmbeddedObject?.Invoke()));

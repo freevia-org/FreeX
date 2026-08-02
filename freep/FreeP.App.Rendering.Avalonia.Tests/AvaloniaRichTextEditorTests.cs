@@ -92,6 +92,42 @@ public sealed class AvaloniaRichTextEditorTests
     }
 
     [Fact]
+    public async Task InlineOleRun_ExposesMeasuredHostRequestAtLogicalPosition()
+    {
+        await Session.Dispatch(() =>
+        {
+            var body = new TextBody();
+            body.Paragraphs.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run { Text = "Before" },
+                    new Run
+                    {
+                        Text = "\uFFFC",
+                        InlineOleObject = new InlineOleObjectInfo
+                        {
+                            EmbeddedBytes = [0x01, 0x02, 0x03],
+                            FileName = "Embedded.xlsx",
+                            ClassName = "Excel.Sheet.12",
+                        },
+                    },
+                },
+            });
+
+            var editor = new AvaloniaRichTextEditor(body, backgroundAlpha: 0xCC);
+            editor.Measure(new Size(320, 90));
+            editor.Arrange(new Rect(0, 0, 320, 90));
+
+            editor.TryGetInlineOleHit(6, out var hit).Should().BeTrue();
+            hit.InlineObject.FileName.Should().Be("Embedded.xlsx");
+            hit.Bounds.Width.Should().Be(42);
+            hit.Bounds.Height.Should().BeGreaterThan(18);
+            editor.TryGetInlineOleHit(5, out _).Should().BeFalse();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task InlineTableRun_RendersNestedCellBodyRecursively()
     {
         await Session.Dispatch(() =>

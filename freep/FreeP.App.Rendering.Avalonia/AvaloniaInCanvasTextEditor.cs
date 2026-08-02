@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
@@ -19,8 +20,10 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
     private readonly SlideCanvas _canvas;
     private readonly EditingSession _editor;
     private readonly Panel _overlay;
+    private readonly Func<AvaloniaInlineOleHostRequest, Action<byte[]>, Control?>? _inlineOleHostFactory;
 
     private AvaloniaRichTextEditor? _textBox;
+    private Control? _activeInlineOleHost;
     private InCanvasTextEditPlanner? _editPlan;
     private uint _editingShapeId;
     private bool _active;
@@ -95,10 +98,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _active
         && _textBox is not null
         && _textBox.TryActivateInlineOleObject(
-            position => _editor.TryActivateInlineOleObject(
-                _editingShapeId,
-                position,
-                updatedBytes => _textBox?.UpdateInlineOleObjectAt(position, updatedBytes)));
+            TryActivateInlineOleAt);
 
     /// <summary>True while a table cell is being edited in the rich overlay editor.</summary>
     public bool IsCellEditActive => _cellEditActive;
@@ -329,11 +329,16 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         return changed;
     }
 
-    public AvaloniaInCanvasTextEditor(SlideCanvas canvas, EditingSession editor, Panel overlay)
+    public AvaloniaInCanvasTextEditor(
+        SlideCanvas canvas,
+        EditingSession editor,
+        Panel overlay,
+        Func<AvaloniaInlineOleHostRequest, Action<byte[]>, Control?>? inlineOleHostFactory = null)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _overlay = overlay ?? throw new ArgumentNullException(nameof(overlay));
+        _inlineOleHostFactory = inlineOleHostFactory;
 
         _canvas.PointerPressed += OnCanvasPointerPressed;
 
@@ -377,6 +382,49 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         Commit();
         CommitCellEdit();
         RefreshTableCellHighlight();
+    }
+
+    private bool TryActivateInlineOleAt(int logicalPosition)
+    {
+        if (_textBox is not null
+            && _inlineOleHostFactory is not null
+            && _textBox.TryGetInlineOleHit(logicalPosition, out var request))
+        {
+            CloseInlineOleHost();
+            var host = _inlineOleHostFactory(
+                request,
+                updatedBytes => _textBox?.UpdateInlineOleObjectAt(
+                    request.LogicalPosition,
+                    updatedBytes));
+            if (host is not null)
+            {
+                host.Width = request.Bounds.Width;
+                host.Height = request.Bounds.Height;
+                host.HorizontalAlignment = HorizontalAlignment.Left;
+                host.VerticalAlignment = VerticalAlignment.Top;
+                host.Margin = new Thickness(request.Bounds.Left, request.Bounds.Top, 0, 0);
+                host.ZIndex = 20;
+                _textBox.Children.Add(host);
+                _activeInlineOleHost = host;
+                return true;
+            }
+        }
+
+        return _editor.TryActivateInlineOleObject(
+            _editingShapeId,
+            logicalPosition,
+            updatedBytes => _textBox?.UpdateInlineOleObjectAt(logicalPosition, updatedBytes));
+    }
+
+    private void CloseInlineOleHost()
+    {
+        if (_activeInlineOleHost is null)
+            return;
+
+        if (_textBox is not null)
+            _textBox.Children.Remove(_activeInlineOleHost);
+        (_activeInlineOleHost as IDisposable)?.Dispose();
+        _activeInlineOleHost = null;
     }
 
     /// <summary>Activates the text editor for the given shape.</summary>
@@ -521,6 +569,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
             var newBody = _textBox.EditedBody;
             var editPlan = _editPlan;
 
+            CloseInlineOleHost();
             _overlay.Children.Remove(_textBox);
             _textBox = null;
             _active = false;
@@ -603,6 +652,7 @@ public sealed class AvaloniaInCanvasTextEditor : IDisposable
         _canceling = true;
         try
         {
+            CloseInlineOleHost();
             _overlay.Children.Remove(_textBox);
             _textBox = null;
             _active = false;
