@@ -229,8 +229,8 @@ public sealed class ExcelParityEngineeringTests
             (1, 2, new TextValue("m")),
             (1, 3, new TextValue("hr")));
 
-        _eval.Evaluate("=CONVERT(A1:A2,B1:C1,\"cm\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=CONVERT(A1:A2,\"m\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CONVERT(A1:A2,B1:B3,\"cm\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=CONVERT(A1:A2,\"m\",B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Theory]

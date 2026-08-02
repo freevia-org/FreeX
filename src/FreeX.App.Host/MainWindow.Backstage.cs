@@ -616,6 +616,19 @@ public partial class MainWindow
     internal Task OpenStartupFileAsync(string path) => OpenFileAsync(path);
 
     /// <summary>
+    /// Tells the user that a command-line file argument could not be opened (it didn't exist, was
+    /// a directory, a URL, or an otherwise-invalid path) when no startup argument resolved to an
+    /// openable file. Called from App.xaml.cs's App_OnStartup after Show() so the window is
+    /// available as the dialog's owner. Without this the app fell back to a blank workbook with
+    /// zero indication the requested file wasn't opened (R118).
+    /// </summary>
+    internal void ReportStartupFileNotFound(string path) =>
+        ShowOwnedMessage(
+            UiText.Format("Startup_FileArgumentNotFoundMessage", path),
+            UiText.Get("MainWindowMessage_OpenErrorTitle"),
+            MessageBoxButton.OK, MessageBoxImage.Warning);
+
+    /// <summary>
     /// Opens a recovery snapshot into this window without recording the snapshot path in recent
     /// files. Called from App.xaml.cs during startup recovery; the snapshot path is a temporary
     /// .fxl file that must never appear in the MRU list.
@@ -625,8 +638,22 @@ public partial class MainWindow
 
     private async Task OpenFileAsync(string path, bool suppressRecentFiles = false)
     {
-        if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path, out var target, out _))
+        if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, path, out var target, out var openTargetMessage))
+        {
+            // Surface the planner's discarded failure reason (e.g. "Unsupported file type: .txt." or
+            // the renamed-file content/extension mismatch message) instead of silently no-opping, the
+            // same way a load-time exception below is reported via ShowOwnedMessage (R118). This is
+            // the single choke point for every open path: File > Open, drag-drop, MRU clicks, and
+            // command-line startup args (via OpenStartupFileAsync) all funnel through here.
+            if (!string.IsNullOrEmpty(openTargetMessage))
+            {
+                ShowOwnedMessage(
+                    UiText.Format("MainWindowMessage_OpenFileFailed", openTargetMessage),
+                    UiText.Get("MainWindowMessage_OpenErrorTitle"),
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
             return;
+        }
         var ext = FileFormatResolver.NormalizeExtension(target!.Extension);
         if (_isOpeningFile) return;
         _isOpeningFile = true;

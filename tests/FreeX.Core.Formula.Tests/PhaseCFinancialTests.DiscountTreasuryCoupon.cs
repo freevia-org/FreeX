@@ -56,7 +56,7 @@ public partial class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("INTRATE(A1:A2,B1:B2,F1:F2,D1:D2,E1:E2)", cells), Calc("INTRATE(43831,44197,90,100,0)"), Calc("INTRATE(43862,44228,95,110,1)"));
         AssertApproxColumn(EvalWithData("RECEIVED(A1:A2,B1:B2,D1:D2,G1:G2,E1:E2)", cells), Calc("RECEIVED(43831,44197,100,0.05,0)"), Calc("RECEIVED(43862,44228,110,0.04,1)"));
 
-        EvalWithData("DISC(A1:A2,B1:C1,97,100,0)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("DISC(A1:A2,B1:B3,97,100,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -167,7 +167,7 @@ public partial class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("TBILLPRICE(A1:A2,B1:B2,C1:C2)", cells), Calc("TBILLPRICE(43831,43921,0.05)"), Calc("TBILLPRICE(43862,43952,0.04)"));
         AssertApproxColumn(EvalWithData("TBILLYIELD(A1:A2,B1:B2,D1:D2)", cells), Calc("TBILLYIELD(43831,43921,98.75)"), Calc("TBILLYIELD(43862,43952,99)"));
 
-        EvalWithData("TBILLEQ(A1:A2,B1:C1,0.05)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("TBILLEQ(A1:A2,B1:B3,0.05)", cells).Should().Be(ErrorValue.Value);
     }
 
     // ── TBILL >1-year maturity guard (J4) ────────────────────────────────
@@ -297,7 +297,7 @@ public partial class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("COUPNUM(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("COUPNUM(43831,44197,2,0)"), Calc("COUPNUM(43845,44562,4,1)"));
         AssertApproxColumn(EvalWithData("COUPPCD(A1:A2,B1:B2,C1:C2,D1:D2)", cells), Calc("COUPPCD(43831,44197,2,0)"), Calc("COUPPCD(43845,44562,4,1)"));
 
-        EvalWithData("COUPDAYBS(A1:A2,B1:C1,2,0)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("COUPDAYBS(A1:A2,B1:B3,2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

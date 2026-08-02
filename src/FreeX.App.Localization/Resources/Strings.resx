@@ -13978,6 +13978,12 @@ Saved XPS file:&#xD;
   <data name="Startup_CrashReportsTitle" xml:space="preserve">
     <value>Crash Reports</value>
   </data>
+  <data name="Startup_FileArgumentNotFoundMessage" xml:space="preserve">
+    <value>FreeX couldn't find the file:&#xD;
+{0}&#xD;
+&#xD;
+A new blank workbook was opened instead.</value>
+  </data>
   <data name="MainWindow_AutomationName_Themes" xml:space="preserve">
     <value>Themes</value>
   </data>

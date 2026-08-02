@@ -214,35 +214,82 @@ public partial class MainWindow
     private string FormatRangeReference(CellAddress start, CellAddress end) =>
         SpreadsheetDisplayFormatter.FormatRangeReference(start, end, _options.UseR1C1ReferenceStyle);
 
+    // R118: reverse (range -> best name) index for the Name Box, mirroring the revision-keyed
+    // memoization WorkbookSelectionStatsCache already uses for the status bar. Before this, every
+    // selection change (SetActiveCell -- plain clicks and every arrow-key move -- plus paste, sort,
+    // and merge) re-walked the full ScopedNamedRanges and NamedRanges dictionaries from scratch, so
+    // a workbook with hundreds/thousands of defined names (a well-documented Excel copy/paste bloat
+    // pattern) made ordinary navigation perceptibly laggier than in Excel. The index is rebuilt only
+    // when _navigationCacheRevision (already bumped by TryExecuteCommand/TryExecuteRepeatableCommand
+    // on every successful model-changing command, including DefineNamedRangeCommand/MoveRangeCommand/
+    // InsertDeleteCellsCommand/the row-column shift helpers) or the active sheet changes, so repeated
+    // selection changes between real edits cost an O(1) dictionary lookup instead of an O(name count)
+    // scan.
+    private ulong _nameBoxRangeIndexRevision = ulong.MaxValue;
+    private SheetId _nameBoxRangeIndexSheetId;
+    private Dictionary<GridRange, string>? _nameBoxScopedRangeIndex;
+    private Dictionary<GridRange, string>? _nameBoxGlobalRangeIndex;
+
     private string FormatNameBoxSelectionText(GridRange range)
     {
+        EnsureNameBoxRangeIndex();
+
         // Sheet-scoped names on the active sheet take precedence over a same-named workbook-global
         // name, matching formula evaluation's resolution order (Workbook.TryGetNamedRange) and the
         // Name Box's own reference-resolution precedence (TryParseNameBoxReferenceRange).
-        string? bestScopedName = null;
+        if (_nameBoxScopedRangeIndex!.TryGetValue(range, out var scopedName))
+            return scopedName;
+
+        if (_nameBoxGlobalRangeIndex!.TryGetValue(range, out var globalName))
+            return globalName;
+
+        return FormatRangeReference(range.Start, range.End);
+    }
+
+    /// <summary>
+    /// (Re)builds the Name Box's range-to-name reverse index when the workbook's defined names (or
+    /// the active sheet, which changes which sheet-scoped names apply) may have changed since the
+    /// last build. Each rebuild is a single O(name count) pass over both dictionaries -- exactly the
+    /// same total work FormatNameBoxSelectionText used to redo on every call -- but it only happens
+    /// once per real change instead of once per selection change.
+    /// </summary>
+    private void EnsureNameBoxRangeIndex()
+    {
+        if (_nameBoxScopedRangeIndex is not null &&
+            _nameBoxGlobalRangeIndex is not null &&
+            _nameBoxRangeIndexRevision == _navigationCacheRevision &&
+            _nameBoxRangeIndexSheetId.Equals(_currentSheetId))
+        {
+            return;
+        }
+
+        var scopedIndex = new Dictionary<GridRange, string>();
         foreach (var (key, namedRange) in _workbook.ScopedNamedRanges)
         {
-            if (!key.Sheet.Equals(_currentSheetId) || namedRange != range)
+            if (!key.Sheet.Equals(_currentSheetId))
                 continue;
 
-            if (bestScopedName is null || string.Compare(key.Name, bestScopedName, StringComparison.OrdinalIgnoreCase) < 0)
-                bestScopedName = key.Name;
+            if (!scopedIndex.TryGetValue(namedRange, out var existing) ||
+                string.Compare(key.Name, existing, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                scopedIndex[namedRange] = key.Name;
+            }
         }
 
-        if (bestScopedName is not null)
-            return bestScopedName;
-
-        string? bestName = null;
+        var globalIndex = new Dictionary<GridRange, string>();
         foreach (var (name, namedRange) in _workbook.NamedRanges)
         {
-            if (namedRange != range)
-                continue;
-
-            if (bestName is null || string.Compare(name, bestName, StringComparison.OrdinalIgnoreCase) < 0)
-                bestName = name;
+            if (!globalIndex.TryGetValue(namedRange, out var existing) ||
+                string.Compare(name, existing, StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                globalIndex[namedRange] = name;
+            }
         }
 
-        return bestName ?? FormatRangeReference(range.Start, range.End);
+        _nameBoxScopedRangeIndex = scopedIndex;
+        _nameBoxGlobalRangeIndex = globalIndex;
+        _nameBoxRangeIndexRevision = _navigationCacheRevision;
+        _nameBoxRangeIndexSheetId = _currentSheetId;
     }
 
     private string FormatFormulaBarText(Cell? cell, CellAddress address) =>

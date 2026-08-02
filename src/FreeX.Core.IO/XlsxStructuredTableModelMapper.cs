@@ -54,14 +54,33 @@ internal static class XlsxStructuredTableModelMapper
         var headerRows = Math.Clamp(table.HeaderRowCount ?? 1, 0, rowCount);
         var firstDataRow = table.Range.Start.Row + (uint)headerRows;
 
-        var filters = BuildFilters(table).ToList();
+        var filters = BuildFilters(table, out var singleUnsupportedColumn);
         if (filters.Count == table.FilterColumns.Count)
         {
+            // R118-io-table-autofilter-activevaluefilter-1: mirrors
+            // XlsxWorksheetAutoFilterMaterializer.MaterializeFilters' identical registration --
+            // Sheet.ActiveValueFilterColumns/ValueFilterHiddenRows form an ownership pair that
+            // FilterCommand.RecomputeHiddenRows relies on to know which rows it may safely un-hide
+            // later (see those properties' doc comments on Sheet.cs, esp. "Persisted alongside
+            // FilterHiddenRows so a reload doesn't leave the two out of sync"). Without this, a
+            // table's own <autoFilter> criteria hide rows correctly on load via FilterHiddenRows
+            // above, but ActiveValueFilterColumns stays empty, so RecomputeHiddenRows treats the
+            // table's column as having "no active value filter" and any subsequent interactive
+            // filter action on it (Clear Filter From <Column>, re-checking Select All) permanently
+            // no-ops instead of restoring the rows.
+            foreach (var filter in filters)
+            {
+                sheet.ActiveValueFilterColumns[filter.Column] = filter.IncludeBlank && !filter.AllowedValues.Contains("")
+                    ? [.. filter.AllowedValues, ""]
+                    : [.. filter.AllowedValues];
+            }
+
             for (var row = firstDataRow; row <= lastDataRow; row++)
             {
                 if (!RowMatchesAllFilters(sheet, row, filters))
                 {
                     sheet.FilterHiddenRows.Add(row);
+                    sheet.ValueFilterHiddenRows.Add(row);
                     // R95-io-autofilter-load-hiddenrows-1: see the matching fix in
                     // XlsxWorksheetAutoFilterMaterializer.MaterializeFilters -- the row's raw XML
                     // "hidden" bit was already unioned into sheet.HiddenRows before this method ran,
@@ -89,6 +108,31 @@ internal static class XlsxStructuredTableModelMapper
                 // without removing the row from HiddenRows here it stays double-classified forever
                 // (see the sibling fix above), since no filter-clearing path ever mutates HiddenRows.
                 sheet.HiddenRows.Remove(row);
+
+                // R118-io-table-autofilter-unsupported-ownedrows-1: when exactly ONE table
+                // FilterColumns entry is unsupported (the common case -- a single Top10/Average/
+                // color/icon/custom filter), register this row into sheet.ColumnFilterOwnedRows for
+                // that column too, mirroring XlsxWorksheetAutoFilterMaterializer's identical fallback
+                // (its own R98-io-autofilter-unsupported-hiddenrows-1 fix) and how a LIVE
+                // TopBottomFilterCommand/AverageFilterCommand apply registers ownership
+                // (FilterHiddenRowUpdater.ApplyColumnOwnedVisibility). Without this, neither
+                // sheet.ColumnFilterOwnedRows nor sheet.ActiveValueFilterColumns has an entry for the
+                // column, so the UI's Clear-Filter column discovery
+                // (MainWindow.DataFilterCommands.cs BuildClearAllValueFiltersCommand, which walks both
+                // dictionaries' keys) never finds it, and "Clear Filter From <Column>"
+                // (FilterCommand.ClearColumnOwnedRange) would find nothing owned and leave the row
+                // hidden forever. Left null (no registration) when a second, different unsupported
+                // column also exists, since which one actually hid any given row is then ambiguous.
+                if (singleUnsupportedColumn is { } ownerColumn)
+                {
+                    if (!sheet.ColumnFilterOwnedRows.TryGetValue(ownerColumn, out var owned))
+                    {
+                        owned = [];
+                        sheet.ColumnFilterOwnedRows[ownerColumn] = owned;
+                    }
+
+                    owned.Add(row);
+                }
             }
         }
     }
@@ -174,26 +218,55 @@ internal static class XlsxStructuredTableModelMapper
         }
     }
 
-    private static IEnumerable<StructuredTableFilterState> BuildFilters(StructuredTableModel table)
+    /// <summary>
+    /// Builds the filters BuildFilters can evaluate directly, and separately reports which single
+    /// absolute column (if any) was responsible for every FilterColumns entry this method could NOT
+    /// represent (icon/color/custom/dynamic/top-N filters or an out-of-range colId). Mirrors
+    /// XlsxWorksheetAutoFilterMaterializer.BuildFilters' identical unsupported-column tracking
+    /// (R98-io-autofilter-unsupported-hiddenrows-1) so MaterializeFilters' fallback below can register
+    /// Sheet.ColumnFilterOwnedRows ownership for the unrepresentable column (R118-io-table-autofilter-
+    /// unsupported-ownedrows-1).
+    /// </summary>
+    private static List<StructuredTableFilterState> BuildFilters(
+        StructuredTableModel table,
+        out uint? singleUnsupportedColumn)
     {
+        var filters = new List<StructuredTableFilterState>();
+        var unsupportedColumnsSeen = new HashSet<uint>();
+        var hasUnattributableUnsupportedColumn = false;
+
         foreach (var filterColumn in table.FilterColumns)
         {
             var tableColumnIndex = filterColumn.ColumnId;
             if (tableColumnIndex < 0 || tableColumnIndex >= table.Columns.Count)
+            {
+                // Can't be attributed to a real column, but this FilterColumns entry's real Excel
+                // criteria still went unrepresented -- disable ownership registration rather than
+                // guessing which column it was.
+                hasUnattributableUnsupportedColumn = true;
                 continue;
+            }
+
+            var column = table.Range.Start.Col + (uint)tableColumnIndex;
             if (filterColumn.CustomFilters.Count > 0 ||
                 filterColumn.CustomFiltersAndRaw is not null ||
                 filterColumn.NativeCustomFiltersAttributes?.Count > 0 ||
                 filterColumn.NativeFilterXmls.Count > 0)
             {
+                unsupportedColumnsSeen.Add(column);
                 continue;
             }
 
-            yield return new StructuredTableFilterState(
-                table.Range.Start.Col + (uint)tableColumnIndex,
+            filters.Add(new StructuredTableFilterState(
+                column,
                 new HashSet<string>(filterColumn.Values, StringComparer.OrdinalIgnoreCase),
-                filterColumn.IncludeBlank);
+                filterColumn.IncludeBlank));
         }
+
+        singleUnsupportedColumn = !hasUnattributableUnsupportedColumn && unsupportedColumnsSeen.Count == 1
+            ? unsupportedColumnsSeen.Single()
+            : null;
+        return filters;
     }
 
     private static bool RowMatchesAllFilters(

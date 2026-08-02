@@ -174,7 +174,11 @@ public partial class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("ODDLPRICE(A1:A2,J1:J2,C1:C2,E1:E2,F1:F2,G1:G2,H1:H2,I1:I2)", cells), Calc("ODDLPRICE(43900,44197,43831,0.05,0.05,100,2,0)"), Calc("ODDLPRICE(43910,44228,43840,0.06,0.07,110,4,1)"));
         AssertApproxColumn(EvalWithData("ODDLYIELD(A1:A2,J1:J2,C1:C2,E1:E2,K1:K2,G1:G2,H1:H2,I1:I2)", cells), Calc("ODDLYIELD(43900,44197,43831,0.05,99,100,2,0)"), Calc("ODDLYIELD(43910,44228,43840,0.06,101,110,4,1)"));
 
-        EvalWithData("ODDFPRICE(A1:A2,B1:C1,43831,44197,0.05,0.05,100,2,0)", cells).Should().Be(ErrorValue.Value);
+        // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
+        // must still be a genuine #VALUE! shape mismatch -- a row-vector (B1:C1) crossed with a
+        // column-vector (A1:A2) is now a valid cross-broadcast (R118-formula-arity3plus-cross-broadcast),
+        // so this uses B1:B3 (a same-axis, differently-sized column) instead.
+        EvalWithData("ODDFPRICE(A1:A2,B1:B3,43831,44197,0.05,0.05,100,2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -196,7 +200,7 @@ public partial class PhaseCFinancialTests
             Calc("ACCRINT(43831,43831,44197,0.05,1000,2,0)"),
             Calc("ACCRINT(43862,43862,44228,0.06,1200,4,1)"));
 
-        EvalWithData("ACCRINT(A1:A2,B1:C1,44197,0.05,1000,2,0)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("ACCRINT(A1:A2,B1:B3,44197,0.05,1000,2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -216,6 +220,6 @@ public partial class PhaseCFinancialTests
             Calc("ACCRINTM(43831,44197,0.05,1000,0)"),
             Calc("ACCRINTM(43862,44228,0.06,1200,3)"));
 
-        EvalWithData("ACCRINTM(A1:A2,B1:C1,0.05,1000)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("ACCRINTM(A1:A2,B1:B3,0.05,1000)", cells).Should().Be(ErrorValue.Value);
     }
 }

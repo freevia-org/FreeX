@@ -67,7 +67,10 @@ public static partial class PivotTableRefreshService
     /// <see cref="ChangePivotTableSourceCommand"/> also leaves this <see langword="false"/> -- it already
     /// reconciles cache.Fields itself against the NEW source before calling <see cref="Refresh"/>, so
     /// asking this method to redo it here would just be the exact same O(fieldCount * rowCount) scan
-    /// twice for one "Change Data Source" action.
+    /// twice for one "Change Data Source" action. This flag only governs the expensive
+    /// <c>ReconcileCacheFields</c> rescan -- the cheap, always-safe <c>ExtendBoundSlicerCacheItems</c>
+    /// step (R118) runs regardless of this flag, so a slicer stays in sync however cache.Fields' shared
+    /// items grew.
     /// </param>
     public static void Refresh(Workbook workbook, Sheet targetSheet, PivotTableModel pivotTable, bool rescanCacheSharedItems = false)
     {
@@ -147,16 +150,26 @@ public static partial class PivotTableRefreshService
         if (cache is not null && rescanCacheSharedItems)
         {
             ReconcileCacheFields(cache, headers, sourceSheet, pivotTable.SourceRange);
+        }
 
-            // R117-commands-pivot-slicer-growth: ReconcileCacheFields (via
-            // PivotCacheFieldFactory.MergeFromSourceData) just appended any genuinely NEW distinct
-            // value onto the surviving field's SharedItems, at a brand-new index past the end of the
-            // list -- but nothing else ever revisits an ALREADY-EXISTING slicer's CacheItems to add an
-            // entry for that new index. SlicerItemResolver.ResolvePivotCacheItems only ever resolves a
-            // caption for an index already present in CacheItems (foreach item in slicer.CacheItems),
-            // so a newly-appeared value stayed invisible in that slicer's tile list forever, even after
-            // Refresh. Extend every slicer bound to THIS pivot table now, while cache.Fields still
-            // reflects the just-reconciled SharedItems.
+        // R118-commands-pivot-slicer-changesource: R117 put ExtendBoundSlicerCacheItems behind the
+        // SAME rescanCacheSharedItems gate as the expensive ReconcileCacheFields rescan above, on the
+        // assumption that "cache.Fields' SharedItems changed" only ever happens on that gated path.
+        // That is false: ChangePivotTableSourceCommand (an ordinary "Change Data Source" action, not a
+        // rare edge case) reconciles cache.Fields itself via PivotCacheFieldFactory.ReconcileFields
+        // BEFORE calling this method -- deliberately passing rescanCacheSharedItems: false to avoid
+        // redoing that same O(fieldCount * rowCount) scan a second time here -- so a field's
+        // SharedItems can grow with a genuinely new distinct value from the new/wider source range
+        // while this method never learns about it, leaving any slicer bound to that field unable to
+        // ever surface the new item (the exact bug R117 fixed for the F5/Refresh path, reopened on
+        // this second entry point). Unlike ReconcileCacheFields, ExtendBoundSlicerCacheItems does NOT
+        // rescan the source column -- it only walks cache.Fields (already in memory) and each bound
+        // slicer's existing CacheItems, so it costs nothing extra to run unconditionally: when
+        // SharedItems genuinely didn't change (the common slicer-click/filter/layout callers), every
+        // index it would add already exists and the loop is a same-length no-op. So this always runs
+        // whenever a cache is present, regardless of which path grew cache.Fields' SharedItems.
+        if (cache is not null)
+        {
             ExtendBoundSlicerCacheItems(workbook, pivotTable, cache);
         }
 
@@ -507,13 +520,21 @@ public static partial class PivotTableRefreshService
     /// <see cref="SlicerCacheItem.IsSelected"/>, so an untouched refresh (no new distinct values) is a
     /// complete no-op and a user's prior per-item selection/deselection survives unchanged.
     /// <para>
-    /// A brand-new item defaults to <c>IsSelected: true</c> -- Excel shows a newly-appeared pivot field
-    /// value as included/selected by default in a slicer that has not explicitly excluded it (mirroring
-    /// <c>AddSlicerCommand.BuildInitialCacheItems</c>'s own "all items selected" seed for a fresh
-    /// slicer). This never touches <see cref="SlicerModel.SelectedItems"/> itself -- only the resolver's
-    /// projection of CacheItems into SelectedItems, which already only fires when SelectedItems is still
-    /// empty -- so a user's existing explicit filter (captured via <c>SetSlicerSelectionCommand</c>) is
-    /// completely unaffected.
+    /// R118-commands-pivot-slicer-includeNewItemsInFilter: a brand-new item does NOT unconditionally
+    /// default to <c>IsSelected: true</c>. Excel's <c>pivotField/@includeNewItemsInFilter</c>
+    /// (ECMA-376 §18.10.1.65; <see cref="PivotFieldModel.IncludeNewItemsInFilter"/>, default
+    /// <see langword="false"/> when absent) governs exactly this situation for a field with a MANUAL
+    /// FILTER already applied (at least one existing item deselected): a newly-appeared item is
+    /// automatically SELECTED only when that flag is explicitly true; otherwise it is added deselected,
+    /// so the user's deliberately-narrowed filter is not silently widened by data they never asked to
+    /// see reappear. When the slicer currently has NO filter at all (every existing item selected),
+    /// there is nothing to preserve, so the new item is still selected by default -- exactly like the
+    /// pre-existing behavior and <c>AddSlicerCommand.BuildInitialCacheItems</c>'s own "all items
+    /// selected" seed for a fresh slicer -- otherwise the slicer would spontaneously start filtering
+    /// data it never filtered before. This never touches <see cref="SlicerModel.SelectedItems"/> itself
+    /// -- only the resolver's projection of CacheItems into SelectedItems, which already only fires when
+    /// SelectedItems is still empty -- so a user's existing explicit filter (captured via
+    /// <c>SetSlicerSelectionCommand</c>) is completely unaffected.
     /// </para>
     /// <para>
     /// Deliberately skips a slicer whose CacheItems is currently empty: an empty CacheItems means either
@@ -536,20 +557,56 @@ public static partial class PivotTableRefreshService
             if (string.IsNullOrWhiteSpace(slicer.SourceFieldName))
                 continue;
 
-            var field = cache.Fields.FirstOrDefault(candidate =>
-                string.Equals(candidate.Name, slicer.SourceFieldName, StringComparison.OrdinalIgnoreCase));
+            var fieldIndex = -1;
+            PivotCacheFieldModel? field = null;
+            for (var candidateIndex = 0; candidateIndex < cache.Fields.Count; candidateIndex++)
+            {
+                if (string.Equals(cache.Fields[candidateIndex].Name, slicer.SourceFieldName, StringComparison.OrdinalIgnoreCase))
+                {
+                    fieldIndex = candidateIndex;
+                    field = cache.Fields[candidateIndex];
+                    break;
+                }
+            }
             if (field?.SharedItems is not { Count: > 0 } sharedItems)
                 continue;
 
             var existingIndices = new HashSet<int>(slicer.CacheItems.Count);
+            var hasManualFilter = false;
             foreach (var item in slicer.CacheItems)
+            {
                 existingIndices.Add(item.Index);
+                if (!item.IsSelected)
+                    hasManualFilter = true;
+            }
+
+            // No existing deselection => nothing to preserve => new items are selected by default, same
+            // as before. A manual filter is present => only widen it when the field's own
+            // includeNewItemsInFilter explicitly says to (Excel default is false/absent => preserve).
+            var includeNewItems = !hasManualFilter ||
+                (FindPivotField(pivotTable, fieldIndex)?.IncludeNewItemsInFilter ?? false);
 
             for (var index = 0; index < sharedItems.Count; index++)
             {
                 if (existingIndices.Add(index))
-                    slicer.CacheItems.Add(new SlicerCacheItem(index, IsSelected: true));
+                    slicer.CacheItems.Add(new SlicerCacheItem(index, IsSelected: includeNewItems));
             }
         }
     }
+
+    /// <summary>
+    /// Finds the <see cref="PivotFieldModel"/> for <paramref name="sourceFieldIndex"/> across whichever
+    /// axis list (Row/Column/Page) it is currently placed in -- <c>IncludeNewItemsInFilter</c> and other
+    /// per-field settings are carried on that axis-placement record, not on the pivot cache field itself
+    /// (mirroring <c>XlsxPivotTableWriter.FindPivotField</c>'s identical lookup for the same reason: the
+    /// OOXML <c>pivotField</c> element these settings round-trip through is independent of which axis,
+    /// if any, currently hosts the field). Returns <see langword="null"/> for a field that is bound to a
+    /// slicer but not currently placed on any axis (its filter settings, if it never was placed, do not
+    /// exist to read).
+    /// </summary>
+    private static PivotFieldModel? FindPivotField(PivotTableModel pivotTable, int sourceFieldIndex) =>
+        pivotTable.RowFields
+            .Concat(pivotTable.ColumnFields)
+            .Concat(pivotTable.PageFields)
+            .LastOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
 }

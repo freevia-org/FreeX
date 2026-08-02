@@ -32,7 +32,9 @@ public sealed class TestLaneSolutionTests
             "tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj",
             "freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj",
             "freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj",
+            "freep/FreeP.App.Localization.Tests/FreeP.App.Localization.Tests.csproj",
             "freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj",
+            "freep/FreeP.App.Recording.Tests/FreeP.App.Recording.Tests.csproj",
             "freep/FreeP.App.Avalonia.Tests/FreeP.App.Avalonia.Tests.csproj",
             "freep/FreeP.App.Rendering.Avalonia.Tests/FreeP.App.Rendering.Avalonia.Tests.csproj"
         });
@@ -42,6 +44,31 @@ public sealed class TestLaneSolutionTests
             "tests/FreeX.App.Host.Tests/FreeX.App.Host.Tests.csproj",
             "tests/FreeX.App.UI.Tests/FreeX.App.UI.Tests.csproj"
         });
+    }
+
+    [Fact]
+    public void R118_DefaultTestLane_IncludesEveryFreePTestProjectRegisteredInFreePSolution()
+    {
+        // FreeX.DefaultTests.slnx is the only automatically-triggered test lane (ci.yml runs it on
+        // every push/PR); FreeP.slnx itself is wired only into the manual-only freep-ci.yml workflow.
+        // This must derive the expected set from FreeP.slnx (not hard-code it) so that a future FreeP
+        // test project silently regresses this contract instead of accruing unnoticed for rounds, the
+        // way FreeP.App.Localization.Tests and FreeP.App.Recording.Tests previously did.
+        var defaultLaneProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "FreeX.DefaultTests.slnx"));
+        var freePSolutionProjects = ReadSolutionProjects(TestWorkspaceFileLocator.FindFromWorkspaceRoot(
+            "FreeP.slnx"));
+
+        var freePTestProjects = freePSolutionProjects
+            .Where(path => path.StartsWith("freep/", StringComparison.Ordinal)
+                && path.EndsWith(".Tests.csproj", StringComparison.Ordinal))
+            .ToArray();
+
+        freePTestProjects.Should().NotBeEmpty("FreeP.slnx should register at least its known test projects");
+        defaultLaneProjects.Should().Contain(freePTestProjects,
+            "every FreeP test project registered in FreeP.slnx must also run under the " +
+            "automatically-triggered FreeX.DefaultTests.slnx gate; freep-ci.yml (FreeP.slnx) is manual-only " +
+            "and never runs on push/PR, so a project missing here is never exercised automatically");
     }
 
     [Fact]

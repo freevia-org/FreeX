@@ -112,7 +112,14 @@ public sealed class R116_PivotSlicerChangeSourcePreservesIndicesTests
             "flips to a different value than the one the user selected");
 
         // Real live-UI/render entry point: resolving the slicer's items must project the selection onto
-        // "B", never "A" -- proving the corruption is invisible nowhere else either.
+        // "B", never "A" -- proving the corruption is invisible nowhere else either. "C" is a genuinely
+        // new distinct value surfaced by this redirect (R118-commands-pivot-slicer-changesource): Change
+        // Data Source now extends the bound slicer's CacheItems for it too, same as an ordinary refresh
+        // (R117). This slicer already has a manual filter applied ("A" explicitly deselected), and the
+        // field carries no explicit includeNewItemsInFilter=true, so per Excel's default (ECMA-376
+        // pivotField/@includeNewItemsInFilter, default false) the new "C" must NOT be auto-included --
+        // it stays excluded alongside "A" until the user (or an explicit includeNewItemsInFilter=true)
+        // opts in, so the user's deliberate filter is not silently widened.
         SlicerItemResolver.ResolveAvailableItems(slicer, workbook);
         slicer.SelectedItems.Should().Equal("B");
     }
@@ -207,6 +214,12 @@ public sealed class R116_PivotSlicerChangeSourcePreservesIndicesTests
             "cache's fields the same way the same-SourceType branch does, not blindly rebuild from the " +
             "new source's row order");
 
+        // "C" is a genuinely new distinct value surfaced by this redirect
+        // (R118-commands-pivot-slicer-changesource): Change Data Source now extends the bound slicer's
+        // CacheItems for it too, same as an ordinary refresh (R117). This slicer already has a manual
+        // filter applied ("A" explicitly deselected) and no explicit includeNewItemsInFilter=true, so
+        // per Excel's default the new "C" must NOT be auto-included -- it stays excluded, preserving the
+        // user's deliberate filter instead of silently widening it.
         SlicerItemResolver.ResolveAvailableItems(slicer, workbook);
         slicer.SelectedItems.Should().Equal("B");
     }

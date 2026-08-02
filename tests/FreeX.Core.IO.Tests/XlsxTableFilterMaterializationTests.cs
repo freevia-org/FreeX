@@ -76,4 +76,49 @@ public class XlsxTableFilterMaterializationTests
 
         sheet.FilterHiddenRows.Should().BeEmpty();
     }
+
+    // R118-io-table-autofilter-activevaluefilter-1: a table's value-list AutoFilter criteria must be
+    // re-registered into sheet.ActiveValueFilterColumns/ValueFilterHiddenRows on load, exactly like
+    // XlsxWorksheetAutoFilterMaterializer.MaterializeFilters already does for a plain worksheet
+    // AutoFilter range. Without this, FilterCommand.RecomputeHiddenRows sees
+    // ActiveValueFilterColumns.Count == 0 for the table's column and treats it as "no active value
+    // filter", so a later Clear Filter / Select-All on that column permanently no-ops instead of
+    // restoring the rows this criterion hid.
+    [Fact]
+    public void R118_EvaluatableValueFilter_RegistersActiveValueFilterColumnAndValueFilterHiddenRows()
+    {
+        // Column 1 (Amount, table-relative) value filter keeping only "3" -> absolute column is
+        // table.Range.Start.Col (1) + ColumnId (1) = 2, matching the "Amount" data column (col 2).
+        var valueFilter = new StructuredTableFilterColumnModel(ColumnId: 1, Values: ["3"]);
+        var (sheet, table) = BuildSheetWithTable(valueFilter);
+
+        XlsxStructuredTableModelMapper.MaterializeFilters(sheet, table);
+
+        sheet.ActiveValueFilterColumns.Should().ContainKey(2u);
+        sheet.ActiveValueFilterColumns[2u].Should().BeEquivalentTo(new[] { "3" });
+        sheet.ValueFilterHiddenRows.Should().Contain([2u, 4u, 5u]);
+        sheet.ValueFilterHiddenRows.Should().NotContain(3u);
+    }
+
+    // No-regression sibling: a table filter column FreeX cannot evaluate (native-XML-only, e.g. an
+    // icon filter) must NOT register anything into ActiveValueFilterColumns/ValueFilterHiddenRows --
+    // those are owned exclusively by plain value-list criteria (see
+    // XlsxWorksheetAutoFilterMaterializer's identical distinction via ColumnFilterOwnedRows for its
+    // own unsupported-column fallback). Registering a fabricated allowed-value set here would make
+    // FilterCommand.RecomputeHiddenRows re-evaluate this column against criteria that don't reflect
+    // the real (unrepresentable) Excel filter, corrupting the row set the "hidden rows" fallback
+    // above just correctly reclassified.
+    [Fact]
+    public void R118_UnevaluatableTableFilter_DoesNotRegisterActiveValueFilterColumn()
+    {
+        var iconFilter = new StructuredTableFilterColumnModel(
+            ColumnId: 1, Values: [], IncludeBlank: false,
+            NativeFilterXml: "<iconFilter iconSet=\"3TrafficLights1\" iconId=\"1\"/>");
+        var (sheet, table) = BuildSheetWithTable(iconFilter, hiddenRows: [3, 4]);
+
+        XlsxStructuredTableModelMapper.MaterializeFilters(sheet, table);
+
+        sheet.ActiveValueFilterColumns.Should().BeEmpty();
+        sheet.ValueFilterHiddenRows.Should().BeEmpty();
+    }
 }

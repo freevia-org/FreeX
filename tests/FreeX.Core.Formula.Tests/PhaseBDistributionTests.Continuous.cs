@@ -39,9 +39,9 @@ public partial class PhaseBDistributionTests
         AssertColumnApproximately(Eval("LOGNORM.DIST(A1:A2,F1:F2,G1:G2,D1:D2)", sheet), Calc("LOGNORM.DIST(1,0,1,FALSE)"), Calc("LOGNORM.DIST(2,0.5,1.5,TRUE)"));
         AssertColumnApproximately(Eval("LOGNORM.INV(E1:E2,F1:F2,G1:G2)", sheet), Calc("LOGNORM.INV(0.5,0,1)"), Calc("LOGNORM.INV(0.75,0.5,1.5)"));
 
-        Eval("WEIBULL.DIST(A1:A2,B1:C1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("GAMMA.DIST(A1:A2,B1:C1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("LOGNORM.DIST(A1:A2,F1:G1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("WEIBULL.DIST(A1:A2,B1:B3,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("GAMMA.DIST(A1:A2,B1:B3,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("LOGNORM.DIST(A1:A2,F1:F3,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -70,8 +70,8 @@ public partial class PhaseBDistributionTests
         AssertColumnApproximately(Eval("BETA.DIST(A1:A2,B1:B2,C1:C2,D1:D2,E1:E2,F1:F2)", sheet), Calc("BETA.DIST(0.25,1,1,TRUE,0,1)"), Calc("BETA.DIST(0.5,2,3,FALSE,0,2)"));
         AssertColumnApproximately(Eval("BETA.INV(A1:A2,B1:B2,C1:C2,E1:E2,F1:F2)", sheet), Calc("BETA.INV(0.25,1,1,0,1)"), Calc("BETA.INV(0.5,2,3,0,2)"));
 
-        Eval("BETA.DIST(A1:A2,B1:C1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("BETA.INV(A1:A2,B1:C1,1)", sheet).Should().Be(ErrorValue.Value);
+        Eval("BETA.DIST(A1:A2,B1:B3,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("BETA.INV(A1:A2,B1:B3,1)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

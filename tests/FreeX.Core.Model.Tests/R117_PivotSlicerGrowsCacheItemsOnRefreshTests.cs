@@ -104,11 +104,13 @@ public sealed class R117_PivotSlicerGrowsCacheItemsOnRefreshTests
 
         // The user's pre-existing partial selection must survive completely unchanged: "A" was
         // explicitly deselected before the refresh and must STILL be excluded afterwards; "B" was
-        // selected and must STILL be included. "C" is the brand-new value, which Excel includes by
-        // default in a slicer that never explicitly excluded it (matching the CacheItem the fix
-        // appends with IsSelected: true), so it also shows up as selected -- but crucially "A" is not
-        // resurrected by the refresh.
-        slicer.SelectedItems.Should().Contain("B").And.Contain("C").And.NotContain("A");
+        // selected and must STILL be included. This slicer already has a manual filter applied ("A"
+        // deselected) and the field carries no explicit includeNewItemsInFilter=true, so per Excel's
+        // default (ECMA-376 pivotField/@includeNewItemsInFilter, default false) the brand-new "C" must
+        // NOT be auto-included either -- it stays excluded alongside "A" until the user (or an explicit
+        // includeNewItemsInFilter=true) opts in, so the user's deliberate filter is not silently
+        // widened by a value they never asked to see.
+        slicer.SelectedItems.Should().Contain("B").And.NotContain("C").And.NotContain("A");
     }
 
     /// <summary>No-regression sibling: an ordinary refresh with NO new distinct value leaves CacheItems byte-identical (same count, same indices, same selection flags, same order).</summary>
@@ -140,7 +142,11 @@ public sealed class R117_PivotSlicerGrowsCacheItemsOnRefreshTests
         var stillA = slicer.CacheItems.Single(i => i.Index == 0);
         stillA.IsSelected.Should().BeFalse("a refresh must never flip an existing item's own selection flag, only append new ones");
 
+        // This slicer already has a manual filter applied ("A" deselected via index 0 above) and the
+        // field carries no explicit includeNewItemsInFilter=true, so per Excel's default the new item
+        // must be added DESELECTED, not selected -- widening an existing manual filter to include a
+        // value the user never asked to see is exactly the bug this fix prevents.
         var newC = slicer.CacheItems.Single(i => i.Index == 2);
-        newC.IsSelected.Should().BeTrue("Excel includes a newly-appeared item by default in an unfiltered/not-yet-considered slicer");
+        newC.IsSelected.Should().BeFalse("Excel does not auto-include a new item in an existing manual filter unless includeNewItemsInFilter is true");
     }
 }

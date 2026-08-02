@@ -117,8 +117,8 @@ public partial class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("AMORDEGRC(A1:A2,J1:J2,K1:K2,B1:B2,D1:D2,L1:L2,I1:I2)", cells), Calc("AMORDEGRC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORDEGRC(3000,43862,44228,500,2,0.25,1)"));
         AssertApproxColumn(EvalWithData("AMORLINC(A1:A2,J1:J2,K1:K2,B1:B2,D1:D2,L1:L2,I1:I2)", cells), Calc("AMORLINC(2400,43831,44197,300,1,0.2,0)"), Calc("AMORLINC(3000,43862,44228,500,2,0.25,1)"));
 
-        EvalWithData("DDB(A1:A2,B1:C1,10,1)", cells).Should().Be(ErrorValue.Value);
-        EvalWithData("AMORLINC(A1:A2,J1:K1,44197,300,1,0.2,0)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("DDB(A1:A2,B1:B3,10,1)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("AMORLINC(A1:A2,J1:J3,44197,300,1,0.2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

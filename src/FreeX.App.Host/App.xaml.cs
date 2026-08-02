@@ -179,19 +179,25 @@ public partial class App : Application
         // window is already hosting the recovered workbook (and is dirty).
         var recoveryAccepted = OfferStartupRecovery(mainWindow, snapshotStore);
 
-        var openedStartupFile = false;
-        foreach (var startupWorkbookPath in startupArgs)
+        // R118: launching FreeX.exe with more than one file argument (or dragging multiple
+        // workbook files onto the taskbar icon, which Windows delivers as a single process launch
+        // with multiple path arguments) used to open only the FIRST existing file and silently
+        // drop every subsequent one -- the loop `break`d right after scheduling the first hit. Real
+        // Excel opens every file argument, each in its own window. PlanStartupFileOpens (a pure,
+        // independently-testable seam) decides which argument opens in the already-visible main
+        // window and which open in their own new window; this loop just carries out that plan.
+        var startupFilePlan = PlanStartupFileOpens(startupArgs, File.Exists, recoveryAccepted, out var firstMissingStartupPath);
+        var openedStartupFile = startupFilePlan.Count > 0;
+        foreach (var entry in startupFilePlan)
         {
-            if (!File.Exists(startupWorkbookPath))
-                continue;
-
-            openedStartupFile = true;
-            if (recoveryAccepted)
+            var pathToOpen = entry.Path;
+            if (entry.OpenInNewWindow)
             {
-                // The main window already holds a recovered workbook. Opening the command-line
-                // argument in the same window would prompt "Save changes?" on the just-recovered
-                // workbook, and a "No" answer would silently discard it.  Open the file-arg in
-                // a new window to keep both workbooks alive and safe.
+                // Either the main window already holds a recovered workbook (recoveryAccepted), or
+                // this is the second-or-later file argument and the main window is already spoken
+                // for by the first one. Opening this argument in the same window would prompt
+                // "Save changes?" on whatever it already holds, and a "No" answer would silently
+                // discard it. Open the file-arg in a new window to keep every workbook alive.
                 _ = mainWindow.Dispatcher.BeginInvoke(() =>
                 {
                     try
@@ -200,22 +206,29 @@ public partial class App : Application
                         newWindow.Show();
                         newWindow.Activate();
                         _ = newWindow.Dispatcher.BeginInvoke(async () =>
-                            await newWindow.OpenStartupFileAsync(startupWorkbookPath));
+                            await newWindow.OpenStartupFileAsync(pathToOpen));
                     }
                     catch
                     {
                         // Best-effort: if we can't open the file-arg in a new window, skip it.
-                        // The user can open it manually; we must not discard the recovered workbook.
+                        // The user can open it manually; we must not discard another window's workbook.
                     }
                 });
             }
             else
             {
                 _ = mainWindow.Dispatcher.BeginInvoke(async () =>
-                    await mainWindow.OpenStartupFileAsync(startupWorkbookPath));
+                    await mainWindow.OpenStartupFileAsync(pathToOpen));
             }
+        }
 
-            break;
+        // No command-line argument resolved to an openable file (and none of them triggered the
+        // crash-recovery / normal-open branches above) -- tell the user instead of quietly showing
+        // a blank Book1 as if launched with no arguments at all.
+        if (!openedStartupFile && firstMissingStartupPath is not null)
+        {
+            _ = mainWindow.Dispatcher.BeginInvoke(() =>
+                mainWindow.ReportStartupFileNotFound(firstMissingStartupPath));
         }
 
         // Warm the XLSX open/save pipeline off the UI thread so the user's first real file open does
@@ -280,6 +293,59 @@ public partial class App : Application
             return e.Args;
 
         return Environment.GetCommandLineArgs().Skip(1).ToArray();
+    }
+
+    /// <summary>
+    /// One command-line/drag startup file argument that resolved to an existing file, and where it
+    /// should be opened: <c>false</c> for the single argument that can share the already-visible
+    /// main window, <c>true</c> for every argument that needs its own new window.
+    /// </summary>
+    internal readonly record struct StartupFileOpenPlan(string Path, bool OpenInNewWindow);
+
+    /// <summary>
+    /// Decides, for a full set of startup file arguments, which existing file (if any) opens in the
+    /// already-visible main window and which open in their own new window (R118: launching FreeX
+    /// with multiple file arguments -- or dragging multiple files onto the taskbar icon -- must open
+    /// every one of them, each in its own window, the way real Excel does, instead of silently
+    /// dropping every argument after the first). Pure and side-effect free so it can be unit tested
+    /// directly; <see cref="App_OnStartup"/> is the sole real caller and just carries out the plan.
+    /// </summary>
+    /// <param name="startupArgs">The raw startup arguments, in the order they were supplied.</param>
+    /// <param name="fileExists">Existence check (injected so tests don't need real files on disk).</param>
+    /// <param name="recoveryAccepted">
+    /// True when the main window already hosts a just-recovered crash snapshot, so even the FIRST
+    /// existing file argument must not reuse that window (it would prompt "Save changes?" on the
+    /// recovered workbook, and a "No" answer would silently discard it) and instead opens in its own
+    /// new window like every subsequent argument.
+    /// </param>
+    /// <param name="firstMissingPath">
+    /// The first argument that failed <paramref name="fileExists"/> (a typo'd path, a directory, a
+    /// URL, ...), or null if every argument resolved to an existing file. Used by the caller to warn
+    /// the user only when NO argument opened anything at all.
+    /// </param>
+    internal static IReadOnlyList<StartupFileOpenPlan> PlanStartupFileOpens(
+        IEnumerable<string> startupArgs,
+        Func<string, bool> fileExists,
+        bool recoveryAccepted,
+        out string? firstMissingPath)
+    {
+        var plans = new List<StartupFileOpenPlan>();
+        string? firstMissing = null;
+        var isFirstOpenableFile = true;
+        foreach (var path in startupArgs)
+        {
+            if (!fileExists(path))
+            {
+                firstMissing ??= path;
+                continue;
+            }
+
+            plans.Add(new StartupFileOpenPlan(path, recoveryAccepted || !isFirstOpenableFile));
+            isFirstOpenableFile = false;
+        }
+
+        firstMissingPath = firstMissing;
+        return plans;
     }
 
     private static void ConfigureServices(IServiceCollection services)

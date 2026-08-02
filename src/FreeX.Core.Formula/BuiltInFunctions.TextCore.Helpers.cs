@@ -28,6 +28,15 @@ public static partial class BuiltInFunctions
         return new RangeValue(cells, range.StartRow, range.StartCol);
     }
 
+    /// <summary>
+    /// Maps a 3-argument function over its (possibly array) arguments, growing to the bounding
+    /// Max(rows)/Max(cols) 2-D broadcast shape (via <see cref="TryGrowBroadcastShape"/>) rather than
+    /// requiring every range argument to either match the FIRST non-scalar range's exact shape or be
+    /// a 1x1 scalar. A genuine row-vector x column-vector pair (e.g. PMT's rate/nper) must 2-D
+    /// cross-broadcast into a spilled matrix, matching Excel dynamic arrays and the identical rule
+    /// already used by MapBinaryMathArgs (BuiltInFunctions.MathCore.Helpers.cs) and the binary
+    /// operators (FormulaEvaluator.Operators' ElementwiseOp) -- see R118-formula-arity3plus-cross-broadcast.
+    /// </summary>
     private static ScalarValue MapTernaryTextArgs(
         ScalarValue first,
         ScalarValue second,
@@ -37,16 +46,14 @@ public static partial class BuiltInFunctions
         var firstRange = first as RangeValue;
         var secondRange = second as RangeValue;
         var thirdRange = third as RangeValue;
-        var shape = ChooseBroadcastShape(firstRange, secondRange, thirdRange);
-        if (shape is null) return map(first, second, third);
-        if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
-            (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
-            (thirdRange is not null && !CanBroadcastToShape(thirdRange, shape.RowCount, shape.ColCount)))
+        if (firstRange is null && secondRange is null && thirdRange is null)
+            return map(first, second, third);
+        if (!TryGrowBroadcastShape([firstRange, secondRange, thirdRange], out int rows, out int cols))
             return ErrorValue.Value;
 
-        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
-        for (int r = 0; r < shape.RowCount; r++)
-            for (int c = 0; c < shape.ColCount; c++)
+        var cells = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
             {
                 var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
                 var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
@@ -119,6 +126,11 @@ public static partial class BuiltInFunctions
         return fallback;
     }
 
+    /// <summary>
+    /// 4-argument counterpart of <see cref="MapTernaryTextArgs"/> -- same Max(rows)/Max(cols)
+    /// grow-broadcast rule, see that method's doc comment for rationale
+    /// (R118-formula-arity3plus-cross-broadcast).
+    /// </summary>
     private static ScalarValue MapQuaternaryTextArgs(
         ScalarValue first,
         ScalarValue second,
@@ -130,17 +142,14 @@ public static partial class BuiltInFunctions
         var secondRange = second as RangeValue;
         var thirdRange = third as RangeValue;
         var fourthRange = fourth as RangeValue;
-        var shape = ChooseBroadcastShape(firstRange, secondRange, thirdRange, fourthRange);
-        if (shape is null) return map(first, second, third, fourth);
-        if ((firstRange is not null && !CanBroadcastToShape(firstRange, shape.RowCount, shape.ColCount)) ||
-            (secondRange is not null && !CanBroadcastToShape(secondRange, shape.RowCount, shape.ColCount)) ||
-            (thirdRange is not null && !CanBroadcastToShape(thirdRange, shape.RowCount, shape.ColCount)) ||
-            (fourthRange is not null && !CanBroadcastToShape(fourthRange, shape.RowCount, shape.ColCount)))
+        if (firstRange is null && secondRange is null && thirdRange is null && fourthRange is null)
+            return map(first, second, third, fourth);
+        if (!TryGrowBroadcastShape([firstRange, secondRange, thirdRange, fourthRange], out int rows, out int cols))
             return ErrorValue.Value;
 
-        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
-        for (int r = 0; r < shape.RowCount; r++)
-            for (int c = 0; c < shape.ColCount; c++)
+        var cells = new ScalarValue[rows, cols];
+        for (int r = 0; r < rows; r++)
+            for (int c = 0; c < cols; c++)
             {
                 var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
                 var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
@@ -152,52 +161,16 @@ public static partial class BuiltInFunctions
         return new RangeValue(cells);
     }
 
-    private static ScalarValue MapScalarArgs(
-        IReadOnlyList<ScalarValue> args,
-        Func<IReadOnlyList<ScalarValue>, ScalarValue> map)
-    {
-        var ranges = new RangeValue?[args.Count];
-        for (int i = 0; i < args.Count; i++)
-            ranges[i] = args[i] as RangeValue;
-
-        var shape = ChooseBroadcastShape(ranges);
-        if (shape is null) return map(args);
-
-        foreach (var range in ranges)
-        {
-            if (range is null) continue;
-            if (!CanBroadcastToShape(range, shape.RowCount, shape.ColCount))
-                return ErrorValue.Value;
-        }
-
-        var cells = new ScalarValue[shape.RowCount, shape.ColCount];
-        var scalarArgs = new ScalarValue[args.Count];
-        for (int r = 0; r < shape.RowCount; r++)
-            for (int c = 0; c < shape.ColCount; c++)
-            {
-                for (int i = 0; i < args.Count; i++)
-                    scalarArgs[i] = args[i] is RangeValue range ? ValueAtBroadcastCell(range, r, c) : args[i];
-                cells[r, c] = map(scalarArgs);
-            }
-
-        return new RangeValue(cells);
-    }
-
     /// <summary>
-    /// Lookup-family variant of <see cref="MapScalarArgs"/> that grows to the bounding 2-D
-    /// broadcast shape (via <see cref="TryGrowBroadcastShape"/>) instead of requiring an EXACT
-    /// shape match or a 1x1 scalar. VLOOKUP/HLOOKUP/MATCH/INDEX route their non-table array
-    /// arguments (lookup_value/col_index_num/row_index_num/match_type/area_num) through this so
-    /// a column-vector lookup_value crossed with a row-vector match_type (etc.) 2-D
-    /// cross-broadcasts into a spilled matrix, matching Excel dynamic arrays -- the same rule
-    /// MapBinaryMathArgs already applies for two-argument math/bit/engineering functions
-    /// (R62-formula-array-broadcast-6-1) -- rather than wrongly returning #VALUE!
-    /// (R98-formula-lookup-cross-broadcast). Deliberately a SEPARATE helper from the shared
-    /// MapScalarArgs (used by ~30 unrelated financial/statistical/text functions whose own
-    /// cross-broadcast behavior has not been verified here) rather than changing that shared
-    /// choke point's semantics for every caller.
+    /// N-argument (params-list) counterpart of <see cref="MapTernaryTextArgs"/> -- same
+    /// Max(rows)/Max(cols) grow-broadcast rule, see that method's doc comment for rationale
+    /// (R118-formula-arity3plus-cross-broadcast). Backs ~30 financial/statistical/text functions
+    /// (PMT/PV/FV/NPER/RATE/IPMT/PPMT, bond/depreciation, CEILING.MATH/FLOOR.MATH, DATEDIF/DAYS360/
+    /// YEARFRAC, CONVERT, the NORM.DIST/GAMMA.DIST/WEIBULL.DIST/BINOM.DIST/POISSON.DIST-style
+    /// distribution family, etc.) so a row-vector argument crossed with a column-vector argument
+    /// (e.g. PMT's rate/nper) now spills an MxN matrix instead of wrongly returning #VALUE!.
     /// </summary>
-    private static ScalarValue MapScalarArgsGrowBroadcast(
+    private static ScalarValue MapScalarArgs(
         IReadOnlyList<ScalarValue> args,
         Func<IReadOnlyList<ScalarValue>, ScalarValue> map)
     {
@@ -227,37 +200,28 @@ public static partial class BuiltInFunctions
     }
 
     /// <summary>
-    /// Lookup-family variant of <see cref="MapTernaryTextArgs"/> that grows to the bounding 2-D
-    /// broadcast shape instead of requiring an exact shape match or a 1x1 scalar -- see
-    /// <see cref="MapScalarArgsGrowBroadcast"/> above for rationale. XLOOKUP/XMATCH route their
-    /// lookup_value/match_mode/search_mode arguments through this (R98-formula-lookup-cross-broadcast).
+    /// Lookup-family alias of <see cref="MapScalarArgs"/>, kept as a distinctly-named call-site
+    /// marker for VLOOKUP/HLOOKUP/MATCH/INDEX (which route their non-table array arguments --
+    /// lookup_value/col_index_num/row_index_num/match_type/area_num -- through this) even though
+    /// both now share the exact same grow-broadcast implementation
+    /// (R118-formula-arity3plus-cross-broadcast folded the two-tier "exact-match-only" vs
+    /// "grow-broadcast" split back into one, since MapScalarArgs itself now grow-broadcasts).
+    /// </summary>
+    private static ScalarValue MapScalarArgsGrowBroadcast(
+        IReadOnlyList<ScalarValue> args,
+        Func<IReadOnlyList<ScalarValue>, ScalarValue> map) => MapScalarArgs(args, map);
+
+    /// <summary>
+    /// Lookup-family alias of <see cref="MapTernaryTextArgs"/>, kept as a distinctly-named
+    /// call-site marker for XLOOKUP/XMATCH (lookup_value/match_mode/search_mode) -- see
+    /// <see cref="MapScalarArgsGrowBroadcast"/> above for rationale.
     /// </summary>
     private static ScalarValue MapTernaryTextArgsGrowBroadcast(
         ScalarValue first,
         ScalarValue second,
         ScalarValue third,
-        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue> map)
-    {
-        var firstRange = first as RangeValue;
-        var secondRange = second as RangeValue;
-        var thirdRange = third as RangeValue;
-        if (firstRange is null && secondRange is null && thirdRange is null)
-            return map(first, second, third);
-        if (!TryGrowBroadcastShape([firstRange, secondRange, thirdRange], out int rows, out int cols))
-            return ErrorValue.Value;
-
-        var cells = new ScalarValue[rows, cols];
-        for (int r = 0; r < rows; r++)
-            for (int c = 0; c < cols; c++)
-            {
-                var firstValue = firstRange is null ? first : ValueAtBroadcastCell(firstRange, r, c);
-                var secondValue = secondRange is null ? second : ValueAtBroadcastCell(secondRange, r, c);
-                var thirdValue = thirdRange is null ? third : ValueAtBroadcastCell(thirdRange, r, c);
-                cells[r, c] = map(firstValue, secondValue, thirdValue);
-            }
-
-        return new RangeValue(cells);
-    }
+        Func<ScalarValue, ScalarValue, ScalarValue, ScalarValue> map) =>
+        MapTernaryTextArgs(first, second, third, map);
 
     private static bool ContainsSurrogatePair(string text)
     {

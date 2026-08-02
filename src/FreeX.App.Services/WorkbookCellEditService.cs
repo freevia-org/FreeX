@@ -113,9 +113,23 @@ public sealed class WorkbookCellEditService
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(affectedCells);
 
-        return workbook.CalculationMode is WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables
-            ? _recalcEngine.Recalculate(workbook, affectedCells)
-            : null;
+        // R118-calc-except-data-tables: both Automatic and AutomaticExceptDataTables recalculate
+        // live on every edit, but "Automatic Except for Data Tables" must leave any What-If
+        // Analysis Data Table's result body frozen at its last computed value until the user
+        // explicitly asks for it (F9 / Shift+F9 -- see RecalculateAll/RecalculateSheet, neither of
+        // which passes this flag, so they always force a fresh Data Table result). Passing
+        // skipDataTableBodyCells here is what actually implements that carve-out -- previously this
+        // method treated the two modes identically, so a Data Table recalculated on every ordinary
+        // edit exactly as in plain Automatic mode, defeating the whole point of selecting this
+        // option (see CalculationOptions.cs's WorkbookCalculationMode.AutomaticExceptDataTables doc
+        // comment).
+        return workbook.CalculationMode switch
+        {
+            WorkbookCalculationMode.Automatic => _recalcEngine.Recalculate(workbook, affectedCells),
+            WorkbookCalculationMode.AutomaticExceptDataTables =>
+                _recalcEngine.Recalculate(workbook, affectedCells, skipDataTableBodyCells: true),
+            _ => null
+        };
     }
 
     /// <summary>
@@ -139,6 +153,18 @@ public sealed class WorkbookCellEditService
     public RecalcReport RecalculateAll(Workbook workbook)
     {
         ArgumentNullException.ThrowIfNull(workbook);
+
+        // R118-calc-except-data-tables: F9 always forces every Data Table fresh regardless of calc
+        // mode, including re-deriving a body's formula TEXT from its driver formula's current state --
+        // not just re-evaluating whatever text it already has -- to pick up a driver/precedent edit
+        // that DataTableAutoRefreshEffects.Apply's own CalculationMode gate left frozen (untouched) at
+        // edit time in AutomaticExceptDataTables/Manual mode. Must run before the ordinary recalc below
+        // so any body cell it rewrites gets evaluated in the very same pass rather than staying at
+        // whatever value the just-rewritten (freshly blank) Cell started with.
+        var ctx = new WorkbookCommandContext(workbook);
+        foreach (var sheet in workbook.Sheets)
+            DataTableAutoRefreshEffects.RefreshAllTables(ctx, sheet);
+
         return _recalcEngine.RecalculateAllFormulas(workbook);
     }
 
@@ -146,6 +172,12 @@ public sealed class WorkbookCellEditService
     public RecalcReport RecalculateSheet(Workbook workbook, SheetId sheetId)
     {
         ArgumentNullException.ThrowIfNull(workbook);
+
+        // See RecalculateAll's matching comment -- Shift+F9 gets the same "always force Data Tables
+        // fresh" treatment, scoped to just this sheet.
+        if (workbook.GetSheet(sheetId) is { } sheet)
+            DataTableAutoRefreshEffects.RefreshAllTables(new WorkbookCommandContext(workbook), sheet);
+
         return _recalcEngine.RecalculateSheetFormulas(workbook, sheetId);
     }
 

@@ -13,6 +13,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="FreeX.Core.Commands" />
     <InternalsVisibleTo Include="FreeX.Core.Formula.Tests" />
+    <InternalsVisibleTo Include="FreeX.Core.Calc" />
   </ItemGroup>
 
 </Project>

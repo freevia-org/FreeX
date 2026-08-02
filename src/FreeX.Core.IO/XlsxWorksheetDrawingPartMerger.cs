@@ -119,10 +119,11 @@ internal static class XlsxWorksheetDrawingPartMerger
             if (string.IsNullOrWhiteSpace(sourceDrawingPath) || string.IsNullOrWhiteSpace(targetDrawingPath))
                 continue;
 
-            var supersededSourceNames = workbook?.GetSheet(sheetName) is { } sheet
+            var sheet = workbook?.GetSheet(sheetName);
+            var supersededSourceNames = sheet is not null
                 ? XlsxWorksheetDrawingObjectWriter.GetRewrittenSourceObjectNames(sheet)
                 : null;
-            MergeDrawingPart(sourceArchive, targetArchive, sourceDrawingPath, targetDrawingPath, context.RelNs, context.PackageRelNs, supersededSourceNames);
+            MergeDrawingPart(sourceArchive, targetArchive, sourceDrawingPath, targetDrawingPath, context.RelNs, context.PackageRelNs, supersededSourceNames, sheet);
         }
 
         return new XlsxWorksheetDrawingPathMap(sourceDrawingPaths, targetDrawingPaths);
@@ -238,7 +239,8 @@ internal static class XlsxWorksheetDrawingPartMerger
         string targetDrawingPath,
         XNamespace relNs,
         XNamespace packageRelNs,
-        IReadOnlySet<string>? supersededSourceNames = null)
+        IReadOnlySet<string>? supersededSourceNames = null,
+        Sheet? sheet = null)
     {
         XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
         var sourceDrawingEntry = sourceArchive.GetEntry(sourceDrawingPath);
@@ -304,11 +306,124 @@ internal static class XlsxWorksheetDrawingPartMerger
             changed = true;
         }
 
-        if (changed)
+        // R118-io-drawing-zorder-1: BringDrawingShapeForwardCommand/SendDrawingShapeBackwardCommand
+        // (DrawingShapeZOrderCommands.cs) and MoveSelectionPaneObjectCommand (SelectionPaneCommands.cs)
+        // only ever mutate sheet.DrawingObjectZOrder -- they never clear a moved object's IsSourceLoaded,
+        // which is the normal (unedited) state for most loaded objects. XlsxWorksheetDrawingObjectWriter's
+        // own z-order-aware anchor loop only walks its !IsSourceLoaded-filtered pictures/textBoxes/shapes
+        // lists, so a still-source-loaded object never reaches it; its ORIGINAL anchor is instead copied
+        // verbatim, in source document order, by the loop above -- silently discarding a Bring
+        // Forward/Send Backward/Selection Pane reorder on save. Reorder the anchors this merge just
+        // assembled (freshly-written ones already in the root, plus every preserved one just appended
+        // above) to match the sheet's CURRENT z-order before saving.
+        var reordered = sheet is not null &&
+            ReorderAnchorsByZOrder(targetDrawingXml.Root, sheet, spreadsheetDrawingNs);
+
+        if (changed || reordered)
         {
             EnsureUniqueDrawingObjectIds(targetDrawingXml.Root);
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetDrawingPath, targetDrawingXml);
         }
+    }
+
+    // R118-io-drawing-zorder-1: reorders the TOP-LEVEL anchors of a merged drawing part to match
+    // sheet.DrawingObjectZOrder, so a Bring Forward/Send Backward/Selection Pane move survives save even
+    // for objects that are still IsSourceLoaded (the writer never re-emits those -- see the caller's
+    // comment). Matches each anchor to its DrawingObjectZOrderEntry by the same stable cNvPr@name identity
+    // the rest of this file already relies on (GetRewrittenSourceObjectNames, GetDrawingAnchorIdentity):
+    // a source-loaded object's model Name was stamped from that exact anchor's cNvPr@name at load time,
+    // and a freshly-written anchor carries the model's CURRENT Name (DrawingName(...)), so the identity
+    // holds for both the "just appended, preserved" and "already emitted by the writer" cases.
+    // <para>
+    // Only Picture/TextBox/Shape entries participate: Chart anchors are matched POSITIONALLY by
+    // XlsxWorksheetChartWriter (a graphicFrame's cNvPr name is not a reliable chart identity — see that
+    // writer's own comments), so charts are deliberately left out of the name-based lookup below and keep
+    // whatever relative position they already have.
+    // </para>
+    // <para>
+    // A picture/shape/text box nested inside a preserved &lt;xdr:grpSp&gt; group is NOT a top-level anchor
+    // at all (the whole group is ONE top-level anchor); reordering such a child relative to a top-level
+    // sibling would require splitting the group apart, which this method deliberately does not attempt.
+    // Only objects with no match at all, or fewer than two matches, leave the anchors untouched.
+    // </para>
+    internal static bool ReorderAnchorsByZOrder(XElement drawingRoot, Sheet sheet, XNamespace spreadsheetDrawingNs)
+    {
+        if (sheet.DrawingObjectZOrder.Count == 0)
+            return false;
+
+        var normalizedOrder = DrawingObjectZOrder.GetNormalizedOrder(sheet);
+        if (normalizedOrder.Count == 0)
+            return false;
+
+        var nameOrderIndex = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var index = 0; index < normalizedOrder.Count; index++)
+        {
+            var entry = normalizedOrder[index];
+            var name = entry.Kind switch
+            {
+                SelectionPaneObjectKind.Picture => sheet.Pictures.FirstOrDefault(picture => picture.Id == entry.Id)?.Name,
+                SelectionPaneObjectKind.TextBox => sheet.TextBoxes.FirstOrDefault(textBox => textBox.Id == entry.Id)?.Name,
+                SelectionPaneObjectKind.Shape => sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == entry.Id)?.Name,
+                // Chart intentionally excluded -- see the method comment above.
+                _ => null
+            };
+
+            // Excel's default naming ("Picture 1", "Shape 1", ...) is reused independently per sheet, so
+            // two distinct entries could in principle share a literal Name; keep the FIRST (lowest
+            // z-order index) mapping only -- an unresolvable name collision is exactly the pre-existing
+            // GetDrawingAnchorIdentity caveat this file already documents, not a new risk this fix adds.
+            if (!string.IsNullOrWhiteSpace(name) && !nameOrderIndex.ContainsKey(name))
+                nameOrderIndex[name] = index;
+        }
+
+        if (nameOrderIndex.Count == 0)
+            return false;
+
+        var elements = drawingRoot.Elements().ToList();
+        var matchedPositions = new List<int>();
+        var matchedZOrderIndexes = new List<int>();
+        for (var position = 0; position < elements.Count; position++)
+        {
+            var name = ReadFirstNonVisualPropertyName(elements[position], spreadsheetDrawingNs);
+            if (name is not null && nameOrderIndex.TryGetValue(name, out var zOrderIndex))
+            {
+                matchedPositions.Add(position);
+                matchedZOrderIndexes.Add(zOrderIndex);
+            }
+        }
+
+        // Fewer than two matched anchors means there is nothing to reorder relative to each other.
+        if (matchedPositions.Count < 2)
+            return false;
+
+        var sortedMatchIndexes = Enumerable.Range(0, matchedPositions.Count)
+            .OrderBy(matchIndex => matchedZOrderIndexes[matchIndex])
+            .ToList();
+
+        var alreadyInOrder = true;
+        for (var matchIndex = 0; matchIndex < sortedMatchIndexes.Count; matchIndex++)
+        {
+            if (sortedMatchIndexes[matchIndex] != matchIndex)
+            {
+                alreadyInOrder = false;
+                break;
+            }
+        }
+
+        if (alreadyInOrder)
+            return false;
+
+        // Re-assign only the matched slots, in z-order sequence; every unmatched element (a chart, an
+        // unnamed anchor, or one this pass could not identify) keeps its original position untouched.
+        var reorderedMatchedElements = sortedMatchIndexes.Select(matchIndex => elements[matchedPositions[matchIndex]]).ToList();
+        for (var matchIndex = 0; matchIndex < matchedPositions.Count; matchIndex++)
+            elements[matchedPositions[matchIndex]] = reorderedMatchedElements[matchIndex];
+
+        drawingRoot.RemoveNodes();
+        foreach (var element in elements)
+            drawingRoot.Add(element);
+
+        return true;
     }
 
     private static Dictionary<string, string> MergeDrawingRelationships(

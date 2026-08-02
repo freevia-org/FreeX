@@ -127,6 +127,6 @@ public partial class PhaseBDistributionTests
             (1, 3, 1.0), (2, 3, 3.0));
         AssertColumnApproximately(Eval("NORM.INV(A1:A2,B1:B2,C1:C2)", probabilities), 0.0, 5.0);
 
-        Eval("NORM.DIST(A1:A2,B1:C1,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("NORM.DIST(A1:A2,B1:B3,1,TRUE)", sheet).Should().Be(ErrorValue.Value);
     }
 }

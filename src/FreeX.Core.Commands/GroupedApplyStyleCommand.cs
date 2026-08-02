@@ -12,7 +12,7 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly GridRange _sourceRange;
     private readonly StyleDiff _diff;
-    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
+    private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, StyleOnlySource? OldStyleOnlySource)>? _snapshot;
 
     private const int BytesPerCell = 200;
 
@@ -45,6 +45,13 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
         _snapshot = [];
         var styleCache = new Dictionary<StyleId, StyleId>();
 
+        // R92-render-cellstyle-inheritance-5-3 (grouped-sheet parity): classify THIS command the
+        // same way ApplyStyleCommand does, so the style-only passes below enforce Excel's fixed
+        // row-beats-column precedence at a row/column intersection on every grouped sheet, instead
+        // of "whichever command ran last wins". The classification depends only on _sourceRange
+        // (shared across all grouped sheets), so it is computed once outside the per-sheet loop.
+        var commandSource = ApplyStyleCommand.DetermineStyleOnlySource(_sourceRange);
+
         foreach (var sheetId in _sheetIds)
         {
             var sheet = ctx.GetSheet(sheetId);
@@ -60,7 +67,7 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
                 if (col < _sourceRange.Start.Col || col > _sourceRange.End.Col) continue;
 
                 var address = new CellAddress(sheetId, row, col);
-                _snapshot.Add((sheetId, address, cell.Clone(), null));
+                _snapshot.Add((sheetId, address, cell.Clone(), null, null));
                 cell.StyleId = StyleDiffStyleCache.GetOrRegister(
                     ctx.Workbook, _diff, cell.StyleId, styleCache);
             }
@@ -76,16 +83,33 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
                         if (sheet.GetCell(r, c) is not null)
                             continue;
 
-                        var address = new CellAddress(sheetId, r, c);
                         var oldStyleOnly = sheet.GetStyleOnly(r, c);
-                        _snapshot.Add((sheetId, address, null, oldStyleOnly));
+                        var oldSource = sheet.GetStyleOnlySource(r, c);
+
+                        // A column-format op must never overwrite a row-sourced entry -- the row's
+                        // format always wins at that intersection, on every grouped sheet.
+                        if (commandSource == StyleOnlySource.Column && oldSource == StyleOnlySource.Row)
+                            continue;
+
+                        var address = new CellAddress(sheetId, r, c);
+                        _snapshot.Add((sheetId, address, null, oldStyleOnly, oldSource));
+
+                        // A row-format op overtaking a column-sourced entry REPLACES it outright
+                        // (matching ApplyStyleCommand / real Excel) rather than merging on top.
+                        var baseStyleId = commandSource == StyleOnlySource.Row && oldSource == StyleOnlySource.Column
+                            ? StyleId.Default
+                            : oldStyleOnly ?? StyleId.Default;
 
                         var newStyleId = StyleDiffStyleCache.GetOrRegister(
                             ctx.Workbook,
                             _diff,
-                            oldStyleOnly ?? StyleId.Default,
+                            baseStyleId,
                             styleCache);
                         sheet.SetStyleOnly(r, c, newStyleId);
+                        if (commandSource.HasValue)
+                            sheet.SetStyleOnlySource(r, c, commandSource.Value);
+                        else
+                            sheet.ClearStyleOnlySource(r, c);
                     }
                 }
             }
@@ -111,12 +135,26 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
                 if (sheet.GetCell(row, col) is not null)
                     continue;
 
+                var existingSource = sheet.GetStyleOnlySource(row, col);
+
+                // Same row-beats-column precedence as Pass 2.
+                if (commandSource == StyleOnlySource.Column && existingSource == StyleOnlySource.Row)
+                    continue;
+
                 var addr = new CellAddress(sheetId, row, col);
-                _snapshot.Add((sheetId, addr, null, existingStyleId));
+                _snapshot.Add((sheetId, addr, null, existingStyleId, existingSource));
+
+                var updatedBaseStyleId = commandSource == StyleOnlySource.Row && existingSource == StyleOnlySource.Column
+                    ? StyleId.Default
+                    : existingStyleId;
 
                 var updated = StyleDiffStyleCache.GetOrRegister(
-                    ctx.Workbook, _diff, existingStyleId, styleCache);
+                    ctx.Workbook, _diff, updatedBaseStyleId, styleCache);
                 sheet.SetStyleOnly(row, col, updated);
+                if (commandSource.HasValue)
+                    sheet.SetStyleOnlySource(row, col, commandSource.Value);
+                else
+                    sheet.ClearStyleOnlySource(row, col);
             }
         }
 
@@ -133,15 +171,25 @@ public sealed class GroupedApplyStyleCommand : IWorkbookCommand, IEstimatesMemor
         if (_snapshot is null)
             return;
 
-        foreach (var (sheetId, address, oldCell, oldStyleOnly) in _snapshot)
+        foreach (var (sheetId, address, oldCell, oldStyleOnly, oldStyleOnlySource) in _snapshot)
         {
             var sheet = ctx.GetSheet(sheetId);
             if (oldCell is null)
             {
                 if (oldStyleOnly.HasValue)
+                {
                     sheet.SetStyleOnly(address.Row, address.Col, oldStyleOnly.Value);
+                    // Restore the pre-existing entry's provenance tag too, so undoing this command
+                    // doesn't leave a stale Row/Column tag (or lose one) at this address.
+                    if (oldStyleOnlySource.HasValue)
+                        sheet.SetStyleOnlySource(address.Row, address.Col, oldStyleOnlySource.Value);
+                    else
+                        sheet.ClearStyleOnlySource(address.Row, address.Col);
+                }
                 else
+                {
                     sheet.ClearStyleOnly(address.Row, address.Col);
+                }
             }
             else
             {

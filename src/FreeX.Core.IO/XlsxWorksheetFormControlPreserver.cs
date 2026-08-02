@@ -22,6 +22,9 @@ internal static class XlsxWorksheetFormControlPreserver
     private static readonly XNamespace ContentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
     private const string VmlDrawingRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+    private const string ControlPropertiesRelationshipType =
+        "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp";
+    private const string ControlPropertiesContentType = "application/vnd.ms-excel.controlproperties+xml";
 
     /// <summary>
     /// R115-io-deleted-form-control-1: describes a <c>&lt;control&gt;</c> that existed in the SOURCE
@@ -130,6 +133,330 @@ internal static class XlsxWorksheetFormControlPreserver
             // Re-bind the freshly injected <control> r:id values to the copied ctrlProps parts.
             XlsxWorksheetOleControlNormalizer.NormalizePackage(targetArchive);
         }
+    }
+
+    /// <summary>
+    /// R118-io-duplicate-sheet-form-control-1: <see cref="Preserve"/> above only ever (re)writes the
+    /// &lt;controls&gt;/legacyDrawing/ctrlProps triad for sheets keyed in
+    /// <see cref="XlsxSourcePackagePreservationContext.SourceSheets"/> -- i.e. sheets that already had
+    /// an on-disk counterpart in the ORIGINALLY LOADED package. A sheet created this session via
+    /// Duplicate Sheet / "Move or Copy... Create a copy" never had one, so it is never a key there and
+    /// its <see cref="Sheet.FormControls"/> -- faithfully cloned in memory by
+    /// <c>DuplicateSheetDrawingCloner.CopyDrawingCollections</c> with the SAME <c>ShapeId</c> as the
+    /// source control -- never gets its package-level triad written at all, and the control silently
+    /// vanishes from the saved file even though it is still fully present in the model. Called once per
+    /// identified (source, duplicate) sheet pair by
+    /// <see cref="XlsxFileAdapter.CloneFormControlsForDuplicatedSheets"/>-equivalent caller logic in
+    /// XlsxFileAdapter.SourcePackage.cs (which identifies the pairing purely by sheet content, the same
+    /// technique <c>CloneQueryTablesForDuplicatedSheets</c> already uses for legacy queryTables, since
+    /// nothing in the model records "this sheet was duplicated from that one").
+    /// <para>
+    /// Clones the source sheet's referenced ctrlProp part(s) and legacyDrawing VML part into FRESH,
+    /// distinct parts owned solely by the duplicate -- never a second relationship aimed at the
+    /// original's part(s), since two sheets sharing one physical ctrlProp/VML part would let an
+    /// independent edit to either sheet's control corrupt the other's saved state.
+    /// </para>
+    /// </summary>
+    public static void CloneOntoDuplicatedSheet(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        Sheet newSheet)
+    {
+        if (newSheet.FormControls.Count == 0)
+            return;
+
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceRoot = sourceWorksheetXml?.Root;
+        if (sourceRoot is null)
+            return;
+
+        if (FindControlsContainer(sourceRoot, context.WorkbookNs) is null)
+            return; // Source sheet carries no <controls> block to clone from at all.
+
+        var targetWorksheetEntry = targetArchive.GetEntry(targetWorksheetPath);
+        if (targetWorksheetEntry is null)
+            return;
+
+        var targetWorksheetXml = XlsxPackageXmlEditor.LoadXml(targetWorksheetEntry);
+        var targetRoot = targetWorksheetXml.Root;
+        if (targetRoot is null)
+            return;
+
+        // Guard against double-injection -- should not happen for a brand-new sheet, but mirrors the
+        // "already survived" guard the ordinary same-sheet Preserve() loop applies above.
+        if (FindControlsContainer(targetRoot, context.WorkbookNs) is not null)
+            return;
+
+        var sourceRelsPath = XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath);
+        var sourceRels = XlsxRelationshipReader.LoadTargets(
+            sourceArchive, sourceRelsPath, sourceWorksheetPath, context.PackageRelNs);
+
+        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+        var targetRelsXml = targetArchive.GetEntry(targetRelsPath) is { } targetRelsEntry
+            ? XlsxPackageXmlEditor.LoadXml(targetRelsEntry)
+            : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+
+        // Clone every distinct ctrlProp part the source controls reference into fresh parts owned
+        // solely by the duplicate.
+        var newCtrlPropPathByShapeId = new Dictionary<uint, string>();
+        var newRelIdByShapeId = new Dictionary<uint, string>();
+        foreach (var element in EnumerateControlElements(sourceRoot, context.WorkbookNs + "control"))
+        {
+            if (!uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId) ||
+                newRelIdByShapeId.ContainsKey(shapeId))
+            {
+                continue;
+            }
+
+            var sourceRelId = element.Attribute(context.RelNs + "id")?.Value;
+            if (string.IsNullOrWhiteSpace(sourceRelId) ||
+                !sourceRels.TryGetValue(sourceRelId, out var sourceCtrlPropPath) ||
+                string.IsNullOrWhiteSpace(sourceCtrlPropPath) ||
+                sourceArchive.GetEntry(sourceCtrlPropPath) is not { } sourceCtrlPropEntry)
+            {
+                continue;
+            }
+
+            var clonedCtrlPropPath = AllocateClonedCtrlPropPartPath(targetArchive);
+            CopyPartContent(sourceCtrlPropEntry, targetArchive, clonedCtrlPropPath);
+            CloneCtrlPropContentTypeOverride(sourceArchive, targetArchive, sourceCtrlPropPath, clonedCtrlPropPath);
+
+            // R118: XlsxPackagePath.GetRelationshipTarget's from-xl/worksheets whitelist does NOT
+            // include "ctrlProps" (only media/drawings/tables/... -- see its own private
+            // UsesRelativeRelationshipTarget switch), so XlsxPackageXmlEditor.
+            // EnsureRelationshipForPackagePart (which derives the Target string through that helper)
+            // would compute "ctrlProps/ctrlPropN.xml" -- missing the "../" a worksheet-relative target
+            // needs -- silently pointing nowhere. CloneQueryTableRelationshipsOntoSheet hits this exact
+            // same whitelist gap for xl/queryTables/ and works around it by hand-building the Target
+            // string; do the same here rather than trying to extend that shared, generic helper's
+            // folder whitelist for one more caller.
+            var newRelId = XlsxPackageXmlEditor.NextRelationshipId(targetRelsXml, context.PackageRelNs);
+            var clonedFileName = clonedCtrlPropPath["xl/ctrlProps/".Length..];
+            targetRelsXml.Root!.Add(new XElement(
+                context.PackageRelNs + "Relationship",
+                new XAttribute("Id", newRelId),
+                new XAttribute("Type", ControlPropertiesRelationshipType),
+                new XAttribute("Target", "../ctrlProps/" + clonedFileName)));
+
+            newCtrlPropPathByShapeId[shapeId] = clonedCtrlPropPath;
+            newRelIdByShapeId[shapeId] = newRelId;
+        }
+
+        if (newRelIdByShapeId.Count == 0)
+            return; // Nothing resolvable to clone (e.g. every ctrlProp reference was already broken).
+
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetRelsPath, targetRelsXml);
+
+        // Clone the controls block, rewriting anchors from the DUPLICATE's own live FormControlModel
+        // state (matched by ShapeId -- DuplicateSheetDrawingCloner.CloneFormControl keeps ShapeId
+        // verbatim, so the same identity every other method in this file already relies on still
+        // lines up for the copy), then repoint each cloned <control>'s r:id at its own freshly cloned
+        // ctrlProp relationship instead of the source's.
+        var clonedControls = CloneControlsBlock(sourceRoot, context.WorkbookNs, newSheet);
+        foreach (var element in EnumerateControlElements(clonedControls, context.WorkbookNs + "control"))
+        {
+            if (uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId) &&
+                newRelIdByShapeId.TryGetValue(shapeId, out var newRelId))
+            {
+                element.SetAttributeValue(context.RelNs + "id", newRelId);
+            }
+        }
+
+        targetRoot.SetAttributeValue(XNamespace.Xmlns + "r", context.RelNs.NamespaceName);
+        targetRoot.SetAttributeValue(XNamespace.Xmlns + "mc", McNs.NamespaceName);
+        InsertControlsInWorksheetOrder(targetRoot, context.WorkbookNs, clonedControls);
+        InjectClonedFormControlLegacyDrawing(
+            sourceArchive, targetArchive, context, sourceWorksheetPath, targetRoot, targetWorksheetPath, newSheet);
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetWorksheetPath, targetWorksheetXml);
+
+        // Write the duplicate's own live IsChecked/Value/SelectedIndex/LinkedCell/ListFillRange into
+        // its freshly cloned ctrlProps -- otherwise the clone would carry the SOURCE's ctrlProp
+        // byte-for-byte, silently losing any state divergence already present at duplication time
+        // (mirrors WriteControlStateToCtrlProps for the ordinary same-sheet preservation path).
+        var controlsByShapeId = newSheet.FormControls
+            .Where(c => c.ShapeId is not null)
+            .ToDictionary(c => c.ShapeId!.Value, c => c);
+        foreach (var (shapeId, ctrlPropPath) in newCtrlPropPathByShapeId)
+        {
+            if (!controlsByShapeId.TryGetValue(shapeId, out var control) ||
+                targetArchive.GetEntry(ctrlPropPath) is not { } ctrlPropEntry)
+            {
+                continue;
+            }
+
+            var ctrlPropXml = XlsxPackageXmlEditor.LoadXml(ctrlPropEntry);
+            var formControlPr = ctrlPropXml.Root;
+            if (formControlPr is null)
+                continue;
+
+            ApplyControlStateToFormControlPr(formControlPr, control);
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, ctrlPropPath, ctrlPropXml);
+        }
+    }
+
+    /// <summary>
+    /// Clones the source sheet's legacyDrawing VML part (form-control shape geometry) into a FRESH
+    /// part for the duplicate, with each control shape's anchor rewritten to the duplicate's own live
+    /// <see cref="FormControlModel"/> state before the clone is written -- otherwise the fresh part
+    /// would carry the SOURCE's stale (pre-duplication-edit) geometry. A no-op when the source sheet
+    /// has no legacyDrawing marker at all (matching <see cref="InjectFormControlLegacyDrawing"/>'s own
+    /// tolerance for that case).
+    /// </summary>
+    private static void InjectClonedFormControlLegacyDrawing(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
+        string sourceWorksheetPath,
+        XElement targetRoot,
+        string targetWorksheetPath,
+        Sheet newSheet)
+    {
+        if (targetRoot.Element(context.WorkbookNs + "legacyDrawing") is not null)
+            return;
+
+        var sourceVmlPath = ResolveSourceLegacyDrawingVmlPath(sourceArchive, context, sourceWorksheetPath);
+        if (sourceVmlPath is null || sourceArchive.GetEntry(sourceVmlPath) is not { } sourceVmlEntry)
+            return;
+
+        XDocument vmlXml;
+        try
+        {
+            vmlXml = XlsxPackageXmlEditor.LoadXml(sourceVmlEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        var root = vmlXml.Root;
+        if (root is null)
+            return;
+
+        var controlsByShapeId = newSheet.FormControls
+            .Where(c => c.ShapeId is not null && c.Anchor is not null)
+            .ToDictionary(c => c.ShapeId!.Value, c => c);
+        foreach (var shape in root.Descendants(VmlNs + "shape"))
+        {
+            var id = shape.Attribute("id")?.Value;
+            if (string.IsNullOrEmpty(id))
+                continue;
+
+            FormControlModel? control = null;
+            foreach (var (shapeId, candidate) in controlsByShapeId)
+            {
+                if (id.EndsWith("s" + shapeId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+                {
+                    control = candidate;
+                    break;
+                }
+            }
+
+            if (control is null)
+                continue;
+
+            ApplyAnchorToVmlShape(shape, control.Anchor!.Value, control.AnchorOffsets);
+        }
+
+        var clonedVmlPath = AllocateClonedVmlDrawingPartPath(targetArchive);
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, clonedVmlPath, vmlXml);
+        XlsxPackageXmlEditor.EnsureDefaultContentType(
+            targetArchive, "vml", "application/vnd.openxmlformats-officedocument.vmlDrawing");
+
+        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+        var targetRelsXml = targetArchive.GetEntry(targetRelsPath) is { } targetRelsEntry
+            ? XlsxPackageXmlEditor.LoadXml(targetRelsEntry)
+            : new XDocument(new XElement(context.PackageRelNs + "Relationships"));
+        var targetRelId = XlsxPackageXmlEditor.EnsureRelationshipForPackagePart(
+            targetRelsXml,
+            context.PackageRelNs,
+            targetWorksheetPath,
+            clonedVmlPath,
+            VmlDrawingRelationshipType);
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetRelsPath, targetRelsXml);
+
+        var marker = new XElement(context.WorkbookNs + "legacyDrawing",
+            new XAttribute(context.RelNs + "id", targetRelId));
+        InsertLegacyDrawingInWorksheetOrder(targetRoot, context.WorkbookNs, marker);
+    }
+
+    // Picks the next unused xl/ctrlProps/ctrlPropN.xml part name in the TARGET package (re-scanned on
+    // every call so cloning several duplicated sheets -- or several controls on one -- in the same
+    // save never collides two clones on the same fresh name).
+    private static string AllocateClonedCtrlPropPartPath(ZipArchive targetArchive)
+    {
+        const string prefix = "xl/ctrlProps/ctrlProp";
+        const string suffix = ".xml";
+        var highestExisting = targetArchive.Entries
+            .Select(entry => entry.FullName)
+            .Where(name =>
+                name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], out var number) ? number : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return $"{prefix}{highestExisting + 1}{suffix}";
+    }
+
+    // Picks the next unused xl/drawings/vmlDrawingN.vml part name in the TARGET package.
+    private static string AllocateClonedVmlDrawingPartPath(ZipArchive targetArchive)
+    {
+        const string prefix = "xl/drawings/vmlDrawing";
+        const string suffix = ".vml";
+        var highestExisting = targetArchive.Entries
+            .Select(entry => entry.FullName)
+            .Where(name =>
+                name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            .Select(name => int.TryParse(name[prefix.Length..^suffix.Length], out var number) ? number : 0)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return $"{prefix}{highestExisting + 1}{suffix}";
+    }
+
+    private static void CopyPartContent(ZipArchiveEntry sourceEntry, ZipArchive targetArchive, string targetPartPath)
+    {
+        targetArchive.GetEntry(targetPartPath)?.Delete();
+        var targetEntry = targetArchive.CreateEntry(targetPartPath, CompressionLevel.Optimal);
+        using var sourceStream = sourceEntry.Open();
+        using var targetStream = targetEntry.Open();
+        sourceStream.CopyTo(targetStream);
+    }
+
+    // Reuses whichever ContentType value the original ctrlProp part's own Override carries (checking
+    // both the target package -- where it may already have been merged in -- and the source package as
+    // a fallback), or the standard ctrlProp content type if neither carries an explicit Override.
+    private static void CloneCtrlPropContentTypeOverride(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        string sourcePartPath,
+        string clonedPartPath)
+    {
+        var contentType =
+            FindOverrideContentType(targetArchive, sourcePartPath) ??
+            FindOverrideContentType(sourceArchive, sourcePartPath) ??
+            ControlPropertiesContentType;
+        XlsxPackageXmlEditor.EnsureSpecificContentType(targetArchive, clonedPartPath, contentType);
+    }
+
+    private static string? FindOverrideContentType(ZipArchive archive, string partPath)
+    {
+        var contentTypesEntry = archive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return null;
+
+        var root = XlsxPackageXmlEditor.LoadXml(contentTypesEntry).Root;
+        return root?
+            .Elements(ContentTypesNs + "Override")
+            .FirstOrDefault(element => string.Equals(
+                element.Attribute("PartName")?.Value?.TrimStart('/'),
+                partPath,
+                StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("ContentType")?.Value;
     }
 
     /// <summary>

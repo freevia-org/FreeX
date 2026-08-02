@@ -365,14 +365,42 @@ internal static partial class XlsxPivotTableWriter
             sourceRange.RowCount > 1 &&
             cache.Fields.Count > 0)
         {
-            var fieldCount = Math.Min(cache.Fields.Count, (int)sourceRange.ColCount);
+            // R118-io-pivotcache-records-shrink: a structural edit (e.g. RowColumnShiftHelpers.
+            // ShiftPivotCaches deleting an interior source column) can shrink cache.SourceReference --
+            // and therefore sourceRange.ColCount -- WITHOUT ever touching cache.Fields, because the
+            // only code that narrows cache.Fields to match (PivotTableRefreshService.
+            // ReconcileCacheFields) runs solely on an explicit pivot Refresh, not on Save. Previously
+            // fieldCount was clamped to Math.Min(cache.Fields.Count, sourceRange.ColCount), so a save
+            // that follows such a shrink (with no intervening refresh) wrote fewer <r> values per
+            // record than <cacheFields count="..."> declares. Per CT_Record (ECMA-376 18.10.1.11), a
+            // record's unlisted trailing fields are read by Excel as index 0 of that field's own
+            // (never-narrowed, still pre-deletion) sharedItems list -- not as "no data" -- so every row
+            // silently rendered one fixed stale value for the deleted field instead of surfacing the
+            // column's removal. Always emit exactly cache.Fields.Count values (matching the
+            // non-calculated portion of cacheFields -- calculated fields are appended afterwards by
+            // GetEffectivePivotCacheFields and, per spec, never get a stored record value of their
+            // own), reading the live cell only for indexes still inside the (possibly shrunk)
+            // sourceRange and padding any index beyond it with an explicit <m/> (missing) marker so a
+            // shrunk-without-refresh source produces schema-consistent "no data" instead of a stale
+            // first-shared-item value. A source that instead GREW since the fields were last
+            // reconciled still only yields cache.Fields.Count values per record, same as before this
+            // fix -- reconciling upward remains Refresh's job.
+            var fieldCount = cache.Fields.Count;
+            var sourceColCount = (int)sourceRange.ColCount;
             for (var row = sourceRange.Start.Row + 1; row <= sourceRange.End.Row; row++)
             {
                 var values = new List<XElement>(fieldCount);
                 for (var index = 0; index < fieldCount; index++)
                 {
-                    var col = sourceRange.Start.Col + (uint)index;
-                    values.Add(ToPivotCacheRecordValueXml(sourceSheet.GetValue(row, col), workbookNs));
+                    if (index < sourceColCount)
+                    {
+                        var col = sourceRange.Start.Col + (uint)index;
+                        values.Add(ToPivotCacheRecordValueXml(sourceSheet.GetValue(row, col), workbookNs));
+                    }
+                    else
+                    {
+                        values.Add(new XElement(workbookNs + "m"));
+                    }
                 }
 
                 records.Add(new XElement(workbookNs + "r", values));

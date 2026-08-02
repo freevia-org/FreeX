@@ -286,7 +286,7 @@ public sealed class ApplyStyleCommand : IWorkbookCommand, IEstimatesMemory
     /// selection, or a fully-unbounded select-all (both dimensions unbounded), is neither -- both
     /// fall back to the pre-existing plain merge-on-top behavior.
     /// </summary>
-    private static StyleOnlySource? DetermineStyleOnlySource(GridRange range)
+    internal static StyleOnlySource? DetermineStyleOnlySource(GridRange range)
     {
         var isUnboundedRows = range.End.Row >= CellAddress.MaxRow;
         var isUnboundedCols = range.End.Col >= CellAddress.MaxCol;

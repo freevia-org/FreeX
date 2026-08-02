@@ -88,7 +88,7 @@ public partial class PhaseBDistributionTests
         AssertColumnApproximately(Eval("CONFIDENCE(0.05,A1:A2,B1:B2)", parameters), Calc("CONFIDENCE(0.05,2.5,50)"), Calc("CONFIDENCE(0.05,3,75)"));
         AssertColumnApproximately(Eval("CONFIDENCE.T(0.05,A1:A2,B1:B2)", parameters), Calc("CONFIDENCE.T(0.05,2.5,50)"), Calc("CONFIDENCE.T(0.05,3,75)"));
 
-        Eval("CONFIDENCE.NORM(0.05,A1:A2,B1:C1)", parameters).Should().Be(ErrorValue.Value);
+        Eval("CONFIDENCE.NORM(0.05,A1:A2,B1:B3)", parameters).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
