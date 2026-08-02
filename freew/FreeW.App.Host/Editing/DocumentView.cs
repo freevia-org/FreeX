@@ -12680,7 +12680,7 @@ public sealed class DocumentView : RichTextBox
                 BlurRadius   = blur,
                 ShadowDepth  = dist,
                 Direction    = 315,
-                Opacity      = opacity,
+                Opacity      = PictureEffectVisualPlanner.ResolveShadowOpacity(image, opacity),
                 Color        = System.Windows.Media.Colors.Black
             };
         }

@@ -4383,7 +4383,12 @@ public static class DocxReader
             if (innerShdw is not null && long.TryParse(innerShdw.Attribute("dir")?.Value, out var bevelDir))
                 image.BevelPreset = (int)(bevelDir / (90 * 60000)) + 1;
 
-            var importedEffects = new ShapeEffectLst();
+            // DrawingML color transforms default to fully opaque when a:alpha is absent.
+            var importedEffects = new ShapeEffectLst
+            {
+                ShadowAlpha = 100000,
+                GlowAlpha = 100000,
+            };
             if (outerShdw is not null)
             {
                 importedEffects.HasShadow = true;
