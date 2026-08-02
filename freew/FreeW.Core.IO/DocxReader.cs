@@ -214,6 +214,10 @@ public static class DocxReader
         // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
         document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
 
+        // Update fields on open (w:updateFields): absent/explicitly-off is Word's default; an empty element
+        // or any valid on token asks the consuming application to recalculate fields when opening the file.
+        document.UpdateFieldsOnOpen = ReadToggle(root, "updateFields");
+
         // Footnote numbering options (w:footnotePr in settings.xml): number format, start-at, restart.
         if (root.Element(W + "footnotePr") is { } footnotePr)
             ReadNoteNumberingOptions(footnotePr, document.FootnoteNumbering);

@@ -198,6 +198,7 @@ public static class DocxWriter
             || document.Blocks.OfType<Paragraph>().Any(p => p.SectionBreak?.Page.DifferentOddEvenPages == true);
 
         var hasSettings = hasProtection
+            || document.UpdateFieldsOnOpen
             || document.Page.AutoHyphenation
             || anyDifferentOddEvenPages
             || document.Page.MirrorMargins
@@ -256,7 +257,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.UpdateFieldsOnOpen, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8207,7 +8208,7 @@ public static class DocxWriter
         "documentProtection", "autoFormatOverride", "styleLockTheme", "styleLockQFSet", "defaultTabStop",
         "autoHyphenation", "consecutiveHyphenLimit", "hyphenationZone", "doNotHyphenateCaps", "showEnvelope",
         "summaryLength", "clickAndTypeStyle", "defaultTableStyle", "evenAndOddHeaders",
-        "footnotePr", "endnotePr"
+        "updateFields", "footnotePr", "endnotePr"
     ];
 
     /// <summary>
@@ -8227,7 +8228,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool updateFieldsOnOpen, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8281,6 +8282,8 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "evenAndOddHeaders"));
             if (ProtectionEditToken(protection.Mode) is { } freshEdit)
                 fresh.Add(BuildDocumentProtectionElement(protection, freshEdit));
+            if (updateFieldsOnOpen)
+                fresh.Add(new XElement(W + "updateFields", new XAttribute(W + "val", "true")));
             // Footnote/endnote numbering options (w:footnotePr / w:endnotePr) follow evenAndOddHeaders in
             // CT_Settings schema order. Only emit when non-default (keeps a freshly authored document minimal).
             if (BuildNotePr(footnoteNumbering, "footnotePr") is { } freshFootnotePr)
@@ -8304,6 +8307,9 @@ public static class DocxWriter
         OverlaySetting(settings, "hyphenationZone", hyphenationZone);
         OverlaySetting(settings, "doNotHyphenateCaps", doNotHyphenateCaps);
         OverlaySetting(settings, "evenAndOddHeaders", differentOddEvenPages ? new XElement(W + "evenAndOddHeaders") : null);
+        OverlaySetting(settings, "updateFields", updateFieldsOnOpen
+            ? new XElement(W + "updateFields", new XAttribute(W + "val", "true"))
+            : null);
         OverlaySetting(settings, "documentProtection",
             ProtectionEditToken(protection.Mode) is { } edit
                 ? BuildDocumentProtectionElement(protection, edit)

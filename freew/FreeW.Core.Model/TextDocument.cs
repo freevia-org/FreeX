@@ -3596,6 +3596,14 @@ public sealed class TextDocument
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
 
     /// <summary>
+    /// Whether Word should refresh fields when the document opens. Maps to
+    /// <c>w:settings/w:updateFields</c>. False is Word's default and is omitted from newly authored
+    /// packages; true emits the non-default setting so references, page numbers, and other fields can
+    /// be recalculated by the consuming application on open.
+    /// </summary>
+    public bool UpdateFieldsOnOpen { get; set; }
+
+    /// <summary>
     /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
     /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
     /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);
