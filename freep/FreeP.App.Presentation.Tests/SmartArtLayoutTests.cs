@@ -120,6 +120,34 @@ public sealed class SmartArtLayoutTests
         intense.GetNodeStyle(0, 0, SmartArtFamily.List).OutlineWidthPt.Should().Be(1.4);
     }
 
+    [Fact]
+    public void NativeSceneQuickStylesUseDistinctLiveProfiles()
+    {
+        var baseColor = SrgbColor.FromRgb(0x4472C4);
+        var ids = Enumerable.Range(1, 9).Select(index => $"3d{index}").ToArray();
+
+        var signatures = ids.Select(id =>
+        {
+            var plan = SmartArtStylePlanner.Build(
+                SmartArtFamily.List,
+                new SmartArtQuickStyleMetadata { UniqueId = id },
+                new SmartArtColorMetadata { Palette = { new ThemeAwareColor(baseColor) } },
+                DefaultTheme());
+            var node = plan.GetNodeStyle(0, 0, SmartArtFamily.List);
+            return new
+            {
+                Fill = node.Fill.Resolved,
+                Outline = node.Outline.Resolved,
+                node.OutlineWidthPt,
+                Connector = plan.Connector.Outline.Resolved,
+                ConnectorWidth = plan.Connector.WidthPt
+            };
+        }).ToArray();
+
+        signatures.Distinct().Should().HaveCount(9,
+            "each native 3D scene quick style must produce its own live style profile");
+    }
+
     // ── Family classification tests ───────────────────────────────────────────────
 
     [Theory]
