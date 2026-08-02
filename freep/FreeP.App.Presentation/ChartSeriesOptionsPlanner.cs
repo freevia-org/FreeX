@@ -73,6 +73,7 @@ public sealed class ChartSeriesOptionsPlanner
     public const string SeriesLabelsLabel = "Series labels";
     public const string LegendKeysLabel = "Legend keys";
     public const string BubbleSizeLabelsLabel = "Bubble size labels";
+    public const string LeaderLinesLabel = "Leader lines";
     public const string ErrorBarsLabel = "Error bars";
     public const string ErrorDirectionLabel = "Direction";
     public const string ErrorBarTypeLabel = "Error amount";
@@ -281,6 +282,7 @@ public sealed class ChartSeriesOptionsPlanner
     public bool ShowSeriesLabels => _showSeriesLabels;
     public bool ShowLegendKeys => _showLegendKeys;
     public bool ShowBubbleSize => _showBubbleSize;
+    public bool? ShowLeaderLines => _showLeaderLines;
     public bool ErrorBarsEnabled => _errorBarsEnabled;
     public ChartErrorDirection ErrorDirection => _errorDirection;
     public ChartErrorBarType ErrorBarType => _errorBarType;
@@ -328,6 +330,7 @@ public sealed class ChartSeriesOptionsPlanner
             _showSeriesLabels = false;
             _showLegendKeys = false;
             _showBubbleSize = false;
+            _showLeaderLines = null;
             _errorBarsEnabled = false;
             _errorDirection = ChartErrorDirection.Y;
             _errorBarType = ChartErrorBarType.Both;
@@ -436,6 +439,7 @@ public sealed class ChartSeriesOptionsPlanner
     public void SetShowSeriesLabels(bool value) => _showSeriesLabels = value;
     public void SetShowLegendKeys(bool value) => _showLegendKeys = value;
     public void SetShowBubbleSize(bool value) => _showBubbleSize = value;
+    public void SetShowLeaderLines(bool? value) => _showLeaderLines = value;
     public void SetErrorBarsEnabled(bool value) => _errorBarsEnabled = value;
     public void SetErrorDirection(ChartErrorDirection value) => _errorDirection = value;
     public void SetErrorBarType(ChartErrorBarType value) => _errorBarType = value;
