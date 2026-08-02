@@ -35,6 +35,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow
     private readonly TextBox _left;
     private readonly TextBox _right;
     private readonly TextBox _gutter;
+    private readonly ComboBox _gutterPosition;
     private readonly ComboBox _orientation;
     private readonly ComboBox _multiplePages;
     private readonly ComboBox _applyTo;
@@ -68,6 +69,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         _left = NumberBox(state.MarginLeftText);
         _right = NumberBox(state.MarginRightText);
         _gutter = NumberBox(state.GutterText);
+        _gutterPosition = Combo(PageSetupDialogPlanner.GutterPositionNames, state.GutterPositionIndex);
         _orientation = Combo(PageSetupDialogPlanner.OrientationNames, state.OrientationIndex);
         _multiplePages = Combo(PageSetupDialogPlanner.MultiplePagesNames, state.MultiplePagesIndex);
         _applyTo = Combo(PageSetupDialogPlanner.ApplyToNames, 0);
@@ -129,6 +131,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.LeftMarginLabel, _left));
         panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.RightMarginLabel, _right));
         panel.Children.Add(PageSetupRow("Gutter (pt):", _gutter));
+        panel.Children.Add(PageSetupRow(PageSetupDialogPlanner.GutterPositionLabel, _gutterPosition));
         panel.Children.Add(PageSetupRow("Orientation:", _orientation));
         panel.Children.Add(PageSetupRow("Multiple pages:", _multiplePages));
         panel.Children.Add(PageSetupRow("Apply to:", _applyTo));
@@ -227,7 +230,8 @@ public sealed class PageSetupDialog : FreeWDialogWindow
             VerticalAlignmentIndex: _verticalAlignment.SelectedIndex,
             UseSelectedPaperPreset: false,
             GeometryMode: PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
-            ValidationProfile: PageSetupValidationProfile.UnifiedDialog);
+            ValidationProfile: PageSetupValidationProfile.UnifiedDialog,
+            GutterPositionIndex: _gutterPosition.SelectedIndex);
         if (!PageSetupDialogPlanner.TryBuildResult(
                 input,
                 PageSetupDialogPlanner.HostPaperOptions,
