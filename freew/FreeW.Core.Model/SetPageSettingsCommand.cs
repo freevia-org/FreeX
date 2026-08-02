@@ -56,6 +56,7 @@ public sealed class SetPageSettingsCommand(PageSettings settings) : IDocumentCom
         dst.HeaderDistancePt = src.HeaderDistancePt;
         dst.FooterDistancePt = src.FooterDistancePt;
         dst.MirrorMargins = src.MirrorMargins;
+        dst.GutterAtTop = src.GutterAtTop;
         dst.ColumnCount = src.ColumnCount;
         dst.ColumnSpacingPt = src.ColumnSpacingPt;
         dst.ColumnsLineBetween = src.ColumnsLineBetween;

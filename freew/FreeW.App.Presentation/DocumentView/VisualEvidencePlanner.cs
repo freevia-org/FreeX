@@ -3525,6 +3525,7 @@ public static class FreeWVisualEvidencePlanner
         target.MarginBottomPt = copy.MarginBottomPt;
         target.Landscape = copy.Landscape;
         target.GutterPt = copy.GutterPt;
+        target.GutterAtTop = copy.GutterAtTop;
         target.HeaderDistancePt = copy.HeaderDistancePt;
         target.FooterDistancePt = copy.FooterDistancePt;
         target.MirrorMargins = copy.MirrorMargins;

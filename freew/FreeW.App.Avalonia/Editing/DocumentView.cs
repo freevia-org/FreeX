@@ -6518,7 +6518,8 @@ public sealed class DocumentView : Control
         _surfacePlan = DocumentViewLayoutPlanner.BuildSurfacePlan(
             _doc.Page,
             ToLayoutKind(_viewMode),
-            width);
+            width,
+            collapsePageBoundaries: _doc.DoNotDisplayPageBoundaries);
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
@@ -6652,7 +6653,8 @@ public sealed class DocumentView : Control
 
         if (_viewMode == DocumentViewMode.PrintLayout)
         {
-            BuildHeaderFooterItems();
+            if (!_doc.DoNotDisplayPageBoundaries)
+                BuildHeaderFooterItems();
             // AV-NOTERENDER: footnotes render in the bottom margin band of the page hosting their
             // reference; endnotes render in a synthetic section after the last body page. Endnotes
             // extend the scrollable content height, so add their measured extent afterwards.

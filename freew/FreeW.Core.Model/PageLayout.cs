@@ -22,21 +22,41 @@ public static class PageLayout
     public static (double Width, double Height) PageSizeDip(PageSettings page) =>
         (PointsToDip(page.WidthPt), PointsToDip(page.HeightPt));
 
-    /// <summary>The page margins in DIP (left, top, right, bottom).</summary>
-    public static (double Left, double Top, double Right, double Bottom) MarginsDip(PageSettings page) =>
-        (PointsToDip(page.MarginLeftPt),
-         PointsToDip(page.MarginTopPt),
-         PointsToDip(page.MarginRightPt),
-         PointsToDip(page.MarginBottomPt));
+    /// <summary>
+    /// The effective page margins in DIP (left, top, right, bottom), including the binding gutter.
+    /// <paramref name="pageIndex"/> is zero-based and selects the inside edge for mirrored pages.
+    /// Word ignores <c>w:gutterAtTop</c> when mirrored margins determine the binding edge.
+    /// </summary>
+    public static (double Left, double Top, double Right, double Bottom) MarginsDip(
+        PageSettings page,
+        int pageIndex = 0)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+
+        var left = PointsToDip(page.MarginLeftPt);
+        var top = PointsToDip(page.MarginTopPt);
+        var right = PointsToDip(page.MarginRightPt);
+        var bottom = PointsToDip(page.MarginBottomPt);
+        var gutter = Math.Max(0, PointsToDip(page.GutterPt));
+
+        if (page.GutterAtTop && !page.MirrorMargins)
+            top += gutter;
+        else if (page.MirrorMargins && Math.Max(0, pageIndex) % 2 == 1)
+            right += gutter;
+        else
+            left += gutter;
+
+        return (left, top, right, bottom);
+    }
 
     /// <summary>
     /// The printable content area in DIP: the page size minus its margins. Never negative — a page
     /// whose margins exceed its dimensions clamps to zero rather than producing a negative box.
     /// </summary>
-    public static (double Width, double Height) ContentAreaDip(PageSettings page)
+    public static (double Width, double Height) ContentAreaDip(PageSettings page, int pageIndex = 0)
     {
         var (w, h) = PageSizeDip(page);
-        var (l, t, r, b) = MarginsDip(page);
+        var (l, t, r, b) = MarginsDip(page, pageIndex);
         return (Math.Max(0, w - l - r), Math.Max(0, h - t - b));
     }
 

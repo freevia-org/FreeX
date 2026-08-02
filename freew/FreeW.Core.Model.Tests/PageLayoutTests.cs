@@ -38,6 +38,32 @@ public class PageLayoutTests
     }
 
     [Fact]
+    public void MarginsDip_AddsGutterToConfiguredBindingEdge()
+    {
+        var side = new PageSettings { GutterPt = 18 };
+        var top = new PageSettings { GutterPt = 18, GutterAtTop = true };
+
+        PageLayout.MarginsDip(side).Should().Be((120, 96, 96, 96));
+        PageLayout.MarginsDip(top).Should().Be((96, 120, 96, 96));
+        PageLayout.ContentAreaDip(side).Should().Be((600, 864));
+        PageLayout.ContentAreaDip(top).Should().Be((624, 840));
+    }
+
+    [Fact]
+    public void MarginsDip_MirrorMarginsOwnsGutterEdgeAcrossPages()
+    {
+        var page = new PageSettings
+        {
+            GutterPt = 18,
+            GutterAtTop = true,
+            MirrorMargins = true,
+        };
+
+        PageLayout.MarginsDip(page, pageIndex: 0).Should().Be((120, 96, 96, 96));
+        PageLayout.MarginsDip(page, pageIndex: 1).Should().Be((96, 96, 120, 96));
+    }
+
+    [Fact]
     public void ContentAreaDip_ClampsToZeroWhenMarginsExceedPage()
     {
         var page = new PageSettings
