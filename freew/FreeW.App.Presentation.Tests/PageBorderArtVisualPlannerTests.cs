@@ -269,7 +269,8 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtFillRectangle(32, 32, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(31, 32, 32, 992, 0, 0, 0),
-            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
+            new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0),
+            new PageBorderArtFillRectangle(63, 128, 1, 800, 0, 0, 0));
         plan.Polygons.Should().HaveCount(224);
         plan.Polygons[0].Points.Should().Equal(
             new PageBorderArtPoint(44, 63),

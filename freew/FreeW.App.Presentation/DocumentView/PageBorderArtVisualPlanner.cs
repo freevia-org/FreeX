@@ -493,6 +493,7 @@ public static class PageBorderArtVisualPlanner
             new(inset, frameHeight - inset - size, railWidth, size, 0, 0, 0),
             new(inset - 1, inset, size, railHeight, 0, 0, 0),
             new(frameWidth - inset - size, inset, size, railHeight, 0, 0, 0),
+            new(inset - 1 + size, 128, 1, 800, 0, 0, 0),
         };
         var polygons = new List<PageBorderArtPolygon>();
         AddRibbonHorizontalStripes(polygons, inset, inset, railWidth, size, slash: true, phaseDip: size * 0.375);
