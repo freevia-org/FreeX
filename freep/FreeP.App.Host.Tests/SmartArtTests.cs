@@ -66,7 +66,8 @@ public sealed class SmartArtTests : IDisposable
         bool includeNodeImage = false,
         IReadOnlySet<int>? pictureNodeIndexes = null,
         bool includeColors = true,
-        string? layoutUniqueId = null)
+        string? layoutUniqueId = null,
+        bool groupedListUnmodeledRole = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -137,7 +138,20 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(aNs + "p",
                         new XElement(aNs + "r",
                             new XElement(aNs + "rPr", new XAttribute("lang", "en-US")),
-                            new XElement(aNs + "t", text))))));
+                        new XElement(aNs + "t", text))))));
+        }
+
+        if (groupedListUnmodeledRole)
+        {
+            fallbackEls.Add(new XElement(dspNs + "sp",
+                new XElement(dspNs + "nvSpPr",
+                    new XElement(dspNs + "cNvPr", new XAttribute("id", shapeIdx++), new XAttribute("name", "GroupedList Cached Role")),
+                    new XElement(dspNs + "cNvSpPr")),
+                new XElement(dspNs + "spPr",
+                    new XElement(aNs + "xfrm",
+                        new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                        new XElement(aNs + "ext", new XAttribute("cx", "457200"), new XAttribute("cy", "457200"))),
+                    new XElement(aNs + "prstGeom", new XAttribute("prst", "rect"), new XElement(aNs + "avLst")))));
         }
 
         var dspDrawingXml = new XDocument(
@@ -515,7 +529,8 @@ public sealed class SmartArtTests : IDisposable
     {
         var pptxPath = MakeSmartArtPptx(
             ["Group A", "Group B"],
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/groupedList");
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/groupedList",
+            groupedListUnmodeledRole: true);
         var presentation = PptxPackageReader.Read(pptxPath);
 
         var smartArt = presentation.Slides[0].Shapes
@@ -528,6 +543,24 @@ public sealed class SmartArtTests : IDisposable
         smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
             "authoring can use Grouped List live geometry, but imported PowerPoint drawing caches may contain roles that geometry does not model");
         smartArt.FallbackShapes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void Reader_SmartArt_GroupedList_AdmitsSimpleNodeCacheToLiveLayout()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Group A", "Group B"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/groupedList");
+        var presentation = PptxPackageReader.Read(pptxPath);
+
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "a cache with exactly one matching text shape per parsed node has no unmodeled grouped-list role");
+        smartArt.FallbackShapes.Should().HaveCount(2);
     }
 
     [Fact]
