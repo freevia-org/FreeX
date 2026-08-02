@@ -53,8 +53,20 @@ public sealed class SlicerModel
     /// <c>&lt;data&gt;&lt;tabular&gt;&lt;items&gt;</c> (the <c>x</c> index + <c>s</c> selected flag). The string
     /// captions are resolved from the pivot cache field's shared items at viewport-build time.
     /// Empty for table slicers (which resolve items from the referenced table column instead).
+    /// <para>
+    /// R117-commands-pivot-slicer-growth: <c>List</c> (not a read-only projection) so
+    /// <see cref="PivotTableRefreshService"/> can APPEND an entry for an index that newly exists in the
+    /// bound <see cref="PivotCacheFieldModel.SharedItems"/> after a refresh -- SharedItems is
+    /// append-only (R115/R116), so a value that appears for the first time gets a brand-new index at
+    /// the END of that list that no previously-built CacheItems entry represents. Still assignable via
+    /// an object initializer (<c>init</c>) at construction/load time exactly like before; the added
+    /// mutability only enables appending post-construction, it never changes how a whole-list
+    /// assignment behaves. Any code that copies a <see cref="SlicerModel"/> (e.g.
+    /// <c>DuplicateSheetDrawingCloner</c>) must copy this list (<c>.ToList()</c>), not alias it, or the
+    /// clone and the original would share -- and silently co-mutate -- the same backing list.
+    /// </para>
     /// </summary>
-    public IReadOnlyList<SlicerCacheItem> CacheItems { get; init; } = [];
+    public List<SlicerCacheItem> CacheItems { get; init; } = [];
 
     /// <summary>
     /// The resolved, ordered list of item captions offered by this slicer's source (table column distinct

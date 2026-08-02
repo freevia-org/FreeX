@@ -181,11 +181,15 @@ public static partial class XlsxChartPartReader
         // <c:cat>/<c:val>, so the embedded-data helpers are called with "yVal"/"xVal" as the
         // value/category container names (matching TryReadSeriesValueColumn/DetectSeriesInRows
         // below, which already override the default "val" container the same way for Bubble).
+        // R117-io-chart-embedded-bubble-size-1: also pass sizeContainerName: "bubbleSize" so each
+        // series' cached point sizes are captured into EmbeddedSeriesData.SizeValues — previously
+        // this fell back to a chart with correct X/Y positions but every bubble at the
+        // default/minimum radius, since ChartEmbeddedSeriesData had nowhere to carry the size cache.
         var allBubbleSeriesElements = bubbleChart.Elements(ChartNs + "ser").ToList();
         var bubbleEmbeddedData = XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData(
-                                     allBubbleSeriesElements, sheetId, valueContainerName: "yVal", categoryContainerName: "xVal")
+                                     allBubbleSeriesElements, sheetId, valueContainerName: "yVal", categoryContainerName: "xVal", sizeContainerName: "bubbleSize")
                                  ?? XlsxChartSeriesRangeReader.TryReadCrossSheetEmbeddedData(
-                                     allBubbleSeriesElements, sheetId, sheetNameResolver, valueContainerName: "yVal", categoryContainerName: "xVal");
+                                     allBubbleSeriesElements, sheetId, sheetNameResolver, valueContainerName: "yVal", categoryContainerName: "xVal", sizeContainerName: "bubbleSize");
         if (bubbleEmbeddedData is not null)
         {
             var placeholderSheet = ranges.Count > 0 ? ranges[0].Start.Sheet : sheetId;

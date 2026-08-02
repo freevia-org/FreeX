@@ -199,10 +199,14 @@ public sealed partial class MainWindowSourceHygieneTests
         saveTargetMethod.Should().Contain("ShowSaveProgress(CreateSaveProgress(\"preparing\", TimeSpan.Zero, 1));");
         backstageSource.Should().Contain("WorkbookProgressTextFormatter.FormatSave(phase, elapsed, percent, UiText.Get)");
         saveTargetMethod.Should().Contain("using var operationCancellation = BeginFileOperationCancellation();");
-        saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(false);");
+        // R115-app-host-save-race replaced the direct SetFileOperationInputEnabled(false/true) calls
+        // with ref-counted AdjustSaveGate(acquire: true/false) so a "New Window" sibling viewing the
+        // same shared Workbook/CommandBus also gets its input surface disabled for the save's
+        // duration (see AdjustSaveGate's doc comment) — the pinned literals were never updated.
+        saveTargetMethod.Should().Contain("AdjustSaveGate(acquire: true);");
         saveTargetMethod.Should().Contain("operationCancellation.Token");
         saveTargetMethod.Should().Contain("catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)");
-        saveTargetMethod.Should().Contain("SetFileOperationInputEnabled(true);");
+        saveTargetMethod.Should().Contain("AdjustSaveGate(acquire: false);");
         saveTargetMethod.Should().Contain("MarkWorkbookSaved();");
         saveTargetMethod.Should().Contain("SaveCompletionPlanner.Plan(");
         saveTargetMethod.Should().Contain("plan.FileContext is { } fileContext");
@@ -240,9 +244,15 @@ public sealed partial class MainWindowSourceHygieneTests
         saveResolvedMethod.Should().Contain("WorkbookFileLifecycleCoordinator.SaveResolvedAsync(");
         saveResolvedMethod.Should().Contain("_workbookDirty");
         saveResolvedMethod.Should().Contain("_currentFilePath");
-        saveResolvedMethod.Should().Contain("_fileAdapters");
+        saveResolvedMethod.Should().Contain("ResolveExistingSaveTarget");
         saveResolvedMethod.Should().Contain("SaveWorkbookToTargetAsync");
         saveResolvedMethod.Should().Contain("SaveWorkbookWithDialogAsync");
+        // Round 83 (d8a9dbea7c) extracted the existing-path resolution (and its _fileAdapters use)
+        // out of SaveResolvedAsync into its own expression-bodied ResolveExistingSaveTarget helper,
+        // passed down as a delegate, so _fileAdapters is no longer referenced directly inside
+        // SaveResolvedAsync itself.
+        lifecycleSource.Should().Contain("private FileSaveTarget? ResolveExistingSaveTarget() =>");
+        lifecycleSource.Should().Contain("FileSavePlanner.TryResolveExistingPath(_currentFilePath, _fileAdapters, out var target)");
 
         var closingMethod = ExtractMethodSource(lifecycleSource, "private async void MainWindow_Closing(");
         closingMethod.Should().Contain("ConfirmSaveBeforeDestructiveActionAsync(UiText.Get(\"MainWindowMessage_SaveChangesBeforeClosingWorkbook\"))");
@@ -445,7 +455,11 @@ public sealed partial class MainWindowSourceHygieneTests
         dataCommandsSource.Should().Contain("await Task.Run(() =>");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_failed\"");
         dataCommandsSource.Should().Contain("RecordDiagnosticEvent(\"import_completed\"");
-        dataCommandsSource.Should().Contain("new ImportSheetCommand(_currentSheetId, destination, imported.Sheets[0])");
+        // Round 68 (8007e3ef6c, "R68-async-ordering-race-sweep-2") captures _currentSheetId into a
+        // local targetSheetId BEFORE the async import's await, so a concurrent File > Open swapping
+        // _currentSheetId out from under this await can't redirect the import to the wrong sheet.
+        dataCommandsSource.Should().Contain("var targetSheetId = _currentSheetId;");
+        dataCommandsSource.Should().Contain("new ImportSheetCommand(targetSheetId, destination, imported.Sheets[0])");
         dataCommandsSource.Should().Contain("RecalculateIfAutomatic(outcome.AffectedCells ?? []);");
         dataCommandsSource.Should().Contain("SetActiveCell(destination);");
         dataCommandsSource.Should().Contain("EnsureCellVisible(destination);");

@@ -332,7 +332,7 @@ public sealed class AddSlicerCommand : IWorkbookCommand
     /// the pre-fix behaviour) when the cache or field can't be resolved, or the field carries no shared
     /// items yet (e.g. an OLAP/external cache this codebase doesn't model shared items for).
     /// </summary>
-    private static IReadOnlyList<SlicerCacheItem> BuildInitialCacheItems(Workbook workbook, PivotTableModel pivotTable, string fieldName)
+    private static List<SlicerCacheItem> BuildInitialCacheItems(Workbook workbook, PivotTableModel pivotTable, string fieldName)
     {
         var cache = CommandGuards.FindPivotCache(workbook, pivotTable);
         var field = cache?.Fields.FirstOrDefault(candidate => string.Equals(candidate.Name, fieldName, StringComparison.OrdinalIgnoreCase));

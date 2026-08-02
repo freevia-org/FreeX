@@ -715,10 +715,29 @@ public static partial class ChartRenderer
                 var row = dataStartRow + (uint)p;
                 lookup[(row, col)] = new DisplayCell(row, col, new NumberValue(value), value.ToString(CultureInfo.InvariantCulture), null, StyleId.Default, null);
             }
+
+            // R117-io-chart-embedded-bubble-size-1: populate the trailing size column (col + 1)
+            // from the series' own cached <c:bubbleSize> numCache when the reader captured one, so
+            // BuildBubbleModel's sizeCol lookup finds the real per-point size instead of always
+            // defaulting to 1 (uniform bubbles). Falls through to the pre-existing empty-column
+            // behavior when SizeValues is null (every non-Bubble chart type, or a Bubble chart whose
+            // source XML genuinely had no bubbleSize cache).
+            if (isBubble && series.SizeValues is { } sizeValues)
+            {
+                var sizeCol = col + 1;
+                for (var p = 0; p < sizeValues.Count; p++)
+                {
+                    if (sizeValues[p] is not { } size)
+                        continue;
+                    var row = dataStartRow + (uint)p;
+                    lookup[(row, sizeCol)] = new DisplayCell(row, sizeCol, new NumberValue(size), size.ToString(CultureInfo.InvariantCulture), null, StyleId.Default, null);
+                }
+            }
         }
 
         var lastSeriesCol = embeddedData.Count > 0 ? firstSeriesCol + (uint)(embeddedData.Count - 1) * seriesColStride : firstSeriesCol;
-        // Bubble reserves one trailing empty column for the last series' (uncached) size.
+        // Bubble reserves one trailing column for the size series -- populated above from
+        // SizeValues when the reader captured a bubbleSize cache, otherwise left empty (uncached).
         var endCol = isBubble ? lastSeriesCol + 1 : lastSeriesCol;
 
         // StartCol mirrors DataStartCol here (both are the synthesized column 1) so that any

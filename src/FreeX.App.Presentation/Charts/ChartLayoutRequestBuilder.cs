@@ -85,6 +85,15 @@ public static class ChartLayoutRequestBuilder
         {
             ChartType.Scatter => ExtractScatterSeries(chart, cellAccessor, startRow, dataStartRow, endRow, startCol, dataStartCol, endCol),
             ChartType.Bubble => ExtractBubbleSeries(chart, cellAccessor, startRow, dataStartRow, endRow, startCol, endCol),
+            // R117-presentation-chart-stock-ohlc-1: Stock was falling through to the generic
+            // ExtractSeries below (one ChartSeriesData PER COLUMN, only Values set), but
+            // ChartLayoutEngine.LayoutStock reads a SINGLE series' HighValues/LowValues/OpenValues --
+            // those were therefore never populated even for an ordinary (non-fallback) cell-range
+            // Stock chart, so LayoutStock's `if (highs is null || lows is null)` guard always hit and
+            // every Stock chart rendered with zero StockElements. ExtractStockSeries merges the
+            // [Volume]/[Open]/High/Low/Close columns (per chart.StockSubtype, mirroring
+            // ChartRenderer.Stock.cs's BuildStockModel column-offset convention) into that one shape.
+            ChartType.Stock => ExtractStockSeries(chart, cellAccessor, dataStartRow, endRow, dataStartCol, endCol),
             _ => ExtractSeries(chart, cellAccessor, startRow, dataStartRow, endRow, dataStartCol, endCol),
         };
 
@@ -113,6 +122,16 @@ public static class ChartLayoutRequestBuilder
         PlotRect plotArea,
         ITextMeasurer textMeasurer)
     {
+        // R117-presentation-chart-stock-ohlc-1: a Stock chart's embedded data is a LIST of
+        // per-dimension series (one entry per Open/High/Low/Close <c:ser>, in that fixed OOXML
+        // document order -- see XlsxChartPartReader.Line.cs), not one entry per plotted series like
+        // every other chart type. Merge it into the single High/Low/Open/Close-shaped
+        // ChartSeriesData LayoutStock expects instead of falling through to the generic per-entry
+        // loop below (which only ever set Values, leaving HighValues/LowValues null and producing a
+        // blank chart exactly like the live-range ExtractSeries gap this round also fixed).
+        if (chart.Type == ChartType.Stock)
+            return BuildStockRequestFromEmbeddedData(chart, embeddedSeries, plotArea, textMeasurer);
+
         // Categories are shared across series in the model (one axis), but each embedded series
         // carries its own cached copy (they read the same <c:cat>/<c:xVal> formula), and a series
         // whose own cache was truncated/short can still disagree with a sibling's -- e.g. series 0
@@ -157,20 +176,18 @@ public static class ChartLayoutRequestBuilder
                 xValues = xs;
             }
 
-            // NOTE: the embedded-cache fallback has no per-point bubble-size data to recover here --
-            // XlsxChartPartReader's <c:bubbleSize> numCache is never captured into
-            // ChartEmbeddedSeriesData (that record only carries Categories/Values), so a Bubble chart
-            // reaching this fallback path renders with the correct X positions but every bubble at
-            // the default/minimum radius. Fixing that requires adding a size-cache field to
-            // ChartEmbeddedSeriesData (FreeX.Core.Model) and populating it in
-            // XlsxChartPartReader.PieBubble.cs (FreeX.Core.IO) -- out of this file's scope. See the
-            // R115 fix report for this defect.
+            // R117-io-chart-embedded-bubble-size-1: XlsxChartPartReader.PieBubble.cs now captures
+            // the series' cached <c:bubbleSize> numCache into embedded.SizeValues, so a Bubble chart
+            // reaching this fallback path renders real per-point sizes instead of always falling
+            // back to the default/minimum radius (see ExtractBubbleSeries's live-cell-range
+            // equivalent, which reads its size column the same way).
             series.Add(new ChartSeriesData
             {
                 SeriesIndex = embedded.SeriesIndex,
                 Name = embedded.SeriesName,
                 Values = embedded.Values,
                 XValues = xValues,
+                SizeValues = chart.Type == ChartType.Bubble ? embedded.SizeValues : null,
             });
         }
 
@@ -178,6 +195,73 @@ public static class ChartLayoutRequestBuilder
         {
             Chart = chart,
             Categories = usesXValCache ? [] : categories,
+            Series = series,
+            PlotArea = plotArea,
+            TextMeasurer = textMeasurer,
+        };
+    }
+
+    /// <summary>
+    /// Merges a Stock chart's embedded-fallback series list -- one <see cref="ChartEmbeddedSeriesData"/>
+    /// per Open/High/Low/Close <c>&lt;c:ser&gt;</c>, in that fixed document order (see
+    /// <c>XlsxChartPartReader.Line.cs</c>'s <c>TryReadLineLikeChart</c>, which the Stock reader reuses) --
+    /// into the single High/Low/Open/Close-shaped <see cref="ChartSeriesData"/>
+    /// <see cref="ChartLayoutEngine"/>'s <c>LayoutStock</c> expects. Mirrors
+    /// <c>ChartRenderer.Stock.cs</c>'s <c>BuildStockModel</c> column-offset convention (using
+    /// <see cref="ChartModel.StockSubtype"/> to tell Open-High-Low-Close from plain High-Low-Close),
+    /// except there is no live volume column to fold in here: the volume bar series lives in a
+    /// separate <c>&lt;c:barChart&gt;</c> the embedded-cache fallback never captures (only the
+    /// <c>&lt;c:stockChart&gt;</c> OHLC series get read into <see cref="ChartModel.EmbeddedSeriesData"/>),
+    /// so a fallback-loaded Volume-Stock chart still renders its price bars correctly but without the
+    /// volume bars -- a known, separate follow-up (the portable engine also has no volume rendering
+    /// support at all yet, live or fallback).
+    /// </summary>
+    private static ChartLayoutRequest BuildStockRequestFromEmbeddedData(
+        ChartModel chart,
+        List<ChartEmbeddedSeriesData> embeddedSeries,
+        PlotRect plotArea,
+        ITextMeasurer textMeasurer)
+    {
+        var categories = embeddedSeries
+            .Select(s => s.Categories)
+            .Where(c => c.Count > 0)
+            .OrderByDescending(c => c.Count)
+            .FirstOrDefault()?.ToList() ?? [];
+
+        var hasOpenColumn = chart.StockSubtype is StockChartSubtype.OpenHighLowClose or StockChartSubtype.VolumeOpenHighLowClose
+            || embeddedSeries.Count >= 4;
+
+        List<ChartSeriesData> series;
+        if (embeddedSeries.Count < 3)
+        {
+            series = [];
+        }
+        else
+        {
+            var index = 0;
+            var opens = hasOpenColumn ? embeddedSeries[index++].Values : null;
+            var highs = embeddedSeries[index++].Values;
+            var lows = embeddedSeries[index++].Values;
+            var closes = embeddedSeries[index].Values;
+
+            series =
+            [
+                new ChartSeriesData
+                {
+                    SeriesIndex = 0,
+                    Name = "Stock",
+                    Values = closes,
+                    HighValues = highs,
+                    LowValues = lows,
+                    OpenValues = opens,
+                }
+            ];
+        }
+
+        return new ChartLayoutRequest
+        {
+            Chart = chart,
+            Categories = categories,
             Series = series,
             PlotArea = plotArea,
             TextMeasurer = textMeasurer,
@@ -323,6 +407,66 @@ public static class ChartLayoutRequestBuilder
         }
 
         return series;
+    }
+
+    /// <summary>
+    /// Builds the single High/Low/Open/Close-shaped series <see cref="ChartLayoutEngine"/>'s
+    /// <c>LayoutStock</c> expects from an ordinary (live) cell-range Stock chart's data columns.
+    /// R117-presentation-chart-stock-ohlc-1: mirrors <c>ChartRenderer.Stock.cs</c>'s
+    /// <c>BuildStockModel</c> column-offset convention exactly (volume column, if any, first; then
+    /// Open, if any; then High, Low, Close) so the two renderers agree on which physical column is
+    /// which OHLC dimension for the same chart.
+    /// </summary>
+    private static List<ChartSeriesData> ExtractStockSeries(
+        ChartModel chart,
+        ChartCellAccessor cellAccessor,
+        uint dataStartRow,
+        uint endRow,
+        uint dataStartCol,
+        uint endCol)
+    {
+        var valueColumnCount = endCol >= dataStartCol ? endCol - dataStartCol + 1 : 0;
+        var hasVolumeColumn = chart.StockSubtype is StockChartSubtype.VolumeHighLowClose or StockChartSubtype.VolumeOpenHighLowClose;
+        var hasOpenColumn = chart.StockSubtype is StockChartSubtype.OpenHighLowClose or StockChartSubtype.VolumeOpenHighLowClose ||
+                            (!hasVolumeColumn && valueColumnCount >= 4);
+        var volumeOffset = hasVolumeColumn ? 1u : 0u;
+        var requiredValueColumns = volumeOffset + (hasOpenColumn ? 4u : 3u);
+        if (valueColumnCount < requiredValueColumns)
+            return [];
+
+        var openCol = hasOpenColumn ? dataStartCol + volumeOffset : (uint?)null;
+        var highCol = dataStartCol + volumeOffset + (hasOpenColumn ? 1u : 0u);
+        var lowCol = highCol + 1;
+        var closeCol = highCol + 2;
+        if (closeCol > endCol)
+            return [];
+
+        var pointCapacity = (int)Math.Min(endRow - dataStartRow + 1, int.MaxValue);
+        var highs = new List<double?>(pointCapacity);
+        var lows = new List<double?>(pointCapacity);
+        var closes = new List<double?>(pointCapacity);
+        List<double?>? opens = openCol is null ? null : new List<double?>(pointCapacity);
+
+        for (var r = dataStartRow; r <= endRow; r++)
+        {
+            highs.Add(cellAccessor(r, highCol, out var h, out _) ? h : null);
+            lows.Add(cellAccessor(r, lowCol, out var l, out _) ? l : null);
+            closes.Add(cellAccessor(r, closeCol, out var c, out _) ? c : null);
+            opens?.Add(openCol is { } oc && cellAccessor(r, oc, out var o, out _) ? o : null);
+        }
+
+        return
+        [
+            new ChartSeriesData
+            {
+                SeriesIndex = 0,
+                Name = "Stock",
+                Values = closes,
+                HighValues = highs,
+                LowValues = lows,
+                OpenValues = opens,
+            }
+        ];
     }
 
     private static string ResolveSeriesName(

@@ -291,7 +291,7 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
         // source range, so its own RemoveAll calls are frequently NOT no-ops and the field lists must be
         // captured here too.
         var cache = CommandGuards.FindPivotCache(ctx.Workbook, pivotTable);
-        _fieldSnapshot = RefreshFieldSnapshot.Capture(pivotTable, cache);
+        _fieldSnapshot = RefreshFieldSnapshot.Capture(ctx.Workbook, pivotTable, cache);
         // R116-commands-pivot-refresh-scope: this command IS the F5 / "Refresh PivotTable" action --
         // the one genuine "source data may have changed" entry point -- so it is the only caller that
         // asks Refresh to re-derive cache.Fields' SharedItems from the live source (see
@@ -347,16 +347,27 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
         IReadOnlyList<PivotFieldModel> PageFields,
         IReadOnlyList<PivotDataFieldModel> DataFields,
         int? CacheId,
-        IReadOnlyList<PivotCacheFieldModel> CacheFields)
+        IReadOnlyList<PivotCacheFieldModel> CacheFields,
+        IReadOnlyList<(string SlicerName, List<SlicerCacheItem> CacheItems)> SlicerCacheItems)
     {
-        public static RefreshFieldSnapshot Capture(PivotTableModel pivotTable, PivotCacheModel? cache) =>
+        public static RefreshFieldSnapshot Capture(Workbook workbook, PivotTableModel pivotTable, PivotCacheModel? cache) =>
             new(
                 pivotTable.RowFields.ToList(),
                 pivotTable.ColumnFields.ToList(),
                 pivotTable.PageFields.ToList(),
                 pivotTable.DataFields.ToList(),
                 cache?.CacheId,
-                cache?.Fields.ToList() ?? []);
+                cache?.Fields.ToList() ?? [],
+                // R117-commands-pivot-slicer-growth: Refresh (rescanCacheSharedItems: true, this
+                // command's own call below) can now APPEND new entries to a bound slicer's CacheItems
+                // (see PivotTableRefreshService.ExtendBoundSlicerCacheItems) the same way it already
+                // rebuilds cache.Fields in place -- capture every such slicer's CacheItems here too, so
+                // Undo reverts that append exactly like it already reverts the cache.Fields rebuild
+                // above, instead of leaving a refresh's slicer-side growth permanently un-undoable.
+                workbook.Slicers
+                    .Where(slicer => string.Equals(slicer.SourcePivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase))
+                    .Select(slicer => (slicer.Name, slicer.CacheItems.ToList()))
+                    .ToList());
 
         public void Restore(PivotTableModel pivotTable, Workbook workbook)
         {
@@ -364,6 +375,17 @@ public sealed class RefreshPivotTableCommand : IWorkbookCommand
             PivotTableCommandCollections.Replace(pivotTable.ColumnFields, ColumnFields);
             PivotTableCommandCollections.Replace(pivotTable.PageFields, PageFields);
             PivotTableCommandCollections.Replace(pivotTable.DataFields, DataFields);
+
+            foreach (var (slicerName, cacheItems) in SlicerCacheItems)
+            {
+                var slicer = workbook.Slicers.FirstOrDefault(candidate =>
+                    string.Equals(candidate.Name, slicerName, StringComparison.OrdinalIgnoreCase));
+                if (slicer is null)
+                    continue;
+
+                slicer.CacheItems.Clear();
+                slicer.CacheItems.AddRange(cacheItems);
+            }
 
             if (CacheId is not { } cacheId)
                 return;

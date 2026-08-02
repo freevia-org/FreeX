@@ -492,12 +492,16 @@ internal static class XlsxChartSeriesRangeReader
     /// that lack a numCache — use the verbatim-formula path instead).
     /// <paramref name="valueContainerName"/>/<paramref name="categoryContainerName"/> default to
     /// "val"/"cat" but can be overridden to "yVal"/"xVal" for Scatter/Bubble series.
+    /// <paramref name="sizeContainerName"/> (R117-io-chart-embedded-bubble-size-1) is null for every
+    /// chart type except Bubble, which passes "bubbleSize" so each series' cached point sizes are
+    /// captured into <see cref="ChartEmbeddedSeriesData.SizeValues"/> alongside its X/Y cache.
     /// </summary>
     public static List<ChartEmbeddedSeriesData>? TryReadEmbeddedSeriesData(
         IReadOnlyList<XElement> seriesElements,
         SheetId sheetId,
         string valueContainerName = "val",
-        string categoryContainerName = "cat")
+        string categoryContainerName = "cat",
+        string? sizeContainerName = null)
     {
         if (!AllValCatFormulasAreNamedRanges(seriesElements, sheetId, valueContainerName, categoryContainerName))
             return null;
@@ -510,7 +514,8 @@ internal static class XlsxChartSeriesRangeReader
             var seriesName = ReadEmbeddedStringCacheFirstValue(series, "tx");
             var categories = ReadEmbeddedStringCacheValues(series, categoryContainerName);
             var values = ReadEmbeddedNumericCacheValues(series, valueContainerName);
-            result.Add(new ChartEmbeddedSeriesData(seriesIndex, seriesName, categories, values));
+            var sizeValues = sizeContainerName is null ? null : ReadEmbeddedNumericCacheValues(series, sizeContainerName);
+            result.Add(new ChartEmbeddedSeriesData(seriesIndex, seriesName, categories, values, sizeValues));
         }
 
         // Only use embedded data when at least one series has actual numeric cache values.
@@ -536,13 +541,17 @@ internal static class XlsxChartSeriesRangeReader
     /// </list>
     /// <paramref name="valueContainerName"/>/<paramref name="categoryContainerName"/> default to
     /// "val"/"cat" but can be overridden to "yVal"/"xVal" for Scatter/Bubble series.
+    /// <paramref name="sizeContainerName"/> mirrors <see cref="TryReadEmbeddedSeriesData"/>'s
+    /// parameter of the same name (R117-io-chart-embedded-bubble-size-1): null for every chart type
+    /// except Bubble, which passes "bubbleSize".
     /// </summary>
     public static List<ChartEmbeddedSeriesData>? TryReadCrossSheetEmbeddedData(
         IEnumerable<XElement> seriesElements,
         SheetId chartSheetId,
         IReadOnlyDictionary<string, SheetId>? sheetNameResolver,
         string valueContainerName = "val",
-        string categoryContainerName = "cat")
+        string categoryContainerName = "cat",
+        string? sizeContainerName = null)
     {
         if (sheetNameResolver is null)
             return null;
@@ -580,7 +589,8 @@ internal static class XlsxChartSeriesRangeReader
             var seriesName = ReadEmbeddedStringCacheFirstValue(series, "tx");
             var categories = ReadEmbeddedStringCacheValues(series, categoryContainerName);
             var values = ReadEmbeddedNumericCacheValues(series, valueContainerName);
-            result.Add(new ChartEmbeddedSeriesData(seriesIndex, seriesName, categories, values));
+            var sizeValues = sizeContainerName is null ? null : ReadEmbeddedNumericCacheValues(series, sizeContainerName);
+            result.Add(new ChartEmbeddedSeriesData(seriesIndex, seriesName, categories, values, sizeValues));
         }
 
         // Only use embedded data when at least one series has numeric cache values.

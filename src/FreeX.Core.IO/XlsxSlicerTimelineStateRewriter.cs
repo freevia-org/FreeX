@@ -899,14 +899,22 @@ internal static class XlsxSlicerTimelineStateRewriter
     /// </summary>
     private static bool RewriteNativeCacheItemSelection(ZipArchive archive, XElement cacheRoot, SlicerModel model, Workbook workbook)
     {
-        if (model.SelectedItems.Count == 0 && !model.SelectionCaptured)
-            return false;
-
         var itemsElement = cacheRoot
             .Descendants()
             .FirstOrDefault(element => string.Equals(element.Name.LocalName, "items", StringComparison.OrdinalIgnoreCase));
         if (itemsElement is null)
             return false;
+
+        // R117-io-slicer-cacheitem-growth: append a native <i x="N"/> for every index the model's
+        // CacheItems now carries (PivotTableRefreshService.ExtendBoundSlicerCacheItems appends one when
+        // a refresh discovers a new distinct pivot-cache value) that this preserved part does not yet
+        // represent -- BEFORE and INDEPENDENT of the SelectedItems/SelectionCaptured-gated rewrite
+        // below, since a plain Refresh-then-Save with no selection change at all must still persist the
+        // new item, or it is invisible again on the very next reload (the bug this fix addresses).
+        var changed = AppendMissingCacheItemEntries(itemsElement, model);
+
+        if (model.SelectedItems.Count == 0 && !model.SelectionCaptured)
+            return changed;
 
         // R26-io-pivot-deep-2: resolve captions from the RAW <sharedItems> XML (indexed exactly as Excel
         // wrote it, including <m/> missing-value slots) -- NOT from PivotCacheFieldModel.SharedItems, which
@@ -914,11 +922,10 @@ internal static class XlsxSlicerTimelineStateRewriter
         // with the native <i x="N"> this loop is patching.
         var rawCaptions = ResolveRawSharedItemCaptions(archive, workbook, model);
         if (rawCaptions is null)
-            return false;
+            return changed;
 
         var selected = new HashSet<string>(model.SelectedItems, StringComparer.OrdinalIgnoreCase);
 
-        var changed = false;
         foreach (var itemElement in itemsElement.Elements())
         {
             if (!string.Equals(itemElement.Name.LocalName, "i", StringComparison.OrdinalIgnoreCase))
@@ -934,6 +941,58 @@ internal static class XlsxSlicerTimelineStateRewriter
 
             var shouldBeSelected = selected.Contains(caption);
             changed |= SetSelectedFlag(itemElement, shouldBeSelected);
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// R117-io-slicer-cacheitem-growth: appends a native <c>&lt;i x="N"/&gt;</c> element for every
+    /// <see cref="SlicerCacheItem"/> in <paramref name="model"/>'s <see cref="SlicerModel.CacheItems"/>
+    /// whose <see cref="SlicerCacheItem.Index"/> is not already present as an <c>&lt;i x="N"&gt;</c>
+    /// under <paramref name="itemsElement"/> -- this is the ONLY thing that lets a pivot slicer loaded
+    /// from an existing file ever surface a value that first appeared after the file was last saved
+    /// (<see cref="PivotTableRefreshService"/>'s in-memory append onto <see cref="SlicerModel.CacheItems"/>
+    /// otherwise has nowhere to go on save, and the item is invisible again on the very next reload).
+    /// Appended purely by INDEX -- no caption/<see cref="SlicerModel.SelectedItems"/> lookup needed --
+    /// using the model's own <see cref="SlicerCacheItem.IsSelected"/> (set true by
+    /// <c>PivotTableRefreshService.ExtendBoundSlicerCacheItems</c> for a brand-new item, mirroring
+    /// Excel's own "include new items" default) for the new element's <c>s</c> flag, via the same
+    /// omit-when-false convention <see cref="SetSelectedFlag"/> uses. New elements are appended, in
+    /// ascending index order, at the END of the existing sequence -- the OOXML schema places no
+    /// ordering constraint on sibling <c>&lt;i&gt;</c> elements, and appending (rather than inserting in
+    /// index order) never disturbs any already-preserved entry or its position. A strict no-op (and the
+    /// existing sequence is left byte-identical) when every model CacheItem index is already present.
+    /// </summary>
+    private static bool AppendMissingCacheItemEntries(XElement itemsElement, SlicerModel model)
+    {
+        if (model.CacheItems.Count == 0)
+            return false;
+
+        var existingIndices = new HashSet<int>();
+        foreach (var itemElement in itemsElement.Elements())
+        {
+            if (!string.Equals(itemElement.Name.LocalName, "i", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (int.TryParse(itemElement.Attribute("x")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var existingIndex))
+                existingIndices.Add(existingIndex);
+        }
+
+        var itemNamespace = itemsElement.Name.Namespace;
+        var changed = false;
+        foreach (var cacheItem in model.CacheItems.OrderBy(item => item.Index))
+        {
+            if (!existingIndices.Add(cacheItem.Index))
+                continue;
+
+            var newElement = new XElement(
+                itemNamespace + "i",
+                new XAttribute("x", cacheItem.Index.ToString(CultureInfo.InvariantCulture)));
+            if (cacheItem.IsSelected)
+                newElement.SetAttributeValue("s", "1");
+
+            itemsElement.Add(newElement);
+            changed = true;
         }
 
         return changed;

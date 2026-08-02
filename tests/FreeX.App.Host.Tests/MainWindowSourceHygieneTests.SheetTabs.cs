@@ -138,8 +138,15 @@ public sealed partial class MainWindowSourceHygieneTests
         var editingSource = ReadEditingSource();
 
         editingSource.Should().NotContain("_inlineEditor.SelectAll();");
-        editingSource.Should().Contain("_inlineEditor.CaretIndex = _inlineEditor.Text.Length;");
+        // Round 61 (0779b0fda6, "R61-render-formula-bar-6-2") taught double-click to place the caret
+        // at the clicked pixel (matching real Excel/the Avalonia shell) via ResolveInlineEditorCaretIndex;
+        // that helper still falls back to "caret at end" (textLength) for keyboard-driven entry (F2,
+        // typing, Enter/Tab), which is the behavior this test is really pinning.
+        editingSource.Should().Contain("_inlineEditor.CaretIndex = ResolveInlineEditorCaretIndex(clickX, layout.TextOverlayRect.Left - 4);");
         editingSource.Should().Contain("_inlineEditor.SelectionLength = 0;");
+        var caretResolverMethod = ExtractMethodSource(editingSource, "private int ResolveInlineEditorCaretIndex(");
+        caretResolverMethod.Should().Contain("if (clickX is not { } x)");
+        caretResolverMethod.Should().Contain("return textLength;");
     }
 
     [Fact]
@@ -352,14 +359,20 @@ public sealed partial class MainWindowSourceHygieneTests
     public void SheetTabMutations_RouteThroughHostCommandExecutionHelpers()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
-        var insert = ExtractMethodSource(source, "private void InsertNewSheet()");
+        // Round 84 (dd5f3056c3) gave InsertNewSheet an optional insertBeforeSheetId parameter so a
+        // sheet-tab context-menu "Insert" could insert before a specific tab, not just append.
+        var insert = ExtractMethodSource(source, "private void InsertNewSheet(SheetId? insertBeforeSheetId = null)");
         var rename = ExtractMethodSource(source, "private void RenameSheet(");
         var delete = ExtractMethodSource(source, "private void SheetCtxDelete_Click(");
         var move = ExtractMethodSource(source, "private void MoveSheetTab(");
 
         insert.Should().Contain("TryExecuteRepeatableCommand(");
         rename.Should().Contain("TryExecuteCommand(new RenameSheetCommand");
-        delete.Should().Contain("TryExecuteCommand(new RemoveSheetCommand");
+        // "Fix 42 verified review-5 FreeX findings" (1551700d33) taught Delete Sheet to act on every
+        // grouped/selected sheet tab at once, wrapping >1 RemoveSheetCommand in a CompositeWorkbookCommand,
+        // so the RemoveSheetCommand construction is no longer inline in the TryExecuteCommand call.
+        delete.Should().Contain("new RemoveSheetCommand(sheetId)");
+        delete.Should().Contain("TryExecuteCommand(command, \"Delete Sheet\")");
         move.Should().Contain("TryExecuteCommand(new MoveSheetCommand");
 
         insert.Should().NotContain("_commandBus.Execute");
@@ -374,13 +387,18 @@ public sealed partial class MainWindowSourceHygieneTests
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.SheetTabs.cs");
         var method = ExtractMethodSource(source, "private void SheetCtxMoveOrCopy_Click(");
 
+        // "Fix 42 verified review-5 FreeX findings" (1551700d33) extended Move-or-Copy (like Delete)
+        // to act on every grouped/selected sheet tab at once: >1 DuplicateSheetCommand are wrapped in
+        // a CompositeWorkbookCommand, and the actual repositioning uses the plural MoveSheetsCommand
+        // over every newly-copied sheet id rather than a single-sheet MoveSheetCommand(copyIndex, targetIndex).
         method.Should().Contain("new CompositeWorkbookCommand(");
         method.Should().Contain("\"Move or Copy Sheet\"");
-        method.Should().Contain("new DuplicateSheetCommand(tab.Id)");
-        method.Should().Contain("new MoveSheetCommand(copyIndex, targetIndex)");
+        method.Should().Contain("new DuplicateSheetCommand(sheetId)");
         method.Should().Contain("TryExecuteCommand(command, \"Move or Copy Sheet\")");
+        method.Should().Contain("new MoveSheetsCommand(copySheetIds, targetIndex)");
+        method.Should().Contain("new MoveSheetsCommand(selectedSheetIds, dialog.Result.InsertBeforeIndex)");
         method.Should().NotContain("TryExecuteCommand(new DuplicateSheetCommand(tab.Id), \"Duplicate Sheet\")");
-        method.Should().NotContain("TryExecuteCommand(new MoveSheetCommand(copyIndex, targetIndex), \"Move Sheet\")");
+        method.Should().NotContain("_commandBus.Execute");
     }
 
     [Fact]
@@ -707,7 +725,9 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var batchSource = WorkspaceFileLocator.ReadAllText("tools", "Run-UxParityScenarioBatch.ps1");
 
-        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"formula\", \"filtering\", \"grid\", \"all\")]");
+        // "native-output" was added as its own scenario category (0b54f1cb46 "batch native output
+        // foreground evidence" and follow-ups); the pinned ValidateSet literal predates that.
+        batchSource.Should().Contain("[ValidateSet(\"smoke\", \"core\", \"dialogs\", \"status\", \"formula\", \"filtering\", \"grid\", \"native-output\", \"all\")]");
         batchSource.Should().Contain("\"core\" { return $pairs | Where-Object { $_[\"id\"] -in @(\"format-cells-dialog\", \"format-cells-context-dialog\", \"sheet-tab-context-menu\", \"sheet-tab-overflow-activate-dialog\") } }");
         batchSource.Should().Contain("id = \"status-footer-reference\"");
         batchSource.Should().Contain("excelScenario = \"excel-status-footer-reference\"");
@@ -828,13 +848,19 @@ public sealed partial class MainWindowSourceHygieneTests
     {
         var keyboard = DialogSourceTestSupport.ReadHostSources("MainWindow.KeyboardCommands.cs");
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        // Commit 52ebe84d9f ("Extract shared presentation review controller") moved the actual
+        // threaded-comment command construction out of MainWindow.ReviewCommands.cs and into the
+        // shared FreeX.App.Presentation.Comments tier (used by both the WPF and Avalonia hosts);
+        // ReviewCommands.cs now only delegates to ReviewSessionController.ApplyThreadedComment.
+        var mutationService = DialogSourceTestSupport.ReadPresentationSources("Comments", "PresentationCommentMutationService.cs");
 
         keyboard.Should().Contain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewThreadedCommentBtn_Click)");
         keyboard.Should().NotContain("_keyboardCommandDispatcher.Register(KeyboardCommandShortcut.NewThreadedComment, ReviewNewCommentBtn_Click)");
         source.Should().Contain("private void ReviewNewThreadedCommentBtn_Click");
-        source.Should().Contain("new SetThreadedCommentCommand(");
-        source.Should().Contain("new ApplyThreadedCommentChangesCommand(");
-        source.Should().Contain("result.RootText is not null");
+        source.Should().Contain("ReviewSessionController.ApplyThreadedComment(");
+        mutationService.Should().Contain("new SetThreadedCommentCommand(");
+        mutationService.Should().Contain("new ApplyThreadedCommentChangesCommand(");
+        mutationService.Should().Contain("result.RootText is not null");
     }
 
     [Fact]
@@ -856,7 +882,12 @@ public sealed partial class MainWindowSourceHygieneTests
         source.Should().Contain("case WorksheetContextMenuAction.DeleteComment:");
         source.Should().Contain("ReviewDeleteThreadedCommentBtn_Click(this, new RoutedEventArgs());");
         reviewSource.Should().Contain("private void ReviewDeleteThreadedCommentBtn_Click(");
-        reviewSource.Should().Contain("new DeleteThreadedCommentCommand(");
+        // Commit 52ebe84d9f moved the actual DeleteThreadedCommentCommand construction into the
+        // shared PresentationCommentMutationService; ReviewCommands.cs now delegates to
+        // ReviewSessionController.DeleteThreadedComment().
+        reviewSource.Should().Contain("ReviewSessionController.DeleteThreadedComment()");
+        var mutationService = DialogSourceTestSupport.ReadPresentationSources("Comments", "PresentationCommentMutationService.cs");
+        mutationService.Should().Contain("new DeleteThreadedCommentCommand(");
     }
 
     [Fact]
@@ -892,17 +923,27 @@ public sealed partial class MainWindowSourceHygieneTests
     public void ReviewCommentAndNoteNavigation_KeepsThreadedCommentsAndNotesSeparate()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
+        // Commit 52ebe84d9f ("Extract shared presentation review controller") moved the actual
+        // prev/next address-ordering calls out of MainWindow.ReviewCommands.cs (which now delegates
+        // to ReviewSessionController.NavigateThreadedComment/NavigateNote) and into the shared
+        // PresentationReviewSessionController used by both the WPF and Avalonia hosts.
+        var controllerSource = DialogSourceTestSupport.ReadPresentationSources("Comments", "PresentationReviewSessionController.cs");
 
         source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments)");
         source.Should().Contain("ShowOrRefreshCommentListWindow(");
-        source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
+        source.Should().Contain("ReviewSessionController.NavigateThreadedComment(previous)");
+        controllerSource.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
         source.Should().Contain("sheet.ThreadedComments.Count == 0");
         source.Should().Contain("private void ReviewPrevNoteBtn_Click(");
         source.Should().Contain("private void ReviewNextNoteBtn_Click(");
         source.Should().Contain("private void ReviewShowNotesBtn_Click(");
         source.Should().Contain("CommentListWindow.CreateNoteItems(sheet.Comments)");
-        source.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
-        source.Should().Contain("sheet.Comments.Count == 0");
+        source.Should().Contain("ReviewSessionController.NavigateNote(previous)");
+        controllerSource.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
+        // NavigateNote's own "sheet.Comments.Count == 0" empty-sheet guard was generalized (52ebe84d9f)
+        // into the shared Navigate() helper's "addresses.Count == 0" check, common to both the note
+        // and threaded-comment navigation paths.
+        controllerSource.Should().Contain("addresses.Count == 0");
         source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
         source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
     }
@@ -986,7 +1027,13 @@ public sealed partial class MainWindowSourceHygieneTests
         committedHandler.Should().Contain("UpdateViewport();");
         committedHandler.Should().Contain("RefreshStatusBar();");
 
+        // R72-commands-sort-filter-4-3 split the viewport/status-bar refresh out of
+        // AdvancedFilterBtn_Click into ApplyAdvancedFilterResult, which also now remembers the
+        // in-place filter for Data > Reapply -- see that method's own doc comment.
         ExtractMethodSource(dataCommandsSource, "private void AdvancedFilterBtn_Click(")
+            .Should()
+            .Contain("ApplyAdvancedFilterResult(dialog.Result);");
+        ExtractMethodSource(dataCommandsSource, "private void ApplyAdvancedFilterResult(")
             .Should()
             .Contain("UpdateViewport();")
             .And.Contain("RefreshStatusBar();");
