@@ -3596,6 +3596,13 @@ public sealed class TextDocument
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
 
     /// <summary>
+    /// Whether consuming applications should remove personal information from document metadata when saving.
+    /// Maps to <c>w:settings/w:removePersonalInformation</c>. False is Word's default and is omitted from
+    /// newly authored packages; this flag preserves the package instruction and does not itself strip metadata.
+    /// </summary>
+    public bool RemovePersonalInformation { get; set; }
+
+    /// <summary>
     /// Whether Word should refresh fields when the document opens. Maps to
     /// <c>w:settings/w:updateFields</c>. False is Word's default and is omitted from newly authored
     /// packages; true emits the non-default setting so references, page numbers, and other fields can

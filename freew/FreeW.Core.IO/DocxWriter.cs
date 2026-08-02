@@ -198,6 +198,7 @@ public static class DocxWriter
             || document.Blocks.OfType<Paragraph>().Any(p => p.SectionBreak?.Page.DifferentOddEvenPages == true);
 
         var hasSettings = hasProtection
+            || document.RemovePersonalInformation
             || document.UpdateFieldsOnOpen
             || document.TrackRevisions
             || document.DoNotTrackMoves
@@ -260,7 +261,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.RemovePersonalInformation, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8219,7 +8220,8 @@ public static class DocxWriter
     /// toggle (w:displayBackgroundShape, when <paramref name="displayBackground"/> so Word paints the
     /// w:background), the automatic-hyphenation toggle (w:autoHyphenation), the different-odd/even-headers
     /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>), the embed-TrueType-fonts
-    /// toggle (w:embedTrueTypeFonts), the revision-tracking toggles (w:trackRevisions,
+    /// toggle (w:embedTrueTypeFonts), the personal-information removal toggle
+    /// (w:removePersonalInformation), the revision-tracking toggles (w:trackRevisions,
     /// w:doNotTrackMoves, and w:doNotTrackFormatting), and the document-protection element
     /// (w:documentProtection: w:edit + w:enforcement="1").
     ///
@@ -8232,7 +8234,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool removePersonalInformation, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8263,6 +8265,8 @@ public static class DocxWriter
         {
             var fresh = new XElement(W + "settings",
                 new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
+            if (removePersonalInformation)
+                fresh.Add(new XElement(W + "removePersonalInformation"));
             if (embedTrueTypeFonts)
                 fresh.Add(new XElement(W + "embedTrueTypeFonts"));
             if (displayBackground)
@@ -8308,6 +8312,7 @@ public static class DocxWriter
         // position; an element whose feature is off is simply removed, since the modelled value — not the
         // preserved one — is authoritative for these. Unmodelled settings keep their place.
         var settings = new XElement(original);
+        OverlaySetting(settings, "removePersonalInformation", removePersonalInformation ? new XElement(W + "removePersonalInformation") : null);
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
