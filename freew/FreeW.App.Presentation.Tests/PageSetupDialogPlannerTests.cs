@@ -6,6 +6,35 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class PageSetupDialogPlannerTests
 {
     [Fact]
+    public void PresentationMetrics_DescribeSharedWpfAuthorityGeometryAndValidationPolicy()
+    {
+        var metrics = PageSetupDialogPlanner.PresentationMetrics;
+
+        metrics.WindowWidth.Should().Be(420);
+        metrics.RowInset.Should().Be(4);
+        metrics.LabelFieldSpacing.Should().Be(8);
+        metrics.NumberBoxMinWidth.Should().Be(120);
+        metrics.ComboBoxMinWidth.Should().Be(180);
+        metrics.ActionButtonWidth.Should().Be(72);
+        metrics.TabNames.Should().Equal("Margins", "Paper", "Layout");
+        metrics.Validation.GeometryMode.Should().Be(PageSetupGeometryMode.PortraitInputSwappedWhenLandscape);
+        metrics.Validation.ValidationProfile.Should().Be(PageSetupValidationProfile.UnifiedDialog);
+        metrics.Validation.UseSelectedPaperPreset.Should().BeFalse();
+        metrics.Validation.Message.Should().Be(PageSetupDialogPlanner.UnifiedValidationMessage);
+    }
+
+    [Fact]
+    public void PresentationLabels_UsePointUnitsAcrossBothHosts()
+    {
+        PageSetupDialogPlanner.TopMarginLabel.Should().Be("Top (pt):");
+        PageSetupDialogPlanner.BottomMarginLabel.Should().Be("Bottom (pt):");
+        PageSetupDialogPlanner.LeftMarginLabel.Should().Be("Left (pt):");
+        PageSetupDialogPlanner.RightMarginLabel.Should().Be("Right (pt):");
+        PageSetupDialogPlanner.GutterLabel.Should().Be("Gutter (pt):");
+        PageSetupDialogPlanner.PaperSizeLabel.Should().Be("Paper size:");
+    }
+
+    [Fact]
     public void BuildInitialState_UsesUnifiedDialogLandscapeRoundTripGeometry()
     {
         var page = new PageSettings

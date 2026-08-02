@@ -4,6 +4,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -26,7 +27,8 @@ public sealed class PageSetupDialogVisualParityTests
             var dialog = new PageSetupDialog(new PageSettings(), initialTab);
             try
             {
-                dialog.Width.Should().Be(420);
+                var metrics = PageSetupDialogPlanner.PresentationMetrics;
+                dialog.Width.Should().Be(metrics.WindowWidth);
                 dialog.FontFamily.Should().Be(AvaloniaCompactDialogChrome.WindowsUiFontFamily);
                 dialog.FontSize.Should().Be(12);
 
@@ -39,22 +41,24 @@ public sealed class PageSetupDialogVisualParityTests
                 grids.Should().NotBeEmpty();
                 grids.Where(grid => grid.ColumnDefinitions.Count == 2)
                     .Should().OnlyContain(grid =>
-                        grid.ColumnDefinitions[0].Width == GridLength.Auto
+                        grid.ColumnDefinitions[0].Width == new GridLength(metrics.LabelColumnWidth)
                         && grid.ColumnDefinitions[1].Width == new GridLength(1, GridUnitType.Star));
 
                 dialog.GetLogicalDescendants().OfType<TextBox>()
-                    .Should().OnlyContain(box => box.MinWidth == 120);
+                    .Should().OnlyContain(box => box.MinWidth == metrics.NumberBoxMinWidth);
+                dialog.GetLogicalDescendants().OfType<TextBox>()
+                    .Should().OnlyContain(box => box.Margin == new Thickness(0, metrics.RowInset, 0, metrics.RowInset));
                 dialog.GetLogicalDescendants().OfType<ComboBox>()
-                    .Should().OnlyContain(combo => combo.MinWidth == 180);
+                    .Should().OnlyContain(combo => combo.MinWidth == metrics.ComboBoxMinWidth);
 
                 var actionButtons = dialog.GetLogicalDescendants()
                     .OfType<Button>()
                     .Where(button => button is not ToggleButton)
                     .ToArray();
                 actionButtons.Where(button => button.Content?.ToString() is "OK" or "Cancel")
-                    .Should().OnlyContain(button => button.MinWidth == 72);
+                    .Should().OnlyContain(button => button.MinWidth == metrics.ActionButtonWidth);
                 actionButtons.Where(button => button.Content?.ToString() is "Line Numbers…" or "Borders…")
-                    .Should().OnlyContain(button => button.MinWidth == 110);
+                    .Should().OnlyContain(button => button.MinWidth == metrics.LauncherButtonWidth);
             }
             finally
             {

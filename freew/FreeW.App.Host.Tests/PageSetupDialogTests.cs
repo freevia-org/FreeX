@@ -1,5 +1,6 @@
 using System.IO;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -146,6 +147,27 @@ public sealed class PageSetupDialogTests
         Assert.DoesNotContain("PaperSizes =", source);
         Assert.DoesNotContain("SectionStartValues =", source);
         Assert.DoesNotContain("TryParse(_top.Text", source);
+        Assert.Contains("PageSetupDialogPlanner.PresentationMetrics", source);
+        Assert.Contains("metrics.Validation", source);
+    }
+
+    [StaFact]
+    public void Dialog_UsesSharedPresentationMetricsForWindowAndTabLabels()
+    {
+        var dialog = PageSetupDialog.CreateForTest(new PageSettings());
+        try
+        {
+            Assert.Equal(PageSetupDialogPlanner.PresentationMetrics.WindowWidth, dialog.Width);
+            var root = (System.Windows.Controls.DockPanel)dialog.Content!;
+            var tabs = (System.Windows.Controls.TabControl)root.Children[1];
+            Assert.Equal(
+                PageSetupDialogPlanner.PresentationMetrics.TabNames,
+                tabs.Items.Cast<System.Windows.Controls.TabItem>().Select(item => item.Header?.ToString()));
+        }
+        finally
+        {
+            dialog.Close();
+        }
     }
 
 }

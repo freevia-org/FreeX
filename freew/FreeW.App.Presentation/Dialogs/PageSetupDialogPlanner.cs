@@ -15,6 +15,45 @@ public enum PageSetupValidationProfile
     CompactDialog
 }
 
+public readonly record struct PageSetupDialogThickness(
+    double Left,
+    double Top,
+    double Right,
+    double Bottom);
+
+public sealed record PageSetupDialogValidationPolicy(
+    PageSetupGeometryMode GeometryMode,
+    PageSetupValidationProfile ValidationProfile,
+    bool UseSelectedPaperPreset,
+    string Message);
+
+public sealed record PageSetupDialogPresentationMetrics
+{
+    public double WindowWidth { get; init; } = 420;
+    public double RowInset { get; init; } = 4;
+    public double LabelFieldSpacing { get; init; } = 8;
+    public double LabelColumnWidth { get; init; } = 93;
+    public double NumberBoxMinWidth { get; init; } = 120;
+    public double ComboBoxMinWidth { get; init; } = 180;
+    public double ActionButtonWidth { get; init; } = 72;
+    public double LauncherButtonWidth { get; init; } = 110;
+    public double CheckGroupTopSpacing { get; init; } = 8;
+    public double LauncherTopSpacing { get; init; } = 10;
+    public double LauncherSpacing { get; init; } = 8;
+    public PageSetupDialogThickness TabMargin { get; init; } = new(14, 14, 14, 0);
+    public PageSetupDialogThickness ActionRowMargin { get; init; } = new(14, 12, 14, 12);
+    public PageSetupDialogThickness SecondCheckMargin { get; init; } = new(0, 4, 0, 0);
+    public PageSetupDialogThickness TabContentMargin { get; init; } = new(14, 14, 14, 14);
+    public PageSetupDialogThickness TabPaneMargin { get; init; } = new(-12, -2, -12, 0);
+    public IReadOnlyList<string> TabNames { get; init; } = ["Margins", "Paper", "Layout"];
+    public PageSetupDialogValidationPolicy Validation { get; init; } =
+        new(
+            PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
+            PageSetupValidationProfile.UnifiedDialog,
+            UseSelectedPaperPreset: false,
+            "Enter non-negative margins/distances and a positive page width and height (in points).");
+}
+
 public sealed record PageSetupPaperOption(
     string HostLabel,
     string AvaloniaLabel,
@@ -85,18 +124,33 @@ public sealed record PageSetupDialogResult(
 
 public static class PageSetupDialogPlanner
 {
+    public static PageSetupDialogPresentationMetrics PresentationMetrics { get; } = new();
+
     public const string Title = "Page Setup";
     public const string MarginsSectionLabel = "Margins (points)";
-    public const string TopMarginLabel = "Top:";
-    public const string BottomMarginLabel = "Bottom:";
-    public const string LeftMarginLabel = "Left:";
-    public const string RightMarginLabel = "Right:";
+    public const string TopMarginLabel = "Top (pt):";
+    public const string BottomMarginLabel = "Bottom (pt):";
+    public const string LeftMarginLabel = "Left (pt):";
+    public const string RightMarginLabel = "Right (pt):";
+    public const string GutterLabel = "Gutter (pt):";
     public const string GutterPositionLabel = "Gutter position:";
+    public const string OrientationLabel = "Orientation:";
+    public const string MultiplePagesLabel = "Multiple pages:";
+    public const string ApplyToLabel = "Apply to:";
     public static readonly IReadOnlyList<string> GutterPositionNames = ["Left", "Top"];
     public const string OrientationSectionLabel = "Orientation";
     public const string PaperSizeSectionLabel = "Paper Size";
+    public const string PaperSizeLabel = "Paper size:";
     public const string CustomWidthLabel = "Width (pt):";
     public const string CustomHeightLabel = "  Height (pt):";
+    public const string SectionStartLabel = "Section start:";
+    public const string VerticalAlignmentLabel = "Vertical alignment:";
+    public const string HeaderDistanceLabel = "Header from edge (pt):";
+    public const string FooterDistanceLabel = "Footer from edge (pt):";
+    public const string DifferentFirstPageLabel = "Different first page";
+    public const string DifferentOddEvenLabel = "Different odd and even";
+    public const string LineNumbersLabel = "Line Numbers\u2026";
+    public const string BordersLabel = "Borders\u2026";
     public const string OkButton = "OK";
     public const string CancelButton = "Cancel";
     public const string UnifiedValidationMessage =
