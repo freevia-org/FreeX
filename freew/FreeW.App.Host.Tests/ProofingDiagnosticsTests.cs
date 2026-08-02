@@ -1,4 +1,6 @@
 using FreeW.App.Host.Editing;
+using WpfParagraph = System.Windows.Documents.Paragraph;
+using WpfRun = System.Windows.Documents.Run;
 
 namespace FreeW.App.Host.Tests;
 
@@ -38,5 +40,64 @@ public sealed class ProofingDiagnosticsTests
         view.ToggleSpellCheck().Should().BeFalse();
 
         view.SharedGrammarDiagnostics.Should().BeEmpty();
+    }
+
+    [StaFact]
+    public void NoProof_disables_native_spellcheck_only_on_effective_run_and_survives_commit()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("teh", RunFormatting.Default with { NoProof = true }));
+        paragraph.Runs.Add(new Run(" visible"));
+        doc.Blocks.Add(paragraph);
+        var view = new DocumentView();
+
+        view.LoadModel(doc);
+
+        var runs = view.Document.Blocks.OfType<WpfParagraph>().Single().Inlines.OfType<WpfRun>().ToArray();
+        runs[0].Language.IetfLanguageTag.Should().Be("zxx");
+        runs[1].Language.IetfLanguageTag.Should().NotBe("zxx");
+
+        view.CommitToModel();
+        ((Paragraph)view.Model.Blocks[0]).Runs[0].Formatting.NoProof.Should().BeTrue();
+        ((Paragraph)view.Model.Blocks[0]).Runs[1].Formatting.NoProof.Should().BeFalse();
+    }
+
+    [StaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void NoProof_native_spellcheck_suppression_honors_style_chain_and_document_default(bool useDefault)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph("teh");
+        if (useDefault)
+        {
+            doc.DefaultRun = doc.DefaultRun with { NoProof = true };
+        }
+        else
+        {
+            doc.Styles["BaseNoProof"] = new DocumentStyle
+            {
+                Id = "BaseNoProof",
+                Name = "Base no proof",
+                Run = RunFormatting.Default with { NoProof = true },
+            };
+            doc.Styles["ChildNoProof"] = new DocumentStyle
+            {
+                Id = "ChildNoProof",
+                Name = "Child no proof",
+                BasedOnStyleId = "BaseNoProof",
+            };
+            paragraph.StyleId = "ChildNoProof";
+        }
+        doc.Blocks.Add(paragraph);
+        var view = new DocumentView();
+
+        view.LoadModel(doc);
+
+        view.Document.Blocks.OfType<WpfParagraph>().Single().Inlines.OfType<WpfRun>().Single()
+            .Language.IetfLanguageTag.Should().Be("zxx");
     }
 }
