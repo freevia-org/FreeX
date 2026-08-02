@@ -1927,13 +1927,15 @@ public sealed class ChartDataCommandTests
         bus.Execute(new SetChartPieOptionsCommand(
             0,
             id,
-            new ChartPieOptions(0, 40, OfPieType.Bar, OfPieSplitType.Custom, 2, 75, new[] { 1, 3 })));
+            new ChartPieOptions(0, 40, OfPieType.Bar, OfPieSplitType.Custom, 2, 75, new[] { 1, 3 }, 120, true)));
 
         chart.OfPieType.Should().Be(OfPieType.Bar);
         chart.OfPieSplitType.Should().Be(OfPieSplitType.Custom);
         chart.OfPieSplitPosition.Should().Be(2);
         chart.OfPieSecondPieSizePercent.Should().Be(75);
         chart.OfPieCustomPointIndices.Should().Equal(1, 3);
+        chart.BarGapWidthPercent.Should().Be(120);
+        chart.OfPieSeriesLinesSpecified.Should().BeTrue();
 
         bus.Undo();
         chart.OfPieType.Should().Be(OfPieType.Pie);
@@ -1941,6 +1943,8 @@ public sealed class ChartDataCommandTests
         chart.OfPieSplitPosition.Should().BeNull();
         chart.OfPieSecondPieSizePercent.Should().BeNull();
         chart.OfPieCustomPointIndices.Should().BeEmpty();
+        chart.BarGapWidthPercent.Should().BeNull();
+        chart.OfPieSeriesLinesSpecified.Should().BeFalse();
     }
 
     [Fact]

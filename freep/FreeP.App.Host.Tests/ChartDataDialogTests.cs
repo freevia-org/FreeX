@@ -401,7 +401,7 @@ public sealed class ChartDataDialogTests : IDisposable
         sess.SelectedChart!.ChartType = ChartType.OfPie;
 
         var dialog = new ChartPieOptionsDialog(sess);
-        dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2");
+        dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2", 120, true);
         var options = dialog.BuildCommitPlanForTests();
 
         dialog.Should().NotBeNull();
@@ -410,6 +410,8 @@ public sealed class ChartDataDialogTests : IDisposable
         options.OfPieSplitPosition.Should().Be(2);
         options.OfPieSecondPieSizePercent.Should().Be(75);
         options.OfPieCustomPointIndices.Should().Equal(1, 2);
+        options.OfPieGapWidthPercent.Should().Be(120);
+        options.OfPieSeriesLines.Should().BeTrue();
     }
 
     [StaFact]

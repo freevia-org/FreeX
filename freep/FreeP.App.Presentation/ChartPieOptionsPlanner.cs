@@ -12,6 +12,8 @@ public sealed record ChartPieOptionsSurfacePlan(
     string OfPieSplitPositionLabel,
     string OfPieSecondPieSizeLabel,
     string OfPieCustomPointIndicesLabel,
+    string OfPieGapWidthLabel,
+    string OfPieSeriesLinesLabel,
     string Hint,
     string OkLabel,
     string CancelLabel);
@@ -28,6 +30,8 @@ public sealed class ChartPieOptionsPlanner
     public const string OfPieSplitPositionLabel = "Split position / threshold";
     public const string OfPieSecondPieSizeLabel = "Secondary plot size (%)";
     public const string OfPieCustomPointIndicesLabel = "Custom secondary points (0-based, comma separated)";
+    public const string OfPieGapWidthLabel = "Secondary plot gap width (%)";
+    public const string OfPieSeriesLinesLabel = "Show connector lines";
     public const string Hint = "Angle accepts 0-359. OfPie values apply only to pie-of-pie/bar-of-pie charts.";
     public const string OkLabel = "OK";
     public const string CancelLabel = "Cancel";
@@ -42,6 +46,8 @@ public sealed class ChartPieOptionsPlanner
     private double? _ofPieSplitPosition;
     private int _ofPieSecondPieSizePercent;
     private List<int> _ofPieCustomPointIndices;
+    private int? _ofPieGapWidthPercent;
+    private bool _ofPieSeriesLines;
 
     private ChartPieOptionsPlanner(ChartShape chart)
     {
@@ -53,6 +59,8 @@ public sealed class ChartPieOptionsPlanner
         _ofPieSplitPosition = chart.OfPieSplitPosition;
         _ofPieSecondPieSizePercent = Math.Clamp(chart.OfPieSecondPieSizePercent ?? 100, 5, 200);
         _ofPieCustomPointIndices = chart.OfPieCustomPointIndices.ToList();
+        _ofPieGapWidthPercent = chart.BarGapWidthPercent;
+        _ofPieSeriesLines = chart.OfPieSeriesLinesSpecified;
     }
 
     public static ChartPieOptionsSurfacePlan BuildSurfacePlan() => new(
@@ -65,6 +73,8 @@ public sealed class ChartPieOptionsPlanner
         OfPieSplitPositionLabel,
         OfPieSecondPieSizeLabel,
         OfPieCustomPointIndicesLabel,
+        OfPieGapWidthLabel,
+        OfPieSeriesLinesLabel,
         Hint,
         OkLabel,
         CancelLabel);
@@ -84,6 +94,8 @@ public sealed class ChartPieOptionsPlanner
     public double? OfPieSplitPosition => _ofPieSplitPosition;
     public int OfPieSecondPieSizePercent => _ofPieSecondPieSizePercent;
     public IReadOnlyList<int> OfPieCustomPointIndices => _ofPieCustomPointIndices;
+    public int? OfPieGapWidthPercent => _ofPieGapWidthPercent;
+    public bool OfPieSeriesLines => _ofPieSeriesLines;
 
     public void SetFirstSliceAngleDegrees(int? value) =>
         _firstSliceAngleDegrees = value is null ? null : Math.Clamp(value.Value, 0, 359);
@@ -100,6 +112,11 @@ public sealed class ChartPieOptionsPlanner
 
     public void SetOfPieSecondPieSizePercent(int value) =>
         _ofPieSecondPieSizePercent = Math.Clamp(value, 5, 200);
+
+    public void SetOfPieGapWidthPercent(int? value) =>
+        _ofPieGapWidthPercent = value is null ? null : Math.Clamp(value.Value, 0, 500);
+
+    public void SetOfPieSeriesLines(bool value) => _ofPieSeriesLines = value;
 
     public void SetOfPieCustomPointIndices(IEnumerable<int>? values)
     {
@@ -118,5 +135,7 @@ public sealed class ChartPieOptionsPlanner
         _chart.ChartType == ChartType.OfPie ? _ofPieSplitType : null,
         _chart.ChartType == ChartType.OfPie ? _ofPieSplitPosition : null,
         _chart.ChartType == ChartType.OfPie ? _ofPieSecondPieSizePercent : null,
-        _chart.ChartType == ChartType.OfPie ? _ofPieCustomPointIndices.ToArray() : null);
+        _chart.ChartType == ChartType.OfPie ? _ofPieCustomPointIndices.ToArray() : null,
+        _chart.ChartType == ChartType.OfPie ? _ofPieGapWidthPercent : null,
+        _chart.ChartType == ChartType.OfPie ? _ofPieSeriesLines : null);
 }
