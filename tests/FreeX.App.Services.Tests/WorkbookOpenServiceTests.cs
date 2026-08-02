@@ -200,6 +200,81 @@ public sealed class WorkbookOpenServiceTests
     }
 
     [Fact]
+    public async Task R119_LoadAsync_CanceledDuringParsing_ReturnsPromptlyInsteadOfWaitingForParseToFinish()
+    {
+        // R119-appservices-open-cancel-eager, through the real entry point (WorkbookOpenService
+        // .LoadAsync): before the fix, cancelling mid-parse only took effect once the (synchronous,
+        // uncancellable) adapter.Load call returned on its own -- indefinitely, for a parse stuck on
+        // an unresponsive network path. This proves LoadAsync itself, not just the shared runner,
+        // now returns as soon as cancellation is requested.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "slow-load.fxjson");
+        await File.WriteAllTextAsync(tempPath, "payload");
+        using var parseStarted = new ManualResetEventSlim();
+        using var releaseParse = new ManualResetEventSlim();
+        using var parseFinished = new ManualResetEventSlim();
+        var adapter = new TestFileAdapter(stream =>
+        {
+            parseStarted.Set();
+            // Bounded so the background thread always finishes (and closes its FileStream) rather
+            // than leaking an indefinitely-blocked thread-pool thread past the end of this test.
+            releaseParse.Wait(TimeSpan.FromSeconds(10));
+            var workbook = new Workbook("Loaded");
+            workbook.AddSheet("Sheet1");
+            parseFinished.Set();
+            return workbook;
+        });
+        using var cancellation = new CancellationTokenSource();
+
+        var loadTask = new WorkbookOpenService().LoadAsync(
+            tempPath,
+            adapter,
+            ".fxjson",
+            new FileFormatDescriptor(".fxjson", "Fake"),
+            cancellationToken: cancellation.Token);
+
+        parseStarted.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue("the adapter's Load must have started");
+        cancellation.Cancel();
+
+        var act = async () => await loadTask;
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        // Generous bound: this only needs to prove LoadAsync returned long before the 10-second
+        // block releases (never, under the pre-fix behavior, since nothing ever set releaseParse
+        // early) -- not race a tight deadline against thread-pool scheduling latency under a busy
+        // parallel test run.
+        stopwatch.Elapsed.Should().BeLessThan(
+            TimeSpan.FromSeconds(5),
+            "cancellation must be observed immediately instead of waiting for the still-running parse to finish");
+
+        // Let the abandoned background parse finish (and its FileStream close) before this method's
+        // `using var temp` disposal tries to recursively delete the directory that file lives in.
+        releaseParse.Set();
+        parseFinished.Wait(TimeSpan.FromSeconds(10)).Should().BeTrue("the abandoned background parse must still complete on its own");
+        // The outer WorkbookOpenService lambda disposes its FileStream immediately after the
+        // adapter callback returns, but on the background thread -- give that a brief window to
+        // land before this method's `using` block tries to delete the file out from under it.
+        SpinWaitUntilFileIsDeletable(tempPath);
+    }
+
+    private static void SpinWaitUntilFileIsDeletable(string path)
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            try
+            {
+                using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None)) { }
+                return;
+            }
+            catch (IOException)
+            {
+                Thread.Sleep(20);
+            }
+        }
+    }
+
+    [Fact]
     public void WorkbookFormulaScanner_UsesSheetFormulaCountsInsteadOfScanningCells()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find(

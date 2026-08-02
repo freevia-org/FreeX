@@ -5,7 +5,7 @@ namespace FreeX.Core.Commands;
 /// <summary>
 /// Applies the same cell edits to the same row/column addresses on multiple grouped sheets.
 /// </summary>
-public sealed class GroupedEditCellsCommand : IWorkbookCommand
+public sealed class GroupedEditCellsCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly IReadOnlyList<SheetId> _sheetIds;
     private readonly SheetId _sourceSheetId;
@@ -17,7 +17,17 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
     // grouped sheets must refresh that sheet's table body too, undone in the same transaction.
     private readonly List<IWorkbookCommand> _appliedTableEffects = [];
 
+    // R119-commands-undo-byte-budget-1: the undo snapshot captures one full per-cell tuple
+    // (Cell clone + style + hyperlink/metadata + rich-text runs + phonetic guide) for EVERY
+    // grouped sheet the source edits are replayed onto, so the real retained size scales with
+    // _sheetIds.Count * _sourceEdits.Count, not a flat per-command constant (see PasteCellsCommand
+    // for the same per-cell shape on a single sheet).
+    private const int BytesPerCell = 300;
+
     public string Label => "Edit Grouped Sheets";
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min((long)_sheetIds.Count * _sourceEdits.Count * BytesPerCell, int.MaxValue);
 
     public GroupedEditCellsCommand(
         IReadOnlyCollection<SheetId> sheetIds,

@@ -568,6 +568,11 @@ public partial class MainWindow
     }
     private void CalcSheetBtn_Click(object sender, RoutedEventArgs e)
     {
+        // R119-app-host-except-data-tables-recalc: Shift+F9 ("Calculate Sheet") is one of the
+        // three explicit triggers that always force this sheet's Data Tables fresh, regardless
+        // of calc mode -- see RefreshDataTablesOnSheetBeforeForcedRecalc's doc comment (mirrors
+        // FreeX.App.Services.WorkbookCellEditService.RecalculateSheet).
+        RefreshDataTablesOnSheetBeforeForcedRecalc(_currentSheetId);
         _recalcEngine.RecalculateSheetFormulas(_workbook, _currentSheetId);
         InvalidateNavigationCaches();
         UpdateViewport();

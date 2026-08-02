@@ -61,6 +61,8 @@
     <Project Path="freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freep/FreeP.App.Presentation/FreeP.App.Presentation.csproj" />
     <Project Path="freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj" />
+    <Project Path="freep/FreeP.App.Localization.Tests/FreeP.App.Localization.Tests.csproj" />
+    <Project Path="freep/FreeP.App.Recording.Tests/FreeP.App.Recording.Tests.csproj" />
     <Project Path="freep/FreeP.App.Recording.Windows/FreeP.App.Recording.Windows.csproj" />
     <Project Path="freep/FreeP.App.Rendering.Wpf/FreeP.App.Rendering.Wpf.csproj" />
     <Project Path="freep/FreeP.App.Rendering.Avalonia/FreeP.App.Rendering.Avalonia.csproj" />

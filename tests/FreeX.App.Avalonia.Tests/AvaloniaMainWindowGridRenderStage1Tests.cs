@@ -277,6 +277,99 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
         }, CancellationToken.None);
     }
 
+    // ── R119: a single click on a merged cell's anchor must expand the selection outline AND
+    // the fill handle to the merge's full footprint, matching the WPF host's
+    // CalculateSelectionRangeLayout (GridView.Rendering.Selection.cs) merge-expansion. SelectCell
+    // always produces an anchor-only 1x1 range (WorkbookSession.SetSingleSelectedRange never
+    // merge-expands), so without a matching reroute in AddSelectionOverlayToGrid the outline/handle
+    // were sized from that raw 1x1 range -- truncating a merged B2:D2 title cell's outline/handle to
+    // column B alone instead of wrapping/anchoring at the true merge footprint (column D).
+
+    [Fact]
+    public async Task R119_SelectCell_OnMergedAnchor_ExpandsSelectionOutlineAndFillHandleToFullMergeSpan()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.ActiveSheet;
+
+            // Merge B2:D2 (a typical merged title-row cell) and click its anchor B2 -- exactly what
+            // SelectCell does on an ordinary single left-click, never merge-expanding SelectedRange.
+            var anchor = new CellAddress(sheet.Id, 2, 2);
+            var mergeEnd = new CellAddress(sheet.Id, 2, 4);
+            sheet.AddMergedRegion(new GridRange(anchor, mergeEnd));
+            window.Session.SelectCell(anchor);
+            window.Session.SelectedRange.Should().Be(new GridRange(anchor, anchor),
+                "SelectCell must still report the raw anchor-only range -- only the rendered overlay should expand");
+
+            var grid = FindInnerGrid(window.RebuildSheetGridForTest());
+            var outline = grid.Children
+                .OfType<Border>()
+                .Single(candidate =>
+                    AutomationProperties.GetAutomationId(candidate) == "WorksheetSelectionOutline");
+            var handle = grid.Children
+                .OfType<Border>()
+                .Single(candidate =>
+                    AutomationProperties.GetAutomationId(candidate) == "WorksheetAutofillHandle");
+            var headerOffset = window.Session.ActiveSheet.ShowHeadings ? 1 : 0;
+
+            // Outline must span the WHOLE merge footprint (row 2, columns B..D), not just column B.
+            Grid.GetRow(outline).Should().Be(1 + headerOffset);
+            Grid.GetColumn(outline).Should().Be(1 + headerOffset);
+            Grid.GetRowSpan(outline).Should().Be(1);
+            Grid.GetColumnSpan(outline).Should().Be(3, "the outline must wrap the full B2:D2 merge, not just the anchor cell");
+
+            // The fill handle must sit at the merge's true bottom-right corner (column D), not the
+            // anchor's own bottom-right corner (column B).
+            Grid.GetRow(handle).Should().Be(1 + headerOffset);
+            Grid.GetColumn(handle).Should().Be(3 + headerOffset,
+                "the fill handle must anchor at the merge's real bottom-right corner (col D), not the un-expanded anchor cell (col B)");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task R119_SelectCell_OnOrdinaryUnmergedCell_SelectionOutlineAndFillHandleStayAtSingleCell()
+    {
+        // Sibling no-regression guard: an ordinary single-cell selection with NO merge involved must
+        // not be spuriously expanded by the new merge-lookup in AddSelectionOverlayToGrid.
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.ActiveSheet;
+
+            // An unrelated merge elsewhere on the sheet must not affect this selection at all.
+            sheet.AddMergedRegion(new GridRange(
+                new CellAddress(sheet.Id, 8, 8),
+                new CellAddress(sheet.Id, 8, 10)));
+
+            var selected = new CellAddress(sheet.Id, 2, 2);
+            window.Session.SelectCell(selected);
+
+            var grid = FindInnerGrid(window.RebuildSheetGridForTest());
+            var outline = grid.Children
+                .OfType<Border>()
+                .Single(candidate =>
+                    AutomationProperties.GetAutomationId(candidate) == "WorksheetSelectionOutline");
+            var handle = grid.Children
+                .OfType<Border>()
+                .Single(candidate =>
+                    AutomationProperties.GetAutomationId(candidate) == "WorksheetAutofillHandle");
+            var headerOffset = window.Session.ActiveSheet.ShowHeadings ? 1 : 0;
+
+            Grid.GetRow(outline).Should().Be(1 + headerOffset);
+            Grid.GetColumn(outline).Should().Be(1 + headerOffset);
+            Grid.GetRowSpan(outline).Should().Be(1);
+            Grid.GetColumnSpan(outline).Should().Be(1, "an ordinary unmerged single-cell selection must stay 1x1");
+
+            Grid.GetRow(handle).Should().Be(1 + headerOffset);
+            Grid.GetColumn(handle).Should().Be(1 + headerOffset);
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
     // ── J50: Shrink-to-fit font resolution must be memoized, not re-measured from scratch ────────
 
     [Fact]

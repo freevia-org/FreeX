@@ -128,41 +128,49 @@ public sealed partial class XlsxFileAdapter
         }
         foreach (var picturePart in layout.PictureParts)
         {
-            var picture = new PictureModel
-            {
-                Anchor = new CellAddress(
-                    sheet.Id,
-                    picturePart.Anchor?.FromRowZeroBased + 1 ?? 1,
-                    picturePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
-                Kind = PictureKind.Image,
-                Name = picturePart.Name,
-                ImageBytes = picturePart.ImageBytes,
-                ContentType = picturePart.ContentType,
-                Title = picturePart.Title,
-                AltText = picturePart.AltText,
-                // R90-app-accessibility-checker-5-2: preserve Excel's "Mark as decorative" flag.
-                IsDecorative = picturePart.IsDecorative,
-                RotationDegrees = picturePart.RotationDegrees,
-                FlipHorizontal = picturePart.FlipHorizontal,
-                FlipVertical = picturePart.FlipVertical,
-                CropLeft = picturePart.CropLeft,
-                CropTop = picturePart.CropTop,
-                CropRight = picturePart.CropRight,
-                CropBottom = picturePart.CropBottom,
-                // R65-io-image-drawing-6-1: a "Link to File" picture part has LinkTarget set instead of
-                // ImageBytes -- carry it onto the model so the picture is materialized as a linked
-                // picture (with a marker other code can check) instead of silently vanishing.
-                LinkedImageTarget = picturePart.LinkTarget,
-                // R80-io-drawing-image-5-3: carry the vector SVG fallback (if any) onto the model so
-                // the writer can re-emit the asvg:svgBlip extension instead of permanently downgrading
-                // the picture to a flat PNG the first time it is edited.
-                SvgImageBytes = picturePart.SvgImageBytes,
-                // R97-model-drawing-hyperlink-2-2: populate the model's own hyperlink field so a later
-                // clone/paste of this picture (which clears IsSourceLoaded and so can't lean on the
-                // source-package hyperlink re-read in XlsxWorksheetDrawingObjectWriter) still has a
-                // hyperlink to carry forward.
-                Hyperlink = picturePart.Hyperlink
-            };
+            // R119-io-camera-linked-picture-identity: a part built by
+            // XlsxWorksheetDrawingPartReader.ReadPictureSnapshotGroupParts (Kind ==
+            // CellRangeSnapshot) came from a marked <xdr:grpSp>, not a real <xdr:pic> -- reconstruct
+            // it as the single linked/unlinked camera PictureModel it always was, instead of the
+            // ordinary embedded-image path below (which would leave Cells empty and
+            // IsLinkedToSourceRange false, i.e. exactly the identity/link loss this fixes).
+            var picture = picturePart.Kind == PictureKind.CellRangeSnapshot
+                ? BuildCellRangeSnapshotPicture(picturePart, sheet, sheetNameResolver)
+                : new PictureModel
+                {
+                    Anchor = new CellAddress(
+                        sheet.Id,
+                        picturePart.Anchor?.FromRowZeroBased + 1 ?? 1,
+                        picturePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
+                    Kind = PictureKind.Image,
+                    Name = picturePart.Name,
+                    ImageBytes = picturePart.ImageBytes,
+                    ContentType = picturePart.ContentType,
+                    Title = picturePart.Title,
+                    AltText = picturePart.AltText,
+                    // R90-app-accessibility-checker-5-2: preserve Excel's "Mark as decorative" flag.
+                    IsDecorative = picturePart.IsDecorative,
+                    RotationDegrees = picturePart.RotationDegrees,
+                    FlipHorizontal = picturePart.FlipHorizontal,
+                    FlipVertical = picturePart.FlipVertical,
+                    CropLeft = picturePart.CropLeft,
+                    CropTop = picturePart.CropTop,
+                    CropRight = picturePart.CropRight,
+                    CropBottom = picturePart.CropBottom,
+                    // R65-io-image-drawing-6-1: a "Link to File" picture part has LinkTarget set instead of
+                    // ImageBytes -- carry it onto the model so the picture is materialized as a linked
+                    // picture (with a marker other code can check) instead of silently vanishing.
+                    LinkedImageTarget = picturePart.LinkTarget,
+                    // R80-io-drawing-image-5-3: carry the vector SVG fallback (if any) onto the model so
+                    // the writer can re-emit the asvg:svgBlip extension instead of permanently downgrading
+                    // the picture to a flat PNG the first time it is edited.
+                    SvgImageBytes = picturePart.SvgImageBytes,
+                    // R97-model-drawing-hyperlink-2-2: populate the model's own hyperlink field so a later
+                    // clone/paste of this picture (which clears IsSourceLoaded and so can't lean on the
+                    // source-package hyperlink re-read in XlsxWorksheetDrawingObjectWriter) still has a
+                    // hyperlink to carry forward.
+                    Hyperlink = picturePart.Hyperlink
+                };
             XlsxDrawingAnchorApplier.ApplyToPicture(picture, picturePart.Anchor, sheet);
             picture.IsSourceLoaded = true;
             sheet.Pictures.Add(picture);
@@ -441,6 +449,65 @@ public sealed partial class XlsxFileAdapter
     /// <see cref="SheetId"/>. When the qualifier is absent (the common same-sheet case) or names a
     /// sheet that no longer exists, the reference is anchored to <paramref name="hostSheetId"/>.
     /// </summary>
+    /// <summary>
+    /// R119-io-camera-linked-picture-identity: rebuilds a "camera" / Paste Special &gt; Linked
+    /// Picture / Paste Picture object's <see cref="PictureModel"/> (Kind ==
+    /// <see cref="PictureKind.CellRangeSnapshot"/>) from an <see cref="XlsxPicturePackagePart"/> that
+    /// <c>XlsxWorksheetDrawingPartReader.ReadPictureSnapshotGroupParts</c> produced from a marked
+    /// <c>&lt;xdr:grpSp&gt;</c> -- restoring IsLinkedToSourceRange/LinkedSourceRange/
+    /// LinkedSourceSheetName and the per-cell Cells snapshot instead of leaving the picture
+    /// permanently flattened into independent, disconnected shapes (the bug this fixes). Mirrors
+    /// <see cref="ResolveSparklineRangeSheetId"/>'s sheet-name-qualifier resolution: the linked
+    /// range's sheet id is looked up by name in <paramref name="sheetNameResolver"/>, falling back to
+    /// the host sheet when the qualifier is absent or names a sheet that no longer exists.
+    /// </summary>
+    private static PictureModel BuildCellRangeSnapshotPicture(
+        XlsxPicturePackagePart picturePart,
+        Sheet sheet,
+        IReadOnlyDictionary<string, SheetId> sheetNameResolver)
+    {
+        var picture = new PictureModel
+        {
+            Anchor = new CellAddress(
+                sheet.Id,
+                picturePart.Anchor?.FromRowZeroBased + 1 ?? 1,
+                picturePart.Anchor?.FromColumnZeroBased + 1 ?? 1),
+            Kind = PictureKind.CellRangeSnapshot,
+            Name = picturePart.Name,
+            Title = picturePart.Title,
+            AltText = picturePart.AltText,
+            IsDecorative = picturePart.IsDecorative,
+            RotationDegrees = picturePart.RotationDegrees,
+            FlipHorizontal = picturePart.FlipHorizontal,
+            FlipVertical = picturePart.FlipVertical,
+            SourceRowCount = picturePart.SnapshotSourceRowCount,
+            SourceColumnCount = picturePart.SnapshotSourceColumnCount,
+            IsLinkedToSourceRange = picturePart.IsLinkedToSourceRange,
+            LinkedSourceSheetName = picturePart.LinkedSourceSheetName,
+            Hyperlink = picturePart.Hyperlink
+        };
+
+        if (picturePart.IsLinkedToSourceRange &&
+            picturePart.LinkedSourceStartRow is { } startRow &&
+            picturePart.LinkedSourceStartCol is { } startCol &&
+            picturePart.LinkedSourceEndRow is { } endRow &&
+            picturePart.LinkedSourceEndCol is { } endCol)
+        {
+            var linkedSheetId = ResolveSparklineRangeSheetId(picturePart.LinkedSourceSheetName, sheetNameResolver, sheet.Id);
+            picture.LinkedSourceRange = new GridRange(
+                new CellAddress(linkedSheetId, (uint)startRow, (uint)startCol),
+                new CellAddress(linkedSheetId, (uint)endRow, (uint)endCol));
+        }
+
+        if (picturePart.SnapshotCells is not null)
+        {
+            foreach (var cell in picturePart.SnapshotCells)
+                picture.Cells.Add(cell);
+        }
+
+        return picture;
+    }
+
     private static SheetId ResolveSparklineRangeSheetId(
         string? qualifyingSheetName,
         IReadOnlyDictionary<string, SheetId> sheetNameResolver,

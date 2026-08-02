@@ -808,7 +808,18 @@ internal static class XlsxWorksheetDrawingObjectWriter
                         new XAttribute("name", DrawingName(picture.Name, $"Picture {pictureIndex}")),
                         string.IsNullOrWhiteSpace(picture.Title) ? null : new XAttribute("title", picture.Title),
                         string.IsNullOrWhiteSpace(picture.AltText) ? null : new XAttribute("descr", picture.AltText),
-                        ToDecorativeExtLst(drawingNs, picture.IsDecorative)),
+                        // R119-io-camera-linked-picture-identity: replaces the plain
+                        // ToDecorativeExtLst call with one that ALSO records
+                        // IsLinkedToSourceRange/LinkedSourceRange/LinkedSourceSheetName (plus the
+                        // source row/column count needed to remap each per-cell shape's cached
+                        // RowOffset/ColumnOffset back onto a PictureModel.Cells entry) in a
+                        // FreeX-specific extLst extension. Without this, a "camera" / Paste
+                        // Special > Linked Picture object permanently lost its picture identity
+                        // and live link on every save+reload -- XlsxWorksheetDrawingParts'
+                        // ReadShapeParts had nothing telling it this group of rectangles was ever
+                        // one linked picture, so it flattened the group into independent,
+                        // ungrouped DrawingShapeModel/TextBoxModel objects with no way back.
+                        ToPictureSnapshotGroupExtLst(drawingNs, picture)),
                     new XElement(spreadsheetDrawingNs + "cNvGrpSpPr")),
                 new XElement(spreadsheetDrawingNs + "grpSpPr",
                     new XElement(drawingNs + "xfrm",
@@ -919,6 +930,54 @@ internal static class XlsxWorksheetDrawingObjectWriter
                 new XElement(decorativeNs + "decorative",
                     new XAttribute(XNamespace.Xmlns + "adec", decorativeNs.NamespaceName),
                     new XAttribute("val", "1"))));
+    }
+
+    /// <summary>
+    /// R119-io-camera-linked-picture-identity: builds the <c>&lt;xdr:cNvPr&gt;&lt;a:extLst&gt;</c>
+    /// for a reconstructed CellRangeSnapshot picture's <c>&lt;xdr:grpSp&gt;</c>
+    /// (<see cref="ToOneCellPictureSnapshotAnchor"/>), combining the existing "Mark as decorative"
+    /// extension (when applicable) with a FreeX-specific <c>fx:linkedPictureSnapshot</c> extension
+    /// that records everything <see cref="XlsxWorksheetDrawingParts.ReadPictureSnapshotGroupParts"/>
+    /// needs to rebuild a single linked/unlinked <see cref="PictureModel"/> from the group instead of
+    /// flattening its per-cell rectangles into independent shapes on load. <c>a:extLst</c> permits at
+    /// most one child per CT_NonVisualDrawingProps (ECMA-376), so both extensions must share the same
+    /// extLst rather than each contributing their own.
+    /// </summary>
+    private static XElement ToPictureSnapshotGroupExtLst(XNamespace drawingNs, PictureModel picture)
+    {
+        XNamespace freexNs = "http://schemas.freexapp.com/drawing/2026/camera";
+        var marker = new XElement(freexNs + "linkedPictureSnapshot",
+            new XAttribute(XNamespace.Xmlns + "fx", freexNs.NamespaceName),
+            new XAttribute("isLinked", picture.IsLinkedToSourceRange ? "1" : "0"),
+            new XAttribute("sourceRowCount", picture.SourceRowCount),
+            new XAttribute("sourceColCount", picture.SourceColumnCount));
+        if (picture.IsLinkedToSourceRange && picture.LinkedSourceRange is { } sourceRange)
+        {
+            marker.Add(
+                new XAttribute("sourceStartRow", sourceRange.Start.Row),
+                new XAttribute("sourceStartCol", sourceRange.Start.Col),
+                new XAttribute("sourceEndRow", sourceRange.End.Row),
+                new XAttribute("sourceEndCol", sourceRange.End.Col));
+            if (!string.IsNullOrWhiteSpace(picture.LinkedSourceSheetName))
+                marker.Add(new XAttribute("sourceSheet", picture.LinkedSourceSheetName));
+        }
+
+        var markerExt = new XElement(drawingNs + "ext",
+            new XAttribute("uri", XlsxWorksheetDrawingPartReader.CellRangeSnapshotGroupExtensionUri),
+            marker);
+
+        XElement? decorativeExt = null;
+        if (picture.IsDecorative)
+        {
+            XNamespace decorativeNs = "http://schemas.microsoft.com/office/drawing/2017/decorative";
+            decorativeExt = new XElement(drawingNs + "ext",
+                new XAttribute("uri", XlsxWorksheetDrawingPartReader.DrawingMlDecorativeExtensionUri),
+                new XElement(decorativeNs + "decorative",
+                    new XAttribute(XNamespace.Xmlns + "adec", decorativeNs.NamespaceName),
+                    new XAttribute("val", "1")));
+        }
+
+        return new XElement(drawingNs + "extLst", decorativeExt, markerExt);
     }
 
     private static bool HasPictureCrop(PictureModel picture) =>

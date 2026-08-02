@@ -57,6 +57,15 @@ public sealed class WorkbookSaveService
 
         try
         {
+            // R119-appservices-save-cancel-blocking: this deliberately does NOT pass
+            // observeCancellationEagerly: true. Unlike WorkbookOpenService (which parses into a
+            // fresh, not-yet-published Workbook), this stage serializes the LIVE Workbook -- possibly
+            // shared with other "New Window" sibling views of the same document -- and the host
+            // disables all user input for the stage's duration for exactly that reason (see
+            // MainWindow.Backstage.cs's AdjustSaveGate / "torn snapshot" comment). Returning to the
+            // caller (and re-enabling input) while adapter.Save/SaveWithWarnings is still reading that
+            // object on another thread would let the UI resume mutating it mid-enumeration. See
+            // WorkbookProgressStageRunner.RunWorkAsync's doc comment for the full rationale.
             saveWarnings = await WorkbookProgressStageRunner.RunStageAsync(
                 progress,
                 WorkbookSavePhase.Writing,

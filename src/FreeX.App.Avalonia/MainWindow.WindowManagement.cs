@@ -94,6 +94,12 @@ public sealed partial class MainWindow : Window
         if (ReferenceEquals(_session, replacement))
             return;
 
+        // R119-avalonia-findreplace-stale-scope: the modeless Find & Replace dialog freezes its
+        // selection scope at open time and never re-reads it, so it must not survive a workbook
+        // swap -- otherwise it silently reports zero matches forever against the new document's
+        // (always-fresh) SheetIds. See CloseFindReplaceDialogIfOpen for the full rationale.
+        CloseFindReplaceDialogIfOpen();
+
         _autosaveCoordinator?.NotifyAutosaveSaved();
         var previousSession = _session;
         previousSession.WorkbookChanged -= Session_WorkbookChanged;

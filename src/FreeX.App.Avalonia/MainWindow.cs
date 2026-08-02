@@ -494,6 +494,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private readonly TextBlock _titleText = new();
     private readonly TextBlock _detailText = new();
     private readonly TextBlock _statusText = new();
+    // R119-avalonia-file-op-cancel: status-bar Cancel affordance shown only while an open/save is
+    // in flight (see UpdateSaveButton) -- the Linux/macOS analogue of the WPF host's
+    // StatusSaveProgressCancelButton/CancelFileOperation_Click.
+    private readonly Button _fileOperationCancelButton = new();
     private readonly TextBlock _selectionStatsText = new();
     private readonly TextBlock _statusCapsLockText = new();
     private readonly TextBlock _statusNumLockText = new();
@@ -891,6 +895,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     internal Control SheetGridHostForTest => _sheetGridHost;
 
     /// <summary>
+    /// R119-avalonia-drag-preview: test-only accessor for the sheet grid host's CURRENT hosted
+    /// content (as last assigned by RefreshShell/RefreshShellForViewportPan/RefreshShellForGridPreview/
+    /// BuildSheetGrid), distinct from <see cref="RebuildSheetGridForTest"/> (which forces a brand
+    /// new rebuild). Lets a test prove that a given call -- e.g. ContinueAutofillDrag -- already
+    /// rebuilt the hosted content itself, without the test performing its own separate rebuild that
+    /// would mask a missing rebuild call in production code. Not used by production code paths.
+    /// </summary>
+    internal Control? SheetGridHostContentForTest => _sheetGridHost.Content as Control;
+
+    /// <summary>
     /// Test-only accessor for the active cell's real Border control (see
     /// <see cref="_activeCellBorder"/>/<see cref="MoveFocusToActiveCellBorder"/>), so headless
     /// accessibility regression tests can assert which control keyboard focus actually lands on
@@ -1221,6 +1235,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private bool _isApplyingFormulaBoxText;
     private bool _isOpening;
     private bool _isSaving;
+    // R119-avalonia-file-op-cancel: live CancellationTokenSource for whichever open/save is
+    // currently in flight, so the status-bar Cancel button (_fileOperationCancelButton) can abort
+    // it -- mirrors the WPF host's _fileOperationCancellation (MainWindow.Backstage.cs). Null
+    // whenever _isOpening/_isSaving are both false. See BeginFileOperationCancellation.
+    private CancellationTokenSource? _fileOperationCancellation;
     // Write-time snapshot of the file this session was opened from
     // (WorkbookOpenResult.SourceLastWriteTimeUtc, set in OpenWorkbookFromTargetAsync and reset to
     // null by ReplaceSession for every new/opened document). Threaded into
@@ -4018,6 +4037,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _zoomText.FontSize = statusBarTextFontSize;
         _zoomText.Foreground = StatusBarForeground;
 
+        // R119-avalonia-file-op-cancel: status-bar Cancel button for the in-flight open/save --
+        // hidden by default (UpdateSaveButton reveals it only while _isOpening/_isSaving is true),
+        // mirroring the WPF host's StatusSaveProgressCancelButton visibility toggle.
+        _fileOperationCancelButton.Content = "Cancel";
+        _fileOperationCancelButton.Padding = new Thickness(8, 2);
+        _fileOperationCancelButton.FontSize = statusBarTextFontSize;
+        _fileOperationCancelButton.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        _fileOperationCancelButton.IsVisible = false;
+        _fileOperationCancelButton.Click += FileOperationCancelButton_Click;
+        AutomationProperties.SetAutomationId(_fileOperationCancelButton, "FileOperationCancelButton");
+        AutomationProperties.SetName(_fileOperationCancelButton, "Cancel");
+        AutomationProperties.SetHelpText(_fileOperationCancelButton, "Cancels the current open or save operation.");
+
         var leftPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -4025,6 +4057,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             VerticalAlignment = AvaloniaVerticalAlignment.Center,
         };
         leftPanel.Children.Add(_statusText);
+        leftPanel.Children.Add(_fileOperationCancelButton);
 
         var statsViewport = new Border
         {
@@ -4451,6 +4484,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     }
 
     /// <summary>
+    /// R119-avalonia-drag-preview: rebuilds only the sheet grid's Border-tree content (plus
+    /// restoring grid focus if it had it) so that AddAutofillPreviewOverlayToGrid /
+    /// AddSelectionMovePreviewOverlayToGrid can paint the live fill-handle/selection-move drag
+    /// preview at its up-to-date target on every pointer move. This is the Avalonia analogue of
+    /// the WPF host's InvalidateVisual() call in GridView.Input.cs's ContinueAutofillDrag /
+    /// UpdateSelectionMovePreview -- Avalonia has no DrawingContext repaint for the sheet grid, so
+    /// a scoped-down grid-content rebuild (deliberately skipping the formula bar, status bar,
+    /// ribbon toggle states, and sheet-tab strip that full RefreshShell also touches, since none
+    /// of those reflect drag-preview state) is the closest equivalent given how frequently pointer
+    /// moves fire during a drag.
+    /// </summary>
+    private void RefreshShellForGridPreview()
+    {
+        var gridHadFocus = IsGridFocused();
+        _sheetGridHost.Content = BuildSheetGrid();
+        if (gridHadFocus)
+            MoveFocusToActiveCellBorder();
+    }
+
+    /// <summary>
     /// True when the currently focused element is <see cref="_sheetGridHost"/> itself or one of its
     /// descendants (i.e. a previous active-cell Border) — meaning the user is actively navigating
     /// the worksheet grid rather than editing the formula bar/inline editor or interacting with a
@@ -4521,6 +4574,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private void UpdateSaveButton()
     {
         var isIdle = !_isOpening && !_isSaving;
+        // R119-avalonia-file-op-cancel: visibility is driven directly off the live token rather than
+        // _isOpening/_isSaving -- BeginFileOperationCancellation/ClearFileOperationCancellation
+        // already bracket the exact lifetime of the in-flight open/save (including test seams that
+        // call OpenWorkbookFromTargetAsync/SaveWorkbookToTargetAsync directly, bypassing the
+        // higher-level entry points that own those two flags), so this is both simpler and more
+        // precise than re-deriving it from isIdle. Also disable it once Cancel has already been
+        // clicked (_fileOperationCancellation is non-null but its Cancel() was already requested)
+        // so a double-click can't fault on an already-canceled source.
+        _fileOperationCancelButton.IsVisible = _fileOperationCancellation is not null;
+        _fileOperationCancelButton.IsEnabled = _fileOperationCancellation is { IsCancellationRequested: false };
         _openButton.IsEnabled = isIdle && StorageProvider.CanOpen;
         _saveButton.IsEnabled = isIdle && _session.CanSaveCurrentSource(out _);
         _saveButton.Content = _session.IsDirty ? "Save*" : "Save";
@@ -4585,6 +4648,48 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         ApplyNativeFileMenuAvailability(isIdle);
         RefreshNativeOpenRecentMenu(isIdle);
         ApplyNativeMenuAvailability(isIdle);
+    }
+
+    /// <summary>
+    /// Starts a new cancellable file operation (open or save): disposes any stale leftover token
+    /// source (there should never be one -- ClearFileOperationCancellation always runs first via
+    /// the caller's finally -- but disposing defensively matches the WPF host's
+    /// BeginFileOperationCancellation) and installs a fresh one as the live
+    /// <see cref="_fileOperationCancellation"/> so <see cref="FileOperationCancelButton_Click"/>
+    /// has something to cancel. Callers must dispose the returned source (via `using`) and call
+    /// <see cref="ClearFileOperationCancellation"/> in a finally block, mirroring
+    /// MainWindow.Backstage.cs's OpenFileAsync/SaveWorkbookToTargetAsync (R119-avalonia-file-op-cancel).
+    /// </summary>
+    private CancellationTokenSource BeginFileOperationCancellation()
+    {
+        _fileOperationCancellation?.Dispose();
+        var cancellation = new CancellationTokenSource();
+        _fileOperationCancellation = cancellation;
+        return cancellation;
+    }
+
+    /// <summary>
+    /// Clears <see cref="_fileOperationCancellation"/> once the operation it was guarding has
+    /// finished, but only if it is STILL that same source -- guards against a pathological
+    /// reentrant call clearing a newer, unrelated in-flight operation's token (mirrors the WPF
+    /// host's ClearFileOperationCancellation).
+    /// </summary>
+    private void ClearFileOperationCancellation(CancellationTokenSource operationCancellation)
+    {
+        if (ReferenceEquals(_fileOperationCancellation, operationCancellation))
+            _fileOperationCancellation = null;
+    }
+
+    /// <summary>
+    /// Status-bar Cancel button handler (R119-avalonia-file-op-cancel): requests cancellation of
+    /// whichever open/save is currently in flight and immediately disables the button so a second
+    /// click can't re-cancel an already-canceled source -- mirrors the WPF host's
+    /// CancelFileOperation_Click.
+    /// </summary>
+    private void FileOperationCancelButton_Click(object? sender, RoutedEventArgs e)
+    {
+        _fileOperationCancellation?.Cancel();
+        _fileOperationCancelButton.IsEnabled = false;
     }
 
     private void ApplyNativeFileMenuAvailability(bool isIdle)
@@ -5067,6 +5172,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             headerOffset,
             zoomFactor);
         AddClipboardMarqueeOverlayToGrid(
+            grid,
+            rowMetrics,
+            colMetrics,
+            headerOffset,
+            zoomFactor);
+        AddAutofillPreviewOverlayToGrid(
+            grid,
+            rowMetrics,
+            colMetrics,
+            headerOffset,
+            zoomFactor);
+        AddSelectionMovePreviewOverlayToGrid(
             grid,
             rowMetrics,
             colMetrics,
@@ -8345,11 +8462,47 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ContinueAutofillDrag(PointerEventArgs args, CellAddress target)
     {
+        if (_autofillSourceRange is null)
+            return;
+
+        ContinueAutofillDragCore(target);
+        args.Handled = true;
+    }
+
+    /// <summary>
+    /// Core continuation logic shared by <see cref="ContinueAutofillDrag"/> and the test-only
+    /// seam <see cref="RaiseContinueAutofillDragForTest"/>: updates <see cref="_autofillTarget"/>
+    /// and, when it actually changed, rebuilds the grid so AddAutofillPreviewOverlayToGrid repaints
+    /// the dashed preview rectangle at the new target -- mirrors the WPF host's InvalidateVisual
+    /// call on every pointer move in GridView.Input.cs (Avalonia has no DrawingContext repaint
+    /// here, so a targeted grid-content rebuild is the equivalent live-preview mechanism; see
+    /// RefreshShellForGridPreview's doc comment for why this is scoped down from RefreshShell).
+    /// </summary>
+    private void ContinueAutofillDragCore(CellAddress target)
+    {
         if (_autofillSourceRange is not { } source)
             return;
 
-        _autofillTarget = GridAutofillPlanner.ConstrainTarget(source, target);
-        args.Handled = true;
+        var constrainedTarget = GridAutofillPlanner.ConstrainTarget(source, target);
+        if (constrainedTarget == _autofillTarget)
+            return;
+
+        _autofillTarget = constrainedTarget;
+        RefreshShellForGridPreview();
+    }
+
+    /// <summary>
+    /// Test-only seam that drives the real fill-handle drag CONTINUATION path
+    /// (ContinueAutofillDragCore) directly, bypassing pointer capture, so headless tests can
+    /// assert the live drag-preview overlay appears mid-drag -- distinct from the pre-existing
+    /// <see cref="RaiseAutofillDragForTest"/>, which only exercises the post-release commit path.
+    /// Not used by production code paths.
+    /// </summary>
+    internal void RaiseContinueAutofillDragForTest(GridRange source, CellAddress target)
+    {
+        _autofillDragging = true;
+        _autofillSourceRange = source;
+        ContinueAutofillDragCore(target);
     }
 
     private void CommitAutofillDrag(bool ctrlHeld = false)
@@ -8472,14 +8625,49 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void ContinueSelectionMoveDrag(PointerEventArgs args, CellAddress target)
     {
+        if (_selectionMoveSourceRange is null)
+            return;
+
+        ContinueSelectionMoveDragCore(target);
+        args.Handled = true;
+    }
+
+    /// <summary>
+    /// Core continuation logic shared by <see cref="ContinueSelectionMoveDrag"/> and the test-only
+    /// seam <see cref="RaiseContinueSelectionMoveDragForTest"/>: updates
+    /// <see cref="_selectionMovePreviewRange"/> and, when it actually changed, rebuilds the grid so
+    /// AddSelectionMovePreviewOverlayToGrid repaints the destination outline live -- mirrors the
+    /// WPF host's InvalidateVisual call in UpdateSelectionMovePreview.
+    /// </summary>
+    private void ContinueSelectionMoveDragCore(CellAddress target)
+    {
         if (_selectionMoveSourceRange is not { } source ||
             GridSelectionMovePlanner.CalculateTargetRange(source, _selectionMoveStartCell, target) is not { } targetRange)
         {
             return;
         }
 
+        if (targetRange.Equals(_selectionMovePreviewRange))
+            return;
+
         _selectionMovePreviewRange = targetRange;
-        args.Handled = true;
+        RefreshShellForGridPreview();
+    }
+
+    /// <summary>
+    /// Test-only seam that drives the real selection-border-move drag CONTINUATION path
+    /// (ContinueSelectionMoveDragCore) directly, bypassing pointer capture, so headless tests can
+    /// assert the live drag-preview overlay appears mid-drag -- distinct from the pre-existing
+    /// <see cref="RaiseSelectionMoveDragForTest"/>, which only exercises the post-release commit
+    /// path. Not used by production code paths.
+    /// </summary>
+    internal void RaiseContinueSelectionMoveDragForTest(GridRange source, CellAddress startCell, CellAddress target)
+    {
+        _selectionMoveDragging = true;
+        _selectionMoveSourceRange = source;
+        _selectionMoveStartCell = startCell;
+        _selectionMovePreviewRange = source;
+        ContinueSelectionMoveDragCore(target);
     }
 
     /// <summary>
@@ -10531,9 +10719,22 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         foreach (var range in _session.SelectedRanges)
         {
+            // A lone selected cell that is itself part of a merged region (e.g. clicking once on a
+            // merged B2:D2 title cell) arrives here as an anchor-only 1x1 range -- selection never
+            // merge-expands it (see WorkbookSession.SetSingleSelectedRange). Excel's selection outline
+            // and fill handle always wrap the WHOLE merge, matching AddActiveCellBoxOverlayToGrid's own
+            // GetMergeRegion expansion above, so route a merged single cell through the multi-cell
+            // layout path using its full merge footprint instead of sizing the rect from its own 1x1
+            // metrics (mirroring the WPF host's CalculateSelectionRangeLayout). The equality check below
+            // against _session.SelectedRange intentionally still compares the ORIGINAL anchor-only
+            // range, since that is what SelectedRange itself holds.
+            var layoutRange = IsSingleCellRange(range) && _session.ActiveSheet.GetMergeRegion(range.Start) is { } merge
+                ? merge
+                : range;
+
             if (range.Start.Sheet != _session.ActiveSheet.Id ||
                 !TryResolveVisibleSelectionGridSpan(
-                    range,
+                    layoutRange,
                     rowMetrics,
                     colMetrics,
                     out var rowIndex,
@@ -10730,6 +10931,140 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         grid.Children.Add(marquee);
     }
 
+    /// <summary>
+    /// R119-avalonia-drag-preview: while a fill-handle drag is in progress, draws a dashed
+    /// rectangle around the union of the source range and the live drag target -- mirrors the
+    /// WPF host's RenderAutofillPreview/AutofillPreviewPen (GridView.Overlays.cs), which repaints
+    /// this on every pointer move via InvalidateVisual. Avalonia has no DrawingContext repaint for
+    /// the sheet grid (it is a rebuilt Border-tree), so this overlay is only ever visible when the
+    /// caller (ContinueAutofillDrag) triggers a grid rebuild after updating <see cref="_autofillTarget"/>;
+    /// without that rebuild call this method is dead code, just like the WPF pen would be dead
+    /// paint logic without its own InvalidateVisual call.
+    /// </summary>
+    private void AddAutofillPreviewOverlayToGrid(
+        AvaloniaGrid grid,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        int headerOffset,
+        double zoomFactor)
+    {
+        if (!_autofillDragging ||
+            _autofillSourceRange is not { } source ||
+            _autofillTarget is not { } target ||
+            source.Start.Sheet != _session.ActiveSheet.Id)
+        {
+            return;
+        }
+
+        var previewStart = new CellAddress(
+            source.Start.Sheet,
+            Math.Min(source.Start.Row, target.Row),
+            Math.Min(source.Start.Col, target.Col));
+        var previewEnd = new CellAddress(
+            source.Start.Sheet,
+            Math.Max(source.End.Row, target.Row),
+            Math.Max(source.End.Col, target.Col));
+
+        if (!TryResolveVisibleSelectionGridSpan(
+                new GridRange(previewStart, previewEnd),
+                rowMetrics,
+                colMetrics,
+                out var rowIndex,
+                out var rowSpan,
+                out var colIndex,
+                out var colSpan,
+                out _,
+                out _,
+                out _,
+                out _))
+        {
+            return;
+        }
+
+        var thickness = Math.Max(2.0, 2.0 * zoomFactor);
+        var preview = new AvaloniaRectangle
+        {
+            Stroke = Brushes.Black,
+            StrokeThickness = thickness,
+            StrokeDashArray = new AvaloniaList<double>([4, 4]),
+            IsHitTestVisible = false,
+            ClipToBounds = false,
+            ZIndex = 95,
+        };
+        AutomationProperties.SetAutomationId(preview, "WorksheetAutofillPreview");
+        AvaloniaGrid.SetRow(preview, rowIndex + headerOffset);
+        AvaloniaGrid.SetRowSpan(preview, rowSpan);
+        AvaloniaGrid.SetColumn(preview, colIndex + headerOffset);
+        AvaloniaGrid.SetColumnSpan(preview, colSpan);
+        grid.Children.Add(preview);
+    }
+
+    /// <summary>
+    /// R119-avalonia-drag-preview: while a selection-border-move drag is in progress, draws the
+    /// selection-colored outline at the live drag destination -- mirrors the WPF host's
+    /// RenderSelectionMovePreview (GridView.Rendering.Selection.cs), which reuses the plain
+    /// selection-range outline (no fill handle) and repaints it on every pointer move. See the
+    /// doc comment on <see cref="AddAutofillPreviewOverlayToGrid"/> for why this is only ever
+    /// visible once ContinueSelectionMoveDrag triggers a grid rebuild.
+    /// </summary>
+    private void AddSelectionMovePreviewOverlayToGrid(
+        AvaloniaGrid grid,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        int headerOffset,
+        double zoomFactor)
+    {
+        if (!_selectionMoveDragging ||
+            _selectionMovePreviewRange is not { } previewRange ||
+            previewRange.Equals(_session.SelectedRange) ||
+            previewRange.Start.Sheet != _session.ActiveSheet.Id)
+        {
+            return;
+        }
+
+        if (!TryResolveVisibleSelectionGridSpan(
+                previewRange,
+                rowMetrics,
+                colMetrics,
+                out var rowIndex,
+                out var rowSpan,
+                out var colIndex,
+                out var colSpan,
+                out var hasTopEdge,
+                out var hasLeftEdge,
+                out var hasBottomEdge,
+                out var hasRightEdge))
+        {
+            return;
+        }
+
+        var thickness = Math.Max(SelectionOutlineThickness, SelectionOutlineThickness * zoomFactor);
+        var halfThickness = thickness / 2;
+        var preview = new Border
+        {
+            BorderBrush = SelectionBorder,
+            BorderThickness = new Thickness(
+                hasLeftEdge ? thickness : 0,
+                hasTopEdge ? thickness : 0,
+                hasRightEdge ? thickness : 0,
+                hasBottomEdge ? thickness : 0),
+            Margin = new Thickness(
+                hasLeftEdge ? -halfThickness : 0,
+                hasTopEdge ? -halfThickness : 0,
+                hasRightEdge ? -halfThickness : 0,
+                hasBottomEdge ? -halfThickness : 0),
+            IsHitTestVisible = false,
+            ClipToBounds = false,
+            ZIndex = 96,
+        };
+        AutomationProperties.SetAutomationId(preview, "WorksheetSelectionMovePreview");
+        AvaloniaGrid.SetRow(preview, rowIndex + headerOffset);
+        AvaloniaGrid.SetRowSpan(preview, rowSpan);
+        AvaloniaGrid.SetColumn(preview, colIndex + headerOffset);
+        AvaloniaGrid.SetColumnSpan(preview, colSpan);
+        grid.Children.Add(preview);
+    }
+
     private static bool TryResolveVisibleSelectionGridSpan(
         GridRange range,
         IReadOnlyList<RowMetric> rowMetrics,
@@ -10780,6 +11115,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         return rowIndex >= 0 && rowSpan > 0 && colIndex >= 0 && colSpan > 0;
     }
+
+    private static bool IsSingleCellRange(GridRange range) =>
+        range.Start.Row == range.End.Row && range.Start.Col == range.End.Col;
 
     private void SheetGridHost_PointerMoved(object? sender, PointerEventArgs args)
     {
@@ -28549,6 +28887,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // _isOpening is already claimed by the entry point that reached here (OpenWorkbookAsync /
         // OpenWorkbookPathAsync), set synchronously before their first await -- this method no
         // longer owns the flag itself (R68-async-ordering-race-sweep-3).
+        //
+        // R119-avalonia-file-op-cancel: this is the single choke point every open path funnels
+        // through (File > Open, drag-drop, MRU clicks, startup args), so wiring the cancellable
+        // token here -- rather than at each caller -- reaches all of them at once, mirroring the
+        // WPF host's OpenFileAsync/BeginFileOperationCancellation.
+        using var operationCancellation = BeginFileOperationCancellation();
+        UpdateSaveButton();
         try
         {
             _statusText.Text = WorkbookProgressTextFormatter
@@ -28570,7 +28915,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 target.Adapter,
                 target.Extension,
                 target.Format,
-                progress);
+                progress,
+                operationCancellation.Token);
+            operationCancellation.Token.ThrowIfCancellationRequested();
             var (viewportHeight, viewportWidth) = GetCurrentSheetViewportSize();
             ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));
             RefreshViewportSizeForZoom();
@@ -28595,6 +28942,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // point in the open sequence, right after the session/shell refresh.
             ApplyReadOnlyRecommendedPromptIfNeeded(_session.Workbook);
         }
+        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        {
+            // The user clicked the status-bar Cancel button (R119-avalonia-file-op-cancel): the
+            // session was never replaced (ReplaceSession only runs after LoadAsync/the
+            // ThrowIfCancellationRequested above both return normally), so there is nothing to roll
+            // back -- just report the abort, matching the WPF host's equivalent catch.
+            ShowOpenIssue("Open canceled.");
+        }
         catch (Exception ex)
         {
             // Broad catch (matching the WPF host's equivalent open path in
@@ -28607,6 +28962,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // menu item's click handler), which is fatal and crashes the whole app instead of
             // showing "Open failed: ..." (R86-services-file-format-detect-5-1).
             ShowOpenIssue($"Open failed: {ex.Message}");
+        }
+        finally
+        {
+            // R119-avalonia-file-op-cancel: release the token so a later operation gets its own
+            // fresh source and the Cancel button hides again via the caller's own UpdateSaveButton
+            // (OpenWorkbookAsync/OpenWorkbookPathAsync already call it in their own finally after
+            // clearing _isOpening).
+            ClearFileOperationCancellation(operationCancellation);
         }
     }
 
@@ -29449,6 +29812,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // Capture the dirty generation before the first await so mid-save edits are detectable.
         var generationAtSaveStart = _session.DirtyGeneration;
         _isSaving = true;
+        // R119-avalonia-file-op-cancel: this is the single choke point every save path funnels
+        // through (Save, Save As, autosave-triggered saves), so wiring the cancellable token here
+        // reaches all of them at once, mirroring the WPF host's SaveWorkbookToTargetAsync in
+        // MainWindow.Backstage.cs.
+        using var operationCancellation = BeginFileOperationCancellation();
         UpdateSaveButton();
         try
         {
@@ -29472,8 +29840,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 target.Adapter,
                 _session.Workbook,
                 progress,
-                CancellationToken.None,
+                operationCancellation.Token,
                 savingOverOpenedPath ? _currentFileSourceLastWriteTimeUtc : null);
+            operationCancellation.Token.ThrowIfCancellationRequested();
             _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, targetPath, fileAccessIdentity);
             // The save just wrote targetPath -- refresh the "known good" write-time snapshot to the
             // file's new on-disk timestamp so the very next save doesn't mistake THIS save's own
@@ -29501,6 +29870,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Path.GetFileName(targetPath)));
             return false;
         }
+        catch (OperationCanceledException) when (operationCancellation.IsCancellationRequested)
+        {
+            // The user clicked the status-bar Cancel button (R119-avalonia-file-op-cancel).
+            // WorkbookSaveService.SaveAsync only replaces the on-disk file (ReplaceTargetFile)
+            // after its own final ThrowIfCancellationRequested, so a cancellation reaching here
+            // never overwrote the original file with a partial write -- the workbook is
+            // deliberately left dirty (TryMarkSavedIfNoEditsArrived never ran) so the user is not
+            // told a canceled save actually completed, matching the WPF host's equivalent catch.
+            ShowSaveIssue("Save canceled.");
+            return false;
+        }
         catch (Exception ex)
         {
             ShowSaveIssue($"Save failed: {ex.Message}");
@@ -29509,6 +29889,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         finally
         {
             _isSaving = false;
+            ClearFileOperationCancellation(operationCancellation);
             UpdateSaveButton();
         }
     }
@@ -29622,6 +30003,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// production code paths.</summary>
     internal Task<bool> SaveWorkbookToTargetAsyncForTest(FileSaveTarget target) =>
         SaveWorkbookToTargetAsync(target);
+
+    /// <summary>Test-only seam for <see cref="_fileOperationCancellation"/> (R119-avalonia-file-op-cancel)
+    /// -- lets a test request cancellation of an in-flight open/save the same way the real status-bar
+    /// Cancel button does, without needing a live pointer click. Not used by production code paths.</summary>
+    internal CancellationTokenSource? FileOperationCancellationForTest => _fileOperationCancellation;
+
+    /// <summary>Test-only seam for the status-bar Cancel button's visibility
+    /// (R119-avalonia-file-op-cancel) -- not used by production code paths.</summary>
+    internal bool FileOperationCancelButtonVisibleForTest => _fileOperationCancelButton.IsVisible;
+
+    /// <summary>Test-only seam for the status-bar Cancel button's enabled state
+    /// (R119-avalonia-file-op-cancel) -- not used by production code paths.</summary>
+    internal bool FileOperationCancelButtonEnabledForTest => _fileOperationCancelButton.IsEnabled;
+
+    /// <summary>Test-only seam driving the real <see cref="FileOperationCancelButton_Click"/> handler
+    /// directly (R119-avalonia-file-op-cancel), so a test exercises the exact same code path a real
+    /// pointer click on the status-bar Cancel button would. Not used by production code paths.</summary>
+    internal void RaiseFileOperationCancelButtonClickForTest() =>
+        FileOperationCancelButton_Click(_fileOperationCancelButton, new RoutedEventArgs());
 
     private void ShowSaveIssue(string message)
     {

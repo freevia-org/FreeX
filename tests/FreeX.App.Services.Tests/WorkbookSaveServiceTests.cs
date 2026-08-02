@@ -455,6 +455,47 @@ public sealed class WorkbookSaveServiceTests
         Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task R119_SaveAsync_CanceledDuringWriting_StillWaitsForTheWriteToFinishBeforeReturning()
+    {
+        // No-regression sibling for R119_LoadAsync_CanceledDuringParsing_ReturnsPromptlyInsteadOf...
+        // (WorkbookOpenServiceTests): SaveAsync's Writing stage serializes the LIVE, possibly
+        // cross-window-shared Workbook, so -- unlike Open's Parsing stage -- it must NOT return to
+        // the caller (and let the host re-enable user input) while adapter.Save is still reading
+        // that object on another thread. This locks in that intentional asymmetry against a future
+        // change accidentally making Save eager too and reintroducing the torn-snapshot race that
+        // MainWindow.Backstage.cs's AdjustSaveGate exists to prevent.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "canceled-mid-write.fxjson");
+        var workbook = new Workbook("Canceled");
+        workbook.AddSheet("Sheet1");
+        using var writeStarted = new ManualResetEventSlim();
+        var writeCompleted = false;
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            writeStarted.Set();
+            Thread.Sleep(300);
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("payload");
+            writeCompleted = true;
+        });
+        using var cancellation = new CancellationTokenSource();
+
+        var saveTask = new WorkbookSaveService().SaveAsync(
+            tempPath,
+            adapter,
+            workbook,
+            cancellationToken: cancellation.Token);
+
+        writeStarted.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue("the adapter's Save must have started");
+        cancellation.Cancel();
+
+        var act = async () => await saveTask;
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        writeCompleted.Should().BeTrue(
+            "SaveAsync must not return to the caller until the in-flight write has actually finished");
+    }
+
     private sealed class TestWorkbookSaveFileOperations : IWorkbookSaveFileOperations
     {
         public Exception? ReplaceException { get; init; }

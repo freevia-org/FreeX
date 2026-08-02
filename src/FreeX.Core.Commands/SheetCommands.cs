@@ -618,8 +618,15 @@ public sealed class RenameSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
 }
 
 /// <summary>Command to delete a sheet from the workbook.</summary>
-public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand
+public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcCommand, IEstimatesMemory
 {
+    // R119-commands-undo-byte-budget-1: _removedSheet below retains the ENTIRE deleted Sheet
+    // object (every cell, style, drawing, etc.) so Undo can restore it -- the single biggest
+    // possible per-command retention in the codebase. Estimate from its occupied-cell count so
+    // deleting a large populated sheet actually counts against CommandBus's 50 MB undo
+    // byte-budget instead of the flat 200-byte IEstimatesMemory default.
+    private const int BytesPerCell = 200;
+
     private readonly SheetId _sheetId;
     private Sheet? _removedSheet;
     private int _removedIndex;
@@ -732,6 +739,17 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     private List<(ChartModel Chart, DrawingObjectHyperlink? OldValue)>? _chartHyperlinkDeleteSnapshot;
 
     public string Label => "Delete Sheet";
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Estimated from the removed sheet's occupied-cell count once Apply has run (the sheet is
+    /// null before that, in which case CommandBus never actually queries this -- EstimateBytes is
+    /// only called after Apply pushes the command). Falls back to 0 in that unreached case rather
+    /// than an arbitrary constant, since a genuinely empty/never-applied removal retains nothing.
+    /// </remarks>
+    public int EstimatedBytes => _removedSheet is null
+        ? 0
+        : (int)Math.Min((long)_removedSheet.GetOccupiedCells().Count * BytesPerCell, int.MaxValue);
 
     public RemoveSheetCommand(SheetId sheetId) => _sheetId = sheetId;
 

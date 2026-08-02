@@ -294,7 +294,11 @@ public sealed partial class FormulaEvaluator
         // to its error code text (matching every other elementwise operator's behavior).
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
-        return new TextValue(ValueToString(left) + ValueToString(right));
+        var text = ValueToString(left) + ValueToString(right);
+        // Excel caps any cell's text content (including formula results) at 32,767 characters --
+        // CONCAT/CONCATENATE/TEXTJOIN/REPT already enforce this via TextResult()/ExceedsExcelTextLimit();
+        // the `&` operator is semantically identical to CONCATENATE and must match (R119).
+        return BuiltInFunctions.ExceedsExcelTextLimit(text) ? ErrorValue.Value : new TextValue(text);
     }
 
     private static ScalarValue ElementwiseOp(

@@ -24,8 +24,15 @@ public sealed record SortOptions(bool CaseSensitive = false, bool LeftToRight = 
 /// Sorts the rows of a rectangular range by a specified column, ascending or descending.
 /// Stores a snapshot of the original arrangement for undo via Revert.
 /// </summary>
-public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R119-commands-undo-byte-budget-1: CapturePayloads snapshots a full SortCellPayload (Cell
+    // clone + style + comment + author + threaded comment + hyperlink + rich text + phonetic
+    // guide) for EVERY cell in _range, plus several per-row HashSet/Dictionary companions -- the
+    // richest per-cell shape in the command set. Without a real estimate here, CommandBus's 50 MB
+    // undo byte-budget bills a sort of a huge range at the flat 200-byte IEstimatesMemory default.
+    private const int BytesPerCell = 400;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly IReadOnlyList<SortKey> _sortKeys;
@@ -110,6 +117,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         : "Sort";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min(_range.CellCount * BytesPerCell, int.MaxValue);
 
     public SortCommand(SheetId sheetId, GridRange range, uint sortByColOffset, bool ascending)
         : this(sheetId, range, [new SortKey(sortByColOffset, ascending)])
