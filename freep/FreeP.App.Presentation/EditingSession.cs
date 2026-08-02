@@ -776,6 +776,17 @@ public sealed class EditingSession
         return shape;
     }
 
+    /// <summary>Inserts a native PowerPoint Section Zoom targeting an existing section.</summary>
+    public SlideShape InsertSectionZoom(string targetSectionId)
+    {
+        if (CurrentSlide is null)
+            throw new InvalidOperationException("A current slide is required to insert a Section Zoom.");
+
+        var shape = SectionZoomInsertionPlanner.CreateShape(Presentation, targetSectionId);
+        AddShape(shape);
+        return shape;
+    }
+
     /// <summary>Deletes all currently selected shapes.</summary>
     public void DeleteSelected()
     {

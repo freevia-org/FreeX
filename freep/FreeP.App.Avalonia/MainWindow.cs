@@ -2414,6 +2414,8 @@ public sealed partial class MainWindow : Window
         r.Register("freep.delete-slide",    new ActionRibbonCommand(() => Editor.DeleteCurrentSlide()));
         r.Register(SlideZoomInsertionPlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenSlideZoomDialogAsync()));
+        r.Register(SectionZoomInsertionPlanner.CommandId,
+            new ActionRibbonCommand(() => _ = OpenSectionZoomDialogAsync()));
         r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
             PresentationDesignCommandPlanner.TryApply(
                 Editor,
@@ -4104,6 +4106,22 @@ public sealed partial class MainWindow : Window
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId)
             Editor.InsertSlideZoom(targetSlideId);
+    }
+
+    internal async void OpenSectionZoomDialog() => await OpenSectionZoomDialogAsync();
+
+    internal async Task OpenSectionZoomDialogAsync()
+    {
+        var options = SectionZoomInsertionPlanner.BuildTargetOptions(
+            Editor.Presentation,
+            Editor.CurrentSlideIndex);
+        if (options.Count == 0 || !IsVisible)
+            return;
+
+        var dialog = new SectionZoomDialog(options);
+        var result = await dialog.ShowDialog<bool?>(this);
+        if (result == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId)
+            Editor.InsertSectionZoom(targetSectionId);
     }
 
     internal void OpenFindDialog() =>

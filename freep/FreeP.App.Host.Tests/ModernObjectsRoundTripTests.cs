@@ -163,6 +163,39 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.ZoomTargetSlideNumericId.Should().Be(257);
         zoom.PreservedObject.RawXml.Should().Contain("slidezoom");
         zoom.PreservedObject.RawXml.Should().Contain("sldId=\"257\"");
+        zoom.PreservedObject.RawXml.Should().Contain("zmPr");
+        zoom.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+        zoom.PreservedObject.RawXml.Should().Contain("blipFill");
+        zoom.PreservedObject.RawXml.Should().Contain("spPr");
+    }
+
+    [Fact]
+    public void AuthoredSectionZoom_WritesNativeTargetAndReopens()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target 1" });
+        presentation.Slides.Add(new Slide { Id = "slide-3", Title = "Target 2" });
+        var section = new PresentationSection { Id = "{SECTION-TARGET}", Name = "Target section" };
+        section.SlideIds.Add("slide-2");
+        section.SlideIds.Add("slide-3");
+        presentation.Sections.Add(section);
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        session.InsertSectionZoom(section.Id);
+
+        var roundTripped = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        var zoom = roundTripped.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
+
+        zoom.PreservedObject!.ObjectKind.Should().Be(PreservedObjectKind.Zoom);
+        zoom.PreservedObject.ZoomTargetSectionId.Should().Be(section.Id);
+        zoom.PreservedObject.RawXml.Should().Contain("sectionzoom");
+        zoom.PreservedObject.RawXml.Should().Contain("sectionId=\"{SECTION-TARGET}\"");
+        zoom.PreservedObject.RawXml.Should().Contain("zmPr");
+        zoom.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+        zoom.PreservedObject.RawXml.Should().Contain("blipFill");
+        zoom.PreservedObject.RawXml.Should().Contain("spPr");
+        roundTripped.Sections.Should().ContainSingle(item => item.Id == section.Id);
     }
 
     // ── Ink contentPart round-trip ────────────────────────────────────────────
