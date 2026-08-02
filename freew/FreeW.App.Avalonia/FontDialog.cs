@@ -42,6 +42,7 @@ public sealed class FontDialog : FreeWDialogWindow
     private readonly bool _underlineIndeterminate;
     private readonly bool _strikeIndeterminate;
     private readonly bool _doubleStrikeIndeterminate;
+    private readonly bool _hiddenIndeterminate;
     private readonly bool _familyIndeterminate;
     private readonly bool _sizeIndeterminate;
 
@@ -53,6 +54,7 @@ public sealed class FontDialog : FreeWDialogWindow
     private readonly CheckBox _underlineChk = Check("Underline", threeState: true);
     private readonly CheckBox _strikeChk = Check("Strikethrough", threeState: true);
     private readonly CheckBox _doubleStrikeChk = Check("Double strikethrough", threeState: true);
+    private readonly CheckBox _hiddenChk = Check("Hidden", threeState: true);
     private readonly CheckBox _smallCapsChk = Check("Small Caps");
     private readonly CheckBox _allCapsChk = Check("All Caps");
     private readonly CheckBox _superChk = Check("Superscript");
@@ -79,6 +81,7 @@ public sealed class FontDialog : FreeWDialogWindow
         _underlineIndeterminate = selection.UnderlineIndeterminate;
         _strikeIndeterminate = selection.StrikethroughIndeterminate;
         _doubleStrikeIndeterminate = selection.DoubleStrikethroughIndeterminate;
+        _hiddenIndeterminate = selection.HiddenIndeterminate;
         _familyIndeterminate = selection.FamilyIndeterminate;
         _sizeIndeterminate = selection.SizeIndeterminate;
 
@@ -109,6 +112,7 @@ public sealed class FontDialog : FreeWDialogWindow
         _underlineChk.IsChecked = _underlineIndeterminate ? null : state.Underline;
         _strikeChk.IsChecked = _strikeIndeterminate ? null : state.Strikethrough;
         _doubleStrikeChk.IsChecked = _doubleStrikeIndeterminate ? null : state.DoubleStrikethrough;
+        _hiddenChk.IsChecked = _hiddenIndeterminate ? null : state.Hidden;
         _smallCapsChk.IsChecked = state.SmallCaps;
         _allCapsChk.IsChecked = state.AllCaps;
         _superChk.IsChecked = state.Superscript;
@@ -152,7 +156,7 @@ public sealed class FontDialog : FreeWDialogWindow
         var effects = new WrapPanel();
         foreach (var check in new[]
                  {
-                     _boldChk, _italicChk, _underlineChk, _strikeChk, _doubleStrikeChk,
+                     _boldChk, _italicChk, _underlineChk, _strikeChk, _doubleStrikeChk, _hiddenChk,
                      _smallCapsChk, _allCapsChk, _superChk, _subChk,
                  })
         {
@@ -251,7 +255,8 @@ public sealed class FontDialog : FreeWDialogWindow
         NumberForm NumberForm = NumberForm.Default,
         NumberSpacing NumberSpacing = NumberSpacing.Default,
         bool AdvancedChanged = false,
-        bool? DoubleStrikethrough = null);
+        bool? DoubleStrikethrough = null,
+        bool? Hidden = null);
 
     private void OnOk()
     {
@@ -279,7 +284,8 @@ public sealed class FontDialog : FreeWDialogWindow
             _stylisticBox.Text,
             _numberFormBox.SelectedIndex,
             _numberSpacingBox.SelectedIndex,
-            _doubleStrikeIndeterminate ? _original.DoubleStrikethrough : _doubleStrikeChk.IsChecked == true);
+            _doubleStrikeIndeterminate ? _original.DoubleStrikethrough : _doubleStrikeChk.IsChecked == true,
+            _hiddenIndeterminate ? _original.Hidden : _hiddenChk.IsChecked == true);
 
         if (!FontDialogPlanner.TryBuildResult(
                 input,
@@ -318,7 +324,8 @@ public sealed class FontDialog : FreeWDialogWindow
         NumberForm: result.NumberForm,
         NumberSpacing: result.NumberSpacing,
         AdvancedChanged: true,
-        DoubleStrikethrough: _doubleStrikeIndeterminate ? null : result.DoubleStrikethrough);
+        DoubleStrikethrough: _doubleStrikeIndeterminate ? null : result.DoubleStrikethrough,
+        Hidden: _hiddenIndeterminate ? null : result.Hidden);
 
     public static void ApplyResult(DocumentView editor, FontDialogResult result, RunFormatting original)
     {
@@ -343,6 +350,8 @@ public sealed class FontDialog : FreeWDialogWindow
             if (result.DoubleStrikethrough.HasValue
                 && result.DoubleStrikethrough.Value != original.DoubleStrikethrough)
                 editor.ToggleDoubleStrikethrough();
+            if (result.Hidden.HasValue && result.Hidden.Value != original.Hidden)
+                editor.ToggleHidden();
 
             if (result.VerticalAlign != original.VerticalAlign)
             {
@@ -439,7 +448,7 @@ public sealed class FontDialog : FreeWDialogWindow
     {
         foreach (var checkBox in new[]
                  {
-                     _boldChk, _italicChk, _underlineChk, _strikeChk, _doubleStrikeChk,
+                     _boldChk, _italicChk, _underlineChk, _strikeChk, _doubleStrikeChk, _hiddenChk,
                      _smallCapsChk, _allCapsChk, _superChk, _subChk,
                  })
         {
@@ -451,7 +460,7 @@ public sealed class FontDialog : FreeWDialogWindow
     {
         foreach (var checkBox in new[]
                  {
-                     _boldChk, _italicChk, _underlineChk, _strikeChk, _doubleStrikeChk,
+                     _boldChk, _italicChk, _underlineChk, _strikeChk, _doubleStrikeChk, _hiddenChk,
                      _smallCapsChk, _allCapsChk, _superChk, _subChk,
                  })
             FontParagraphDialogChrome.ApplyCheckBox(checkBox, DialogChromeStyle);

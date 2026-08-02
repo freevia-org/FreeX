@@ -21,6 +21,8 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("ToDialogResult(planned!)");
         source.Should().Contain("Double strikethrough");
         source.Should().Contain("DoubleStrikethroughIndeterminate");
+        source.Should().Contain("Check(\"Hidden\", threeState: true)");
+        source.Should().Contain("HiddenIndeterminate");
     }
 
     [Fact]

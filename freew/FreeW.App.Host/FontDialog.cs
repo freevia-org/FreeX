@@ -54,6 +54,7 @@ internal static class FontDialog
         var underlineCheck = new CheckBox { Content = "Underline",        IsChecked = state.Underline,     Margin = new Thickness(0, 0, 12, 4) };
         var strikeCheck    = new CheckBox { Content = "Strikethrough",    IsChecked = state.Strikethrough, Margin = new Thickness(0, 0, 12, 4) };
         var doubleStrikeCheck = new CheckBox { Content = "Double strikethrough", IsChecked = state.DoubleStrikethrough, Margin = new Thickness(0, 0, 12, 4) };
+        var hiddenCheck    = new CheckBox { Content = "Hidden",           IsChecked = state.Hidden,        Margin = new Thickness(0, 0, 12, 4) };
         var smallCapsCheck = new CheckBox { Content = "Small Caps",       IsChecked = state.SmallCaps,     Margin = new Thickness(0, 0, 12, 4) };
         var allCapsCheck   = new CheckBox { Content = "All Caps",         IsChecked = state.AllCaps,       Margin = new Thickness(0, 0, 12, 4) };
         var superCheck     = new CheckBox { Content = "Superscript",      IsChecked = state.Superscript,   Margin = new Thickness(0, 0, 12, 4) };
@@ -70,7 +71,7 @@ internal static class FontDialog
         FontRow(fontPanel, "Color:",       colorBox);
         fontPanel.Children.Add(new TextBlock { Text = "Style:", Margin = new Thickness(0, 4, 0, 2) });
         var effectsWrap = new WrapPanel();
-        foreach (var cb in new[] { boldCheck, italicCheck, underlineCheck, strikeCheck, doubleStrikeCheck, smallCapsCheck, allCapsCheck, superCheck, subCheck })
+        foreach (var cb in new[] { boldCheck, italicCheck, underlineCheck, strikeCheck, doubleStrikeCheck, hiddenCheck, smallCapsCheck, allCapsCheck, superCheck, subCheck })
             effectsWrap.Children.Add(cb);
         fontPanel.Children.Add(effectsWrap);
 
@@ -140,7 +141,8 @@ internal static class FontDialog
                 stylisticBox.Text,
                 numberFormBox.SelectedIndex,
                 numberSpacingBox.SelectedIndex,
-                doubleStrikeCheck.IsChecked == true);
+                doubleStrikeCheck.IsChecked == true,
+                hiddenCheck.IsChecked == true);
 
             if (!FontDialogPlanner.TryBuildResult(
                     input,
