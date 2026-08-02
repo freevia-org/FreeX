@@ -76,9 +76,9 @@ public static class DocumentViewDepthLayoutPlanner
             UsesHorizontalPageFlow: false),
         FreeWViewDepthMode.SideToSidePreview => new DocumentViewDepthLayoutPlan(
             DocumentViewDepthPageFlow.SideToSideHorizontal,
-            UsesLiveEditor: false,
-            AllowsPrimaryEditing: false,
-            UsesReadOnlySnapshot: true,
+            UsesLiveEditor: true,
+            AllowsPrimaryEditing: true,
+            UsesReadOnlySnapshot: false,
             RequiresPrintLayoutSnapshot: true,
             PagesAcross: 2,
             PageRows: 1,

@@ -79,10 +79,10 @@ public sealed class FreeWViewDepthPlannerTests
 
         split.UsesReadOnlySnapshot.Should().BeTrue();
         multiple.UsesReadOnlySnapshot.Should().BeTrue();
-        sideToSide.UsesReadOnlySnapshot.Should().BeTrue();
+        sideToSide.UsesReadOnlySnapshot.Should().BeFalse();
         split.Limitation.Should().Contain("read-only");
         multiple.Limitation.Should().Contain("Editing is disabled");
-        sideToSide.Limitation.Should().Contain("editable horizontal page view remains deferred");
+        sideToSide.Limitation.Should().Contain("Cross-page clipboard/undo");
     }
 
     [Theory]

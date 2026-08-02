@@ -125,6 +125,7 @@ public sealed partial class MainWindow : Window
     private TextBlock? _sideToSidePairStatusText;
     private double _sideToSidePairScrollStrideDip;
     private double _sideToSidePlannedHorizontalOffsetDip;
+    private bool _sideToSideUsesLiveEditor;
     private double _zoomScale = 1.0;
     private bool _updatingZoomSlider;
     private bool _readMode;
@@ -456,6 +457,7 @@ public sealed partial class MainWindow : Window
     internal Vector SideToSidePreviewOffsetForTests => new(_sideToSidePlannedHorizontalOffsetDip, 0);
     internal Control? WorkspaceContentForTests => _workspace.Child as Control;
     internal bool IsWorkspaceShowingLiveEditor => ReferenceEquals(_workspace.Child, _liveWorkspaceContent);
+    internal bool IsSideToSideEditorEditableForTests => _sideToSideUsesLiveEditor;
     internal bool IsOutlineModeActiveForTests => _outlineMode;
     internal bool IsPagedEditModeActiveForTests => _pagedEditMode;
     internal void TogglePagedEditViewForTests() => TogglePagedEditView();
@@ -1374,6 +1376,9 @@ public sealed partial class MainWindow : Window
             case FreeWViewDepthSurfaceKind.ReadOnlyPagePreview:
                 EnterReadOnlyPagePreview(plan);
                 break;
+            case FreeWViewDepthSurfaceKind.EditablePageView:
+                EnterEditableSideToSideView(plan);
+                break;
         }
 
         _viewDepthPlan = plan;
@@ -1398,6 +1403,8 @@ public sealed partial class MainWindow : Window
 
         if (_liveWorkspaceContent is not null && !ReferenceEquals(_workspace.Child, _liveWorkspaceContent))
             _workspace.Child = _liveWorkspaceContent;
+        if (_scroller is not null)
+            _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
     }
 
     private void EnterSplitPreview(FreeWViewDepthPlan plan)
@@ -1444,6 +1451,33 @@ public sealed partial class MainWindow : Window
     {
         RestoreLiveWorkspace();
         _workspace.Child = BuildReadOnlyPagePreviewSurface(plan, compact: false);
+        ApplySideToSideNavigationToScrollViewer(plan);
+    }
+
+    private void EnterEditableSideToSideView(FreeWViewDepthPlan plan)
+    {
+        RestoreLiveWorkspace();
+        if (_scroller is null)
+            return;
+
+        _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
+        _sideToSideUsesLiveEditor = true;
+        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
+            plan,
+            requestedFirstVisiblePageNumber: 1,
+            totalPages: Math.Max(1, _editor.PageCount));
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_editor.Document.Page);
+        var (viewportWidth, viewportHeight) = GetWorkspaceViewportSize(compact: false);
+        var viewport = DocumentViewDepthLayoutPlanner.BuildViewportPlan(
+            plan.Layout,
+            viewportWidth,
+            viewportHeight,
+            pageWidthDip,
+            pageHeightDip);
+        _sideToSidePreviewScrollViewer = _scroller;
+        _sideToSidePairScrollStrideDip = viewport.RequiredPageSpanWidthDip * viewport.Scale;
+        _workspace.Child = null;
+        _workspace.Child = BuildSideToSideNavigationHost(_scroller);
         ApplySideToSideNavigationToScrollViewer(plan);
     }
 
@@ -1607,6 +1641,7 @@ public sealed partial class MainWindow : Window
         _sideToSidePairStatusText = null;
         _sideToSidePairScrollStrideDip = 0;
         _sideToSidePlannedHorizontalOffsetDip = 0;
+        _sideToSideUsesLiveEditor = false;
     }
 
     private (double Width, double Height) GetWorkspaceViewportSize(bool compact)

@@ -259,7 +259,8 @@ public sealed class PageViewModesTests
         view.ViewDepthLayout.PageFlow.Should().Be(DocumentViewDepthPageFlow.SideToSideHorizontal);
         view.ViewDepthLayout.PagesAcross.Should().Be(2);
         view.ViewDepthLayout.UsesHorizontalPageFlow.Should().BeTrue();
-        view.ViewDepthLayout.UsesReadOnlySnapshot.Should().BeTrue();
+        view.ViewDepthLayout.UsesReadOnlySnapshot.Should().BeFalse();
+        view.ViewDepthLayout.AllowsPrimaryEditing.Should().BeTrue();
     }
 
     // ── Split Window mode ────────────────────────────────────────────────────────────────────────
@@ -275,6 +276,7 @@ public sealed class PageViewModesTests
             InvokePrivate(window, "ToggleSideToSide");
 
             window.HasSideToSidePagePairNavigationForTests.Should().BeTrue();
+            window.HasSideToSideEditablePageSurfaceForTests.Should().BeTrue();
             var initial = window.SideToSideNavigationForTests;
             initial.TotalPages.Should().BeGreaterThan(2);
             initial.FirstVisiblePageNumber.Should().Be(1);

@@ -28,7 +28,8 @@ public enum FreeWViewDepthSurfaceKind
 {
     LiveEditor,
     SplitEditorWithReadOnlyPreview,
-    ReadOnlyPagePreview
+    ReadOnlyPagePreview,
+    EditablePageView
 }
 
 public sealed record FreeWViewDepthState(FreeWViewDepthMode Mode)
@@ -111,15 +112,15 @@ public static class FreeWViewDepthPlanner
             Limitation: "Editing is disabled while the Multiple Pages preview is active; editable page grids remain deferred."),
         FreeWViewDepthMode.SideToSidePreview => new FreeWViewDepthPlan(
             mode,
-            FreeWViewDepthSurfaceKind.ReadOnlyPagePreview,
+            FreeWViewDepthSurfaceKind.EditablePageView,
             IsSplitActive: false,
             IsMultiplePagesActive: false,
             IsSideToSideActive: true,
-            UsesReadOnlySnapshot: true,
+            UsesReadOnlySnapshot: false,
             PagesAcross: 2,
             Layout: DocumentViewDepthLayoutPlanner.Build(mode),
-            StatusText: "Side to Side view active: read-only two-page horizontal-flow preview with pair navigation.",
-            Limitation: "Editing is disabled while the Side-to-Side preview is active; editable horizontal page view remains deferred."),
+            StatusText: "Side to Side view active: editable two-page horizontal-flow view with pair navigation.",
+            Limitation: "Cross-page clipboard/undo and Avalonia page-grid layout remain deferred."),
         _ => new FreeWViewDepthPlan(
             FreeWViewDepthMode.LiveEditor,
             FreeWViewDepthSurfaceKind.LiveEditor,

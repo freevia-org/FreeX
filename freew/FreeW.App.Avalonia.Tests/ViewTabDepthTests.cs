@@ -251,6 +251,7 @@ public sealed class ViewTabDepthTests
         FreeWViewDepthMode afterSideToSide = FreeWViewDepthMode.LiveEditor;
         bool multipleActiveAfterSideToSide = true;
         bool sideToSideActive = false;
+        bool sideToSideEditorEditable = false;
         bool liveAfterSecondToggle = false;
         string? sideToSideLimitation = null;
 
@@ -266,6 +267,7 @@ public sealed class ViewTabDepthTests
             multipleActiveAfterSideToSide = window.IsMultiplePagesPreviewActive;
             sideToSideActive = window.IsSideToSidePreviewActive;
             sideToSideLimitation = window.ViewDepthLimitation;
+            sideToSideEditorEditable = window.IsSideToSideEditorEditableForTests;
 
             window.ToggleSideToSide();
             liveAfterSecondToggle = window.IsWorkspaceShowingLiveEditor;
@@ -276,7 +278,8 @@ public sealed class ViewTabDepthTests
         afterSideToSide.Should().Be(FreeWViewDepthMode.SideToSidePreview);
         multipleActiveAfterSideToSide.Should().BeFalse();
         sideToSideActive.Should().BeTrue();
-        sideToSideLimitation.Should().Contain("editable horizontal page view remains deferred");
+        sideToSideLimitation.Should().Contain("Cross-page clipboard/undo");
+        sideToSideEditorEditable.Should().BeTrue();
         liveAfterSecondToggle.Should().BeTrue();
     }
 

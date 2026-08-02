@@ -200,10 +200,11 @@ public sealed class MainWindow : Window
     private ToggleButton _draftSwitch = null!;
 
     // Multiple Pages / Side to Side / Split share the same host-neutral view-depth policy as Avalonia.
-    // The WPF realization remains host-thin: FlowDocumentPageViewer for paginated previews and
-    // GridSplitter plus FlowDocumentScrollViewer for the split snapshot.
+    // Multiple Pages remains a read-only paginator; Side to Side uses the existing editable page-box
+    // surface so the command no longer discards edits behind a snapshot.
     private FreeWViewDepthPlan _viewDepthPlan = FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor);
     private FlowDocumentPageViewer? _paginatedViewer; // the overlay page viewer (non-null while active)
+    private PaginatedEditorPanel? _sideToSideEditorPanel;
     private FreeWViewDepthPagePairNavigationState _sideToSideNavigation =
         FreeWViewDepthPlanner.BuildPagePairNavigation(
             FreeWViewDepthPlanner.Build(FreeWViewDepthMode.LiveEditor),
@@ -2249,6 +2250,7 @@ public sealed class MainWindow : Window
     // The two modes are mutually exclusive with each other and with any live-editor overlay mode.
 
     internal FreeWViewDepthPagePairNavigationState SideToSideNavigationForTests => _sideToSideNavigation;
+    internal bool HasSideToSideEditablePageSurfaceForTests => _sideToSideEditorPanel is not null;
     internal bool HasSideToSidePagePairNavigationForTests =>
         _sideToSidePreviousPairButton is not null &&
         _sideToSideNextPairButton is not null &&
@@ -2283,12 +2285,14 @@ public sealed class MainWindow : Window
             ExitSplitView(resetPlan: false);
 
         if ((_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive) &&
-            plan.SurfaceKind != FreeWViewDepthSurfaceKind.ReadOnlyPagePreview)
+            plan.SurfaceKind is not FreeWViewDepthSurfaceKind.ReadOnlyPagePreview and
+            not FreeWViewDepthSurfaceKind.EditablePageView)
         {
             ExitPaginatedView(resetPlan: false);
         }
         else if ((_viewDepthPlan.IsMultiplePagesActive || _viewDepthPlan.IsSideToSideActive) &&
-                 plan.SurfaceKind == FreeWViewDepthSurfaceKind.ReadOnlyPagePreview &&
+                 plan.SurfaceKind is (FreeWViewDepthSurfaceKind.ReadOnlyPagePreview or
+                     FreeWViewDepthSurfaceKind.EditablePageView) &&
                  plan.Mode != _viewDepthPlan.Mode)
         {
             ExitPaginatedView(resetPlan: false);
@@ -2307,9 +2311,31 @@ public sealed class MainWindow : Window
             case FreeWViewDepthSurfaceKind.ReadOnlyPagePreview:
                 EnterPaginatedView(plan);
                 break;
+            case FreeWViewDepthSurfaceKind.EditablePageView:
+                EnterEditableSideToSideView(plan);
+                break;
         }
 
         SyncViewDepthRibbonState();
+    }
+
+    /// <summary>
+    /// Enters the editable Side-to-Side surface. The existing paginated editor owns page sharding,
+    /// cross-page caret routing, and model commit; this host only supplies the shared pair-navigation
+    /// chrome and restores the normal workspace on exit.
+    /// </summary>
+    private void EnterEditableSideToSideView(FreeWViewDepthPlan plan)
+    {
+        _editor.CommitToModel();
+        _sideToSideEditorPanel = PaginatedEditorPanel.Build(_editor, horizontalFlow: true);
+        _sideToSideNavigation = FreeWViewDepthPlanner.BuildPagePairNavigation(
+            plan,
+            requestedFirstVisiblePageNumber: 1,
+            totalPages: _sideToSideEditorPanel.PageBoxes.Count);
+
+        _workspaceGridChild = _workspace.Child;
+        _workspace.Child = BuildSideToSideNavigationHost(_sideToSideEditorPanel);
+        ApplySideToSideNavigationToViewer();
     }
 
     /// <summary>
@@ -2366,7 +2392,7 @@ public sealed class MainWindow : Window
         ApplySideToSideNavigationToViewer();
     }
 
-    private UIElement BuildSideToSideNavigationHost(FlowDocumentPageViewer viewer)
+    private UIElement BuildSideToSideNavigationHost(UIElement content)
     {
         var host = new DockPanel { LastChildFill = true };
         var toolbar = new StackPanel
@@ -2397,7 +2423,7 @@ public sealed class MainWindow : Window
 
         DockPanel.SetDock(toolbar, Dock.Top);
         host.Children.Add(toolbar);
-        host.Children.Add(viewer);
+        host.Children.Add(content);
         SyncSideToSideNavigationControls();
         return host;
     }
@@ -2419,7 +2445,8 @@ public sealed class MainWindow : Window
 
     private void NavigateSideToSidePagePair(FreeWViewDepthPagePairNavigationCommand command)
     {
-        if (!_viewDepthPlan.IsSideToSideActive || _paginatedViewer is null)
+        if (!_viewDepthPlan.IsSideToSideActive ||
+            (_paginatedViewer is null && _sideToSideEditorPanel is null))
             return;
 
         _sideToSideNavigation = FreeWViewDepthPlanner.NavigatePagePair(
@@ -2432,12 +2459,14 @@ public sealed class MainWindow : Window
 
     private void ApplySideToSideNavigationToViewer()
     {
-        if (!_viewDepthPlan.IsSideToSideActive || _paginatedViewer is null)
+        if (!_viewDepthPlan.IsSideToSideActive)
             return;
 
         var firstPage = _sideToSideNavigation.FirstVisiblePageNumber;
-        if (_paginatedViewer.CanGoToPage(firstPage))
+        if (_paginatedViewer is not null && _paginatedViewer.CanGoToPage(firstPage))
             _paginatedViewer.GoToPage(firstPage);
+        else
+            _sideToSideEditorPanel?.ScrollToPage(firstPage);
     }
 
     private void SyncSideToSideNavigationControls()
@@ -2471,6 +2500,12 @@ public sealed class MainWindow : Window
             _workspace.Child = _workspaceGridChild;
 
         _paginatedViewer = null;
+        if (_sideToSideEditorPanel is not null)
+        {
+            PaginatedCommitCoordinator.Commit(_sideToSideEditorPanel, _editor);
+            _editor.LoadModel(_editor.Model);
+        }
+        _sideToSideEditorPanel = null;
         _workspaceGridChild = null;
         ResetSideToSideNavigation();
         if (resetPlan)

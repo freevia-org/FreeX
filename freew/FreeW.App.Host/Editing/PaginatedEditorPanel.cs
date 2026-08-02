@@ -62,6 +62,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     private List<PageBox> _pageBoxes;
     private readonly StackPanel _stack;
     private readonly DocumentView _sourceEditor;  // kept for repagination
+    private readonly bool _horizontalFlow;
     private DispatcherTimer? _repaginateTimer;
 
     // ── Phase 3b-2: cross-page selection and undo ─────────────────────────────────────────────────
@@ -83,16 +84,18 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
     // ── construction ─────────────────────────────────────────────────────────────────────────────
 
-    private PaginatedEditorPanel(DocumentView sourceEditor, List<PageBox> boxes)
+    private PaginatedEditorPanel(DocumentView sourceEditor, List<PageBox> boxes, bool horizontalFlow)
     {
         _sourceEditor = sourceEditor;
         _pageBoxes = boxes;
+        _horizontalFlow = horizontalFlow;
 
         _stack = new StackPanel
         {
-            Orientation = Orientation.Vertical,
+            Orientation = horizontalFlow ? Orientation.Horizontal : Orientation.Vertical,
             HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 20)
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = horizontalFlow ? new Thickness(20, 0, 20, 20) : new Thickness(0, 0, 0, 20)
         };
         foreach (var box in boxes)
         {
@@ -135,7 +138,7 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
     /// </list>
     /// </para>
     /// </summary>
-    internal static PaginatedEditorPanel Build(DocumentView sourceEditor)
+    internal static PaginatedEditorPanel Build(DocumentView sourceEditor, bool horizontalFlow = false)
     {
         var model = sourceEditor.Model;
 
@@ -231,7 +234,14 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
             boxes[i].NextBox = i < boxes.Count - 1 ? boxes[i + 1] : null;
         }
 
-        return new PaginatedEditorPanel(sourceEditor, boxes);
+        return new PaginatedEditorPanel(sourceEditor, boxes, horizontalFlow);
+    }
+
+    /// <summary>Scrolls the editable surface to the requested 1-based page.</summary>
+    internal void ScrollToPage(int pageNumber)
+    {
+        var page = _pageBoxes.FirstOrDefault(box => box.PageNumber == pageNumber);
+        page?.BringIntoView();
     }
 
 
