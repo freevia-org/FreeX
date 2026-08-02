@@ -189,6 +189,7 @@ public static class SlideCloner
             OfPieSplitType = src.OfPieSplitType,
             OfPieSplitPosition = src.OfPieSplitPosition,
             OfPieSecondPieSizePercent = src.OfPieSecondPieSizePercent,
+            OfPieCustomPointIndices = new(src.OfPieCustomPointIndices),
             OfPieSeriesLinesSpecified = src.OfPieSeriesLinesSpecified,
             HasHighLowLines = src.HasHighLowLines,
             StyleId      = src.StyleId,

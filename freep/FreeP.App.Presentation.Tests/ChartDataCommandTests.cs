@@ -1956,6 +1956,37 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void OfPieChart_PreservesCustomSecondPiePointIndicesThroughPptxRoundTrip()
+    {
+        var (p, _, _) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.OfPie;
+        chart.OfPieType = OfPieType.Pie;
+        chart.OfPieSplitType = OfPieSplitType.Custom;
+        chart.OfPieCustomPointIndices.AddRange(new[] { 1, 3 });
+        chart.RegenerateWorkbookOnSave = true;
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        using (var document = PresentationDocument.Open(stream, false))
+        {
+            var validator = new OpenXmlValidator(FileFormatVersions.Microsoft365);
+            var chartPart = document.PresentationPart!.SlideParts
+                .SelectMany(slidePart => slidePart.ChartParts)
+                .Single();
+            validator.Validate(chartPart)
+                .Where(error => error.ErrorType == ValidationErrorType.Schema)
+                .Should().BeEmpty();
+        }
+
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.OfPieSplitType.Should().Be(OfPieSplitType.Custom);
+        roundTripped.OfPieCustomPointIndices.Should().Equal(1, 3);
+    }
+
+    [Fact]
     public void SetChartPlotStyleOptions_ChangesRoundTripFieldsAndUndoRestoresThem()
     {
         var (p, bus, id) = MakeChartPresentation();

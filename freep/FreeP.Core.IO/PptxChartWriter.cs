@@ -540,6 +540,13 @@ internal static class PptxChartWriter
             chart.OfPieSplitPosition is { } splitPosition
                 ? new XElement(C + "splitPos", new XAttribute("val", splitPosition.ToString("G", CultureInfo.InvariantCulture)))
                 : null,
+            chart.OfPieCustomPointIndices.Count > 0
+                ? new XElement(C + "custSplit",
+                    chart.OfPieCustomPointIndices
+                        .Distinct()
+                        .Where(index => index >= 0)
+                        .Select(index => new XElement(C + "secondPiePt", new XAttribute("val", index))))
+                : null,
             chart.OfPieSecondPieSizePercent is { } secondPieSize
                 ? new XElement(C + "secondPieSize", new XAttribute("val", Math.Clamp(secondPieSize, 5, 200)))
                 : null,
