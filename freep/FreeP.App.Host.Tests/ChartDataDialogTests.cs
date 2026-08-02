@@ -196,6 +196,30 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartAxisOptions_CustomDisplayUnit_IsEditableAndRoundTrips()
+    {
+        var (sess, _) = MakeSession();
+        sess.ApplyChartAxisOptions(new ChartAxisOptions(
+            ChartAxisKind.Value, null, null, null, null, null, null, true,
+            DisplayUnit: ChartAxisDisplayUnit.Custom,
+            CustomDisplayUnit: 2500));
+
+        sess.SelectedChart!.ValueAxis.DisplayUnit.Should().Be(ChartAxisDisplayUnit.Custom);
+        sess.SelectedChart.ValueAxis.CustomDisplayUnit.Should().Be(2500);
+
+        var path = Path.Combine(_tempDir, "chart-custom-display-unit.pptx");
+        PptxPackageWriter.Write(sess.Presentation, path);
+        var reloaded = PptxPackageReader.Read(path);
+        var axis = reloaded.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!.ValueAxis;
+        axis.DisplayUnit.Should().Be(ChartAxisDisplayUnit.Custom);
+        axis.CustomDisplayUnit.Should().Be(2500);
+
+        sess.Undo();
+        sess.SelectedChart.ValueAxis.DisplayUnit.Should().Be(ChartAxisDisplayUnit.None);
+    }
+
+    [StaFact]
     public void ChartSeriesOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();

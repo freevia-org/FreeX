@@ -18,6 +18,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
     private bool? _oldNumberFormatSourceLinked;
     private ChartAxisDisplayUnit _oldDisplayUnit;
     private string? _oldRawDisplayUnitToken;
+    private double? _oldCustomDisplayUnit;
     private bool _oldMajorGridlines;
     private bool _oldMinorGridlines;
     private ChartTickMark? _oldMajorTickMark;
@@ -67,6 +68,9 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.RawDisplayUnitToken = _newOptions.DisplayUnit == ChartAxisDisplayUnit.Unsupported
             ? _newOptions.RawDisplayUnitToken
             : null;
+        axis.CustomDisplayUnit = _newOptions.DisplayUnit == ChartAxisDisplayUnit.Custom
+            ? _newOptions.CustomDisplayUnit
+            : null;
         axis.HasMajorGridlines = _newOptions.MajorGridlines;
         axis.HasMinorGridlines = _newOptions.MinorGridlines;
         axis.MajorTickMark = _newOptions.MajorTickMark;
@@ -105,6 +109,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         axis.NumberFormatSourceLinked = _oldNumberFormatSourceLinked;
         axis.DisplayUnit = _oldDisplayUnit;
         axis.RawDisplayUnitToken = _oldRawDisplayUnitToken;
+        axis.CustomDisplayUnit = _oldCustomDisplayUnit;
         axis.HasMajorGridlines = _oldMajorGridlines;
         axis.HasMinorGridlines = _oldMinorGridlines;
         axis.MajorTickMark = _oldMajorTickMark;
@@ -136,6 +141,7 @@ public sealed class SetChartAxisOptionsCommand : IPresentationCommand
         _oldNumberFormatSourceLinked = axis.NumberFormatSourceLinked;
         _oldDisplayUnit = axis.DisplayUnit;
         _oldRawDisplayUnitToken = axis.RawDisplayUnitToken;
+        _oldCustomDisplayUnit = axis.CustomDisplayUnit;
         _oldMajorGridlines = axis.HasMajorGridlines;
         _oldMinorGridlines = axis.HasMinorGridlines;
         _oldMajorTickMark = axis.MajorTickMark;

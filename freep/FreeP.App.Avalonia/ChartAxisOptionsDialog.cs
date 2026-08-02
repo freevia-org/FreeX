@@ -28,6 +28,7 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly TextBox _minorUnitBox;
     private readonly TextBox _numberFormatBox;
     private readonly ComboBox _displayUnitCombo;
+    private readonly TextBox _customDisplayUnitBox;
     private readonly CheckBox _majorGridlinesCheck;
     private readonly CheckBox _minorGridlinesCheck;
     private readonly ComboBox _majorTickMarkCombo;
@@ -86,6 +87,11 @@ internal sealed class ChartAxisOptionsDialog : Window
         _minorUnitBox = new TextBox { MinWidth = 130 };
         _numberFormatBox = new TextBox { MinWidth = 180 };
         _displayUnitCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.DisplayUnitOptions.Select(x => x.Label));
+        _customDisplayUnitBox = new TextBox
+        {
+            MinWidth = 130,
+            PlaceholderText = "Positive divisor",
+        };
         _majorGridlinesCheck = new CheckBox { Content = surface.MajorGridlinesLabel };
         _minorGridlinesCheck = new CheckBox { Content = surface.MinorGridlinesLabel };
         _majorTickMarkCombo = MakeChoiceCombo(ChartAxisOptionsPlanner.TickMarkOptions.Select(x => x.Label));
@@ -134,6 +140,7 @@ internal sealed class ChartAxisOptionsDialog : Window
                 MakeRow(surface.MinorUnitLabel, _minorUnitBox),
                 MakeRow(surface.NumberFormatLabel, _numberFormatBox),
                 MakeRow(surface.DisplayUnitLabel, _displayUnitCombo),
+                MakeRow("Custom divisor", _customDisplayUnitBox),
                 new TextBlock { Text = surface.AutoHint, Opacity = 0.7 },
                 _majorGridlinesCheck,
                 _minorGridlinesCheck,
@@ -233,6 +240,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _minorUnitBox.Text = Format(_planner.MinorUnit);
         _numberFormatBox.Text = _planner.NumberFormatCode;
         _displayUnitCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.DisplayUnitOptions, _planner.DisplayUnit);
+        _customDisplayUnitBox.Text = Format(_planner.CustomDisplayUnit);
         _majorGridlinesCheck.IsChecked = _planner.MajorGridlines;
         _minorGridlinesCheck.IsChecked = _planner.MinorGridlines;
         _majorTickMarkCombo.SelectedIndex = FindIndex(ChartAxisOptionsPlanner.TickMarkOptions, _planner.MajorTickMark);
@@ -263,6 +271,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _planner.SetMinorUnit(ParseOptional(_minorUnitBox.Text, "Minor unit"));
         _planner.SetNumberFormatCode(_numberFormatBox.Text);
         _planner.SetDisplayUnit(ChartAxisOptionsPlanner.DisplayUnitOptions[_displayUnitCombo.SelectedIndex].Value);
+        _planner.SetCustomDisplayUnit(ParseOptional(_customDisplayUnitBox.Text, "Custom display-unit divisor"));
         _planner.SetMajorGridlines(_majorGridlinesCheck.IsChecked == true);
         _planner.SetMinorGridlines(_minorGridlinesCheck.IsChecked == true);
         _planner.SetMajorTickMark(ChartAxisOptionsPlanner.TickMarkOptions[_majorTickMarkCombo.SelectedIndex].Value);

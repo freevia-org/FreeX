@@ -132,6 +132,7 @@ public enum ChartAxisDisplayUnit
     HundredMillions,
     Billions,
     Trillions,
+    Custom,
     Unsupported,
 }
 
@@ -535,6 +536,9 @@ public sealed class ChartAxis
 
     /// <summary>Unknown <c>c:builtInUnit/@val</c> token retained losslessly.</summary>
     public string? RawDisplayUnitToken { get; set; }
+
+    /// <summary>Authored custom display-unit divisor from <c>c:dispUnits/c:customUnit/@val</c>.</summary>
+    public double? CustomDisplayUnit { get; set; }
 
     /// <summary>Explicit minimum scale value. Null = auto.</summary>
     public double? Min { get; set; }
