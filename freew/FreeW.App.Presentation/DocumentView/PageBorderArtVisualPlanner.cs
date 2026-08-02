@@ -76,6 +76,7 @@ public static class PageBorderArtVisualPlanner
     public const int CandyCornArtId = 4;
     public const int IceCreamConesArtId = 5;
     public const int BirdsFlightArtId = 35;
+    public const int FlowersRosesArtId = 38;
     public const int PaintedEggsArtId = 66;
     public const int PeopleArtId = 84;
     public const int ShadowedSquaresArtId = 57;
@@ -312,6 +313,27 @@ public static class PageBorderArtVisualPlanner
         var polygons = new List<PageBorderArtPolygon>();
         foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
             AddPerson(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
+        plan = new PageBorderArtFilledShapePlan([], polygons);
+        return true;
+    }
+
+    public static bool TryBuildFlowersRosesFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != FlowersRosesArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var polygons = new List<PageBorderArtPolygon>();
+        foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
+            AddRose(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
         plan = new PageBorderArtFilledShapePlan([], polygons);
         return true;
     }
@@ -1058,6 +1080,51 @@ public static class PageBorderArtVisualPlanner
             (20, 13), (19.5, 20), (22.5, 27), (21, 28), (16, 22), (16, 30),
             (15, 30), (15, 22), (10, 28), (8.5, 27), (12.5, 20), (12, 13),
             (7, 16.5), (6, 16), (10, 13), (14, 12));
+    }
+
+    private static void AddRose(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
+            polygons.Add(new PageBorderArtPolygon(
+                points.Select(point => Point(point.X, point.Y)).ToList(), red, green, blue));
+
+        Add(0x40, 0x40, 0x40,
+            (13, 14), (16, 14), (19, 22), (28, 28), (27, 31), (18, 26), (14, 18));
+        Add(0x0F, 0x64, 0x00,
+            (15, 16), (16, 17), (20, 23), (27, 28), (26, 29), (19, 25));
+        Add(0x40, 0x40, 0x40,
+            (18, 19), (19, 14), (23, 8), (27, 7), (30, 10), (32, 16),
+            (31, 22), (28, 25), (24, 25), (21, 22));
+        Add(0x1A, 0xB3, 0x00,
+            (20, 18), (21, 14), (24, 9), (27, 8), (29, 11), (31, 16),
+            (30, 21), (27, 24), (24, 23), (22, 21));
+        Add(0x0F, 0x64, 0x00, (25, 9), (27, 9), (27, 23), (25, 24));
+
+        Add(0x40, 0x40, 0x40,
+            (1, 5), (4, 1), (8, 2), (11, 0), (15, 2), (20, 1), (23, 4),
+            (20, 8), (19, 11), (23, 14), (22, 18), (18, 21), (14, 20),
+            (11, 23), (6, 22), (4, 18), (0, 16), (1, 12), (0, 9));
+        Add(0xE9, 0x6A, 0xD3,
+            (2, 6), (5, 3), (8, 4), (11, 2), (14, 4), (19, 3), (21, 5),
+            (18, 8), (17, 11), (21, 14), (20, 17), (17, 19), (13, 18),
+            (10, 21), (7, 20), (6, 17), (2, 15), (3, 12), (2, 9));
+        Add(0xA0, 0x49, 0x91, (2, 6), (7, 7), (9, 11), (3, 10));
+        Add(0xA0, 0x49, 0x91, (6, 13), (18, 12), (19, 15), (8, 16));
+        Add(0xA0, 0x49, 0x91, (9, 3), (12, 4), (11, 9), (15, 12), (13, 14), (8, 10));
+
+        Add(0x40, 0x40, 0x40,
+            (0, 21), (4, 19), (8, 20), (11, 23), (10, 26), (7, 27),
+            (7, 32), (4, 32), (4, 27), (1, 25));
+        Add(0xE9, 0x6A, 0xD3,
+            (2, 21), (5, 21), (9, 23), (8, 25), (6, 25), (6, 27),
+            (5, 30), (5, 26), (2, 24));
+        Add(0x0F, 0x64, 0x00, (6, 26), (9, 24), (8, 29), (6, 31));
     }
 
     private static void AddVineCorner(

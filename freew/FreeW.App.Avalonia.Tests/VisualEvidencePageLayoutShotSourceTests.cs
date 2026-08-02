@@ -287,6 +287,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildCandyCornFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildPeopleFrame(");
+        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildVineFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildPapyrusFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");

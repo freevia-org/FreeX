@@ -1624,6 +1624,17 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         DrawSoftwareFilledShapePlan(canvas, peoplePlan);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildFlowersRosesFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var rosePlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, rosePlan);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildVineFrame(
             border.ArtId,
             border.WidthPt,

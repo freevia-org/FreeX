@@ -1337,6 +1337,7 @@ public sealed record ContentControlDataBinding(
 
 /// <summary>
 /// Word-specific structured-document-tag metadata that remains active after displayed content is edited.
+/// <see cref="TabIndex"/> preserves the exact optional w:sdtPr/w:tabIndex/@w:val source token.
 /// </summary>
 public sealed record ContentControlWordMetadata(
     string? Id = null,
@@ -1345,7 +1346,8 @@ public sealed record ContentControlWordMetadata(
     bool ShowingPlaceholder = false,
     bool Temporary = false,
     string? Appearance = null,
-    string? Color = null);
+    string? Color = null,
+    string? TabIndex = null);
 
 /// <summary>
 /// Word-specific date-picker metadata from w:date. Null fields represent absent OOXML values and are

@@ -3321,7 +3321,8 @@ public static class DocxReader
             Temporary: sdtPr.Element(W + "temporary") is not null,
             Appearance: sdtPr.Element(W15 + "appearance")?.Attribute(W15 + "val")?.Value,
             Color: sdtPr.Element(W15 + "color")?.Attribute(W + "val")?.Value
-                ?? sdtPr.Element(W15 + "color")?.Attribute(W15 + "val")?.Value);
+                ?? sdtPr.Element(W15 + "color")?.Attribute(W15 + "val")?.Value,
+            TabIndex: sdtPr.Element(W + "tabIndex")?.Attribute(W + "val")?.Value);
 
         return metadata == new ContentControlWordMetadata() ? null : metadata;
     }
