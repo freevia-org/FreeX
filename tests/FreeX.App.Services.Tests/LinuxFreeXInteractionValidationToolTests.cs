@@ -236,7 +236,8 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("outline-expanded.png");
         probe.Should().Contain("values-restored=$values_restored");
         probe.Should().Contain("xdotool_mousemove_sync \"$toggle_x\" \"$toggle_y\" click 1");
-        probe.Should().Contain("probe_window_management\nprobe_outline_group_physical");
+        probe.Should().MatchRegex(
+            @"probe_window_management\r?\nprobe_split_pane_pointer\r?\nprobe_outline_group_physical");
         runner.Split("\"outline-group-physical\"").Should().HaveCountGreaterThanOrEqualTo(4,
             "the focused selector and default all lane must both require the physical outline result and artifacts");
     }
