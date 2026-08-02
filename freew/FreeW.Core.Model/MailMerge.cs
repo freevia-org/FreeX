@@ -1492,6 +1492,12 @@ public static class MailMerge
             {
                 result.Add(merged);
             }
+
+            // NEXT / NEXTIF consumes one additional source row after the current output record.
+            // The record-level evaluator only reports this cursor request; the all-record caller owns
+            // advancing the data-source cursor, just as the label-sheet hosts do between cells.
+            if (state.AdvanceRecordRequested && i + 1 < data.Count)
+                i++;
         }
         return result;
     }
