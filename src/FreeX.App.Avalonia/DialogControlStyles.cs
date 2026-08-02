@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
 using Avalonia.Data;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -51,6 +52,9 @@ internal static class DialogControlStyles
     // WS-G token: FreeXTextBrush (#1F1F1F) — byte-identical to the literal; falls back when no app.
     private static readonly IBrush SelectionForegroundBrush =
         ResolveTokenBrush("FreeXTextBrush") ?? new ImmutableSolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
+    private static readonly IBrush DisabledCheckBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
+    private static readonly IBrush DisabledCheckBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(0xBC, 0xBC, 0xBC));
+    private static readonly IBrush DisabledCheckMarkBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x9E, 0x9E, 0x9E));
 
     /// <summary>
     /// Looks up a named brush from the Application's resource registry (populated by
@@ -99,6 +103,29 @@ internal static class DialogControlStyles
             Margin = new Thickness(0, 0, 4, 0),
             Child = checkMark,
             VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        void UpdateDisabledCheckChrome()
+        {
+            if (checkBox.IsEnabled)
+            {
+                indicator.Background = Brushes.White;
+                indicator.BorderBrush = BorderBrush;
+                checkMark.Stroke = AccentBrush;
+            }
+            else
+            {
+                indicator.Background = DisabledCheckBackgroundBrush;
+                indicator.BorderBrush = DisabledCheckBorderBrush;
+                checkMark.Stroke = DisabledCheckMarkBrush;
+            }
+        }
+
+        UpdateDisabledCheckChrome();
+        checkBox.PropertyChanged += (_, args) =>
+        {
+            if (args.Property == InputElement.IsEnabledProperty)
+                UpdateDisabledCheckChrome();
         };
 
         var presenter = new ContentPresenter
@@ -195,6 +222,13 @@ internal static class DialogControlStyles
         yield return new Style(x => x.OfType<CheckBox>().Class(":disabled"))
         {
             Setters = { new Setter(Visual.OpacityProperty, 0.45d) },
+        };
+
+        yield return new Style(x => x.OfType<CheckBox>().Class("free-options-ease-checkbox").Class(":disabled"))
+        {
+            // WPF keeps this Options page's disabled labels at full contrast and changes the glyph
+            // fill/check instead. Other dialogs retain the existing shared disabled opacity.
+            Setters = { new Setter(Visual.OpacityProperty, 1d) },
         };
 
         // ── RadioButton ─────────────────────────────────────────────────────────────────────────────

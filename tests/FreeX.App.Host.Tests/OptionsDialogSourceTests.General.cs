@@ -123,6 +123,19 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_EaseOfAccessMatchesTheSharedWpfRowRhythm()
+    {
+        var xaml = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml");
+
+        xaml.Should().Contain("x:Name=\"PanelEaseOfAccess\"");
+        xaml.Should().Contain("Options_EaseOfAccessOptions");
+        xaml.Should().Contain("Content=\"{local:Loc Key=Options_ProvideFeedbackWithSound}\"");
+        xaml.Should().Contain("Content=\"{local:Loc Key=Options_ShowQuickAnalysisOptionsOnSelection}\"");
+        xaml.Should().Contain("Content=\"{local:Loc Key=Options_OptimizeDisplayForAccessibility}\"");
+        xaml.Should().Contain("Margin=\"0,0,0,6\" FontSize=\"12\"");
+    }
+
+    [Fact]
     public void OptionsDialog_DefaultFormatUsesNativeFreexWorkbookExtension()
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");

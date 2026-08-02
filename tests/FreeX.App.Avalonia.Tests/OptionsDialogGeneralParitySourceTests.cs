@@ -68,6 +68,27 @@ public sealed class OptionsDialogGeneralParitySourceTests
         wpf.Should().Contain("Height=\"24\" VerticalAlignment=\"Center\"");
     }
 
+    [Fact]
+    public void EaseOfAccessOptions_UsesWpfHeaderAndCheckboxRhythm()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var planner = File.ReadAllText(RepoFile("src", "FreeX.App.Services", "OptionsDialogPlanner.cs"));
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+        var styles = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "DialogControlStyles.cs"));
+
+        source.Should().Contain("OptionsDialogPlanner.EaseSectionRuleBottomMargin");
+        source.Should().Contain("OptionsDialogPlanner.EaseCheckBoxBottomMargin");
+        source.Should().Contain("OptionsDialogPlanner.EaseCheckBoxHeight");
+        source.Should().Contain("free-options-ease-checkbox");
+        source.Should().Contain("easePanel.Spacing = 0;");
+        source.Should().Contain("ruleTopMargin: OptionsDialogPlanner.EaseSectionRuleTopMargin");
+        planner.Should().Contain("public const double EaseCheckBoxBottomMargin = 6;");
+        wpf.Should().Contain("<StackPanel x:Name=\"PanelEaseOfAccess\" Visibility=\"Collapsed\">");
+        wpf.Should().Contain("Margin=\"0,0,0,6\" FontSize=\"12\"");
+        styles.Should().Contain("DisabledCheckBackgroundBrush");
+        styles.Should().Contain("DisabledCheckMarkBrush");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

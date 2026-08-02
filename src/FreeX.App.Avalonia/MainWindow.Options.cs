@@ -490,10 +490,23 @@ public sealed partial class MainWindow
         languagePanel.Spacing = 0;
 
         var easePanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_EaseOfAccessOptions")),
-            OptionsCheckBox(OptionsText("Options_ProvideFeedbackWithSound"), isEnabled: false),
-            OptionsCheckBox(OptionsText("Options_ShowQuickAnalysisOptionsOnSelection"), isChecked: true, isEnabled: false),
-            OptionsCheckBox(OptionsText("Options_OptimizeDisplayForAccessibility"), isEnabled: false));
+            OptionsSectionHeader(
+                OptionsText("Options_EaseOfAccessOptions"),
+                topMargin: OptionsDialogPlanner.EaseSectionHeaderTopMargin,
+                bottomMargin: OptionsDialogPlanner.EaseSectionHeaderBottomMargin,
+                ruleTopMargin: OptionsDialogPlanner.EaseSectionRuleTopMargin,
+                ruleBottomMargin: OptionsDialogPlanner.EaseSectionRuleBottomMargin),
+            WithMargin(
+                OptionsCheckBox(OptionsText("Options_ProvideFeedbackWithSound"), isEnabled: false, height: OptionsDialogPlanner.EaseCheckBoxHeight, preserveDisabledContrast: true),
+                new Thickness(0, 0, 0, OptionsDialogPlanner.EaseCheckBoxBottomMargin)),
+            WithMargin(
+                OptionsCheckBox(OptionsText("Options_ShowQuickAnalysisOptionsOnSelection"), isChecked: true, isEnabled: false, height: OptionsDialogPlanner.EaseCheckBoxHeight, preserveDisabledContrast: true),
+                new Thickness(0, 0, 0, OptionsDialogPlanner.EaseCheckBoxBottomMargin)),
+            WithMargin(
+                OptionsCheckBox(OptionsText("Options_OptimizeDisplayForAccessibility"), isEnabled: false, height: OptionsDialogPlanner.EaseCheckBoxHeight, preserveDisabledContrast: true),
+                new Thickness(0, 0, 0, OptionsDialogPlanner.EaseCheckBoxBottomMargin)));
+        // WPF's Ease page uses explicit checkbox margins, not the generic category gap.
+        easePanel.Spacing = 0;
 
         // ── Advanced (editing options) ────────────────────────────────────────────
         // The "After pressing Enter, move selection" toggle + its direction picker edit the persisted
@@ -1375,10 +1388,23 @@ public sealed partial class MainWindow
         AvaloniaCompactDialogChrome.ApplyRadioButton(radioButton, OptionsDialogChromeStyle);
     }
 
-    private static CheckBox OptionsCheckBox(string text, bool isChecked = false, bool isEnabled = true)
+    private static CheckBox OptionsCheckBox(
+        string text,
+        bool isChecked = false,
+        bool isEnabled = true,
+        double? height = null,
+        bool preserveDisabledContrast = false)
     {
         var cb = new CheckBox { Content = text, IsChecked = isChecked, IsEnabled = isEnabled };
         ApplyOptionsCheckBoxChrome(cb);
+        if (preserveDisabledContrast)
+            cb.Classes.Add("free-options-ease-checkbox");
+        if (height is { } fixedHeight)
+        {
+            cb.Height = fixedHeight;
+            cb.MinHeight = fixedHeight;
+            cb.MaxHeight = fixedHeight;
+        }
         return cb;
     }
 
@@ -1505,14 +1531,19 @@ public sealed partial class MainWindow
         public override string ToString() => Label;
     }
 
-    private static Control OptionsSectionHeader(string text, double topMargin = 10, double bottomMargin = 4) =>
+    private static Control OptionsSectionHeader(
+        string text,
+        double topMargin = 10,
+        double bottomMargin = 4,
+        double ruleTopMargin = 5,
+        double ruleBottomMargin = 0) =>
         new StackPanel
         {
             Margin = new Thickness(0, topMargin, 0, bottomMargin),
             Children =
             {
                 new TextBlock { Text = text, FontWeight = FontWeight.SemiBold, FontSize = 13 },
-                new Border { Height = 1, Background = Brush(212, 212, 212), Margin = new Thickness(0, 5, 0, 0) },
+                new Border { Height = 1, Background = Brush(212, 212, 212), Margin = new Thickness(0, ruleTopMargin, 0, ruleBottomMargin) },
             },
         };
 

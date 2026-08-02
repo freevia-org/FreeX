@@ -61,6 +61,12 @@ public static class OptionsDialogPlanner
     public const double GeneralCheckBoxHeight = 18;
     public const double GeneralFieldBottomMargin = 9;
     public const double GeneralUserNameBottomMargin = 6;
+    public const double EaseSectionHeaderTopMargin = 0;
+    public const double EaseSectionHeaderBottomMargin = 0;
+    public const double EaseSectionRuleTopMargin = 6;
+    public const double EaseSectionRuleBottomMargin = 13;
+    public const double EaseCheckBoxBottomMargin = 6;
+    public const double EaseCheckBoxHeight = 15;
     public const double LanguageFieldWidth = 240;
     public const double LanguageSectionTopMargin = 0;
     public const double LanguageSectionBottomMargin = 14;
