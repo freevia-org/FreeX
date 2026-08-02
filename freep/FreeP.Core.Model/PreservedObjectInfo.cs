@@ -21,6 +21,19 @@ public enum PreservedObjectKind
 }
 
 /// <summary>
+/// One target tile in a native PowerPoint Summary Zoom. Factors use the OOXML percentage
+/// scale where 100000 represents 100 percent.
+/// </summary>
+public sealed record SummaryZoomTarget(
+    string SectionId,
+    string Title,
+    string Description,
+    int OffsetFactorX,
+    int OffsetFactorY,
+    int ScaleFactorX,
+    int ScaleFactorY);
+
+/// <summary>
 /// Payload for a preserved modern object (SlideShapeKind.Zoom / Ink / Model3d / PreservedObject).
 ///
 /// All three modern objects (slide zoom, ink, 3D model) and any UNKNOWN graphicFrame or
@@ -54,6 +67,13 @@ public sealed class PreservedObjectInfo
     /// <summary>Stable section GUID targeted by a Section Zoom, when present.</summary>
     public string? ZoomTargetSectionId { get; set; }
 
+    /// <summary>
+    /// All section targets in a Summary Zoom, in native tile order. A Summary Zoom is a
+    /// multi-target object; the singular section property above remains for Section Zoom
+    /// compatibility and is not used to collapse this list.
+    /// </summary>
+    public List<SummaryZoomTarget> SummaryZoomTargets { get; } = new();
+
     // ── Verbatim XML round-trip ───────────────────────────────────────────────────
 
     /// <summary>
@@ -62,6 +82,9 @@ public sealed class PreservedObjectInfo
     /// on write, with rel-id attributes patched to match freshly written part paths.
     /// </summary>
     public string RawXml { get; set; } = string.Empty;
+
+    /// <summary>Raw XML for the first child of an original <c>mc:Fallback</c> branch.</summary>
+    public string? AlternateContentFallbackXml { get; set; }
 
     /// <summary>
     /// True when the original element was wrapped in mc:AlternateContent. The writer must

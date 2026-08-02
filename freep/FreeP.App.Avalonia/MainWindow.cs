@@ -2416,6 +2416,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => _ = OpenSlideZoomDialogAsync()));
         r.Register(SectionZoomInsertionPlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenSectionZoomDialogAsync()));
+        r.Register(SummaryZoomInsertionPlanner.CommandId,
+            new ActionRibbonCommand(() => _ = OpenSummaryZoomDialogAsync()));
         r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
             PresentationDesignCommandPlanner.TryApply(
                 Editor,
@@ -4122,6 +4124,22 @@ public sealed partial class MainWindow : Window
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId)
             Editor.InsertSectionZoom(targetSectionId);
+    }
+
+    internal async void OpenSummaryZoomDialog() => await OpenSummaryZoomDialogAsync();
+
+    internal async Task OpenSummaryZoomDialogAsync()
+    {
+        var options = SummaryZoomInsertionPlanner.BuildTargetOptions(
+            Editor.Presentation,
+            Editor.CurrentSlideIndex);
+        if (options.Count < 2 || !IsVisible)
+            return;
+
+        var dialog = new SummaryZoomDialog(options);
+        var result = await dialog.ShowDialog<bool?>(this);
+        if (result == true)
+            Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
     }
 
     internal void OpenFindDialog() =>

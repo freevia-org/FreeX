@@ -730,6 +730,7 @@ public static class SlideCloner
             ZoomTargetSlideNumericId = src.ZoomTargetSlideNumericId,
             ZoomTargetSectionId  = src.ZoomTargetSectionId,
             RawXml              = src.RawXml,
+            AlternateContentFallbackXml = src.AlternateContentFallbackXml,
             WasAlternateContent = src.WasAlternateContent,
             McRequiresToken     = src.McRequiresToken,
             McRequiresNsUri     = src.McRequiresNsUri,
@@ -744,6 +745,7 @@ public static class SlideCloner
             copy.SlideRels[kv.Key] = kv.Value;
         foreach (var kv in src.McRequiresNsUris)
             copy.McRequiresNsUris[kv.Key] = kv.Value;
+        copy.SummaryZoomTargets.AddRange(src.SummaryZoomTargets);
         return copy;
     }
 }
