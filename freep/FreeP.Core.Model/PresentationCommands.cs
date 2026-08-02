@@ -869,6 +869,98 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
     }
 }
 
+/// <summary>Replaces one media object's caption-track collection as one undoable edit.</summary>
+public sealed class SetMediaCaptionTracksCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly IReadOnlyList<MediaCaptionTrackInfo> _before;
+    private readonly IReadOnlyList<MediaCaptionTrackInfo> _after;
+
+    public SetMediaCaptionTracksCommand(
+        int slideIndex,
+        uint shapeId,
+        IEnumerable<MediaCaptionTrackInfo> before,
+        IEnumerable<MediaCaptionTrackInfo> after)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _before = CloneTracks(before);
+        _after = CloneTracks(after);
+    }
+
+    public string Label => "Edit Media Captions";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var media = FindMedia(presentation);
+        return media is not null && !TracksEqual(media.CaptionTracks, _after);
+    }
+
+    public void Apply(Presentation presentation) => ReplaceTracks(FindMedia(presentation), _after);
+
+    public void Revert(Presentation presentation) => ReplaceTracks(FindMedia(presentation), _before);
+
+    private MediaInfo? FindMedia(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return FindMedia(presentation.Slides[_slideIndex].Shapes);
+    }
+
+    private MediaInfo? FindMedia(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == _shapeId && shape.Kind == SlideShapeKind.Media)
+                return shape.Media;
+            if (shape.Children.Count > 0 && FindMedia(shape.Children) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
+    private static void ReplaceTracks(MediaInfo? media, IReadOnlyList<MediaCaptionTrackInfo> tracks)
+    {
+        if (media is null)
+            return;
+
+        media.CaptionTracks.Clear();
+        media.CaptionTracks.AddRange(CloneTracks(tracks));
+    }
+
+    private static List<MediaCaptionTrackInfo> CloneTracks(IEnumerable<MediaCaptionTrackInfo> tracks) =>
+        tracks.Select(track => new MediaCaptionTrackInfo
+        {
+            RelationshipId = track.RelationshipId,
+            Source = track.Source,
+            Bytes = track.Bytes.ToArray(),
+            ContentType = track.ContentType,
+            Language = track.Language,
+            Label = track.Label,
+            IsExternal = track.IsExternal
+        }).ToList();
+
+    private static bool TracksEqual(
+        IReadOnlyList<MediaCaptionTrackInfo> left,
+        IReadOnlyList<MediaCaptionTrackInfo> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        return left.Zip(right).All(pair =>
+            pair.First.RelationshipId == pair.Second.RelationshipId
+            && pair.First.Source == pair.Second.Source
+            && pair.First.ContentType == pair.Second.ContentType
+            && pair.First.Language == pair.Second.Language
+            && pair.First.Label == pair.Second.Label
+            && pair.First.IsExternal == pair.Second.IsExternal
+            && pair.First.Bytes.SequenceEqual(pair.Second.Bytes));
+    }
+}
+
 /// <summary>Edits one native Summary Zoom tile's position and scale as one undoable operation.</summary>
 public sealed class SetSummaryZoomTileLayoutCommand : IPresentationCommand
 {

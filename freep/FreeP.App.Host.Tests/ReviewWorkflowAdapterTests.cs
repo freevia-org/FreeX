@@ -2371,7 +2371,7 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
         source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
         source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(");
-        source.Should().Contain("PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(");
+        source.Should().Contain("Editor.ApplyMediaCaptionAuthoring(");
         source.Should().Contain("RenderCommentPane(PresentationCommentPanePlan plan)");
         source.Should().Contain("cm.AuthorDisplayName");
         source.Should().Contain("cm.InitialsBadgeText");

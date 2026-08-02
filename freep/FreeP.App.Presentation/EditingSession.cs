@@ -2127,6 +2127,66 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Applies a prepared caption mutation through the shared command bus so caption authoring
+    /// participates in the same undo/redo contract as the other slide edits.
+    /// </summary>
+    public PresentationMediaCaptionTrackMutationResult ApplyMediaCaptionAuthoring(
+        PresentationMediaCaptionAuthoringMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            CurrentSlide,
+            SelectedShapeIds);
+        var media = mediaShape?.Media;
+        if (mediaShape is null || media is null)
+            return PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(media, plan);
+
+        var before = CloneCaptionTracks(media.CaptionTracks);
+        var staged = new MediaInfo
+        {
+            IsVideo = media.IsVideo,
+            PlaybackStartMode = media.PlaybackStartMode,
+            Loop = media.Loop,
+            Bytes = media.Bytes.ToArray(),
+            ContentType = media.ContentType,
+            SourcePackagePath = media.SourcePackagePath,
+            LinkUrl = media.LinkUrl
+        };
+        staged.CaptionTracks.AddRange(CloneCaptionTracks(before));
+
+        var result = PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(staged, plan);
+        if (!result.Succeeded)
+            return result;
+
+        Bus.Execute(new SetMediaCaptionTracksCommand(
+            CurrentSlideIndex,
+            mediaShape.Id,
+            before,
+            staged.CaptionTracks));
+
+        if (result.TrackIndex >= 0 && result.TrackIndex < media.CaptionTracks.Count)
+            return PresentationMediaCaptionTrackMutationResult.Success(
+                result.TrackIndex,
+                media.CaptionTracks[result.TrackIndex]);
+
+        return result;
+    }
+
+    private static List<MediaCaptionTrackInfo> CloneCaptionTracks(
+        IEnumerable<MediaCaptionTrackInfo> tracks) =>
+        tracks.Select(track => new MediaCaptionTrackInfo
+        {
+            RelationshipId = track.RelationshipId,
+            Source = track.Source,
+            Bytes = track.Bytes.ToArray(),
+            ContentType = track.ContentType,
+            Language = track.Language,
+            Label = track.Label,
+            IsExternal = track.IsExternal
+        }).ToList();
+
+    /// <summary>
     /// Creates and inserts an embedded OLE package from raw file bytes. The package payload
     /// remains editable/activatable after save and the insertion is one undoable shape add.
     /// </summary>

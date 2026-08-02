@@ -7830,9 +7830,7 @@ public sealed partial class MainWindow : Window
                 _selectedMediaCaptionTrackIndex ?? -1,
                 descriptor);
         LastMediaCaptionTrackMutationResult =
-            PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(
-                media,
-                LastMediaCaptionAuthoringMutationPlan);
+            Editor.ApplyMediaCaptionAuthoring(LastMediaCaptionAuthoringMutationPlan);
         if (LastMediaCaptionTrackMutationResult.Succeeded)
         {
             _selectedMediaCaptionTrackIndex = NormalizeMediaCaptionSelectionAfterMutation(
