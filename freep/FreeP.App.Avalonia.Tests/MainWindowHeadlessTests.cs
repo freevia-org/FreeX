@@ -1781,6 +1781,8 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.insert-chart-stock", ChartType.Stock)]
     [InlineData("freep.insert-chart-surface", ChartType.Surface)]
     [InlineData("freep.insert-chart-surface-3d", ChartType.Surface3D)]
+    [InlineData("freep.insert-chart-funnel", ChartType.Funnel)]
+    [InlineData("freep.insert-chart-waterfall", ChartType.Waterfall)]
     public async Task Ribbon_insert_chart_commands_add_expected_chart(
         string commandId,
         ChartType expectedChartType)

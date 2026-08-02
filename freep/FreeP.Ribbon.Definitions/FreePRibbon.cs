@@ -529,6 +529,12 @@ public static class FreePRibbon
             group.Medium(SlideObjectInsertionPlanner.ChartSurface3DCommandId,
                 FreePRibbonText.InsertChartSurface3DLabel, RibbonCommandIconKind.ChartColumn,
                 FreePRibbonText.InsertChartSurface3DKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartFunnelCommandId,
+                FreePRibbonText.InsertChartFunnelLabel, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartFunnelKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartWaterfallCommandId,
+                FreePRibbonText.InsertChartWaterfallLabel, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartWaterfallKeyTip);
             group.Dropdown(
                 ChartDataDialogPlanner.ChangeChartTypeCommandId,
                 FreePRibbonText.ChartChangeTypeLabel,

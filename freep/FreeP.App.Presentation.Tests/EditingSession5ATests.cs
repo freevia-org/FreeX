@@ -473,6 +473,17 @@ public sealed class EditingSession5ATests
     }
 
     [Fact]
+    public void InsertChart_WaterfallHasEditableIncrements()
+    {
+        var sess = Make();
+        var shape = sess.InsertChart(ChartType.Waterfall);
+
+        shape.Chart!.Categories.Should().Equal("Starting value", "Reduction", "Growth", "Ending value");
+        shape.Chart.Series.Should().ContainSingle();
+        shape.Chart.Series[0].Values.Should().Equal(100, -30, 20, 90);
+    }
+
+    [Fact]
     public void InsertChart_IsUndoable()
     {
         var sess = Make();

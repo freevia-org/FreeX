@@ -532,6 +532,18 @@
   <data name="Ribbon_Command_InsertChartSurface3D_KeyTip" xml:space="preserve">
     <value>S3</value>
   </data>
+  <data name="Ribbon_Command_InsertChartFunnel_Label" xml:space="preserve">
+    <value>Funnel</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartFunnel_KeyTip" xml:space="preserve">
+    <value>FN</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartWaterfall_Label" xml:space="preserve">
+    <value>Waterfall</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartWaterfall_KeyTip" xml:space="preserve">
+    <value>WF</value>
+  </data>
   <data name="Ribbon_Command_ChartEditData_Label" xml:space="preserve">
     <value>Edit Data</value>
   </data>

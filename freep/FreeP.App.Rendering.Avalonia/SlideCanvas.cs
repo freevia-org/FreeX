@@ -1235,6 +1235,9 @@ public sealed class SlideCanvas : Control
             case ChartSceneGeometryKind.Funnel:
                 RenderFunnelChart(dc, scene);
                 break;
+            case ChartSceneGeometryKind.Waterfall:
+                RenderColumnChart(dc, scene);
+                break;
             case ChartSceneGeometryKind.Area:
                 RenderAreaChart(dc, scene);
                 break;

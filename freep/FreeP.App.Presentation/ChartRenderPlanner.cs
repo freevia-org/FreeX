@@ -19,6 +19,7 @@ public enum ChartRenderFamily
     HorizontalBar,
     Pie,
     Funnel,
+    Waterfall,
     ScatterLike,
     Radar
 }
@@ -37,7 +38,8 @@ public enum ChartSceneGeometryKind
     Scatter,
     Bubble,
     Radar,
-    Funnel
+    Funnel,
+    Waterfall
 }
 
 public enum ChartPlanTextAlignment
@@ -1537,6 +1539,7 @@ public static partial class ChartRenderPlanner
             ChartType.Bubble => ChartSceneGeometryKind.Bubble,
             ChartType.Radar => ChartSceneGeometryKind.Radar,
             ChartType.Funnel => ChartSceneGeometryKind.Funnel,
+            ChartType.Waterfall => ChartSceneGeometryKind.Waterfall,
             _ => ChartSceneGeometryKind.Empty
         };
 
@@ -1595,6 +1598,9 @@ public static partial class ChartRenderPlanner
             case ChartSceneGeometryKind.Funnel:
                 funnelSegments = BuildFunnelSegmentPrimitives(chart, plot, seriesColors, fillPlans);
                 break;
+            case ChartSceneGeometryKind.Waterfall:
+                rectangles = BuildWaterfallPrimitives(chart, plot, seriesColors, fillPlans);
+                break;
             case ChartSceneGeometryKind.Scatter:
                 scatter = BuildScatterPrimitivePlan(chart, plot, seriesColors, fillPlans);
                 break;
@@ -1609,6 +1615,7 @@ public static partial class ChartRenderPlanner
         bool canHaveComboOverlay = frame.Family is not (
             ChartRenderFamily.Pie or
             ChartRenderFamily.Funnel or
+            ChartRenderFamily.Waterfall or
             ChartRenderFamily.HorizontalBar or
             ChartRenderFamily.Radar or
             ChartRenderFamily.ScatterLike);
@@ -2309,6 +2316,7 @@ public static partial class ChartRenderPlanner
             ChartType.Scatter or ChartType.Bubble => ChartRenderFamily.ScatterLike,
             ChartType.Radar => ChartRenderFamily.Radar,
             ChartType.Funnel => ChartRenderFamily.Funnel,
+            ChartType.Waterfall => ChartRenderFamily.Waterfall,
             ChartType.Stock or ChartType.Surface or ChartType.Surface3D => ChartRenderFamily.Cartesian,
             _ => ChartRenderFamily.Cartesian
         };
@@ -3694,6 +3702,60 @@ public static partial class ChartRenderPlanner
                 index,
                 new ChartPathPrimitive(points, IsClosed: true, Fill: fill),
                 fill));
+        }
+
+        return result;
+    }
+
+    public static IReadOnlyList<ChartRectPrimitive> BuildWaterfallPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
+    {
+        if (chart.Series.Count == 0 || chart.Categories.Count == 0 || !plot.HasPositiveArea)
+            return Array.Empty<ChartRectPrimitive>();
+
+        var series = chart.Series[0];
+        var (minimum, maximum, _) = ComputePrimaryValueAxisRange(chart);
+        var range = maximum - minimum;
+        if (range <= 0)
+            return Array.Empty<ChartRectPrimitive>();
+
+        int categoryCount = Math.Max(1, chart.Categories.Count);
+        var spacing = ResolveBarClusterSpacing(chart, plot.Width / categoryCount, 1, stacked: false);
+        var result = new List<ChartRectPrimitive>(categoryCount);
+        double cumulative = 0;
+        for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            double value = categoryIndex < series.Values.Count
+                ? series.Values[categoryIndex] ?? 0
+                : 0;
+            int renderCategoryIndex = ResolveCategoryRenderIndex(chart.CategoryAxis, categoryIndex, categoryCount);
+            var slot = ResolveBarClusterSlot(plot.X, renderCategoryIndex, spacing);
+            double next = cumulative + value;
+            double startY = MapCartesianValueToY(cumulative, minimum, range, plot);
+            double endY = MapCartesianValueToY(next, minimum, range, plot);
+            var bounds = new ChartPlanRect(
+                slot.ClusterStart,
+                Math.Min(startY, endY),
+                Math.Max(1, slot.ClusterSize),
+                Math.Max(0.5, Math.Abs(endY - startY)));
+            result.Add(new ChartRectPrimitive(
+                0,
+                categoryIndex,
+                bounds,
+                ResolvePointFill(
+                    series,
+                    0,
+                    categoryIndex,
+                    seriesColors,
+                    RectSeriesFillAlpha,
+                    fillPlans,
+                    varyByPoint: true,
+                    negativeValue: value < 0),
+                Stroke: null));
+            cumulative = next;
         }
 
         return result;
@@ -6659,7 +6721,7 @@ public static partial class ChartRenderPlanner
         ChartFillPlanSet? fillPlans = null)
     {
         var family = GetRenderFamily(chart.ChartType);
-        if (family is ChartRenderFamily.Funnel or ChartRenderFamily.Radar or ChartRenderFamily.ScatterLike || !plot.HasPositiveArea)
+        if (family is ChartRenderFamily.Funnel or ChartRenderFamily.Waterfall or ChartRenderFamily.Radar or ChartRenderFamily.ScatterLike || !plot.HasPositiveArea)
             return Array.Empty<ChartDataLabelPlan>();
 
         if (family == ChartRenderFamily.Pie)
@@ -6763,6 +6825,10 @@ public static partial class ChartRenderPlanner
         if (chart.ChartType == ChartType.AreaStacked)
         {
             AccumulateStackedCategoryTotals(chart, onSecondaryAxis: false, ref dataMin, ref dataMax);
+        }
+        else if (chart.ChartType == ChartType.Waterfall)
+        {
+            AccumulateWaterfallTotals(chart, ref dataMin, ref dataMax);
         }
         else
         {
@@ -6914,6 +6980,24 @@ public static partial class ChartRenderPlanner
 
             dataMin = Math.Min(dataMin, negativeTotal);
             dataMax = Math.Max(dataMax, positiveTotal);
+        }
+    }
+
+    private static void AccumulateWaterfallTotals(
+        ChartShape chart,
+        ref double dataMin,
+        ref double dataMax)
+    {
+        var series = chart.Series.FirstOrDefault(item => !item.OnSecondaryAxis);
+        if (series is null)
+            return;
+
+        double cumulative = 0;
+        for (int index = 0; index < series.Values.Count; index++)
+        {
+            cumulative += series.Values[index] ?? 0;
+            dataMin = Math.Min(dataMin, cumulative);
+            dataMax = Math.Max(dataMax, cumulative);
         }
     }
 

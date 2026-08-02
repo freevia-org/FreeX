@@ -193,6 +193,10 @@ internal static class FreePRibbonText
     public static string InsertChartSurfaceKeyTip => Get("Ribbon_Command_InsertChartSurface_KeyTip");
     public static string InsertChartSurface3DLabel => Get("Ribbon_Command_InsertChartSurface3D_Label");
     public static string InsertChartSurface3DKeyTip => Get("Ribbon_Command_InsertChartSurface3D_KeyTip");
+    public static string InsertChartFunnelLabel => Get("Ribbon_Command_InsertChartFunnel_Label");
+    public static string InsertChartFunnelKeyTip => Get("Ribbon_Command_InsertChartFunnel_KeyTip");
+    public static string InsertChartWaterfallLabel => Get("Ribbon_Command_InsertChartWaterfall_Label");
+    public static string InsertChartWaterfallKeyTip => Get("Ribbon_Command_InsertChartWaterfall_KeyTip");
     public static string ChartChangeTypeLabel => Get("Ribbon_Command_ChartChangeType_Label");
     public static string ChartChangeTypeKeyTip => Get("Ribbon_Command_ChartChangeType_KeyTip");
     public static string ChartEditDataLabel => Get("Ribbon_Command_ChartEditData_Label");

@@ -1459,11 +1459,11 @@ public sealed class DocumentViewRoundTripTests
         var expected = (contentWidth - table.PreferredWidthPt!.Value * (96.0 / 72.0)) / 2;
 
         Assert.InRange(rendered.Margin.Left, expected - 0.01, expected + 0.01);
-        Assert.Equal(0, rendered.Margin.Right);
+        Assert.InRange(rendered.Margin.Right, expected - 0.01, expected + 0.01);
     }
 
     [StaFact]
-    public void CenteredFixedWidthFlowTable_LeavesTheWpfBlockMarginUntouched()
+    public void CenteredFixedWidthFlowTable_UsesTheAuthoredWidthConstraint()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
         var sourceTable = doc.Blocks.OfType<Table>().Single();
@@ -1471,11 +1471,38 @@ public sealed class DocumentViewRoundTripTests
         view.LoadModel(doc);
 
         var rendered = RenderedTables(view.Document).First();
-        double.IsNaN(rendered.Margin.Left).Should().BeTrue();
+        rendered.Margin.Left.Should().Be(0);
+        rendered.Margin.Right.Should().Be(0);
         rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
-            .BeApproximately(2 + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0), 0.01);
+            .BeApproximately(
+                sourceTable.Rows[0].Cells[0].Margins!.TopPt * (96.0 / 72.0)
+                + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0),
+                0.01);
         rendered.RowGroups[0].Rows[0].Cells[0].Background.Should().NotBeNull(
             "ordinary flow tables retain their existing WPF cell-surface ownership");
+    }
+
+    [StaFact]
+    public void LeftAlignedPreferredWidthFlowTable_ReservesTrailingWidth()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        table.PreferredWidthPt = 460;
+        table.Alignment = TableAlignment.Left;
+        table.ColumnWidthsPt.AddRange([230.0, 230.0]);
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        var contentWidth = DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip;
+        var expectedTrailing = contentWidth - 460 * (96.0 / 72.0);
+        rendered.Margin.Left.Should().Be(0);
+        rendered.Margin.Right.Should().BeApproximately(expectedTrailing, 0.01);
+        rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should().Be(0);
+        rendered.RowGroups[0].Rows[0].Cells[0].Padding.Bottom.Should().Be(0);
     }
 
     [StaFact]

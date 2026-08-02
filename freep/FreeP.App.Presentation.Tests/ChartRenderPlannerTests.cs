@@ -943,6 +943,31 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildWaterfallPrimitives_UsesCumulativeStartAndEndValues()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Waterfall,
+            Categories = { "Start", "Reduction", "Growth" }
+        };
+        var series = new ChartSeries { Name = "Value" };
+        series.Values.AddRange(new double?[] { 100, -30, 20 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+        var bars = ChartRenderPlanner.BuildWaterfallPrimitives(
+            chart,
+            scene.Frame.Plot);
+
+        scene.GeometryKind.Should().Be(ChartSceneGeometryKind.Waterfall);
+        bars.Should().HaveCount(3);
+        bars.Should().OnlyContain(bar => bar.Bounds.HasPositiveArea);
+        bars[1].Bounds.Y.Should().BeApproximately(bars[0].Bounds.Y, 0.001);
+        bars[1].Bounds.Height.Should().BeGreaterThan(0);
+        bars[2].Bounds.Y.Should().BeLessThan(bars[1].Bounds.Y + bars[1].Bounds.Height);
+    }
+
+    [Fact]
     public void GradientColorInterpolation_UsesLinearLightRatherThanDirectSrgbMidpoint()
     {
         var midpoint = GradientColorInterpolation.InterpolateLinearLight(
