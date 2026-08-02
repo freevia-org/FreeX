@@ -82,6 +82,41 @@ public class ManualHyphenationPlannerTests
         second.Text.Should().Be("bit");
     }
 
+    [Fact]
+    public void Session_ReviewsDistinctSectionHeaderFooterStoriesAfterTheBody()
+    {
+        var document = new TextDocument();
+        var firstSectionHeader = new HeaderFooter("characterization");
+        document.Blocks.Add(new Paragraph("the")
+        {
+            SectionBreak = new Section(new PageSettings())
+            {
+                HeadersFooters = new SectionHeadersFooters
+                {
+                    Header = firstSectionHeader,
+                    EvenHeader = firstSectionHeader
+                }
+            }
+        });
+        document.Header = new HeaderFooter("rabbit");
+        document.FirstFooter = new HeaderFooter("hyphenation");
+
+        var session = ManualHyphenationPlanner.CreateSession(document);
+
+        session.CandidateCount.Should().Be(3);
+        session.Current!.Word.Should().Be("characterization");
+        session.Accept(session.Current.Options[0].BreakPoint);
+        session.Current!.Word.Should().Be("rabbit");
+        session.Skip();
+        session.Current!.Word.Should().Be("hyphenation");
+        session.Skip();
+
+        new ApplyManualHyphenationCommand(session.Edits).Apply(new Context(document));
+        firstSectionHeader.PlainText.Should().Contain(Hyphenator.SoftHyphen.ToString());
+        document.Header.PlainText.Should().Be("rabbit");
+        document.FirstFooter.PlainText.Should().Be("hyphenation");
+    }
+
     private sealed class Context(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document { get; } = document;

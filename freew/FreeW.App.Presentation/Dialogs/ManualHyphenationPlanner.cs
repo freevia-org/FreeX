@@ -78,13 +78,43 @@ public static class ManualHyphenationPlanner
     {
         ArgumentNullException.ThrowIfNull(document);
         var entries = new List<(string, IReadOnlyList<(int, ManualHyphenationEdit)>)>();
-        foreach (var paragraph in BodyParagraphs(document.Blocks))
+        foreach (var paragraph in ReviewParagraphs(document))
         {
             if (paragraph.Formatting.SuppressAutoHyphens)
                 continue;
             AddParagraphCandidates(paragraph, document.Page.DoNotHyphenateCaps, entries);
         }
         return new ManualHyphenationSession(entries);
+    }
+
+    private static IEnumerable<Paragraph> ReviewParagraphs(TextDocument document)
+    {
+        var seen = new HashSet<Paragraph>(ReferenceEqualityComparer.Instance);
+        foreach (var paragraph in BodyParagraphs(document.Blocks))
+            if (seen.Add(paragraph))
+                yield return paragraph;
+
+        foreach (var section in document.Sections)
+        {
+            foreach (var content in HeaderFooterStories(section.HeadersFooters))
+            {
+                if (content is null)
+                    continue;
+                foreach (var paragraph in content.Paragraphs)
+                    if (seen.Add(paragraph))
+                        yield return paragraph;
+            }
+        }
+    }
+
+    private static IEnumerable<HeaderFooter?> HeaderFooterStories(SectionHeadersFooters stories)
+    {
+        yield return stories.Header;
+        yield return stories.Footer;
+        yield return stories.EvenHeader;
+        yield return stories.EvenFooter;
+        yield return stories.FirstHeader;
+        yield return stories.FirstFooter;
     }
 
     private static IEnumerable<Paragraph> BodyParagraphs(IEnumerable<Block> blocks)
