@@ -12,6 +12,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using Free.Shared.AppServices;
+using Free.Shared.AppServices.Printing;
 using Free.Shared.Drawing;
 using Free.Shared.IO;
 using Free.Shared.Pdf.Skia;
@@ -22,7 +23,9 @@ using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using Free.Shared.Theme;
 using FreeP.App.Avalonia.Backstage;
+using FreeP.App.Avalonia.Printing;
 using FreeP.App.Compositor;
+using FreeP.App.Compositor.Printing;
 using FreeP.App.Recording;
 #if FREEP_WINDOWS_CAPTURE
 using FreeP.App.Recording.Windows;
@@ -186,6 +189,11 @@ public sealed partial class MainWindow : Window
     private readonly FreePOptions _options;
     private LinuxNativeOutputCapabilities _nativeOutputCapabilities;
     private ILinuxNativePrintHandoffAdapter _nativePrintAdapter;
+    private readonly IPlatformPrintService _printService;
+    private readonly Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>
+        _showPrintSelectionDialog;
+    private readonly bool _portablePrintWorkflowEnabled;
+    private PrinterDiscoveryResult? _latestPrinterDiscovery;
     private ILinuxVideoExportAdapter _videoExportAdapter;
     private PresentationNativePrintHandoffHostCapabilities _nativePrintHostCapabilities;
     private PresentationVideoExportHandoffHostCapabilities _videoExportHostCapabilities;
@@ -215,6 +223,7 @@ public sealed partial class MainWindow : Window
     private readonly BackstageView _backstage;
     private Task<LinuxNativePrintResult> _backstagePrintOperation =
         Task.FromResult(LinuxNativePrintResult.Failed("No Backstage print action has run."));
+    private CancellationTokenSource? _printCancellation;
     private readonly Border _titleBar;
     private IReadOnlyList<Button> _quickAccessButtons = [];
     private Border _layoutPickerHost = null!;
@@ -476,6 +485,8 @@ public sealed partial class MainWindow : Window
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
     internal PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
     internal LinuxNativePrintResult? LastNativePrintResult { get; private set; }
+    internal PrinterDiscoveryResult? LatestPrinterDiscoveryForTests => _latestPrinterDiscovery;
+    internal PrintSelection? LastPrintSelectionForTests { get; private set; }
     internal LinuxVideoExportResult? LastVideoExportResult { get; private set; }
     internal bool NativeOutputDetectionStartedForTests => _nativeOutputDetectionStarted;
     internal PresentationNativePrintHandoffHostCapabilities NativePrintHostCapabilitiesForTests => _nativePrintHostCapabilities;
@@ -720,7 +731,10 @@ public sealed partial class MainWindow : Window
         Func<LinuxNativeOutputCapabilities>? nativeOutputCapabilityDetector = null,
         Func<PresentationPrintRequest?, PresentationPrintOutputPackage>? printOutputPackageFactory = null,
         Func<PresentationVideoExportRequest?, PresentationVideoFramePackage>? videoFramePackageFactory = null,
-        bool enableStartupDirtyTrace = false)
+        bool enableStartupDirtyTrace = false,
+        IPlatformPrintService? printService = null,
+        Func<Window, PrinterDiscoveryResult, PrintSelection?, CancellationToken, Task<PrintSelection?>>?
+            showPrintSelectionDialog = null)
     {
         _startupDirtyTrace = enableStartupDirtyTrace ? new StartupDirtyTrace() : null;
         Title = DefaultTitle;
@@ -735,6 +749,11 @@ public sealed partial class MainWindow : Window
         _nativeOutputCapabilities = nativeOutputCapabilities ??
             LinuxNativeOutputCapabilities.Unavailable("Native output capability detection is pending.");
         _nativePrintAdapter = nativePrintAdapter ?? CreateNativePrintAdapter(_nativeOutputCapabilities.Print);
+        _printService = printService ?? new CupsPrintService();
+        _showPrintSelectionDialog = showPrintSelectionDialog ??
+            ((owner, discovery, requested, cancellationToken) =>
+                CupsPrintDialog.ShowAsync(owner, discovery, requested, cancellationToken: cancellationToken));
+        _portablePrintWorkflowEnabled = printService is not null || nativePrintAdapter is null;
         _videoExportAdapter = videoExportAdapter ?? CreateVideoExportAdapter(_nativeOutputCapabilities.Video);
         _nativePrintHostCapabilities = BuildNativePrintHostCapabilities(_nativeOutputCapabilities.Print);
         _videoExportHostCapabilities = BuildVideoExportHostCapabilities(_nativeOutputCapabilities.Video);
@@ -1447,9 +1466,7 @@ public sealed partial class MainWindow : Window
             IsEnabled = false,
         };
         _printOptionsPaneExecuteButton.Click += async (_, _) =>
-        {
-            await ExecuteNativePrintHandoffAsync(_printOptionsPaneRequest);
-        };
+            await ExecutePrintWorkflowAsync(_printOptionsPaneRequest);
 
         var content = new StackPanel
         {
@@ -4337,7 +4354,7 @@ public sealed partial class MainWindow : Window
                 new PresentationSlideRangeRequest(
                     PresentationSlideRangeKind.CustomRange,
                     CustomRangeText: rangeText))),
-        Print: request => _backstagePrintOperation = ExecuteNativePrintHandoffAsync(request),
+        Print: request => _backstagePrintOperation = ExecutePrintWorkflowAsync(request),
         ExportVideo: () => _ = FileExportVideoAsync(),
         CanExportVideo: () => _nativeOutputCapabilities.Video.CanEncodeMp4);
 
@@ -4750,6 +4767,119 @@ public sealed partial class MainWindow : Window
         RenderPrintOptionsPane(plan);
         _printOptionsPaneHost.IsVisible = true;
         return plan;
+    }
+
+    internal Task<LinuxNativePrintResult> ExecutePrintForTests(
+        PresentationPrintRequest? request = null,
+        CancellationToken cancellationToken = default) =>
+        ExecutePrintWorkflowAsync(request, cancellationToken);
+
+    private async Task<LinuxNativePrintResult> ExecutePrintWorkflowAsync(
+        PresentationPrintRequest? request = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_portablePrintWorkflowEnabled || OperatingSystem.IsWindows())
+            return await ExecuteNativePrintHandoffAsync(request, cancellationToken).ConfigureAwait(true);
+
+        var requestedRequest = request ?? new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides);
+        try
+        {
+            _latestPrinterDiscovery = await _printService.DiscoverAsync(cancellationToken).ConfigureAwait(true);
+            var requestedSelection = new PrintSelection(
+                _nativeOutputCapabilities.Print.PrinterName ?? _latestPrinterDiscovery.DefaultPrinter,
+                requestedRequest.Copies,
+                PrintPageRange.All,
+                PrintOrientation.Document,
+                requestedRequest.Collate);
+            var selection = await _showPrintSelectionDialog(
+                this,
+                _latestPrinterDiscovery,
+                requestedSelection,
+                cancellationToken).ConfigureAwait(true);
+            if (selection is null)
+            {
+                LastNativePrintResult = LinuxNativePrintResult.CanceledResult();
+                _statusText.Text = LastNativePrintResult.StatusText;
+                return LastNativePrintResult;
+            }
+
+            selection.Validate();
+            LastPrintSelectionForTests = selection;
+            var effectiveRequest = requestedRequest with
+            {
+                Copies = selection.Copies,
+                Collate = selection.Collate,
+            };
+            RefreshPrintOutputPackage(effectiveRequest);
+            var package = LastPrintOutputPackage;
+            if (package is null || !package.Plan.CanBuildPackage)
+            {
+                LastNativePrintResult = LinuxNativePrintResult.Failed(
+                    package?.Plan.DisabledReason ?? "Printable package was not built.");
+                _statusText.Text = LastNativePrintResult.FailureReason ?? LastNativePrintResult.StatusText;
+                return LastNativePrintResult;
+            }
+
+            var temporaryPath = Path.Combine(Path.GetTempPath(), $"freep-print-{Guid.NewGuid():N}.pdf");
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _printCancellation = linkedCancellation;
+            try
+            {
+                await File.WriteAllBytesAsync(temporaryPath, package.Bytes, linkedCancellation.Token).ConfigureAwait(true);
+                var submission = await _printService.SubmitAsync(
+                    temporaryPath,
+                    selection,
+                    linkedCancellation.Token).ConfigureAwait(true);
+                LastNativePrintResult = ToNativePrintResult(submission);
+            }
+            finally
+            {
+                if (ReferenceEquals(_printCancellation, linkedCancellation))
+                    _printCancellation = null;
+                TryDeletePrintFile(temporaryPath);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            LastNativePrintResult = LinuxNativePrintResult.CanceledResult();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            LastNativePrintResult = LinuxNativePrintResult.Failed(ex.Message);
+        }
+
+        _statusText.Text = LastNativePrintResult!.StatusText;
+        if (!LastNativePrintResult.Succeeded && !LastNativePrintResult.Canceled &&
+            LastNativePrintResult.FailureReason is not null)
+        {
+            _statusText.Text = $"{LastNativePrintResult.StatusText}: {LastNativePrintResult.FailureReason}";
+        }
+
+        return LastNativePrintResult;
+    }
+
+    private static LinuxNativePrintResult ToNativePrintResult(PrintSubmissionResult submission) =>
+        submission.Status switch
+        {
+            PrintSubmissionStatus.Submitted => LinuxNativePrintResult.Success(null),
+            PrintSubmissionStatus.Cancelled => LinuxNativePrintResult.CanceledResult(),
+            _ => LinuxNativePrintResult.Failed(
+                submission.Message ?? "Portable print submission failed."),
+        };
+
+    private static void TryDeletePrintFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     internal async Task<LinuxNativePrintResult> ExecuteNativePrintHandoffAsync(
@@ -5173,8 +5303,11 @@ public sealed partial class MainWindow : Window
         return LastVideoExportResult;
     }
 
-    internal void CancelNativeOutputForTests() =>
+    internal void CancelNativeOutputForTests()
+    {
         _nativeOutputCancellation?.Cancel();
+        _printCancellation?.Cancel();
+    }
 
     internal sealed record VideoPickerSelectionForTests(string? LocalPath);
 
