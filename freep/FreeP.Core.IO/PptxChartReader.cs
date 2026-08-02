@@ -709,6 +709,7 @@ internal static class PptxChartReader
         series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
         series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
         series.ErrorBars = ReadErrorBars(serEl.Element(C + "errBars"));
+        series.Trendline = ReadTrendline(serEl.Element(C + "trendline"));
 
         // Fall back to the OOXML series index in the theme accent cycle. Combo-chart
         // plot groups can arrive out of visual order, so the group-local index would
