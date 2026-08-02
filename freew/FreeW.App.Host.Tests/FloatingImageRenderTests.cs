@@ -4,6 +4,7 @@ using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using WpfFloater = System.Windows.Documents.Floater;
 using WpfParagraph = System.Windows.Documents.Paragraph;
@@ -268,6 +269,31 @@ public sealed class FloatingImageRenderTests
 
         Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
             .Should().BeApproximately(123.3333333333, 0.01);
+    }
+
+    [StaFact]
+    public void FloatingImageGlow_UsesImportedAlphaAndPreservesPresetFallback()
+    {
+        static double RenderOpacity(ShapeEffectLst? importedEffects)
+        {
+            var doc = DocWithFloating();
+            var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+            image.GlowSizePt = 5;
+            image.ImportedEffects = importedEffects;
+
+            var canvas = new Canvas();
+            var view = new DocumentView();
+            view.SetFloatingCanvas(canvas);
+            view.LoadModel(doc);
+
+            return canvas.Children.OfType<Image>().Single().Effect
+                .Should().BeOfType<DropShadowEffect>().Subject.Opacity;
+        }
+
+        RenderOpacity(new ShapeEffectLst { HasGlow = true, GlowAlpha = 0 }).Should().Be(0);
+        RenderOpacity(new ShapeEffectLst { HasGlow = true, GlowAlpha = 25000 }).Should().Be(0.25);
+        RenderOpacity(new ShapeEffectLst { HasGlow = true, GlowAlpha = 100000 }).Should().Be(1);
+        RenderOpacity(null).Should().Be(PictureEffectVisualPlanner.PresetGlowOpacity);
     }
 
     [StaFact]
