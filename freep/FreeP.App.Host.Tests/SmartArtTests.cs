@@ -3449,6 +3449,24 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_Hierarchy3_AdmitsSimpleNodeCacheToLiveLayout()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Portfolio", "Product"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3");
+        var presentation = PptxPackageReader.Read(pptxPath);
+
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "a cache with exactly one matching text shape per parsed hierarchy node has no unmodeled role");
+        smartArt.FallbackShapes.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void Reader_ParsesTableHierarchyAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

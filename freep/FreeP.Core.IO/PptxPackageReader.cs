@@ -2136,12 +2136,13 @@ public static class PptxPackageReader
         {
             smart.Data = ReadSmartArtData(smart);
             if (smart.Data is { } data
-                && IsGroupedListLayout(data.LayoutUniqueId)
-                && CanUseSimpleGroupedListCache(smart, data))
+                && (IsGroupedListLayout(data.LayoutUniqueId)
+                    || IsHierarchy3Layout(data.LayoutUniqueId))
+                && CanUseSimpleNodeCache(smart, data))
             {
-                // Grouped List has a bounded live layout implementation.  Imported
-                // caches may still contain backgrounds/connectors that it cannot model,
-                // so admit only the exact node-only cache shape proven by this guard.
+                // These layouts have bounded live geometry. Imported caches may still
+                // contain backgrounds/connectors that it cannot model, so admit only
+                // the exact node-only cache shape proven by this guard.
                 data.IsLiveLayoutSupported = true;
             }
             TryAttachPictureNodePictures(smart, archive);
@@ -2799,7 +2800,16 @@ public static class PptxPackageReader
         return id.Split('/').Last() == "groupedlist";
     }
 
-    private static bool CanUseSimpleGroupedListCache(SmartArtShape smart, SmartArtData data)
+    private static bool IsHierarchy3Layout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "hierarchy3";
+    }
+
+    private static bool CanUseSimpleNodeCache(SmartArtShape smart, SmartArtData data)
     {
         var nodes = FlattenSmartArtNodes(data);
         if (nodes.Count == 0 || smart.FallbackShapes.Count != nodes.Count)
