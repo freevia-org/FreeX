@@ -596,6 +596,17 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         m3d.PreservedObject.Parts.Values.Should().Contain(b => b.SequenceEqual(glbBytes),
             "the GLB bytes should have been captured");
 
+        // Canvas transforms edit the shared SlideShape geometry even when the
+        // payload is a preserved modern graphic frame. Those edits must survive
+        // the native XML write boundary, not just the in-memory model.
+        m3d.OffsetXEmu = 1828800;
+        m3d.OffsetYEmu = 914400;
+        m3d.ExtentCxEmu = 3657600;
+        m3d.ExtentCyEmu = 1828800;
+        m3d.RotationDeg = 37.5;
+        m3d.FlipH = true;
+        m3d.FlipV = true;
+
         // Round-trip
         var ms2 = WritePptxToMemory(pres1);
         var pres2 = PptxPackageReader.Read(ms2);
@@ -604,6 +615,13 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         m3d2.Should().NotBeNull("3D model must survive write/re-read round-trip");
         m3d2!.PreservedObject!.Parts.Values.Should().Contain(b => b.SequenceEqual(glbBytes),
             "GLB bytes must survive round-trip");
+        m3d2.OffsetXEmu.Should().Be(1828800);
+        m3d2.OffsetYEmu.Should().Be(914400);
+        m3d2.ExtentCxEmu.Should().Be(3657600);
+        m3d2.ExtentCyEmu.Should().Be(1828800);
+        m3d2.RotationDeg.Should().BeApproximately(37.5, 0.001);
+        m3d2.FlipH.Should().BeTrue();
+        m3d2.FlipV.Should().BeTrue();
     }
 
     // ── Unknown graphicFrame — no silent loss ─────────────────────────────────
