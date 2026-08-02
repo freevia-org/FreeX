@@ -6936,7 +6936,11 @@ public static partial class ChartRenderPlanner
             secondaryIndices.Add(moved);
         }
 
-        double gap = Math.Min(16.0, plot.Width * 0.06);
+        // OfPie reuses c:gapWidth for the separation between the primary and
+        // secondary plots. Keep the historical default when the attribute is
+        // omitted, but let an authored value scale that same bounded gap.
+        double gapWidthPercent = Math.Clamp(chart.BarGapWidthPercent ?? 150, 0, 500);
+        double gap = Math.Min(16.0, plot.Width * 0.06) * gapWidthPercent / 150.0;
         double primaryWidth = Math.Max(1.0, (plot.Width - gap) * 0.58);
         double secondaryWidth = Math.Max(1.0, plot.Width - gap - primaryWidth);
         var primaryPlot = new ChartPlanRect(plot.X, plot.Y, primaryWidth, plot.Height);

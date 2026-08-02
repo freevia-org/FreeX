@@ -3944,6 +3944,29 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_OfPieGapWidth_UsesAuthoredPlotSeparation()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 40, 30, 20, 10 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.OfPie,
+            OfPieType = OfPieType.Pie,
+            OfPieSplitType = OfPieSplitType.Position,
+            OfPieSplitPosition = 2
+        };
+        chart.Series.Add(series);
+
+        var defaultScene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+        chart.BarGapWidthPercent = 300;
+        var wideScene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        double defaultDistance = defaultScene.OfPieSecondarySlices[0].Center.X - defaultScene.PieSlices[0].Center.X;
+        double wideDistance = wideScene.OfPieSecondarySlices[0].Center.X - wideScene.PieSlices[0].Center.X;
+        wideDistance.Should().BeGreaterThan(defaultDistance);
+    }
+
+    [Fact]
     public void BuildScenePlan_OfPieBarUsesSecondaryColumnPrimitives()
     {
         var series = new ChartSeries { Name = "Share" };
