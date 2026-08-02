@@ -299,53 +299,76 @@ internal sealed class AccessibilityReportDialog : FreeWDialogWindow
     public AccessibilityReportDialog(AccessibilityReport report)
     {
         Title = "Accessibility Checker";
-        Width = 480;
-        Height = 360;
+        Width = 460;
+        MaxHeight = 560;
+        SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        CanResize = true;
+        CanResize = false;
         ShowInTaskbar = false;
 
-        var body = new StackPanel
+        var outer = new StackPanel
         {
-            Margin = new Thickness(16, 14, 16, 0),
-            Spacing = 8,
+            Margin = new Thickness(16, 14, 16, 8),
         };
 
-        body.Children.Add(new TextBlock
+        outer.Children.Add(new TextBlock
         {
             Text = report.IsClean
-                ? "No accessibility issues were found."
-                : $"{report.ErrorCount} error(s), {report.WarningCount} warning(s), {report.TipCount} tip(s)",
+                ? "No accessibility issues found."
+                : $"{report.ErrorCount} error(s), {report.WarningCount} warning(s), {report.TipCount} tip(s).",
             FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 0, 0, 10),
             TextWrapping = TextWrapping.Wrap,
         });
 
-        foreach (var issue in report.Issues)
-            body.Children.Add(new TextBlock
+        if (!report.IsClean)
+        {
+            var list = new StackPanel();
+            AddGroup(list, "Errors", AccessibilitySeverity.Error, report, Color.FromRgb(0xC0, 0x00, 0x00));
+            AddGroup(list, "Warnings", AccessibilitySeverity.Warning, report, Color.FromRgb(0xB8, 0x6A, 0x00));
+            AddGroup(list, "Tips", AccessibilitySeverity.Tip, report, Color.FromRgb(0x40, 0x40, 0x40));
+
+            outer.Children.Add(new ScrollViewer
             {
-                Text = $"{issue.Severity}: {issue.Message}",
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 0),
+                MaxHeight = 420,
+                Content = list,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             });
+        }
 
         var ok = new Button { Content = "OK", IsDefault = true, IsCancel = true };
-        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 72, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(ok, DialogChromeStyle, minWidth: 84, isDefault: true);
         ok.Click += (_, _) => Close();
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok], new Thickness(16, 12, 16, 14));
-        DockPanel.SetDock(buttons, Dock.Bottom);
+        outer.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok], new Thickness(0, 12, 0, 4)));
 
-        Content = new DockPanel
+        Content = outer;
+    }
+
+    private static void AddGroup(
+        StackPanel parent,
+        string heading,
+        AccessibilitySeverity severity,
+        AccessibilityReport report,
+        Color accent)
+    {
+        var issues = report.Issues.Where(issue => issue.Severity == severity).ToArray();
+        if (issues.Length == 0)
+            return;
+
+        parent.Children.Add(new TextBlock
         {
-            LastChildFill = true,
-            Children =
+            Text = $"{heading} ({issues.Length})",
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(accent),
+            Margin = new Thickness(0, 8, 0, 2),
+        });
+
+        foreach (var issue in issues)
+            parent.Children.Add(new TextBlock
             {
-                buttons,
-                new ScrollViewer
-                {
-                    Content = body,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                },
-            },
-        };
+                Text = $"\u2022  {issue.Message}",
+                Margin = new Thickness(8, 2, 0, 2),
+                TextWrapping = TextWrapping.Wrap,
+            });
     }
 }
