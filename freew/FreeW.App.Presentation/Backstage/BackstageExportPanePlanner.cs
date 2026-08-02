@@ -9,19 +9,8 @@ namespace FreeW.App.Presentation.Backstage;
 /// </summary>
 public static class BackstageExportPanePlanner
 {
-    public static BackstageExportPaneVisualMetrics VisualMetrics { get; } =
-        new(
-            PaneMaxWidth: 720,
-            HeadingFontSize: 26,
-            HeadingBottomMargin: new(0, 0, 0, 18),
-            DescriptionFontSize: 12,
-            DescriptionBottomMargin: new(0, 0, 0, 16),
-            SectionHeaderFontSize: 15,
-            SectionHeaderMargin: new(0, 16, 0, 6),
-            ActionFontSize: 14,
-            DescriptionTextFontSize: 11,
-            ActionRowMargin: new(0, 0, 0, 10),
-            ActionDescriptionMargin: new(0, 2, 0, 0));
+    public static BackstageActionPaneVisualMetrics VisualMetrics =>
+        BackstagePaneSurfacePlanner.ActionPaneVisualMetrics;
 
     public static IReadOnlyList<BackstageActionRow> BuildFixedLayoutActions(
         IReadOnlyList<DocumentFormatCapabilityRow> capabilities,
@@ -55,16 +44,3 @@ public static class BackstageExportPanePlanner
         return actions;
     }
 }
-
-public readonly record struct BackstageExportPaneVisualMetrics(
-    double PaneMaxWidth,
-    double HeadingFontSize,
-    BackstageThickness HeadingBottomMargin,
-    double DescriptionFontSize,
-    BackstageThickness DescriptionBottomMargin,
-    double SectionHeaderFontSize,
-    BackstageThickness SectionHeaderMargin,
-    double ActionFontSize,
-    double DescriptionTextFontSize,
-    BackstageThickness ActionRowMargin,
-    BackstageThickness ActionDescriptionMargin);

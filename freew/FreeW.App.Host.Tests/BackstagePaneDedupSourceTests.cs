@@ -39,7 +39,6 @@ public sealed class BackstagePaneDedupSourceTests
         source.Should().Contain("PaneSpecs.BuildNewPaneSpec(");
         source.Should().Contain("Panes.BuildOptionsPane(");
         source.Should().Contain("PaneSpecs.BuildOptionsPaneSpec(");
-        source.Should().Contain("Panes.BuildAccountPane(");
 
         if (appFolder == "freew")
         {
@@ -82,7 +81,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("PrintPreview");
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
-            source.Should().Contain("ToAccountPaneSpec(surface)");
+            source.Should().Contain("BackstagePaneRenderer.BuildAccountPane(Kit, surface)");
             source.Should().Contain("HideRecentPane = true");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
             source.Should().Contain("document: model");
@@ -91,8 +90,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("RestrictEditing");
             source.Should().Contain("InspectDocument");
             source.Should().Contain("CheckAccessibility");
-            source.Should().Contain("Panes.BuildExportActionPane(");
-            source.Should().Contain("ToActionPaneSpec(surface)");
+            source.Should().Contain("BackstagePaneRenderer.BuildActionPane(Kit, surface)");
             source.Should().Contain("_backstage.ShowPane(\"Open\")");
             source.Should().Contain("RecoverUnsaved");
         }
@@ -103,6 +101,7 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("BuildAccountPane = BuildAccountPane");
             source.Should().Contain("PaneSpecs.BuildAccountPaneSpec(");
             source.Should().Contain("PaneSpecs.BuildExportPaneSpec(");
+            source.Should().Contain("Panes.BuildAccountPane(");
         }
 
         source.Should().NotContain("BackstageEntry.Pane(\"Info\"");

@@ -25,4 +25,17 @@ public sealed class WindowsPrinterSelectionTests
         capability.CanPrint.Should().BeFalse();
         capability.Reason.Should().NotBeNullOrWhiteSpace();
     }
+
+    [Fact]
+    public void PortablePrintWorkflowUsesSharedPlatformServiceWithoutReplacingWindowsNativeSelection()
+    {
+        var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("IPlatformPrintService");
+        source.Should().Contain("CupsPrintDialog.ShowAsync");
+        source.Should().Contain("!_portablePrintWorkflowEnabled || OperatingSystem.IsWindows()");
+        source.Should().Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog");
+        source.Should().Contain("WindowsNativePrintOutput.CreateAdapter(capability)");
+    }
 }

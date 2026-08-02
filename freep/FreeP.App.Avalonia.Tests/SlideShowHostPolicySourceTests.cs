@@ -218,7 +218,7 @@ public sealed class SlideShowHostPolicySourceTests
             "FreeP.App.Avalonia",
             "SlideShowWindow.cs"));
 
-        var displayStart = source.IndexOf("private void DisplayCurrentSlide(bool animated)", StringComparison.Ordinal);
+        var displayStart = source.IndexOf("private void DisplayCurrentSlide(", StringComparison.Ordinal);
         displayStart.Should().BeGreaterThanOrEqualTo(0);
         var displaySource = source[displayStart..];
         var cancelIndex = displaySource.IndexOf("CancelActiveTimers();", StringComparison.Ordinal);

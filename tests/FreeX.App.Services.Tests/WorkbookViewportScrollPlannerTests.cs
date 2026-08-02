@@ -5,6 +5,26 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class WorkbookViewportScrollPlannerTests
 {
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(-0.25, -1)]
+    [InlineData(3, 3)]
+    [InlineData(-3.75, -3)]
+    public void NormalizePointerWheelNotches_PreservesCoalescedPointerDelta(double delta, int expected)
+    {
+        WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(delta).Should().Be(expected);
+    }
+
+    [Fact]
+    public void NormalizePointerWheelNotches_SaturatesSymmetricallyForSafeDirectionInversion()
+    {
+        WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(double.MaxValue)
+            .Should().Be(int.MaxValue);
+        WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(-double.MaxValue)
+            .Should().Be(-int.MaxValue);
+    }
+
     [Fact]
     public void CalculateViewportOrigin_DoesNotScrollToFrozenPaneBoundary()
     {

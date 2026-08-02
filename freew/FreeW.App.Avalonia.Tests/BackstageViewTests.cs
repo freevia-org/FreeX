@@ -697,6 +697,35 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public async Task Account_pane_uses_shared_metrics_and_direct_options_content()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            view.TryActivateEntry("Account").Should().BeTrue();
+
+            var metrics = BackstagePaneSurfacePlanner.AccountPaneVisualMetrics;
+            var heading = view.GetLogicalDescendants().OfType<TextBlock>()
+                .Single(block => block.Text == "Account" && block.FontSize == metrics.HeadingFontSize);
+            heading.FontSize.Should().Be(metrics.HeadingFontSize);
+            heading.Margin.Should().Be(new Thickness(
+                metrics.HeadingBottomMargin.Left,
+                metrics.HeadingBottomMargin.Top,
+                metrics.HeadingBottomMargin.Right,
+                metrics.HeadingBottomMargin.Bottom));
+
+            var options = FindControl<Button>(view, "AccountOptionsButton");
+            options.Content.Should().Be("FreeW Options...");
+            options.FontSize.Should().Be(metrics.OptionsFontSize);
+            options.Margin.Should().Be(new Thickness(
+                metrics.OptionsMargin.Left,
+                metrics.OptionsMargin.Top,
+                metrics.OptionsMargin.Right,
+                metrics.OptionsMargin.Bottom));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Export_pane_preserves_shared_WPF_authority_button_order_and_geometry()
     {
         await Session.Dispatch(() =>

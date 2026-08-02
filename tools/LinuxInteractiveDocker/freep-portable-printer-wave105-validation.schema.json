@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://freex.local/schemas/freep-portable-printer-wave105-v1.json",
+  "title": "FreeP Wave 105 physical portable printer validation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "suite", "platform", "shell", "app", "baseline", "appSurface", "window", "fakePrinter", "screenshots", "submission", "summary", "results", "processExitCode", "contractValidation"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "suite": { "const": "freep-portable-printer-wave105-physical" },
+    "platform": { "const": "linux" },
+    "shell": { "const": "avalonia" },
+    "app": { "const": "FreeP" },
+    "baseline": { "const": false },
+    "appSurface": { "const": "file-print-portable-printer-dialog" },
+    "window": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "title", "pattern", "visible", "dialogId", "dialogTitle", "dialogVisible", "dialogTransientFor"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "const": "FreeP" },
+        "pattern": { "const": "FreeP" },
+        "visible": { "const": true },
+        "dialogId": { "type": "string", "minLength": 1 },
+        "dialogTitle": { "const": "Print" },
+        "dialogVisible": { "const": true },
+        "dialogTransientFor": { "type": "string", "minLength": 1 }
+      }
+    },
+    "fakePrinter": {
+      "type": "object", "additionalProperties": false,
+      "required": ["privatePath", "printers", "defaultPrinter", "realDevice", "lpstatExecutable", "lpExecutable"],
+      "properties": {
+        "privatePath": { "const": "/tmp/freex-cups-dry-run" },
+        "printers": { "const": ["FreeP-Default", "FreeP-Secondary"] },
+        "defaultPrinter": { "const": "FreeP-Default" },
+        "realDevice": { "const": false },
+        "lpstatExecutable": { "const": "freep-portable-printer-fake-lpstat.sh" },
+        "lpExecutable": { "const": "freep-portable-printer-fake-lp.sh" }
+      }
+    },
+    "screenshots": {
+      "type": "array", "minItems": 5, "maxItems": 5,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "kind"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[^/\\\\]+\\.png$" },
+          "kind": { "const": "screenshot" }
+        }
+      }
+    },
+    "submission": {
+      "type": "object", "additionalProperties": false,
+      "required": ["queue", "copies", "pageRange", "collate", "orientation", "arguments", "pdfPath", "pdfBytes", "invocationPath", "submittedPdfPath"],
+      "properties": {
+        "queue": { "const": "FreeP-Secondary" },
+        "copies": { "const": 2 },
+        "pageRange": { "const": "2-3" },
+        "collate": { "const": false },
+        "orientation": { "const": "landscape" },
+        "arguments": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "pdfPath": { "type": "string", "pattern": "^/.+\\.pdf$" },
+        "pdfBytes": { "type": "integer", "minimum": 1 },
+        "invocationPath": { "const": "last-invocation.json" },
+        "submittedPdfPath": { "const": "last-submitted.pdf" }
+      }
+    },
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["passed", "failed", "total"],
+      "properties": {
+        "passed": { "const": 9 },
+        "failed": { "const": 0 },
+        "total": { "const": 9 }
+      }
+    },
+    "results": {
+      "type": "array", "minItems": 9, "maxItems": 9,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "category", "status", "evidenceLevel", "evidence", "note"],
+        "properties": {
+          "id": { "type": "string", "enum": ["owner-window-visible", "file-print-route", "portable-dialog-visible", "portable-dialog-controls", "non-default-printer-selected", "settings-submitted", "fake-lp-arguments", "submitted-pdf", "owner-focus-restored"] },
+          "category": { "const": "physical-x11-portable-printer" },
+          "status": { "const": "passed" },
+          "evidenceLevel": { "const": "physical-x11-input" },
+          "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+          "note": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "processExitCode": { "const": 0 },
+    "contractValidation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "validator", "contractReference"],
+      "properties": {
+        "status": { "enum": ["pending", "passed"] },
+        "validator": { "const": "tools/Run-FreePPortablePrinterValidation.ps1" },
+        "contractReference": { "const": "tools/LinuxInteractiveDocker/freep-portable-printer-wave105-validation.schema.json" }
+      }
+    }
+  }
+}

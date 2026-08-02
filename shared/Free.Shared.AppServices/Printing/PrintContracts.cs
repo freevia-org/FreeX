@@ -61,7 +61,8 @@ public sealed record PrintSelection(
     string? PrinterName = null,
     int Copies = 1,
     PrintPageRange? PageRange = null,
-    PrintOrientation Orientation = PrintOrientation.Document)
+    PrintOrientation Orientation = PrintOrientation.Document,
+    bool Collate = true)
 {
     public PrintPageRange EffectivePageRange => PageRange ?? PrintPageRange.All;
 

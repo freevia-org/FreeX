@@ -9,6 +9,8 @@ using System.Windows.Media;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Wpf;
+using FreeW.App.Host.Backstage;
+using FreeW.App.Presentation.Backstage;
 using Xunit;
 
 namespace FreeW.App.Host.Tests;
@@ -177,6 +179,56 @@ public sealed class SharedBackstagePaneComposerTests
 
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         invoked.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void FreeWRenderer_UsesPlannerMetricsAndPreservesActionOrder()
+    {
+        var invoked = new List<string>();
+        var surface = BackstagePaneSurfacePlanner.BuildExportPane(
+            [],
+            exportPdf: () => invoked.Add("pdf"),
+            exportXps: () => invoked.Add("xps"),
+            saveAsFormat: (_, _) => invoked.Add("format"));
+
+        var pane = BackstagePaneRenderer.BuildActionPane(Kit, surface);
+        var buttons = Descendants<Button>(pane).ToArray();
+
+        buttons.Select(button => button.Content).Should().Equal(
+            "Create PDF or XPS",
+            "Export to XPS");
+        buttons[0].FontSize.Should().Be(surface.VisualMetrics.ActionFontSize);
+        buttons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        buttons[1].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        invoked.Should().Equal("pdf", "xps");
+
+        var row = Assert.IsType<StackPanel>(buttons[0].Parent);
+        row.Children.OfType<TextBlock>().Single().Text.Should().Contain("Export-only fixed-layout PDF copy");
+    }
+
+    [StaFact]
+    public void FreeWAccountRenderer_UsesPlannerMetricsAndRoutesOptions()
+    {
+        var openedOptions = false;
+        var surface = BackstagePaneSurfacePlanner.BuildAccountPane(
+            new SisterBackstageAccountPaneContext(
+                "FreeW",
+                "1.2.3",
+                "Ada",
+                "WORD-BOX",
+                @"C:\Users\Ada\AppData\Local\FreeW"),
+            openOptions: () => openedOptions = true);
+
+        var pane = BackstagePaneRenderer.BuildAccountPane(Kit, surface);
+        var heading = Descendants<TextBlock>(pane).Single(block => block.Text == "Account");
+        heading.FontSize.Should().Be(surface.VisualMetrics.HeadingFontSize);
+
+        var options = Descendants<Button>(pane)
+            .Single(button => button.Content as string == "FreeW Options...");
+        options.FontSize.Should().Be(surface.VisualMetrics.OptionsFontSize);
+        options.Margin.Should().Be(new Thickness(0, 18, 0, 0));
+        options.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        openedOptions.Should().BeTrue();
     }
 
     [Fact]

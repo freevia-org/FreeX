@@ -23,6 +23,35 @@ public static class BackstagePaneSurfacePlanner
             ActionRowMargin: new(0, 0, 0, 10),
             ActionDescriptionMargin: new(0, 2, 0, 0));
 
+    public static BackstageAccountPaneVisualMetrics AccountPaneVisualMetrics { get; } =
+        new(
+            PaneMaxWidth: 640,
+            HeadingFontSize: 26,
+            HeadingBottomMargin: new(0, 0, 0, 18),
+            DescriptionFontSize: 12,
+            DescriptionBottomMargin: new(0, 0, 0, 16),
+            SectionHeaderFontSize: 15,
+            SectionHeaderMargin: new(0, 16, 0, 6),
+            FieldLabelColumnWidth: 120,
+            FieldFontSize: 12,
+            FieldRowMargin: new(0, 2, 0, 2),
+            OptionsFontSize: 13,
+            OptionsMargin: new(0, 18, 0, 0));
+
+    public static BackstageActionPaneVisualMetrics ActionPaneVisualMetrics { get; } =
+        new(
+            PaneMaxWidth: 720,
+            HeadingFontSize: 26,
+            HeadingBottomMargin: new(0, 0, 0, 18),
+            DescriptionFontSize: 12,
+            DescriptionBottomMargin: new(0, 0, 0, 16),
+            SectionHeaderFontSize: 15,
+            SectionHeaderMargin: new(0, 16, 0, 6),
+            ActionFontSize: 14,
+            DescriptionTextFontSize: 11,
+            ActionRowMargin: new(0, 0, 0, 10),
+            ActionDescriptionMargin: new(0, 2, 0, 0));
+
     public static BackstageOpenPaneVisualMetrics OpenPaneVisualMetrics { get; } =
         new(
             HeadingBottomMargin: new(0, 0, 0, 18),
@@ -119,6 +148,7 @@ public static class BackstagePaneSurfacePlanner
             plan.Heading,
             plan.Description,
             plan.Groups,
+            AccountPaneVisualMetrics,
             new BackstageSurfaceActionRow(
                 plan.OptionsText,
                 string.Empty,
@@ -149,6 +179,7 @@ public static class BackstagePaneSurfacePlanner
         return new BackstageActionPaneSurfaceSpec(
             BackstageViewTextResources.Open.Title,
             BackstageViewTextResources.Open.Description,
+            ActionPaneVisualMetrics,
             BackstageOpenPanePlanner.Build(recentEntries, openRecent, browse, recoverUnsaved));
     }
 
@@ -237,6 +268,7 @@ public static class BackstagePaneSurfacePlanner
         return new BackstageActionPaneSurfaceSpec(
             BackstageViewTextResources.Share.Title,
             BackstageViewTextResources.Share.Description,
+            ActionPaneVisualMetrics,
             BackstageSharePanePlanner.Build(
                 currentPath,
                 fileExists,
@@ -282,6 +314,7 @@ public static class BackstagePaneSurfacePlanner
         return new BackstageActionPaneSurfaceSpec(
             text.Title,
             text.Description,
+            ActionPaneVisualMetrics,
             [
                 new(text.FixedLayoutGroupHeading, fixedLayoutRows),
                 BackstageExportFileTypePlanner.BuildChangeFileTypeGroup(formats.ToArray(), saveAsFormat),
@@ -318,6 +351,7 @@ public static class BackstagePaneSurfacePlanner
 public sealed record BackstageActionPaneSurfaceSpec(
     string Title,
     string Description,
+    BackstageActionPaneVisualMetrics VisualMetrics,
     IReadOnlyList<BackstageActionGroup> Groups);
 
 public sealed record BackstageHomePaneSurfaceSpec(
@@ -344,6 +378,7 @@ public sealed record BackstageAccountPaneSurfaceSpec(
     string Title,
     string Description,
     IReadOnlyList<SisterBackstageAccountFieldGroup> Groups,
+    BackstageAccountPaneVisualMetrics VisualMetrics,
     BackstageSurfaceActionRow OptionsAction);
 
 public sealed record BackstageSurfaceActionGroup(
@@ -392,6 +427,33 @@ public readonly record struct BackstageOpenPaneVisualMetrics(
     BackstageThickness DescriptionMargin);
 
 public readonly record struct BackstageHomePaneVisualMetrics(
+    double PaneMaxWidth,
+    double HeadingFontSize,
+    BackstageThickness HeadingBottomMargin,
+    double DescriptionFontSize,
+    BackstageThickness DescriptionBottomMargin,
+    double SectionHeaderFontSize,
+    BackstageThickness SectionHeaderMargin,
+    double ActionFontSize,
+    double DescriptionTextFontSize,
+    BackstageThickness ActionRowMargin,
+    BackstageThickness ActionDescriptionMargin);
+
+public readonly record struct BackstageAccountPaneVisualMetrics(
+    double PaneMaxWidth,
+    double HeadingFontSize,
+    BackstageThickness HeadingBottomMargin,
+    double DescriptionFontSize,
+    BackstageThickness DescriptionBottomMargin,
+    double SectionHeaderFontSize,
+    BackstageThickness SectionHeaderMargin,
+    double FieldLabelColumnWidth,
+    double FieldFontSize,
+    BackstageThickness FieldRowMargin,
+    double OptionsFontSize,
+    BackstageThickness OptionsMargin);
+
+public readonly record struct BackstageActionPaneVisualMetrics(
     double PaneMaxWidth,
     double HeadingFontSize,
     BackstageThickness HeadingBottomMargin,

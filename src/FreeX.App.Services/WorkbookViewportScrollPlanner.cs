@@ -32,10 +32,32 @@ public static class WorkbookViewportScrollPlanner
 
     public static int NormalizeWheelNotches(int delta)
     {
-        if (delta == 0)
+        return NormalizeWheelNotches(delta, unitsPerNotch: 120);
+    }
+
+    /// <summary>
+    /// Normalizes an Avalonia pointer-wheel delta. Avalonia reports pointer deltas in logical
+    /// notch units, while WPF reports the same gesture in 120-unit mouse-wheel ticks. Preserve
+    /// the magnitude so high-resolution Linux devices that coalesce several notches into one event
+    /// pan by the same number of worksheet rows or columns as the WPF route.
+    /// </summary>
+    public static int NormalizePointerWheelNotches(double delta)
+    {
+        return NormalizeWheelNotches(delta, unitsPerNotch: 1);
+    }
+
+    private static int NormalizeWheelNotches(double delta, double unitsPerNotch)
+    {
+        if (!double.IsFinite(delta) || delta == 0)
             return 0;
 
-        var notches = delta / 120;
+        var wholeNotches = Math.Truncate(delta / unitsPerNotch);
+        if (wholeNotches > int.MaxValue)
+            return int.MaxValue;
+        if (wholeNotches < -int.MaxValue)
+            return -int.MaxValue;
+
+        var notches = (int)wholeNotches;
         return notches != 0 ? notches : Math.Sign(delta);
     }
 
