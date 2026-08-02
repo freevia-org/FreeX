@@ -2745,8 +2745,9 @@ public static class DocxWriter
     /// w:date carrying date-picker format and metadata; a w:dropDownList / w:comboBox carrying a
     /// w:listItem (w:displayText/w:value) per choice for a list control; an empty w:picture for a picture
     /// control; w:docPartList for a document-part list; w:docPartObj for a building-block gallery;
-    /// w:group for a Group control; or w:citation for a Citation control. This is the minimal valid shape
-    /// FreeW's own reader recovers (see <see cref="DocxReader"/>).
+    /// w:group for a Group control; w:citation for a Citation control; or w:equation for an inline
+    /// equation control. This is the minimal valid shape FreeW's own reader recovers (see
+    /// <see cref="DocxReader"/>).
     /// </summary>
     private static XElement BuildSdtProperties(ContentControl control)
     {
@@ -2801,6 +2802,9 @@ public static class DocxWriter
                 break;
             case ContentControlKind.Citation:
                 sdtPr.Add(new XElement(W + "citation"));
+                break;
+            case ContentControlKind.Equation:
+                sdtPr.Add(new XElement(W + "equation"));
                 break;
             default:
                 sdtPr.Add(new XElement(W + "text"));
