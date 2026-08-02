@@ -260,7 +260,7 @@ internal static class PptxChartReader
                 "pieChart" or "pie3DChart" or "ofPieChart" or "doughnutChart" or
                 "areaChart" or "area3DChart" or "scatterChart" or "bubbleChart" or
                 "stockChart" or "radarChart" or "surfaceChart" or "surface3DChart" or
-                "funnelChart";
+                "funnelChart" or "waterfallChart";
 
             if (!isChartType) continue;
 
@@ -293,6 +293,8 @@ internal static class PptxChartReader
                         ReadStockChart(el, shape, scheme, idxMap); break;
                     case "funnelChart":
                         ReadFunnelChart(el, shape, scheme, idxMap); break;
+                    case "waterfallChart":
+                        ReadWaterfallChart(el, shape, scheme, idxMap); break;
                     case "radarChart":
                         ReadRadarChart(el, shape, scheme, idxMap); break;
                     case "surfaceChart":
@@ -443,6 +445,15 @@ internal static class PptxChartReader
     {
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Funnel;
+        shape.BarGapWidthPercent = ParseNullableInt(el.Element(C + "gapWidth")?.Attribute("val")?.Value);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
+    }
+
+    private static void ReadWaterfallChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
+    {
+        ReadVaryColors(el, shape);
+        shape.ChartType = ChartType.Waterfall;
         shape.BarGapWidthPercent = ParseNullableInt(el.Element(C + "gapWidth")?.Attribute("val")?.Value);
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }

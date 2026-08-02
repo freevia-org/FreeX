@@ -274,6 +274,10 @@ public sealed class ChartDataDialogPlanner
             {
                 EnsureFunnelSeriesShape();
             }
+            if (chartType == ChartType.Waterfall)
+            {
+                EnsureWaterfallSeriesShape();
+            }
             if (IsScatterLike(chartType))
             {
                 SeedMissingCoordinates();
@@ -585,6 +589,7 @@ public sealed class ChartDataDialogPlanner
             ChartType.Surface => "Surface",
             ChartType.Surface3D => "3-D Surface",
             ChartType.Funnel => "Funnel",
+            ChartType.Waterfall => "Waterfall",
             _ => chartType.ToString(),
         };
     }
@@ -612,6 +617,16 @@ public sealed class ChartDataDialogPlanner
     }
 
     private void EnsureFunnelSeriesShape()
+    {
+        if (_grid.SeriesCount > 0)
+            return;
+
+        _grid.AddSeries("Value");
+        for (var categoryIndex = 0; categoryIndex < _grid.CategoryCount; categoryIndex++)
+            _grid.SetValue(0, categoryIndex, 0);
+    }
+
+    private void EnsureWaterfallSeriesShape()
     {
         if (_grid.SeriesCount > 0)
             return;

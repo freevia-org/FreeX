@@ -1557,6 +1557,34 @@ public sealed class ChartTests : IDisposable
         rt.Series[0].Values.Should().Equal(100, 60, 18);
     }
 
+    [Fact]
+    public void RoundTrip_WaterfallChart_TypeAndIncrementsPreservedInPackageAndModel()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Waterfall,
+            Categories = { "Start", "Reduction", "Growth" }
+        };
+        var series = new ChartSeries { Name = "Value" };
+        series.Values.AddRange(new double?[] { 100, -30, 20 });
+        chart.Series.Add(series);
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(ChartNs + "waterfallChart").Should().ContainSingle();
+            chartDoc.Descendants(ChartNs + "catAx").Should().ContainSingle();
+        }
+
+        var rt = PptxPackageReader.Read(path).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(ChartType.Waterfall);
+        rt.Categories.Should().Equal("Start", "Reduction", "Growth");
+        rt.Series.Should().ContainSingle();
+        rt.Series[0].Values.Should().Equal(100, -30, 20);
+    }
+
     [Theory]
     [InlineData(ChartType.Surface, "surfaceChart")]
     [InlineData(ChartType.Surface3D, "surface3DChart")]
