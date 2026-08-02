@@ -297,6 +297,31 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingImageShadow_UsesImportedAlphaAndPreservesPresetFallback()
+    {
+        static double RenderOpacity(ShapeEffectLst? importedEffects)
+        {
+            var doc = DocWithFloating();
+            var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+            image.ShadowPreset = 2;
+            image.ImportedEffects = importedEffects;
+
+            var canvas = new Canvas();
+            var view = new DocumentView();
+            view.SetFloatingCanvas(canvas);
+            view.LoadModel(doc);
+
+            return canvas.Children.OfType<Image>().Single().Effect
+                .Should().BeOfType<DropShadowEffect>().Subject.Opacity;
+        }
+
+        RenderOpacity(new ShapeEffectLst { HasShadow = true, ShadowAlpha = 0 }).Should().Be(0);
+        RenderOpacity(new ShapeEffectLst { HasShadow = true, ShadowAlpha = 25000 }).Should().Be(0.25);
+        RenderOpacity(new ShapeEffectLst { HasShadow = true, ShadowAlpha = 100000 }).Should().Be(1);
+        RenderOpacity(null).Should().Be(0.55);
+    }
+
+    [StaFact]
     public void ObjectFormatSquareImage_UsesItsPositionedFigureForWordWrap()
     {
         var view = new DocumentView();
