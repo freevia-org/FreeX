@@ -90,6 +90,9 @@ public sealed class ViewportScrollCalculatorTests(ITestOutputHelper output)
 
         source.Should().Contain("ViewportScrollCalculator.NormalizeWheelNotches(e.Delta)");
         source.Should().Contain("ViewportScrollCalculator.CalculateWheelScroll");
+        ViewportScrollCalculator.NormalizeWheelNotches(240)
+            .Should().Be(WorkbookViewportScrollPlanner.NormalizeWheelNotches(240),
+                "the WPF route must remain a thin facade over the shared wheel authority");
     }
 
     [Fact]

@@ -28152,16 +28152,15 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         CloseAutoFilterFlyout();
 
-        var vertical = e.Delta.Y;
-        var horizontal = e.Delta.X;
+        var vertical = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.Y);
+        var horizontal = WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(e.Delta.X);
 
         if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
             // Ctrl+Scroll = zoom (mirrors the WPF host's SheetGrid_MouseWheel).
             var wheelScroll = Math.Abs(horizontal) > Math.Abs(vertical) ? horizontal : vertical;
-            var notches = wheelScroll > 0 ? 1 : wheelScroll < 0 ? -1 : 0;
-            if (notches != 0)
-                ApplyZoomPercent(_session.ZoomPercent + notches * StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom failed.");
+            if (wheelScroll != 0)
+                ApplyZoomPercent(_session.ZoomPercent + wheelScroll * StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom failed.");
 
             e.Handled = true;
             return;
@@ -28173,11 +28172,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Math.Abs(horizontal) > Math.Abs(vertical))
         {
             var scroll = Math.Abs(horizontal) > 0 ? horizontal : vertical;
-            colDelta = scroll < 0 ? 1 : -1;
+            colDelta = -scroll;
         }
         else if (Math.Abs(vertical) > 0)
         {
-            rowDelta = vertical < 0 ? 1 : -1;
+            rowDelta = -vertical;
         }
 
         if (rowDelta == 0 && colDelta == 0)
