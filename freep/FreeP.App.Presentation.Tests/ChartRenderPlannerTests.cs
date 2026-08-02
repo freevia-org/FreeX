@@ -636,6 +636,23 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void ValueAxisLabelPlans_HonorAuthoredTickLabelPosition()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+        chart.ValueAxis.TickLabelPosition = ChartTickLabelPosition.High;
+
+        var high = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+
+        high.Should().HaveCount(6);
+        high[0].Bounds.X.Should().BeGreaterThanOrEqualTo(frame.Plot.Right);
+        high[0].Alignment.Should().Be(ChartPlanTextAlignment.Left);
+
+        chart.ValueAxis.TickLabelPosition = ChartTickLabelPosition.None;
+        ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame).Should().BeEmpty();
+    }
+
+    [Fact]
     public void AxisLabelPlans_ApplyCustomDisplayUnitToValueLabels()
     {
         var series = new ChartSeries { Name = "Revenue" };
@@ -738,6 +755,32 @@ public sealed class ChartRenderPlannerTests
         var label = ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame).First();
 
         (label.Bounds.X + label.Bounds.Width).Should().BeApproximately(frame.Plot.X, 0.0001);
+    }
+
+    [Fact]
+    public void CategoryAxisLabelPlans_HonorAuthoredTickLabelPosition()
+    {
+        var column = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        var columnFrame = ChartRenderPlanner.BuildFramePlan(column, new ChartPlanRect(0, 0, 400, 300));
+        column.CategoryAxis.TickLabelPosition = ChartTickLabelPosition.High;
+
+        var highColumn = ChartRenderPlanner.BuildCategoryAxisLabelPlans(column, columnFrame);
+
+        highColumn.Should().HaveCount(2);
+        highColumn[0].Bounds.Bottom.Should().BeLessThan(columnFrame.Plot.Y);
+
+        column.CategoryAxis.TickLabelPosition = ChartTickLabelPosition.None;
+        ChartRenderPlanner.BuildCategoryAxisLabelPlans(column, columnFrame).Should().BeEmpty();
+
+        var bar = MakeTwoSeriesChart(ChartType.BarClustered);
+        var barFrame = ChartRenderPlanner.BuildFramePlan(bar, new ChartPlanRect(0, 0, 400, 300));
+        bar.CategoryAxis.TickLabelPosition = ChartTickLabelPosition.High;
+
+        var highBar = ChartRenderPlanner.BuildCategoryAxisLabelPlans(bar, barFrame);
+
+        highBar.Should().HaveCount(2);
+        highBar[0].Bounds.X.Should().BeGreaterThanOrEqualTo(barFrame.Plot.Right);
+        highBar[0].Alignment.Should().Be(ChartPlanTextAlignment.Left);
     }
 
     [Fact]
@@ -1977,6 +2020,26 @@ public sealed class ChartRenderPlannerTests
         plan.Title!.Value.Label.Text.Should().Be("Margin");
         plan.Title.Value.Label.Bounds.Should().Be(new ChartPlanRect(378, 8, 14, 268));
         plan.Title.Value.Orientation.Should().Be(ChartAxisTitleOrientation.VerticalClockwise);
+    }
+
+    [Fact]
+    public void BuildSecondaryValueAxisPlan_HonorAuthoredTickLabelPosition()
+    {
+        var chart = MakeSecondaryAxisChart();
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+        chart.SecondaryValueAxis!.TickLabelPosition = ChartTickLabelPosition.Low;
+
+        var low = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
+
+        low.Labels.Should().HaveCount(6);
+        (low.Labels[0].Bounds.X + low.Labels[0].Bounds.Width)
+            .Should().BeLessThan(frame.Plot.X);
+        low.Labels[0].Alignment.Should().Be(ChartPlanTextAlignment.Right);
+
+        chart.SecondaryValueAxis.TickLabelPosition = ChartTickLabelPosition.None;
+        var none = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
+        none.Labels.Should().BeEmpty();
+        none.Ticks.Should().HaveCount(6);
     }
 
     [Fact]
