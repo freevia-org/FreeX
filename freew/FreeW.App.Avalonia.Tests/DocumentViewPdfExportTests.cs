@@ -1436,6 +1436,7 @@ public sealed class DocumentViewPdfExportTests
             paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(29.25, 765));
             paths[1].FillColor.Should().Be(new PdfColor(0xFF, 0xEE, 0xCA));
             paths[2].FillColor.Should().Be(new PdfColor(0xFF, 0x99, 0xC2));
+            paths[3].FillColor.Should().Be(PdfColor.Black);
             pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
 
             using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());

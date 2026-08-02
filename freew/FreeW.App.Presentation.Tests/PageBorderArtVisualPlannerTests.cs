@@ -63,7 +63,7 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
-    public void CakeSlice_UsesWordCadenceAndSharedCreamPinkLayerGeometry()
+    public void CakeSlice_UsesWordCadenceAndSharedCreamPinkBlackLayerGeometry()
     {
         PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(3, 3, 816, 1056, 32, out var plan)
             .Should().BeTrue();
@@ -79,6 +79,8 @@ public sealed class PageBorderArtVisualPlannerTests
             polygon.Red == 0xFF && polygon.Green == 0xEE && polygon.Blue == 0xCA);
         plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
             polygon.Red == 0xFF && polygon.Green == 0x99 && polygon.Blue == 0xC2);
+        plan.Polygons[3].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0 && polygon.Green == 0 && polygon.Blue == 0);
         plan.Polygons[115].Points[0].Should().Be(new PageBorderArtPoint(39, 996));
     }
 
