@@ -219,7 +219,11 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         }
 
         var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
-        session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}", "{SECTION-THREE}" });
+        var inserted = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}", "{SECTION-THREE}" });
+        SummaryZoomPreviewPlanner.AttachPreviewImages(
+            presentation,
+            inserted,
+            _ => MinPng);
 
         var roundTripped = PptxPackageReader.Read(WritePptxToMemory(presentation));
         var zoom = roundTripped.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
@@ -229,6 +233,8 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.RawXml.Should().Contain("summaryzoom");
         zoom.PreservedObject.RawXml.Should().Contain("fixedLayout");
         zoom.PreservedObject.RawXml.Should().Contain("summaryZmObj");
+        zoom.PreservedObject.Parts.Should().HaveCount(3);
+        zoom.PreservedObject.RawXml.Should().Contain("embed=");
         zoom.PreservedObject.WasAlternateContent.Should().BeTrue();
         zoom.PreservedObject.McRequiresToken.Should().Be("p14");
         zoom.PreservedObject.AlternateContentFallbackXml.Should().Contain("<p:sp");
