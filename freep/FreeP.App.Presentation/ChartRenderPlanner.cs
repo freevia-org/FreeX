@@ -3090,7 +3090,11 @@ public static partial class ChartRenderPlanner
                     chart.ValueAxis.ReverseOrder);
                 labels.Add(new ChartTextPlan(
                     FormatChartAxisLabelValue(chart, value, chart.ValueAxis),
-                    new ChartPlanRect(x - ResolveAxisLabelWidth(chart) / 2, plot.Bottom + 2, ResolveAxisLabelWidth(chart), ResolveCategoryLabelHeight(chart)),
+                    new ChartPlanRect(
+                        x - ResolveAxisLabelWidth(chart) / 2,
+                        ResolveValueAxisCrossingCoordinate(chart, frame) + 2,
+                        ResolveAxisLabelWidth(chart),
+                        ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Center,
@@ -3117,7 +3121,7 @@ public static partial class ChartRenderPlanner
                 double labelWidth = ResolveAxisLabelWidth(chart) - GridlinePad;
                 double labelRight = UsesImportedThreeDColumnDefaults(chart)
                     ? plot.X + 21.0 - 4.0
-                    : plot.X - rightGap;
+                    : ResolveValueAxisCrossingCoordinate(chart, frame) - rightGap;
                 labels.Add(new ChartTextPlan(
                     FormatChartAxisLabelValue(chart, value, chart.ValueAxis),
                     new ChartPlanRect(labelRight - labelWidth, y - verticalOffset, labelWidth, ResolveCategoryLabelHeight(chart)),
@@ -3231,6 +3235,7 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartGridLinePlan>();
 
         var plot = frame.Plot;
+        double valueAxisCrossing = ResolveValueAxisCrossingCoordinate(chart, frame);
         int tickCount = (int)Math.Round(steps);
         var ticks = new List<ChartGridLinePlan>(tickCount + 1);
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
@@ -3242,8 +3247,8 @@ public static partial class ChartRenderPlanner
                     plot,
                     chart.ValueAxis.ReverseOrder);
                 ticks.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(x, plot.Bottom),
-                    new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
+                    new ChartPlanPoint(x, valueAxisCrossing),
+                    new ChartPlanPoint(x, valueAxisCrossing + AxisMajorTickLength)));
             }
             else
             {
@@ -3252,8 +3257,8 @@ public static partial class ChartRenderPlanner
                     plot,
                     chart.ValueAxis.ReverseOrder);
                 ticks.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(plot.X - AxisMajorTickLength, y),
-                    new ChartPlanPoint(plot.X, y)));
+                    new ChartPlanPoint(valueAxisCrossing - AxisMajorTickLength, y),
+                    new ChartPlanPoint(valueAxisCrossing, y)));
             }
         }
 
@@ -3273,8 +3278,8 @@ public static partial class ChartRenderPlanner
                     plot,
                     chart.ValueAxis.ReverseOrder);
                 ticks.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(plot.X - AxisMinorTickLength, y),
-                    new ChartPlanPoint(plot.X, y)));
+                    new ChartPlanPoint(valueAxisCrossing - AxisMinorTickLength, y),
+                    new ChartPlanPoint(valueAxisCrossing, y)));
             }
         }
 
@@ -3297,8 +3302,8 @@ public static partial class ChartRenderPlanner
                         plot,
                         chart.ValueAxis.ReverseOrder);
                     ticks.Add(new ChartGridLinePlan(
-                        new ChartPlanPoint(x, plot.Bottom),
-                        new ChartPlanPoint(x, plot.Bottom + AxisMinorTickLength)));
+                        new ChartPlanPoint(x, valueAxisCrossing),
+                        new ChartPlanPoint(x, valueAxisCrossing + AxisMinorTickLength)));
                 }
                 else
                 {
@@ -3307,13 +3312,43 @@ public static partial class ChartRenderPlanner
                         plot,
                         chart.ValueAxis.ReverseOrder);
                     ticks.Add(new ChartGridLinePlan(
-                        new ChartPlanPoint(plot.X - AxisMinorTickLength, y),
-                        new ChartPlanPoint(plot.X, y)));
+                        new ChartPlanPoint(valueAxisCrossing - AxisMinorTickLength, y),
+                        new ChartPlanPoint(valueAxisCrossing, y)));
                 }
             }
         }
 
         return ticks;
+    }
+
+    private static double ResolveValueAxisCrossingCoordinate(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        var plot = frame.Plot;
+        if (chart.ValueAxis.CrossBetween != ChartCrossBetween.MidCat || chart.Categories.Count == 0)
+            return frame.IsBar ? plot.Bottom : plot.X;
+
+        double categoryStep = (frame.IsBar ? plot.Height : plot.Width) /
+            Math.Max(1, chart.Categories.Count);
+        return frame.IsBar
+            ? plot.Bottom - categoryStep / 2.0
+            : plot.X + categoryStep / 2.0;
+    }
+
+    private static double ResolveSecondaryValueAxisCrossingCoordinate(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        var plot = frame.Plot;
+        if (chart.SecondaryValueAxis?.CrossBetween != ChartCrossBetween.MidCat ||
+            chart.Categories.Count == 0)
+        {
+            return plot.Right;
+        }
+
+        double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
+        return plot.Right - categoryStep / 2.0;
     }
 
     public static IReadOnlyList<ChartAxisTitlePlan> BuildAxisTitlePlans(
@@ -3576,7 +3611,8 @@ public static partial class ChartRenderPlanner
         var plot = frame.Plot;
         var labels = new List<ChartTextPlan>(tickCount + 1);
         var ticks = new List<ChartGridLinePlan>(tickCount + 1);
-        double labelX = plot.Right + AxisMajorTickLength + GridlinePad +
+        double secondaryAxisX = ResolveSecondaryValueAxisCrossingCoordinate(chart, frame);
+        double labelX = secondaryAxisX + AxisMajorTickLength + GridlinePad +
             (UsesImportedTextMetrics(chart) ? 8.0 : 0.0) +
             (UsesImportedComboDefaults(chart) ? ImportedComboSecondaryLabelCompensation : 0.0);
         double labelWidth = Math.Max(
@@ -3594,8 +3630,8 @@ public static partial class ChartRenderPlanner
                 plot,
                 chart.SecondaryValueAxis.ReverseOrder);
             ticks.Add(new ChartGridLinePlan(
-                new ChartPlanPoint(plot.Right, y),
-                new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
+                new ChartPlanPoint(secondaryAxisX, y),
+                new ChartPlanPoint(secondaryAxisX + AxisMajorTickLength, y)));
             labels.Add(new ChartTextPlan(
                 FormatChartAxisLabelValue(chart, value, chart.SecondaryValueAxis),
                 new ChartPlanRect(labelX, y - labelVerticalOffset, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
@@ -3617,8 +3653,8 @@ public static partial class ChartRenderPlanner
                         plot,
                         chart.SecondaryValueAxis.ReverseOrder);
                     ticks.Add(new ChartGridLinePlan(
-                        new ChartPlanPoint(plot.Right, y),
-                        new ChartPlanPoint(plot.Right + AxisMinorTickLength, y)));
+                        new ChartPlanPoint(secondaryAxisX, y),
+                        new ChartPlanPoint(secondaryAxisX + AxisMinorTickLength, y)));
                 }
             }
         }

@@ -1596,6 +1596,45 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildMajorAxisTickPrimitivePlan_MidCatCrossingMovesValueTicksToFirstCategory()
+    {
+        var columnChart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        columnChart.ValueAxis.CrossBetween = ChartCrossBetween.MidCat;
+        var columnFrame = ChartRenderPlanner.BuildFramePlan(columnChart, new ChartPlanRect(0, 0, 400, 300));
+
+        var columnTicks = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(columnChart, columnFrame).ValueTicks;
+        double columnCrossing = columnFrame.Plot.X + columnFrame.Plot.Width / columnChart.Categories.Count / 2.0;
+        columnTicks[0].Start.Should().Be(new ChartPlanPoint(
+            columnCrossing - ChartRenderPlanner.AxisMajorTickLength,
+            columnFrame.Plot.Bottom));
+        columnTicks[0].End.Should().Be(new ChartPlanPoint(columnCrossing, columnFrame.Plot.Bottom));
+
+        var barChart = MakeTwoSeriesChart(ChartType.BarClustered);
+        barChart.ValueAxis.CrossBetween = ChartCrossBetween.MidCat;
+        var barFrame = ChartRenderPlanner.BuildFramePlan(barChart, new ChartPlanRect(0, 0, 400, 300));
+
+        var barTicks = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(barChart, barFrame).ValueTicks;
+        double barCrossing = barFrame.Plot.Bottom - barFrame.Plot.Height / barChart.Categories.Count / 2.0;
+        barTicks[0].Start.Should().Be(new ChartPlanPoint(barFrame.Plot.X, barCrossing));
+        barTicks[0].End.Should().Be(new ChartPlanPoint(
+            barFrame.Plot.X,
+            barCrossing + ChartRenderPlanner.AxisMajorTickLength));
+    }
+
+    [Fact]
+    public void BuildValueAxisLabelPlans_MidCatCrossingFollowsValueAxis()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+        var between = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+
+        chart.ValueAxis.CrossBetween = ChartCrossBetween.MidCat;
+        var midCat = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+
+        midCat[0].Bounds.X.Should().BeGreaterThan(between[0].Bounds.X);
+    }
+
+    [Fact]
     public void BuildMajorAxisTickPrimitivePlan_DeletedAxesAndNoPlot_ReturnEmptyGeometry()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
@@ -1938,6 +1977,23 @@ public sealed class ChartRenderPlannerTests
         plan.Title!.Value.Label.Text.Should().Be("Margin");
         plan.Title.Value.Label.Bounds.Should().Be(new ChartPlanRect(378, 8, 14, 268));
         plan.Title.Value.Orientation.Should().Be(ChartAxisTitleOrientation.VerticalClockwise);
+    }
+
+    [Fact]
+    public void BuildSecondaryValueAxisPrimitivePlan_MidCatCrossingMovesRightAxisInward()
+    {
+        var chart = MakeSecondaryAxisChart();
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+        chart.SecondaryValueAxis!.CrossBetween = ChartCrossBetween.MidCat;
+
+        var plan = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
+        double crossing = frame.Plot.Right - frame.Plot.Width / chart.Categories.Count / 2.0;
+
+        plan.Ticks[0].Start.Should().Be(new ChartPlanPoint(crossing, frame.Plot.Bottom));
+        plan.Ticks[0].End.Should().Be(new ChartPlanPoint(
+            crossing + ChartRenderPlanner.AxisMajorTickLength,
+            frame.Plot.Bottom));
+        plan.Labels[0].Bounds.X.Should().BeLessThan(342);
     }
 
     [Fact]
