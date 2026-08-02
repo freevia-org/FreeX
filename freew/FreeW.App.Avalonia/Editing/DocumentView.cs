@@ -133,7 +133,7 @@ public sealed class DocumentView : Control
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
     // AV-FLSEL: BlockIndex/RunIndex added so hit-test can locate the model object.
-    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, int ReflectionPreset, bool BehindText, int ZOrder, int BlockIndex, int RunIndex)> _floatingImages = new();
+    private readonly List<(Rect Rect, AvaloniaRenderedImage? Image, InlineImage Model, int ReflectionPreset, bool BehindText, int ZOrder, int BlockIndex, int RunIndex)> _floatingImages = new();
     // Floating shapes collected during layout; rendered in the same z-ordered passes as floating images.
     // ShapeData captures everything needed to draw the shape in Render() without re-touching the model.
     private readonly List<FloatingShapeData> _floatingShapes = new();
@@ -9533,6 +9533,7 @@ public sealed class DocumentView : Control
                     _floatingImages.Add((
                         rect,
                         DecodeRenderedImage(img),
+                        img,
                         img.ReflectionPreset,
                         snapshot.BehindText,
                         snapshot.ZOrderIndex,
@@ -10924,8 +10925,8 @@ public sealed class DocumentView : Control
             DrawFloatingObjectSnapshot(context, snapshot);
 
         // Inline images (non-floating).
-        foreach (var (rect, bitmap, _, reflectionPreset) in _images)
-            DrawFloatingImage(context, rect, bitmap, reflectionPreset);
+        foreach (var (rect, bitmap, model, reflectionPreset) in _images)
+            DrawFloatingImage(context, rect, bitmap, model, reflectionPreset);
 
         // FO4: inline drawing objects rendered in the text flow using the same FO3 helpers.
         foreach (var shape in _inlineShapes)
@@ -11110,7 +11111,7 @@ public sealed class DocumentView : Control
                 if (item.Image is { } image)
                 {
                     var rect = new Rect(item.X, item.Y, Math.Max(1, item.Width), Math.Max(1, item.Height));
-                    DrawFloatingImage(context, rect, DecodeRenderedImage(image));
+                    DrawFloatingImage(context, rect, DecodeRenderedImage(image), image, image.ReflectionPreset);
                     continue;
                 }
 
@@ -11395,7 +11396,7 @@ public sealed class DocumentView : Control
                 {
                     if (image.BlockIndex == snapshot.BlockIndex && image.RunIndex == snapshot.RunIndex)
                     {
-                        DrawFloatingImage(context, image.Rect, image.Image, image.ReflectionPreset);
+                        DrawFloatingImage(context, image.Rect, image.Image, image.Model, image.ReflectionPreset);
                         return;
                     }
                 }
@@ -11437,21 +11438,75 @@ public sealed class DocumentView : Control
         DrawingContext context,
         Rect rect,
         AvaloniaRenderedImage? rendered,
+        InlineImage model,
         int reflectionPreset = 0)
     {
-        if (rendered is not null)
+        IDisposable? transformState = null;
+        if (model.RotationAngle != 0 || model.FlipH || model.FlipV)
+            transformState = context.PushTransform(BuildPictureTransform(rect, model));
+
+        try
         {
-            var visualRect = rendered.VisualRect(rect);
-            context.DrawImage(rendered.Bitmap, visualRect);
-            DrawFloatingImageReflection(context, rect, rendered, reflectionPreset);
+            if (rendered is not null)
+            {
+                var visualRect = rendered.VisualRect(rect);
+                context.DrawImage(rendered.Bitmap, visualRect);
+                DrawFloatingImageReflection(context, rect, rendered, reflectionPreset);
+            }
+            else
+            {
+                // Placeholder: light-blue fill + dashed border so the position is visible even without bitmap data.
+                context.FillRectangle(FloatPlaceholderFill, rect);
+                context.DrawRectangle(null, FloatPlaceholderPen, rect);
+            }
+
+            if (BuildPictureBorderPen(model) is { } borderPen)
+                context.DrawRectangle(null, borderPen, rect);
         }
-        else
+        finally
         {
-            // Placeholder: light-blue fill + dashed border so the position is visible even without bitmap data.
-            context.FillRectangle(FloatPlaceholderFill, rect);
-            context.DrawRectangle(null, FloatPlaceholderPen, rect);
+            transformState?.Dispose();
         }
     }
+
+    internal static Matrix BuildPictureTransform(Rect rect, InlineImage image)
+    {
+        var centerX = rect.X + rect.Width / 2;
+        var centerY = rect.Y + rect.Height / 2;
+        var matrix = Matrix.Identity;
+        matrix *= Matrix.CreateTranslation(-centerX, -centerY);
+        if (image.FlipH) matrix *= new Matrix(-1, 0, 0, 1, 0, 0);
+        if (image.FlipV) matrix *= new Matrix(1, 0, 0, -1, 0, 0);
+        if (image.RotationAngle != 0)
+            matrix *= Matrix.CreateRotation(image.RotationAngle * Math.PI / 180.0);
+        return matrix * Matrix.CreateTranslation(centerX, centerY);
+    }
+
+    internal Pen? BuildPictureBorderPen(InlineImage image)
+    {
+        if (!image.HasBorder)
+            return null;
+
+        var colorHex = image.BorderColorHex!.Trim();
+        if (!colorHex.StartsWith('#'))
+            colorHex = "#" + colorHex;
+        return new Pen(
+            BrushFor(colorHex),
+            Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint,
+            BuildPictureDashStyle(image.BorderDash));
+    }
+
+    internal static DashStyle? BuildPictureDashStyle(string? dashStyle) =>
+        dashStyle?.Trim().ToLowerInvariant() switch
+        {
+            "dash" or "sysdash" => new DashStyle([4, 3], 0),
+            "dot" or "sysdot" => new DashStyle([1, 2], 0),
+            "dashdot" or "sysdashdot" => new DashStyle([4, 2, 1, 2], 0),
+            "lgdash" => new DashStyle([8, 3], 0),
+            "lgdashdot" => new DashStyle([8, 2, 1, 2], 0),
+            "lgdashdotdot" => new DashStyle([8, 2, 1, 2, 1, 2], 0),
+            _ => null,
+        };
 
     private static void DrawFloatingImageReflection(
         DrawingContext context,
@@ -23977,6 +24032,7 @@ public sealed class DocumentView : Control
         public enum ChildKind { Image, Shape, Chart, WordArt, SmartArt, Group }
         public ChildKind Kind;
         // Reused data structs (only the relevant one is non-null):
+        public InlineImage? ImageModel;
         public AvaloniaRenderedImage? Bitmap;    // Image
         public FloatingShapeData? Shape;    // Shape
         public FloatingChartData? Chart;    // Chart
@@ -24149,6 +24205,7 @@ public sealed class DocumentView : Control
             {
                 case DocumentFloatingObjectKind.Image when child is InlineImage img:
                     childData.Kind = FloatingGroupChildData.ChildKind.Image;
+                    childData.ImageModel = img;
                     childData.Bitmap = DecodeRenderedImage(img);
                     break;
 
@@ -25125,8 +25182,8 @@ public sealed class DocumentView : Control
         {
             switch (child.Kind)
             {
-                case FloatingGroupChildData.ChildKind.Image:
-                    DrawFloatingImage(context, child.Rect, child.Bitmap);
+                case FloatingGroupChildData.ChildKind.Image when child.ImageModel is { } image:
+                    DrawFloatingImage(context, child.Rect, child.Bitmap, image, image.ReflectionPreset);
                     break;
 
                 case FloatingGroupChildData.ChildKind.Shape when child.Shape is { } sd:
