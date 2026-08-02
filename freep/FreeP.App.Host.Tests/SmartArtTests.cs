@@ -531,6 +531,24 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_SmartArt_IncreasingCircleProcess_AdmitsDedicatedLiveLayout()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Phase A", "Phase B", "Phase C"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/increasingCircleProcess");
+        var presentation = PptxPackageReader.Read(pptxPath);
+
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.Process);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the shared layout engine has dedicated Increasing Circle Process geometry");
+    }
+
+    [Fact]
     public void Reader_SmartArt_PreservesNativeDspConnectorFallback()
     {
         var pptxPath = MakeSmartArtPptx(["Node"]);

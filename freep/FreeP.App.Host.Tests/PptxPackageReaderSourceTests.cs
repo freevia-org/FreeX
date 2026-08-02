@@ -112,7 +112,8 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("cycle2")
             .And.Contain("verticalprocess")
             .And.Contain("horizontalhierarchy")
-            .And.Contain("hierarchy3");
+            .And.Contain("hierarchy3")
+            .And.Contain("increasingcircleprocess");
     }
 
     [Fact]
