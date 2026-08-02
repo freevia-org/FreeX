@@ -2767,8 +2767,7 @@ public static class DocxWriter
                 sdtPr.Add(text);
                 break;
             case ContentControlKind.CheckBox:
-                sdtPr.Add(new XElement(W14 + "checkbox",
-                    new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0"))));
+                sdtPr.Add(BuildCheckBoxElement(control));
                 break;
             case ContentControlKind.RichText:
                 sdtPr.Add(new XElement(W + "richText"));
@@ -2808,6 +2807,31 @@ public static class DocxWriter
                 break;
         }
         return sdtPr;
+    }
+
+    private static XElement BuildCheckBoxElement(ContentControl control)
+    {
+        var checkbox = new XElement(W14 + "checkbox",
+            new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0")));
+        AddCheckBoxState(checkbox, W14 + "checkedState", control.CheckBoxMetadata?.CheckedState);
+        AddCheckBoxState(checkbox, W14 + "uncheckedState", control.CheckBoxMetadata?.UncheckedState);
+        return checkbox;
+    }
+
+    private static void AddCheckBoxState(
+        XElement checkbox,
+        XName stateName,
+        ContentControlCheckBoxStateMetadata? state)
+    {
+        if (state is null)
+            return;
+
+        var element = new XElement(stateName);
+        if (state.GlyphCodePoint is not null)
+            element.Add(new XAttribute(W14 + "val", state.GlyphCodePoint));
+        if (state.Font is not null)
+            element.Add(new XAttribute(W14 + "font", state.Font));
+        checkbox.Add(element);
     }
 
     private static XElement BuildDateElement(ContentControl control)

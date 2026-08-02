@@ -3222,7 +3222,9 @@ public static class DocxReader
                 ?? (checkbox.Element(W14 + "checked") ?? checkbox.Element(W + "checked"))?.Attribute(W + "val")?.Value;
             var isChecked = val is "1" or "true" or "on";
             return new ContentControl(ContentControlKind.CheckBox, normTag, normAlias, isChecked,
-                LockMode: lockMode, WordMetadata: wordMetadata);
+                LockMode: lockMode,
+                WordMetadata: wordMetadata,
+                CheckBoxMetadata: ReadContentControlCheckBoxMetadata(checkbox));
         }
 
         var date = sdtPr?.Element(W + "date");
@@ -3281,6 +3283,21 @@ public static class DocxReader
             LanguageId: Normalize(date.Element(W + "lid")?.Attribute(W + "val")?.Value),
             StoreMappedDataAs: Normalize(date.Element(W + "storeMappedDataAs")?.Attribute(W + "val")?.Value));
         return metadata == new ContentControlDateMetadata() ? null : metadata;
+    }
+
+    private static ContentControlCheckBoxMetadata? ReadContentControlCheckBoxMetadata(XElement checkbox)
+    {
+        static ContentControlCheckBoxStateMetadata? ReadState(XElement? state) =>
+            state is null
+                ? null
+                : new ContentControlCheckBoxStateMetadata(
+                    GlyphCodePoint: state.Attribute(W14 + "val")?.Value,
+                    Font: state.Attribute(W14 + "font")?.Value);
+
+        var metadata = new ContentControlCheckBoxMetadata(
+            CheckedState: ReadState(checkbox.Element(W14 + "checkedState")),
+            UncheckedState: ReadState(checkbox.Element(W14 + "uncheckedState")));
+        return metadata == new ContentControlCheckBoxMetadata() ? null : metadata;
     }
 
     private static ContentControlWordMetadata? ReadContentControlWordMetadata(XElement? sdtPr)

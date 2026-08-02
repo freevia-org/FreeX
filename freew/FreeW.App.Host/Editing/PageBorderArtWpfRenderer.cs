@@ -188,6 +188,18 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildPeopleFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var peoplePlan))
+        {
+            DrawFilledShapePlan(context, frame, peoplePlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
