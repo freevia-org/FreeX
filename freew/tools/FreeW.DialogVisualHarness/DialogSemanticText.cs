@@ -2,14 +2,22 @@ namespace FreeW.DialogVisualHarness;
 
 public static class DialogSemanticText
 {
-    public static string ResolveButtonText(string? automationName, string? content, string fallback)
+    public static bool TryResolveActionButtonText(
+        bool isVisible,
+        string? automationName,
+        string? content,
+        out string actionText)
     {
-        // WPF stores access-key markers in Content while Avalonia may expose them through the
-        // automation name. Resolve both to the same user-facing action label.
-        var resolved = string.IsNullOrWhiteSpace(automationName)
-            ? content ?? fallback
-            : automationName;
-        return RemoveAccessKeyMarkers(resolved);
+        actionText = string.Empty;
+        if (!isVisible)
+            return false;
+
+        var candidate = string.IsNullOrWhiteSpace(automationName) ? content : automationName;
+        if (string.IsNullOrWhiteSpace(candidate))
+            return false;
+
+        actionText = RemoveAccessKeyMarkers(candidate).Trim();
+        return actionText.Length > 0;
     }
 
     private static string RemoveAccessKeyMarkers(string value)

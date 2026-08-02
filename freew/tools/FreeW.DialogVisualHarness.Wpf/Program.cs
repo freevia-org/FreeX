@@ -331,23 +331,42 @@ static Semantics ReadSemantics(Window dialog)
         AutomationProperties.GetAutomationId(e), e.GetType().Name, AutomationProperties.GetName(e), e.IsEnabled,
         e is ToggleButton toggle ? toggle.IsChecked : null,
         e is Selector selector ? selector.SelectedIndex : null)).ToArray();
-    var buttons = FindVisualChildren<Button>(dialog).ToArray();
+    var buttons = ReadActionButtons(dialog);
     var focused = Keyboard.FocusedElement as FrameworkElement;
     var focusedAutomationId = focused is null ? null : AutomationProperties.GetAutomationId(focused);
+    var defaultButton = buttons.FirstOrDefault(action => action.Button.IsDefault);
+    var cancelButton = buttons.FirstOrDefault(action => action.Button.IsCancel);
     return new Semantics(
         string.IsNullOrWhiteSpace(focusedAutomationId) ? null : focusedAutomationId,
-        buttons.FirstOrDefault(b => b.IsDefault) is { } d ? ButtonText(d) : null,
-        buttons.FirstOrDefault(b => b.IsCancel) is { } c ? ButtonText(c) : null,
-        buttons.Select(ButtonText).ToArray(), controls);
+        defaultButton.Button is null ? null : defaultButton.Text,
+        cancelButton.Button is null ? null : cancelButton.Text,
+        buttons.Select(action => action.Text).ToArray(), controls);
 }
 
-// WPF stores access-key markers in Content (for example "_OK"), while Avalonia exposes the
-// normalized automation name. Compare the shared semantic name so the report does not flag a
-// framework-specific accelerator encoding as a dialog action mismatch.
-static string ButtonText(Button button) => DialogSemanticText.ResolveButtonText(
-    AutomationProperties.GetName(button),
-    button.Content?.ToString(),
-    button.GetType().Name);
+static IReadOnlyList<(Button Button, string Text)> ReadActionButtons(Window dialog)
+{
+    var actions = new List<(Button Button, string Text)>();
+    foreach (var button in FindVisualChildren<Button>(dialog))
+    {
+        if (DialogSemanticText.TryResolveActionButtonText(
+                button.IsVisible,
+                AutomationProperties.GetName(button),
+                UserFacingButtonContent(button.Content),
+                out var text))
+        {
+            actions.Add((button, text));
+        }
+    }
+
+    return actions;
+}
+
+static string? UserFacingButtonContent(object? content) => content switch
+{
+    string text => text,
+    TextBlock textBlock => textBlock.Text,
+    _ => null,
+};
 static Capture Unsupported(Scenario scenario, string note) => new(scenario.Id, "wpf", scenario.RouteId, scenario.State, "unsupported", "", 0, 0, 0, 0, 96, 96, new Rect(0, 0, 0, 0), new Semantics(null, null, null, [], []), scenario.Limitation, note);
 static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
 {

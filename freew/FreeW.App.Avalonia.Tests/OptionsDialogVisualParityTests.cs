@@ -47,7 +47,7 @@ public sealed class OptionsDialogVisualParityTests
 
                 var buttons = dialog.GetLogicalDescendants()
                     .OfType<Button>()
-                    .Where(button => button is not ToggleButton && button.Content is not null)
+                    .Where(button => button is not ToggleButton)
                     .ToArray();
                 buttons.Select(button => button.Content?.ToString())
                     .Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);

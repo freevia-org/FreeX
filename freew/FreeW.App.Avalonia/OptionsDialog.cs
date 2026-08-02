@@ -42,16 +42,6 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         VerticalAlignment = VerticalAlignment.Top
     };
     private readonly Grid _replacementGrid = new();
-    // WPF DataGrid exposes an unnamed add-row Button in its visual tree. Keep the same inert tree
-    // artifact so the parity harness can compare action ordering without filtering framework controls.
-    private readonly Button _replacementAddRowPlaceholder = new()
-    {
-        IsVisible = false,
-        IsHitTestVisible = false,
-        IsTabStop = false,
-        Width = 0,
-        Height = 0,
-    };
     private readonly List<ReplacementEditor> _replacementEditors = [];
     private readonly TextBlock _status = new();
 
@@ -235,9 +225,6 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             AddReplacementRow(replacement.Replace, replacement.With);
 
         AddReplacementRow();
-        Grid.SetRow(_replacementAddRowPlaceholder, 1);
-        Grid.SetColumn(_replacementAddRowPlaceholder, 0);
-        _replacementGrid.Children.Add(_replacementAddRowPlaceholder);
         _replacements.Child = new ScrollViewer
         {
             Content = _replacementGrid,

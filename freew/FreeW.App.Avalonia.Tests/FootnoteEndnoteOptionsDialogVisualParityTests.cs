@@ -89,9 +89,9 @@ public sealed class FootnoteEndnoteOptionsDialogVisualParityTests
             "FreeW.DialogVisualHarness.Avalonia",
             "Program.cs"));
 
-        source.Should().Contain("DialogSemanticText.ResolveButtonText(");
-        source.Should().Contain("AutomationProperties.GetName(d)");
-        source.Should().Contain("AutomationProperties.GetName(c)");
+        source.Should().Contain("DialogSemanticText.TryResolveActionButtonText(");
+        source.Should().Contain("ReadActionButtons(dialog)");
+        source.Should().Contain("AutomationProperties.GetName(button)");
     }
 
     private static object GetField(FootnoteEndnoteOptionsDialog dialog, string name) =>

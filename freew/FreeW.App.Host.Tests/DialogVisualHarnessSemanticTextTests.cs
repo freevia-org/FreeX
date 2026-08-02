@@ -90,25 +90,48 @@ public sealed class DialogVisualHarnessSemanticTextTests
     }
 
     [Fact]
-    public void Shared_extractor_normalizes_access_key_markers()
+    public void Shared_action_predicate_ignores_visible_unnamed_internal_buttons()
     {
-        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var helper = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness", "DialogSemanticText.cs"));
+        var included = Harness::FreeW.DialogVisualHarness.DialogSemanticText.TryResolveActionButtonText(
+            isVisible: true,
+            automationName: null,
+            content: null,
+            out var actionText);
 
-        helper.Should().Contain("var resolved = string.IsNullOrWhiteSpace(automationName)");
-        helper.Should().Contain("return RemoveAccessKeyMarkers(resolved);");
-        helper.Should().Contain("normalized.Append('_');");
+        included.Should().BeFalse();
+        actionText.Should().BeEmpty();
     }
 
     [Fact]
-    public void Shared_extractor_uses_blank_automation_name_fallback_without_masking_nonblank_names()
+    public void Shared_action_predicate_includes_visible_named_actions_and_normalizes_access_keys()
     {
-        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
-        var helper = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness", "DialogSemanticText.cs"));
+        var included = Harness::FreeW.DialogVisualHarness.DialogSemanticText.TryResolveActionButtonText(
+            isVisible: true,
+            automationName: "_Save __As",
+            content: null,
+            out var actionText);
 
-        helper.Should().Contain("string.IsNullOrWhiteSpace(automationName)");
-        helper.Should().Contain("? content ?? fallback");
-        helper.Should().Contain("RemoveAccessKeyMarkers(resolved)");
+        included.Should().BeTrue();
+        actionText.Should().Be("Save _As");
+    }
+
+    [Fact]
+    public void Shared_action_predicate_requires_visibility_and_accepts_user_facing_content()
+    {
+        Harness::FreeW.DialogVisualHarness.DialogSemanticText.TryResolveActionButtonText(
+                isVisible: false,
+                automationName: "OK",
+                content: "_OK",
+                out _)
+            .Should().BeFalse();
+
+        Harness::FreeW.DialogVisualHarness.DialogSemanticText.TryResolveActionButtonText(
+                isVisible: true,
+                automationName: " ",
+                content: "_Cancel",
+                out var actionText)
+            .Should().BeTrue();
+        actionText.Should().Be("Cancel");
     }
 
     [Fact]
@@ -118,10 +141,12 @@ public sealed class DialogVisualHarnessSemanticTextTests
         var wpf = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Wpf", "Program.cs"));
         var avalonia = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "Program.cs"));
 
-        wpf.Should().Contain("DialogSemanticText.ResolveButtonText(");
-        avalonia.Should().Contain("DialogSemanticText.ResolveButtonText(");
-        avalonia.Should().NotContain("AutomationProperties.GetName(d) ?? d.Content?.ToString()");
-        avalonia.Should().NotContain("AutomationProperties.GetName(c) ?? c.Content?.ToString()");
+        wpf.Should().Contain("DialogSemanticText.TryResolveActionButtonText(");
+        avalonia.Should().Contain("DialogSemanticText.TryResolveActionButtonText(");
+        wpf.Should().Contain("static IReadOnlyList<(Button Button, string Text)> ReadActionButtons(Window dialog)");
+        avalonia.Should().Contain("static IReadOnlyList<(Button Button, string Text)> ReadActionButtons(Window dialog)");
+        wpf.Should().NotContain("button.GetType().Name");
+        avalonia.Should().NotContain("button.GetType().Name");
     }
 
     [Fact]
@@ -141,7 +166,7 @@ public sealed class DialogVisualHarnessSemanticTextTests
         var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var avalonia = File.ReadAllText(Path.Combine(root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "Program.cs"));
 
-        avalonia.Should().Contain("var buttons = dialog.GetVisualDescendants()",
+        avalonia.Should().Contain("dialog.GetVisualDescendants().OfType<Button>()",
             "logical descendants from inactive tabs must not change the selected dialog's action order");
     }
 }

@@ -268,30 +268,44 @@ static Semantics ReadSemantics(Window dialog)
         Avalonia.Automation.AutomationProperties.GetAutomationId(c), c.GetType().Name, Avalonia.Automation.AutomationProperties.GetName(c), c.IsEffectivelyEnabled,
         c is CheckBox check ? check.IsChecked : c is ToggleButton toggle ? toggle.IsChecked : null,
         c is SelectingItemsControl selector ? selector.SelectedIndex : null)).ToArray();
-    var buttons = dialog.GetVisualDescendants()
-        .OfType<Button>()
-        .Where(button => button is not ToggleButton and not RepeatButton)
-        .ToArray();
+    var buttons = ReadActionButtons(dialog);
     var focused = FindVisualChildren<Control>(dialog).FirstOrDefault(c => c.IsFocused);
+    var defaultButton = buttons.FirstOrDefault(action => action.Button.IsDefault);
+    var cancelButton = buttons.FirstOrDefault(action => action.Button.IsCancel);
     return new Semantics(
         focused is null ? null : Avalonia.Automation.AutomationProperties.GetAutomationId(focused),
-        buttons.FirstOrDefault(b => b.IsDefault) is { } d
-            ? DialogSemanticText.ResolveButtonText(
-                Avalonia.Automation.AutomationProperties.GetName(d),
-                d.Content?.ToString(),
-                d.GetType().Name)
-            : null,
-        buttons.FirstOrDefault(b => b.IsCancel) is { } c
-            ? DialogSemanticText.ResolveButtonText(
-                Avalonia.Automation.AutomationProperties.GetName(c),
-                c.Content?.ToString(),
-                c.GetType().Name)
-            : null,
-        buttons.Select(b => DialogSemanticText.ResolveButtonText(
-            Avalonia.Automation.AutomationProperties.GetName(b),
-            b.Content?.ToString(),
-            b.GetType().Name)).ToArray(), controls);
+        defaultButton.Button is null ? null : defaultButton.Text,
+        cancelButton.Button is null ? null : cancelButton.Text,
+        buttons.Select(action => action.Text).ToArray(), controls);
 }
+
+static IReadOnlyList<(Button Button, string Text)> ReadActionButtons(Window dialog)
+{
+    var actions = new List<(Button Button, string Text)>();
+    foreach (var button in dialog.GetVisualDescendants().OfType<Button>())
+    {
+        if (button is ToggleButton or RepeatButton)
+            continue;
+
+        if (DialogSemanticText.TryResolveActionButtonText(
+                button.IsEffectivelyVisible,
+                Avalonia.Automation.AutomationProperties.GetName(button),
+                UserFacingButtonContent(button.Content),
+                out var text))
+        {
+            actions.Add((button, text));
+        }
+    }
+
+    return actions;
+}
+
+static string? UserFacingButtonContent(object? content) => content switch
+{
+    string text => text,
+    TextBlock textBlock => textBlock.Text,
+    _ => null,
+};
 
 static RenderedFrame ReadFrame(
     Avalonia.Media.Imaging.WriteableBitmap bitmap,
