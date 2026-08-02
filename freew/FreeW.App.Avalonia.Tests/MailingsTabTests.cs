@@ -383,6 +383,61 @@ public sealed class MailingsTabTests
     // ── Registry wiring ─────────────────────────────────────────────────────────────────
 
     [Fact]
+    public void ApplyLabels_inserts_requested_grid_and_applies_page_setup_without_recipients()
+    {
+        var view = ViewWith();
+        var engine = new MailMergeEngine(view, Callbacks());
+        var setup = new LabelSetupResult(2, 3, 612, 792, 18, Landscape: false);
+
+        engine.ApplyLabels(setup);
+
+        view.Document.Page.WidthPt.Should().Be(612);
+        view.Document.Page.HeightPt.Should().Be(792);
+        view.Document.Page.MarginLeftPt.Should().Be(18);
+        var table = view.Document.Blocks.OfType<Table>().Should().ContainSingle().Subject;
+        table.Rows.Should().HaveCount(2);
+        table.Rows.Should().OnlyContain(row => row.Cells.Count == 3);
+        table.Rows.SelectMany(row => row.Cells).Should().OnlyContain(cell => cell.PlainText == string.Empty);
+    }
+
+    [Fact]
+    public void ApplyLabels_populates_recipients_in_order_and_preserves_rich_runs()
+    {
+        var template = new Paragraph();
+        template.Runs.Add(new Run("Dear ", RunFormatting.Default));
+        template.Runs.Add(new Run(
+            $"{MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}",
+            RunFormatting.Default with { Bold = true }));
+        var view = ViewWith(template);
+        var engine = new MailMergeEngine(view, Callbacks());
+        engine.LoadRecipientsCsv(SampleCsv);
+
+        engine.ApplyLabels(new LabelSetupResult(2, 2, 612, 792, 18, Landscape: false));
+
+        var table = view.Document.Blocks.OfType<Table>().Should().ContainSingle().Subject;
+        table.Rows[0].Cells[0].PlainText.Should().Be("Dear Ada");
+        table.Rows[0].Cells[1].PlainText.Should().Be("Dear Grace");
+        table.Rows[1].Cells[0].PlainText.Should().BeEmpty();
+        table.Rows[0].Cells[0].Paragraphs[0].Runs[1].Formatting.Bold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ApplyLabels_skipped_recipient_does_not_consume_a_cell()
+    {
+        var skip = MergeRuleEvaluator.BuildSkipRecordIfInstruction(
+            "City", MergeConditionOperator.Equal, "London");
+        var view = ViewWith(new Paragraph($"{Wrap(skip)}{Wrap("FirstName")}"));
+        var engine = new MailMergeEngine(view, Callbacks());
+        engine.LoadRecipientsCsv(SampleCsv);
+
+        engine.ApplyLabels(new LabelSetupResult(1, 2, 612, 792, 18, Landscape: false));
+
+        var table = view.Document.Blocks.OfType<Table>().Should().ContainSingle().Subject;
+        table.Rows[0].Cells[0].PlainText.Should().Be("Grace");
+        table.Rows[0].Cells[1].PlainText.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Registry_resolves_all_mailings_tab_commands()
     {
         var registry = FreeWAvaloniaRibbonCommands.Build(new DocumentView(), Callbacks());
