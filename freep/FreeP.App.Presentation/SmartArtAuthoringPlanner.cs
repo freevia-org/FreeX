@@ -793,9 +793,24 @@ public static class SmartArtAuthoringPlanner
             }
         }
 
+        // A colorsDef can contain fill palettes for background/style labels before
+        // the node palette. PowerPoint's Change Colors gallery owns the node fill
+        // cycle, not an arbitrary first fillClrLst in document order. Keep the
+        // fallback for minimal/legacy parts that do not name their style labels.
         var fillLists = document
-            .Descendants(Diagram + "fillClrLst")
+            .Descendants(Diagram + "styleLbl")
+            .Where(label => IsNodeStyleLabel(label.Attribute("name")?.Value))
+            .Select(label => label.Element(Diagram + "fillClrLst"))
+            .Where(fillList => fillList is not null)
+            .Cast<XElement>()
             .ToList();
+        if (fillLists.Count == 0)
+        {
+            fillLists = document
+                .Descendants(Diagram + "fillClrLst")
+                .Take(1)
+                .ToList();
+        }
         var firstPalette = fillLists.FirstOrDefault()?
             .Elements()
             .Where(IsColorElement)
@@ -983,6 +998,10 @@ public static class SmartArtAuthoringPlanner
     private static bool IsColorElement(XElement element) =>
         element.Name.Namespace == Drawing &&
         (element.Name.LocalName is "schemeClr" or "srgbClr" or "sysClr");
+
+    private static bool IsNodeStyleLabel(string? name) =>
+        !string.IsNullOrWhiteSpace(name) &&
+        name.StartsWith("node", StringComparison.OrdinalIgnoreCase);
 
     private static XElement BuildColorElement(PaletteColor color, XElement previous)
     {
