@@ -24,6 +24,25 @@ namespace FreeW.App.Avalonia.Tests;
 /// </summary>
 public sealed class DocumentViewFloatingImageTests
 {
+    [Fact]
+    public void ImportedReflectionParameters_UseAuthoredStartAlphaAndDistance()
+    {
+        var parameters = DocumentView.ReflectionParameters(new InlineImage([], 1, 1)
+        {
+            ReflectionPreset = 1,
+            ImportedEffects = new ShapeEffectLst
+            {
+                HasReflection = true,
+                ReflectionStartAlpha = 35000,
+                ReflectionDist = 38100,
+            },
+        });
+
+        parameters.Should().NotBeNull();
+        parameters!.Opacity.Should().Be(0.35);
+        parameters.DistanceDip.Should().Be(4);
+    }
+
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
