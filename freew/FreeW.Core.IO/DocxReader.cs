@@ -3239,12 +3239,14 @@ public static class DocxReader
         var dropDown = sdtPr?.Element(W + "dropDownList");
         if (dropDown is not null)
             return new ContentControl(ContentControlKind.DropDownList, normTag, normAlias,
-                ListItems: ReadListItems(dropDown), LockMode: lockMode, WordMetadata: wordMetadata);
+                ListItems: ReadListItems(dropDown), LockMode: lockMode, WordMetadata: wordMetadata,
+                ListLastValue: dropDown.Attribute(W + "lastValue")?.Value);
 
         var combo = sdtPr?.Element(W + "comboBox");
         if (combo is not null)
             return new ContentControl(ContentControlKind.ComboBox, normTag, normAlias,
-                ListItems: ReadListItems(combo), LockMode: lockMode, WordMetadata: wordMetadata);
+                ListItems: ReadListItems(combo), LockMode: lockMode, WordMetadata: wordMetadata,
+                ListLastValue: combo.Attribute(W + "lastValue")?.Value);
 
         if (sdtPr?.Element(W + "picture") is not null)
             return new ContentControl(ContentControlKind.Picture, normTag, normAlias,

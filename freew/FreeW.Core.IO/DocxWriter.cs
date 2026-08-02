@@ -2771,10 +2771,10 @@ public static class DocxWriter
                 sdtPr.Add(BuildDateElement(control));
                 break;
             case ContentControlKind.DropDownList:
-                sdtPr.Add(BuildListElement(W + "dropDownList", control.Items));
+                sdtPr.Add(BuildListElement(W + "dropDownList", control.Items, control.ListLastValue));
                 break;
             case ContentControlKind.ComboBox:
-                sdtPr.Add(BuildListElement(W + "comboBox", control.Items));
+                sdtPr.Add(BuildListElement(W + "comboBox", control.Items, control.ListLastValue));
                 break;
             case ContentControlKind.Picture:
                 sdtPr.Add(new XElement(W + "picture"));
@@ -2863,11 +2863,17 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds the w:dropDownList / w:comboBox element for a list content control: a w:listItem
-    /// (w:displayText + w:value) for each <paramref name="items"/> choice.
+    /// (w:displayText + w:value) for each <paramref name="items"/> choice, preserving an explicitly
+    /// present w:lastValue (including the empty string) while omitting an absent value.
     /// </summary>
-    private static XElement BuildListElement(XName listName, IReadOnlyList<ContentControlListItem> items)
+    private static XElement BuildListElement(
+        XName listName,
+        IReadOnlyList<ContentControlListItem> items,
+        string? lastValue)
     {
         var list = new XElement(listName);
+        if (lastValue is not null)
+            list.Add(new XAttribute(W + "lastValue", lastValue));
         foreach (var item in items)
             list.Add(new XElement(W + "listItem",
                 new XAttribute(W + "displayText", item.DisplayText),
