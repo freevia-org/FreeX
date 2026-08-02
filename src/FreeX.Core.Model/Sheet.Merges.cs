@@ -38,81 +38,121 @@ public sealed partial class Sheet
     /// <summary>True if <paramref name="addr"/> is inside any merged region.</summary>
     public bool IsMerged(CellAddress addr) => GetMergeRegion(addr) is not null;
 
+    /// <summary>
+    /// Answers "which merged region (if any) contains (row, col)" via a row-bucket/column-bucket
+    /// index, mirroring the dual-axis bucketing approach RangeDependencyIndex/CandidateIndex
+    /// already use in FreeX.Core.Calc.DependencyGraph for the exact same shape of problem (range
+    /// membership queries against a mix of tall/narrow and short/wide rectangles).
+    ///
+    /// A prior implementation sorted regions by start row and used a running prefix-max of
+    /// End.Row, answering Find() by binary-searching to the last region starting at-or-before
+    /// `row` and then scanning backward until the prefix max fell below `row`. Because the
+    /// prefix max is monotonically non-decreasing, a single region with a very large End.Row
+    /// (e.g. spanning nearly the whole sheet) kept every later region's prefix-max entry at or
+    /// above that End.Row for the remainder of the array -- so a query landing in that region's
+    /// row-shadow but matching no intervening region had to walk backward through every one of
+    /// those intervening regions before it could even reach (or rule out) the large region. That
+    /// turned a single lookup into an O(total merged regions on the sheet) scan instead of the
+    /// intended O(log n + k).
+    ///
+    /// Each region is registered under whichever axis (row bands or column bands) it spans FEWER
+    /// buckets of -- exactly like RangeDependencyIndex.UseRowIndex. A region that is tall but
+    /// narrow (e.g. a single merged column running the full height of the sheet) spans thousands
+    /// of row-bands but only one or two column-bands, so it is filed under column buckets instead;
+    /// this keeps index build cost/memory bounded by min(row bands, column bands) spanned rather
+    /// than blowing up for any one very tall or very wide region. Find() only has to scan the
+    /// (typically few) regions filed under the query row's band plus the (typically few) regions
+    /// filed under the query column's band, independent of how many unrelated regions exist
+    /// elsewhere on the sheet.
+    /// </summary>
     private sealed class MergeRegionIndex
     {
-        private readonly GridRange[] _regionsByStartRow;
-        private readonly uint[] _prefixMaxEndRows;
+        private const uint RowBucketSize = 256;
+        private const uint ColumnBucketSize = 16;
 
-        private MergeRegionIndex(GridRange[] regionsByStartRow, uint[] prefixMaxEndRows)
+        private readonly Dictionary<uint, List<GridRange>> _rowBuckets;
+        private readonly Dictionary<uint, List<GridRange>> _columnBuckets;
+
+        private MergeRegionIndex(Dictionary<uint, List<GridRange>> rowBuckets, Dictionary<uint, List<GridRange>> columnBuckets)
         {
-            _regionsByStartRow = regionsByStartRow;
-            _prefixMaxEndRows = prefixMaxEndRows;
+            _rowBuckets = rowBuckets;
+            _columnBuckets = columnBuckets;
         }
 
         public static MergeRegionIndex Create(IReadOnlyList<GridRange> regions)
         {
-            var regionsByStartRow = new GridRange[regions.Count];
-            for (var i = 0; i < regions.Count; i++)
-                regionsByStartRow[i] = regions[i];
+            var rowBuckets = new Dictionary<uint, List<GridRange>>();
+            var columnBuckets = new Dictionary<uint, List<GridRange>>();
 
-            Array.Sort(regionsByStartRow, static (left, right) =>
+            foreach (var region in regions)
             {
-                var rowComparison = left.Start.Row.CompareTo(right.Start.Row);
-                return rowComparison != 0 ? rowComparison : left.Start.Col.CompareTo(right.Start.Col);
-            });
-
-            var prefixMaxEndRows = new uint[regionsByStartRow.Length];
-            var maxEndRow = 0u;
-            for (var i = 0; i < regionsByStartRow.Length; i++)
-            {
-                maxEndRow = Math.Max(maxEndRow, regionsByStartRow[i].End.Row);
-                prefixMaxEndRows[i] = maxEndRow;
+                if (UseRowIndex(region))
+                    AddToBuckets(rowBuckets, region, region.Start.Row, region.End.Row, RowBucketSize);
+                else
+                    AddToBuckets(columnBuckets, region, region.Start.Col, region.End.Col, ColumnBucketSize);
             }
 
-            return new MergeRegionIndex(regionsByStartRow, prefixMaxEndRows);
+            return new MergeRegionIndex(rowBuckets, columnBuckets);
         }
 
         public GridRange? Find(uint row, uint col)
         {
-            var index = LastRegionStartingAtOrBefore(row);
-            while (index >= 0 && _prefixMaxEndRows[index] >= row)
+            if (_rowBuckets.TryGetValue(GetBucket(row, RowBucketSize), out var rowCandidates))
             {
-                var region = _regionsByStartRow[index];
-                if (region.Start.Row <= row &&
-                    region.End.Row >= row &&
-                    region.Start.Col <= col &&
-                    region.End.Col >= col)
+                foreach (var region in rowCandidates)
                 {
-                    return region;
+                    if (Contains(region, row, col))
+                        return region;
                 }
+            }
 
-                index--;
+            if (_columnBuckets.TryGetValue(GetBucket(col, ColumnBucketSize), out var columnCandidates))
+            {
+                foreach (var region in columnCandidates)
+                {
+                    if (Contains(region, row, col))
+                        return region;
+                }
             }
 
             return null;
         }
 
-        private int LastRegionStartingAtOrBefore(uint row)
+        private static bool Contains(GridRange region, uint row, uint col) =>
+            region.Start.Row <= row &&
+            region.End.Row >= row &&
+            region.Start.Col <= col &&
+            region.End.Col >= col;
+
+        private static bool UseRowIndex(GridRange region) =>
+            GetBucketCount(region.Start.Row, region.End.Row, RowBucketSize) <=
+            GetBucketCount(region.Start.Col, region.End.Col, ColumnBucketSize);
+
+        private static void AddToBuckets(
+            Dictionary<uint, List<GridRange>> buckets,
+            GridRange region,
+            uint start,
+            uint end,
+            uint bucketSize)
         {
-            var low = 0;
-            var high = _regionsByStartRow.Length - 1;
-            var result = -1;
+            var startBucket = GetBucket(start, bucketSize);
+            var endBucket = GetBucket(end, bucketSize);
 
-            while (low <= high)
+            for (var bucket = startBucket; bucket <= endBucket; bucket++)
             {
-                var mid = low + ((high - low) / 2);
-                if (_regionsByStartRow[mid].Start.Row <= row)
+                if (!buckets.TryGetValue(bucket, out var bucketRegions))
                 {
-                    result = mid;
-                    low = mid + 1;
+                    bucketRegions = [];
+                    buckets[bucket] = bucketRegions;
                 }
-                else
-                {
-                    high = mid - 1;
-                }
-            }
 
-            return result;
+                bucketRegions.Add(region);
+            }
         }
+
+        private static uint GetBucketCount(uint start, uint end, uint bucketSize) =>
+            GetBucket(end, bucketSize) - GetBucket(start, bucketSize) + 1;
+
+        private static uint GetBucket(uint value, uint bucketSize) => (value - 1) / bucketSize;
     }
 }

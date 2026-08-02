@@ -24,12 +24,22 @@ internal static class XlsxStylesheetMetadataPreserver
         if (targetRoot is null)
             return;
 
+        // Captured BEFORE any merge below mutates <tableStyles> -- used only to compute which
+        // trailing source dxfs are still "live" (see ComputeLiveTrailingDifferentialStyleIndexes).
+        var targetTableStylesBeforeMerge = targetRoot.Element(workbookNs + "tableStyles");
+
         var changed = false;
         if (MergeStylesheetColors(sourceStylesXml.Root?.Element(workbookNs + "colors"), targetRoot, workbookNs))
             changed = true;
         if (MergeStylesheetGradientFills(sourceStylesXml, targetRoot, sourceArchive, workbookNs))
             changed = true;
-        if (MergeStylesheetDifferentialStyles(sourceStylesXml.Root?.Element(workbookNs + "dxfs"), targetRoot, workbookNs))
+        var liveTrailingIndexes = ComputeLiveTrailingDifferentialStyleIndexes(
+            sourceArchive,
+            targetArchive,
+            sourceStylesXml.Root?.Element(workbookNs + "tableStyles"),
+            targetTableStylesBeforeMerge,
+            workbookNs);
+        if (MergeStylesheetDifferentialStyles(sourceStylesXml.Root?.Element(workbookNs + "dxfs"), targetRoot, workbookNs, liveTrailingIndexes))
             changed = true;
         if (MergeStylesheetTableStyles(sourceStylesXml.Root?.Element(workbookNs + "tableStyles"), targetRoot, workbookNs))
             changed = true;
@@ -476,7 +486,11 @@ internal static class XlsxStylesheetMetadataPreserver
         return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(sourceColors, targetColors);
     }
 
-    private static bool MergeStylesheetDifferentialStyles(XElement? sourceDifferentialStyles, XElement targetRoot, XNamespace workbookNs)
+    private static bool MergeStylesheetDifferentialStyles(
+        XElement? sourceDifferentialStyles,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        IReadOnlyCollection<int> liveTrailingIndexes)
     {
         if (sourceDifferentialStyles is null)
             return false;
@@ -494,6 +508,20 @@ internal static class XlsxStylesheetMetadataPreserver
         {
             if (index >= targetStyles.Count)
             {
+                // A rebuild sizes the target's <dxfs> to exactly the model's CURRENT live rules, so
+                // any source dxf past that count belonged to something the rebuild no longer emits.
+                // Most commonly that is a conditional-format rule the user just deleted -- appending
+                // it unconditionally would resurrect a dxf nothing references, and because the
+                // just-saved package is rebased to become the next save's "source" (see
+                // XlsxFileAdapter.SavePostProcessing.cs), the zombie would never get pruned. Only
+                // keep it when something that will actually survive into the final package still
+                // addresses this exact source-side index (an "unsupported" CF rule preserved
+                // verbatim, a native tableStyle not tracked by the model, or a raw dxfId passthrough
+                // already written into the rebuilt worksheet) -- see
+                // ComputeLiveTrailingDifferentialStyleIndexes for the full enumeration.
+                if (!liveTrailingIndexes.Contains(index))
+                    continue;
+
                 targetDifferentialStyles.Add(new XElement(sourceStyle));
                 targetStyles.Add(targetDifferentialStyles.Elements(workbookNs + "dxf").Last());
                 XlsxAdvancedConditionalFormatWriter.NormalizeDifferentialStyleOrder(targetStyles[^1], workbookNs);
@@ -521,6 +549,121 @@ internal static class XlsxStylesheetMetadataPreserver
             targetDifferentialStyles.Elements(workbookNs + "dxf").Count().ToString(CultureInfo.InvariantCulture));
         return changed;
     }
+
+    // Computes which trailing (index >= the just-rebuilt target's dxf count) SOURCE dxf indices are
+    // still "live" -- i.e. still addressed by something that will actually survive into the final
+    // saved package -- as opposed to belonging to a conditional-format rule the user just deleted.
+    // The rebuild sizes <dxfs> to exactly the model's CURRENT rules (SaveDifferentialStyles), so a
+    // deleted rule's old dxf always lands past that count with nothing left pointing at it; blindly
+    // re-appending it (the historical bug) resurrects a zombie entry that -- because the just-saved
+    // package becomes the next save's "source" -- never gets pruned.
+    //
+    // Three kinds of surviving content still address a dxf by its ORIGINAL source-side index rather
+    // than a freshly-rebuilt one, and must keep that dxf entry alive:
+    //   1. An "unsupported" CF rule type FreeX doesn't model at all: XlsxUnsupportedConditionalFormattingPreserver
+    //      (called later in the same save, from PreserveSourcePackageParts) re-inserts that rule's
+    //      whole <conditionalFormatting> block verbatim from the SOURCE worksheet, dxfId untouched.
+    //   2. A <tableStyle> present in the source but not in the just-rebuilt target (by name) --
+    //      MergeStylesheetTableStyles (below, in this same Preserve pass) raw-clones the whole
+    //      <tableStyle> element, including its <tableStyleElement dxfId="..."/> children, unchanged.
+    //      (A tableStyle the model DOES track -- e.g. via XlsxStructuredTableStyleMetadataWriter or
+    //      XlsxSlicerTimelineWriter.SavePivotTableStyles, both of which run before this preserver --
+    //      already exists in the target by name and remaps its own dxfId against the rebuilt <dxfs>
+    //      itself; see R22_TableStyleDxfIdRemapTests.)
+    //   3. A raw dxfId passthrough already written into the just-rebuilt TARGET worksheet XML for an
+    //      AutoFilter/structured-table color filter that carried a native dxfId at load time (see
+    //      XlsxWorksheetAutoFilterXmlMapper/XlsxStructuredTableWriter's DifferentialFormatIdRaw
+    //      passthrough) -- that raw string is the SOURCE package's original index, written into the
+    //      target during the initial model-to-XML pass, well before this preserver ever runs.
+    //
+    // Any source dxf beyond the rebuilt count referenced by NONE of the above has no live consumer
+    // left and must be dropped rather than resurrected.
+    private static HashSet<int> ComputeLiveTrailingDifferentialStyleIndexes(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XElement? sourceTableStyles,
+        XElement? targetTableStylesBeforeMerge,
+        XNamespace workbookNs)
+    {
+        var live = new HashSet<int>();
+
+        // (3) any dxfId already written into the rebuilt target's worksheets.
+        foreach (var worksheetEntry in targetArchive.Entries.Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry))
+        {
+            XDocument worksheetXml;
+            try
+            {
+                worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var attribute in worksheetXml.Descendants().Attributes("dxfId"))
+            {
+                if (TryParseInt(attribute.Value, out var dxfId))
+                    live.Add(dxfId);
+            }
+        }
+
+        // (1) any dxfId referenced from an "unsupported" CF rule in the SOURCE worksheets -- that
+        // whole block gets pasted back verbatim later in this same save.
+        foreach (var worksheetEntry in sourceArchive.Entries.Where(XlsxConditionalFormatRuleSupport.IsWorksheetEntry))
+        {
+            XDocument worksheetXml;
+            try
+            {
+                worksheetXml = XlsxPackageXmlEditor.LoadXml(worksheetEntry);
+            }
+            catch
+            {
+                continue;
+            }
+
+            foreach (var block in worksheetXml.Root?.Elements(workbookNs + "conditionalFormatting") ?? Enumerable.Empty<XElement>())
+            {
+                if (!XlsxConditionalFormatRuleSupport.ConditionalFormattingHasUnsupportedRule(
+                        block, workbookNs, allowBlankType: true, comparison: StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                foreach (var rule in block.Elements(workbookNs + "cfRule"))
+                {
+                    if (TryGetIntAttribute(rule, "dxfId", out var dxfId))
+                        live.Add(dxfId);
+                }
+            }
+        }
+
+        // (2) any dxfId used by a source <tableStyle> not present (by name) in the just-rebuilt target.
+        if (sourceTableStyles is not null)
+        {
+            var targetNames = (targetTableStylesBeforeMerge?.Elements(workbookNs + "tableStyle") ?? Enumerable.Empty<XElement>())
+                .Select(element => element.Attribute("name")?.Value)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var sourceStyle in sourceTableStyles.Elements(workbookNs + "tableStyle"))
+            {
+                var name = sourceStyle.Attribute("name")?.Value;
+                if (!string.IsNullOrWhiteSpace(name) && targetNames.Contains(name))
+                    continue; // already tracked by the model; its own writer remaps dxfId itself (R22)
+
+                foreach (var element in sourceStyle.Elements(workbookNs + "tableStyleElement"))
+                {
+                    if (TryGetIntAttribute(element, "dxfId", out var dxfId))
+                        live.Add(dxfId);
+                }
+            }
+        }
+
+        return live;
+    }
+
+    private static bool TryParseInt(string? raw, out int value) =>
+        int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
 
     // Two dxfs "render the same style" when their modeled font/fill/border/number-format produce an equal
     // CellStyle. Native (unmodeled) metadata is intentionally ignored here — that is precisely what the merge

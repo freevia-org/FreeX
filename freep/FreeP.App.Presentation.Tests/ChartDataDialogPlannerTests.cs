@@ -340,6 +340,8 @@ public sealed class ChartDataDialogPlannerTests
         plan.CancelLabel.Should().Be("Cancel");
         ChartDataDialogPlanner.ChartTypeOptions.Should().Contain(option =>
             option.Value == ChartType.LineMarkers && option.Label == "Line with Markers");
+        ChartDataDialogPlanner.ChartTypeOptions.Should().Contain(option =>
+            option.Value == ChartType.Funnel && option.Label == "Funnel");
     }
 
     [Fact]

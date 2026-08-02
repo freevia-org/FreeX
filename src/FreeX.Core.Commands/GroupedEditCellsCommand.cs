@@ -12,6 +12,11 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
     private readonly IReadOnlyList<(CellAddress Address, Cell NewCell)> _sourceEdits;
     private List<(SheetId SheetId, CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
 
+    // R115-data-table-master-formula-refresh: mirrors EditCellsCommand's _appliedTableEffects --
+    // a grouped edit that lands on a registered Data Table's master formula cell on one of the
+    // grouped sheets must refresh that sheet's table body too, undone in the same transaction.
+    private readonly List<IWorkbookCommand> _appliedTableEffects = [];
+
     public string Label => "Edit Grouped Sheets";
 
     public GroupedEditCellsCommand(
@@ -42,6 +47,7 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
 
         _snapshot = [];
         var affected = new List<CellAddress>();
+        var appliedEdits = new List<(CellAddress Address, Cell NewCell)>();
 
         foreach (var sheetId in _sheetIds)
         {
@@ -89,8 +95,17 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
                 sheet.CellPhoneticGuides.Remove(address);
 
                 affected.Add(address);
+                appliedEdits.Add((address, appliedCell));
             }
         }
+
+        // R115-data-table-master-formula-refresh: see the matching call in EditCellsCommand.Apply --
+        // a Data Table's body is a one-time text-baked substitution of its master formula, so
+        // re-derive it here whenever this grouped edit lands on that master/header formula cell on
+        // any of the grouped sheets.
+        var dataTableRefreshCells = DataTableAutoRefreshEffects.Apply(ctx, appliedEdits, _appliedTableEffects);
+        if (dataTableRefreshCells.Count > 0)
+            affected.AddRange(dataTableRefreshCells);
 
         return new CommandOutcome(true, AffectedCells: affected);
     }
@@ -99,6 +114,10 @@ public sealed class GroupedEditCellsCommand : IWorkbookCommand
     {
         if (_snapshot is null)
             return;
+
+        for (var i = _appliedTableEffects.Count - 1; i >= 0; i--)
+            _appliedTableEffects[i].Revert(ctx);
+        _appliedTableEffects.Clear();
 
         foreach (var (sheetId, address, oldCell, oldStyleOnly, hadRichTextRuns, oldRichTextRuns, hadHyperlink, oldHyperlink, hadHyperlinkMetadata, oldHyperlinkMetadata, hadPhoneticGuide, oldPhoneticGuide) in _snapshot)
         {

@@ -89,12 +89,30 @@ public static partial class PivotTableRefreshService
                 // XlsxPivotTableWriter emits a <cacheFields count="N"> that no longer matches the
                 // narrower field-count it writes into each <pivotCacheRecords><r> (which re-resolves
                 // against the current, live source range), producing a corrupt cache Excel repairs
-                // or misreads on open.
-                ReconcileCacheFields(cache, ReadHeaders(sourceSheet, liveTable.Range), sourceSheet, liveTable.Range);
+                // or misreads on open. (The reconciliation call itself now lives below, after
+                // `headers` is computed against the just-updated SourceRange, so it also runs for a
+                // plain worksheet-range cache -- see R115-commands-pivot-sharedItems-refresh.)
             }
         }
 
         var headers = ReadHeaders(sourceSheet, pivotTable.SourceRange);
+
+        // R115-commands-pivot-sharedItems-refresh: R114 only recomputed a cache field's SharedItems
+        // at pivot creation, "Change Data Source", and (via the table-growth branch above) when a
+        // table-backed source's column set changed. An ORDINARY refresh -- the F5 / Refresh-All path
+        // every other Apply() that mutates source data funnels through -- reused the existing field
+        // object verbatim for any header that still matched by name, so a field's SharedItems (and
+        // hence SlicerItemResolver.ResolveAvailableItems, the live-UI/render entry point) stayed
+        // frozen at whatever it was when the pivot was created or last had its source redirected,
+        // even though the underlying cell values kept changing. Worse, this reconciliation was only
+        // ever invoked for a table-backed cache (SourceType.Table): a plain worksheet-range pivot
+        // cache never called it at all, so its SharedItems were frozen at creation-time forever.
+        // Excel re-derives shared items on every refresh (independent of the "number of items to
+        // retain" stale-item-retention setting, which controls whether OLD items linger, not whether
+        // NEW ones appear) -- so run this unconditionally, for every cache source type, on every
+        // refresh.
+        if (cache is not null)
+            ReconcileCacheFields(cache, headers, sourceSheet, pivotTable.SourceRange);
 
         // R92-app-pivot-drilldown-5-3: a source shrink (columns deleted, or an entire field's
         // backing column gone) can leave some fields' SourceFieldIndex pointing past the new
@@ -407,32 +425,20 @@ public static partial class PivotTableRefreshService
              string.Equals(calculated.Name, field.CalculatedFieldName, StringComparison.OrdinalIgnoreCase)));
 
     /// <summary>
-    /// R94-app-pivot-cache-5-1: reconciles <paramref name="cache"/>'s cacheFields list to match the
-    /// live table's current header set, matching ChangePivotTableSourceCommand's explicit
-    /// "Change Data Source" reconciliation. Fields whose name still matches at the same position keep
-    /// their existing metadata (grouping/sharedItems/number-format) rather than being rebuilt from
-    /// scratch, so a table resize that doesn't touch a surviving column's header doesn't discard that
-    /// column's grouping. A no-op fast path (headers already match by name and position) avoids
-    /// churning cache.Fields identity on every ordinary refresh.
+    /// R94-app-pivot-cache-5-1 / R115-commands-pivot-sharedItems-refresh: reconciles
+    /// <paramref name="cache"/>'s cacheFields list to match the live source's current header set,
+    /// matching ChangePivotTableSourceCommand's explicit "Change Data Source" reconciliation, AND
+    /// re-derives every SURVIVING field's <see cref="PivotCacheFieldModel.SharedItems"/> from the live
+    /// column data on every call (not only when the header set itself changed) -- see
+    /// <see cref="PivotCacheFieldFactory.MergeFromSourceData"/> for why this is a merge rather than a
+    /// full rebuild. Deliberately has NO "headers already match" fast-path early return any more: that
+    /// used to skip this entirely on the overwhelmingly common ordinary-refresh case (same header
+    /// names, only the underlying values changed), which is exactly the staleness this method now
+    /// exists to prevent. A field whose header has no existing same-named match (a truly new column)
+    /// still gets a brand-new field built from scratch, same as before.
     /// </summary>
     private static void ReconcileCacheFields(PivotCacheModel cache, IReadOnlyList<string> liveHeaders, Sheet sourceSheet, GridRange sourceRange)
     {
-        if (cache.Fields.Count == liveHeaders.Count)
-        {
-            var alreadyInSync = true;
-            for (var i = 0; i < liveHeaders.Count; i++)
-            {
-                if (!string.Equals(cache.Fields[i].Name, liveHeaders[i], StringComparison.Ordinal))
-                {
-                    alreadyInSync = false;
-                    break;
-                }
-            }
-
-            if (alreadyInSync)
-                return;
-        }
-
         var existingByName = new Dictionary<string, PivotCacheFieldModel>(StringComparer.Ordinal);
         foreach (var field in cache.Fields)
             existingByName.TryAdd(field.Name, field);
@@ -441,12 +447,18 @@ public static partial class PivotTableRefreshService
         for (var index = 0; index < liveHeaders.Count; index++)
         {
             var header = liveHeaders[index];
-            // R114-commands-pivot-sharedItems: a header that has no existing same-named field (a truly
-            // new column the table grew into) must get its SharedItems populated from the live source
-            // data the same way a brand-new pivot's cache does -- otherwise a slicer added against this
-            // newly-appeared field would have no filter items, exactly like the brand-new-pivot case.
             reconciled.Add(existingByName.TryGetValue(header, out var existing)
-                ? existing
+                // R115-commands-pivot-sharedItems-refresh: a header that already has a same-named
+                // field keeps that field's identity/grouping/number-format but must still pick up any
+                // NEW distinct value the live data has grown since the last refresh -- otherwise a
+                // pivot-bound slicer resolved after this refresh never sees it (SlicerItemResolver
+                // reads exactly this cached list, not the live source).
+                ? PivotCacheFieldFactory.MergeFromSourceData(existing, sourceSheet, sourceRange, index)
+                // R114-commands-pivot-sharedItems: a header that has no existing same-named field (a
+                // truly new column the table grew into) must get its SharedItems populated from the
+                // live source data the same way a brand-new pivot's cache does -- otherwise a slicer
+                // added against this newly-appeared field would have no filter items, exactly like the
+                // brand-new-pivot case.
                 : PivotCacheFieldFactory.BuildFromSourceData(header, sourceSheet, sourceRange, index));
         }
 

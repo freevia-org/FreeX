@@ -81,9 +81,12 @@ public static class ChartLayoutRequestBuilder
             return null;
 
         var categories = ExtractCategories(chart, cellAccessor, startCol, dataStartRow, endRow);
-        var series = chart.Type == ChartType.Scatter
-            ? ExtractScatterSeries(chart, cellAccessor, startRow, dataStartRow, endRow, startCol, dataStartCol, endCol)
-            : ExtractSeries(chart, cellAccessor, startRow, dataStartRow, endRow, dataStartCol, endCol);
+        var series = chart.Type switch
+        {
+            ChartType.Scatter => ExtractScatterSeries(chart, cellAccessor, startRow, dataStartRow, endRow, startCol, dataStartCol, endCol),
+            ChartType.Bubble => ExtractBubbleSeries(chart, cellAccessor, startRow, dataStartRow, endRow, startCol, endCol),
+            _ => ExtractSeries(chart, cellAccessor, startRow, dataStartRow, endRow, dataStartCol, endCol),
+        };
 
         return new ChartLayoutRequest
         {
@@ -129,17 +132,19 @@ public static class ChartLayoutRequestBuilder
             .OrderByDescending(c => c.Count)
             .FirstOrDefault()?.ToList() ?? [];
 
-        var isScatter = chart.Type == ChartType.Scatter;
+        // Scatter AND Bubble both read their embedded data with categoryContainerName "xVal" (see
+        // XlsxChartPartReader.Scatter.cs and XlsxChartPartReader.PieBubble.cs's TryReadBubbleChart),
+        // so for either type this series' own Categories are its X values as formatted numeric
+        // strings, not axis labels.
+        var usesXValCache = chart.Type is ChartType.Scatter or ChartType.Bubble;
         var series = new List<ChartSeriesData>(embeddedSeries.Count);
         foreach (var embedded in embeddedSeries)
         {
             IReadOnlyList<double>? xValues = null;
-            if (isScatter)
+            if (usesXValCache)
             {
-                // Scatter reads its embedded data with categoryContainerName "xVal" (see
-                // XlsxChartPartReader.Scatter.cs), so this series' own Categories are its X values
-                // as formatted numeric strings, not axis labels. A point whose cached text doesn't
-                // parse falls back to its positional index, matching ExtractScatterSeries.
+                // A point whose cached text doesn't parse falls back to its positional index,
+                // matching ExtractScatterSeries/ExtractBubbleSeries.
                 var xs = new double[embedded.Values.Count];
                 for (var i = 0; i < xs.Length; i++)
                 {
@@ -152,6 +157,14 @@ public static class ChartLayoutRequestBuilder
                 xValues = xs;
             }
 
+            // NOTE: the embedded-cache fallback has no per-point bubble-size data to recover here --
+            // XlsxChartPartReader's <c:bubbleSize> numCache is never captured into
+            // ChartEmbeddedSeriesData (that record only carries Categories/Values), so a Bubble chart
+            // reaching this fallback path renders with the correct X positions but every bubble at
+            // the default/minimum radius. Fixing that requires adding a size-cache field to
+            // ChartEmbeddedSeriesData (FreeX.Core.Model) and populating it in
+            // XlsxChartPartReader.PieBubble.cs (FreeX.Core.IO) -- out of this file's scope. See the
+            // R115 fix report for this defect.
             series.Add(new ChartSeriesData
             {
                 SeriesIndex = embedded.SeriesIndex,
@@ -164,7 +177,7 @@ public static class ChartLayoutRequestBuilder
         return new ChartLayoutRequest
         {
             Chart = chart,
-            Categories = isScatter ? [] : categories,
+            Categories = usesXValCache ? [] : categories,
             Series = series,
             PlotArea = plotArea,
             TextMeasurer = textMeasurer,
@@ -255,6 +268,57 @@ public static class ChartLayoutRequestBuilder
                 Name = ResolveSeriesName(chart, cellAccessor, startRow, col, seriesIndex),
                 Values = values,
                 XValues = xValues,
+            });
+        }
+
+        return series;
+    }
+
+    private static List<ChartSeriesData> ExtractBubbleSeries(
+        ChartModel chart,
+        ChartCellAccessor cellAccessor,
+        uint startRow,
+        uint dataStartRow,
+        uint endRow,
+        uint startCol,
+        uint endCol)
+    {
+        // Bubble deliberately ignores FirstColIsCategories -- the first column of the data range is
+        // ALWAYS the shared X column (mirrors ChartRenderer.Bubble.cs's BuildBubbleModel, which reads
+        // the unshifted startCol rather than the FirstColIsCategories-shifted dataStartCol other chart
+        // types use here). Each subsequent (Y, Size) column pair becomes one series: yCol = xCol+1,
+        // xCol+3, xCol+5, ... paired with the following size column.
+        var xCol = startCol;
+        var pointCapacity = (int)Math.Min(endRow - dataStartRow + 1, int.MaxValue);
+
+        var xValues = new List<double>(pointCapacity);
+        var rowOffset = 0;
+        for (var r = dataStartRow; r <= endRow; r++, rowOffset++)
+            xValues.Add(cellAccessor(r, xCol, out var x, out _) ? x : rowOffset);
+
+        var series = new List<ChartSeriesData>();
+        var seriesIndex = 0;
+        for (var yCol = xCol + 1; yCol <= endCol; yCol += 2, seriesIndex++)
+        {
+            var sizeCol = yCol + 1;
+            if (sizeCol > endCol)
+                break;
+
+            var values = new List<double?>(pointCapacity);
+            var sizes = new List<double?>(pointCapacity);
+            for (var r = dataStartRow; r <= endRow; r++)
+            {
+                values.Add(cellAccessor(r, yCol, out var y, out _) ? y : null);
+                sizes.Add(cellAccessor(r, sizeCol, out var s, out _) ? s : null);
+            }
+
+            series.Add(new ChartSeriesData
+            {
+                SeriesIndex = seriesIndex,
+                Name = ResolveSeriesName(chart, cellAccessor, startRow, yCol, seriesIndex),
+                Values = values,
+                XValues = xValues,
+                SizeValues = sizes,
             });
         }
 

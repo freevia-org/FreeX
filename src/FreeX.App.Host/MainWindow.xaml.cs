@@ -88,6 +88,11 @@ public partial class MainWindow : Window, IWorkbookWindow, IFormulaPointModeWork
     private string? _operationProgressFileName;
     private CancellationTokenSource? _fileOperationCancellation;
     private Dictionary<UIElement, bool>? _fileOperationInputEnabledSnapshot;
+    // Reentrant hold count backing the save-input gate (see AdjustSaveGate in
+    // MainWindow.Backstage.cs): incremented both when THIS window starts its own save and when a
+    // "New Window" sibling's save broadcasts the gate into this window, so the input surface is
+    // only re-enabled once every hold on it has released (R115-app-host-save-race).
+    private int _saveGateHoldCount;
     // ── Dirty / save-state cluster: canonical state lives in _documentState ──
     // These private properties delegate to the injected WorkbookDocumentState service.
     // They preserve the same names used across the 50-file partial-class surface so

@@ -24,6 +24,9 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
     public List<Rect> TiledBounds => ArrangedBounds;
     public int FormulaBarVisibilityAppliedCount { get; private set; }
     public bool? LastAppliedFormulaBarVisibility { get; private set; }
+    public int SaveGateHoldCount { get; private set; }
+    public int SaveInProgressAppliedCount { get; private set; }
+    public bool? LastAppliedSaveInProgress { get; private set; }
 
     public void ApplyWindowTitleSuffix(string suffix) => Suffix = suffix;
 
@@ -56,5 +59,12 @@ internal sealed class TestWorkbookWindow : IWorkbookWindow
     {
         LastAppliedFormulaBarVisibility = visible;
         FormulaBarVisibilityAppliedCount++;
+    }
+
+    public void ApplySaveInProgress(bool inProgress)
+    {
+        LastAppliedSaveInProgress = inProgress;
+        SaveInProgressAppliedCount++;
+        SaveGateHoldCount = inProgress ? SaveGateHoldCount + 1 : Math.Max(0, SaveGateHoldCount - 1);
     }
 }

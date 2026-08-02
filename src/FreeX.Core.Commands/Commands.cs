@@ -129,7 +129,13 @@ public sealed class EditCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             sheet.CellPhoneticGuides.Remove(addr);
         }
 
-        var extraAffectedCells = StructuredTableEditEffects.Apply(ctx, _edits, _appliedTableEffects);
+        var extraAffectedCells = new List<CellAddress>();
+        extraAffectedCells.AddRange(StructuredTableEditEffects.Apply(ctx, _edits, _appliedTableEffects));
+        // R115-data-table-master-formula-refresh: a Data Table's body is a one-time text-baked
+        // substitution of its master formula, so re-derive it here whenever this edit lands on that
+        // master/header formula cell -- see DataTableAutoRefreshEffects for the full rationale.
+        extraAffectedCells.AddRange(DataTableAutoRefreshEffects.Apply(ctx, _edits, _appliedTableEffects));
+
         if (extraAffectedCells.Count == 0)
             return new CommandOutcome(true, AffectedCells: _affectedCells);
 

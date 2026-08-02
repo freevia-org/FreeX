@@ -1,5 +1,6 @@
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using System.Linq;
 
 namespace FreeX.App.Services;
 
@@ -30,6 +31,12 @@ public sealed class WorkbookSaveService
         ArgumentNullException.ThrowIfNull(adapter);
         ArgumentNullException.ThrowIfNull(workbook);
         cancellationToken.ThrowIfCancellationRequested();
+
+        // Self-heal any orphaned fallback backup left next to `path` by a previous save that
+        // was interrupted (power loss, OS crash, forced task-kill) inside
+        // ReplaceExistingFileWithFallback's vacate-then-place window -- see the recovery method
+        // for why this must run before anything else in this call.
+        RecoverOrphanedFallbackBackup(path);
 
         // Detect a concurrent second writer: if the caller captured the file's write time at open
         // (WorkbookOpenResult.SourceLastWriteTimeUtc) and the file on disk has a different write
@@ -149,6 +156,94 @@ public sealed class WorkbookSaveService
         _fileOperations.DeleteFile(backupPath);
     }
 
+    // r115-services-workbooksave-orphaned-fallback-backup: ReplaceExistingFileWithFallback's
+    // vacate-then-place sequence (see its comments) is safe against corrupting `path`, but it is
+    // NOT atomic: if the process dies after the vacate move (line: MoveFile(path, backupPath))
+    // completes but before the placement move (MoveFile(tempPath, path)) starts or finishes,
+    // `path` no longer exists anywhere -- the user's file has vanished from Explorer/Finder --
+    // while its last-known-good content survives under a hidden, GUID-suffixed `.bak` sibling
+    // that nothing ever scans for. Without this, that backup sits there forever, undiscoverable,
+    // and the very next save simply treats the missing `path` as a brand-new file (via the
+    // "target does not exist" branch of ReplaceTargetFile), silently orphaning the backup instead
+    // of ever reconciling it.
+    //
+    // This runs at the top of every SaveAsync call (the "next save" for this path) and:
+    //   - if `path` is missing and a matching backup survives next to it, restores the newest
+    //     one to `path` before doing anything else, so the save (and the file) recovers exactly
+    //     as if the crash never interrupted the previous save;
+    //   - if `path` already exists, any matching backup here is stale (either unrelated to a
+    //     fallback at all, or left over because the process died between a successful placement
+    //     move and the trailing DeleteFile(backupPath) cleanup) and is discarded without ever
+    //     touching `path` itself.
+    private void RecoverOrphanedFallbackBackup(string path)
+    {
+        var directory = GetBackupSearchDirectory(path);
+        var pattern = GetBackupSearchPattern(path);
+
+        List<string> backups;
+        try
+        {
+            backups = _fileOperations.EnumerateFiles(directory, pattern).ToList();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best-effort recovery scan: if the directory can't be enumerated right now (e.g. a
+            // transient cloud-sync/network hiccup) just proceed with the save unchanged rather
+            // than blocking it on a diagnostic scan.
+            return;
+        }
+
+        if (backups.Count == 0)
+            return;
+
+        if (_fileOperations.FileExists(path))
+        {
+            foreach (var stale in backups)
+            {
+                if (_fileOperations.FileExists(stale))
+                    _fileOperations.DeleteFile(stale);
+            }
+
+            return;
+        }
+
+        var restore = backups
+            .Select(candidate => (Path: candidate, WriteTimeUtc: SafeGetLastWriteTimeUtc(candidate)))
+            .OrderByDescending(candidate => candidate.WriteTimeUtc)
+            .First()
+            .Path;
+
+        _fileOperations.MoveFile(restore, path, overwrite: false);
+
+        foreach (var other in backups)
+        {
+            if (!string.Equals(other, restore, StringComparison.OrdinalIgnoreCase) &&
+                _fileOperations.FileExists(other))
+                _fileOperations.DeleteFile(other);
+        }
+    }
+
+    private DateTime SafeGetLastWriteTimeUtc(string path)
+    {
+        try
+        {
+            return _fileOperations.GetLastWriteTimeUtc(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return DateTime.MinValue;
+        }
+    }
+
+    private static string GetBackupSearchDirectory(string path)
+    {
+        var directory = Path.GetDirectoryName(path);
+        return string.IsNullOrWhiteSpace(directory) ? Path.GetTempPath() : directory;
+    }
+
+    private static string GetBackupSearchPattern(string path) =>
+        $".{Path.GetFileName(path)}.*.bak";
+
     private void RestoreFallbackBackup(string path, string backupPath)
     {
         // The move into `path` failed partway through (or never started). Because `path` was
@@ -236,6 +331,11 @@ public sealed class WorkbookSaveService
             File.Copy(sourcePath, destinationPath, overwrite);
 
         public void DeleteFile(string path) => File.Delete(path);
+
+        public IEnumerable<string> EnumerateFiles(string directory, string searchPattern) =>
+            Directory.Exists(directory)
+                ? Directory.EnumerateFiles(directory, searchPattern)
+                : [];
     }
 }
 
@@ -252,6 +352,14 @@ internal interface IWorkbookSaveFileOperations
     void CopyFile(string sourcePath, string destinationPath, bool overwrite);
 
     void DeleteFile(string path);
+
+    /// <summary>
+    /// Lists files in <paramref name="directory"/> matching <paramref name="searchPattern"/>.
+    /// Used only by <see cref="WorkbookSaveService"/>'s orphaned-fallback-backup recovery scan;
+    /// implementations should return an empty sequence rather than throw when the directory does
+    /// not exist.
+    /// </summary>
+    IEnumerable<string> EnumerateFiles(string directory, string searchPattern);
 }
 
 /// <summary>

@@ -461,6 +461,18 @@ public sealed class EditingSession5ATests
     }
 
     [Fact]
+    public void InsertChart_FunnelHasEditableStages()
+    {
+        var sess = Make();
+        var shape = sess.InsertChart(ChartType.Funnel);
+
+        shape.Chart!.Categories.Should().Equal("Awareness", "Interest", "Consideration", "Conversion");
+        shape.Chart.Series.Should().ContainSingle();
+        shape.Chart.Series[0].Name.Should().Be("Value");
+        shape.Chart.Series[0].Values.Should().Equal(100, 68, 42, 18);
+    }
+
+    [Fact]
     public void InsertChart_IsUndoable()
     {
         var sess = Make();

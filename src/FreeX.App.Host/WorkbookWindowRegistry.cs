@@ -64,6 +64,19 @@ public interface IWorkbookWindow
     /// must reflect it immediately, the way real Excel does).
     /// </summary>
     void ApplyFormulaBarVisibility(bool visible);
+
+    /// <summary>
+    /// Applies (or releases) an EXTERNAL save-input gate raised by another window viewing the
+    /// same document (Excel "New Window" sibling), for the duration of that sibling's
+    /// full-workbook save.  Save serializes the LIVE Workbook instance on a background thread
+    /// (see MainWindow.Backstage.cs SaveWorkbookToTargetAsync); a New Window sibling shares that
+    /// exact Workbook/CommandBus instance, so without this a keystroke in this window while the
+    /// OTHER window's background thread enumerates the shared Sheet cell dictionaries could tear
+    /// them structurally mid-enumeration (R115-app-host-save-race). Implementations must be
+    /// reentrant/hold-counted: this window's own save and any number of sibling saves may overlap,
+    /// and input must stay blocked until every hold has released.
+    /// </summary>
+    void ApplySaveInProgress(bool inProgress);
 }
 
 /// <summary>
@@ -306,6 +319,24 @@ public sealed class WorkbookWindowRegistry
         {
             if (!ReferenceEquals(window, origin))
                 window.ApplyFormulaBarVisibility(visible);
+        }
+    }
+
+    /// <summary>
+    /// Extends <paramref name="origin"/>'s save-input gate to every OTHER window viewing the
+    /// SAME document (Excel "New Window" siblings share the live Workbook instance origin is
+    /// serializing in the background -- see <see cref="IWorkbookWindow.ApplySaveInProgress"/>).
+    /// Windows over a different document are untouched: their workbook is a different instance,
+    /// unaffected by origin's save. <paramref name="origin"/> itself is skipped -- it has already
+    /// applied the gate to its own input directly, before/after invoking the save.
+    /// </summary>
+    public void BroadcastSaveInProgress(IWorkbookWindow origin, bool inProgress)
+    {
+        ArgumentNullException.ThrowIfNull(origin);
+        foreach (var window in _windows)
+        {
+            if (!ReferenceEquals(window, origin) && window.DocumentId == origin.DocumentId)
+                window.ApplySaveInProgress(inProgress);
         }
     }
 

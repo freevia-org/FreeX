@@ -1535,6 +1535,48 @@ internal static partial class RowColumnShiftHelpers
         return removed ?? [];
     }
 
+    // R115-formula-structuredref-coldelete-survivingtable-ref: counterpart of
+    // FindStructuredTablesRemovedByColumnDelete above for the OTHER outcome of a column delete -- a
+    // table that SURVIVES the delete (only some of its columns fall inside the deleted band) still
+    // loses those columns' names (ReconcileStructuredTableColumns below rebuilds Columns to the
+    // post-delete width), so any Table[ColumnName] structured reference elsewhere in the workbook
+    // naming one of them is now exactly as dead as a reference to a fully-deleted table. Computed
+    // independently over the live, not-yet-mutated sheet.StructuredTables (same timing requirement
+    // as FindStructuredTablesRemovedByColumnDelete: must run BEFORE ShiftStructuredTables clears and
+    // rebuilds sheet.StructuredTables) so DeleteColumnsCommand.Apply can feed the result into every
+    // FormulaRewriter pass as DeleteColsOp.DeletedColumnNamesByTable. A fully-consumed table (whole
+    // range inside the deleted band) is excluded here -- it's covered by DeletedTableNames instead,
+    // and reporting its columns as merely "removed" would be redundant (and its own Columns/Range are
+    // about to be discarded, not reconciled).
+    internal static Dictionary<string, IReadOnlyList<string>> FindStructuredTableColumnsRemovedByColumnDelete(
+        Sheet sheet, uint startCol, uint count)
+    {
+        var result = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
+        var endCol = startCol + count - 1;
+
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (ShiftRangeColumnsDown(table.Range, startCol, count) is null)
+                continue; // fully consumed -- handled via DeletedTableNames, not here.
+
+            List<string>? removedNames = null;
+            for (var col = table.Range.Start.Col; col <= table.Range.End.Col; col++)
+            {
+                if (col < startCol || col > endCol)
+                    continue;
+
+                var index = (int)(col - table.Range.Start.Col);
+                if (index < table.Columns.Count)
+                    (removedNames ??= []).Add(table.Columns[index].Name);
+            }
+
+            if (removedNames is { Count: > 0 })
+                result[table.Name] = removedNames;
+        }
+
+        return result;
+    }
+
     private static void ShiftStructuredTables(Workbook workbook, Sheet sheet, AddressBearingStateSnapshot snapshot, AddressShift shift)
     {
         sheet.StructuredTables.Clear();

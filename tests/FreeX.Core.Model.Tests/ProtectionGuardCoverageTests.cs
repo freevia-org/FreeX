@@ -609,6 +609,28 @@ public class ProtectionGuardCoverageTests
                     new CellAddress(sheet.Id, 1, 1));
             },
 
+            // R115-data-table-master-formula-refresh: the internal sub-effect DataTableAutoRefreshEffects
+            // runs to re-derive a Data Table's body when its master formula cell is edited after the
+            // table already exists (see EditCellsCommand/GroupedEditCellsCommand). Register a real
+            // one-variable table's registration directly (its body-writing is identical regardless of
+            // one/two-variable origin) so this rejects a fully-protected sheet exactly like the
+            // creation commands above.
+            ["DataTableBodyRefreshCommand"] = (wb, sheet) =>
+            {
+                sheet.IsProtected = false;
+                var formulaCell = new CellAddress(sheet.Id, 1, 1);
+                var inputCell = new CellAddress(sheet.Id, 10, 1);
+                sheet.SetCell(formulaCell, Cell.FromFormula("A10*2"));
+                sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(1));
+                sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(2));
+                var tableRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 2));
+                var creation = new OneVariableDataTableCommand(tableRange, formulaCell, inputCell, DataTableInputOrientation.Column);
+                creation.Apply(new TestCommandContext(wb));
+                sheet.IsProtected = true;
+                return new DataTableBodyRefreshCommand(
+                    new DataTableRegistration(tableRange, formulaCell, inputCell, SecondInputCell: null, IsRowOriented: false));
+            },
+
             // ---- Merge / unmerge ----
             ["MergeCellsCommand"] = (wb, sheet) =>
                 new MergeCellsCommand(sheet.Id, new GridRange(

@@ -270,6 +270,10 @@ public sealed class ChartDataDialogPlanner
             {
                 EnsureStockSeriesShape();
             }
+            if (chartType == ChartType.Funnel)
+            {
+                EnsureFunnelSeriesShape();
+            }
             if (IsScatterLike(chartType))
             {
                 SeedMissingCoordinates();
@@ -580,6 +584,7 @@ public sealed class ChartDataDialogPlanner
             ChartType.Stock => "Stock",
             ChartType.Surface => "Surface",
             ChartType.Surface3D => "3-D Surface",
+            ChartType.Funnel => "Funnel",
             _ => chartType.ToString(),
         };
     }
@@ -604,6 +609,16 @@ public sealed class ChartDataDialogPlanner
 
         for (var index = 0; index < names.Length; index++)
             _grid.SetSeriesName(index, names[index]);
+    }
+
+    private void EnsureFunnelSeriesShape()
+    {
+        if (_grid.SeriesCount > 0)
+            return;
+
+        _grid.AddSeries("Value");
+        for (var categoryIndex = 0; categoryIndex < _grid.CategoryCount; categoryIndex++)
+            _grid.SetValue(0, categoryIndex, 0);
     }
 
     private int FindSeriesIndex(string name)

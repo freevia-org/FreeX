@@ -164,59 +164,223 @@ public sealed class App : Application
     }
 
     /// <summary>
-    /// Checks for a crash-recovery snapshot from a previous (now-dead) session and, if the user
-    /// accepts, loads it into <paramref name="mainWindow"/>. Mirrors
-    /// <c>the WPF host.App.xaml.cs</c>'s <c>OfferStartupRecovery</c>, simplified for this shell's
-    /// single-MainWindow-at-startup shape: only the single newest candidate is offered into the
-    /// already-shown main window (WPF's multi-candidate/"open extra candidates in new windows"
-    /// behavior is not replicated here — Avalonia's <c>MainWindow.WindowManagement.cs</c>, which
-    /// would host that, is owned by a different change in this pass). Declined or unreadable
-    /// candidates are deleted so they are never re-offered. Must never throw — startup recovery is
-    /// best-effort and must not affect normal startup.
+    /// Checks for crash-recovery snapshots from previous (now-dead) sessions and offers each one
+    /// individually, loading accepted candidates into live windows. Mirrors
+    /// <c>the WPF host.App.xaml.cs</c>'s <c>OfferStartupRecovery</c>: candidates are first collapsed
+    /// by <see cref="DeduplicateCandidatesByDocument"/> so that multiple autosave snapshots which all
+    /// belong to the SAME underlying document (e.g. "New Window" siblings over one shared
+    /// <c>WorkbookSession</c> — see <c>MainWindow.WindowManagement.cs</c>'s <c>NewWindow()</c>, which
+    /// gives every sibling its own <see cref="AvaloniaAutosaveCoordinator"/> and therefore its own
+    /// snapshot file) collapse to a single, newest-per-document candidate. What remains after that
+    /// are provably INDEPENDENT documents (different <c>Workbook.Id</c>/<see cref="AutosaveSidecar.DocumentId"/>),
+    /// e.g. a sibling window that was detached via File &gt; Open or File &gt; New
+    /// (<c>MainWindow.cs</c>'s <c>ReplaceSession</c> call sites) before the crash — each of those is
+    /// offered on its own, never silently discarded in favor of another. The first accepted candidate
+    /// is restored into <paramref name="mainWindow"/>; any further accepted candidates are restored
+    /// into freshly opened windows so accepting more than one recovery never overwrites another.
+    /// Declined or unreadable candidates are deleted so they are never re-offered. Must never throw —
+    /// startup recovery is best-effort and must not affect normal startup.
     /// </summary>
     private static async Task OfferStartupRecoveryAsync(MainWindow mainWindow, AutosaveSnapshotStore snapshotStore)
     {
         try
         {
-            var candidates = snapshotStore.EnumerateCandidates();
+            // This process's OWN just-started coordinator has not written a snapshot yet at this
+            // point in startup, so every candidate here necessarily belongs to a previous launch —
+            // no self-recovery filtering is needed.
+            var candidates = DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates());
             if (candidates.Count == 0)
                 return;
 
-            // Newest first (by sidecar timestamp, falling back to file write time), matching the
-            // WPF host's dedup-then-offer-newest-first ordering.
-            var ordered = candidates
-                .OrderByDescending(GetCandidateTimestamp)
-                .ToList();
+            var anyAccepted = false;
 
-            // This process's OWN just-started coordinator has not written a snapshot yet at this
-            // point in startup, so every candidate here necessarily belongs to a previous launch —
-            // no self-recovery filtering is needed the way WPF's multi-window dedup requires.
-            var newest = ordered[0];
-            for (var i = 1; i < ordered.Count; i++)
+            for (var i = 0; i < candidates.Count; i++)
             {
-                try { AutosaveSnapshotStore.DeleteCandidate(ordered[i]); } catch { /* best-effort */ }
+                var candidate = candidates[i];
+                var displayName = candidate.Sidecar.DisplayName;
+                var remaining = candidates.Count - i;
+
+                // When multiple independent documents remain, mention how many are outstanding so
+                // the user is not surprised by repeated prompts — mirrors the WPF host's
+                // Startup_RecoveryPromptMultiple/-Named variants.
+                string prompt;
+                if (remaining > 1)
+                {
+                    prompt = string.IsNullOrWhiteSpace(displayName)
+                        ? $"FreeX found unsaved changes from a previous session ({remaining} unsaved workbooks found). Recover this one?"
+                        : $"FreeX found unsaved changes to \"{displayName}\" from a previous session ({remaining} unsaved workbooks found). Recover this one?";
+                }
+                else
+                {
+                    prompt = string.IsNullOrWhiteSpace(displayName)
+                        ? "FreeX found unsaved changes from a previous session. Recover them?"
+                        : $"FreeX found unsaved changes to \"{displayName}\" from a previous session. Recover them?";
+                }
+
+                var accepted = await mainWindow.ShowRecoveryPromptAsync(prompt, "Recover Unsaved Workbook");
+                if (accepted)
+                {
+                    // The first accepted candidate restores into the already-shown main window; any
+                    // subsequent accepted candidate opens its own new window so accepting more than
+                    // one recovery never overwrites an already-recovered document.
+                    var targetWindow = anyAccepted ? OpenRecoveryWindow() : mainWindow;
+                    anyAccepted = true;
+
+                    // A load failure (corrupt/unreadable snapshot) leaves the target window's
+                    // just-shown default workbook untouched — there is nothing else to do; the bad
+                    // snapshot is deleted below either way so it is never re-offered.
+                    await targetWindow.LoadRecoverySnapshotAsync(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
+                }
+
+                // Whether declined, or accepted and (successfully or not) loaded, this candidate is
+                // never re-offered on a future launch.
+                try { AutosaveSnapshotStore.DeleteCandidate(candidate); } catch { /* best-effort */ }
             }
-
-            var displayName = newest.Sidecar.DisplayName;
-            var prompt = string.IsNullOrWhiteSpace(displayName)
-                ? "FreeX found unsaved changes from a previous session. Recover them?"
-                : $"FreeX found unsaved changes to \"{displayName}\" from a previous session. Recover them?";
-
-            var accepted = await mainWindow.ShowRecoveryPromptAsync(prompt, "Recover Unsaved Workbook");
-            if (accepted)
-            {
-                // A load failure (corrupt/unreadable snapshot) leaves the just-shown default
-                // workbook untouched — there is nothing else to do; the bad snapshot is deleted
-                // below either way so it is never re-offered.
-                await mainWindow.LoadRecoverySnapshotAsync(newest.SnapshotPath, newest.Sidecar.OriginalFilePath);
-            }
-
-            try { AutosaveSnapshotStore.DeleteCandidate(newest); } catch { /* best-effort */ }
         }
         catch
         {
             // Startup recovery must never affect normal startup.
         }
+    }
+
+    /// <summary>
+    /// Opens a brand-new, independent <see cref="MainWindow"/> (its own fresh default session, NOT
+    /// a shared sibling view) to host a subsequent accepted recovery candidate, wiring its autosave
+    /// coordinator exactly like <c>MainWindow.WindowManagement.cs</c>'s <c>NewWindow()</c> /
+    /// <see cref="OnFrameworkInitializationCompleted"/> already do for every other live window.
+    /// </summary>
+    private static MainWindow OpenRecoveryWindow()
+    {
+        var window = new MainWindow(StartupArguments);
+        var snapshotStore = AutosaveSnapshotStore.CreateDefault(PlatformApplicationDataPathProvider.LocalInstance);
+        var autosaveCoordinator = new AvaloniaAutosaveCoordinator(window, snapshotStore);
+        window.AttachAutosaveCoordinator(autosaveCoordinator);
+        window.Closed += (_, _) => autosaveCoordinator.OnWindowClosed();
+        autosaveCoordinator.Start();
+        window.Show();
+        window.Activate();
+        return window;
+    }
+
+    /// <summary>
+    /// Collapses recovery candidates that all belong to the same underlying document down to a
+    /// single one, deleting the rest — ports the WPF host's <c>DeduplicateCandidatesByDocument</c>
+    /// (App.xaml.cs) verbatim in behavior. A workbook shared across "New Window" views
+    /// (<c>MainWindow.WindowManagement.cs</c>'s <c>NewWindow()</c>) gets one autosave snapshot PER
+    /// WINDOW (autosave ownership is per-window, not per-document — see
+    /// <see cref="AvaloniaAutosaveCoordinator"/>'s constructor, which mints a unique snapshot id per
+    /// instance even when several coordinators share the same <c>WorkbookSession</c>'s workbook). If
+    /// the process crashes, that leaves multiple snapshot files with the same
+    /// <see cref="AutosaveSidecar.OriginalFilePath"/>/<see cref="AutosaveSidecar.DisplayName"/> on
+    /// disk for what was really one shared, dirtied document — without this step,
+    /// <see cref="OfferStartupRecoveryAsync"/> would offer each one individually, and accepting more
+    /// than one would load the same document into two independent windows with disconnected
+    /// sessions. Recovery only ever needs to restore ONE copy of a document, so we keep just the
+    /// newest snapshot per document identity and delete its siblings up front.
+    /// </summary>
+    private static IReadOnlyList<AutosaveRecoveryCandidate> DeduplicateCandidatesByDocument(
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
+    {
+        if (candidates.Count <= 1)
+            return candidates;
+
+        var newestByDocument = new Dictionary<string, AutosaveRecoveryCandidate>(StringComparer.OrdinalIgnoreCase);
+        var ordered = new List<string>();
+
+        foreach (var candidate in candidates)
+        {
+            var documentKey = GetDocumentIdentityKey(candidate);
+            if (!newestByDocument.TryGetValue(documentKey, out var existing))
+            {
+                newestByDocument[documentKey] = candidate;
+                ordered.Add(documentKey);
+                continue;
+            }
+
+            if (GetCandidateTimestamp(candidate) > GetCandidateTimestamp(existing))
+            {
+                try { AutosaveSnapshotStore.DeleteCandidate(existing); } catch { /* best-effort */ }
+                newestByDocument[documentKey] = candidate;
+            }
+            else
+            {
+                try { AutosaveSnapshotStore.DeleteCandidate(candidate); } catch { /* best-effort */ }
+            }
+        }
+
+        return ordered.Select(key => newestByDocument[key]).ToList();
+    }
+
+    /// <summary>
+    /// Identity key grouping candidates that are recovery snapshots of the same document — ports the
+    /// WPF host's <c>GetDocumentIdentityKey</c>. A saved workbook is keyed by its original file path
+    /// (case-insensitive); an unsaved workbook by its display name. Either way, the key is further
+    /// scoped to the originating process launch (see <see cref="GetLaunchScope"/>) and to the
+    /// sidecar's <see cref="AutosaveSidecar.DocumentId"/> (populated from
+    /// <c>MainWindow.DocumentId</c>, i.e. the in-memory <c>Workbook.Id</c>): genuine "New Window"
+    /// siblings share the exact same Workbook instance and therefore the same DocumentId, while two
+    /// independent windows (e.g. one detached via File &gt; Open/File &gt; New) each get their own
+    /// freshly created/deserialized Workbook and therefore different DocumentIds. Candidates whose
+    /// DocumentId is missing (a snapshot written by a build predating this field) are never treated
+    /// as provably the same document as another candidate — see
+    /// <see cref="GetDocumentIdentityComponent"/>. Candidates that have neither a path nor a name
+    /// (should not normally happen) each get their own unique key so they are never incorrectly
+    /// merged with an unrelated candidate.
+    /// </summary>
+    private static string GetDocumentIdentityKey(AutosaveRecoveryCandidate candidate)
+    {
+        if (!string.IsNullOrWhiteSpace(candidate.Sidecar.OriginalFilePath))
+        {
+            return "path:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.OriginalFilePath
+                + ":" + GetDocumentIdentityComponent(candidate);
+        }
+
+        if (!string.IsNullOrWhiteSpace(candidate.Sidecar.DisplayName))
+        {
+            return "name:" + GetLaunchScope(candidate) + ":" + candidate.Sidecar.DisplayName
+                + ":" + GetDocumentIdentityComponent(candidate);
+        }
+
+        return "snapshot:" + candidate.SnapshotPath;
+    }
+
+    /// <summary>
+    /// The DocumentId contribution to <see cref="GetDocumentIdentityKey"/>. When the sidecar carries
+    /// a <see cref="AutosaveSidecar.DocumentId"/> (every snapshot written by this build does — see
+    /// <c>SessionSnapshotSource.DocumentId</c> below), it is authoritative proof of whether two
+    /// candidates share the same underlying Workbook instance. When it is missing, the candidate's
+    /// own snapshot path is used instead so it is NEVER treated as provably the same document as
+    /// another candidate and silently merged/deleted — better to keep (and offer) an extra candidate
+    /// than to silently destroy an unrelated window's unsaved edits.
+    /// </summary>
+    private static string GetDocumentIdentityComponent(AutosaveRecoveryCandidate candidate) =>
+        string.IsNullOrWhiteSpace(candidate.Sidecar.DocumentId)
+            ? "unknown:" + candidate.SnapshotPath
+            : candidate.Sidecar.DocumentId;
+
+    /// <summary>
+    /// Extracts the "{processId}-{launchTag}" scope from a snapshot's file name, e.g.
+    /// "recovery-12345-a1b2c3d4-e5f6a7b8.fxl" -&gt; "12345-a1b2c3d4" (matching
+    /// <see cref="AvaloniaAutosaveCoordinator"/>'s snapshot-id format). This identifies the
+    /// originating process launch (not the individual window within it), so sibling windows of the
+    /// same crashed session still share a scope and can be deduplicated, while two different
+    /// processes/launches never do. Falls back to the full snapshot path when the file name does not
+    /// match the expected pattern, so an unrecognized name is always treated as its own distinct
+    /// scope rather than accidentally merged with anything else.
+    /// </summary>
+    private static string GetLaunchScope(AutosaveRecoveryCandidate candidate)
+    {
+        var baseName = Path.GetFileNameWithoutExtension(candidate.SnapshotPath);
+        var parts = baseName.Split('-');
+        if (!string.Equals(parts.Length > 0 ? parts[0] : null, "recovery", StringComparison.OrdinalIgnoreCase))
+            return candidate.SnapshotPath;
+
+        if (parts.Length >= 4)
+            return parts[1] + "-" + parts[2];
+        if (parts.Length == 3)
+            return parts[1];
+
+        return candidate.SnapshotPath;
     }
 
     private static DateTimeOffset GetCandidateTimestamp(AutosaveRecoveryCandidate candidate)
@@ -362,6 +526,12 @@ internal sealed class AvaloniaAutosaveCoordinator
         public string DisplayName => _mainWindow.Session.DisplayName;
         public bool IsDirty => _mainWindow.Session.IsDirty;
         public int DirtyGeneration => _mainWindow.Session.DirtyGeneration;
+
+        // Stable identity of the in-memory Workbook this snapshot came from (see
+        // App.GetDocumentIdentityKey's doc comment): two windows sharing the SAME Workbook.Id are
+        // genuine "New Window" siblings over one shared document; two windows with DIFFERENT
+        // Workbook.Ids are independent documents even when they happen to share a saved file path.
+        public string? DocumentId => _mainWindow.Session.Workbook.Id.Value.ToString();
 
         public void WriteSnapshot(string snapshotPath)
         {
