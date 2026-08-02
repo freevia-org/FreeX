@@ -5291,6 +5291,7 @@ public static class PptxPackageWriter
         // can edit them. Synchronize only a recognized root transform; payloads
         // without one remain verbatim by design.
         SynchronizePreservedTransform(el, shape);
+        SynchronizePreservedNonVisualProperties(el, shape);
 
         // Patch r-namespace id attributes to use the fresh relIds
         var rNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -5382,6 +5383,7 @@ public static class PptxPackageWriter
                 clone = new XElement(el);
             }
             SynchronizePreservedTransform(clone, shape);
+            SynchronizePreservedNonVisualProperties(clone, shape);
             return new XElement(MC + "AlternateContent",
                 new XAttribute(XNamespace.Xmlns + "mc",
                     "http://schemas.openxmlformats.org/markup-compatibility/2006"),
@@ -5391,6 +5393,68 @@ public static class PptxPackageWriter
         }
 
         return el;
+    }
+
+    /// <summary>
+    /// Synchronizes model-owned non-visual properties on preserved modern objects.
+    /// Preserved payloads are retained verbatim, but these cNvPr fields are ordinary
+    /// editable shape state just like the transform and hyperlink above. AlternateContent
+    /// choice/fallback branches are both updated so the next reader sees the same state.
+    /// </summary>
+    private static void SynchronizePreservedNonVisualProperties(XElement root, SlideShape shape)
+    {
+        foreach (var cNvPr in root.Descendants(P + "cNvPr").ToList())
+        {
+            cNvPr.SetAttributeValue("id", shape.Id);
+            cNvPr.SetAttributeValue("name", shape.Name);
+
+            if (shape.IsHidden)
+                cNvPr.SetAttributeValue("hidden", "1");
+            else
+                cNvPr.Attribute("hidden")?.Remove();
+
+            if (!string.IsNullOrWhiteSpace(shape.AlternativeTextTitle))
+                cNvPr.SetAttributeValue("title", shape.AlternativeTextTitle.Trim());
+            else
+                cNvPr.Attribute("title")?.Remove();
+
+            if (!string.IsNullOrWhiteSpace(shape.AlternativeText))
+                cNvPr.SetAttributeValue("descr", shape.AlternativeText.Trim());
+            else
+                cNvPr.Attribute("descr")?.Remove();
+
+            SynchronizePreservedDecorativeState(cNvPr, shape.IsDecorative);
+        }
+    }
+
+    private static void SynchronizePreservedDecorativeState(XElement cNvPr, bool isDecorative)
+    {
+        var extLst = cNvPr.Element(A + "extLst");
+        if (extLst is not null)
+        {
+            extLst.Elements(A + "ext")
+                .Where(ext => ext.Descendants(Adec + "decorative").Any())
+                .Remove();
+
+            if (!extLst.Elements().Any())
+                extLst.Remove();
+        }
+
+        if (!isDecorative)
+            return;
+
+        extLst = cNvPr.Element(A + "extLst");
+        if (extLst is null)
+        {
+            extLst = new XElement(A + "extLst");
+            cNvPr.Add(extLst);
+        }
+
+        extLst.Add(new XElement(A + "ext",
+            new XAttribute("uri", DecorativeExtUri),
+            new XElement(Adec + "decorative",
+                NsAttr("adec", Adec),
+                new XAttribute("val", "1"))));
     }
 
     private static void SynchronizePreservedTransform(XElement root, SlideShape shape)

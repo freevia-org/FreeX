@@ -77,6 +77,47 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void PreservedObject_NonVisualProperties_RoundTripEditedState()
+    {
+        const string zoomXml = """
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+              <p:nvGraphicFramePr>
+                <p:cNvPr id="10" name="Original Zoom"/>
+                <p:cNvGraphicFramePr/>
+                <p:nvPr/>
+              </p:nvGraphicFramePr>
+              <p:xfrm>
+                <a:off x="457200" y="274638"/>
+                <a:ext cx="2743200" cy="1828800"/>
+              </p:xfrm>
+              <a:graphic>
+                <a:graphicData uri="http://schemas.microsoft.com/office/powerpoint/2010/main">
+                  <p14:zoom xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main" type="slide"/>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+            """;
+
+        var presentation = PptxPackageReader.Read(BuildPptxWithShapeXml(zoomXml));
+        var zoom = presentation.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
+        zoom.Name = "Edited Zoom";
+        zoom.IsHidden = true;
+        zoom.AlternativeTextTitle = "Navigation target";
+        zoom.AlternativeText = "Opens the quarterly overview.";
+        zoom.IsDecorative = true;
+
+        var roundTripped = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        var edited = roundTripped.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
+
+        edited.Name.Should().Be("Edited Zoom");
+        edited.IsHidden.Should().BeTrue();
+        edited.AlternativeTextTitle.Should().Be("Navigation target");
+        edited.AlternativeText.Should().Be("Opens the quarterly overview.");
+        edited.IsDecorative.Should().BeTrue();
+    }
+
+    [Fact]
     public void SlideZoom_CapturesTargetSlideId_AndPreservesItOnWrite()
     {
         const string zoomXml = """
