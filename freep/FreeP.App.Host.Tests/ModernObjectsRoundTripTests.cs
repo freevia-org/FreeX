@@ -363,6 +363,51 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void SummaryZoomTileLayout_IsUndoableAndRoundTripsNativeFactors()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target 1" });
+        presentation.Slides.Add(new Slide { Id = "slide-3", Title = "Target 2" });
+        foreach (var (id, slideId) in new[]
+                 { ("{SECTION-ONE}", "slide-2"), ("{SECTION-TWO}", "slide-3") })
+        {
+            var section = new PresentationSection { Id = id, Name = id };
+            section.SlideIds.Add(slideId);
+            presentation.Sections.Add(section);
+        }
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var zoom = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}" });
+        var originalTile = zoom.PreservedObject!.SummaryZoomTargets.Single(target =>
+            target.SectionId == "{SECTION-TWO}");
+        session.SetSummaryZoomTileLayout(
+            zoom.Id, "{SECTION-TWO}", -12500, 8750, 112500, 90000).Should().BeTrue();
+
+        var tile = XElement.Parse(zoom.PreservedObject!.RawXml).Descendants()
+            .Single(element => element.Name.LocalName == "summaryZmObj"
+                && element.Attribute("sectionId")?.Value == "{SECTION-TWO}");
+        tile.Attribute("offsetFactorX")!.Value.Should().Be("-12500");
+        tile.Attribute("offsetFactorY")!.Value.Should().Be("8750");
+        tile.Attribute("scaleFactorX")!.Value.Should().Be("112500");
+        tile.Attribute("scaleFactorY")!.Value.Should().Be("90000");
+
+        session.Undo();
+        zoom.PreservedObject.SummaryZoomTargets.Single(target => target.SectionId == "{SECTION-TWO}")
+            .Should().Be(originalTile);
+        session.Redo();
+        zoom.PreservedObject.SummaryZoomTargets.Single(target => target.SectionId == "{SECTION-TWO}")
+            .ScaleFactorX.Should().Be(112500);
+
+        var reopened = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        reopened.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.SummaryZoomTargets.Single(target => target.SectionId == "{SECTION-TWO}")
+            .Should().Be(new SummaryZoomTarget(
+                "{SECTION-TWO}", "{SECTION-TWO}", string.Empty,
+                -12500, 8750, 112500, 90000));
+    }
+
+    [Fact]
     public void AuthoredSummaryZoom_CoverImageTargetsSingleTileAndReopens()
     {
         var presentation = new Presentation();

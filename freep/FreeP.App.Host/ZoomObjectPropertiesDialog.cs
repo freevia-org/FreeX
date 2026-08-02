@@ -12,11 +12,19 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
     private readonly ComboBox _imageType;
     private readonly TextBox _transitionDuration;
     private readonly TextBox _cropEdges;
+    private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
+    private readonly ComboBox? _summaryTile;
+    private readonly TextBox? _summaryOffset;
+    private readonly TextBox? _summaryScale;
 
     internal ZoomObjectProperties Properties { get; private set; }
+    internal ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit? SummaryTileLayout { get; private set; }
 
-    internal ZoomObjectPropertiesDialog(ZoomObjectProperties current)
+    internal ZoomObjectPropertiesDialog(
+        ZoomObjectProperties current,
+        IReadOnlyList<SummaryZoomTarget>? summaryTargets = null)
     {
+        _summaryTargets = summaryTargets ?? Array.Empty<SummaryZoomTarget>();
         Title = ZoomObjectPropertiesPlanner.DialogTitle;
         Width = 440;
         SizeToContent = SizeToContent.Height;
@@ -53,19 +61,43 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             ToolTip = "left, top, right, bottom as percentages; for example 0, 5, 0, 5",
         };
 
+        if (_summaryTargets.Count > 0)
+        {
+            _summaryTile = new ComboBox
+            {
+                ItemsSource = _summaryTargets
+                    .Select(target => string.IsNullOrWhiteSpace(target.Title)
+                        ? target.SectionId
+                        : target.Title)
+                    .ToArray(),
+                SelectedIndex = 0,
+                MinWidth = 180,
+            };
+            _summaryOffset = new TextBox { MinWidth = 180 };
+            _summaryScale = new TextBox { MinWidth = 180 };
+            _summaryTile.SelectionChanged += (_, _) => LoadSummaryTileFields();
+        }
+
         var grid = new Grid { Margin = new Thickness(14) };
-        for (var i = 0; i < 6; i++)
+        for (var i = 0; i < 6 + (_summaryTargets.Count > 0 ? 3 : 0); i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        AddRow(grid, 0, "Image source:", _imageType);
-        AddRow(grid, 1, "Transition duration:", _transitionDuration);
-        AddRow(grid, 2, "Preview crop (%):", _cropEdges);
-        Grid.SetRow(_returnToParent, 3);
+        var row = 0;
+        AddRow(grid, row++, "Image source:", _imageType);
+        AddRow(grid, row++, "Transition duration:", _transitionDuration);
+        AddRow(grid, row++, "Preview crop (%):", _cropEdges);
+        if (_summaryTile is not null)
+        {
+            AddRow(grid, row++, "Summary tile:", _summaryTile);
+            AddRow(grid, row++, "Tile position (%):", _summaryOffset!);
+            AddRow(grid, row++, "Tile scale (%):", _summaryScale!);
+        }
+        Grid.SetRow(_returnToParent, row++);
         Grid.SetColumnSpan(_returnToParent, 2);
         grid.Children.Add(_returnToParent);
-        Grid.SetRow(_showBackground, 4);
+        Grid.SetRow(_showBackground, row++);
         Grid.SetColumnSpan(_showBackground, 2);
         grid.Children.Add(_showBackground);
 
@@ -79,11 +111,12 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
         ok.Click += (_, _) => Apply();
         buttons.Children.Add(ok);
         buttons.Children.Add(new Button { Content = "Cancel", IsCancel = true, MinWidth = 75 });
-        Grid.SetRow(buttons, 5);
+        Grid.SetRow(buttons, row);
         Grid.SetColumnSpan(buttons, 2);
         grid.Children.Add(buttons);
         Content = grid;
         Properties = current;
+        LoadSummaryTileFields();
     }
 
     private static void AddRow(Grid grid, int row, string labelText, Control control)
@@ -109,6 +142,26 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
                 MessageBoxImage.Warning);
             return;
         }
+        if (_summaryTile is not null && _summaryOffset is not null && _summaryScale is not null)
+        {
+            if (!ZoomObjectPropertiesPlanner.TryParseFactorPair(
+                    _summaryOffset.Text, allowNegative: true, out var offsetX, out var offsetY)
+                || !ZoomObjectPropertiesPlanner.TryParseFactorPair(
+                    _summaryScale.Text, allowNegative: false, out var scaleX, out var scaleY))
+            {
+                MessageBox.Show(this,
+                    "Summary tile position and scale must each be two percentages.",
+                    ZoomObjectPropertiesPlanner.DialogTitle,
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            var target = _summaryTargets[_summaryTile.SelectedIndex];
+            SummaryTileLayout = new ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit(
+                target.SectionId, offsetX, offsetY, scaleX, scaleY);
+        }
+
         Properties = new ZoomObjectProperties(
             _returnToParent.IsChecked == true,
             imageType,
@@ -119,5 +172,19 @@ internal sealed class ZoomObjectPropertiesDialog : Free.Shared.Ribbon.Wpf.Dialog
             cropRight,
             cropBottom);
         DialogResult = true;
+    }
+
+    private void LoadSummaryTileFields()
+    {
+        if (_summaryTile is null || _summaryOffset is null || _summaryScale is null
+            || _summaryTile.SelectedIndex < 0
+            || _summaryTile.SelectedIndex >= _summaryTargets.Count)
+            return;
+
+        var target = _summaryTargets[_summaryTile.SelectedIndex];
+        _summaryOffset.Text = ZoomObjectPropertiesPlanner.FormatFactorPair(
+            target.OffsetFactorX, target.OffsetFactorY);
+        _summaryScale.Text = ZoomObjectPropertiesPlanner.FormatFactorPair(
+            target.ScaleFactorX, target.ScaleFactorY);
     }
 }

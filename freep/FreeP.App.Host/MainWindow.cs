@@ -4842,11 +4842,32 @@ public sealed partial class MainWindow : Window
         if (current is null)
             return;
 
-        var dialog = new ZoomObjectPropertiesDialog(current);
+        var selectedShapeId = GetSingleSelectedShapeId();
+        var summaryTargets = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
+            && ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject is { } info
+            ? info.SummaryZoomTargets
+            : (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
+        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets);
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
-            Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+        {
+            var changed = Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+            if (dialog.SummaryTileLayout is { } tile && selectedShapeId is uint summaryShapeId)
+                changed |= Editor.SetSummaryZoomTileLayout(
+                    summaryShapeId,
+                    tile.SectionId,
+                    tile.OffsetFactorX,
+                    tile.OffsetFactorY,
+                    tile.ScaleFactorX,
+                    tile.ScaleFactorY);
+            if (changed)
+            {
+                _file.MarkDirty();
+                RefreshCanvas();
+                UpdateTitle();
+            }
+        }
     }
 
     internal void OpenZoomCoverImagePicker()
