@@ -14,6 +14,59 @@ public sealed class AsyncFileLifecycleHeadlessTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
+    [Theory]
+    [InlineData(true, "Ada Lovelace")]
+    [InlineData(false, "stale author")]
+    public async Task StartupDocument_HonorsUpdateFieldsSettingAndRemainsClean(
+        bool updateFields,
+        string expectedText)
+    {
+        var tempDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "FreeW.Avalonia.Tests",
+            Guid.NewGuid().ToString("N"));
+        var documentPath = Path.Combine(tempDirectory, $"UpdateFields-{updateFields}.docx");
+        var settingsPath = Path.Combine(tempDirectory, "settings.json");
+        Directory.CreateDirectory(tempDirectory);
+        var source = TextDocument.CreateEmpty();
+        source.Blocks.Clear();
+        source.UpdateFieldsOnOpen = updateFields;
+        source.Properties.Author = "Ada Lovelace";
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("stale author") { FieldKind = RunFieldKind.Author });
+        source.Blocks.Add(paragraph);
+        DocxWriter.Write(source, documentPath);
+
+        try
+        {
+            string? text = null;
+            string? currentPath = null;
+            var dirty = true;
+
+            await RunOnUiThread(() =>
+            {
+                var window = new MainWindow(
+                    [documentPath],
+                    new FreeWOptions(),
+                    ApplicationOptionsStore<FreeWOptions>.ForPath(settingsPath));
+                var callbacks = window.BuildBackstageCallbacks();
+                text = window.Editor.PlainText.Trim();
+                currentPath = callbacks.CurrentPath;
+                dirty = callbacks.GetIsDirty();
+                return Task.CompletedTask;
+            });
+
+            text.Should().Be(expectedText);
+            currentPath.Should().Be(documentPath);
+            dirty.Should().BeFalse();
+        }
+        finally
+        {
+            try { Directory.Delete(tempDirectory, recursive: true); }
+            catch { /* best-effort cleanup */ }
+        }
+    }
+
     [Fact]
     public async Task StartupDocument_RetainsPathTitleAndDirectSaveRouting()
     {

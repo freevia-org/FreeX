@@ -3923,6 +3923,19 @@ public sealed partial class MainWindow : Window
         {
             MarkDocumentSavedWithPath(path);
         }
+
+        if (document.UpdateFieldsOnOpen)
+        {
+            _suppressEditorDirty = true;
+            try
+            {
+                _editor.UpdateFields();
+            }
+            finally
+            {
+                _suppressEditorDirty = false;
+            }
+        }
     }
 
     private void LoadDocumentContent(TextDocument document)

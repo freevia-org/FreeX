@@ -197,6 +197,14 @@ internal sealed class FileCommands
         {
             var result = _persistence.Open(path);
             _editor.LoadModel(result.Document);
+
+            // Word's w:updateFields requests one field refresh when the document is opened. Establish
+            // the filename first so FILENAME fields have their live value, then mark the result saved
+            // after the refresh so opening a document never creates a dirty edit.
+            _editor.CurrentFileName = result.SavedPath is null ? null : Path.GetFileName(result.SavedPath);
+            if (result.Document.UpdateFieldsOnOpen)
+                _editor.UpdateFields();
+
             ApplyOpenMetadata(result, suppressRecentFiles);
 
             return true;
