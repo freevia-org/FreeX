@@ -163,6 +163,10 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.ZoomTargetSlideNumericId.Should().Be(257);
         zoom.PreservedObject.RawXml.Should().Contain("slidezoom");
         zoom.PreservedObject.RawXml.Should().Contain("sldId=\"257\"");
+        zoom.PreservedObject.RawXml.Should().Contain("zmPr");
+        zoom.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+        zoom.PreservedObject.RawXml.Should().Contain("blipFill");
+        zoom.PreservedObject.RawXml.Should().Contain("spPr");
     }
 
     [Fact]
@@ -187,6 +191,10 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.ZoomTargetSectionId.Should().Be(section.Id);
         zoom.PreservedObject.RawXml.Should().Contain("sectionzoom");
         zoom.PreservedObject.RawXml.Should().Contain("sectionId=\"{SECTION-TARGET}\"");
+        zoom.PreservedObject.RawXml.Should().Contain("zmPr");
+        zoom.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+        zoom.PreservedObject.RawXml.Should().Contain("blipFill");
+        zoom.PreservedObject.RawXml.Should().Contain("spPr");
         roundTripped.Sections.Should().ContainSingle(item => item.Id == section.Id);
     }
 

@@ -104,11 +104,17 @@ public static class SlideZoomInsertionPlanner
     {
         XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
         XNamespace a = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        XNamespace p166 = "http://schemas.microsoft.com/office/powerpoint/2016/6/main";
         XNamespace pslz = SlideZoomUri;
+
+        var zoomObject = new XElement(pslz + "sldZmObj",
+            new XAttribute("sldId", targetNumericId),
+            ZoomObjectPropertiesXml.Build(p166, a));
 
         var frame = new XElement(p + "graphicFrame",
             new XAttribute(XNamespace.Xmlns + "p", p.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", a.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "p166", p166.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "pslz", pslz.NamespaceName),
             new XElement(p + "nvGraphicFramePr",
                 new XElement(p + "cNvPr", new XAttribute("id", shapeId), new XAttribute("name", ShapeName)),
@@ -121,7 +127,7 @@ public static class SlideZoomInsertionPlanner
                 new XElement(a + "graphicData",
                     new XAttribute("uri", SlideZoomUri),
                     new XElement(pslz + "sldZm",
-                        new XElement(pslz + "sldZmObj", new XAttribute("sldId", targetNumericId))))));
+                        zoomObject))));
 
         return frame.ToString(SaveOptions.DisableFormatting);
     }
