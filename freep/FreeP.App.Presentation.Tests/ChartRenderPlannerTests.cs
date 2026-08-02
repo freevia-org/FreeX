@@ -919,6 +919,30 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildFunnelSegmentPrimitives_CreatesCenteredDescendingStages()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Funnel,
+            Categories = { "Awareness", "Interest", "Conversion" }
+        };
+        var series = new ChartSeries { Name = "Value" };
+        series.Values.AddRange(new double?[] { 100, 60, 18 });
+        chart.Series.Add(series);
+
+        var segments = ChartRenderPlanner.BuildFunnelSegmentPrimitives(
+            chart,
+            new ChartPlanRect(10, 20, 300, 240));
+
+        segments.Should().HaveCount(3);
+        segments.Select(segment => segment.Path.IsClosed).Should().OnlyContain(value => value);
+        segments.Select(segment => segment.Path.Points[0].X + segment.Path.Points[1].X)
+            .Should().OnlyContain(value => Math.Abs(value - 320) < 0.001);
+        segments[0].Path.Points[1].X.Should().BeGreaterThan(segments[1].Path.Points[1].X);
+        segments[1].Path.Points[1].X.Should().BeGreaterThan(segments[2].Path.Points[1].X);
+    }
+
+    [Fact]
     public void GradientColorInterpolation_UsesLinearLightRatherThanDirectSrgbMidpoint()
     {
         var midpoint = GradientColorInterpolation.InterpolateLinearLight(

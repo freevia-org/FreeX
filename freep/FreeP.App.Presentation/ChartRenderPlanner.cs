@@ -18,6 +18,7 @@ public enum ChartRenderFamily
     Cartesian,
     HorizontalBar,
     Pie,
+    Funnel,
     ScatterLike,
     Radar
 }
@@ -35,7 +36,8 @@ public enum ChartSceneGeometryKind
     Area,
     Scatter,
     Bubble,
-    Radar
+    Radar,
+    Funnel
 }
 
 public enum ChartPlanTextAlignment
@@ -189,6 +191,7 @@ public readonly record struct ChartFramePlan(
 {
     public bool HasPlot => Plot.HasPositiveArea;
     public bool IsPie => Family == ChartRenderFamily.Pie;
+    public bool IsFunnel => Family == ChartRenderFamily.Funnel;
     public bool IsBar => Family == ChartRenderFamily.HorizontalBar;
     public bool IsScatterLike => Family == ChartRenderFamily.ScatterLike;
     public bool IsRadar => Family == ChartRenderFamily.Radar;
@@ -396,6 +399,12 @@ public readonly record struct ChartAreaSeriesPrimitive(
     public ChartClassicThreeDDepthPlan? Depth { get; init; }
 }
 
+public readonly record struct ChartFunnelSegmentPrimitive(
+    int SeriesIndex,
+    int CategoryIndex,
+    ChartPathPrimitive Path,
+    ChartFillPlan Fill);
+
 public readonly record struct ChartClassicThreeDDepthPlan(
     double OffsetX,
     double OffsetY,
@@ -573,6 +582,7 @@ public sealed class ChartScenePlan
     public ChartStockPrimitivePlan? Stock { get; init; }
     public IReadOnlyList<ChartRectPrimitive> StockVolumes { get; init; } = Array.Empty<ChartRectPrimitive>();
     public IReadOnlyList<ChartAreaSeriesPrimitive> AreaSeries { get; init; } = Array.Empty<ChartAreaSeriesPrimitive>();
+    public IReadOnlyList<ChartFunnelSegmentPrimitive> FunnelSegments { get; init; } = Array.Empty<ChartFunnelSegmentPrimitive>();
     public IReadOnlyList<ChartPieSlicePrimitive> PieSlices { get; init; } = Array.Empty<ChartPieSlicePrimitive>();
     public IReadOnlyList<ChartPieSlicePrimitive> DoughnutSlices { get; init; } = Array.Empty<ChartPieSlicePrimitive>();
     public ChartScatterPrimitivePlan? Scatter { get; init; }
@@ -1205,6 +1215,7 @@ public static partial class ChartRenderPlanner
             ? titleHeight + margin
             : 0;
         bool hasSecondaryValueAxis = family is not (ChartRenderFamily.Pie
+            or ChartRenderFamily.Funnel
             or ChartRenderFamily.ScatterLike
             or ChartRenderFamily.Radar) &&
             chart.SecondaryValueAxis is { Delete: false };
@@ -1231,6 +1242,7 @@ public static partial class ChartRenderPlanner
             : 0;
 
         bool reservesAxes = family is not (ChartRenderFamily.Pie
+            or ChartRenderFamily.Funnel
             or ChartRenderFamily.ScatterLike
             or ChartRenderFamily.Radar);
         bool isBar = family == ChartRenderFamily.HorizontalBar;
@@ -1524,6 +1536,7 @@ public static partial class ChartRenderPlanner
             ChartType.Scatter => ChartSceneGeometryKind.Scatter,
             ChartType.Bubble => ChartSceneGeometryKind.Bubble,
             ChartType.Radar => ChartSceneGeometryKind.Radar,
+            ChartType.Funnel => ChartSceneGeometryKind.Funnel,
             _ => ChartSceneGeometryKind.Empty
         };
 
@@ -1533,6 +1546,7 @@ public static partial class ChartRenderPlanner
         ChartStockPrimitivePlan? stock = null;
         IReadOnlyList<ChartRectPrimitive> stockVolumes = Array.Empty<ChartRectPrimitive>();
         IReadOnlyList<ChartAreaSeriesPrimitive> areaSeries = Array.Empty<ChartAreaSeriesPrimitive>();
+        IReadOnlyList<ChartFunnelSegmentPrimitive> funnelSegments = Array.Empty<ChartFunnelSegmentPrimitive>();
         IReadOnlyList<ChartPieSlicePrimitive> pieSlices = Array.Empty<ChartPieSlicePrimitive>();
         IReadOnlyList<ChartPieSlicePrimitive> doughnutSlices = Array.Empty<ChartPieSlicePrimitive>();
         ChartScatterPrimitivePlan? scatter = null;
@@ -1578,6 +1592,9 @@ public static partial class ChartRenderPlanner
             case ChartSceneGeometryKind.Area:
                 areaSeries = BuildAreaSeriesPrimitives(chart, plot, seriesColors, fillPlans);
                 break;
+            case ChartSceneGeometryKind.Funnel:
+                funnelSegments = BuildFunnelSegmentPrimitives(chart, plot, seriesColors, fillPlans);
+                break;
             case ChartSceneGeometryKind.Scatter:
                 scatter = BuildScatterPrimitivePlan(chart, plot, seriesColors, fillPlans);
                 break;
@@ -1591,6 +1608,7 @@ public static partial class ChartRenderPlanner
 
         bool canHaveComboOverlay = frame.Family is not (
             ChartRenderFamily.Pie or
+            ChartRenderFamily.Funnel or
             ChartRenderFamily.HorizontalBar or
             ChartRenderFamily.Radar or
             ChartRenderFamily.ScatterLike);
@@ -1648,6 +1666,7 @@ public static partial class ChartRenderPlanner
             Stock = stock,
             StockVolumes = stockVolumes,
             AreaSeries = areaSeries,
+            FunnelSegments = funnelSegments,
             PieSlices = pieSlices,
             DoughnutSlices = doughnutSlices,
             Scatter = scatter,
@@ -2289,6 +2308,7 @@ public static partial class ChartRenderPlanner
             ChartType.BarClustered or ChartType.BarStacked or ChartType.BarStacked100 => ChartRenderFamily.HorizontalBar,
             ChartType.Scatter or ChartType.Bubble => ChartRenderFamily.ScatterLike,
             ChartType.Radar => ChartRenderFamily.Radar,
+            ChartType.Funnel => ChartRenderFamily.Funnel,
             ChartType.Stock or ChartType.Surface or ChartType.Surface3D => ChartRenderFamily.Cartesian,
             _ => ChartRenderFamily.Cartesian
         };
@@ -3622,6 +3642,61 @@ public static partial class ChartRenderPlanner
         }
 
         return primitives;
+    }
+
+    public static IReadOnlyList<ChartFunnelSegmentPrimitive> BuildFunnelSegmentPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
+    {
+        if (chart.Series.Count == 0 || chart.Categories.Count == 0 || !plot.HasPositiveArea)
+            return Array.Empty<ChartFunnelSegmentPrimitive>();
+
+        var series = chart.Series[0];
+        var values = chart.Categories
+            .Select((_, index) => index < series.Values.Count ? series.Values[index] : null)
+            .Select(value => Math.Max(0, value ?? 0))
+            .ToArray();
+        var maximum = values.DefaultIfEmpty(0).Max();
+        if (maximum <= 0)
+            return Array.Empty<ChartFunnelSegmentPrimitive>();
+
+        const double gap = 2.0;
+        var segmentHeight = plot.Height / values.Length;
+        var result = new List<ChartFunnelSegmentPrimitive>(values.Length);
+        for (var index = 0; index < values.Length; index++)
+        {
+            var top = plot.Y + index * segmentHeight + gap / 2.0;
+            var bottom = plot.Y + (index + 1) * segmentHeight - gap / 2.0;
+            var topWidth = plot.Width * Math.Max(0.08, values[index] / maximum);
+            var nextValue = index + 1 < values.Length ? values[index + 1] : 0;
+            var bottomWidth = plot.Width * Math.Max(0.08, nextValue / maximum);
+            var center = plot.X + plot.Width / 2.0;
+            var points = new[]
+            {
+                new ChartPlanPoint(center - topWidth / 2.0, top),
+                new ChartPlanPoint(center + topWidth / 2.0, top),
+                new ChartPlanPoint(center + bottomWidth / 2.0, bottom),
+                new ChartPlanPoint(center - bottomWidth / 2.0, bottom)
+            };
+            var fill = ResolvePointFill(
+                series,
+                0,
+                index,
+                seriesColors,
+                RectSeriesFillAlpha,
+                fillPlans,
+                varyByPoint: true,
+                negativeValue: false);
+            result.Add(new ChartFunnelSegmentPrimitive(
+                0,
+                index,
+                new ChartPathPrimitive(points, IsClosed: true, Fill: fill),
+                fill));
+        }
+
+        return result;
     }
 
     public static IReadOnlyList<ChartRectPrimitive> BuildBarPrimitives(
@@ -6584,7 +6659,7 @@ public static partial class ChartRenderPlanner
         ChartFillPlanSet? fillPlans = null)
     {
         var family = GetRenderFamily(chart.ChartType);
-        if (family is ChartRenderFamily.Radar or ChartRenderFamily.ScatterLike || !plot.HasPositiveArea)
+        if (family is ChartRenderFamily.Funnel or ChartRenderFamily.Radar or ChartRenderFamily.ScatterLike || !plot.HasPositiveArea)
             return Array.Empty<ChartDataLabelPlan>();
 
         if (family == ChartRenderFamily.Pie)

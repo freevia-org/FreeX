@@ -1232,6 +1232,9 @@ public sealed class SlideCanvas : Control
             case ChartSceneGeometryKind.Doughnut:
                 RenderDoughnutChart(dc, scene);
                 break;
+            case ChartSceneGeometryKind.Funnel:
+                RenderFunnelChart(dc, scene);
+                break;
             case ChartSceneGeometryKind.Area:
                 RenderAreaChart(dc, scene);
                 break;
@@ -1823,6 +1826,17 @@ public sealed class SlideCanvas : Control
     }
 
     // ── Doughnut chart ───────────────────────────────────────────────────────
+
+    private static void RenderFunnelChart(DrawingContext dc, ChartScenePlan scene)
+    {
+        foreach (var segment in scene.FunnelSegments)
+        {
+            if (segment.Path.Fill is not { } fill)
+                continue;
+
+            dc.DrawGeometry(ToBrush(fill), null, ToGeometry(segment.Path));
+        }
+    }
 
     private static void RenderDoughnutChart(DrawingContext dc, ChartScenePlan scene)
     {

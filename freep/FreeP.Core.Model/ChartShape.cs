@@ -29,6 +29,8 @@ public enum ChartType
     Surface,
     /// <summary>3-D surface chart, rendered as a value-colored matrix until full surface mesh geometry lands.</summary>
     Surface3D,
+    /// <summary>Funnel chart with one category/value series.</summary>
+    Funnel,
     Unknown
 }
 

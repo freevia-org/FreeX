@@ -1529,6 +1529,34 @@ public sealed class ChartTests : IDisposable
         rt.Series.Should().HaveCount(4);
     }
 
+    [Fact]
+    public void RoundTrip_FunnelChart_TypeAndStagesPreservedInPackageAndModel()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Funnel,
+            Categories = { "Awareness", "Interest", "Conversion" }
+        };
+        var series = new ChartSeries { Name = "Value" };
+        series.Values.AddRange(new double?[] { 100, 60, 18 });
+        chart.Series.Add(series);
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(ChartNs + "funnelChart").Should().ContainSingle();
+            chartDoc.Descendants(ChartNs + "catAx").Should().BeEmpty();
+        }
+
+        var rt = PptxPackageReader.Read(path).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(ChartType.Funnel);
+        rt.Categories.Should().Equal("Awareness", "Interest", "Conversion");
+        rt.Series.Should().ContainSingle();
+        rt.Series[0].Values.Should().Equal(100, 60, 18);
+    }
+
     [Theory]
     [InlineData(ChartType.Surface, "surfaceChart")]
     [InlineData(ChartType.Surface3D, "surface3DChart")]
