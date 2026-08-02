@@ -29,6 +29,7 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
             "../../../../FreeP.App.Avalonia/MainWindow.cs"));
         var source = File.ReadAllText(sourcePath);
 
-        source.Should().Contain("if (IsSmartArtTextPaneVisible)\n            ShowSmartArtTextPane();");
+        source.Should().MatchRegex(
+            @"if\s*\(IsSmartArtTextPaneVisible\)\s*ShowSmartArtTextPane\(\);");
     }
 }

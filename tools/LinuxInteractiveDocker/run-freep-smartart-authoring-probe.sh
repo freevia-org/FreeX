@@ -339,10 +339,10 @@ if [[ "$phase" == "first" ]]; then
     xdotool type --delay "$input_delay_ms" "Discover"
     sleep "$settle_seconds"
 
-    # The command strip is a two-row WrapPanel at the bottom of the fixed-width
-    # pane: clear-picture, Apply, and Close occupy its second row.
+    # The fixed pane keeps its picture actions above the outline-authoring rows.
+    # Resolve Apply from the owner bottom so the Xfce decoration offset remains included.
     apply_x=$((pane_x + 180))
-    apply_y=$((Y + HEIGHT - 28))
+    apply_y=$((Y + HEIGHT - 167))
     xdotool mousemove "$apply_x" "$apply_y" click 1
     sleep "$settle_seconds"
     xdotool mousemove "$first_row_x" "$first_row_y" click 1
@@ -367,8 +367,13 @@ if [[ "$phase" == "first" ]]; then
     fi
 
     # Apply must commit the shared SmartArt model, not only leave the edited
-    # TextBox value visible. The Apply button retains focus for shell undo/redo,
-    # so each transition is observed through a freshly rendered outline row.
+    # TextBox value visible. Clipboard readback above returned focus to that TextBox;
+    # move focus to the active Home ribbon tab, a production shell-shortcut target,
+    # before dispatching Ctrl+Z/Ctrl+Y through the real window route.
+    shell_focus_x=$((X + 62))
+    shell_focus_y=$((Y + 28))
+    xdotool mousemove "$shell_focus_x" "$shell_focus_y" click 1
+    sleep "$settle_seconds"
     send_key ctrl+z
     xdotool mousemove "$first_row_x" "$first_row_y" click 1
     xdotool key ctrl+a ctrl+c
@@ -378,9 +383,7 @@ if [[ "$phase" == "first" ]]; then
         undo_clipboard_pass=true
     fi
 
-    # Clicking Apply with the restored Plan outline only restores command-button
-    # focus; it is a no-op and does not consume the redo entry.
-    xdotool mousemove "$apply_x" "$apply_y" click 1
+    xdotool mousemove "$shell_focus_x" "$shell_focus_y" click 1
     sleep "$settle_seconds"
     send_key ctrl+y
     xdotool mousemove "$first_row_x" "$first_row_y" click 1
@@ -392,10 +395,10 @@ if [[ "$phase" == "first" ]]; then
     fi
     capture "smartart-apply-undo-redo.png" || true
     {
-        printf 'undo-button-focus-point=%s,%s\n' "$apply_x" "$apply_y"
+        printf 'undo-shell-focus-point=%s,%s\n' "$shell_focus_x" "$shell_focus_y"
         printf 'undo-expected-text=Plan\n'
         printf 'undo-clipboard=%s\n' "$undo_clipboard_pass"
-        printf 'redo-button-focus-point=%s,%s\n' "$apply_x" "$apply_y"
+        printf 'redo-shell-focus-point=%s,%s\n' "$shell_focus_x" "$shell_focus_y"
         printf 'redo-expected-text=Discover\n'
         printf 'redo-clipboard=%s\n' "$redo_clipboard_pass"
     } > "$output/smartart-apply-undo-redo-proof.txt"

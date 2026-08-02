@@ -29,6 +29,8 @@ public sealed class PhysicalSmartArtAuthoringSourceTests
         probe.Should().Contain("Plan|Design|New node|Build|Test|Deploy");
         probe.Should().Contain("send_key ctrl+z");
         probe.Should().Contain("send_key ctrl+y");
+        probe.Should().Contain("apply_y=$((Y + HEIGHT - 167))");
+        probe.Should().Contain("shell_focus_y=$((Y + 28))");
         probe.Should().Contain("apply-undo-row-clipboard.txt");
         probe.Should().Contain("apply-redo-row-clipboard.txt");
         probe.Should().Contain("xclip -selection clipboard -out");

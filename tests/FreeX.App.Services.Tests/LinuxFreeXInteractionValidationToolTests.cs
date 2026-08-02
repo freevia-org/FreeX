@@ -48,7 +48,7 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
-    public void SplitPanePointerSelectorRequiresIndependentPhysicalEvidenceRows()
+    public void SplitPanePointerSelectorRequiresSharedScrollbarPhysicalEvidenceRows()
     {
         var runner = File.ReadAllText(RepositoryFileLocator.Find(
             "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
@@ -62,6 +62,10 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         runner.Should().Contain("split-pane-mini-scrollbar-physical");
         probe.Should().Contain("probe_split_pane_pointer()");
         probe.Should().Contain("enter_view_keytip");
+        probe.Should().Contain("split_button_x");
+        probe.Should().Contain("split-command-gesture=view-tab-physical-click");
+        probe.Should().Contain("split-pane-before-grid.png");
+        probe.Should().Contain("split-pane-open-grid.png");
         probe.Should().Contain("xdotool mousedown 1");
         probe.Should().Contain("xdotool keydown --window \"$window_id\" Shift_L");
         probe.Should().Contain("xdotool click 5");
