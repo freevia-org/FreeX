@@ -47,7 +47,12 @@ public static class SlideCompositor
     /// <returns>
     /// Ordered list of <see cref="DrawOp"/> in painter's order (background first, then shapes back to front).
     /// </returns>
-    public static IReadOnlyList<DrawOp> Compose(PresentationModel presentation, Slide slide, int slideIndex = 0)
+    /// <param name="includeBackground">When false, omit the destination slide background for a Zoom transition.</param>
+    public static IReadOnlyList<DrawOp> Compose(
+        PresentationModel presentation,
+        Slide slide,
+        int slideIndex = 0,
+        bool includeBackground = true)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(slide);
@@ -77,8 +82,11 @@ public static class SlideCompositor
         var slideBounds = new LayoutRect(0, 0, slideWidthDip, slideHeightDip);
 
         // 1. Background
-        var bgFill = ResolveBackground(slide, presentation, theme, effectiveClrMap);
-        ops.Add(new DrawOp.Background { Fill = bgFill, BoundsDip = slideBounds });
+        if (includeBackground)
+        {
+            var bgFill = ResolveBackground(slide, presentation, theme, effectiveClrMap);
+            ops.Add(new DrawOp.Background { Fill = bgFill, BoundsDip = slideBounds });
+        }
 
         // 2. Shapes in z-order (back to front)
         foreach (var shape in slide.Shapes)

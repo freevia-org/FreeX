@@ -68,6 +68,15 @@ public sealed class SmartArtStylePlan
             SmartArtStyleProfile.SimpleFill => color,
             SmartArtStyleProfile.Subtle => ThemeColorTransform.ApplyTint(color, 0.32),
             SmartArtStyleProfile.Intense => ThemeColorTransform.ApplyShade(color, 0.72),
+            SmartArtStyleProfile.Polished => ThemeColorTransform.ApplyShade(color, 0.78),
+            SmartArtStyleProfile.Inset => ThemeColorTransform.ApplyTint(color, 0.52),
+            SmartArtStyleProfile.Cartoon => color,
+            SmartArtStyleProfile.Powder => ThemeColorTransform.ApplyTint(color, 0.42),
+            SmartArtStyleProfile.BrickScene => ThemeColorTransform.ApplyShade(color, 0.86),
+            SmartArtStyleProfile.FlatScene => color,
+            SmartArtStyleProfile.MetallicScene => ThemeColorTransform.ApplyShade(color, 0.65),
+            SmartArtStyleProfile.SunsetScene => ThemeColorTransform.ApplyTint(color, 0.18),
+            SmartArtStyleProfile.BirdsEyeScene => ThemeColorTransform.ApplyShade(color, 0.92),
             _ => ThemeColorTransform.ApplyTint(color, 0.88)
         };
 
@@ -77,6 +86,15 @@ public sealed class SmartArtStylePlan
             SmartArtStyleProfile.WhiteOutline => SrgbColor.White,
             SmartArtStyleProfile.Subtle => ThemeColorTransform.ApplyShade(color, 0.72),
             SmartArtStyleProfile.Intense => ThemeColorTransform.ApplyShade(color, 0.45),
+            SmartArtStyleProfile.Polished => ThemeColorTransform.ApplyShade(color, 0.32),
+            SmartArtStyleProfile.Inset => ThemeColorTransform.ApplyShade(color, 0.58),
+            SmartArtStyleProfile.Cartoon => ThemeColorTransform.ApplyShade(color, 0.28),
+            SmartArtStyleProfile.Powder => ThemeColorTransform.ApplyShade(color, 0.78),
+            SmartArtStyleProfile.BrickScene => ThemeColorTransform.ApplyShade(color, 0.36),
+            SmartArtStyleProfile.FlatScene => ThemeColorTransform.ApplyShade(color, 0.62),
+            SmartArtStyleProfile.MetallicScene => SrgbColor.White,
+            SmartArtStyleProfile.SunsetScene => ThemeColorTransform.ApplyShade(color, 0.48),
+            SmartArtStyleProfile.BirdsEyeScene => ThemeColorTransform.ApplyShade(color, 0.40),
             _ => ThemeColorTransform.ApplyShade(color, 0.62)
         };
 
@@ -85,6 +103,15 @@ public sealed class SmartArtStylePlan
         {
             SmartArtStyleProfile.WhiteOutline => SrgbColor.White,
             SmartArtStyleProfile.Subtle => ThemeColorTransform.ApplyShade(_palette[0], 0.68),
+            SmartArtStyleProfile.Polished => ThemeColorTransform.ApplyShade(_palette[0], 0.36),
+            SmartArtStyleProfile.Inset => ThemeColorTransform.ApplyShade(_palette[0], 0.58),
+            SmartArtStyleProfile.Cartoon => ThemeColorTransform.ApplyShade(_palette[0], 0.30),
+            SmartArtStyleProfile.Powder => ThemeColorTransform.ApplyShade(_palette[0], 0.76),
+            SmartArtStyleProfile.BrickScene => ThemeColorTransform.ApplyShade(_palette[0], 0.40),
+            SmartArtStyleProfile.FlatScene => ThemeColorTransform.ApplyShade(_palette[0], 0.50),
+            SmartArtStyleProfile.MetallicScene => SrgbColor.White,
+            SmartArtStyleProfile.SunsetScene => ThemeColorTransform.ApplyShade(_palette[0], 0.46),
+            SmartArtStyleProfile.BirdsEyeScene => ThemeColorTransform.ApplyShade(_palette[0], 0.38),
             _ => ThemeColorTransform.ApplyShade(_palette[0], 0.50)
         };
 
@@ -93,6 +120,15 @@ public sealed class SmartArtStylePlan
         {
             SmartArtStyleProfile.WhiteOutline => 1.25,
             SmartArtStyleProfile.Intense => 1.75,
+            SmartArtStyleProfile.Polished => 1.8,
+            SmartArtStyleProfile.Inset => 1.15,
+            SmartArtStyleProfile.Cartoon => 2.0,
+            SmartArtStyleProfile.Powder => 1.0,
+            SmartArtStyleProfile.BrickScene => 1.7,
+            SmartArtStyleProfile.FlatScene => 1.35,
+            SmartArtStyleProfile.MetallicScene => 1.9,
+            SmartArtStyleProfile.SunsetScene => 1.5,
+            SmartArtStyleProfile.BirdsEyeScene => 1.65,
             _ => 1.35
         };
 
@@ -195,9 +231,45 @@ public static class SmartArtStylePlanner
             || hint.Contains("subtle", StringComparison.OrdinalIgnoreCase))
             return SmartArtStyleProfile.Subtle;
 
-        if (hint.Contains("3d", StringComparison.OrdinalIgnoreCase)
+        // The native 3D scene gallery is not one style.  Keep the IDs distinct so the
+        // live WPF/Avalonia route reflects a user's selected scene profile instead of
+        // collapsing every 3d1-3d9 quick style to Intense.
+        if (hint.Contains("3d1", StringComparison.OrdinalIgnoreCase)
             || hint.Contains("polish", StringComparison.OrdinalIgnoreCase))
-            return SmartArtStyleProfile.Intense;
+            return SmartArtStyleProfile.Polished;
+
+        if (hint.Contains("3d2", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("inset", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.Inset;
+
+        if (hint.Contains("3d3", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("cartoon", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.Cartoon;
+
+        if (hint.Contains("3d4", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("powder", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.Powder;
+
+        if (hint.Contains("3d5", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("brick scene", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.BrickScene;
+
+        if (hint.Contains("3d6", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("flat scene", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.FlatScene;
+
+        if (hint.Contains("3d7", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("metallic scene", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.MetallicScene;
+
+        if (hint.Contains("3d8", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("sunset scene", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.SunsetScene;
+
+        if (hint.Contains("3d9", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("bird's eye scene", StringComparison.OrdinalIgnoreCase)
+            || hint.Contains("birds eye scene", StringComparison.OrdinalIgnoreCase))
+            return SmartArtStyleProfile.BirdsEyeScene;
 
         return SmartArtStyleProfile.Moderate;
     }
@@ -215,5 +287,14 @@ internal enum SmartArtStyleProfile
     Subtle,
     WhiteOutline,
     Moderate,
-    Intense
+    Intense,
+    Polished,
+    Inset,
+    Cartoon,
+    Powder,
+    BrickScene,
+    FlatScene,
+    MetallicScene,
+    SunsetScene,
+    BirdsEyeScene
 }

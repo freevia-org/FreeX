@@ -201,10 +201,11 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("double textSizePx = notePlan.TextFontSizePt * (96.0 / 72.0);");
         source.Should().Contain("FontSize          = notePlan.LabelFontSizePt * (96.0 / 72.0)");
         source.Should().Contain("if (!string.IsNullOrEmpty(notePlan.Heading))");
-        source.Should().Contain("PageLayout.PointsToDip(pb.SpacePt)");
-        source.Should().Contain("DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);");
-        source.Should().Contain("DrawTextRelativePageBorderFrame(dc, pen, outerFrame);");
-        source.Should().Contain("PageLayout.PointsToDip(36)");
+        source.Should().Contain("PageBorderTextFramePlanner.Build(");
+        source.Should().Contain("doc.PageBordersDoNotSurroundHeader");
+        source.Should().Contain("doc.PageBordersDoNotSurroundFooter");
+        source.Should().Contain("DrawPageBorderFrame(drawingContext, pen, edgeInset, width, height);");
+        source.Should().Contain("DrawTextRelativePageBorderFrame(drawingContext, pen, outerFrame);");
         source.Should().Contain("edgeInset + borderWidth * 2.0");
         source.Should().Contain("width - 2 * inset");
         source.Should().Contain("if (panel is not null && i < panel.PageBoxes.Count)");
@@ -310,9 +311,15 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         var previewSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Host", "PrintPreviewWindow.cs"));
 
         renderSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, edgeInset)");
-        viewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(width, height, inset)");
+        viewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, inset)");
+        viewSource.Should().Contain("PageBorderTextFramePlanner.Build(");
+        viewSource.Should().Contain("document.PageBordersDoNotSurroundHeader");
+        viewSource.Should().Contain("document.PageBordersDoNotSurroundFooter");
         viewSource.Should().Contain("pb.LineStyle == BorderLineStyle.Wave");
-        previewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(size.Width, size.Height, waveInset)");
+        previewSource.Should().Contain("PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, artInset)");
+        previewSource.Should().Contain("PageBorderTextFramePlanner.Build(");
+        previewSource.Should().Contain("model.PageBordersDoNotSurroundHeader");
+        previewSource.Should().Contain("model.PageBordersDoNotSurroundFooter");
     }
 
     [Fact]

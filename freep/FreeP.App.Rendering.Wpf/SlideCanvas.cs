@@ -74,6 +74,14 @@ public sealed class SlideCanvas : FrameworkElement
             typeof(SlideCanvas),
             new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsRender));
 
+    public static readonly DependencyProperty RenderSlideBackgroundProperty =
+        DependencyProperty.Register(
+            nameof(RenderSlideBackground),
+            typeof(bool),
+            typeof(SlideCanvas),
+            new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsRender,
+                OnModelChanged));
+
     public Presentation? Presentation
     {
         get => (Presentation?)GetValue(PresentationProperty);
@@ -84,6 +92,13 @@ public sealed class SlideCanvas : FrameworkElement
     {
         get => (Slide?)GetValue(SlideProperty);
         set => SetValue(SlideProperty, value);
+    }
+
+    /// <summary>Whether the compositor paints the slide background.</summary>
+    public bool RenderSlideBackground
+    {
+        get => (bool)GetValue(RenderSlideBackgroundProperty);
+        set => SetValue(RenderSlideBackgroundProperty, value);
     }
 
     /// <summary>Shape whose base text is hidden while its rich editor overlay is active.</summary>
@@ -4113,6 +4128,10 @@ public sealed class SlideCanvas : FrameworkElement
         _slideWidthDip = presentation.SlideSizeCxEmu / 9525.0;
         _slideHeightDip = presentation.SlideSizeCyEmu / 9525.0;
         int slideIndex = presentation.Slides.IndexOf(slide);
-        _cachedOps = SlideCompositor.Compose(presentation, slide, slideIndex < 0 ? 0 : slideIndex);
+        _cachedOps = SlideCompositor.Compose(
+            presentation,
+            slide,
+            slideIndex < 0 ? 0 : slideIndex,
+            RenderSlideBackground);
     }
 }

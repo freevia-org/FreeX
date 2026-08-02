@@ -588,6 +588,8 @@ public static class DocumentCompare
         target.DoNotAutoCompressPictures = source.DoNotAutoCompressPictures;
         target.EmbedSystemFonts = source.EmbedSystemFonts;
         target.SaveSubsetFonts = source.SaveSubsetFonts;
+        target.PageBordersDoNotSurroundHeader = source.PageBordersDoNotSurroundHeader;
+        target.PageBordersDoNotSurroundFooter = source.PageBordersDoNotSurroundFooter;
         foreach (var (id, style) in source.Styles)
             target.Styles[id] = style;
 

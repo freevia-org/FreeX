@@ -695,8 +695,9 @@ static void RenderDocumentComposite(
                 {
                     DrawPageBorderVisual(
                         dc, pageBorder!, thisPageSettings,
-                        thisMarginLeft, thisMarginRight, thisMarginBottom,
-                        thisPixW, thisPixH);
+                        thisPixW, thisPixH,
+                        doc.PageBordersDoNotSurroundHeader,
+                        doc.PageBordersDoNotSurroundFooter);
                 }
 
                 // Layer 2: body FlowDocument content (the paginator's Visual is already laid out).
@@ -739,8 +740,9 @@ static void RenderDocumentComposite(
             {
                 DrawPageBorderVisual(
                     dc, pb, thisPageSettings,
-                    thisMarginLeft, thisMarginRight, thisMarginBottom,
-                    thisPixW, thisPixH);
+                    thisPixW, thisPixH,
+                    doc.PageBordersDoNotSurroundHeader,
+                    doc.PageBordersDoNotSurroundFooter);
             }
             bmp.Render(borderVisual);
         }
@@ -2306,11 +2308,10 @@ static void DrawPageBorderVisual(
     DrawingContext drawingContext,
     PageBorder border,
     PageSettings page,
-    double marginLeft,
-    double marginRight,
-    double marginBottom,
     double width,
-    double height)
+    double height,
+    bool doNotSurroundHeader,
+    bool doNotSurroundFooter)
 {
     var borderColor = ParseHexColor(border.ColorHex, Colors.Black);
     var edgeInset = Math.Min(
@@ -2323,15 +2324,16 @@ static void DrawPageBorderVisual(
         double artInset;
         if (border.OffsetFrom == PageBorderOffsetFrom.Text)
         {
-            var headerDistance = page.HeaderDistancePt > 0
-                ? PageLayout.PointsToDip(page.HeaderDistancePt)
-                : PageLayout.PointsToDip(36);
-            var space = PageLayout.PointsToDip(border.SpacePt);
-            artFrame = new Rect(
-                Math.Max(0, marginLeft - space - borderWidth),
-                Math.Max(0, headerDistance - space - borderWidth),
-                Math.Max(0, width - marginLeft - marginRight + 2 * (space + borderWidth)),
-                Math.Max(0, height - headerDistance - marginBottom + 2 * (space + borderWidth)));
+            var planned = PageBorderTextFramePlanner.Build(
+                page,
+                border,
+                width,
+                height,
+                PageLayout.DipPerPoint,
+                borderWidth,
+                doNotSurroundHeader,
+                doNotSurroundFooter);
+            artFrame = new Rect(planned.X, planned.Y, planned.Width, planned.Height);
             artInset = 0;
         }
         else
@@ -2346,15 +2348,16 @@ static void DrawPageBorderVisual(
 
     if (border.OffsetFrom == PageBorderOffsetFrom.Text)
     {
-        var headerDistance = page.HeaderDistancePt > 0
-            ? PageLayout.PointsToDip(page.HeaderDistancePt)
-            : PageLayout.PointsToDip(36);
-        var space = PageLayout.PointsToDip(border.SpacePt);
-        var outerFrame = new Rect(
-            Math.Max(0, marginLeft - space - borderWidth),
-            Math.Max(0, headerDistance - space - borderWidth),
-            Math.Max(0, width - marginLeft - marginRight + 2 * (space + borderWidth)),
-            Math.Max(0, height - headerDistance - marginBottom + 2 * (space + borderWidth)));
+        var planned = PageBorderTextFramePlanner.Build(
+            page,
+            border,
+            width,
+            height,
+            PageLayout.DipPerPoint,
+            borderWidth,
+            doNotSurroundHeader,
+            doNotSurroundFooter);
+        var outerFrame = new Rect(planned.X, planned.Y, planned.Width, planned.Height);
 
         if (border.LineStyle == BorderLineStyle.Wave)
         {

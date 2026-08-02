@@ -248,6 +248,11 @@ public static class DocxReader
         // of whether the current package carries embedded font parts and does not transform their stored bytes.
         document.SaveSubsetFonts = ReadToggle(root, "saveSubsetFonts");
 
+        // Page-border header/footer exclusions are document-global on/off settings. Their visual effect depends
+        // on section page-border geometry, but the package semantics remain meaningful and round-trip on their own.
+        document.PageBordersDoNotSurroundHeader = ReadToggle(root, "bordersDoNotSurroundHeader");
+        document.PageBordersDoNotSurroundFooter = ReadToggle(root, "bordersDoNotSurroundFooter");
+
         // Hide spelling errors (w:hideSpellingErrors): controls document-level proofing indicators without
         // removing proofing metadata. Absent or explicitly off is Word's default.
         document.HideSpellingErrors = ReadToggle(root, "hideSpellingErrors");

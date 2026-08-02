@@ -636,19 +636,41 @@ internal sealed class HeaderFooterPaginator(
     /// Draws the whole-page border (w:pgBorders) as a rectangle just inside the page edge, matching the
     /// editor's BorderBrush/BorderThickness chrome so on-screen and printed pages agree.
     /// </summary>
-    private static DrawingVisual BuildPageBorder(PageBorder border, Size size)
+    private DrawingVisual BuildPageBorder(PageBorder border, Size size)
     {
         var visual = new DrawingVisual();
         var color = ParseColor(border.ColorHex);
-        var artInset = Math.Min(
-            PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
-            Math.Min(size.Width, size.Height) / 4);
+        var thickness = Math.Max(1, PageLayout.PointsToDip(border.WidthPt));
+        Rect frame;
+        double artInset;
+        if (border.OffsetFrom == PageBorderOffsetFrom.Text)
+        {
+            var planned = PageBorderTextFramePlanner.Build(
+                page,
+                border,
+                size.Width,
+                size.Height,
+                PageLayout.DipPerPoint,
+                thickness,
+                model.PageBordersDoNotSurroundHeader,
+                model.PageBordersDoNotSurroundFooter);
+            frame = new Rect(planned.X, planned.Y, planned.Width, planned.Height);
+            artInset = 0;
+        }
+        else
+        {
+            frame = new Rect(0, 0, size.Width, size.Height);
+            artInset = Math.Min(
+                PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+                Math.Min(size.Width, size.Height) / 4);
+        }
+
         using (var artContext = visual.RenderOpen())
         {
             if (PageBorderArtWpfRenderer.TryDraw(
                     artContext,
                     border,
-                    new Rect(0, 0, size.Width, size.Height),
+                    frame,
                     artInset))
             {
                 return visual;
@@ -657,9 +679,6 @@ internal sealed class HeaderFooterPaginator(
 
         if (border.LineStyle == BorderLineStyle.Wave)
         {
-            var waveInset = Math.Min(
-                PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
-                Math.Min(size.Width, size.Height) / 4);
             var waveColor = Color.FromArgb(
                 (byte)Math.Round(255 * PageBorderWaveVisualPlanner.StrokeOpacity),
                 color.R,
@@ -669,23 +688,35 @@ internal sealed class HeaderFooterPaginator(
                 new SolidColorBrush(waveColor),
                 PageBorderWaveVisualPlanner.StrokeWidthDip);
             using var waveContext = visual.RenderOpen();
-            foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(size.Width, size.Height, waveInset))
+            foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, artInset))
             {
                 waveContext.DrawLine(
                     wavePen,
-                    new Point(segment.X1Dip, segment.Y1Dip),
-                    new Point(segment.X2Dip, segment.Y2Dip));
+                    new Point(frame.X + segment.X1Dip, frame.Y + segment.Y1Dip),
+                    new Point(frame.X + segment.X2Dip, frame.Y + segment.Y2Dip));
             }
 
             return visual;
         }
 
-        var thickness = Math.Max(1, PageLayout.PointsToDip(border.WidthPt));
         var pen = new Pen(new SolidColorBrush(color), thickness);
-        // Inset by half the stroke width plus the 24pt offsetFrom="page" gap used on save, clamped so
-        // the rectangle stays positive on small pages.
-        var inset = thickness / 2 + Math.Min(PageLayout.PointsToDip(24), Math.Min(size.Width, size.Height) / 4);
-        var rect = new Rect(inset, inset, Math.Max(0, size.Width - 2 * inset), Math.Max(0, size.Height - 2 * inset));
+        Rect rect;
+        if (border.OffsetFrom == PageBorderOffsetFrom.Text)
+        {
+            var half = thickness / 2;
+            rect = new Rect(
+                frame.X + half,
+                frame.Y + half,
+                Math.Max(0, frame.Width - thickness),
+                Math.Max(0, frame.Height - thickness));
+        }
+        else
+        {
+            // Inset by half the stroke width plus the 24pt offsetFrom="page" gap used on save, clamped so
+            // the rectangle stays positive on small pages.
+            var inset = thickness / 2 + Math.Min(PageLayout.PointsToDip(24), Math.Min(size.Width, size.Height) / 4);
+            rect = new Rect(inset, inset, Math.Max(0, size.Width - 2 * inset), Math.Max(0, size.Height - 2 * inset));
+        }
         using (var dc = visual.RenderOpen())
             dc.DrawRectangle(null, pen, rect);
         return visual;

@@ -5539,27 +5539,52 @@ public sealed class DocumentView : RichTextBox
         base.OnRender(drawingContext);
         if (!PrintLayoutEnabled
             || _model.Page.PageBorder is not { } border
-            || (border.LineStyle != BorderLineStyle.Wave && border.ArtId <= 0)
+            || (border.OffsetFrom != PageBorderOffsetFrom.Text
+                && border.LineStyle != BorderLineStyle.Wave
+                && border.ArtId <= 0)
             || !PageBorderVisibilityPlanner.ShouldRender(border.Display, 0)
             || PageBorderVisibilityPlanner.LayerFor(border.ZOrder) != PageBorderRenderLayer.BehindText)
             return;
 
-        DrawLivePageBorder(drawingContext, border, ActualWidth, ActualHeight);
+        DrawLivePageBorder(drawingContext, _model, border, ActualWidth, ActualHeight);
     }
 
     private static void DrawLivePageBorder(
         DrawingContext drawingContext,
+        TextDocument document,
         PageBorder border,
         double width,
         double height)
     {
-        var inset = Math.Min(
-            PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
-            Math.Min(width, height) / 4);
+        var thickness = Math.Max(1, border.WidthPt * PxPerPoint);
+        Rect frame;
+        double inset;
+        if (border.OffsetFrom == PageBorderOffsetFrom.Text)
+        {
+            var planned = PageBorderTextFramePlanner.Build(
+                document.Page,
+                border,
+                width,
+                height,
+                PxPerPoint,
+                thickness,
+                document.PageBordersDoNotSurroundHeader,
+                document.PageBordersDoNotSurroundFooter);
+            frame = new Rect(planned.X, planned.Y, planned.Width, planned.Height);
+            inset = 0;
+        }
+        else
+        {
+            frame = new Rect(0, 0, width, height);
+            inset = Math.Min(
+                PageLayout.PointsToDip(Math.Max(0, border.SpacePt)),
+                Math.Min(width, height) / 4);
+        }
+
         if (PageBorderArtWpfRenderer.TryDraw(
                 drawingContext,
                 border,
-                new Rect(0, 0, width, height),
+                frame,
                 inset))
         {
             return;
@@ -5576,23 +5601,26 @@ public sealed class DocumentView : RichTextBox
             var pen = new Pen(
                 new SolidColorBrush(waveColor),
                 PageBorderWaveVisualPlanner.StrokeWidthDip);
-            foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(width, height, inset))
+            foreach (var segment in PageBorderWaveVisualPlanner.BuildFrame(frame.Width, frame.Height, inset))
             {
                 drawingContext.DrawLine(
                     pen,
-                    new Point(segment.X1Dip, segment.Y1Dip),
-                    new Point(segment.X2Dip, segment.Y2Dip));
+                    new Point(frame.X + segment.X1Dip, frame.Y + segment.Y1Dip),
+                    new Point(frame.X + segment.X2Dip, frame.Y + segment.Y2Dip));
             }
             return;
         }
 
-        var thickness = Math.Max(1, border.WidthPt * PxPerPoint);
         var linePen = new Pen(new SolidColorBrush(color), thickness);
         var half = thickness / 2;
         drawingContext.DrawRectangle(
             null,
             linePen,
-            new Rect(half, half, Math.Max(0, width - thickness), Math.Max(0, height - thickness)));
+            new Rect(
+                frame.X + half,
+                frame.Y + half,
+                Math.Max(0, frame.Width - thickness),
+                Math.Max(0, frame.Height - thickness)));
     }
 
     private void ApplyPageChrome()
@@ -5601,7 +5629,10 @@ public sealed class DocumentView : RichTextBox
             && PageBorderVisibilityPlanner.ShouldRender(pb.Display, 0))
         {
             var frontLayer = PageBorderVisibilityPlanner.LayerFor(pb.ZOrder) == PageBorderRenderLayer.InFrontOfText;
-            if (pb.ArtId > 0 || pb.LineStyle == BorderLineStyle.Wave || frontLayer)
+            if (pb.OffsetFrom == PageBorderOffsetFrom.Text
+                || pb.ArtId > 0
+                || pb.LineStyle == BorderLineStyle.Wave
+                || frontLayer)
             {
                 BorderBrush = null;
                 BorderThickness = new Thickness(0);
@@ -17530,6 +17561,7 @@ public sealed class DocumentView : RichTextBox
 
             DrawLivePageBorder(
                 drawingContext,
+                _view._model,
                 border,
                 _view.RenderSize.Width,
                 _view.RenderSize.Height);

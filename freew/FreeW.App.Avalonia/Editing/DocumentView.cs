@@ -4292,22 +4292,19 @@ public sealed class DocumentView : Control
         double height;
         if (border.OffsetFrom == PageBorderOffsetFrom.Text)
         {
-            var spacePt = Math.Max(0, border.SpacePt);
-            var headerDistancePt = _doc.Page.HeaderDistancePt > 0
-                ? _doc.Page.HeaderDistancePt
-                : 36;
-            x = _doc.Page.MarginLeftPt - spacePt - widthPt / 2;
-            y = _doc.Page.MarginBottomPt - spacePt - widthPt / 2;
-            width = pageWidthPt
-                - _doc.Page.MarginLeftPt
-                - _doc.Page.MarginRightPt
-                + 2 * spacePt
-                + widthPt;
-            height = pageHeightPt
-                - headerDistancePt
-                - _doc.Page.MarginBottomPt
-                + 2 * spacePt
-                + widthPt;
+            var frame = PageBorderTextFramePlanner.Build(
+                _doc.Page,
+                border,
+                pageWidthPt,
+                pageHeightPt,
+                unitsPerPoint: 1,
+                strokeRegistration: widthPt / 2,
+                _doc.PageBordersDoNotSurroundHeader,
+                _doc.PageBordersDoNotSurroundFooter);
+            x = frame.X;
+            y = pageHeightPt - frame.Y - frame.Height;
+            width = frame.Width;
+            height = frame.Height;
         }
         else
         {
@@ -10234,15 +10231,20 @@ public sealed class DocumentView : Control
         double artInset;
         if (pb.OffsetFrom == PageBorderOffsetFrom.Text)
         {
-            var space = Math.Max(0, pb.SpacePt * PxPerPoint);
-            var headerDistance = _doc.Page.HeaderDistancePt > 0
-                ? _doc.Page.HeaderDistancePt * PxPerPoint
-                : 36 * PxPerPoint;
+            var planned = PageBorderTextFramePlanner.Build(
+                _doc.Page,
+                pb,
+                pageRect.Width,
+                pageRect.Height,
+                PxPerPoint,
+                widthDip,
+                _doc.PageBordersDoNotSurroundHeader,
+                _doc.PageBordersDoNotSurroundFooter);
             var outerFrame = new Rect(
-                pageRect.X + _doc.Page.MarginLeftPt * PxPerPoint - space - widthDip,
-                pageRect.Y + headerDistance - space - widthDip,
-                Math.Max(0, pageRect.Width - (_doc.Page.MarginLeftPt + _doc.Page.MarginRightPt) * PxPerPoint + 2 * (space + widthDip)),
-                Math.Max(0, pageRect.Height - (headerDistance / PxPerPoint + _doc.Page.MarginBottomPt) * PxPerPoint + 2 * (space + widthDip)));
+                pageRect.X + planned.X,
+                pageRect.Y + planned.Y,
+                planned.Width,
+                planned.Height);
             artFrame = outerFrame;
             artInset = 0;
             rect = outerFrame.Deflate(new Thickness(widthDip / 2));
