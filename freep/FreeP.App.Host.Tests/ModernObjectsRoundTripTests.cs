@@ -229,6 +229,21 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.RawXml.Should().Contain("summaryzoom");
         zoom.PreservedObject.RawXml.Should().Contain("fixedLayout");
         zoom.PreservedObject.RawXml.Should().Contain("summaryZmObj");
+        zoom.PreservedObject.WasAlternateContent.Should().BeTrue();
+        zoom.PreservedObject.McRequiresToken.Should().Be("p14");
+        zoom.PreservedObject.AlternateContentFallbackXml.Should().Contain("<p:sp");
+
+        using var saved = WritePptxToMemory(presentation);
+        using var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
+        var slideXmlEntry = zip.Entries.First(entry =>
+            entry.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase) &&
+            entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+        using var slideReader = new StreamReader(slideXmlEntry.Open());
+        var slideXml = slideReader.ReadToEnd();
+        slideXml.Should().Contain("AlternateContent");
+        slideXml.Should().Contain("Requires=\"p14\"");
+        slideXml.Should().Contain("Summary Zoom");
+        slideXml.Should().Contain("roundRect");
     }
 
     // ── Ink contentPart round-trip ────────────────────────────────────────────
