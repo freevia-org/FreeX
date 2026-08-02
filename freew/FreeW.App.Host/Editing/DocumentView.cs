@@ -9648,6 +9648,11 @@ public sealed class DocumentView : RichTextBox
                 {
                     wpfCell.BorderBrush = null;
                     wpfCell.BorderThickness = new Thickness(0);
+                    wpfCell.Padding = new Thickness(
+                        0,
+                        wpfCell.Padding.Top,
+                        0,
+                        wpfCell.Padding.Bottom);
                 }
 
                 var mergeSource = modelCell.VerticalMerge == VerticalMergeState.Continue
@@ -9955,7 +9960,12 @@ public sealed class DocumentView : RichTextBox
         TableCellMargins? contentMargins,
         IReadOnlyDictionary<ModelParagraph, PreservedNumberingMarkerPlan> preservedNumberingMarkers)
     {
-        var grid = new System.Windows.Controls.Grid();
+        var grid = new System.Windows.Controls.Grid
+        {
+            RenderTransform = borderPlan.HasVisibleEdges
+                ? new TranslateTransform(-4, 0)
+                : Transform.Identity
+        };
         if (minHeightPx is { } minHeight)
             grid.MinHeight = minHeight;
 

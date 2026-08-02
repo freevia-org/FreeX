@@ -781,6 +781,35 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_SmartArt_PictureStrips_ImportsNodePictures()
+    {
+        var nodeTexts = new[] { "Alpha caption", "Beta caption" };
+        var pptxPath = MakeSmartArtPptx(nodeTexts, pictureStrips: true, includeNodeImage: true);
+        var pres = PptxPackageReader.Read(pptxPath);
+
+        var smart = pres.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smart.Data.Should().NotBeNull();
+        smart.Data!.LayoutUniqueId.Should().EndWith("/pictureStrips");
+        smart.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "Picture Strips is a supported live layout when node picture relationships are mapped");
+        smart.Data.Nodes.Should().HaveCount(nodeTexts.Length);
+        smart.Data.Nodes.Select(n => n.Text).Should().Equal(nodeTexts);
+        smart.Data.Nodes.Select(n => n.Picture?.ContentType).Should().OnlyContain(contentType => contentType == "image/png");
+        smart.Data.Nodes.Select(n => n.Picture?.Bytes.Length ?? 0).Should().OnlyContain(length => length > 0);
+
+        var reopened = PptxPackageReader.Read(WriteToPptx(pres));
+        var reopenedSmart = reopened.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reopenedSmart.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        reopenedSmart.Data.Nodes.Select(n => n.Picture?.Bytes.Length ?? 0)
+            .Should().OnlyContain(length => length > 0);
+    }
+
+    [Fact]
     public void EditingSession_ReplaceSmartArtNodePicture_IsUndoableAndRoundTripsMedia()
     {
         var sourcePath = MakeSmartArtPptx(["Alpha caption", "Beta caption"], pictureCaptionList: true, includeNodeImage: true);

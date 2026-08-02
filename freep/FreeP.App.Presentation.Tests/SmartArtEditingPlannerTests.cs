@@ -243,6 +243,19 @@ public sealed class SmartArtEditingPlannerTests
                 element.Attribute("Type")?.Value.EndsWith("/image", StringComparison.Ordinal) == true)
             .Should().ContainSingle();
         smartArt.Parts.Keys.Should().Contain(path => path.StartsWith("ppt/media/freep-smartart-picture", StringComparison.Ordinal));
+
+        var drawing = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts[smartArt.DrawingPartPath!].Bytes));
+        drawing.Descendants(XName.Get("pic", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+            .Should().ContainSingle("picture nodes must remain native dsp:pic elements after cache regeneration");
+        drawing.Descendants(XName.Get("sp", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+            .Where(shape => shape.Element(XName.Get("spPr", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+                ?.Element(XName.Get("blipFill", "http://schemas.microsoft.com/office/drawing/2008/diagram")) is not null)
+            .Should().BeEmpty("picture payloads must not be downgraded to generic dsp:sp shapes");
+        drawing.Descendants(XName.Get("blipFill", "http://schemas.microsoft.com/office/drawing/2008/diagram"))
+            .Should().ContainSingle()
+            .Which.Descendants(XName.Get("blip", "http://schemas.openxmlformats.org/drawingml/2006/main"))
+            .Single().Attribute(XName.Get("embed", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"))
+            .Should().NotBeNull();
     }
 
     [Fact]
@@ -1223,11 +1236,11 @@ public sealed class SmartArtEditingPlannerTests
             .Select(t => t.Element(a + "bodyPr") is not null && t.Element(a + "lstStyle") is not null)
             .Should().OnlyContain(value => value);
         var cacheDocument = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
-        cacheDocument.Descendants(dsp + "sp")
+        cacheDocument.Descendants(dsp + "pic")
             .SelectMany(shape => shape.Descendants(a + "blip"))
             .Select(blip => (string?)blip.Attribute(r + "embed"))
             .Where(id => id is not null)
-            .Should().Equal("rIdPic1", "rIdPic2");
+            .Should().Equal(["rIdPic1", "rIdPic2"]);
     }
 
     [Fact]

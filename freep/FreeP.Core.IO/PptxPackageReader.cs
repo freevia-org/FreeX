@@ -2826,7 +2826,7 @@ public static class PptxPackageReader
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return id.Split('/').Last() is "pictureaccentprocess" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "continuouspicturelist" or "picturegrid";
+        return id.Split('/').Last() is "pictureaccentprocess" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturestrips" or "continuouspicturelist" or "picturegrid";
     }
 
     /// <summary>
