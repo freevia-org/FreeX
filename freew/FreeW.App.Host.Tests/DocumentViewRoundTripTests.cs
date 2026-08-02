@@ -1506,6 +1506,32 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void ContentAutoFitFlowTable_UsesMeasuredColumnWidthsAndTrailingReservation()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(2, 2);
+        table.AutoFit = AutoFitMode.Contents;
+        table.Rows[0].Cells[0] = new FreeW.Core.Model.TableCell("Tiny");
+        table.Rows[0].Cells[1] = new FreeW.Core.Model.TableCell("A substantially longer cell value");
+        table.Rows[1].Cells[0] = new FreeW.Core.Model.TableCell("X");
+        table.Rows[1].Cells[1] = new FreeW.Core.Model.TableCell("Y");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        rendered.Margin.Right.Should().BeGreaterThan(0);
+        rendered.Columns.Should().HaveCount(2);
+        rendered.Columns[1].Width.Value.Should().BeGreaterThan(rendered.Columns[0].Width.Value);
+        rendered.Columns.Sum(column => column.Width.Value)
+            .Should().BeApproximately(
+                DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip - rendered.Margin.Right,
+                0.01);
+    }
+
+    [StaFact]
     public void TablePagination_WithoutRepeatHeader_RendersPlannedPageBreakSegments()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
