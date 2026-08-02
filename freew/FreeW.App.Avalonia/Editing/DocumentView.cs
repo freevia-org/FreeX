@@ -471,7 +471,8 @@ public sealed class DocumentView : Control
         bool UnderlineIndeterminate     = false,
         bool StrikethroughIndeterminate = false,
         bool FamilyIndeterminate        = false,
-        bool SizeIndeterminate          = false);
+        bool SizeIndeterminate          = false,
+        bool DoubleStrikethroughIndeterminate = false);
 
     public string GetCellText(int block, int row, int col)
     {
@@ -17881,6 +17882,9 @@ public sealed class DocumentView : Control
     public void ToggleItalic() => ToggleRunFlag(f => f.Italic, (f, v) => f with { Italic = v });
     public void ToggleUnderline() => ToggleRunFlag(f => f.Underline, (f, v) => f with { Underline = v });
     public void ToggleStrikethrough() => ToggleRunFlag(f => f.Strikethrough, (f, v) => f with { Strikethrough = v });
+    public void ToggleDoubleStrikethrough() => ToggleRunFlag(
+        f => f.DoubleStrikethrough,
+        (f, v) => f with { DoubleStrikethrough = v });
     public void ToggleSmallCaps() => ToggleRunFlag(f => f.SmallCaps, (f, v) => f with { SmallCaps = v });
     public void ToggleAllCaps() => ToggleRunFlag(f => f.AllCaps, (f, v) => f with { AllCaps = v });
 
@@ -21668,6 +21672,7 @@ public sealed class DocumentView : Control
         var italicMixed     = false;
         var underlineMixed  = false;
         var strikeMixed     = false;
+        var doubleStrikeMixed = false;
         var familyMixed     = false;
         var sizeMixed       = false;
 
@@ -21678,6 +21683,7 @@ public sealed class DocumentView : Control
             if (fmt.Italic      != firstFmt.Italic)      italicMixed    = true;
             if (fmt.Underline   != firstFmt.Underline)   underlineMixed = true;
             if (fmt.Strikethrough != firstFmt.Strikethrough) strikeMixed = true;
+            if (fmt.DoubleStrikethrough != firstFmt.DoubleStrikethrough) doubleStrikeMixed = true;
             if (fmt.FontFamily  != firstFmt.FontFamily)  familyMixed    = true;
             if (fmt.FontSizePt  != firstFmt.FontSizePt)  sizeMixed      = true;
         }
@@ -21690,7 +21696,8 @@ public sealed class DocumentView : Control
             UnderlineIndeterminate:     underlineMixed,
             StrikethroughIndeterminate: strikeMixed,
             FamilyIndeterminate:        familyMixed,
-            SizeIndeterminate:          sizeMixed);
+            SizeIndeterminate:          sizeMixed,
+            DoubleStrikethroughIndeterminate: doubleStrikeMixed);
     }
 
     // ── Undo-group pass-throughs (used by FontDialog to group all format steps) ─────────────────

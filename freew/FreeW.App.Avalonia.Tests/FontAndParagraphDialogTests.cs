@@ -274,6 +274,46 @@ public sealed class FontAndParagraphDialogTests
     }
 
     [Fact]
+    public void FontDialog_apply_sets_double_strikethrough_independently()
+    {
+        var doc = MakeDoc("Double strike");
+        var view = new DocumentView();
+        view.LoadDocument(doc);
+        view.SelectAll();
+
+        var original = RunFormatting.Default;
+        var result = new FontDialog.FontDialogResult(
+            Family: null, SizePt: null,
+            Bold: false, Italic: false, Underline: false, Strikethrough: false,
+            VerticalAlign: VerticalAlign.Baseline,
+            SmallCaps: false, AllCaps: false,
+            ColorHex: null, HighlightHex: null,
+            DoubleStrikethrough: true);
+
+        FontDialog.ApplyResult(view, result, original);
+
+        var formatting = ((Paragraph)view.Document.Blocks[0]).Runs.Single().Formatting;
+        formatting.DoubleStrikethrough.Should().BeTrue();
+        formatting.Strikethrough.Should().BeFalse();
+    }
+
+    [Fact]
+    public void FontDialog_selection_state_reports_mixed_double_strikethrough()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("double", RunFormatting.Default with { DoubleStrikethrough = true }));
+        paragraph.Runs.Add(new Run(" plain"));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadDocument(document);
+        view.SelectAll();
+
+        view.GetSelectionFormatting().DoubleStrikethroughIndeterminate.Should().BeTrue();
+    }
+
+    [Fact]
     public void FontDialog_apply_sets_font_family()
     {
         var doc = MakeDoc("Family");

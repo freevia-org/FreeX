@@ -18,6 +18,8 @@ public sealed class FontDialogPolicySourceGuardTests
         source.Should().Contain("FontDialogPlanner.NumberSpacingChoices");
         source.Should().Contain("new FontDialogInput(");
         source.Should().Contain("FontDialogPlanner.TryBuildResult(");
+        source.Should().Contain("Double strikethrough");
+        source.Should().Contain("state.DoubleStrikethrough");
     }
 
     [Fact]
