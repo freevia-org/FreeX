@@ -10283,32 +10283,37 @@ public sealed partial class MainWindow : Window
     internal SlideShowCustomShowMutationResult CreateCustomShow(
         string? name,
         IEnumerable<string?> slideIds) =>
-        SlideShowCustomShowPlanner.CreateCustomShow(_presentation, name, slideIds);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.CreateCustomShow(presentation, name, slideIds));
 
     internal SlideShowCustomShowMutationResult RenameCustomShow(
         int customShowIndex,
         string? name) =>
-        SlideShowCustomShowPlanner.RenameCustomShow(_presentation, customShowIndex, name);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.RenameCustomShow(presentation, customShowIndex, name));
 
     internal SlideShowCustomShowMutationResult DeleteCustomShow(int customShowIndex) =>
-        SlideShowCustomShowPlanner.DeleteCustomShow(_presentation, customShowIndex);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.DeleteCustomShow(presentation, customShowIndex));
 
     internal SlideShowCustomShowMutationResult UpdateCustomShowSlides(
         int customShowIndex,
         IEnumerable<string?> slideIds) =>
-        SlideShowCustomShowPlanner.UpdateCustomShowSlides(_presentation, customShowIndex, slideIds);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.UpdateCustomShowSlides(presentation, customShowIndex, slideIds));
 
     internal SlideShowCustomShowMutationResult MoveCustomShowSlide(
         int customShowIndex,
         int sourceSlideIndex,
         string? sourceSlideId,
         int targetSlideIndex) =>
-        SlideShowCustomShowPlanner.MoveCustomShowSlide(
-            _presentation,
-            customShowIndex,
-            sourceSlideIndex,
-            sourceSlideId,
-            targetSlideIndex);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.MoveCustomShowSlide(
+                presentation,
+                customShowIndex,
+                sourceSlideIndex,
+                sourceSlideId,
+                targetSlideIndex));
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {
