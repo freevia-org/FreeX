@@ -1274,7 +1274,7 @@ public sealed class DocumentViewPdfExportTests
             var pdf = view.BuildPdfContent();
             var fills = pdf.Pages.Single().Ops.OfType<PdfFillRect>().ToArray();
             var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
-            fills.Should().HaveCount(4);
+            fills.Should().HaveCount(5);
             paths.Should().HaveCount(224);
             fills[0].Should().Be(new PdfFillRect(24, 744, 564, 24, PdfColor.Black));
             paths[0].FillColor.Should().Be(new PdfColor(255, 255, 255));
