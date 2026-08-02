@@ -286,7 +286,7 @@ internal sealed class FileCommands
                 PresentationPrintLayoutKind.Handouts,
                 range,
                 HandoutSlidesPerPage: slidesPerPage),
-            presentation.Slides.Count,
+            presentation,
             presentation.SlideSizeCxEmu,
             presentation.SlideSizeCyEmu);
     }
