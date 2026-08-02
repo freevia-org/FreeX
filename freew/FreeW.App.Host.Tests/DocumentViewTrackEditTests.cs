@@ -538,6 +538,115 @@ public sealed class DocumentViewTrackEditTests
         ((Paragraph)view.Model.Blocks[0]).Runs.Single().Formatting.Should().Be(baseline);
     }
 
+    [StaFact]
+    public void CommitToModel_PreservesModelOnlyRunFormattingThroughWpfView()
+    {
+        var formatting = new RunFormatting
+        {
+            Bold = true,
+            Underline = true,
+            Strikethrough = true,
+            FontFamily = "Arial",
+            FontSizePt = 15,
+            ColorHex = "#0070C0",
+            HighlightColorHex = "#FFFF00",
+            CharacterSpacingPt = 1.25,
+            KerningMinSizePt = 12,
+            PositionPt = 1.5,
+            Ligatures = LigatureMode.StandardContextual,
+            StylisticSet = 4,
+            NumberForm = NumberForm.OldStyle,
+            NumberSpacing = NumberSpacing.Tabular,
+            CharacterBorder = new ParagraphBorder("#C00000", 1),
+            CharacterShadingHex = "#E2F0D9",
+            CharacterShadingPattern = ShadingPattern.Pct25,
+            LanguageTag = "fr-FR",
+        };
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Preserve", formatting));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        view.CommitToModel();
+
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single().Formatting.Should().Be(formatting);
+    }
+
+    [StaFact]
+    public void FormatPainter_SelectedRangeCopiesFullFormattingTracksAndUndoesAtomically()
+    {
+        var sourceFormatting = new RunFormatting
+        {
+            Bold = true,
+            Underline = true,
+            FontFamily = "Arial",
+            FontSizePt = 16,
+            ColorHex = "#0070C0",
+            CharacterSpacingPt = 1.25,
+            KerningMinSizePt = 12,
+            PositionPt = 1.5,
+            Ligatures = LigatureMode.StandardContextual,
+            StylisticSet = 4,
+            NumberForm = NumberForm.OldStyle,
+            NumberSpacing = NumberSpacing.Tabular,
+            CharacterBorder = new ParagraphBorder("#C00000", 1),
+            CharacterShadingHex = "#E2F0D9",
+            CharacterShadingPattern = ShadingPattern.Pct25,
+            LanguageTag = "fr-FR",
+        };
+        var sourceParagraphFormatting = ParagraphFormatting.Default with
+        {
+            Alignment = TextAlignment.Center,
+            SpaceAfterPt = 18,
+        };
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var source = new Paragraph { Formatting = sourceParagraphFormatting };
+        source.Runs.Add(new Run("Source", sourceFormatting));
+        document.Blocks.Add(source);
+        document.Blocks.Add(new Paragraph("Hello world"));
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.CommitToModel();
+        var targetBaseline = ((Paragraph)view.Model.Blocks[1]).Runs.Single().Formatting;
+        var targetParagraphBaseline = ((Paragraph)view.Model.Blocks[1]).Formatting;
+        view.RevisionAuthor = "Painter Reviewer";
+        view.TrackChangesEnabled = true;
+
+        view.SetSelectionRangeForTest(0, 0, 0, 6);
+        view.ArmFormatPainter().Should().BeTrue();
+        view.SetSelectionRangeForTest(1, 6, 1, 11);
+
+        view.ApplyFormatPainterToSelectionForTest().Should().BeTrue();
+
+        var target = (Paragraph)view.Model.Blocks[1];
+        target.Runs.Single(run => run.Text == "Hello ").Formatting.Should().Be(targetBaseline);
+        var painted = target.Runs.Single(run => run.Text == "world");
+        painted.Formatting.Should().Be(sourceFormatting);
+        painted.FormatRevision.Should().NotBeNull();
+        painted.FormatRevision!.Author.Should().Be("Painter Reviewer");
+        painted.FormatRevision.PreviousFormatting.Should().Be(targetBaseline);
+        target.Formatting.Should().Be(sourceParagraphFormatting);
+        view.FormatPainterActive.Should().BeFalse();
+
+        view.Undo();
+
+        target = (Paragraph)view.Model.Blocks[1];
+        target.Runs.Should().ContainSingle();
+        target.Runs[0].Text.Should().Be("Hello world");
+        target.Runs[0].Formatting.Should().Be(targetBaseline);
+        target.Runs[0].FormatRevision.Should().BeNull();
+        target.Formatting.Should().Be(targetParagraphBaseline);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[1]).Runs.Single(run => run.Text == "world")
+            .Formatting.Should().Be(sourceFormatting);
+        ((Paragraph)view.Model.Blocks[1]).Formatting.Should().Be(sourceParagraphFormatting);
+    }
+
     private static WpfRun RenderedRun(DocumentView view, string text) =>
         view.Document.Blocks.OfType<WpfParagraph>()
             .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())
