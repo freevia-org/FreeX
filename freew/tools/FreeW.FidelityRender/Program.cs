@@ -1679,6 +1679,17 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         DrawSoftwareDecorativeArch(canvas, archPlan);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildHandmade2Frame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var handmadePlan))
+    {
+        DrawSoftwareDecorativeArch(canvas, handmadePlan);
+        return;
+    }
 
     using var borderPaint = new SKPaint
     {
