@@ -24,6 +24,7 @@ public static class ZoomNavigationService
             null,
             out slideIndex,
             out _,
+            out _,
             out _);
 
     /// <summary>
@@ -43,6 +44,7 @@ public static class ZoomNavigationService
             relativeY,
             out slideIndex,
             out _,
+            out _,
             out _);
 
     /// <summary>Resolves a Zoom target and its Return to Parent behavior.</summary>
@@ -60,6 +62,29 @@ public static class ZoomNavigationService
             relativeY,
             out slideIndex,
             out returnToParent,
+            out _,
+            out _);
+
+    /// <summary>
+    /// Resolves a Zoom target while preserving the pre-showBg API shape for callers that do not
+    /// participate in slideshow rendering.
+    /// </summary>
+    public static bool TryGetTargetSlideIndex(
+        Presentation presentation,
+        PreservedObjectInfo? zoom,
+        double? relativeX,
+        double? relativeY,
+        out int slideIndex,
+        out bool returnToParent,
+        out int? transitionDurationMs)
+        => TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            relativeX,
+            relativeY,
+            out slideIndex,
+            out returnToParent,
+            out transitionDurationMs,
             out _);
 
     /// <summary>
@@ -73,16 +98,19 @@ public static class ZoomNavigationService
         double? relativeY,
         out int slideIndex,
         out bool returnToParent,
-        out int? transitionDurationMs)
+        out int? transitionDurationMs,
+        out bool showBackground)
     {
         slideIndex = -1;
         returnToParent = false;
         transitionDurationMs = null;
+        showBackground = true;
         if (presentation is null || zoom?.ObjectKind != PreservedObjectKind.Zoom)
             return false;
 
         returnToParent = zoom.ZoomProperties?.ReturnToParent ?? true;
         transitionDurationMs = ParseTransitionDuration(zoom.ZoomProperties?.TransitionDuration);
+        showBackground = zoom.ZoomProperties?.ShowBackground ?? true;
 
         if (zoom.SummaryZoomTargets.Count > 0)
         {

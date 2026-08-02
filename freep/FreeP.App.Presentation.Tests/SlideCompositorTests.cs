@@ -212,6 +212,20 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void Compose_CanOmitDestinationBackgroundForZoomTransition()
+    {
+        var presentation = MakePresentation();
+        var slide = FirstSlide(presentation);
+
+        var ops = SlideCompositor.Compose(
+            presentation,
+            slide,
+            includeBackground: false);
+
+        ops.OfType<DrawOp.Background>().Should().BeEmpty();
+    }
+
+    [Fact]
     public void Compose_SummaryZoom_UsesAttachedPreviewTilesAndNativeLayout()
     {
         var presentation = new PresentationModel();

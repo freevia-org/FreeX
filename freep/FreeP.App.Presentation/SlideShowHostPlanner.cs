@@ -36,7 +36,8 @@ public sealed record SlideShowPointerClickIntent(
     Hyperlink? Hyperlink = null,
     int? TargetSlideIndex = null,
     bool ReturnToParent = false,
-    int? TransitionDurationMs = null)
+    int? TransitionDurationMs = null,
+    bool ShowBackground = true)
 {
     public bool IsHandled => Kind is
         SlideShowPointerClickIntentKind.Trigger or
@@ -64,7 +65,8 @@ public sealed record SlideShowHostDisplayPlan(
     Slide? Slide,
     SlideShowSlideMetrics Metrics,
     SlideTransition? Transition,
-    int? AutoAdvanceAfterMs);
+    int? AutoAdvanceAfterMs,
+    bool UseDestinationBackground = true);
 
 public sealed record SlideShowPresenterDisplayIntent(
     bool IsFullScreenRequested,
@@ -102,7 +104,8 @@ public sealed record SlideShowHostCommand
         AnimationStep? step,
         AdvanceResult? advanceResult,
         BackResult? backResult,
-        int? transitionDurationMs)
+        int? transitionDurationMs,
+        bool useDestinationBackground)
     {
         Kind = kind;
         IsHandled = isHandled;
@@ -114,6 +117,7 @@ public sealed record SlideShowHostCommand
         AdvanceResult = advanceResult;
         BackResult = backResult;
         TransitionDurationMs = transitionDurationMs;
+        UseDestinationBackground = useDestinationBackground;
     }
 
     public SlideShowHostCommandKind Kind { get; }
@@ -137,6 +141,12 @@ public sealed record SlideShowHostCommand
     /// <summary>Authored Zoom transition duration override in milliseconds.</summary>
     public int? TransitionDurationMs { get; }
 
+    /// <summary>
+    /// Whether the destination slide background participates in an authored Zoom transition.
+    /// PowerPoint's omitted showBg attribute defaults to true.
+    /// </summary>
+    public bool UseDestinationBackground { get; }
+
     public static SlideShowHostCommand Ignored { get; } = new(
         SlideShowHostCommandKind.None,
         isHandled: false,
@@ -147,7 +157,8 @@ public sealed record SlideShowHostCommand
         step: null,
         advanceResult: null,
         backResult: null,
-        transitionDurationMs: null);
+        transitionDurationMs: null,
+        useDestinationBackground: true);
 
     public static SlideShowHostCommand HandledNoOp(
         bool stopAutoAdvance = false,
@@ -162,7 +173,8 @@ public sealed record SlideShowHostCommand
             step: null,
             advanceResult,
             backResult,
-            transitionDurationMs: null);
+            transitionDurationMs: null,
+            useDestinationBackground: true);
 
     public static SlideShowHostCommand Close(
         bool stopAutoAdvance = false,
@@ -176,7 +188,8 @@ public sealed record SlideShowHostCommand
             step: null,
             advanceResult,
             backResult: null,
-            transitionDurationMs: null);
+            transitionDurationMs: null,
+            useDestinationBackground: true);
 
     public static SlideShowHostCommand PlayStep(
         AnimationStep step,
@@ -191,7 +204,8 @@ public sealed record SlideShowHostCommand
             step,
             advanceResult,
             backResult: null,
-            transitionDurationMs: null);
+            transitionDurationMs: null,
+            useDestinationBackground: true);
 
     public static SlideShowHostCommand Navigate(
         Slide slide,
@@ -200,7 +214,8 @@ public sealed record SlideShowHostCommand
         bool stopAutoAdvance = false,
         AdvanceResult? advanceResult = null,
         BackResult? backResult = null,
-        int? transitionDurationMs = null) => new(
+        int? transitionDurationMs = null,
+        bool useDestinationBackground = true) => new(
             SlideShowHostCommandKind.NavigateToSlide,
             isHandled: true,
             stopAutoAdvance,
@@ -210,7 +225,8 @@ public sealed record SlideShowHostCommand
             step: null,
             advanceResult,
             backResult,
-            transitionDurationMs);
+            transitionDurationMs,
+            useDestinationBackground);
 }
 
 public static class SlideShowHostPlanner
@@ -338,13 +354,15 @@ public static class SlideShowHostPlanner
                 slidePoint,
                 out var targetSlideIndex,
                 out var returnToParent,
-                out var transitionDurationMs))
+                out var transitionDurationMs,
+                out var showBackground))
         {
             return new SlideShowPointerClickIntent(
                 SlideShowPointerClickIntentKind.Zoom,
                 TargetSlideIndex: targetSlideIndex,
                 ReturnToParent: returnToParent,
-                TransitionDurationMs: transitionDurationMs);
+                TransitionDurationMs: transitionDurationMs,
+                ShowBackground: showBackground);
         }
 
         var hyperlink = HitTestHyperlink(slide, slidePoint);
@@ -360,7 +378,8 @@ public static class SlideShowHostPlanner
         IReadOnlyList<Slide> slides,
         int targetSlideIndex,
         bool returnToParent = false,
-        int? transitionDurationMs = null)
+        int? transitionDurationMs = null,
+        bool showBackground = true)
     {
         ArgumentNullException.ThrowIfNull(controller);
         ArgumentNullException.ThrowIfNull(slides);
@@ -379,7 +398,8 @@ public static class SlideShowHostPlanner
                 stopAutoAdvance: true,
                 transitionDurationMs: transitionDurationMs is > 0
                     ? transitionDurationMs
-                    : null);
+                    : null,
+                useDestinationBackground: showBackground);
     }
 
     public static SlideShowHostCommand PlanInternalSlideJump(
@@ -427,7 +447,8 @@ public static class SlideShowHostPlanner
         Presentation presentation,
         SlideShowController controller,
         bool animated,
-        int? zoomTransitionDurationMs = null)
+        int? zoomTransitionDurationMs = null,
+        bool zoomShowBackground = true)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(controller);
@@ -436,7 +457,7 @@ public static class SlideShowHostPlanner
         var slide = controller.CurrentSlide;
         if (slide is null)
         {
-            return new SlideShowHostDisplayPlan(null, metrics, null, null);
+            return new SlideShowHostDisplayPlan(null, metrics, null, null, true);
         }
 
         var transition = animated && slide.Transition is { Kind: not TransitionKind.None }
@@ -457,7 +478,16 @@ public static class SlideShowHostPlanner
             ? advMs
             : null;
 
-        return new SlideShowHostDisplayPlan(slide, metrics, transition, autoAdvanceAfterMs);
+        var useDestinationBackground = animated
+            && zoomTransitionDurationMs is > 0
+            ? zoomShowBackground
+            : true;
+        return new SlideShowHostDisplayPlan(
+            slide,
+            metrics,
+            transition,
+            autoAdvanceAfterMs,
+            useDestinationBackground);
     }
 
     public static SlideShowHostState BuildState(
@@ -618,7 +648,8 @@ public static class SlideShowHostPlanner
         SlideShowPoint slidePoint,
         out int targetSlideIndex,
         out bool returnToParent,
-        out int? transitionDurationMs)
+        out int? transitionDurationMs,
+        out bool showBackground)
     {
         foreach (var shape in slide.Shapes)
         {
@@ -633,7 +664,8 @@ public static class SlideShowHostPlanner
                     RelativeShapeY(shape, slidePoint),
                     out targetSlideIndex,
                     out returnToParent,
-                    out transitionDurationMs))
+                    out transitionDurationMs,
+                    out showBackground))
             {
                 return true;
             }
@@ -644,7 +676,8 @@ public static class SlideShowHostPlanner
                     slidePoint,
                     out targetSlideIndex,
                     out returnToParent,
-                    out transitionDurationMs))
+                    out transitionDurationMs,
+                    out showBackground))
             {
                 return true;
             }
@@ -653,6 +686,7 @@ public static class SlideShowHostPlanner
         targetSlideIndex = -1;
         returnToParent = false;
         transitionDurationMs = null;
+        showBackground = true;
         return false;
     }
 
@@ -662,7 +696,8 @@ public static class SlideShowHostPlanner
         SlideShowPoint slidePoint,
         out int targetSlideIndex,
         out bool returnToParent,
-        out int? transitionDurationMs)
+        out int? transitionDurationMs,
+        out bool showBackground)
     {
         foreach (var shape in shapes)
         {
@@ -677,7 +712,8 @@ public static class SlideShowHostPlanner
                     RelativeShapeY(shape, slidePoint),
                     out targetSlideIndex,
                     out returnToParent,
-                    out transitionDurationMs))
+                    out transitionDurationMs,
+                    out showBackground))
             {
                 return true;
             }
@@ -688,7 +724,8 @@ public static class SlideShowHostPlanner
                     slidePoint,
                     out targetSlideIndex,
                     out returnToParent,
-                    out transitionDurationMs))
+                    out transitionDurationMs,
+                    out showBackground))
             {
                 return true;
             }
@@ -697,6 +734,7 @@ public static class SlideShowHostPlanner
         targetSlideIndex = -1;
         returnToParent = false;
         transitionDurationMs = null;
+        showBackground = true;
         return false;
     }
 
