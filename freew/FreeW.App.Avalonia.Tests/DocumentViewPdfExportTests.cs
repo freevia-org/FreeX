@@ -2030,6 +2030,44 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_PreservesPictureBorderColorWidthDashAndTransform() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var image = new InlineImage(SolidPng(SKColors.White), 72, 36)
+            {
+                BorderColorHex = "#C00000",
+                BorderWidthPt = 2.25,
+                BorderDash = "lgDashDot",
+                RotationAngle = 23,
+                FlipH = true,
+            };
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromImage(image));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var transform = pdf.Pages.Single().Ops.OfType<PdfRotationGroup>().Single();
+            transform.RotationDegrees.Should().BeApproximately(23, 0.001);
+            transform.FlipH.Should().BeTrue();
+            transform.Ops.OfType<PdfImage>().Should().ContainSingle()
+                .Which.RotationDegrees.Should().Be(0);
+            var border = transform.Ops.OfType<PdfStrokeRect>().Should().ContainSingle().Which;
+            border.Color.Should().Be(new PdfColor(0xC0, 0x00, 0x00));
+            border.LineWidth.Should().BeApproximately(2.25, 0.001);
+            border.Dash!.Segments.Should().Equal(8, 2, 1, 2);
+
+            PortablePdfWriter.WriteToBytes(pdf).Should().StartWith(Encoding.ASCII.GetBytes("%PDF-"));
+            using var rendered = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            rendered.Pixels.Count(pixel => pixel.Red > 140 && pixel.Green < 80 && pixel.Blue < 80)
+                .Should().BeGreaterThan(50, "the authored red picture border must reach the rendered page");
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesFloatingShapesAsVectorGeometryTextAndMergedLayering() =>
         Session.Dispatch(() =>
         {
