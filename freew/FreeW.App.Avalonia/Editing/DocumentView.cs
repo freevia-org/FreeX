@@ -18101,10 +18101,15 @@ public sealed class DocumentView : Control
             .Where(diagnostic => !_ignoredProofingWords.Contains(diagnostic.NormalizedWord))
             .ToArray();
 
+    private IReadOnlyList<ProofingDiagnostic> BuildVisibleProofingDiagnostics() =>
+        ProofingDiagnosticPlanner.BuildVisibleIndicators(_doc, SpellCheckEnabled, _customDictionary.Words)
+            .Where(diagnostic => !_ignoredProofingWords.Contains(diagnostic.NormalizedWord))
+            .ToArray();
+
     private HashSet<(int Block, int Offset)> BuildProofingOffsetSet()
     {
         var offsets = new HashSet<(int Block, int Offset)>();
-        foreach (var diagnostic in BuildProofingDiagnostics())
+        foreach (var diagnostic in BuildVisibleProofingDiagnostics())
         {
             for (var offset = diagnostic.ParagraphOffset; offset < diagnostic.ParagraphOffset + diagnostic.Length; offset++)
                 offsets.Add((diagnostic.BlockIndex, offset));
