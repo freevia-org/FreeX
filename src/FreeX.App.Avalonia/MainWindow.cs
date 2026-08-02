@@ -349,6 +349,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ListBoxItemPadding = new Thickness(0, 1),
             ListBoxItemMinHeight = 22,
         };
+    // WPF ScenarioManagerDialog uses the shared 12px dialog typography with compact
+    // 22px controls. Keep this override app-local so other dialogs retain their
+    // established compact chrome metrics.
+    private static AvaloniaCompactDialogChromeStyle ScenarioManagerDialogChromeStyle =>
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ControlHeight = 22,
+            TextBoxHeight = 22,
+            ButtonHeight = 22,
+            ButtonPadding = new Thickness(8, 1),
+            TextBoxPadding = new Thickness(4, 0),
+            ListBoxItemPadding = new Thickness(4, 1),
+            ListBoxItemMinHeight = 22,
+        };
 
     // Shell chrome surface — shared by the toolbar and the sheet-tabs/status bar so the window chrome reads
     // as one cohesive light surface (the same #F5F6F7 the ribbon theme uses). Exposed for tests.
@@ -22323,7 +22337,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "ScenarioManagerCompactDialog");
-        var dialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
+        var dialogChrome = ScenarioManagerDialogChromeStyle with
         {
             FontFamily = FormulaBarFontFamily,
         };
@@ -22388,6 +22402,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_PreventChanges")),
             IsChecked = true,
             FontSize = 12,
+            Margin = new Thickness(0, 0, 0, ScenarioManagerDialogLayout.LockedCheckBoxBottomMargin),
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(preventChangesBox, dialogChrome);
         AutomationProperties.SetName(preventChangesBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_PreventChangesAutomationName")));
@@ -22398,6 +22413,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Content = StripDisplayMnemonic(UiText.Get("ScenarioManager_Hide")),
             FontSize = 12,
+            Margin = new Thickness(0, 0, 0, ScenarioManagerDialogLayout.HiddenCheckBoxBottomMargin),
         };
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(hideBox, dialogChrome);
         AutomationProperties.SetName(hideBox, StripDisplayMnemonic(UiText.Get("ScenarioManager_HideAutomationName")));
@@ -22790,7 +22806,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var scenariosHeader = new TextBlock
         {
             Text = StripDisplayMnemonic(UiText.Get("ScenarioManager_Scenarios")),
-            Margin = new Thickness(0, 0, 0, ScenarioManagerDialogLayout.FieldBottomMargin),
+            Margin = new Thickness(0, 0, 0, ScenarioManagerDialogLayout.ScenarioListHeaderBottomMargin),
         };
 
         var fields = new AvaloniaGrid
