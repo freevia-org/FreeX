@@ -35,7 +35,8 @@ public sealed record SlideShowPointerClickIntent(
     uint? TriggerShapeId = null,
     Hyperlink? Hyperlink = null,
     int? TargetSlideIndex = null,
-    bool ReturnToParent = false)
+    bool ReturnToParent = false,
+    int? TransitionDurationMs = null)
 {
     public bool IsHandled => Kind is
         SlideShowPointerClickIntentKind.Trigger or
@@ -100,7 +101,8 @@ public sealed record SlideShowHostCommand
         Slide? slide,
         AnimationStep? step,
         AdvanceResult? advanceResult,
-        BackResult? backResult)
+        BackResult? backResult,
+        int? transitionDurationMs)
     {
         Kind = kind;
         IsHandled = isHandled;
@@ -111,6 +113,7 @@ public sealed record SlideShowHostCommand
         Step = step;
         AdvanceResult = advanceResult;
         BackResult = backResult;
+        TransitionDurationMs = transitionDurationMs;
     }
 
     public SlideShowHostCommandKind Kind { get; }
@@ -131,6 +134,9 @@ public sealed record SlideShowHostCommand
 
     public BackResult? BackResult { get; }
 
+    /// <summary>Authored Zoom transition duration override in milliseconds.</summary>
+    public int? TransitionDurationMs { get; }
+
     public static SlideShowHostCommand Ignored { get; } = new(
         SlideShowHostCommandKind.None,
         isHandled: false,
@@ -140,7 +146,8 @@ public sealed record SlideShowHostCommand
         slide: null,
         step: null,
         advanceResult: null,
-        backResult: null);
+        backResult: null,
+        transitionDurationMs: null);
 
     public static SlideShowHostCommand HandledNoOp(
         bool stopAutoAdvance = false,
@@ -154,7 +161,8 @@ public sealed record SlideShowHostCommand
             slide: null,
             step: null,
             advanceResult,
-            backResult);
+            backResult,
+            transitionDurationMs: null);
 
     public static SlideShowHostCommand Close(
         bool stopAutoAdvance = false,
@@ -167,7 +175,8 @@ public sealed record SlideShowHostCommand
             slide: null,
             step: null,
             advanceResult,
-            backResult: null);
+            backResult: null,
+            transitionDurationMs: null);
 
     public static SlideShowHostCommand PlayStep(
         AnimationStep step,
@@ -181,7 +190,8 @@ public sealed record SlideShowHostCommand
             slide: null,
             step,
             advanceResult,
-            backResult: null);
+            backResult: null,
+            transitionDurationMs: null);
 
     public static SlideShowHostCommand Navigate(
         Slide slide,
@@ -189,7 +199,8 @@ public sealed record SlideShowHostCommand
         bool animateSlide,
         bool stopAutoAdvance = false,
         AdvanceResult? advanceResult = null,
-        BackResult? backResult = null) => new(
+        BackResult? backResult = null,
+        int? transitionDurationMs = null) => new(
             SlideShowHostCommandKind.NavigateToSlide,
             isHandled: true,
             stopAutoAdvance,
@@ -198,7 +209,8 @@ public sealed record SlideShowHostCommand
             slide,
             step: null,
             advanceResult,
-            backResult);
+            backResult,
+            transitionDurationMs);
 }
 
 public static class SlideShowHostPlanner
@@ -325,12 +337,14 @@ public static class SlideShowHostPlanner
                 slide,
                 slidePoint,
                 out var targetSlideIndex,
-                out var returnToParent))
+                out var returnToParent,
+                out var transitionDurationMs))
         {
             return new SlideShowPointerClickIntent(
                 SlideShowPointerClickIntentKind.Zoom,
                 TargetSlideIndex: targetSlideIndex,
-                ReturnToParent: returnToParent);
+                ReturnToParent: returnToParent,
+                TransitionDurationMs: transitionDurationMs);
         }
 
         var hyperlink = HitTestHyperlink(slide, slidePoint);
@@ -345,7 +359,8 @@ public static class SlideShowHostPlanner
         SlideShowController controller,
         IReadOnlyList<Slide> slides,
         int targetSlideIndex,
-        bool returnToParent = false)
+        bool returnToParent = false,
+        int? transitionDurationMs = null)
     {
         ArgumentNullException.ThrowIfNull(controller);
         ArgumentNullException.ThrowIfNull(slides);
@@ -360,8 +375,11 @@ public static class SlideShowHostPlanner
             : SlideShowHostCommand.Navigate(
                 slide,
                 controller.CurrentSlideIndex,
-                animateSlide: false,
-                stopAutoAdvance: true);
+                animateSlide: transitionDurationMs is > 0,
+                stopAutoAdvance: true,
+                transitionDurationMs: transitionDurationMs is > 0
+                    ? transitionDurationMs
+                    : null);
     }
 
     public static SlideShowHostCommand PlanInternalSlideJump(
@@ -408,7 +426,8 @@ public static class SlideShowHostPlanner
     public static SlideShowHostDisplayPlan BuildDisplayPlan(
         Presentation presentation,
         SlideShowController controller,
-        bool animated)
+        bool animated,
+        int? zoomTransitionDurationMs = null)
     {
         ArgumentNullException.ThrowIfNull(presentation);
         ArgumentNullException.ThrowIfNull(controller);
@@ -423,6 +442,17 @@ public static class SlideShowHostPlanner
         var transition = animated && slide.Transition is { Kind: not TransitionKind.None }
             ? slide.Transition
             : null;
+        if (animated && zoomTransitionDurationMs is > 0)
+        {
+            transition = new SlideTransition
+            {
+                Kind = TransitionKind.Zoom,
+                DurationMs = Math.Max(
+                    SlideShowPlaybackPlanner.MinTransitionDurationMs,
+                    zoomTransitionDurationMs.Value),
+                AdvanceAfterMs = slide.Transition?.AdvanceAfterMs,
+            };
+        }
         int? autoAdvanceAfterMs = slide.Transition?.AdvanceAfterMs is int advMs && advMs > 0
             ? advMs
             : null;
@@ -587,7 +617,8 @@ public static class SlideShowHostPlanner
         Slide slide,
         SlideShowPoint slidePoint,
         out int targetSlideIndex,
-        out bool returnToParent)
+        out bool returnToParent,
+        out int? transitionDurationMs)
     {
         foreach (var shape in slide.Shapes)
         {
@@ -601,13 +632,19 @@ public static class SlideShowHostPlanner
                     RelativeShapeX(shape, slidePoint),
                     RelativeShapeY(shape, slidePoint),
                     out targetSlideIndex,
-                    out returnToParent))
+                    out returnToParent,
+                    out transitionDurationMs))
             {
                 return true;
             }
 
             if (shape.Children.Count > 0 && TryGetZoomTargetSlideIndexInShapes(
-                    presentation, shape.Children, slidePoint, out targetSlideIndex, out returnToParent))
+                    presentation,
+                    shape.Children,
+                    slidePoint,
+                    out targetSlideIndex,
+                    out returnToParent,
+                    out transitionDurationMs))
             {
                 return true;
             }
@@ -615,6 +652,7 @@ public static class SlideShowHostPlanner
 
         targetSlideIndex = -1;
         returnToParent = false;
+        transitionDurationMs = null;
         return false;
     }
 
@@ -623,7 +661,8 @@ public static class SlideShowHostPlanner
         IReadOnlyList<SlideShape> shapes,
         SlideShowPoint slidePoint,
         out int targetSlideIndex,
-        out bool returnToParent)
+        out bool returnToParent,
+        out int? transitionDurationMs)
     {
         foreach (var shape in shapes)
         {
@@ -637,13 +676,19 @@ public static class SlideShowHostPlanner
                     RelativeShapeX(shape, slidePoint),
                     RelativeShapeY(shape, slidePoint),
                     out targetSlideIndex,
-                    out returnToParent))
+                    out returnToParent,
+                    out transitionDurationMs))
             {
                 return true;
             }
 
             if (shape.Children.Count > 0 && TryGetZoomTargetSlideIndexInShapes(
-                    presentation, shape.Children, slidePoint, out targetSlideIndex, out returnToParent))
+                    presentation,
+                    shape.Children,
+                    slidePoint,
+                    out targetSlideIndex,
+                    out returnToParent,
+                    out transitionDurationMs))
             {
                 return true;
             }
@@ -651,6 +696,7 @@ public static class SlideShowHostPlanner
 
         targetSlideIndex = -1;
         returnToParent = false;
+        transitionDurationMs = null;
         return false;
     }
 
