@@ -136,6 +136,14 @@ static Capture? CaptureOne(Scenario scenario, string output, Capture? authorityC
 static void Populate(Window dialog, Scenario scenario)
 {
     var state = scenario.State;
+    if (scenario.RouteId == "manual-hyphenation")
+    {
+        var choices = FindVisualChildren<ComboBox>(dialog).FirstOrDefault();
+        if (choices is not null && state != "initial")
+            choices.SelectedIndex = Math.Max(0, choices.ItemCount - 1);
+        FocusScenarioTarget(dialog, scenario);
+        return;
+    }
     if (scenario.RouteId == "style")
     {
         var styleTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();

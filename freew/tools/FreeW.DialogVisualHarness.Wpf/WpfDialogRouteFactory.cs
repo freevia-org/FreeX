@@ -7,6 +7,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 using LinqExpression = System.Linq.Expressions.Expression;
@@ -76,6 +77,8 @@ internal static class WpfDialogRouteFactory
             return CreateScreenClipOverlay(owner);
         if (routeId == "bookmark-manager")
             return CreateBookmarkManager(state, owner);
+        if (routeId == "manual-hyphenation")
+            return CreateManualHyphenation(state, owner);
         if (!DialogTypes.TryGetValue(routeId, out var typeName)) return null;
         var assembly = typeof(MainWindow).Assembly;
         var type = assembly.GetType($"FreeW.App.Host.{typeName}", false)
@@ -117,6 +120,20 @@ internal static class WpfDialogRouteFactory
         var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
             .Single(candidate => candidate.GetParameters().Length == 2);
         return (Window)constructor.Invoke([owner, editor]);
+    }
+
+    private static Window CreateManualHyphenation(string state, Window owner)
+    {
+        var editor = new DocumentView();
+        editor.Model.Blocks.Clear();
+        editor.Model.Blocks.Add(new Paragraph("characterization"));
+        var candidate = ManualHyphenationPlanner.CreateSession(editor.Model).Current
+            ?? throw new InvalidOperationException("The manual-hyphenation harness fixture did not produce a real candidate.");
+
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Host.ManualHyphenationDialog", true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(candidateConstructor => candidateConstructor.GetParameters().Length == 2);
+        return (Window)constructor.Invoke([owner, candidate]);
     }
 
     public static bool IsStaticPromptRoute(string routeId) => routeId is
