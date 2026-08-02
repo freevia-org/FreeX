@@ -254,6 +254,13 @@ public sealed class PptxRepairCorpusValidityTests
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
         var presentation = PptxPackageReader.Read(deckPath);
+        var increasingCircleProcess = presentation.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        increasingCircleProcess.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "the imported PowerPoint cache contains background-role geometry the bounded live authoring layout does not yet model");
+        increasingCircleProcess.FallbackShapes.Should().NotBeEmpty();
 
         var shapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
             .OfType<DrawOp.Shape>()
