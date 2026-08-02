@@ -113,20 +113,31 @@ public sealed class MotionPathModelTests
     }
 
     [Fact]
-    public void Evaluator_Sample_TwoSegmentPath_AtT05_IsFirstEndpoint()
+    public void Evaluator_Sample_TwoSegmentPath_AtT05_UsesArcLength()
     {
-        // M 0 0 L 0.5 0 L 1.0 0.5 — two equal segments
-        // at t=0.5 we should be exactly at first line endpoint (0.5, 0)
+        // The second segment is longer, so halfway through the path is already
+        // partway through that segment rather than at an equal-segment boundary.
         var mp = new MotionPath();
         mp.Segments.Add(MotionPathSegment.MoveTo(0, 0));
         mp.Segments.Add(MotionPathSegment.LineTo(0.5, 0));
         mp.Segments.Add(MotionPathSegment.LineTo(1.0, 0.5));
 
         var (dx, dy) = MotionPathEvaluator.Sample(mp, 0.5);
-        // At t=0.5 with 2 drawable segments: localT=0 of seg[1] → prevX=0.5, so we start the second seg at t=0
-        // which should return 0.5, 0 (the prev point of seg 1)
-        dx.Should().BeInRange(0.0, 1.0);
-        dy.Should().BeInRange(0.0, 1.0);
+        dx.Should().BeApproximately(0.573223, 1e-5);
+        dy.Should().BeApproximately(0.073223, 1e-5);
+    }
+
+    [Fact]
+    public void Evaluator_Sample_CubicAndLinePath_UsesCubicArcLength()
+    {
+        var mp = new MotionPath();
+        mp.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+        mp.Segments.Add(MotionPathSegment.CubicTo(0.025, 0, 0.075, 0, 0.1, 0));
+        mp.Segments.Add(MotionPathSegment.LineTo(1, 0));
+
+        var (dx, dy) = MotionPathEvaluator.Sample(mp, 0.5);
+        dx.Should().BeApproximately(0.5, 1e-5);
+        dy.Should().BeApproximately(0, 1e-5);
     }
 
     // ── MotionPath I/O round-trip ───────────────────────────────────────────────

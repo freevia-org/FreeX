@@ -353,67 +353,169 @@ public sealed class MotionPathSegment
 /// </summary>
 public static class MotionPathEvaluator
 {
+    private const int CubicLengthSamples = 64;
+
+    private sealed class SegmentMeasure
+    {
+        public required MotionPathSegment Segment { get; init; }
+        public required double StartX { get; init; }
+        public required double StartY { get; init; }
+        public required double Length { get; init; }
+        public double[]? ArcLengths { get; init; }
+    }
+
     /// <summary>
     /// Samples the path at fraction <paramref name="t"/> (0=start, 1=end).
     /// Returns the (dx, dy) displacement from the path's origin (first Move point).
     /// </summary>
     public static (double dx, double dy) Sample(MotionPath path, double t)
     {
+        ArgumentNullException.ThrowIfNull(path);
         if (path.Segments.Count == 0) return (0, 0);
 
-        // Assign proportional arc-lengths to segments for t interpolation.
-        // Simplified: treat each non-Close segment as equally weighted.
-        var active = path.Segments
-            .Where(s => s.Kind != MotionPathSegmentKind.Move || path.Segments.IndexOf(s) == 0)
-            .ToList();
+        var measures = MeasureSegments(path, out var originX, out var originY);
+        if (measures.Count == 0) return (0, 0);
 
-        // Build list of drawable segments (skip first Move for distance counting).
-        var drawable = path.Segments
-            .Where(s => s.Kind != MotionPathSegmentKind.Move && s.Kind != MotionPathSegmentKind.Close)
-            .ToList();
+        var totalLength = measures.Sum(measure => measure.Length);
+        if (totalLength <= double.Epsilon)
+            return (0, 0);
 
-        if (drawable.Count == 0) return (0, 0);
-
-        double segT   = t * drawable.Count;
-        int    segIdx = Math.Clamp((int)segT, 0, drawable.Count - 1);
-        double localT = segT - segIdx;
-
-        // Find previous endpoint for the selected segment.
-        // Walk through the full path to track the current pen position.
-        double px = 0, py = 0; // path-space pen
-        double startX = 0, startY = 0;
-
-        int drawableCount = 0;
-        bool started = false;
-        foreach (var seg in path.Segments)
+        var targetDistance = Math.Clamp(t, 0, 1) * totalLength;
+        var distanceBefore = 0.0;
+        foreach (var measure in measures)
         {
-            if (!started && seg.Kind == MotionPathSegmentKind.Move)
+            var distanceInto = targetDistance - distanceBefore;
+            if (distanceInto <= measure.Length || ReferenceEquals(measure, measures[^1]))
             {
-                startX = seg.X;
-                startY = seg.Y;
-                px = seg.X;
-                py = seg.Y;
-                started = true;
-                continue;
+                var localT = ResolveSegmentParameter(measure, Math.Clamp(distanceInto, 0, measure.Length));
+                var (x, y) = measure.Segment.Evaluate(localT, measure.StartX, measure.StartY);
+                return (x - originX, y - originY);
             }
-            if (seg.Kind == MotionPathSegmentKind.Close) { px = startX; py = startY; continue; }
-            if (seg.Kind == MotionPathSegmentKind.Move)  { px = seg.X;  py = seg.Y;  continue; }
 
-            // drawable segment
-            if (drawableCount == segIdx)
-            {
-                var (ex, ey) = seg.Evaluate(localT, px, py);
-                return (ex - startX, ey - startY);
-            }
-            px = seg.Kind == MotionPathSegmentKind.Cubic ? seg.X : seg.X;
-            py = seg.Kind == MotionPathSegmentKind.Cubic ? seg.Y : seg.Y;
-            drawableCount++;
+            distanceBefore += measure.Length;
         }
 
-        // Fallback: endpoint of last segment minus start.
-        var last = drawable[^1];
-        return (last.X - startX, last.Y - startY);
+        var last = measures[^1];
+        return (last.Segment.X - originX, last.Segment.Y - originY);
     }
+
+    private static List<SegmentMeasure> MeasureSegments(
+        MotionPath path,
+        out double originX,
+        out double originY)
+    {
+        var measures = new List<SegmentMeasure>();
+        originX = 0;
+        originY = 0;
+        var currentX = 0.0;
+        var currentY = 0.0;
+        var subpathStartX = 0.0;
+        var subpathStartY = 0.0;
+        var started = false;
+
+        foreach (var segment in path.Segments)
+        {
+            if (segment.Kind == MotionPathSegmentKind.Move)
+            {
+                if (!started)
+                {
+                    originX = segment.X;
+                    originY = segment.Y;
+                    started = true;
+                }
+
+                currentX = subpathStartX = segment.X;
+                currentY = subpathStartY = segment.Y;
+                continue;
+            }
+
+            if (!started)
+                continue;
+
+            if (segment.Kind == MotionPathSegmentKind.Close)
+            {
+                currentX = subpathStartX;
+                currentY = subpathStartY;
+                continue;
+            }
+
+            var measure = CreateMeasure(segment, currentX, currentY);
+            if (measure.Length > double.Epsilon)
+                measures.Add(measure);
+
+            currentX = segment.X;
+            currentY = segment.Y;
+        }
+
+        return measures;
+    }
+
+    private static SegmentMeasure CreateMeasure(
+        MotionPathSegment segment,
+        double startX,
+        double startY)
+    {
+        if (segment.Kind == MotionPathSegmentKind.Line)
+        {
+            var length = Distance(segment.X - startX, segment.Y - startY);
+            return new SegmentMeasure
+            {
+                Segment = segment,
+                StartX = startX,
+                StartY = startY,
+                Length = length
+            };
+        }
+
+        var arcLengths = new double[CubicLengthSamples + 1];
+        var previousX = startX;
+        var previousY = startY;
+        for (var index = 1; index <= CubicLengthSamples; index++)
+        {
+            var sampleT = index / (double)CubicLengthSamples;
+            var (x, y) = segment.Evaluate(sampleT, startX, startY);
+            arcLengths[index] = arcLengths[index - 1] + Distance(x - previousX, y - previousY);
+            previousX = x;
+            previousY = y;
+        }
+
+        return new SegmentMeasure
+        {
+            Segment = segment,
+            StartX = startX,
+            StartY = startY,
+            Length = arcLengths[^1],
+            ArcLengths = arcLengths
+        };
+    }
+
+    private static double ResolveSegmentParameter(SegmentMeasure measure, double distance)
+    {
+        if (measure.Length <= double.Epsilon)
+            return 0;
+
+        if (measure.ArcLengths is not { } arcLengths)
+            return distance / measure.Length;
+
+        var upper = Array.BinarySearch(arcLengths, distance);
+        if (upper >= 0)
+            return upper / (double)CubicLengthSamples;
+
+        upper = ~upper;
+        if (upper <= 0)
+            return 0;
+        if (upper >= arcLengths.Length)
+            return 1;
+
+        var lower = upper - 1;
+        var span = arcLengths[upper] - arcLengths[lower];
+        var fraction = span <= double.Epsilon
+            ? 0
+            : (distance - arcLengths[lower]) / span;
+        return (lower + fraction) / CubicLengthSamples;
+    }
+
+    private static double Distance(double x, double y) => Math.Sqrt(x * x + y * y);
 }
 
 /// <summary>
