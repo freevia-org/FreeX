@@ -1347,17 +1347,20 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.smartart.continuous-block-process",
             Area: "SmartArt continuous block process live layout",
             Status: "shared-render-planner-evidence",
-            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt layout planner; no renderer-local SmartArt policy",
+            HostCoverage: "WPF/Avalonia consume the same dedicated shared rounded-block and ordered-connector ops emitted by the SmartArt layout planner; no renderer-local SmartArt policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-smartart-continuous-block-process-2026-07-06.md"
+                "docs/parity/freep-smartart-continuous-block-process-2026-07-06.md",
+                "docs/parity/freep-smartart-continuous-block-process-wave112-20260802.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/PptxRepairCorpusValidityTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "continuousBlockProcess now uses the bounded shared process live-layout path for parsed nodes while unsupported process variants still fall back to cached drawing. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+            RemainingWork: "continuousBlockProcess now uses dedicated shared compact rounded-block geometry with stable block/connector roles, regenerated drawing-cache evidence, and schema-valid PPTX round-trip coverage. Unsupported process variants still fall back to cached drawing; exact PowerPoint spacing/effects, PowerPoint-authoritative visual baselines, and broader SmartArt authoring remain deferred."),
         new(
             EvidenceId: "freep.smartart.basic-process",
             Area: "SmartArt basic process live layout",
