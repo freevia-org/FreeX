@@ -122,6 +122,89 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void MergeRecord_SubstitutesAllSectionHeaderFooterStoriesAndPreservesPageSettings()
+    {
+        var template = new TextDocument();
+        template.Page.DifferentFirstPage = true;
+        template.Page.DifferentOddEvenPages = true;
+        template.Page.HeaderDistancePt = 24;
+        template.Page.FooterDistancePt = 18;
+        template.FirstHeader = new HeaderFooter("Final first «Name»");
+        template.EvenFooter = new HeaderFooter("Final even «Name»");
+
+        var firstSection = new Section(
+            new PageSettings
+            {
+                DifferentFirstPage = true,
+                DifferentOddEvenPages = true,
+                HeaderDistancePt = 30
+            },
+            SectionBreakKind.OddPage)
+        {
+            HeadersFooters = new SectionHeadersFooters
+            {
+                Header = new HeaderFooter("Section default «Name»"),
+                EvenHeader = new HeaderFooter("Section even «Name»"),
+                FirstFooter = new HeaderFooter("Section first «Name»")
+            }
+        };
+        template.Blocks.Add(new Paragraph("Body «Name»") { SectionBreak = firstSection });
+        template.Blocks.Add(new Paragraph("Final body «Name»"));
+
+        var merged = MailMerge.MergeRecord(template,
+            new Dictionary<string, string> { ["Name"] = "Ada" });
+
+        merged.Page.DifferentFirstPage.Should().BeTrue();
+        merged.Page.DifferentOddEvenPages.Should().BeTrue();
+        merged.Page.HeaderDistancePt.Should().Be(24);
+        merged.Page.FooterDistancePt.Should().Be(18);
+        merged.FirstHeader!.PlainText.Should().Be("Final first Ada");
+        merged.EvenFooter!.PlainText.Should().Be("Final even Ada");
+        var mergedSection = ((Paragraph)merged.Blocks[0]).SectionBreak!;
+        mergedSection.Should().NotBeSameAs(firstSection);
+        mergedSection.Page.Should().NotBeSameAs(firstSection.Page);
+        mergedSection.BreakKind.Should().Be(SectionBreakKind.OddPage);
+        mergedSection.HeadersFooters.Header!.PlainText.Should().Be("Section default Ada");
+        mergedSection.HeadersFooters.EvenHeader!.PlainText.Should().Be("Section even Ada");
+        mergedSection.HeadersFooters.FirstFooter!.PlainText.Should().Be("Section first Ada");
+        template.FirstHeader!.PlainText.Should().Contain("«Name»");
+        firstSection.HeadersFooters.Header!.PlainText.Should().Contain("«Name»");
+    }
+
+    [Fact]
+    public void MergeRecordWithRules_EvaluatesRulesInFirstEvenAndNonFinalSectionStories()
+    {
+        var template = new TextDocument();
+        var ifInstruction = MergeRuleEvaluator.BuildIfInstruction(
+            "City", MergeConditionOperator.Equal, "London", "Local", "Remote");
+        template.FirstHeader = new HeaderFooter(
+            $"{MailMerge.FieldOpen}{ifInstruction}{MailMerge.FieldClose}");
+        template.EvenFooter = new HeaderFooter($"Even {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
+        template.Blocks.Add(new Paragraph("Section end")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+            {
+                HeadersFooters = new SectionHeadersFooters
+                {
+                    FirstFooter = new HeaderFooter(
+                        $"Section {MailMerge.FieldOpen}Name{MailMerge.FieldClose}")
+                }
+            }
+        });
+
+        var merged = MailMerge.MergeRecordWithRules(
+            template,
+            new Dictionary<string, string> { ["Name"] = "Ada", ["City"] = "London" },
+            new MergeState(),
+            recordIndex: 1);
+
+        merged.FirstHeader!.PlainText.Should().Be("Local");
+        merged.EvenFooter!.PlainText.Should().Be("Even Ada");
+        ((Paragraph)merged.Blocks[0]).SectionBreak!.HeadersFooters.FirstFooter!.PlainText
+            .Should().Be("Section Ada");
+    }
+
+    [Fact]
     public void MergeRecord_PreservesBlockContentControlRegion()
     {
         var control = BlockContentControl.BibliographyRegion();

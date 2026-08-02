@@ -200,4 +200,31 @@ public sealed class MailMergeDialogPlannerTests
         report.PlainText.Should().Contain("Error 1: Merge field 'Missing'");
         report.PlainText.Should().Contain("Instruction: If Broken");
     }
+
+    [Fact]
+    public void CheckForErrors_InspectsFirstEvenAndEverySectionHeaderFooterStory()
+    {
+        var template = TextDocument.CreateEmpty();
+        template.FirstHeader = new HeaderFooter($"{MailMerge.FieldOpen}FirstMissing{MailMerge.FieldClose}");
+        template.EvenFooter = new HeaderFooter($"{MailMerge.FieldOpen}EvenMissing{MailMerge.FieldClose}");
+        template.Blocks.Insert(0, new Paragraph("Section end")
+        {
+            SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
+            {
+                HeadersFooters = new SectionHeadersFooters
+                {
+                    Header = new HeaderFooter(
+                        $"{MailMerge.FieldOpen}SectionMissing{MailMerge.FieldClose}")
+                }
+            }
+        });
+        IReadOnlyDictionary<string, string>[] rows =
+        [new Dictionary<string, string> { ["Name"] = "Ada" }];
+
+        var result = MailMergeCheckForErrorsPlanner.Check(
+            template, rows, MailMergeCheckForErrorsMode.SimulateAndReport);
+
+        result.Issues.Select(issue => issue.Instruction).Should().BeEquivalentTo(
+            "SectionMissing", "FirstMissing", "EvenMissing");
+    }
 }
