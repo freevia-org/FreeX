@@ -270,7 +270,7 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtFillRectangle(32, 992, 752, 32, 0, 0, 0),
             new PageBorderArtFillRectangle(31, 32, 32, 992, 0, 0, 0),
             new PageBorderArtFillRectangle(752, 32, 32, 992, 0, 0, 0));
-        plan.Polygons.Should().HaveCount(220);
+        plan.Polygons.Should().HaveCount(224);
         plan.Polygons[0].Points.Should().Equal(
             new PageBorderArtPoint(44, 63),
             new PageBorderArtPoint(44, 64),
@@ -278,6 +278,20 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtPoint(76, 43),
             new PageBorderArtPoint(76, 32),
             new PageBorderArtPoint(65, 32));
+        plan.Polygons[104].Points.Should().Equal(
+            new PageBorderArtPoint(31, 136),
+            new PageBorderArtPoint(42, 136),
+            new PageBorderArtPoint(63, 167),
+            new PageBorderArtPoint(63, 168),
+            new PageBorderArtPoint(52, 168),
+            new PageBorderArtPoint(31, 147));
+        plan.Polygons[168].Points.Should().Equal(
+            new PageBorderArtPoint(752, 149),
+            new PageBorderArtPoint(763, 149),
+            new PageBorderArtPoint(784, 180),
+            new PageBorderArtPoint(784, 181),
+            new PageBorderArtPoint(773, 181),
+            new PageBorderArtPoint(752, 160));
     }
 
     [Fact]
