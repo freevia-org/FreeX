@@ -869,6 +869,159 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
     }
 }
 
+/// <summary>Edits one native Summary Zoom tile's position and scale as one undoable operation.</summary>
+public sealed class SetSummaryZoomTileLayoutCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly string _sectionId;
+    private readonly int _offsetFactorX;
+    private readonly int _offsetFactorY;
+    private readonly int _scaleFactorX;
+    private readonly int _scaleFactorY;
+    private SummaryZoomTarget? _oldTarget;
+    private string? _oldRawXml;
+
+    public SetSummaryZoomTileLayoutCommand(
+        int slideIndex,
+        uint shapeId,
+        string sectionId,
+        int offsetFactorX,
+        int offsetFactorY,
+        int scaleFactorX,
+        int scaleFactorY)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _sectionId = string.IsNullOrWhiteSpace(sectionId)
+            ? throw new ArgumentException("A Summary Zoom tile section id is required.", nameof(sectionId))
+            : sectionId.Trim();
+        _offsetFactorX = ValidateOffset(offsetFactorX, nameof(offsetFactorX));
+        _offsetFactorY = ValidateOffset(offsetFactorY, nameof(offsetFactorY));
+        _scaleFactorX = ValidateScale(scaleFactorX, nameof(scaleFactorX));
+        _scaleFactorY = ValidateScale(scaleFactorY, nameof(scaleFactorY));
+    }
+
+    public string Label => "Format Summary Zoom Tile";
+
+    public bool HasEffect(Presentation presentation) =>
+        TryGetTarget(presentation, out _, out _, out var target)
+        && (target.OffsetFactorX != _offsetFactorX
+            || target.OffsetFactorY != _offsetFactorY
+            || target.ScaleFactorX != _scaleFactorX
+            || target.ScaleFactorY != _scaleFactorY);
+
+    public void Apply(Presentation presentation)
+    {
+        if (!TryGetTarget(presentation, out var info, out var index, out var target))
+            return;
+
+        _oldTarget ??= target;
+        _oldRawXml ??= info.RawXml;
+        info.SummaryZoomTargets[index] = target with
+        {
+            OffsetFactorX = _offsetFactorX,
+            OffsetFactorY = _offsetFactorY,
+            ScaleFactorX = _scaleFactorX,
+            ScaleFactorY = _scaleFactorY,
+        };
+        if (TryPatchRawXml(info.RawXml, out var rawXml))
+            info.RawXml = rawXml;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        if (!TryGetTarget(presentation, out var info, out var index, out _)
+            || _oldTarget is null)
+            return;
+
+        info.SummaryZoomTargets[index] = _oldTarget;
+        if (_oldRawXml is not null)
+            info.RawXml = _oldRawXml;
+    }
+
+    private bool TryGetTarget(
+        Presentation presentation,
+        out PreservedObjectInfo info,
+        out int index,
+        out SummaryZoomTarget target)
+    {
+        info = null!;
+        index = -1;
+        target = null!;
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return false;
+
+        var shape = FindShape(presentation.Slides[_slideIndex].Shapes, _shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom }
+            || shape.PreservedObject is not { } preserved)
+            return false;
+
+        index = preserved.SummaryZoomTargets.FindIndex(candidate =>
+            string.Equals(candidate.SectionId, _sectionId, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+            return false;
+
+        info = preserved;
+        target = preserved.SummaryZoomTargets[index];
+        return true;
+    }
+
+    private bool TryPatchRawXml(string rawXml, out string patchedXml)
+    {
+        patchedXml = rawXml;
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return false;
+
+        XDocument document;
+        try { document = XDocument.Parse(rawXml, LoadOptions.PreserveWhitespace); }
+        catch { return false; }
+
+        var target = document.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "summaryZmObj", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(element.Attribute("sectionId")?.Value, _sectionId,
+                StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+            return false;
+
+        target.SetAttributeValue("offsetFactorX", _offsetFactorX);
+        target.SetAttributeValue("offsetFactorY", _offsetFactorY);
+        target.SetAttributeValue("scaleFactorX", _scaleFactorX);
+        target.SetAttributeValue("scaleFactorY", _scaleFactorY);
+        patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    private static int ValidateOffset(int value, string parameterName)
+    {
+        if (value is < -100000 or > 100000)
+            throw new ArgumentOutOfRangeException(parameterName, value,
+                "Summary Zoom offsets must be between -100000 and 100000.");
+        return value;
+    }
+
+    private static int ValidateScale(int value, string parameterName)
+    {
+        if (value is < 1 or > 400000)
+            throw new ArgumentOutOfRangeException(parameterName, value,
+                "Summary Zoom scales must be between 1 and 400000.");
+        return value;
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+}
+
 /// <summary>Replaces the native cover image on a Zoom object or Summary Zoom tile.</summary>
 public sealed class SetZoomCoverImageCommand : IPresentationCommand
 {

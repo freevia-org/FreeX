@@ -4193,10 +4193,31 @@ public sealed partial class MainWindow : Window
         if (current is null || !IsVisible)
             return;
 
-        var dialog = new ZoomObjectPropertiesDialog(current);
+        var selectedShapeId = GetSingleSelectedShapeId();
+        var summaryTargets = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
+            && ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject is { } info
+            ? info.SummaryZoomTargets
+            : (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
+        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
-            Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+        {
+            var changed = Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+            if (dialog.SummaryTileLayout is { } tile && selectedShapeId is uint summaryShapeId)
+                changed |= Editor.SetSummaryZoomTileLayout(
+                    summaryShapeId,
+                    tile.SectionId,
+                    tile.OffsetFactorX,
+                    tile.OffsetFactorY,
+                    tile.ScaleFactorX,
+                    tile.ScaleFactorY);
+            if (changed)
+            {
+                _fileWorkflow.MarkDirty();
+                RefreshCanvas();
+                UpdateStatus();
+            }
+        }
     }
 
     internal async Task OpenZoomCoverImagePickerAsync()
