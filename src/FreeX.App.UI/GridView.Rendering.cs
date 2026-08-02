@@ -262,7 +262,7 @@ public partial class GridView
         {
             fill = BuildCellGradientBrush(cellGradFill);
         }
-        else if (style?.FillColor is { } fillColor)
+        else if (style?.ResolveFillColor(WorkbookTheme) is { } fillColor)
         {
             fill = BrushForCellColor(fillColor, _brushCache);
         }
@@ -270,7 +270,7 @@ public partial class GridView
         if (fill is not null || gridPen is not null)
             dc.DrawRectangle(fill, gridPen, rect);
         if (style?.GradientFill is null)
-            DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
+            DrawFillPattern(dc, rect, style, WorkbookTheme, _brushCache, _fillPatternPenCache);
         if (cell.ConditionalDataBar is { } splitDataBar)
             DrawConditionalDataBar(dc, splitDataBar, rect, _brushCache);
 
@@ -406,7 +406,7 @@ public partial class GridView
         {
             var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
             var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
-            if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
+            if (style?.ResolveFontColor(WorkbookTheme) is { } fontColor && !fontColor.IsBlack)
                 textBrush = BrushForCellColor(fontColor, _brushCache);
             text = new FormattedText(
                     renderText,
@@ -943,7 +943,7 @@ public partial class GridView
             {
                 var typefaceKey = CreateCellTypefaceKeyWithTheme(style);
                 var typeface = CreateCellTypeface(typefaceKey, _typefaceCache);
-                if (style?.FontColor is { } fc && !fc.IsBlack)
+                if (style?.ResolveFontColor(WorkbookTheme) is { } fc && !fc.IsBlack)
                     textBrush = BrushForCellColor(fc, _brushCache);
 
                 text = new FormattedText(
@@ -1147,14 +1147,19 @@ public partial class GridView
         if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
             return;
 
+        // Re-resolve against the CURRENT theme rather than reading the baked FillColor directly,
+        // so a theme-bound fill (FillThemeColor) repaints after a Theme Colors swap instead of
+        // staying stuck at whatever RGB was baked in at style-creation/load time.
+        var resolvedFill = bg?.ResolveFillColor(WorkbookTheme);
+
         Brush? fill = null;
         if (bg?.GradientFill is { } gradFill)
         {
             fill = BuildCellGradientBrush(gradFill);
         }
-        else if (bg?.FillColor.HasValue == true)
+        else if (resolvedFill is { } resolvedFillColor)
         {
-            fill = BrushForCellColor(bg.FillColor.Value, _brushCache);
+            fill = BrushForCellColor(resolvedFillColor, _brushCache);
         }
         else if (WorksheetBackground == null &&
                  (isMerged || bg?.FillPatternStyle is not null and not CellFillPatternStyle.None))
@@ -1170,13 +1175,13 @@ public partial class GridView
         // never draw when the merge has its own explicit fill (gradient or solid FillColor) painted
         // over it -- an unmerged filled cell never gets a matching gray outline over its fill either,
         // only the plain "no authored fill" default-white merge fallback above does.
-        var hasExplicitFill = bg?.GradientFill is not null || bg?.FillColor.HasValue == true;
+        var hasExplicitFill = bg?.GradientFill is not null || resolvedFill.HasValue;
         var strokeMergeGridline = isMerged && ShowGridLines && !hasExplicitFill;
 
         if (fill is not null || strokeMergeGridline)
             dc.DrawRectangle(fill, strokeMergeGridline ? GridPen : null, rect);
         if (bg is not null && bg.GradientFill is null)
-            DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache);
+            DrawFillPattern(dc, rect, bg, WorkbookTheme, _brushCache, _fillPatternPenCache);
     }
 
     private void RenderCellBackgroundBase(DrawingContext dc, double rowHeaderWidth, double columnHeaderHeight)
@@ -1238,12 +1243,14 @@ public partial class GridView
 
     private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);
 
-    private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup(IReadOnlyList<DisplayCell> cells)
+    private static Dictionary<(uint Row, uint Col), CellStyle> BuildRenderCellStyleLookup(
+        IReadOnlyList<DisplayCell> cells,
+        WorkbookTheme theme)
     {
         Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;
         foreach (var cell in cells)
         {
-            if (cell.Style is { } style && HasVisibleCellSurface(style))
+            if (cell.Style is { } style && HasVisibleCellSurface(style, theme))
             {
                 lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);
                 lookup.Add((cell.Row, cell.Col), style);
@@ -1289,7 +1296,7 @@ public partial class GridView
             viewport.Cells,
             viewport.RowMetrics,
             viewport.ColMetrics,
-            BuildRenderCellStyleLookup(viewport.Cells),
+            BuildRenderCellStyleLookup(viewport.Cells, WorkbookTheme),
             metricLookups.Rows,
             metricLookups.Columns);
         _renderCellLookupCache = lookups;

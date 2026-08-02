@@ -198,8 +198,12 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
                 cache.SourceTableName = matchedTable?.Name;
                 cache.SourceTableId = matchedTable?.Id;
                 cache.Fields.Clear();
-                foreach (var header in headers)
-                    cache.Fields.Add(new PivotCacheFieldModel(header));
+                // R114-commands-pivot-sharedItems: an explicit "Change Data Source" must populate
+                // SharedItems from the NEW live source the same way AddPivotTableCommand does for a
+                // brand-new pivot -- otherwise a slicer bound to a field on the redirected cache would
+                // lose its filter items even though it had them (or could have had them) before.
+                for (var index = 0; index < headers.Count; index++)
+                    cache.Fields.Add(PivotCacheFieldFactory.BuildFromSourceData(headers[index], sourceSheet, _sourceRange, index));
             }
             else
             {
@@ -288,8 +292,11 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
             RawRecordsXml = original.RawRecordsXml,
         };
 
-        foreach (var header in headers)
-            redirected.Fields.Add(new PivotCacheFieldModel(header));
+        // R114-commands-pivot-sharedItems: same as the same-SourceType branch above -- populate
+        // SharedItems from the new live source so a slicer bound to a field on this redirected cache
+        // (or added fresh against it afterward) has real filter items instead of an empty list.
+        for (var index = 0; index < headers.Count; index++)
+            redirected.Fields.Add(PivotCacheFieldFactory.BuildFromSourceData(headers[index], sourceSheet, sourceRange, index));
 
         return redirected;
     }

@@ -134,10 +134,68 @@ internal static class XlsxWorksheetColumnWidthWriter
                 columns.Remove(colNum);
         }
 
-        var newCols = columns.Count > 0 ? new XElement(ns + "cols", columns.Values) : null;
+        var mergedRuns = MergeAdjacentIdenticalRuns(columns);
+        var newCols = mergedRuns.Count > 0 ? new XElement(ns + "cols", mergedRuns) : null;
         root.Element(ns + "cols")?.Remove();
         if (newCols is not null)
             InsertColsElement(root, ns, newCols);
+        return true;
+    }
+
+    // Excel (and ClosedXML's own writer) always emits <cols> as compact, non-overlapping min..max runs;
+    // the per-column expansion above (needed to stamp exact widths/attributes onto individual columns)
+    // must be coalesced back into runs before writing, or a uniform-width multi-column selection (e.g. a
+    // ribbon "Column Width" action over a full header selection) turns into thousands of singleton
+    // min==max <col> entries instead of one compact run.
+    private static List<XElement> MergeAdjacentIdenticalRuns(SortedDictionary<uint, XElement> columns)
+    {
+        var result = new List<XElement>();
+        XElement? runTemplate = null;
+        uint runMin = 0, runMax = 0;
+
+        foreach (var (colNum, col) in columns)
+        {
+            if (runTemplate is not null && colNum == runMax + 1 && HasIdenticalNonRangeAttributes(runTemplate, col))
+            {
+                runMax = colNum;
+                continue;
+            }
+
+            if (runTemplate is not null)
+                result.Add(BuildRunElement(runTemplate, runMin, runMax));
+
+            runTemplate = col;
+            runMin = colNum;
+            runMax = colNum;
+        }
+
+        if (runTemplate is not null)
+            result.Add(BuildRunElement(runTemplate, runMin, runMax));
+
+        return result;
+    }
+
+    private static XElement BuildRunElement(XElement template, uint min, uint max)
+    {
+        var clone = new XElement(template);
+        clone.SetAttributeValue("min", min.ToString(CultureInfo.InvariantCulture));
+        clone.SetAttributeValue("max", max.ToString(CultureInfo.InvariantCulture));
+        return clone;
+    }
+
+    private static bool HasIdenticalNonRangeAttributes(XElement a, XElement b)
+    {
+        var aAttrs = a.Attributes().Where(attr => attr.Name.LocalName is not ("min" or "max"))
+            .ToDictionary(attr => attr.Name.LocalName, attr => attr.Value);
+        var bAttrs = b.Attributes().Where(attr => attr.Name.LocalName is not ("min" or "max"))
+            .ToDictionary(attr => attr.Name.LocalName, attr => attr.Value);
+        if (aAttrs.Count != bAttrs.Count)
+            return false;
+        foreach (var (key, value) in aAttrs)
+        {
+            if (!bAttrs.TryGetValue(key, out var otherValue) || otherValue != value)
+                return false;
+        }
         return true;
     }
 

@@ -109,7 +109,11 @@ public sealed class WorkbookSaveServiceTests
 
         (await File.ReadAllTextAsync(tempPath)).Should().Be("replacement");
         fileOperations.ReplaceCallCount.Should().Be(1);
-        fileOperations.OverwriteMoveCallCount.Should().Be(1);
+        // Fallback now vacates `path` to the backup location first (a plain rename) and then
+        // places tempPath into the now-vacant `path` (a plain create, not an overwrite) -- two
+        // moves total, neither of which touches live data in place. See R114_* tests below for
+        // why this replaced the old single in-place overwrite move.
+        fileOperations.MoveCallCount.Should().Be(2);
         Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
         Directory.GetFiles(temp.Path, "*.bak").Should().BeEmpty();
     }
@@ -127,10 +131,22 @@ public sealed class WorkbookSaveServiceTests
             using var writer = new StreamWriter(stream, leaveOpen: true);
             writer.Write("replacement");
         });
+        // Fail only the FIRST move that targets `path` (the temp-into-target placement move),
+        // not the later restore-from-backup move that also targets `path` -- so this still
+        // exercises "the placement move throws before touching path", letting the restore run.
+        var placementMoveFailed = false;
         var fileOperations = new TestWorkbookSaveFileOperations
         {
             ReplaceException = new PlatformNotSupportedException("replace unsupported"),
-            OverwriteMoveException = new IOException("move failed")
+            MoveFileException = (_, destination, _) =>
+            {
+                if (placementMoveFailed ||
+                    !string.Equals(Path.GetFullPath(destination), Path.GetFullPath(tempPath), StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                placementMoveFailed = true;
+                return new IOException("move failed");
+            }
         };
 
         var act = async () => await new WorkbookSaveService(fileOperations).SaveAsync(tempPath, adapter, workbook);
@@ -138,7 +154,100 @@ public sealed class WorkbookSaveServiceTests
         await act.Should().ThrowAsync<IOException>().WithMessage("move failed");
         (await File.ReadAllTextAsync(tempPath)).Should().Be("original");
         fileOperations.ReplaceCallCount.Should().Be(1);
-        fileOperations.OverwriteMoveCallCount.Should().Be(1);
+        // Vacate move (path -> backup) succeeds, the placement move (temp -> path) throws before
+        // writing anything, then the restore move (backup -> path) puts the original back --
+        // three MoveFile calls total.
+        fileOperations.MoveCallCount.Should().Be(3);
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
+        Directory.GetFiles(temp.Path, "*.bak").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task R114_SaveAsync_FallbackPlacementMovePartiallyOverwritesTarget_RestoresOriginalNotCorruptRemnant()
+    {
+        // R114-services-workbooksave-fallback-inplace-overwrite: on filesystems where File.Move
+        // can't do an atomic same-volume rename-with-replace (FAT32/exFAT, many SMB/NAS shares,
+        // cloud-sync placeholder filesystems such as OneDrive Files-On-Demand -- the very
+        // filesystem class this repo's own working tree lives on), the runtime falls back to a
+        // byte-level copy-then-delete that can fail PARTWAY THROUGH (disk-full, permission,
+        // network-drop mid-copy). This fake simulates that faithfully: the move that writes into
+        // the live target path first writes a truncated/garbage payload to it (as a real partial
+        // copy would) and only then throws -- unlike the pre-existing regression test above
+        // (SaveAsync_PreservesExistingFileAndDeletesTemporaryFileWhenFallbackMoveFails), whose
+        // fake throws BEFORE touching any bytes and so cannot exercise this failure mode at all.
+        //
+        // Before the fix: ReplaceExistingFileWithFallback moved the new content directly into
+        // `path` via MoveFile(tempPath, path, overwrite: true) -- an in-place overwrite of live
+        // data. A partial failure there left `path` holding the truncated remnant written above.
+        // RestoreFallbackBackup only checked File.Exists(path) (true, for the remnant) and
+        // reported "nothing to restore", so the outer finally then deleted the only pristine
+        // backup -- destroying the user's file with no recovery path.
+        //
+        // After the fix: `path` is vacated to the backup location BEFORE the risky move is
+        // attempted, so the risky move is always a plain create into an already-vacant `path`,
+        // never an overwrite of live data. A partial failure leaves `path` holding, at worst, the
+        // same truncated remnant -- but RestoreFallbackBackup now unconditionally discards
+        // whatever is at `path` and restores the backup, because vacating first means anything
+        // found at `path` after a failure can never be the still-good original.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "saved.fxjson");
+        await File.WriteAllTextAsync(tempPath, "original");
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("replacement");
+        });
+        var fileOperations = new TestWorkbookSaveFileOperations
+        {
+            ReplaceException = new PlatformNotSupportedException("replace unsupported"),
+            // Only the move whose SOURCE is the internal temp file and whose DESTINATION is the
+            // real target path is the risky "placement" move -- the later restore move (source is
+            // the backup, destination is also the real target path) must be left alone so the
+            // fixed implementation can actually recover.
+            PartialWriteFailureDestinationPath = tempPath
+        };
+
+        var act = async () => await new WorkbookSaveService(fileOperations).SaveAsync(tempPath, adapter, workbook);
+
+        await act.Should().ThrowAsync<IOException>().WithMessage("*partial move failure*");
+        (await File.ReadAllTextAsync(tempPath)).Should().Be(
+            "original",
+            "a save that fails partway through the fallback move must never leave a corrupted/truncated remnant at the target path, and must never delete the only backup of a corrupted file");
+        Directory.GetFiles(temp.Path, "*.bak").Should().BeEmpty();
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task R114_SaveAsync_FallbackSucceeds_VacatesThenPlacesRatherThanOverwritingInPlace()
+    {
+        // No-regression sibling for the test above: the happy-path fallback (no failure at all)
+        // must still end with the new content at `path`, no leftover temp/backup files, and must
+        // still route through the vacate-then-place sequence (two moves, neither of which is an
+        // in-place overwrite) rather than reverting to the old single overwrite-move mechanism.
+        using var temp = new TestTemporaryDirectory();
+        var tempPath = Path.Combine(temp.Path, "saved.fxjson");
+        await File.WriteAllTextAsync(tempPath, "original");
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("replacement");
+        });
+        var fileOperations = new TestWorkbookSaveFileOperations
+        {
+            ReplaceException = new PlatformNotSupportedException("replace unsupported")
+        };
+
+        await new WorkbookSaveService(fileOperations).SaveAsync(tempPath, adapter, workbook);
+
+        (await File.ReadAllTextAsync(tempPath)).Should().Be("replacement");
+        fileOperations.MoveCallCount.Should().Be(2);
+        fileOperations.OverwriteMoveCallCount.Should().Be(
+            0,
+            "the fallback must never call MoveFile with overwrite:true against the live target -- both the vacate and placement moves target an unoccupied destination");
         Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
         Directory.GetFiles(temp.Path, "*.bak").Should().BeEmpty();
     }
@@ -262,9 +371,35 @@ public sealed class WorkbookSaveServiceTests
     {
         public Exception? ReplaceException { get; init; }
 
-        public Exception? OverwriteMoveException { get; init; }
+        /// <summary>
+        /// Called for every MoveFile invocation with (sourcePath, destinationPath, overwrite);
+        /// return a non-null exception to throw instead of performing the move. Lets a test target
+        /// a specific move in the fallback sequence (e.g. only the temp-into-target placement move,
+        /// not the vacate-to-backup move or the restore-from-backup move) regardless of which
+        /// overwrite flag the implementation happens to pass for that step.
+        /// </summary>
+        public Func<string, string, bool, Exception?>? MoveFileException { get; init; }
+
+        /// <summary>
+        /// When set, simulates a partial/interrupted byte-level move: instead of performing an
+        /// atomic rename, writes truncated garbage bytes to <paramref name="destinationPath"/> (as
+        /// a real File.Move copy-then-delete fallback can do mid-copy on a disk-full/permission/
+        /// network-drop failure) and then throws, the FIRST time a move targets
+        /// <see cref="PartialWriteFailureDestinationPath"/>. Only the first match fires (not
+        /// subsequent ones) because the real target path can legitimately be the destination of
+        /// two different moves in the fallback sequence -- the risky placement move (which this
+        /// simulates failing) and, only if that fails, the later restore-from-backup move (which
+        /// must be allowed to actually succeed so the fixed implementation can recover). Source is
+        /// not deleted, matching a real interrupted copy-then-delete (the delete only happens
+        /// after a successful copy).
+        /// </summary>
+        public string? PartialWriteFailureDestinationPath { get; init; }
+
+        private bool _partialWriteFailureFired;
 
         public int ReplaceCallCount { get; private set; }
+
+        public int MoveCallCount { get; private set; }
 
         public int OverwriteMoveCallCount { get; private set; }
 
@@ -283,18 +418,27 @@ public sealed class WorkbookSaveServiceTests
 
         public void MoveFile(string sourcePath, string destinationPath, bool overwrite)
         {
+            MoveCallCount++;
             if (overwrite)
-            {
                 OverwriteMoveCallCount++;
-                if (OverwriteMoveException is not null)
-                    throw OverwriteMoveException;
 
-                File.Move(sourcePath, destinationPath, overwrite: true);
-            }
-            else
+            if (!_partialWriteFailureFired &&
+                PartialWriteFailureDestinationPath is not null &&
+                string.Equals(Path.GetFullPath(destinationPath), Path.GetFullPath(PartialWriteFailureDestinationPath), StringComparison.OrdinalIgnoreCase))
             {
-                File.Move(sourcePath, destinationPath);
+                _partialWriteFailureFired = true;
+                File.WriteAllBytes(destinationPath, "CORRUPT-PARTIAL-BYTES"u8.ToArray());
+                throw new IOException("simulated partial move failure mid-copy");
             }
+
+            var exception = MoveFileException?.Invoke(sourcePath, destinationPath, overwrite);
+            if (exception is not null)
+                throw exception;
+
+            if (overwrite)
+                File.Move(sourcePath, destinationPath, overwrite: true);
+            else
+                File.Move(sourcePath, destinationPath);
         }
 
         public void CopyFile(string sourcePath, string destinationPath, bool overwrite) =>

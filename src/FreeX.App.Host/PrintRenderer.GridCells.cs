@@ -46,6 +46,7 @@ public static partial class PrintRenderer
         WorksheetPrintErrorValue printErrorValue,
         double gridLeft,
         double gridTop,
+        Workbook workbook,
         bool blackAndWhite = false,
         Sheet? sheet = null)
     {
@@ -273,7 +274,7 @@ public static partial class PrintRenderer
         // (R88-render-sparkline-5-1).
         if (sheet is { Sparklines.Count: > 0 })
         {
-            DrawPrintedSparklines(dc, sheet, measurement, pageRows, pageColumns, gridLeft, gridTop);
+            DrawPrintedSparklines(dc, workbook, sheet, measurement, pageRows, pageColumns, gridLeft, gridTop);
         }
 
         // Data > Data Validation > Circle Invalid Data is a screen-only overlay drawn above the
@@ -340,6 +341,7 @@ public static partial class PrintRenderer
 
     private static void DrawPrintedSparklines(
         DrawingContext dc,
+        Workbook workbook,
         Sheet sheet,
         PrintGridMeasurement measurement,
         IReadOnlyList<uint> pageRows,
@@ -355,7 +357,7 @@ public static partial class PrintRenderer
         for (var i = 0; i < pageColumns.Count; i++)
             colIndexLookup[pageColumns[i]] = i;
 
-        var sparklineValues = FreeX.App.Presentation.Sparklines.SparklineSeriesReader.BuildValues(sheet);
+        var sparklineValues = FreeX.App.Presentation.Sparklines.SparklineSeriesReader.BuildValues(workbook, sheet);
 
         GridView.BuildSparklineGroupScalingBounds(
             sheet.Sparklines,

@@ -117,7 +117,7 @@ public static partial class ChartRenderer
         // chart.DataRange -- an empty result means literally nothing in the viewport fell inside it.
         if (cellLookup.Count == 0 && chart.EmbeddedSeriesData is { Count: > 0 })
         {
-            (cellLookup, embeddedCategories, startRow, dataStartRow, endRow, dataStartCol, endCol) = BuildEmbeddedCellLookup(chart);
+            (cellLookup, embeddedCategories, startRow, dataStartRow, endRow, startCol, dataStartCol, endCol) = BuildEmbeddedCellLookup(chart);
         }
 
         var dataPointCapacity = GetDataPointCapacity(dataStartRow, endRow);
@@ -240,7 +240,7 @@ public static partial class ChartRenderer
 
         if (chart.Type == ChartType.Bubble)
         {
-            var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow, theme, pointDataLabelFormats, out var trendPoints);
+            var bubbleModel = BuildBubbleModel(chart, model, cellLookup, categories, dataStartRow, endRow, startCol, endCol, startRow, theme, pointDataLabelFormats, out var trendPoints);
             AddTrendlineIfRequested(bubbleModel, chart, theme, trendPoints);
             ApplyAxisBounds(bubbleModel, chart, theme);
             AddChartDataTableAnnotations(bubbleModel, chart, cellLookup, categories, dataStartRow, endRow, dataStartCol, endCol, startRow);
@@ -648,8 +648,10 @@ public static partial class ChartRenderer
     /// <c>XlsxChartPartReader.Scatter.cs</c>/<c>PieBubble.cs</c>, which override
     /// categoryContainerName to "xVal" when reading their embedded data). This mirrors the live-cell
     /// renderer's own assumption of one shared X column feeding every Y series
-    /// (<see cref="ShouldSkipScatterXColumn"/>; BuildBubbleModel reads its X column from the same
-    /// <c>dataStartCol</c> this method returns). Bubble additionally leaves an empty column after
+    /// (<see cref="ShouldSkipScatterXColumn"/>; BuildBubbleModel reads its X column from the
+    /// <c>StartCol</c> this method returns, which -- unlike a live chart's <c>startCol</c> --
+    /// always matches <c>DataStartCol</c> here since both are the synthesized column 1). Bubble
+    /// additionally leaves an empty column after
     /// each Y column for the (uncached) bubble-size series -- <see cref="ChartEmbeddedSeriesData"/>
     /// never carries a bubbleSize cache at all, so those bubbles fall back to BuildBubbleModel's own
     /// existing default (uniform size) rather than being lost entirely.
@@ -661,6 +663,7 @@ public static partial class ChartRenderer
         uint StartRow,
         uint DataStartRow,
         uint EndRow,
+        uint StartCol,
         uint DataStartCol,
         uint EndCol) BuildEmbeddedCellLookup(ChartModel chart)
     {
@@ -718,7 +721,12 @@ public static partial class ChartRenderer
         // Bubble reserves one trailing empty column for the last series' (uncached) size.
         var endCol = isBubble ? lastSeriesCol + 1 : lastSeriesCol;
 
-        return (lookup, categories, headerRow, dataStartRow, endRow, dataStartCol, endCol);
+        // StartCol mirrors DataStartCol here (both are the synthesized column 1) so that any
+        // caller which -- like BuildBubbleModel -- deliberately reads the *unshifted* start
+        // column (ignoring FirstColIsCategories) still lands on the column this method actually
+        // populated, instead of the stale live chart.DataRange.Start.Col the substitution never
+        // rewrites.
+        return (lookup, categories, headerRow, dataStartRow, endRow, dataStartCol, dataStartCol, endCol);
     }
 
     /// <summary>

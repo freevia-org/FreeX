@@ -111,26 +111,54 @@ public static class FormulaFunctionAutocompletePlanner
 
     /// <summary>
     /// Commits the chosen candidate: replaces the typed prefix token with <paramref
-    /// name="chosenName"/> followed by an opening parenthesis (matching Excel's Tab/Enter behavior),
-    /// and returns the new full text plus the caret index that lands right after the inserted "(".
+    /// name="chosenName"/>, and returns the new full text plus the caret index that lands right after
+    /// the inserted name. When <paramref name="isFunction"/> is true the name is followed by an
+    /// opening parenthesis (matching Excel's Tab/Enter behavior for callable functions); when false
+    /// (a defined name or structured-table name -- never callable) the bare name is inserted with no
+    /// trailing "(", since appending one would produce a syntactically broken formula (e.g.
+    /// "=SalesTotal(" instead of "=SalesTotal"). Use <see cref="IsFunctionCandidate"/> to determine
+    /// this flag from the same <c>functionNames</c> sequence passed to <see cref="BuildCandidates"/>.
     /// </summary>
     public static (string Text, int CaretIndex) Commit(
         string text,
         int tokenStart,
         int tokenLength,
-        string chosenName)
+        string chosenName,
+        bool isFunction)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(chosenName);
         if (tokenStart < 0 || tokenLength < 0 || tokenStart + tokenLength > text.Length)
             throw new ArgumentOutOfRangeException(nameof(tokenStart));
 
-        var replacement = chosenName + "(";
+        var replacement = isFunction ? chosenName + "(" : chosenName;
         var newText = string.Concat(
             text.AsSpan(0, tokenStart),
             replacement,
             text.AsSpan(tokenStart + tokenLength));
         return (newText, tokenStart + replacement.Length);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="candidateName"/> is one of the supplied built-in function names (as
+    /// opposed to a defined name or structured-table name that merely happened to share the
+    /// AutoComplete candidate list). Callers pass the same <paramref name="functionNames"/> sequence
+    /// given to <see cref="BuildCandidates"/> so <see cref="Commit"/> knows whether to append the
+    /// callable "(" -- Excel never appends one for a plain name reference.
+    /// </summary>
+    public static bool IsFunctionCandidate(string candidateName, IEnumerable<string>? functionNames)
+    {
+        ArgumentNullException.ThrowIfNull(candidateName);
+        if (functionNames is null)
+            return false;
+
+        foreach (var name in functionNames)
+        {
+            if (string.Equals(name, candidateName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
     }
 
     /// <summary>

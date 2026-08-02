@@ -53,7 +53,10 @@ public sealed partial class GridViewRenderPerformanceTests
 
         source.Should().Contain("private static readonly Dictionary<(uint Row, uint Col), CellStyle> EmptyRenderCellStyleLookup = new(0);");
         buildStyleLookup.Should().Contain("Dictionary<(uint Row, uint Col), CellStyle>? lookup = null;");
-        buildStyleLookup.Should().Contain("cell.Style is { } style && HasVisibleCellSurface(style)");
+        // R114-render-theme-color-reresolution: HasVisibleCellSurface now takes the active
+        // WorkbookTheme too, so a cell whose fill was set purely via a Theme Color picker
+        // (FillThemeColor with no baked FillColor -- see StyleDiff.Apply) is not silently dropped.
+        buildStyleLookup.Should().Contain("cell.Style is { } style && HasVisibleCellSurface(style, theme)");
         buildStyleLookup.Should().Contain("lookup ??= new Dictionary<(uint Row, uint Col), CellStyle>(cells.Count);");
         buildStyleLookup.Should().Contain("return lookup ?? EmptyRenderCellStyleLookup;");
         buildStyleLookup.Should().NotContain("var lookup = new Dictionary<(uint Row, uint Col), CellStyle>();");
@@ -65,22 +68,34 @@ public sealed partial class GridViewRenderPerformanceTests
 
         var defaultLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup!.Invoke(
             null,
-            [new DisplayCell[] { Cell(1, 1, "default", CellStyle.Default) }])!;
+            [new DisplayCell[] { Cell(1, 1, "default", CellStyle.Default) }, WorkbookTheme.Office])!;
         defaultLookup.Should().BeEmpty();
 
         var fontOnlyStyle = CellStyle.Default.Clone();
         fontOnlyStyle.Bold = true;
         var fontOnlyLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup.Invoke(
             null,
-            [new DisplayCell[] { Cell(1, 1, "font", fontOnlyStyle) }])!;
+            [new DisplayCell[] { Cell(1, 1, "font", fontOnlyStyle) }, WorkbookTheme.Office])!;
         fontOnlyLookup.Should().BeEmpty();
 
         var fillStyle = CellStyle.Default.Clone();
         fillStyle.FillColor = CellColor.White;
         var fillLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup.Invoke(
             null,
-            [new DisplayCell[] { Cell(1, 1, "fill", fillStyle) }])!;
+            [new DisplayCell[] { Cell(1, 1, "fill", fillStyle) }, WorkbookTheme.Office])!;
         fillLookup.Should().ContainKey((1u, 1u));
+
+        // R114 sibling coverage: a cell whose fill was set PURELY via a Theme Color reference
+        // (no baked FillColor at all) must also be included -- this is exactly the reachability
+        // gap the theme parameter fixes (StyleDiff.Apply leaves FillColor untouched when only
+        // FillThemeColor is set).
+        var themeOnlyFillStyle = CellStyle.Default.Clone();
+        themeOnlyFillStyle.FillThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2);
+        var themeOnlyFillLookup = (IReadOnlyDictionary<(uint Row, uint Col), CellStyle>)buildLookup.Invoke(
+            null,
+            [new DisplayCell[] { Cell(1, 1, "theme-fill", themeOnlyFillStyle) }, WorkbookTheme.Office])!;
+        themeOnlyFillLookup.Should().ContainKey((1u, 1u),
+            "a cell whose fill was set purely via FillThemeColor (no baked FillColor) must not be silently dropped from the render lookup");
     }
 
     [Fact]
@@ -829,7 +844,9 @@ public sealed partial class GridViewRenderPerformanceTests
             source.IndexOf("private void RenderCells(DrawingContext dc)", StringComparison.Ordinal)..
             source.IndexOf("private void DrawCommentIndicator", StringComparison.Ordinal)];
 
-        renderCells.Should().Contain("BrushForCellColor(bg.FillColor.Value, _brushCache)");
+        // R114-render-theme-color-reresolution: the fill color painted is now the theme-RESOLVED
+        // value (bg.ResolveFillColor(WorkbookTheme)), not the raw baked bg.FillColor field.
+        renderCells.Should().Contain("BrushForCellColor(resolvedFillColor, _brushCache)");
         renderCells.Should().Contain("BrushForCellColor(fc, _brushCache)");
         renderCells.Should().NotContain("new SolidColorBrush");
     }
@@ -858,7 +875,9 @@ public sealed partial class GridViewRenderPerformanceTests
         gridViewSource.Should().Contain("private readonly Dictionary<CellColor, Pen> _fillPatternPenCache = new();");
         rendering.Should().Contain("if (_fillPatternPenCache.Count >= RenderCacheSizeLimit)");
         rendering.Should().Contain("_fillPatternPenCache.Clear();");
-        rendering.Should().Contain("DrawFillPattern(dc, rect, bg, _brushCache, _fillPatternPenCache)");
+        // R114-render-theme-color-reresolution: DrawFillPattern now takes the active WorkbookTheme
+        // so it can re-resolve FillPatternThemeColor instead of reading the raw baked FillPatternColor.
+        rendering.Should().Contain("DrawFillPattern(dc, rect, bg, WorkbookTheme, _brushCache, _fillPatternPenCache)");
         cellStyles.Should().Contain("FillPatternPenForCellColor(color, brushCache, fillPatternPenCache)");
         cellStyles.Should().Contain("pen.Freeze();");
         drawFillPattern.Should().NotContain("new Pen(");
@@ -890,7 +909,9 @@ public sealed partial class GridViewRenderPerformanceTests
 
         textSetup.Should().NotContain("CreateCellTypeface");
         textSetup.Should().NotContain("BrushForCellColor");
-        renderCells.Should().Contain("if (style?.FontColor is { } fc && !fc.IsBlack)");
+        // R114-render-theme-color-reresolution: the eligibility check now re-resolves
+        // FontThemeColor against the active theme instead of reading the raw baked style.FontColor.
+        renderCells.Should().Contain("if (style?.ResolveFontColor(WorkbookTheme) is { } fc && !fc.IsBlack)");
         renderCells.Should().Contain("textBrush = BrushForCellColor(fc, _brushCache);");
     }
 

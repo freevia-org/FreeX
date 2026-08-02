@@ -746,11 +746,15 @@ public partial class MainWindow
     private void Formula_ABS_Click(object sender, RoutedEventArgs e)     => InsertFormulaFunction("ABS");
     private void Formula_SQRT_Click(object sender, RoutedEventArgs e)    => InsertFormulaFunction("SQRT");
 
-    private IReadOnlyList<string> GetNameDefinitionScopeOptions() =>
-        new[] { "Workbook" }
-            .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+    // R114-app-name-manager-workbook-sentinel-3-2: mirrors NamedRangeDialog.GetScopeOptions --
+    // deliberately not de-duplicated by display label, so a sheet literally named "Workbook" still
+    // gets its own distinct (label, SheetId) entry alongside the workbook-global sentinel.
+    private IReadOnlyList<NamedRangeScopeOption> GetNameDefinitionScopeOptions()
+    {
+        var options = new List<NamedRangeScopeOption> { new("Workbook", null) };
+        options.AddRange(_workbook.Sheets.Select(sheet => new NamedRangeScopeOption(sheet.Name, sheet.Id)));
+        return options;
+    }
 
     // R74-commands-name-manager-4-1: whether "name" is already defined -- as a range, a
     // formula/constant, or a structured table -- in the given target scope. Structured-table names

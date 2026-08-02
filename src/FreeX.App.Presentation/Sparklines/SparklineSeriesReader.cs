@@ -12,15 +12,19 @@ public static class SparklineSeriesReader
 {
     /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into its numeric series, keyed by id.
-    /// Data ranges over the supported cell cap are reported as empty.
+    /// Data ranges over the supported cell cap are reported as empty. <paramref name="workbook"/> is
+    /// used to resolve each sparkline's <see cref="SparklineModel.DataRange"/> to its own source
+    /// sheet (Excel allows a sparkline hosted on one sheet to read its data from another), so it
+    /// must be the workbook that owns <paramref name="sheet"/>.
     /// </summary>
-    public static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildValues(Sheet sheet)
+    public static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildValues(Workbook workbook, Sheet sheet)
     {
+        ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
 
         var values = new Dictionary<Guid, IReadOnlyList<double>>();
         foreach (var sparkline in sheet.Sparklines)
-            values[sparkline.Id] = ReadSeries(sheet, sparkline);
+            values[sparkline.Id] = ReadSeries(workbook, sheet, sparkline);
 
         return values;
     }
@@ -40,27 +44,40 @@ public static class SparklineSeriesReader
     /// draw between them -- i.e. it renders as a direct connection, not a break -- while leaving the
     /// blank's own slot (and every later slot) at its original position.
     /// </summary>
-    public static IReadOnlyList<double> ReadSeries(Sheet sheet, SparklineModel sparkline)
+    /// <remarks>
+    /// Excel's "Edit Data" dialog lets a sparkline's Data Range live on a different sheet than the
+    /// one it is anchored/displayed on (<see cref="SparklineModel.DataRange"/>'s
+    /// <c>Start.Sheet</c> vs. <see cref="SparklineModel.Location"/>'s sheet), and
+    /// <c>XlsxSparklineMapper</c> round-trips that cross-sheet reference. <paramref name="workbook"/>
+    /// resolves the range's own <c>Start.Sheet</c> to the sheet actually holding the source values,
+    /// falling back to the host <paramref name="sheet"/> only if that sheet id no longer resolves
+    /// (e.g. the source sheet was deleted) -- hidden-row/col checks and cell reads both happen
+    /// against that resolved sheet, never unconditionally against the host.
+    /// </remarks>
+    public static IReadOnlyList<double> ReadSeries(Workbook workbook, Sheet sheet, SparklineModel sparkline)
     {
+        ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(sparkline);
 
         if (!SparklineRangeLimits.IsSupportedDataRange(sparkline.DataRange))
             return [];
 
-        var raw = new List<double?>();
         var range = sparkline.DataRange;
+        var dataSheet = workbook.GetSheet(range.Start.Sheet) ?? sheet;
+
+        var raw = new List<double?>();
         for (var row = range.Start.Row; row <= range.End.Row; row++)
         {
-            if (!sparkline.DisplayHidden && sheet.IsRowEffectivelyHidden(row))
+            if (!sparkline.DisplayHidden && dataSheet.IsRowEffectivelyHidden(row))
                 continue;
 
             for (var col = range.Start.Col; col <= range.End.Col; col++)
             {
-                if (!sparkline.DisplayHidden && sheet.IsColEffectivelyHidden(col))
+                if (!sparkline.DisplayHidden && dataSheet.IsColEffectivelyHidden(col))
                     continue;
 
-                raw.Add(sheet.GetValue(row, col) switch
+                raw.Add(dataSheet.GetValue(row, col) switch
                 {
                     NumberValue number => number.Value,
                     DateTimeValue date => date.Value,

@@ -25,6 +25,7 @@ public static partial class PrintRenderer
     }
 
     private static (DrawingVisual Visual, IReadOnlyList<PdfTextOverlay> TextOverlays, IReadOnlyList<PdfLinkOverlay> LinkOverlays, IReadOnlyList<PdfCellDestinationOverlay> CellDestinationOverlays) RenderPageVisual(
+        Workbook workbook,
         Sheet sheet,
         double pageW,
         double pageH,
@@ -210,6 +211,7 @@ public static partial class PrintRenderer
             printErrorValue,
             gridLeft,
             gridTop,
+            workbook,
             blackAndWhite,
             sheet);
 

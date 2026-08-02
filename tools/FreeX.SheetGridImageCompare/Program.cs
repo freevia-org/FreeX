@@ -500,7 +500,7 @@ internal static class Program
             NativeTimelines = nativeVisualFilters.Timelines,
             Sparklines      = sheet.Sparklines,
             SparklineValues = sheet.Sparklines.Count > 0
-                ? SparklineSeriesReader.BuildValues(sheet)
+                ? SparklineSeriesReader.BuildValues(workbook, sheet)
                 : null,
             MergedRegions   = sheet.MergedRegions,
             WorksheetBackground = null,

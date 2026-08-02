@@ -197,6 +197,21 @@ public sealed class CommandBus : ICommandBus, ICommandStackChangeNotifier, IComm
     public bool CanRepeat(WorkbookId workbookId) =>
         _repeatableCommandFactories.ContainsKey(workbookId);
 
+    /// <summary>
+    /// R114-commands-workbook-retire-1: drop <paramref name="workbookId"/>'s undo/redo stack and
+    /// any pending repeatable-command factory. Without this, a host that keeps one CommandBus
+    /// instance alive across File &gt; Open / File &gt; New (rather than replacing the bus itself,
+    /// as the "New Window" detach path does) leaks up to <see cref="MaxUndoByteBudget"/> (50 MB)
+    /// of undo history per workbook the window ever displayed, for the remaining lifetime of the
+    /// process -- <see cref="_stacks"/>/<see cref="_repeatableCommandFactories"/> have no other
+    /// eviction path.
+    /// </summary>
+    public void Retire(WorkbookId workbookId)
+    {
+        _stacks.Remove(workbookId);
+        _repeatableCommandFactories.Remove(workbookId);
+    }
+
     private void RunBeforeMutation(WorkbookId workbookId, ICommandContext context) =>
         _beforeMutation?.Invoke(workbookId, context);
 

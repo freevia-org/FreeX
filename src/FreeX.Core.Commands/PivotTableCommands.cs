@@ -1,4 +1,3 @@
-using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -115,75 +114,17 @@ public sealed class AddPivotTableCommand : IWorkbookCommand
         return headers;
     }
 
-    // Builds a cache field whose sharedItems type/range metadata (ContainsNumber/ContainsDate/
-    // ContainsString + MinValue/MaxValue/MinDate/MaxDate) reflects the actual source-column data at
-    // creation time. Fields created via `new PivotCacheFieldModel(header)` alone leave every optional
-    // flag at its all-false/null default, which serializes to a bare <sharedItems/> that Excel's schema
-    // defaults interpret as containsString=true/containsNumber=false/containsDate=false -- always wrong
-    // for a numeric or date column and breaking the field's filter dropdown / Group dialog bounds.
+    // R114-commands-pivot-sharedItems: delegates to the shared choke point (PivotCacheFieldFactory) so
+    // every cache field built from LIVE source data -- here, in PivotTableRefreshService.ReconcileCacheFields,
+    // and in ChangePivotTableSourceCommand/BuildRedirectedCache -- gets the same type-flag metadata AND
+    // the same distinct-value SharedItems/SharedItemKinds list a pivot-bound slicer needs to have any
+    // filter items at all (see PivotCacheFieldFactory's own doc comment for the full story).
     private static PivotCacheFieldModel BuildPivotCacheFieldFromSourceData(
         string header,
         Sheet sourceSheet,
         GridRange sourceRange,
-        int columnIndex)
-    {
-        var col = sourceRange.Start.Col + (uint)columnIndex;
-        var containsString = false;
-        var containsNumber = false;
-        var containsDate = false;
-        var containsBlank = false;
-        double? minValue = null;
-        double? maxValue = null;
-        string? minDate = null;
-        string? maxDate = null;
-
-        for (var row = sourceRange.Start.Row + 1; row <= sourceRange.End.Row; row++)
-        {
-            switch (sourceSheet.GetValue(row, col))
-            {
-                case NumberValue number:
-                    containsNumber = true;
-                    if (minValue is null || number.Value < minValue.Value)
-                        minValue = number.Value;
-                    if (maxValue is null || number.Value > maxValue.Value)
-                        maxValue = number.Value;
-                    break;
-                case DateTimeValue date:
-                    containsDate = true;
-                    var iso = date.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
-                    if (minDate is null || string.CompareOrdinal(iso, minDate) < 0)
-                        minDate = iso;
-                    if (maxDate is null || string.CompareOrdinal(iso, maxDate) > 0)
-                        maxDate = iso;
-                    break;
-                case TextValue text when !string.IsNullOrEmpty(text.Value):
-                    containsString = true;
-                    break;
-                case BoolValue:
-                    containsString = true;
-                    break;
-                case ErrorValue:
-                    containsString = true;
-                    break;
-                default:
-                    containsBlank = true;
-                    break;
-            }
-        }
-
-        var typeCount = (containsString ? 1 : 0) + (containsNumber ? 1 : 0) + (containsDate ? 1 : 0);
-        return new PivotCacheFieldModel(
-            header,
-            ContainsBlank: containsBlank,
-            ContainsString: containsString,
-            ContainsNumber: containsNumber,
-            ContainsDate: containsDate,
-            ContainsMixedTypes: typeCount > 1,
-            MinValue: minValue,
-            MaxValue: maxValue,
-            MinDate: minDate,
-            MaxDate: maxDate);
-    }
+        int columnIndex) =>
+        PivotCacheFieldFactory.BuildFromSourceData(header, sourceSheet, sourceRange, columnIndex);
 
     private static int NextCacheId(Workbook workbook) =>
         workbook.PivotCaches.Count == 0

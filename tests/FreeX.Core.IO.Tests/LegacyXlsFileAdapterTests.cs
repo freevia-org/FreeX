@@ -154,6 +154,101 @@ public sealed class LegacyXlsFileAdapterTests
         sheet.GetValue(4, 1).Should().Be(new NumberValue(15));
     }
 
+    [Fact]
+    public void R114_Load_LegacyCseArrayFormula_ConfinesResultToDeclaredExtentOnRecalc()
+    {
+        // Regression for the .xls (BIFF8/NPOI) counterpart of the XlsxFileAdapter legacy-CSE-array fix:
+        // LoadCells detects a multi-cell CSE array formula via NPOI's IsPartOfArrayFormulaGroup/
+        // ArrayFormulaRange and correctly marks the anchor ArrayMode.Dynamic, but (before the fix) never
+        // set Cell.LegacyArrayRows/LegacyArrayCols, so RecalcEngine's confining branch (RecalcEngine.cs
+        // line 399, "if (cell.LegacyArrayRows > 0)") never fired and the formula free-spilled like a
+        // modern dynamic array instead of staying confined to its originally CSE-selected range, exactly
+        // like R80_LegacyCseArrayFixedExtentTests but exercised through the real .xls loader entry point
+        // (LegacyXlsFileAdapter.Load) rather than by hand-setting LegacyArrayRows/Cols on a model Cell.
+        var hssf = new HSSFWorkbook();
+        var sheet = hssf.CreateSheet("Sheet1");
+
+        // A1:A3 = 1,2,3 (a 3-row x 1-col column).
+        var row0 = sheet.CreateRow(0);
+        row0.CreateCell(0).SetCellValue(1);
+        var row1 = sheet.CreateRow(1);
+        row1.CreateCell(0).SetCellValue(2);
+        var row2 = sheet.CreateRow(2);
+        row2.CreateCell(0).SetCellValue(3);
+
+        // H1:I1 (row 0, cols 7-8) was CSE-entered as {=TRANSPOSE(A1:A3)}: a 1-row x 2-col selection
+        // over a formula whose natural result is 1x3. Excel fills only H1/I1 and silently drops the
+        // third transposed value; J1 (col 9) is never touched, no matter how large the natural result is.
+        sheet.SetArrayFormula("TRANSPOSE(A1:A3)", new CellRangeAddress(0, 0, 7, 8));
+
+        using var stream = new MemoryStream();
+        hssf.Write(stream, leaveOpen: true);
+        stream.Position = 0;
+
+        var workbook = new LegacyXlsFileAdapter().Load(stream);
+        var modelSheet = workbook.GetSheetAt(0);
+
+        var h1 = new ModelCellAddress(modelSheet.Id, 1, 8);
+        var loadedAnchor = modelSheet.GetCell(1, 8);
+        loadedAnchor.Should().NotBeNull();
+        loadedAnchor!.ArrayMode.Should().Be(FormulaArrayMode.Dynamic);
+        loadedAnchor.LegacyArrayRows.Should().Be(1u, "the loader must confine this to the originally CSE-declared 1-row extent");
+        loadedAnchor.LegacyArrayCols.Should().Be(2u, "the loader must confine this to the originally CSE-declared 2-col extent");
+
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        engine.RecalculateAllFormulas(workbook);
+
+        modelSheet.GetValue(1, 8).Should().Be(new NumberValue(1), "H1 gets the first transposed value");
+        modelSheet.GetValue(1, 9).Should().Be(new NumberValue(2), "I1 gets the second transposed value");
+        modelSheet.GetValue(1, 10).Should().Be(BlankValue.Instance,
+            "J1 sits outside the originally declared H1:I1 ref range and Excel's legacy CSE semantics " +
+            "never grow into it, unlike a modern dynamic-array spill");
+        modelSheet.GetCell(new ModelCellAddress(modelSheet.Id, 1, 10)).Should().BeNull(
+            "J1 must not gain a spill-value/cell entry at all -- confirming the formula never free-spilled");
+    }
+
+    [Fact]
+    public void R114_Load_LegacyCseArrayFormula_DeclaredRangeMatchesNaturalResult_FillsEveryDeclaredCell()
+    {
+        // No-regression sibling: when the CSE-declared range exactly matches the formula's natural
+        // result size, every declared cell must still be filled correctly through the real .xls loader
+        // (the confining branch is a no-op path when declaredRows/Cols == rv.RowCount/ColCount).
+        var hssf = new HSSFWorkbook();
+        var sheet = hssf.CreateSheet("Sheet1");
+
+        // A1:B2 = a genuine 2x2 block of values.
+        var row0 = sheet.CreateRow(0);
+        row0.CreateCell(0).SetCellValue(1);
+        row0.CreateCell(1).SetCellValue(2);
+        var row1 = sheet.CreateRow(1);
+        row1.CreateCell(0).SetCellValue(3);
+        row1.CreateCell(1).SetCellValue(4);
+
+        // D1:E2 (row 0-1, cols 3-4) was CSE-entered as {=A1:B2}: a 2-row x 2-col selection whose
+        // natural result is exactly 2x2, so every declared cell gets its corresponding value.
+        sheet.SetArrayFormula("A1:B2", new CellRangeAddress(0, 1, 3, 4));
+
+        using var stream = new MemoryStream();
+        hssf.Write(stream, leaveOpen: true);
+        stream.Position = 0;
+
+        var workbook = new LegacyXlsFileAdapter().Load(stream);
+        var modelSheet = workbook.GetSheetAt(0);
+
+        var loadedAnchor = modelSheet.GetCell(1, 4);
+        loadedAnchor.Should().NotBeNull();
+        loadedAnchor!.LegacyArrayRows.Should().Be(2u);
+        loadedAnchor.LegacyArrayCols.Should().Be(2u);
+
+        var engine = new RecalcEngine(new DependencyGraph(), new FormulaEvaluator());
+        engine.RecalculateAllFormulas(workbook);
+
+        modelSheet.GetValue(1, 4).Should().Be(new NumberValue(1), "D1");
+        modelSheet.GetValue(1, 5).Should().Be(new NumberValue(2), "E1");
+        modelSheet.GetValue(2, 4).Should().Be(new NumberValue(3), "D2");
+        modelSheet.GetValue(2, 5).Should().Be(new NumberValue(4), "E2");
+    }
+
     // Note: the legacy .xls adapter is open-only (Save throws NotSupportedException), so there is no NPOI
     // write path to carry the mirror-image 1904 conversion — the fix is load-side only. A 1904 workbook is
     // reproduced here the way a genuine Excel-authored file exists on disk: the BIFF DateWindow1904 record

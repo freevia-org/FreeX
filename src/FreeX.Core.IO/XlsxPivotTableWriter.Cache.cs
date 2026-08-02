@@ -353,6 +353,8 @@ internal static partial class XlsxPivotTableWriter
             var containsDate = field.ContainsDate;
             var minValue = field.MinValue;
             var maxValue = field.MaxValue;
+            var minDate = field.MinDate;
+            var maxDate = field.MaxDate;
 
             // Only ever WIDEN from actually-observed, typed values (Number/Date/String/Bool/Error).
             // Blank cells are deliberately NOT treated as evidence of anything here: many pivot caches
@@ -371,8 +373,13 @@ internal static partial class XlsxPivotTableWriter
                         if (maxValue is null || number.Value > maxValue.Value)
                             maxValue = number.Value;
                         break;
-                    case DateTimeValue:
+                    case DateTimeValue date:
                         containsDate = true;
+                        var iso = date.ToDateTime().ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture);
+                        if (minDate is null || string.CompareOrdinal(iso, minDate) < 0)
+                            minDate = iso;
+                        if (maxDate is null || string.CompareOrdinal(iso, maxDate) > 0)
+                            maxDate = iso;
                         break;
                     case TextValue text when !string.IsNullOrEmpty(text.Value):
                         containsString = true;
@@ -391,7 +398,9 @@ internal static partial class XlsxPivotTableWriter
                 containsDate == field.ContainsDate &&
                 containsMixedTypes == field.ContainsMixedTypes &&
                 minValue == field.MinValue &&
-                maxValue == field.MaxValue)
+                maxValue == field.MaxValue &&
+                minDate == field.MinDate &&
+                maxDate == field.MaxDate)
             {
                 continue;
             }
@@ -404,6 +413,8 @@ internal static partial class XlsxPivotTableWriter
                 ContainsMixedTypes = containsMixedTypes,
                 MinValue = minValue,
                 MaxValue = maxValue,
+                MinDate = minDate,
+                MaxDate = maxDate,
             };
         }
     }

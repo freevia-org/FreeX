@@ -150,11 +150,12 @@ public sealed class R50_NameManagerNamedFormulaCrudTests
         NamedRangeDialog dialog,
         NameDefinitionDialogResult definition,
         string? originalName,
-        string? originalScope)
+        string? originalScope,
+        SheetId? originalScopeSheetId = null)
     {
         var method = typeof(NamedRangeDialog).GetMethod("DefineOrUpdateName", BindingFlags.NonPublic | BindingFlags.Instance)
             ?? throw new MissingMethodException(nameof(NamedRangeDialog), "DefineOrUpdateName");
-        method.Invoke(dialog, [definition, originalName, originalScope]);
+        method.Invoke(dialog, [definition, originalName, originalScope, originalScopeSheetId]);
     }
 
     private static ICommandBus CreateCommandBus(Workbook workbook) =>
