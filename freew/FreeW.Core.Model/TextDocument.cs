@@ -3669,6 +3669,13 @@ public sealed class TextDocument
     public bool DoNotTrackFormatting { get; set; }
 
     /// <summary>
+    /// Whether applications must preserve embedded picture data without automatically recompressing it when
+    /// saving the document. Maps to <c>w:settings/w:doNotAutoCompressPictures</c>. False is Word's default and
+    /// is omitted from newly authored packages; true preserves the original image fidelity across saves.
+    /// </summary>
+    public bool DoNotAutoCompressPictures { get; set; }
+
+    /// <summary>
     /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
     /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
     /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);

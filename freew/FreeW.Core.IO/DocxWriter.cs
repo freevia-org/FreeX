@@ -207,6 +207,7 @@ public static class DocxWriter
             || document.TrackRevisions
             || document.DoNotTrackMoves
             || document.DoNotTrackFormatting
+            || document.DoNotAutoCompressPictures
             || document.Page.AutoHyphenation
             || anyDifferentOddEvenPages
             || document.Page.MirrorMargins
@@ -272,7 +273,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8242,7 +8243,11 @@ public static class DocxWriter
         "documentProtection", "autoFormatOverride", "styleLockTheme", "styleLockQFSet", "defaultTabStop",
         "autoHyphenation", "consecutiveHyphenLimit", "hyphenationZone", "doNotHyphenateCaps", "showEnvelope",
         "summaryLength", "clickAndTypeStyle", "defaultTableStyle", "evenAndOddHeaders",
-        "updateFields", "footnotePr", "endnotePr"
+        "updateFields", "footnotePr", "endnotePr", "compat", "docVars", "rsids", "mathPr",
+        "uiCompat97To2003", "attachedSchema", "themeFontLang", "clrSchemeMapping",
+        "doNotIncludeSubdocsInStats", "doNotAutoCompressPictures", "forceUpgrade", "captions",
+        "readModeInkLockDown", "smartTagType", "schemaLibrary", "shapeDefaults", "doNotEmbedSmartTags",
+        "decimalSymbol", "listSeparator"
     ];
 
     /// <summary>
@@ -8256,8 +8261,9 @@ public static class DocxWriter
     /// w:hideGrammaticalErrors), the top-gutter toggle (w:gutterAtTop), the template-style refresh toggle
     /// (w:linkStyles),
     /// the revision-tracking toggles (w:trackRevisions,
-    /// w:doNotTrackMoves, and w:doNotTrackFormatting), and the document-protection element
-    /// (w:documentProtection: w:edit + w:enforcement="1").
+    /// w:doNotTrackMoves, and w:doNotTrackFormatting), the image-preservation policy
+    /// (w:doNotAutoCompressPictures), and the document-protection element (w:documentProtection: w:edit +
+    /// w:enforcement="1").
     ///
     /// <para>
     /// When <paramref name="original"/> is null (an authored-from-scratch document) a FRESH minimal part is
@@ -8268,7 +8274,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8349,6 +8355,8 @@ public static class DocxWriter
                 fresh.Add(freshFootnotePr);
             if (BuildNotePr(endnoteNumbering, "endnotePr") is { } freshEndnotePr)
                 fresh.Add(freshEndnotePr);
+            if (doNotAutoCompressPictures)
+                fresh.Add(new XElement(W + "doNotAutoCompressPictures"));
             return new XDocument(fresh);
         }
 
@@ -8386,6 +8394,9 @@ public static class DocxWriter
         // w:endnotePr from the preserved settings; default values remove the element (FreeW owns it now).
         OverlaySetting(settings, "footnotePr", BuildNotePr(footnoteNumbering, "footnotePr"));
         OverlaySetting(settings, "endnotePr", BuildNotePr(endnoteNumbering, "endnotePr"));
+        OverlaySetting(settings, "doNotAutoCompressPictures", doNotAutoCompressPictures
+            ? new XElement(W + "doNotAutoCompressPictures")
+            : null);
         return new XDocument(settings);
     }
 
