@@ -793,7 +793,7 @@ public sealed class FreeWRibbonParityTests
             .Equal("freew.check-accessibility");
         CommandIds(review.FindGroup("tracking")!)
             .Should()
-            .Equal("freew.track-changes", "freew.reviewing-pane", "freew.display-for-review", "freew.show-markup");
+            .Equal("freew.track-changes", "freew.track-formatting", "freew.reviewing-pane", "freew.display-for-review", "freew.show-markup");
         MenuCommandIds(review.FindGroup("tracking")!)
             .Should()
             .Equal(
@@ -858,6 +858,16 @@ public sealed class FreeWRibbonParityTests
         editor.TrackChangesEnabled.Should().BeTrue();
         editor.Model.TrackRevisions.Should().BeTrue();
         trackChangesState.GetState().IsChecked.Should().BeTrue();
+
+        registry.TryGet("freew.track-formatting", out var trackFormatting).Should().BeTrue();
+        var trackFormattingState = trackFormatting.Should().BeAssignableTo<IRibbonStatefulCommand>().Subject;
+        trackFormattingState.GetState().IsChecked.Should().BeTrue();
+
+        trackFormatting!.Execute(RibbonCommandContext.Empty);
+
+        editor.TrackFormattingEnabled.Should().BeFalse();
+        editor.Model.DoNotTrackFormatting.Should().BeTrue();
+        trackFormattingState.GetState().IsChecked.Should().BeFalse();
 
         foreach (var commandId in new[]
         {

@@ -15611,6 +15611,23 @@ public sealed class DocumentView : RichTextBox
         }
     }
 
+    /// <summary>
+    /// Whether formatting-only edits participate in tracked revisions. Word stores the inverse policy as
+    /// <c>w:doNotTrackFormatting</c>, so the user-facing enabled state is true by default.
+    /// </summary>
+    public bool TrackFormattingEnabled
+    {
+        get => !_model.DoNotTrackFormatting;
+        set
+        {
+            if (TrackFormattingEnabled == value)
+                return;
+
+            _model.DoNotTrackFormatting = !value;
+            OnTextChanged(new TextChangedEventArgs(TextBoxBase.TextChangedEvent, UndoAction.None));
+        }
+    }
+
     /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
     public string RevisionAuthor { get; set; } = "FreeW User";
 

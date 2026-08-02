@@ -1300,6 +1300,7 @@ internal static class FreeWRibbonCommands
         // with a non-empty selection marks that selection as an insertion. Accept All / Reject All resolve
         // every tracked change on the model from the Changes dropdowns.
         registry.Register("freew.track-changes", new TrackChangesToggleCommand(editor));
+        registry.Register("freew.track-formatting", new TrackFormattingToggleCommand(editor));
         registry.Register("freew.accept-all", new ActionRibbonCommand(() => { editor.Focus(); editor.AcceptAllRevisions(); }));
         registry.Register("freew.reject-all", new ActionRibbonCommand(() => { editor.Focus(); editor.RejectAllRevisions(); }));
 
@@ -4841,6 +4842,17 @@ internal static class FreeWRibbonCommands
         }
 
         public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackChangesEnabled);
+    }
+
+    private sealed class TrackFormattingToggleCommand(DocumentView editor) : IRibbonStatefulCommand
+    {
+        public void Execute(RibbonCommandContext context)
+        {
+            editor.Focus();
+            editor.TrackFormattingEnabled = !editor.TrackFormattingEnabled;
+        }
+
+        public RibbonCommandState GetState() => new(IsEnabled: true, IsChecked: editor.TrackFormattingEnabled);
     }
 
     // Review > Tracking > Display for Review: exposes the ReviewDisplayMode dropdown. The root button

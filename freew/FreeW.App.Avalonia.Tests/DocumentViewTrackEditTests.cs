@@ -95,6 +95,28 @@ public sealed class DocumentViewTrackEditTests
         disabledState.Should().BeFalse();
     }
 
+    [Fact]
+    public async Task ToggleTrackFormatting_PersistsInverseWordSetting()
+    {
+        bool disabledState = false;
+        bool enabledState = false;
+        var changed = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello world");
+            view.DocumentChanged += () => changed++;
+            disabledState = view.ToggleTrackFormatting();
+            view.Document.DoNotTrackFormatting.Should().BeTrue();
+            enabledState = view.ToggleTrackFormatting();
+            view.Document.DoNotTrackFormatting.Should().BeFalse();
+        });
+        if (!ran) return;
+
+        disabledState.Should().BeFalse();
+        enabledState.Should().BeTrue();
+        changed.Should().Be(2);
+    }
+
     // ── Typing records a tracked insertion ────────────────────────────────────────
 
     [Fact]
