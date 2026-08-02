@@ -579,6 +579,7 @@ public sealed class ChartDataDialogPlanner
             ChartType.Line => "Line",
             ChartType.LineMarkers => "Line with Markers",
             ChartType.Pie => "Pie",
+            ChartType.OfPie => "Pie of Pie / Bar of Pie",
             ChartType.Area => "Area",
             ChartType.AreaStacked => "Stacked Area",
             ChartType.Scatter => "Scatter",

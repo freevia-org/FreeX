@@ -805,7 +805,7 @@ public static partial class ChartRenderPlanner
 
     private static bool UsesImportedPieLegendDefaults(ChartShape chart) =>
         UsesImportedTextMetrics(chart) &&
-        chart.ChartType is ChartType.Pie or ChartType.Doughnut;
+        chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.OfPie;
 
     private static bool UsesImportedThreeDColumnDefaults(ChartShape chart) =>
         UsesImportedTextMetrics(chart) &&
@@ -921,7 +921,7 @@ public static partial class ChartRenderPlanner
     private static bool UsesImportedCartesianAxisStrokes(ChartShape chart) =>
         UsesImportedTextMetrics(chart) &&
         !UsesImportedComboDefaults(chart) &&
-        chart.ChartType is not (ChartType.Pie or ChartType.Doughnut);
+        chart.ChartType is not (ChartType.Pie or ChartType.Doughnut or ChartType.OfPie);
 
     private static bool UsesImportedStyle2ColumnLineFrame(ChartShape chart) =>
         chart.StyleId == 2 &&
@@ -1158,7 +1158,7 @@ public static partial class ChartRenderPlanner
 
     private static bool ShouldVaryPointColors(ChartShape chart) =>
         chart.VaryColors &&
-        (chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.Bubble ||
+        (chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.OfPie or ChartType.Bubble ||
          chart.Series.Count == 1);
 
     private static ChartStrokePlan? ResolveMarkerStroke(
@@ -1362,7 +1362,7 @@ public static partial class ChartRenderPlanner
                 plot.Width + 10.0,
                 plot.Height + 20.0);
         }
-        else if (chart.ChartType == ChartType.Pie &&
+        else if (chart.ChartType is ChartType.Pie or ChartType.OfPie &&
                  UsesImportedTextMetrics(chart) &&
                  chart.HasAutomaticTitle)
         {
@@ -1532,7 +1532,7 @@ public static partial class ChartRenderPlanner
             ChartType.BarClustered or ChartType.BarStacked or ChartType.BarStacked100 => ChartSceneGeometryKind.Bar,
             ChartType.Line or ChartType.LineMarkers => ChartSceneGeometryKind.Line,
             ChartType.Stock => ChartSceneGeometryKind.Stock,
-            ChartType.Pie => ChartSceneGeometryKind.Pie,
+            ChartType.Pie or ChartType.OfPie => ChartSceneGeometryKind.Pie,
             ChartType.Doughnut => ChartSceneGeometryKind.Doughnut,
             ChartType.Area or ChartType.AreaStacked => ChartSceneGeometryKind.Area,
             ChartType.Scatter => ChartSceneGeometryKind.Scatter,
@@ -2311,7 +2311,7 @@ public static partial class ChartRenderPlanner
     public static ChartRenderFamily GetRenderFamily(ChartType chartType) =>
         chartType switch
         {
-            ChartType.Pie or ChartType.Doughnut => ChartRenderFamily.Pie,
+            ChartType.Pie or ChartType.Doughnut or ChartType.OfPie => ChartRenderFamily.Pie,
             ChartType.BarClustered or ChartType.BarStacked or ChartType.BarStacked100 => ChartRenderFamily.HorizontalBar,
             ChartType.Scatter or ChartType.Bubble => ChartRenderFamily.ScatterLike,
             ChartType.Radar => ChartRenderFamily.Radar,

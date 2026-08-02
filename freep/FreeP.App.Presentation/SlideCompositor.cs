@@ -1032,7 +1032,7 @@ public static class SlideCompositor
 
         SrgbColor[] seriesColors;
 
-        if (chart.ChartType is ChartType.Pie or ChartType.Doughnut && chart.Series.Count > 0)
+        if (chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.OfPie && chart.Series.Count > 0)
         {
             // BV1: For pie AND doughnut charts emit one color per data POINT (cycling accent1-6)
             // so the renderer can pick the right slice fill without re-resolving the theme.
@@ -1129,7 +1129,7 @@ public static class SlideCompositor
         var seriesFills = new List<ChartFillPlan>();
         var pointFills = new Dictionary<ChartFillKey, ChartFillPlan>();
         var markerFills = new Dictionary<ChartFillKey, ChartFillPlan>();
-        bool pieLike = chart.ChartType is ChartType.Pie or ChartType.Doughnut;
+        bool pieLike = chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.OfPie;
 
         if (pieLike && chart.Series.Count > 0)
         {

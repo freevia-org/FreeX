@@ -154,7 +154,7 @@ public static partial class ChartRenderPlanner
                 "bar/column gap, overlap, and depth plan",
             ChartType.Pie when chart.ThreeDStyle == ChartThreeDStyle.Pie =>
                 "3-D pie compressed top face and lower depth pass plan",
-            ChartType.Pie => "pie first-slice and visible-point sweep plan",
+            ChartType.Pie or ChartType.OfPie => "pie-family first-slice and visible-point sweep plan",
             ChartType.Doughnut => "doughnut ring and first-slice plan",
             ChartType.Radar => chart.RadarStyle switch
             {

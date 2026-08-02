@@ -278,8 +278,9 @@ internal static class PptxChartReader
                         ReadLineChart(el, shape, scheme, idxMap); break;
                     case "pieChart":
                     case "pie3DChart":
-                    case "ofPieChart":
                         ReadPieChart(el, shape, scheme, idxMap); break;
+                    case "ofPieChart":
+                        ReadOfPieChart(el, shape, scheme, idxMap); break;
                     case "doughnutChart":
                         ReadDoughnutChart(el, shape, scheme, idxMap); break;
                     case "areaChart":
@@ -480,6 +481,33 @@ internal static class PptxChartReader
         if (el.Name.LocalName == "pie3DChart")
             shape.ThreeDStyle = ChartThreeDStyle.Pie;
         shape.FirstSliceAngleDegrees = ReadFirstSliceAngle(el);
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
+    }
+
+    private static void ReadOfPieChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
+    {
+        ReadVaryColors(el, shape);
+        shape.ChartType = ChartType.OfPie;
+        shape.OfPieType = (el.Element(C + "ofPieType")?.Attribute("val")?.Value ?? "pie") == "bar"
+            ? OfPieType.Bar
+            : OfPieType.Pie;
+        shape.OfPieSplitType = el.Element(C + "splitType")?.Attribute("val")?.Value switch
+        {
+            "cust" => OfPieSplitType.Custom,
+            "percent" => OfPieSplitType.Percent,
+            "pos" => OfPieSplitType.Position,
+            "val" => OfPieSplitType.Value,
+            "auto" => OfPieSplitType.Auto,
+            _ => null
+        };
+        shape.OfPieSplitPosition = ParseDouble(
+            el.Element(C + "splitPos")?.Attribute("val")?.Value);
+        shape.OfPieSecondPieSizePercent = ParseNullableInt(
+            el.Element(C + "secondPieSize")?.Attribute("val")?.Value);
+        shape.BarGapWidthPercent = ParseNullableInt(
+            el.Element(C + "gapWidth")?.Attribute("val")?.Value);
+        shape.OfPieSeriesLinesSpecified = el.Element(C + "serLines") is not null;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 

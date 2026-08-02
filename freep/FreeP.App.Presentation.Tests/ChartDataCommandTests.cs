@@ -1,6 +1,9 @@
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
 using FreeP.Core.Model;
+using DocumentFormat.OpenXml;
+using DocumentFormat.OpenXml.Packaging;
+using DocumentFormat.OpenXml.Validation;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -1910,6 +1913,46 @@ public sealed class ChartDataCommandTests
         bus.Undo();
         chart.FirstSliceAngleDegrees.Should().Be(20);
         chart.DoughnutHolePercent.Should().Be(40);
+    }
+
+    [Fact]
+    public void OfPieChart_PreservesNativeFamilyAndSplitControlsThroughPptxRoundTrip()
+    {
+        var (p, _, _) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.OfPie;
+        chart.OfPieType = OfPieType.Bar;
+        chart.OfPieSplitType = OfPieSplitType.Percent;
+        chart.OfPieSplitPosition = 60.5;
+        chart.OfPieSecondPieSizePercent = 75;
+        chart.OfPieSeriesLinesSpecified = true;
+        chart.BarGapWidthPercent = 120;
+        chart.RegenerateWorkbookOnSave = true;
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        using (var document = PresentationDocument.Open(stream, false))
+        {
+            var validator = new OpenXmlValidator(FileFormatVersions.Microsoft365);
+            var chartPart = document.PresentationPart!.SlideParts
+                .SelectMany(slidePart => slidePart.ChartParts)
+                .Single();
+            validator.Validate(chartPart)
+                .Where(error => error.ErrorType == ValidationErrorType.Schema)
+                .Should().BeEmpty();
+        }
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+
+        roundTripped.ChartType.Should().Be(ChartType.OfPie);
+        roundTripped.OfPieType.Should().Be(OfPieType.Bar);
+        roundTripped.OfPieSplitType.Should().Be(OfPieSplitType.Percent);
+        roundTripped.OfPieSplitPosition.Should().Be(60.5);
+        roundTripped.OfPieSecondPieSizePercent.Should().Be(75);
+        roundTripped.OfPieSeriesLinesSpecified.Should().BeTrue();
+        roundTripped.BarGapWidthPercent.Should().Be(120);
+        roundTripped.Series.Select(series => series.Name).Should().Equal("Sales", "Budget");
     }
 
     [Fact]

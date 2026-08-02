@@ -19,6 +19,8 @@ public enum ChartType
     Scatter,
     /// <summary>Doughnut (annular pie) chart. HoleSize in ChartShape.DoughnutHolePercent.</summary>
     Doughnut,
+    /// <summary>Pie-of-pie or bar-of-pie chart backed by OOXML <c>c:ofPieChart</c>.</summary>
+    OfPie,
     /// <summary>Radar (spider/polar) chart. Each series is a closed polygon on N spokes.</summary>
     Radar,
     /// <summary>Bubble chart. Like scatter but each point has a BubbleSizes list in its series.</summary>
@@ -35,6 +37,12 @@ public enum ChartType
     Waterfall,
     Unknown
 }
+
+/// <summary>Secondary plot kind for an OOXML <c>c:ofPieChart</c>.</summary>
+public enum OfPieType { Pie, Bar }
+
+/// <summary>Authored point-selection rule for an OOXML <c>c:ofPieChart</c>.</summary>
+public enum OfPieSplitType { Auto, Custom, Percent, Position, Value }
 
 /// <summary>Scatter/bubble style read from c:scatterStyle or similar.</summary>
 public enum ScatterStyle { Marker, LineMarker, Line, Smooth, SmoothMarker }
@@ -607,6 +615,21 @@ public sealed class ChartShape
 {
     /// <summary>Chart variant (column clustered, pie, line, etc.).</summary>
     public ChartType ChartType { get; set; } = ChartType.ColumnClustered;
+
+    /// <summary>Whether an <c>ofPieChart</c> uses a second pie or a bar plot.</summary>
+    public OfPieType OfPieType { get; set; } = OfPieType.Pie;
+
+    /// <summary>Authored <c>ofPieChart/splitType</c>; null means the producer omitted it.</summary>
+    public OfPieSplitType? OfPieSplitType { get; set; }
+
+    /// <summary>Authored numeric <c>ofPieChart/splitPos</c>, when present.</summary>
+    public double? OfPieSplitPosition { get; set; }
+
+    /// <summary>Authored <c>ofPieChart/secondPieSize</c> percentage, when present.</summary>
+    public int? OfPieSecondPieSizePercent { get; set; }
+
+    /// <summary>Whether the source explicitly included <c>ofPieChart/serLines</c>.</summary>
+    public bool OfPieSeriesLinesSpecified { get; set; }
 
     /// <summary>
     /// True when an imported stock chart authors <c>c:hiLowLines</c>. When false,

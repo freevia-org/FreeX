@@ -185,6 +185,11 @@ public static class SlideCloner
         var copy = new ChartShape
         {
             ChartType    = src.ChartType,
+            OfPieType = src.OfPieType,
+            OfPieSplitType = src.OfPieSplitType,
+            OfPieSplitPosition = src.OfPieSplitPosition,
+            OfPieSecondPieSizePercent = src.OfPieSecondPieSizePercent,
+            OfPieSeriesLinesSpecified = src.OfPieSeriesLinesSpecified,
             HasHighLowLines = src.HasHighLowLines,
             StyleId      = src.StyleId,
             Title        = src.Title,

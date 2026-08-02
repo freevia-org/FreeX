@@ -246,7 +246,7 @@ internal static class PptxChartWriter
     private static XElement BuildPlotArea(ChartShape chart)
     {
         bool isScatterLike = chart.ChartType is ChartType.Scatter or ChartType.Bubble;
-        bool noCatAx       = chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.Funnel or ChartType.Unknown;
+        bool noCatAx       = chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.OfPie or ChartType.Funnel or ChartType.Unknown;
 
         // CA1: split series by OnSecondaryAxis only when there IS a SecondaryValueAxis and at
         // least one secondary series. All other charts use a single group (no regression).
@@ -420,6 +420,8 @@ internal static class PptxChartWriter
                 BuildLineChartEl(chart, seriesEls, catAxId, valAxId),
             ChartType.Pie =>
                 BuildPieChartEl(chart, seriesEls),
+            ChartType.OfPie =>
+                BuildOfPieChartEl(chart, seriesEls),
             ChartType.Doughnut =>
                 BuildDoughnutChartEl(chart, seriesEls),
             ChartType.Area or ChartType.AreaStacked =>
@@ -516,6 +518,32 @@ internal static class PptxChartWriter
             BuildVaryColorsEl(chart),
             seriesEls,
             BuildFirstSliceAngleEl(chart));
+
+    private static XElement BuildOfPieChartEl(ChartShape chart, List<XElement> seriesEls) =>
+        new XElement(C + "ofPieChart",
+            new XElement(C + "ofPieType", new XAttribute("val", chart.OfPieType == OfPieType.Bar ? "bar" : "pie")),
+            BuildVaryColorsEl(chart),
+            seriesEls,
+            chart.BarGapWidthPercent is { } gapWidth
+                ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
+                : null,
+            chart.OfPieSplitType is { } splitType
+                ? new XElement(C + "splitType", new XAttribute("val", splitType switch
+                {
+                    OfPieSplitType.Custom => "cust",
+                    OfPieSplitType.Percent => "percent",
+                    OfPieSplitType.Position => "pos",
+                    OfPieSplitType.Value => "val",
+                    _ => "auto"
+                }))
+                : null,
+            chart.OfPieSplitPosition is { } splitPosition
+                ? new XElement(C + "splitPos", new XAttribute("val", splitPosition.ToString("G", CultureInfo.InvariantCulture)))
+                : null,
+            chart.OfPieSecondPieSizePercent is { } secondPieSize
+                ? new XElement(C + "secondPieSize", new XAttribute("val", Math.Clamp(secondPieSize, 5, 200)))
+                : null,
+            chart.OfPieSeriesLinesSpecified ? new XElement(C + "serLines") : null);
 
     private static XElement BuildAreaChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
@@ -995,7 +1023,7 @@ internal static class PptxChartWriter
             return posVal == "ctr" ? "ctr" : null;
         }
 
-        bool isPieLike = chartType is ChartType.Pie or ChartType.Doughnut;
+        bool isPieLike = chartType is ChartType.Pie or ChartType.Doughnut or ChartType.OfPie;
         if (isPieLike)
         {
             // Pie allows: ctr, inEnd, outEnd, bestFit.  Suppress directional (t/b/l/r) and inBase.
