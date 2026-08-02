@@ -4031,15 +4031,21 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Clear all character formatting in every model paragraph spanned by the selection (or the caret's
-    /// paragraph): each run's formatting is reset to <see cref="RunFormatting.Default"/> while its text is
-    /// kept (see <see cref="DropCap.ClearFormatting"/>). One reversible <see cref="FormatParagraphRunsCommand"/>
-    /// per paragraph on the undo/redo bus; the view re-renders so the reset shows immediately.
+    /// Clear character formatting in the exact selected text, or in the caret's paragraph when the selection is
+    /// collapsed. Each affected run's formatting is reset to <see cref="RunFormatting.Default"/> while its text
+    /// is kept. The exact-range path authors tracked formatting metadata and both paths use the undo/redo bus.
     /// </summary>
     public void ClearFormatting()
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
             return;
+
+        if (TrySetSelectedRunFormatting(
+                formatting => formatting == RunFormatting.Default,
+                _ => RunFormatting.Default))
+        {
+            return;
+        }
 
         Focus();
         CommitToModel();
@@ -4438,23 +4444,200 @@ public sealed class DocumentView : RichTextBox
         LoadModel(_model);
     }
 
-    /// <summary>
-    /// Set (or clear when <paramref name="border"/> is null) the character border on every run in the
-    /// selected paragraphs. Routes through the undo/redo bus and re-renders.
-    /// </summary>
-    public void SetCharacterBorder(ParagraphBorder? border) =>
-        FormatSelectedModelRuns(f => f with { CharacterBorder = border });
+    internal bool TryToggleSelectedRunFormatting(
+        Func<RunFormatting, bool> isSet,
+        Func<RunFormatting, bool, RunFormatting> set) =>
+        TryApplySelectedRunFormatting(isSet, set, toggle: true);
+
+    internal bool TrySetSelectedRunFormatting(
+        Func<RunFormatting, bool> isSet,
+        Func<RunFormatting, RunFormatting> set)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        return TryApplySelectedRunFormatting(isSet, (formatting, _) => set(formatting), toggle: false);
+    }
+
+    private bool TryApplySelectedRunFormatting(
+        Func<RunFormatting, bool> isSet,
+        Func<RunFormatting, bool, RunFormatting> set,
+        bool toggle)
+    {
+        ArgumentNullException.ThrowIfNull(isSet);
+        ArgumentNullException.ThrowIfNull(set);
+
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return true;
+
+        var selectedRange = SelectedVisibleTextRange();
+        if (selectedRange is null
+            || (selectedRange.Value.VisibleBlockIndices.Count == 1
+                && selectedRange.Value.StartOffset == selectedRange.Value.EndOffset))
+        {
+            return false;
+        }
+
+        CommitToModel();
+        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
+        for (var i = 0; i < selectedRange.Value.VisibleBlockIndices.Count; i++)
+        {
+            var modelIndex = ModelIndexFromVisible(selectedRange.Value.VisibleBlockIndices[i]);
+            if (modelIndex < 0 || modelIndex >= _model.Blocks.Count
+                || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
+            {
+                continue;
+            }
+
+            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
+            var start = i == 0 ? selectedRange.Value.StartOffset : 0;
+            var end = i == selectedRange.Value.VisibleBlockIndices.Count - 1
+                ? selectedRange.Value.EndOffset
+                : textLength;
+            start = Math.Clamp(start, 0, textLength);
+            end = Math.Clamp(end, 0, textLength);
+            if (end > start)
+                ranges.Add((modelIndex, start, end));
+        }
+
+        if (ranges.Count == 0)
+            return false;
+
+        var allSet = ranges.All(range => RunRangeAllMatches(
+            (ModelParagraph)_model.Blocks[range.BlockIndex],
+            range.StartOffset,
+            range.EndOffset,
+            isSet));
+        if (!toggle && allSet)
+            return true;
+        var target = toggle ? !allSet : true;
+
+        if (ranges.Count > 1)
+            _commands.BeginUndoGroup();
+        foreach (var range in ranges)
+        {
+            _commands.Execute(new FormatRunRangeCommand(
+                range.BlockIndex,
+                range.StartOffset,
+                range.EndOffset,
+                formatting => set(formatting, target)));
+        }
+        if (ranges.Count > 1)
+            _commands.CommitUndoGroup("Character Formatting");
+
+        return true;
+    }
+
+    private static bool RunRangeAllMatches(
+        ModelParagraph paragraph,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, bool> predicate)
+    {
+        var position = 0;
+        var sawText = false;
+        foreach (var run in paragraph.Runs)
+        {
+            var runStart = position;
+            var runEnd = position + run.Text.Length;
+            position = runEnd;
+            if (runEnd <= startOffset || runStart >= endOffset || run.Text.Length == 0)
+                continue;
+            sawText = true;
+            if (!predicate(run.Formatting))
+                return false;
+        }
+        return sawText;
+    }
+
+    private sealed class FormatRunRangeCommand(
+        int blockIndex,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, RunFormatting> transform) : IDocumentCommand
+    {
+        private List<ModelRun>? _previous;
+        private List<ModelRun>? _replacement;
+
+        public string Label => "Character Formatting";
+        public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyFormatting;
+
+        public void Apply(IDocumentCommandContext context)
+        {
+            var paragraph = (ModelParagraph)context.Document.Blocks[blockIndex];
+            if (_replacement is not null)
+            {
+                paragraph.Runs.Clear();
+                paragraph.Runs.AddRange(_replacement);
+                return;
+            }
+
+            _previous = [.. paragraph.Runs];
+            ApplyRunFormattingToTextRange(
+                paragraph,
+                startOffset,
+                endOffset,
+                transform,
+                context.Document,
+                context.RevisionAuthor);
+            _replacement = [.. paragraph.Runs];
+        }
+
+        public void Revert(IDocumentCommandContext context)
+        {
+            if (_previous is null)
+                return;
+            var paragraph = (ModelParagraph)context.Document.Blocks[blockIndex];
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(_previous);
+        }
+    }
 
     /// <summary>
-    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on every run
-    /// in the selected paragraphs. Routes through the undo/redo bus and re-renders.
+    /// Set (or clear when <paramref name="border"/> is null) the character border on the exact selected text.
+    /// A collapsed caret retains the historical selected-paragraph behavior. Routes through the undo/redo bus
+    /// and re-renders.
     /// </summary>
-    public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
-        FormatSelectedModelRuns(f => f with
+    public void SetCharacterBorder(ParagraphBorder? border)
+    {
+        if (TrySetSelectedRunFormatting(
+                formatting => Equals(formatting.CharacterBorder, border),
+                formatting => formatting with { CharacterBorder = border }))
         {
-            CharacterShadingHex = string.IsNullOrEmpty(colorHex) ? null : colorHex,
-            CharacterShadingPattern = string.IsNullOrEmpty(colorHex) ? ShadingPattern.Clear : pattern,
+            return;
+        }
+
+        FormatSelectedModelRuns(formatting => formatting with { CharacterBorder = border });
+    }
+
+    /// <summary>
+    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on the exact selected
+    /// text. A collapsed caret retains the historical selected-paragraph behavior. Routes through the undo/redo
+    /// bus and re-renders.
+    /// </summary>
+    public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear)
+    {
+        var normalizedColor = string.IsNullOrEmpty(colorHex) ? null : colorHex;
+        var normalizedPattern = normalizedColor is null ? ShadingPattern.Clear : pattern;
+        if (TrySetSelectedRunFormatting(
+                formatting => string.Equals(
+                        formatting.CharacterShadingHex,
+                        normalizedColor,
+                        StringComparison.OrdinalIgnoreCase)
+                    && formatting.CharacterShadingPattern == normalizedPattern,
+                formatting => formatting with
+                {
+                    CharacterShadingHex = normalizedColor,
+                    CharacterShadingPattern = normalizedPattern,
+                }))
+        {
+            return;
+        }
+
+        FormatSelectedModelRuns(formatting => formatting with
+        {
+            CharacterShadingHex = normalizedColor,
+            CharacterShadingPattern = normalizedPattern,
         });
+    }
 
     /// <summary>
     /// Set (or clear when <paramref name="languageTag"/> is null/empty) the proofing language on the
@@ -16046,7 +16229,9 @@ public sealed class DocumentView : RichTextBox
         ModelParagraph paragraph,
         int startOffset,
         int endOffset,
-        Func<RunFormatting, RunFormatting> transform)
+        Func<RunFormatting, RunFormatting> transform,
+        TextDocument? document = null,
+        string? revisionAuthor = null)
     {
         var rebuilt = new List<ModelRun>();
         var position = 0;
@@ -16077,7 +16262,17 @@ public sealed class DocumentView : RichTextBox
                 rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[..localStart]));
 
             var covered = RevisionEditPlanner.CloneRunWithText(source, source.Text[localStart..localEnd]);
-            covered.Formatting = transform(source.Formatting);
+            var formatting = transform(source.Formatting);
+            covered.Formatting = formatting;
+            if (document is { TrackRevisions: true, DoNotTrackFormatting: false }
+                && formatting != source.Formatting
+                && covered.FormatRevision is null)
+            {
+                covered.FormatRevision = new ModelFormatRevision(
+                    source.Formatting,
+                    string.IsNullOrWhiteSpace(revisionAuthor) ? "FreeW User" : revisionAuthor.Trim(),
+                    CurrentRevisionDateXml());
+            }
             rebuilt.Add(covered);
 
             if (localEnd < length)

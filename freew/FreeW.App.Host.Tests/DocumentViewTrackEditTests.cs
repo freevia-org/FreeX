@@ -1,6 +1,8 @@
 using FreeW.App.Host.Editing;
 using Free.Shared.Ribbon;
 using FreeW.App.Presentation.Ribbon;
+using WpfParagraph = System.Windows.Documents.Paragraph;
+using WpfRun = System.Windows.Documents.Run;
 
 namespace FreeW.App.Host.Tests;
 
@@ -105,6 +107,293 @@ public sealed class DocumentViewTrackEditTests
 
         ((Paragraph)excluded.Model.Blocks[0]).Runs.Should().OnlyContain(run => run.FormatRevision == null);
     }
+
+    [StaFact]
+    public void RibbonBold_SelectedRangeTracksActiveAuthorAndUndoRedoRestoresExactFormatting()
+    {
+        var view = BuildView("Hello world");
+        view.RevisionAuthor = "Ada Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.bold"), out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.PlainText.Should().Be("Hello world");
+        var formatted = paragraph.Runs.Single(run => run.Text == "world");
+        formatted.Formatting.Bold.Should().BeTrue();
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Ada Reviewer");
+        formatted.FormatRevision.PreviousFormatting.Bold.Should().BeFalse();
+        var revisionDate = formatted.FormatRevision.DateXml;
+        RenderedRun(view, "world").FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            !run.Formatting.Bold && run.FormatRevision == null);
+        RenderedRun(view, "Hello world").FontWeight.Should().Be(System.Windows.FontWeights.Normal);
+
+        view.Redo();
+        formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
+        formatted.Formatting.Bold.Should().BeTrue();
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Ada Reviewer");
+        formatted.FormatRevision.DateXml.Should().Be(revisionDate);
+        RenderedRun(view, "world").FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+    }
+
+    [StaFact]
+    public void RibbonItalic_SelectedRangeHonorsTrackFormattingSuppressionAndRemainsUndoable()
+    {
+        var view = BuildView("Hello world");
+        view.TrackChangesEnabled = true;
+        view.TrackFormattingEnabled = false;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.italic"), out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
+        formatted.Formatting.Italic.Should().BeTrue();
+        formatted.FormatRevision.Should().BeNull();
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run => !run.Formatting.Italic);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world").Formatting.Italic.Should().BeTrue();
+    }
+
+    [StaFact]
+    public void RibbonSuperscript_SelectedRangeTracksAndUndoRestoresBaseline()
+    {
+        var view = BuildView("H2O");
+        view.RevisionAuthor = "Chem Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 1, 0, 2);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.superscript"), out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "2");
+        formatted.Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Chem Reviewer");
+        formatted.FormatRevision.PreviousFormatting.VerticalAlign.Should().Be(VerticalAlign.Baseline);
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.VerticalAlign == VerticalAlign.Baseline && run.FormatRevision == null);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "2")
+            .Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+    }
+
+    [StaFact]
+    public void RibbonSmallCapsAndAllCaps_SelectedRangeStayMutuallyExclusive()
+    {
+        var view = BuildView("Caps");
+        view.SetSelectionRangeForTest(0, 0, 0, 4);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.smallcaps"), out var smallCaps).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.allcaps"), out var allCaps).Should().BeTrue();
+
+        smallCaps!.Execute(RibbonCommandContext.Empty);
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.SmallCaps && !run.Formatting.AllCaps);
+
+        view.SetSelectionRangeForTest(0, 0, 0, 4);
+        allCaps!.Execute(RibbonCommandContext.Empty);
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.AllCaps && !run.Formatting.SmallCaps);
+    }
+
+    [StaFact]
+    public void RibbonFontFamily_SelectedRangeTracksAndUndoRestoresInheritedFamily()
+    {
+        var view = BuildView("Hello world");
+        view.RevisionAuthor = "Type Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.font-family"), out var command).Should().BeTrue();
+
+        command!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "Arial" }));
+
+        var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
+        formatted.Formatting.FontFamily.Should().Be("Arial");
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Type Reviewer");
+        formatted.FormatRevision.PreviousFormatting.FontFamily.Should().Be("Calibri");
+        RenderedRun(view, "world").FontFamily.Source.Should().Be("Arial");
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.FontFamily == "Calibri" && run.FormatRevision == null);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world")
+            .Formatting.FontFamily.Should().Be("Arial");
+    }
+
+    [StaFact]
+    public void RibbonFontSize_SelectedRangeTracksPointsAndUndoRestoresInheritedSize()
+    {
+        var view = BuildView("Hello world");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.font-size"), out var command).Should().BeTrue();
+
+        command!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "16" }));
+
+        var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
+        formatted.Formatting.FontSizePt.Should().Be(16);
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.PreviousFormatting.FontSizePt.Should().Be(11);
+        RenderedRun(view, "world").FontSize.Should().BeApproximately(16 * 96.0 / 72.0, 0.001);
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.FontSizePt == 11 && run.FormatRevision == null);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world")
+            .Formatting.FontSizePt.Should().Be(16);
+    }
+
+    [StaFact]
+    public void RibbonFontFamilyAndSize_CollapsedCaretKeepNativePendingFormatting()
+    {
+        var view = BuildView("Hello");
+        view.MoveCaretToBlockForTest(0, 5);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.font-family"), out var family).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.font-size"), out var size).Should().BeTrue();
+
+        family!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "Arial" }));
+        size!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "16" }));
+
+        view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.FontFamilyProperty)
+            .Should().Be(new System.Windows.Media.FontFamily("Arial"));
+        view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.FontSizeProperty)
+            .Should().Be(16 * 96.0 / 72.0);
+    }
+
+    [StaFact]
+    public void CharacterBorder_SelectedRangeTracksOnlyExactCharactersAndUndoRestoresParagraph()
+    {
+        var view = BuildView("Hello world");
+        view.RevisionAuthor = "Border Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var border = new ParagraphBorder("#0070C0", 1);
+
+        view.SetCharacterBorder(border);
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Single(run => run.Text == "Hello ").Formatting.CharacterBorder.Should().BeNull();
+        var formatted = paragraph.Runs.Single(run => run.Text == "world");
+        formatted.Formatting.CharacterBorder.Should().Be(border);
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Border Reviewer");
+        formatted.FormatRevision.PreviousFormatting.CharacterBorder.Should().BeNull();
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.CharacterBorder == null && run.FormatRevision == null);
+    }
+
+    [StaFact]
+    public void CharacterShading_SelectedRangeTracksOnlyExactCharactersAndUndoRestoresParagraph()
+    {
+        var view = BuildView("Hello world");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 0, 0, 5);
+
+        view.SetCharacterShading("#FFFF00", ShadingPattern.Pct25);
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        var formatted = paragraph.Runs.Single(run => run.Text == "Hello");
+        formatted.Formatting.CharacterShadingHex.Should().Be("#FFFF00");
+        formatted.Formatting.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
+        formatted.FormatRevision.Should().NotBeNull();
+        paragraph.Runs.Single(run => run.Text == " world").Formatting.CharacterShadingHex.Should().BeNull();
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.CharacterShadingHex == null
+            && run.Formatting.CharacterShadingPattern == ShadingPattern.Clear
+            && run.FormatRevision == null);
+    }
+
+    [StaFact]
+    public void ClearFormatting_SelectedRangeTracksOnlyExactCharactersAndUndoRestoresFormatting()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var original = new RunFormatting { Bold = true, Italic = true, ColorHex = "#C00000" };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Hello world", original));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.CommitToModel();
+        var baseline = ((Paragraph)view.Model.Blocks[0]).Runs.Single().Formatting;
+        view.RevisionAuthor = "Cleanup Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+
+        view.ClearFormatting();
+
+        paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Single(run => run.Text == "Hello ").Formatting.Should().Be(baseline);
+        var cleared = paragraph.Runs.Single(run => run.Text == "world");
+        cleared.Formatting.Should().Be(RunFormatting.Default);
+        cleared.FormatRevision.Should().NotBeNull();
+        cleared.FormatRevision!.Author.Should().Be("Cleanup Reviewer");
+        cleared.FormatRevision.PreviousFormatting.Should().Be(baseline);
+
+        view.Undo();
+        paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].Text.Should().Be("Hello world");
+        paragraph.Runs[0].Formatting.Should().Be(baseline);
+        paragraph.Runs[0].FormatRevision.Should().BeNull();
+    }
+
+    [StaFact]
+    public void ClearFormatting_CollapsedCaretRetainsParagraphFallback()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Bold ", new RunFormatting { Bold = true }));
+        paragraph.Runs.Add(new Run("italic", new RunFormatting { Italic = true }));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.MoveCaretToBlockForTest(0, 2);
+
+        view.ClearFormatting();
+
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting == RunFormatting.Default);
+    }
+
+    private static WpfRun RenderedRun(DocumentView view, string text) =>
+        view.Document.Blocks.OfType<WpfParagraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())
+            .Single(run => run.Text == text);
 
     [StaFact]
     public void InsertText_WithTrackChangesOn_RecordsInsertedRevision()

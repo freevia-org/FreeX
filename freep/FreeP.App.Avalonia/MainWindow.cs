@@ -2439,6 +2439,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => _ = OpenZoomObjectPropertiesDialogAsync()));
         r.Register(ZoomCoverImagePlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenZoomCoverImagePickerAsync()));
+        r.Register(ZoomCoverImagePlanner.ResetCommandId,
+            new ActionRibbonCommand(() => _ = RestoreZoomPreviewAsync()));
         r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
             PresentationDesignCommandPlanner.TryApply(
                 Editor,
@@ -4208,10 +4210,31 @@ public sealed partial class MainWindow : Window
         if (current is null || !IsVisible)
             return;
 
-        var dialog = new ZoomObjectPropertiesDialog(current);
+        var selectedShapeId = GetSingleSelectedShapeId();
+        var summaryTargets = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
+            && ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject is { } info
+            ? info.SummaryZoomTargets
+            : (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
+        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
-            Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+        {
+            var changed = Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+            if (dialog.SummaryTileLayout is { } tile && selectedShapeId is uint summaryShapeId)
+                changed |= Editor.SetSummaryZoomTileLayout(
+                    summaryShapeId,
+                    tile.SectionId,
+                    tile.OffsetFactorX,
+                    tile.OffsetFactorY,
+                    tile.ScaleFactorX,
+                    tile.ScaleFactorY);
+            if (changed)
+            {
+                _fileWorkflow.MarkDirty();
+                RefreshCanvas();
+                UpdateStatus();
+            }
+        }
     }
 
     internal async Task OpenZoomCoverImagePickerAsync()
@@ -4275,6 +4298,60 @@ public sealed partial class MainWindow : Window
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandFailed(
                 ZoomCoverImagePlanner.DialogTitle,
                 ex.Message);
+        }
+    }
+
+    internal async Task RestoreZoomPreviewAsync()
+    {
+        var selectedShapeId = GetSingleSelectedShapeId();
+        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
+            return;
+
+        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
+        if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
+            return;
+
+        string? summarySectionId = null;
+        if (info.SummaryZoomTargets.Count > 0)
+        {
+            var targetOptions = info.SummaryZoomTargets
+                .Select(target => (target.SectionId, string.IsNullOrWhiteSpace(target.Title)
+                    ? target.SectionId
+                    : target.Title))
+                .ToArray();
+            var targetDialog = new SummaryZoomCoverImageTargetDialog(targetOptions);
+            var targetResult = await targetDialog.ShowDialog<bool?>(this);
+            if (targetResult != true)
+                return;
+            summarySectionId = targetDialog.SelectedTargetSectionId;
+        }
+
+        var targetIndex = summarySectionId is not null
+            ? SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
+                Editor.Presentation, summarySectionId, out var summaryIndex)
+                ? summaryIndex
+                : -1
+            : ZoomNavigationService.TryGetTargetSlideIndex(
+                Editor.Presentation, info, out var singleIndex)
+                ? singleIndex
+                : -1;
+        if (targetIndex < 0)
+            return;
+
+        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
+        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(
+            Editor.Presentation, widthPx);
+        var preview = SlideRenderer.RenderToBytes(
+            Editor.Presentation, targetIndex, widthPx, heightPx);
+        var applied = summarySectionId is null
+            ? Editor.ResetSelectedZoomCoverImage(preview, "image/png")
+            : Editor.ResetSummaryZoomTileCoverImage(
+                shape.Id, summarySectionId, preview, "image/png");
+        if (applied)
+        {
+            _fileWorkflow.MarkDirty();
+            RefreshCanvas();
+            UpdateStatus();
         }
     }
 

@@ -238,6 +238,8 @@ internal static class FreePRibbonText
     public static string FormatZoomKeyTip => Get("Ribbon_Command_FormatZoom_KeyTip");
     public static string SetZoomCoverImageLabel => Get("Ribbon_Command_SetZoomCoverImage_Label");
     public static string SetZoomCoverImageKeyTip => Get("Ribbon_Command_SetZoomCoverImage_KeyTip");
+    public static string ResetZoomCoverImageLabel => Get("Ribbon_Command_ResetZoomCoverImage_Label");
+    public static string ResetZoomCoverImageKeyTip => Get("Ribbon_Command_ResetZoomCoverImage_KeyTip");
     public static string RemoveLinkLabel => Get("Ribbon_Command_RemoveLink_Label");
     public static string RemoveLinkKeyTip => Get("Ribbon_Command_RemoveLink_KeyTip");
 
