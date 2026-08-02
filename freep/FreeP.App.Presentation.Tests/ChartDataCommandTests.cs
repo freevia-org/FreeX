@@ -2226,4 +2226,75 @@ public sealed class ChartDataCommandTests
         chart.PlotAreaManualLayout.X.Should().Be(0.1);
         chart.PlotAreaManualLayout.Height.Should().Be(0.7);
     }
+
+    [Fact]
+    public void SetChartLayoutOptions_PreservesUnknownManualLayoutModeTokens()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+
+        bus.Execute(new SetChartLayoutOptionsCommand(
+            0,
+            id,
+            new ChartLayoutOptions(
+                ChartLayoutTarget.PlotArea,
+                "inner",
+                ChartManualLayoutMode.Unsupported,
+                ChartManualLayoutMode.Factor,
+                ChartManualLayoutMode.Factor,
+                ChartManualLayoutMode.Factor,
+                0.1,
+                0.2,
+                0.7,
+                0.6,
+                RawXModeToken: "futureMode")));
+
+        var layout = p.Slides[0].Shapes[0].Chart!.PlotAreaManualLayout!;
+        layout.XMode.Should().Be(ChartManualLayoutMode.Unsupported);
+        layout.RawXModeToken.Should().Be("futureMode");
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        reopened.PlotAreaManualLayout!.XMode.Should().Be(ChartManualLayoutMode.Unsupported);
+        reopened.PlotAreaManualLayout.RawXModeToken.Should().Be("futureMode");
+    }
+
+    [Fact]
+    public void ChartAxis_PreservesUnknownDisplayTokensThroughPptxRoundTrip()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var axis = p.Slides[0].Shapes[0].Chart!.ValueAxis;
+        axis.RawMajorTickMarkToken = "futureMajorTick";
+        axis.RawMinorTickMarkToken = "futureMinorTick";
+        axis.RawTickLabelPositionToken = "futureLabelPosition";
+        axis.RawCrossesToken = "futureCrossing";
+        axis.RawCrossBetweenToken = "futureCrossBetween";
+        axis.RawLabelAlignmentToken = "futureAlignment";
+
+        var unchangedDialogPlan = ChartAxisOptionsPlanner.FromChart(p.Slides[0].Shapes[0].Chart!)
+            .BuildCommitPlan();
+        unchangedDialogPlan.RawMajorTickMarkToken.Should().Be("futureMajorTick");
+        unchangedDialogPlan.RawCrossesToken.Should().Be("futureCrossing");
+        bus.Execute(new SetChartAxisOptionsCommand(0, id, unchangedDialogPlan));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        var roundTripped = reopened.ValueAxis;
+
+        roundTripped.MajorTickMark.Should().BeNull();
+        roundTripped.RawMajorTickMarkToken.Should().Be("futureMajorTick");
+        roundTripped.MinorTickMark.Should().BeNull();
+        roundTripped.RawMinorTickMarkToken.Should().Be("futureMinorTick");
+        roundTripped.TickLabelPosition.Should().BeNull();
+        roundTripped.RawTickLabelPositionToken.Should().Be("futureLabelPosition");
+        roundTripped.Crosses.Should().BeNull();
+        roundTripped.RawCrossesToken.Should().Be("futureCrossing");
+        roundTripped.CrossBetween.Should().BeNull();
+        roundTripped.RawCrossBetweenToken.Should().Be("futureCrossBetween");
+        roundTripped.LabelAlignment.Should().BeNull();
+        roundTripped.RawLabelAlignmentToken.Should().Be("futureAlignment");
+    }
 }

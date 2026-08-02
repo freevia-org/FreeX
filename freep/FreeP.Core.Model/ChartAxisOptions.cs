@@ -34,4 +34,10 @@ public sealed record ChartAxisOptions(
     ChartTextStyle? TitleStyle = null,
     ChartAxisDisplayUnit DisplayUnit = ChartAxisDisplayUnit.None,
     string? RawDisplayUnitToken = null,
-    double? CustomDisplayUnit = null);
+    double? CustomDisplayUnit = null,
+    string? RawMajorTickMarkToken = null,
+    string? RawMinorTickMarkToken = null,
+    string? RawTickLabelPositionToken = null,
+    string? RawCrossesToken = null,
+    string? RawCrossBetweenToken = null,
+    string? RawLabelAlignmentToken = null);

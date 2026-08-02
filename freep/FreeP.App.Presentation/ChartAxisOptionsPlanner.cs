@@ -185,12 +185,18 @@ public sealed class ChartAxisOptionsPlanner
     private bool _majorGridlines;
     private bool _minorGridlines;
     private ChartTickMark? _majorTickMark;
+    private string? _rawMajorTickMarkToken;
     private ChartTickMark? _minorTickMark;
+    private string? _rawMinorTickMarkToken;
     private ChartTickLabelPosition? _tickLabelPosition;
+    private string? _rawTickLabelPositionToken;
     private ChartAxisCrossing? _crosses;
+    private string? _rawCrossesToken;
     private double? _crossesAt;
     private ChartCrossBetween? _crossBetween;
+    private string? _rawCrossBetweenToken;
     private ChartLabelAlignment? _labelAlignment;
+    private string? _rawLabelAlignmentToken;
     private int? _labelOffsetPercent;
     private bool? _noMultiLevelLabels;
     private bool? _autoCrossing;
@@ -298,12 +304,18 @@ public sealed class ChartAxisOptionsPlanner
         _majorGridlines = axis.HasMajorGridlines;
         _minorGridlines = axis.HasMinorGridlines;
         _majorTickMark = axis.MajorTickMark;
+        _rawMajorTickMarkToken = axis.RawMajorTickMarkToken;
         _minorTickMark = axis.MinorTickMark;
+        _rawMinorTickMarkToken = axis.RawMinorTickMarkToken;
         _tickLabelPosition = axis.TickLabelPosition;
+        _rawTickLabelPositionToken = axis.RawTickLabelPositionToken;
         _crosses = axis.Crosses;
+        _rawCrossesToken = axis.RawCrossesToken;
         _crossesAt = axis.CrossesAt;
         _crossBetween = axis.CrossBetween;
+        _rawCrossBetweenToken = axis.RawCrossBetweenToken;
         _labelAlignment = axis.LabelAlignment;
+        _rawLabelAlignmentToken = axis.RawLabelAlignmentToken;
         _labelOffsetPercent = axis.LabelOffsetPercent;
         _noMultiLevelLabels = axis.NoMultiLevelLabels;
         _autoCrossing = axis.AutoCrossing;
@@ -327,13 +339,47 @@ public sealed class ChartAxisOptionsPlanner
         value is null ? null : Math.Clamp(value.Value, 0.000001, 1_000_000_000_000d);
     public void SetMajorGridlines(bool show) => _majorGridlines = show;
     public void SetMinorGridlines(bool show) => _minorGridlines = show;
-    public void SetMajorTickMark(ChartTickMark? value) => _majorTickMark = value;
-    public void SetMinorTickMark(ChartTickMark? value) => _minorTickMark = value;
-    public void SetTickLabelPosition(ChartTickLabelPosition? value) => _tickLabelPosition = value;
-    public void SetCrosses(ChartAxisCrossing? value) => _crosses = value;
-    public void SetCrossesAt(double? value) => _crossesAt = value;
-    public void SetCrossBetween(ChartCrossBetween? value) => _crossBetween = value;
-    public void SetLabelAlignment(ChartLabelAlignment? value) => _labelAlignment = value;
+    public void SetMajorTickMark(ChartTickMark? value)
+    {
+        _majorTickMark = value;
+        _rawMajorTickMarkToken = null;
+    }
+
+    public void SetMinorTickMark(ChartTickMark? value)
+    {
+        _minorTickMark = value;
+        _rawMinorTickMarkToken = null;
+    }
+
+    public void SetTickLabelPosition(ChartTickLabelPosition? value)
+    {
+        _tickLabelPosition = value;
+        _rawTickLabelPositionToken = null;
+    }
+
+    public void SetCrosses(ChartAxisCrossing? value)
+    {
+        _crosses = value;
+        _rawCrossesToken = null;
+    }
+
+    public void SetCrossesAt(double? value)
+    {
+        _crossesAt = value;
+        _rawCrossesToken = null;
+    }
+
+    public void SetCrossBetween(ChartCrossBetween? value)
+    {
+        _crossBetween = value;
+        _rawCrossBetweenToken = null;
+    }
+
+    public void SetLabelAlignment(ChartLabelAlignment? value)
+    {
+        _labelAlignment = value;
+        _rawLabelAlignmentToken = null;
+    }
     public void SetLabelOffsetPercent(int? value) => _labelOffsetPercent = value;
     public void SetNoMultiLevelLabels(bool? value) => _noMultiLevelLabels = value;
     public void SetAutoCrossing(bool? value) => _autoCrossing = value;
@@ -371,7 +417,13 @@ public sealed class ChartAxisOptionsPlanner
         BuildTitleStyle(),
         _displayUnit,
         _displayUnit == ChartAxisDisplayUnit.Unsupported ? _rawDisplayUnitToken : null,
-        _displayUnit == ChartAxisDisplayUnit.Custom ? _customDisplayUnit : null);
+        _displayUnit == ChartAxisDisplayUnit.Custom ? _customDisplayUnit : null,
+        _rawMajorTickMarkToken,
+        _rawMinorTickMarkToken,
+        _rawTickLabelPositionToken,
+        _rawCrossesToken,
+        _rawCrossBetweenToken,
+        _rawLabelAlignmentToken);
 
     private ChartTextStyle? BuildTitleStyle() =>
         _titleFontFamily is null && _titleFontSizePt is null && _titleBold is null &&
