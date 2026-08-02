@@ -496,7 +496,16 @@ public static class PageBorderArtVisualPlanner
             new(inset - 1 + size, 128, 1, 800, 0, 0, 0),
         };
         var polygons = new List<PageBorderArtPolygon>();
-        AddRibbonHorizontalStripes(polygons, inset, inset, railWidth, size, slash: true, phaseDip: size * 0.375);
+        AddRibbonHorizontalStripes(
+            polygons,
+            inset,
+            inset,
+            railWidth,
+            size,
+            slash: true,
+            phaseDip: size * 0.375,
+            steepWhiteBandStartDip: inset + size * 2.375,
+            steepWhiteBandEndDip: frameWidth - inset - size * 2.125);
         AddRibbonHorizontalStripes(polygons, inset, frameHeight - inset - size, railWidth, size, slash: true, phaseDip: 0);
         const double verticalMiddleTop = 128;
         const double verticalMiddleBottom = 928;
@@ -1261,20 +1270,26 @@ public static class PageBorderArtVisualPlanner
         double width,
         double size,
         bool slash,
-        double phaseDip)
+        double phaseDip,
+        double? steepWhiteBandStartDip = null,
+        double? steepWhiteBandEndDip = null)
     {
         var end = x + width;
         for (var tileX = x + phaseDip; tileX < end; tileX += size)
         {
+            var usesSteepWhiteBand = steepWhiteBandStartDip is not null &&
+                                     steepWhiteBandEndDip is not null &&
+                                     tileX >= steepWhiteBandStartDip.Value &&
+                                     tileX < steepWhiteBandEndDip.Value;
             var points = slash
                 ? new[]
                 {
                     (tileX, y + size * 0.96875),
                     (tileX, y + size),
-                    (tileX + size * 0.34375, y + size),
-                    (tileX + size, y + size * 0.34375),
+                    (tileX + size * (usesSteepWhiteBand ? 0.3125 : 0.34375), y + size),
+                    (tileX + size, y + size * (usesSteepWhiteBand ? 0.25 : 0.34375)),
                     (tileX + size, y),
-                    (tileX + size * 0.65625, y),
+                    (tileX + size * (usesSteepWhiteBand ? 0.75 : 0.65625), y),
                 }
                 : new[]
                 {
