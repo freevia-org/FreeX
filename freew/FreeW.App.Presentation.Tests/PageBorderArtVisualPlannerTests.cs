@@ -279,6 +279,13 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtPoint(76, 43),
             new PageBorderArtPoint(76, 32),
             new PageBorderArtPoint(65, 32));
+        plan.Polygons[96].Points.Should().Equal(
+            new PageBorderArtPoint(31, 32),
+            new PageBorderArtPoint(39, 32),
+            new PageBorderArtPoint(63, 56),
+            new PageBorderArtPoint(63, 64),
+            new PageBorderArtPoint(55, 64),
+            new PageBorderArtPoint(31, 40));
         plan.Polygons[104].Points.Should().Equal(
             new PageBorderArtPoint(31, 136),
             new PageBorderArtPoint(42, 136),

@@ -500,12 +500,18 @@ public static class PageBorderArtVisualPlanner
         AddRibbonHorizontalStripes(polygons, inset, frameHeight - inset - size, railWidth, size, slash: true, phaseDip: 0);
         const double verticalMiddleTop = 128;
         const double verticalMiddleBottom = 928;
-        AddRibbonVerticalStripes(polygons, inset - 1, inset, verticalMiddleTop - inset, size, slash: false, phaseDip: 0);
-        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.75);
-        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleBottom, frameHeight - inset - verticalMiddleBottom, size, slash: false, phaseDip: 0);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, inset, verticalMiddleTop - inset, size, slash: false, phaseDip: 0);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.34375);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleBottom, frameHeight - inset - verticalMiddleBottom, size, slash: false, phaseDip: 0);
+        var verticalTopMaterialEnd = inset + 2 * size;
+        var verticalBottomMaterialStart = frameHeight - inset - 2 * size;
+        AddRibbonVerticalStripes(polygons, inset - 1, inset, verticalTopMaterialEnd - inset, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalTopMaterialEnd, verticalMiddleTop - verticalTopMaterialEnd, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.75, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleBottom, verticalBottomMaterialStart - verticalMiddleBottom, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalBottomMaterialStart, frameHeight - inset - verticalBottomMaterialStart, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, inset, verticalTopMaterialEnd - inset, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalTopMaterialEnd, verticalMiddleTop - verticalTopMaterialEnd, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.34375, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleBottom, verticalBottomMaterialStart - verticalMiddleBottom, size, slash: false, phaseDip: 0, parallelWhiteBand: false);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalBottomMaterialStart, frameHeight - inset - verticalBottomMaterialStart, size, slash: false, phaseDip: 0, parallelWhiteBand: true);
         plan = new PageBorderArtFilledShapePlan(fills, polygons);
         return true;
     }
@@ -1298,7 +1304,8 @@ public static class PageBorderArtVisualPlanner
         double height,
         double size,
         bool slash,
-        double phaseDip)
+        double phaseDip,
+        bool parallelWhiteBand)
     {
         var end = y + height;
         for (var tileY = y + phaseDip; tileY < end; tileY += size)
@@ -1313,6 +1320,16 @@ public static class PageBorderArtVisualPlanner
                     (x + size, tileY),
                     (x + size * 0.65625, tileY),
                 }
+                : parallelWhiteBand
+                    ? new[]
+                    {
+                        (x, tileY),
+                        (x + size * 0.25, tileY),
+                        (x + size, tileY + size * 0.75),
+                        (x + size, tileY + size),
+                        (x + size * 0.75, tileY + size),
+                        (x, tileY + size * 0.25),
+                    }
                 : new[]
                 {
                     (x, tileY),
