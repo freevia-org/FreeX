@@ -258,6 +258,55 @@ public sealed class SlideCompositorTests
             fullBounds.Height));
     }
 
+    [Fact]
+    public void Compose_SlideAndSectionZoom_UsesAttachedSingleTargetPreviews()
+    {
+        var presentation = new PresentationModel();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Id = "slide-1" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        presentation.Sections.Add(new PresentationSection
+        {
+            Id = "section-target",
+            Name = "Target section",
+            SlideIds = { "slide-2" }
+        });
+
+        var slideZoom = SlideZoomInsertionPlanner.CreateShape(
+            presentation,
+            currentSlideIndex: 0,
+            targetSlideId: "slide-2");
+        var sectionZoom = SectionZoomInsertionPlanner.CreateShape(
+            presentation,
+            "section-target");
+        presentation.Slides[0].Shapes.Add(slideZoom);
+        presentation.Slides[0].Shapes.Add(sectionZoom);
+
+        var preview = new byte[] { 7, 8, 9 };
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation,
+            slideZoom,
+            targetSlideIndex: 1,
+            _ => preview).Should().BeTrue();
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation,
+            sectionZoom,
+            targetSlideIndex: 1,
+            _ => preview).Should().BeTrue();
+
+        var pictures = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>()
+            .ToArray();
+
+        pictures.Should().HaveCount(2);
+        pictures.Should().AllSatisfy(picture =>
+        {
+            picture.Bytes.Should().BeEquivalentTo(preview);
+            picture.DestDip.Width.Should().BeGreaterThan(0);
+            picture.DestDip.Height.Should().BeGreaterThan(0);
+        });
+    }
+
     private static TextBody BodyWithText(string text)
     {
         var body = new TextBody();

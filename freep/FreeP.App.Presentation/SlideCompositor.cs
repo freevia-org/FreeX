@@ -600,6 +600,55 @@ public static class SlideCompositor
         return composed;
     }
 
+    private static bool TryComposeSingleZoomPreview(
+        SlideShape shape,
+        LayoutRect boundsDip,
+        double rotationDeg,
+        List<DrawOp> ops)
+    {
+        var info = shape.PreservedObject;
+        if (info is null || string.IsNullOrWhiteSpace(info.RawXml))
+            return false;
+
+        XElement raw;
+        try
+        {
+            raw = XElement.Parse(info.RawXml);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
+        }
+
+        var properties = raw.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
+                StringComparison.OrdinalIgnoreCase));
+        var relId = properties?.Descendants()
+            .SelectMany(element => element.Attributes())
+            .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
+                StringComparison.OrdinalIgnoreCase))?.Value;
+        if (string.IsNullOrWhiteSpace(relId)
+            || !info.SlideRels.TryGetValue(relId, out var relation)
+            || !info.Parts.TryGetValue(relation.TargetPath, out var bytes)
+            || bytes.Length == 0)
+        {
+            return false;
+        }
+
+        ops.Add(new DrawOp.Picture
+        {
+            ShapeId = shape.Id,
+            Bytes = bytes,
+            ContentType = info.PartContentTypes.TryGetValue(relation.TargetPath, out var contentType)
+                ? contentType
+                : "image/png",
+            DestDip = boundsDip,
+            RotationDeg = rotationDeg,
+            Outline = ResolvedOutline.None.Instance,
+        });
+        return true;
+    }
+
     private static void AddSummaryZoomPlaceholder(
         uint shapeId,
         LayoutRect boundsDip,
@@ -638,6 +687,13 @@ public static class SlideCompositor
         if (shape.Kind == SlideShapeKind.Zoom
             && shape.PreservedObject?.SummaryZoomTargets.Count > 0
             && TryComposeSummaryZoomPreviews(shape, boundsDip, anchor.RotationDeg, ops))
+        {
+            return;
+        }
+
+        if (shape.Kind == SlideShapeKind.Zoom
+            && shape.PreservedObject?.SummaryZoomTargets.Count == 0
+            && TryComposeSingleZoomPreview(shape, boundsDip, anchor.RotationDeg, ops))
         {
             return;
         }
