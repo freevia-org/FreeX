@@ -708,6 +708,7 @@ internal static class PptxChartReader
 
         series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
         series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
+        series.InvertIfNegative = ParseNullableBoolElement(serEl.Element(C + "invertIfNegative"));
         series.ErrorBars = ReadErrorBars(serEl.Element(C + "errBars"));
         series.Trendline = ReadTrendline(serEl.Element(C + "trendline"));
 
@@ -763,6 +764,7 @@ internal static class PptxChartReader
 
             series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
             series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
+            series.InvertIfNegative = ParseNullableBoolElement(serEl.Element(C + "invertIfNegative"));
             series.ErrorBars = ReadErrorBars(serEl.Element(C + "errBars"));
             series.Trendline = ReadTrendline(serEl.Element(C + "trendline"));
 

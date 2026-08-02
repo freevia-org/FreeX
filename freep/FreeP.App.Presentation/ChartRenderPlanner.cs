@@ -1103,28 +1103,45 @@ public static partial class ChartRenderPlanner
         IReadOnlyList<SrgbColor>? seriesColors,
         byte alpha,
         ChartFillPlanSet? fillPlans = null,
-        bool varyByPoint = false)
+        bool varyByPoint = false,
+        bool negativeValue = false)
     {
+        ChartFillPlan fill;
         if (fillPlans?.TryGetPointFill(seriesIndex, pointIndex, alpha, out var pointFill) == true)
-            return pointFill;
+            fill = pointFill;
+        else
+        {
+            var pointStyleColor = series.PointStyles.TryGetValue(pointIndex, out var pointStyle)
+                ? pointStyle.FillColor?.Resolved
+                : (SrgbColor?)null;
+            var pointColorOverride = series.PointColors.TryGetValue(pointIndex, out var pointColor)
+                ? pointColor.Resolved
+                : (SrgbColor?)null;
 
-        var pointStyleColor = series.PointStyles.TryGetValue(pointIndex, out var pointStyle)
-            ? pointStyle.FillColor?.Resolved
-            : (SrgbColor?)null;
-        var pointColorOverride = series.PointColors.TryGetValue(pointIndex, out var pointColor)
-            ? pointColor.Resolved
-            : (SrgbColor?)null;
+            if (pointStyleColor is not null)
+                fill = new ChartFillPlan(pointStyleColor.Value, alpha);
+            else if (pointColorOverride is not null)
+                fill = new ChartFillPlan(pointColorOverride.Value, alpha);
+            else if (varyByPoint && series.FillColor is null && series.Fill is null)
+                fill = new ChartFillPlan(ResolveSeriesColor(pointIndex, seriesColors), alpha);
+            else
+                fill = ResolveSeriesFill(seriesIndex, seriesColors, alpha, fillPlans);
+        }
 
-        if (pointStyleColor is not null)
-            return new ChartFillPlan(pointStyleColor.Value, alpha);
+        // OOXML's invertIfNegative is a solid-fill operation. Preserve richer
+        // gradient/pattern plans until their dedicated inversion semantics exist.
+        if (negativeValue && series.InvertIfNegative == true && fill.Fill is null)
+        {
+            fill = fill with
+            {
+                Color = new SrgbColor(
+                    (byte)(255 - fill.Color.R),
+                    (byte)(255 - fill.Color.G),
+                    (byte)(255 - fill.Color.B))
+            };
+        }
 
-        if (pointColorOverride is not null)
-            return new ChartFillPlan(pointColorOverride.Value, alpha);
-
-        if (varyByPoint && series.FillColor is null && series.Fill is null)
-            return new ChartFillPlan(ResolveSeriesColor(pointIndex, seriesColors), alpha);
-
-        return ResolveSeriesFill(seriesIndex, seriesColors, alpha, fillPlans);
+        return fill;
     }
 
     private static bool ShouldVaryPointColors(ChartShape chart) =>
@@ -3555,7 +3572,7 @@ public static partial class ChartRenderPlanner
                         seriesIndex,
                         categoryIndex,
                         bounds,
-                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
+                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint, rawValue.Value < 0),
                         Stroke: null)
                     {
                         Depth = depth
@@ -3595,7 +3612,7 @@ public static partial class ChartRenderPlanner
                         seriesIndex,
                         categoryIndex,
                         bounds,
-                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
+                        ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint, rawValue.Value < 0),
                         Stroke: null)
                     {
                         Depth = depth
@@ -3710,7 +3727,7 @@ public static partial class ChartRenderPlanner
                     seriesIndex,
                     categoryIndex,
                     bounds,
-                    ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
+                    ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint, rawValue.Value < 0),
                     Stroke: null)
                 {
                     Depth = depth

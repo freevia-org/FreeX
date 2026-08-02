@@ -1018,6 +1018,9 @@ internal static class PptxChartWriter
         if (marker is not null)
             el.Add(marker);
 
+        if (series.InvertIfNegative is { } invertIfNegative)
+            el.Add(new XElement(C + "invertIfNegative", new XAttribute("val", BoolValue(invertIfNegative))));
+
         AddPointStyleElements(el, series);
 
         // Per-series data labels
@@ -1126,6 +1129,9 @@ internal static class PptxChartWriter
         var marker = BuildMarkerStyleEl(series.MarkerStyle);
         if (marker is not null)
             el.Add(marker);
+
+        if (series.InvertIfNegative is { } invertIfNegative)
+            el.Add(new XElement(C + "invertIfNegative", new XAttribute("val", BoolValue(invertIfNegative))));
 
         AddPointStyleElements(el, series);
 
