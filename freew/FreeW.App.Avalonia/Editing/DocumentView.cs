@@ -9256,7 +9256,7 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG2: shift X to the column band that this image's content-Y falls in.
             var x = ColumnLeftFor(imgContentY) + AlignmentOffset(alignment, textWidth, width);
             _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeRenderedImage(image), image, image.ReflectionPreset));
-            _layoutContentY = imgContentY + height + ReflectionExtraHeight(image.ReflectionPreset, height) + gap;
+            _layoutContentY = imgContentY + height + ReflectionExtraHeight(image, height) + gap;
         }
     }
 
@@ -9356,7 +9356,7 @@ public sealed class DocumentView : Control
                 _images.Add((new Rect(x, pageSpaceY, width, height), DecodeRenderedImage(image), image, image.ReflectionPreset));
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
-                _layoutContentY = contentY + height + ReflectionExtraHeight(image.ReflectionPreset, height) + gap;
+                _layoutContentY = contentY + height + ReflectionExtraHeight(image, height) + gap;
                 continue;
             }
 
@@ -11531,7 +11531,7 @@ public sealed class DocumentView : Control
             {
                 var visualRect = rendered.VisualRect(rect);
                 context.DrawImage(rendered.Bitmap, visualRect);
-                DrawFloatingImageReflection(context, rect, rendered, reflectionPreset);
+                DrawFloatingImageReflection(context, rect, rendered, model);
             }
             else
             {
@@ -11592,13 +11592,13 @@ public sealed class DocumentView : Control
         DrawingContext context,
         Rect imageRect,
         AvaloniaRenderedImage rendered,
-        int reflectionPreset)
+        InlineImage image)
     {
-        var parameters = ReflectionParameters(reflectionPreset);
+        var parameters = ReflectionParameters(image);
         if (parameters is null)
             return;
 
-        var (opacity, distance) = parameters.Value;
+        var (opacity, distance) = parameters;
         var reflectionRect = new Rect(
             imageRect.X,
             imageRect.Bottom + distance,
@@ -11624,20 +11624,13 @@ public sealed class DocumentView : Control
         context.DrawImage(rendered.Bitmap, rendered.VisualRect(imageRect));
     }
 
-    private static (double Opacity, double Distance)? ReflectionParameters(int preset) => preset switch
-    {
-        1 => (0.5, 0),
-        2 => (0.5, 4 * PxPerPoint),
-        3 => (0.5, 8 * PxPerPoint),
-        4 => (1.0, 0),
-        5 => (1.0, 4 * PxPerPoint),
-        _ => null,
-    };
+    internal static PictureReflectionVisualPlan? ReflectionParameters(InlineImage image) =>
+        PictureEffectVisualPlanner.BuildReflectionPlan(image);
 
-    private static double ReflectionExtraHeight(int preset, double imageHeight)
+    private static double ReflectionExtraHeight(InlineImage image, double imageHeight)
     {
-        return ReflectionParameters(preset) is { } parameters
-            ? imageHeight + parameters.Distance
+        return ReflectionParameters(image) is { } parameters
+            ? imageHeight + parameters.DistanceDip
             : 0;
     }
 

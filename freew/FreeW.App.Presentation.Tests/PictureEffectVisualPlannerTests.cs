@@ -6,6 +6,40 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class PictureEffectVisualPlannerTests
 {
     [Fact]
+    public void ImportedReflection_UsesAuthoredStartAlphaAndDistance()
+    {
+        var image = new InlineImage([], 1, 1)
+        {
+            ReflectionPreset = 1,
+            ImportedEffects = new ShapeEffectLst
+            {
+                HasReflection = true,
+                ReflectionStartAlpha = 35000,
+                ReflectionDist = 38100,
+            },
+        };
+
+        var plan = PictureEffectVisualPlanner.BuildReflectionPlan(image);
+
+        plan.Should().NotBeNull();
+        plan!.Opacity.Should().Be(0.35);
+        plan.DistanceDip.Should().Be(4);
+    }
+
+    [Fact]
+    public void PresetReflectionPlan_PreservesExistingOpacityAndDistance()
+    {
+        var plan = PictureEffectVisualPlanner.BuildReflectionPlan(new InlineImage([], 1, 1)
+        {
+            ReflectionPreset = 2,
+        });
+
+        plan.Should().NotBeNull();
+        plan!.Opacity.Should().Be(0.5);
+        plan.DistanceDip.Should().BeApproximately(5.3333333333, 0.000001);
+    }
+
+    [Fact]
     public void ImportedShadow_BuildsExactDrawingMlGeometry()
     {
         var image = new InlineImage([], 1, 1)

@@ -6399,22 +6399,21 @@ public sealed class DocumentView : RichTextBox
         ApplyImageWpfEffects(root, image);
 
         // Floating overlays use the same preset-specific reflection geometry as inline pictures.
-        if (image.ReflectionPreset > 0)
+        if (PictureEffectVisualPlanner.BuildReflectionPlan(image) is { } reflection)
         {
             var isImportedObjectFormatReflection = image is
             {
                 AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
                 ReflectionPreset: 2
             };
-            var reflOpacity = image.ReflectionPreset <= 3 ? 0.5 : 1.0;
             var reflDistPx = (isImportedObjectFormatReflection
-                ? 13.0
-                : image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 }) * PxPerPoint;
+                ? 13.0 * PxPerPoint
+                : reflection.DistanceDip);
             root = BuildReflectionContainer(
                 root,
                 widthPx,
                 heightPx,
-                reflOpacity,
+                reflection.Opacity,
                 reflDistPx,
                 borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
             root.Tag = image;
@@ -12644,11 +12643,10 @@ public sealed class DocumentView : RichTextBox
         ApplyImageWpfEffects(inlineRoot, image);
 
         // Reflection: render a mirrored low-opacity copy below the image using a VisualBrush.
-        if (image.ReflectionPreset > 0)
+        if (PictureEffectVisualPlanner.BuildReflectionPlan(image) is { } reflection)
         {
-            var reflOpacity = image.ReflectionPreset <= 3 ? 0.5 : 1.0;
-            var reflDistPx  = image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 } * PxPerPoint;
-            var reflContainer = BuildReflectionContainer(inlineRoot, widthPx, heightPx, reflOpacity, reflDistPx,
+            var reflContainer = BuildReflectionContainer(
+                inlineRoot, widthPx, heightPx, reflection.Opacity, reflection.DistanceDip,
                 borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
             return new InlineUIContainer(reflContainer) { BaselineAlignment = BaselineAlignment.Bottom };
         }

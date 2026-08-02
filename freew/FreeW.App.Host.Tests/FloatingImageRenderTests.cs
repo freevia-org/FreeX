@@ -225,6 +225,31 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingImageReflection_UsesImportedStartAlphaAndDistance()
+    {
+        var doc = DocWithFloating();
+        var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        image.ReflectionPreset = 1;
+        image.ImportedEffects = new ShapeEffectLst
+        {
+            HasReflection = true,
+            ReflectionStartAlpha = 35000,
+            ReflectionDist = 38100,
+        };
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+
+        var reflection = canvas.Children.OfType<StackPanel>().Should().ContainSingle().Which;
+        var surface = reflection.Children[1].Should().BeOfType<System.Windows.Shapes.Rectangle>().Subject;
+        surface.Margin.Top.Should().Be(4);
+        var mask = surface.OpacityMask.Should().BeOfType<System.Windows.Media.LinearGradientBrush>().Subject;
+        mask.GradientStops[0].Color.A.Should().Be((byte)(0.35 * 255));
+    }
+
+    [StaFact]
     public void ObjectFormatSquareImage_UsesWordMeasuredReflectionDistance()
     {
         var canvas = new Canvas();
