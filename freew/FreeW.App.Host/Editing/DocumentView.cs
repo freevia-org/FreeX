@@ -4370,7 +4370,9 @@ public sealed class DocumentView : RichTextBox
             Bold = selection.GetPropertyValue(TextElement.FontWeightProperty) is FontWeight w && w >= FontWeights.Bold,
             Italic = selection.GetPropertyValue(TextElement.FontStyleProperty) is FontStyle s && s == FontStyles.Italic,
             Underline = decorations?.Contains(TextDecorations.Underline[0]) == true,
-            Strikethrough = decorations?.Contains(TextDecorations.Strikethrough[0]) == true,
+            Strikethrough = retained.DoubleStrikethrough
+                ? retained.Strikethrough
+                : decorations?.Contains(TextDecorations.Strikethrough[0]) == true,
             SmallCaps = capitals is FontCapitals.SmallCaps,
             AllCaps = capitals is FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
@@ -4431,8 +4433,7 @@ public sealed class DocumentView : RichTextBox
         var decorations = new TextDecorationCollection();
         if (fmt.Underline)
             decorations.Add(TextDecorations.Underline);
-        if (fmt.Strikethrough)
-            decorations.Add(TextDecorations.Strikethrough);
+        AddStrikethroughDecorations(decorations, fmt);
         selection.ApplyPropertyValue(Inline.TextDecorationsProperty, decorations);
     }
 
@@ -6685,8 +6686,7 @@ public sealed class DocumentView : RichTextBox
             var decorations = new TextDecorationCollection();
             if (formatting.Underline)
                 decorations.Add(TextDecorations.Underline);
-            if (formatting.Strikethrough)
-                decorations.Add(TextDecorations.Strikethrough);
+            AddStrikethroughDecorations(decorations, formatting);
             if (decorations.Count > 0)
                 glyphText.TextDecorations = decorations;
             Canvas.SetLeft(glyphText, glyph.X);
@@ -10947,8 +10947,7 @@ public sealed class DocumentView : RichTextBox
             : new TextDecorationCollection();
         if (fmt.Underline)
             decorations.Add(TextDecorations.Underline);
-        if (fmt.Strikethrough)
-            decorations.Add(TextDecorations.Strikethrough);
+        AddStrikethroughDecorations(decorations, fmt);
 
         // A tracked-change run carries a RevisionMarker tag UNCONDITIONALLY so CommitToModel can
         // round-trip the kind/author/date in every display mode. The visual chrome (colour, decoration,
@@ -16890,7 +16889,7 @@ public sealed class DocumentView : RichTextBox
             Underline = charBorder is null
                 ? run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true
                 : retained.Underline,
-            Strikethrough = charBorder is null
+            Strikethrough = charBorder is null && !retained.DoubleStrikethrough
                 ? run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true
                 : retained.Strikethrough,
             SmallCaps = capitals == FontCapitals.SmallCaps,
@@ -17078,6 +17077,7 @@ public sealed class DocumentView : RichTextBox
             Italic = r.Italic || style.Italic || d.Italic,
             Underline = r.Underline || style.Underline || d.Underline,
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
+            DoubleStrikethrough = r.DoubleStrikethrough || StyleRunDoubleStrikethrough(paragraph, document) || d.DoubleStrikethrough,
             Hidden = r.Hidden || style.Hidden || d.Hidden,
             WebHidden = r.WebHidden || style.WebHidden || d.WebHidden,
             NoProof = r.NoProof || StyleRunNoProof(paragraph, document) || d.NoProof,
@@ -17200,6 +17200,26 @@ public sealed class DocumentView : RichTextBox
             ? style.Run
             : RunFormatting.Default;
 
+    private static void AddStrikethroughDecorations(TextDecorationCollection decorations, RunFormatting formatting)
+    {
+        if (!formatting.DoubleStrikethrough)
+        {
+            if (formatting.Strikethrough)
+                decorations.Add(TextDecorations.Strikethrough);
+            return;
+        }
+
+        decorations.Add(DoubleStrikethroughDecoration(-0.055));
+        decorations.Add(DoubleStrikethroughDecoration(0.055));
+    }
+
+    private static TextDecoration DoubleStrikethroughDecoration(double offset) => new()
+    {
+        Location = TextDecorationLocation.Strikethrough,
+        PenOffset = offset,
+        PenOffsetUnit = TextDecorationUnit.FontRenderingEmSize,
+    };
+
     private static bool StyleRunNoProof(ModelParagraph paragraph, TextDocument document)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -17209,6 +17229,22 @@ public sealed class DocumentView : RichTextBox
             && document.Styles.TryGetValue(styleId, out var style))
         {
             if (style.Run.NoProof)
+                return true;
+            styleId = style.BasedOnStyleId;
+        }
+
+        return false;
+    }
+
+    private static bool StyleRunDoubleStrikethrough(ModelParagraph paragraph, TextDocument document)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var styleId = paragraph.StyleId;
+        while (!string.IsNullOrEmpty(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (style.Run.DoubleStrikethrough)
                 return true;
             styleId = style.BasedOnStyleId;
         }

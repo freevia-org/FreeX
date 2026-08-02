@@ -3486,7 +3486,22 @@ public sealed class DocumentView : Control
                     decorationLineWidthPt));
             }
 
-            if (runFmt.Strikethrough)
+            if (runFmt.DoubleStrikethrough)
+            {
+                foreach (var fraction in new[] { 0.46, 0.54 })
+                {
+                    var strikeY = pageHeightPt
+                        - (yWithinPagePx + Math.Max(1, runLineHeight) * fraction) / PxPerPoint;
+                    pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
+                        Math.Max(0, xPt),
+                        strikeY,
+                        Math.Max(0, xPt) + runWidthPt,
+                        strikeY,
+                        color,
+                        decorationLineWidthPt));
+                }
+            }
+            else if (runFmt.Strikethrough)
             {
                 var strikeY = pageHeightPt
                     - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.5) / PxPerPoint;
@@ -5068,7 +5083,7 @@ public sealed class DocumentView : Control
               $"{border.Top}|{border.Left}|{border.Bottom}|{border.Right}";
         return $"{fmt.FontFamily}|{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.VerticalAlign}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
                $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|" +
-               $"{fmt.Strikethrough}|{borderKey}";
+               $"{fmt.Strikethrough}|{fmt.DoubleStrikethrough}|{borderKey}";
     }
 
     private static DocumentFloatingObjectSnapshot BuildInlineDrawingSnapshot(
@@ -11106,8 +11121,7 @@ public sealed class DocumentView : Control
                 // Still draw underline/strikethrough across the tab gap if the run has them.
                 if (drawFmt.Underline)
                     DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
-                if (drawFmt.Strikethrough)
-                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
+                DrawStrikethroughDecorations(context, pc, drawFmt);
                 DrawRevisionDecoration(context, pc, revisionDecision, revisionColorHex);
                 if (formatRevisionHighlighted)
                     DrawFormatRevisionDecoration(context, pc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
@@ -11120,8 +11134,7 @@ public sealed class DocumentView : Control
             DrawCharacterBorder(context, placedIndex, pc, decorationPlan);
             if (drawFmt.Underline)
                 DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
-            if (drawFmt.Strikethrough)
-                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
+            DrawStrikethroughDecorations(context, pc, drawFmt);
             DrawRevisionDecoration(context, pc, revisionDecision, revisionColorHex);
             if (formatRevisionHighlighted)
                 DrawFormatRevisionDecoration(context, pc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
@@ -11816,10 +11829,19 @@ public sealed class DocumentView : Control
                         context.DrawLine(decorationPen,
                             new Point(point.X, point.Y + glyph.Height * 0.82),
                             new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.82));
-                    if (glyph.Formatting.Strikethrough)
+                    if (glyph.Formatting.DoubleStrikethrough)
+                    {
+                        foreach (var fraction in new[] { 0.46, 0.54 })
+                            context.DrawLine(decorationPen,
+                                new Point(point.X, point.Y + glyph.Height * fraction),
+                                new Point(point.X + glyph.Width, point.Y + glyph.Height * fraction));
+                    }
+                    else if (glyph.Formatting.Strikethrough)
+                    {
                         context.DrawLine(decorationPen,
                             new Point(point.X, point.Y + glyph.Height * 0.5),
                             new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.5));
+                    }
                 }
                 rotation?.Dispose();
             }
@@ -15521,6 +15543,19 @@ public sealed class DocumentView : Control
     {
         var pen = new Pen(BrushFor(fmt.ColorHex), Math.Max(1, FontSizePx(fmt) / 14));
         context.DrawLine(pen, new Point(pc.X, yLine), new Point(pc.X + pc.W, yLine));
+    }
+
+    private void DrawStrikethroughDecorations(DrawingContext context, PlacedChar pc, RunFormatting formatting)
+    {
+        if (formatting.DoubleStrikethrough)
+        {
+            DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.46, formatting);
+            DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.54, formatting);
+        }
+        else if (formatting.Strikethrough)
+        {
+            DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, formatting);
+        }
     }
 
     /// <summary>
@@ -21561,6 +21596,7 @@ public sealed class DocumentView : Control
         Italic        = baseRun.Italic || styleRun.Italic,
         Underline     = baseRun.Underline || styleRun.Underline,
         Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
+        DoubleStrikethrough = baseRun.DoubleStrikethrough || styleRun.DoubleStrikethrough,
         Hidden        = baseRun.Hidden || styleRun.Hidden,
         WebHidden     = baseRun.WebHidden || styleRun.WebHidden,
         NoProof       = baseRun.NoProof || styleRun.NoProof,
@@ -23180,6 +23216,7 @@ public sealed class DocumentView : Control
         Italic = baseRun.Italic || over.Italic,
         Underline = baseRun.Underline || over.Underline,
         Strikethrough = baseRun.Strikethrough || over.Strikethrough,
+        DoubleStrikethrough = baseRun.DoubleStrikethrough || over.DoubleStrikethrough,
         Hidden = baseRun.Hidden || over.Hidden,
         WebHidden = baseRun.WebHidden || over.WebHidden,
         NoProof = baseRun.NoProof || over.NoProof,

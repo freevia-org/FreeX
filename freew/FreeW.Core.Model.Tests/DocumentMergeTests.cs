@@ -469,6 +469,7 @@ public class DocumentMergeTests
         paragraph.Runs.Add(new Run("Bold bit", new RunFormatting
         {
             Bold = true,
+            DoubleStrikethrough = true,
             NoProof = true,
             Hidden = true,
             WebHidden = true,
@@ -484,6 +485,7 @@ public class DocumentMergeTests
         clonedParagraph.PlainText.Should().Be("Bold bit plain");
         clonedParagraph.StyleId.Should().Be("Heading1");
         clonedParagraph.Runs[0].Formatting.Bold.Should().BeTrue();
+        clonedParagraph.Runs[0].Formatting.DoubleStrikethrough.Should().BeTrue();
         clonedParagraph.Runs[0].Formatting.NoProof.Should().BeTrue();
         clonedParagraph.Runs[0].Formatting.Hidden.Should().BeTrue();
         clonedParagraph.Runs[0].Formatting.WebHidden.Should().BeTrue();
