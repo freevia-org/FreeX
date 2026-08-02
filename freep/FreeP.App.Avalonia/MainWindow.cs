@@ -4109,7 +4109,12 @@ public sealed partial class MainWindow : Window
         var dialog = new SlideZoomDialog(options);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true && dialog.SelectedTargetSlideId is { Length: > 0 } targetSlideId)
-            Editor.InsertSlideZoom(targetSlideId);
+        {
+            var shape = Editor.InsertSlideZoom(targetSlideId);
+            var targetSlideIndex = Editor.Presentation.Slides.FindIndex(slide =>
+                string.Equals(slide.Id, targetSlideId, StringComparison.OrdinalIgnoreCase));
+            AttachZoomPreview(shape, targetSlideIndex);
+        }
     }
 
     internal async void OpenSectionZoomDialog() => await OpenSectionZoomDialogAsync();
@@ -4125,7 +4130,12 @@ public sealed partial class MainWindow : Window
         var dialog = new SectionZoomDialog(options);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId)
-            Editor.InsertSectionZoom(targetSectionId);
+        {
+            var shape = Editor.InsertSectionZoom(targetSectionId);
+            if (SummaryZoomPreviewPlanner.TryResolveTargetSlideIndex(
+                    Editor.Presentation, targetSectionId, out var targetSlideIndex))
+                AttachZoomPreview(shape, targetSlideIndex);
+        }
     }
 
     internal async void OpenSummaryZoomDialog() => await OpenSummaryZoomDialogAsync();
@@ -4154,6 +4164,21 @@ public sealed partial class MainWindow : Window
         SummaryZoomPreviewPlanner.AttachPreviewImages(
             Editor.Presentation,
             shape,
+            slideIndex => SlideRenderer.RenderToBytes(
+                Editor.Presentation, slideIndex, widthPx, heightPx));
+    }
+
+    private void AttachZoomPreview(SlideShape shape, int targetSlideIndex)
+    {
+        if (targetSlideIndex < 0)
+            return;
+
+        var widthPx = SummaryZoomPreviewPlanner.DefaultPreviewWidthPx;
+        var heightPx = SummaryZoomPreviewPlanner.ResolvePreviewHeightPx(Editor.Presentation, widthPx);
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            Editor.Presentation,
+            shape,
+            targetSlideIndex,
             slideIndex => SlideRenderer.RenderToBytes(
                 Editor.Presentation, slideIndex, widthPx, heightPx));
     }
