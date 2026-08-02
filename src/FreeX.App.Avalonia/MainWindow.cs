@@ -29474,7 +29474,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             // snapshot immediately rather than waiting for window close (mirrors WPF's
             // NotifyAutosaveSaved, called from the same save-completion point).
             _autosaveCoordinator?.NotifyAutosaveSaved();
-            RecordRecentWorkbook(targetPath, fileAccessIdentity);
+            RecordRecentWorkbook(target.Path, fileAccessIdentity);
             RefreshShell(FormatSaveCompletionStatus(targetPath, saveWarnings));
             return true;
         }

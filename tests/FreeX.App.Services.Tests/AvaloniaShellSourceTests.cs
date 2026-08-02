@@ -85,7 +85,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("target.FileAccessIdentity");
         source.Should().Contain("fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(");
         source.Should().Contain("_session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, targetPath, fileAccessIdentity);");
-        source.Should().Contain("RecordRecentWorkbook(targetPath, fileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
 
         var recentBlock = ExtractSourceBlock(
             source,
@@ -503,7 +503,9 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("FileItem(NativeFileMenuItemId.Options)");
 
         // The dialog edits the shared AppOptions via the portable store and planner — no bespoke model.
-        optionsSource.Should().Contain("var current = AppOptionsStore.Load();");
+        optionsSource.Should().Contain("var current = App.ParityCaptureOptions is null");
+        optionsSource.Should().Contain("? AppOptionsStore.Load()");
+        optionsSource.Should().Contain(": OptionsDialogParityFixture.Create();");
         optionsSource.Should().Contain("OptionsDialogPlanner.TryBuildInput(");
         optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(current, input);");
         optionsSource.Should().Contain("AppOptionsStore.Save(projected)");
@@ -929,7 +931,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("new RecentFileRegistrationRequest(");
         source.Should().Contain("FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity");
         source.Should().Contain("RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
-        source.Should().Contain("RecordRecentWorkbook(targetPath, fileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
         normalizedSource.Should().Contain("ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("Closing += MainWindow_Closing;");
         source.Should().Contain("private async Task CloseWorkbookAsync()");
