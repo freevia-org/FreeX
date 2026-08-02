@@ -2650,10 +2650,7 @@ public static class DocumentViewLayoutPlanner
     {
         var pageWidthDip = Math.Max(options.MinPrintPageWidthDip, PageLayout.PointsToDip(page.WidthPt));
         var pageHeightDip = Math.Max(options.MinPrintPageHeightDip, PageLayout.PointsToDip(page.HeightPt));
-        var marginLeftDip = Math.Max(0, PageLayout.PointsToDip(page.MarginLeftPt));
-        var marginTopDip = Math.Max(0, PageLayout.PointsToDip(page.MarginTopPt));
-        var marginRightDip = Math.Max(0, PageLayout.PointsToDip(page.MarginRightPt));
-        var marginBottomDip = Math.Max(0, PageLayout.PointsToDip(page.MarginBottomPt));
+        var (marginLeftDip, marginTopDip, marginRightDip, marginBottomDip) = PageLayout.MarginsDip(page);
         var pageLeftDip = Math.Max(options.MinHorizontalGutterDip, (availableWidthDip - pageWidthDip) / 2);
         var contentWidthDip = Math.Max(options.MinContentWidthDip, pageWidthDip - marginLeftDip - marginRightDip);
         var textAreaHeightDip = Math.Max(options.MinPrintTextAreaHeightDip, pageHeightDip - marginTopDip - marginBottomDip);
