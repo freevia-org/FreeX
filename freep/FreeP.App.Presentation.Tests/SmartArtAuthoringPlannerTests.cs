@@ -31,6 +31,7 @@ public sealed class SmartArtAuthoringPlannerTests
         smartArt.Colors!.Palette.Should().HaveCount(6);
         smartArt.Colors.Palette.Select(color => color.SchemeColor!.RoleName)
             .Should().Equal(Enumerable.Repeat("accent1", 6));
+        smartArt.Colors.ColorLabels.Should().ContainSingle().Which.Should().Be("node0");
 
         var part = smartArt.Parts[result.PartPath!];
         var document = XDocument.Parse(Encoding.UTF8.GetString(part.Bytes));
@@ -124,6 +125,7 @@ public sealed class SmartArtAuthoringPlannerTests
         labels["node0"].Should().Equal("accent1", "accent1");
         smartArt.Colors!.Palette.Select(color => color.SchemeColor!.RoleName)
             .Should().Equal("accent1", "accent1");
+        smartArt.Colors.ColorLabels.Should().Equal("bg", "node0");
     }
 
     [Fact]
