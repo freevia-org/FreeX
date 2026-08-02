@@ -96,6 +96,7 @@ public static class SummaryZoomInsertionPlanner
         var preserved = new PreservedObjectInfo
         {
             ObjectKind = PreservedObjectKind.Zoom,
+            ZoomProperties = new ZoomObjectProperties(true, "preview", null, true),
             RawXml = BuildRawXml(shapeId, plan.Targets),
             AlternateContentFallbackXml = BuildFallbackXml(shapeId),
             WasAlternateContent = true,
