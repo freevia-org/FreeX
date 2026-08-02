@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FreeX.App.Avalonia;
 using FluentAssertions;
@@ -33,9 +34,69 @@ public sealed class FormatCellsBorderVisualParityTests
         source.Should().Contain("IsExpanded = true");
         source.Should().Contain("Margin = new Thickness(0, 8, 0, 0)");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWpfExpander(borderDetailsExpander)");
+        source.Should().Contain("dialog.MinHeight = targetHeight");
         source.Should().Contain("borderInsideHorizontalToggle.IsVisible = false");
         source.Should().Contain("borderInsideVerticalToggle.IsVisible = false");
         source.Should().NotContain("Children = { borderInsideHorizontalToggle, borderInsideVerticalToggle }");
+    }
+
+    [Fact]
+    public void ParityCapture_PrefersRequestedBorderHeightOverStaleX11Bounds()
+    {
+        MainWindow.ResolveParityDialogCaptureDimension(596.5, 540).Should().Be(597);
+        MainWindow.ResolveParityDialogCaptureDimension(double.NaN, 540).Should().Be(540);
+    }
+
+    [Fact]
+    public async Task FormatCellsBorderTab_RendersEveryDetailRowAndActionButtonInsideItsViewport()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                window.Measure(new Size(1120, 720));
+                window.Arrange(new Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+
+                var dialogTask = window.ShowFormatCellsInputDialogAsync(probe =>
+                {
+                    probe.TabStrip.SelectedIndex = 3;
+                    var renderWidth = MainWindow.ResolveParityDialogCaptureDimension(probe.Dialog.Width, 620);
+                    var renderHeight = MainWindow.ResolveParityDialogCaptureDimension(probe.Dialog.Height, 540);
+                    renderWidth.Should().Be(620);
+                    renderHeight.Should().Be(597);
+
+                    probe.Dialog.Measure(new Size(renderWidth, renderHeight));
+                    probe.Dialog.Arrange(new Rect(0, 0, renderWidth, renderHeight));
+                    probe.Dialog.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                    var viewport = probe.BorderTab.Content.Should().BeOfType<ScrollViewer>().Subject;
+                    foreach (var automationId in new[]
+                    {
+                        "FormatCellsBorderTopStyleBox",
+                        "FormatCellsBorderRightStyleBox",
+                        "FormatCellsBorderBottomStyleBox",
+                        "FormatCellsBorderLeftStyleBox",
+                    })
+                    {
+                        AssertFullyInside(viewport, automationId);
+                    }
+
+                    AssertFullyInside(probe.Dialog, "FormatCellsOkButton");
+                    AssertFullyInside(probe.Dialog, "FormatCellsCancelButton");
+                    probe.CancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                });
+
+                await dialogTask;
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
     }
 
     [Fact]
@@ -89,5 +150,22 @@ public sealed class FormatCellsBorderVisualParityTests
 
         directory.Should().NotBeNull("the test must run inside the repository checkout");
         return Path.Combine(new[] { directory!.FullName }.Concat(parts).ToArray());
+    }
+
+    private static void AssertFullyInside(Control root, string automationId)
+    {
+        var control = root.GetVisualDescendants()
+            .OfType<Control>()
+            .FirstOrDefault(candidate => AutomationProperties.GetAutomationId(candidate) == automationId);
+        control.Should().NotBeNull($"{automationId} must be present in the rendered visual tree");
+        control!.Bounds.Width.Should().BeGreaterThan(0);
+        control.Bounds.Height.Should().BeGreaterThan(0);
+
+        var origin = control.TranslatePoint(default, root);
+        origin.Should().NotBeNull($"{automationId} must share the rendered dialog visual tree");
+        origin!.Value.X.Should().BeGreaterThanOrEqualTo(0);
+        origin.Value.Y.Should().BeGreaterThanOrEqualTo(0);
+        (origin.Value.X + control.Bounds.Width).Should().BeLessThanOrEqualTo(root.Bounds.Width + 0.01);
+        (origin.Value.Y + control.Bounds.Height).Should().BeLessThanOrEqualTo(root.Bounds.Height + 0.01);
     }
 }

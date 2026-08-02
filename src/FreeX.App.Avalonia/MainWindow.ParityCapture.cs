@@ -2671,8 +2671,12 @@ public sealed partial class MainWindow
     {
         try
         {
-            var width = (int)Math.Ceiling(dialog.Bounds.Width > 0 ? dialog.Bounds.Width : dialog.Width);
-            var height = (int)Math.Ceiling(dialog.Bounds.Height > 0 ? dialog.Bounds.Height : dialog.Height);
+            // X11 applies top-level resizes asynchronously. Immediately after selecting the taller
+            // Format Cells Border tab, Bounds can still report the previous 620x540 frame even though
+            // Width/Height already carry the authoritative 620x596.5 request. Render the requested
+            // size when it is explicit so one tab cannot inherit the preceding tab's stale bounds.
+            var width = ResolveParityDialogCaptureDimension(dialog.Width, dialog.Bounds.Width);
+            var height = ResolveParityDialogCaptureDimension(dialog.Height, dialog.Bounds.Height);
             RenderVisualToPng(dialog, width, height, Path.Combine(outputDirectory, pngName));
             return ParityCaptureOutputGuard.ResultForPng(surfaceId, kind, outputDirectory, pngName);
         }
@@ -2680,6 +2684,14 @@ public sealed partial class MainWindow
         {
             return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: false, $"{ex.GetType().Name}: {ex.Message}");
         }
+    }
+
+    internal static int ResolveParityDialogCaptureDimension(double requestedSize, double arrangedSize)
+    {
+        var size = double.IsFinite(requestedSize) && requestedSize > 0
+            ? requestedSize
+            : arrangedSize;
+        return Math.Max(1, (int)Math.Ceiling(size));
     }
 
     /// <summary>

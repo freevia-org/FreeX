@@ -18114,10 +18114,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         void ApplyFormatCellsDialogFrameForSelectedTab()
         {
-            dialog.Width = formatCellsDialogWidth;
-            dialog.Height = tabStrip.SelectedIndex == 3
+            var targetHeight = tabStrip.SelectedIndex == 3
                 ? formatCellsBorderDialogHeight
                 : formatCellsDefaultDialogHeight;
+            dialog.Width = formatCellsDialogWidth;
+            dialog.MinHeight = targetHeight;
+            dialog.Height = targetHeight;
         }
 
         tabStrip.SelectionChanged += (_, _) => ApplyFormatCellsDialogFrameForSelectedTab();
