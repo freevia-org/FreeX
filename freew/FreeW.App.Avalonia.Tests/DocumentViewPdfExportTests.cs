@@ -759,6 +759,36 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_PreservesRunBaselinePositionForBodyAndHeader() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var body = new Paragraph();
+            body.Runs.Add(new Run("BodyBase"));
+            body.Runs.Add(new Run("BodyRaised", RunFormatting.Default with { PositionPt = 3 }));
+            document.Blocks.Add(body);
+
+            var headerParagraph = new Paragraph();
+            headerParagraph.Runs.Add(new Run("HeaderBase"));
+            headerParagraph.Runs.Add(new Run("HeaderLowered", RunFormatting.Default with { PositionPt = -2 }));
+            document.FinalSectionHeadersFooters.Header = new HeaderFooter();
+            document.FinalSectionHeadersFooters.Header.Paragraphs.Add(headerParagraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var text = view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfText>().ToArray();
+            var bodyBase = text.Single(item => item.Text == "BodyBase");
+            var bodyRaised = text.Single(item => item.Text == "BodyRaised");
+            var headerBase = text.Single(item => item.Text == "HeaderBase");
+            var headerLowered = text.Single(item => item.Text == "HeaderLowered");
+
+            bodyRaised.Y.Should().BeApproximately(bodyBase.Y + 3, 0.001);
+            headerLowered.Y.Should().BeApproximately(headerBase.Y - 2, 0.001);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_ExportsDoubleStrikeAsTwoLinesAndPreservesSingleStrikeControl() =>
         Session.Dispatch(() =>
         {

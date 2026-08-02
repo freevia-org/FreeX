@@ -3406,7 +3406,7 @@ public sealed class DocumentView : Control
                 _ => 0,
             };
             var baselineFromTopPt = (yWithinPagePx + drawOffsetDip) / PxPerPoint + fontSizePt;
-            var yPt = pageHeightPt - baselineFromTopPt;
+            var yPt = pageHeightPt - baselineFromTopPt + runFmt.PositionPt;
 
             var decorationPlan = RunDecorationVisualPlanner.Build(runFmt, PxPerPoint);
             if (decorationPlan.HasBackground)
@@ -3478,7 +3478,8 @@ public sealed class DocumentView : Control
             if (runFmt.Underline)
             {
                 var underlineY = pageHeightPt
-                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.82) / PxPerPoint;
+                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.82) / PxPerPoint
+                    + runFmt.PositionPt;
                 pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
                     Math.Max(0, xPt),
                     underlineY,
@@ -3493,7 +3494,8 @@ public sealed class DocumentView : Control
                 foreach (var fraction in new[] { 0.46, 0.54 })
                 {
                     var strikeY = pageHeightPt
-                        - (yWithinPagePx + Math.Max(1, runLineHeight) * fraction) / PxPerPoint;
+                        - (yWithinPagePx + Math.Max(1, runLineHeight) * fraction) / PxPerPoint
+                        + runFmt.PositionPt;
                     pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
                         Math.Max(0, xPt),
                         strikeY,
@@ -3506,7 +3508,8 @@ public sealed class DocumentView : Control
             else if (runFmt.Strikethrough)
             {
                 var strikeY = pageHeightPt
-                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.5) / PxPerPoint;
+                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.5) / PxPerPoint
+                    + runFmt.PositionPt;
                 pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
                     Math.Max(0, xPt),
                     strikeY,
@@ -4145,7 +4148,7 @@ public sealed class DocumentView : Control
             var fontSizePt = fmt.FontSizePt ?? DefaultFontSizePt;
             var xPt = (xDip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
             var yWithinPagePx = yDip - _surfacePlan.PageTopDip(pageIndex);
-            var yPt = pageHeightPt - (yWithinPagePx / PxPerPoint + fontSizePt);
+            var yPt = pageHeightPt - (yWithinPagePx / PxPerPoint + fontSizePt) + fmt.PositionPt;
             var face = fmt.Bold ? Free.Shared.Pdf.PdfFontFace.Bold : Free.Shared.Pdf.PdfFontFace.Regular;
             pagesOps[pageIndex].Add(new Free.Shared.Pdf.PdfText(
                 Math.Max(0, xPt), yPt, fontSizePt, face, ParseColor(fmt.ColorHex), text));
@@ -5083,7 +5086,7 @@ public sealed class DocumentView : Control
             ? string.Empty
             : $"{border.ColorHex}|{border.WidthPt}|{border.BottomOnly}|{border.LineStyle}|" +
               $"{border.Top}|{border.Left}|{border.Bottom}|{border.Right}";
-        return $"{fmt.FontFamily}|{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.VerticalAlign}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
+        return $"{fmt.FontFamily}|{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.VerticalAlign}|{fmt.PositionPt}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
                $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|" +
                $"{fmt.Strikethrough}|{fmt.DoubleStrikethrough}|{borderKey}";
     }
@@ -6295,7 +6298,8 @@ public sealed class DocumentView : Control
                 return;
 
             var fontSizePt = currentFormatting.FontSizePt ?? DefaultFontSizePt;
-            var baselineDip = currentY + currentHeight * 0.82;
+            var baselineDip = currentY + currentHeight * 0.82
+                + RunBaselinePositionPlanner.ResolveOffsetDip(currentFormatting, PxPerPoint);
             var baselinePt = pageHeightPt - ((baselineDip - pageTopDip) / PxPerPoint);
             var face = currentFormatting.Bold
                 ? currentFormatting.Italic ? PdfFontFace.BoldItalic : PdfFontFace.Bold
@@ -7105,6 +7109,9 @@ public sealed class DocumentView : Control
             {
                 var run = para.Runs[runIndex];
                 var effectiveFormatting = ResolveRunFmt(run.Formatting, para);
+                if (sb.Length > 0 && effectiveFormatting != segFmt)
+                    FlushText();
+                segFmt = effectiveFormatting;
                 if (IsTextHiddenInCurrentView(effectiveFormatting))
                 {
                     FlushText();
@@ -7116,9 +7123,6 @@ public sealed class DocumentView : Control
                 var fieldText = ResolveHfField(run, pageNumberText, pageCount);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
-                if (effectiveFormatting.FontSizePt.HasValue)
-                    segFmt = effectiveFormatting;
-
                 if (run.Image is { } image)
                 {
                     FlushText();
@@ -11105,6 +11109,10 @@ public sealed class DocumentView : Control
             var formatRevisionHighlighted = pc.HasFormatRevision && reviewPolicy.ShouldHighlightFormattingChanges;
             if (formatRevisionHighlighted && string.IsNullOrWhiteSpace(drawFmt.ColorHex))
                 drawFmt = drawFmt with { ColorHex = ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor) };
+            var baselineOffsetDip = RunBaselinePositionPlanner.ResolveOffsetDip(drawFmt, PxPerPoint);
+            var positionedPc = Math.Abs(baselineOffsetDip) < 0.001
+                ? pc
+                : pc with { Y = pc.Y + baselineOffsetDip };
 
             if (pc.EquationElement is { } equationElement)
             {
@@ -11122,26 +11130,27 @@ public sealed class DocumentView : Control
                 DrawCharacterBorder(context, placedIndex, pc, decorationPlan);
                 // Still draw underline/strikethrough across the tab gap if the run has them.
                 if (drawFmt.Underline)
-                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
-                DrawStrikethroughDecorations(context, pc, drawFmt);
-                DrawRevisionDecoration(context, pc, revisionDecision, revisionColorHex);
+                    DrawDecoration(context, positionedPc, positionedPc.Y + pc.LineHeight * 0.82, drawFmt);
+                DrawStrikethroughDecorations(context, positionedPc, drawFmt);
+                DrawRevisionDecoration(context, positionedPc, revisionDecision, revisionColorHex);
                 if (formatRevisionHighlighted)
-                    DrawFormatRevisionDecoration(context, pc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
+                    DrawFormatRevisionDecoration(context, positionedPc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
                 continue;
             }
 
             var ft = Build(pc.Ch.ToString(), drawFmt);
+            drawY += baselineOffsetDip;
             context.DrawText(ft, new Point(pc.X, drawY));
 
             DrawCharacterBorder(context, placedIndex, pc, decorationPlan);
             if (drawFmt.Underline)
-                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
-            DrawStrikethroughDecorations(context, pc, drawFmt);
-            DrawRevisionDecoration(context, pc, revisionDecision, revisionColorHex);
+                DrawDecoration(context, positionedPc, positionedPc.Y + pc.LineHeight * 0.82, drawFmt);
+            DrawStrikethroughDecorations(context, positionedPc, drawFmt);
+            DrawRevisionDecoration(context, positionedPc, revisionDecision, revisionColorHex);
             if (formatRevisionHighlighted)
-                DrawFormatRevisionDecoration(context, pc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
+                DrawFormatRevisionDecoration(context, positionedPc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
             if (!pc.IsCell && proofingOffsets.Contains((pc.Block, pc.Offset)))
-                DrawProofingSquiggle(context, pc);
+                DrawProofingSquiggle(context, positionedPc);
         }
 
         foreach (var (mx, my, text, fmt) in _markers)
@@ -11189,7 +11198,8 @@ public sealed class DocumentView : Control
                 var ft = Build(item.Text, item.Fmt);
                 var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth,
                     ft.WidthIncludingTrailingWhitespace, isLast: true);
-                context.DrawText(ft, new Point(item.X + alignOffset, item.Y));
+                var baselineOffsetDip = RunBaselinePositionPlanner.ResolveOffsetDip(item.Fmt, PxPerPoint);
+                context.DrawText(ft, new Point(item.X + alignOffset, item.Y + baselineOffsetDip));
             }
 
             // AV-NOTERENDER: footnote-band separators + footnote/endnote text (pre-computed in
@@ -11209,6 +11219,7 @@ public sealed class DocumentView : Control
                     drawFmt = drawFmt with { FontSizePt = sz };
                     drawY = note.Y - (note.Fmt.FontSizePt ?? NoteFontSizePt) * PxPerPoint * 0.15;
                 }
+                drawY += RunBaselinePositionPlanner.ResolveOffsetDip(drawFmt, PxPerPoint);
                 context.DrawText(Build(note.Text, drawFmt), new Point(note.X, drawY));
             }
 
