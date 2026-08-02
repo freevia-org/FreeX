@@ -10,6 +10,38 @@ public static class FindReplaceDialogPlanner
     public const double Height = 430;
     public const double MinWidth = 520;
     public const double MinHeight = 360;
+    public const double RootMargin = 12;
+    public const double AvaloniaRootRightMargin = 28;
+    public const double AvaloniaRootBottomMargin = 44;
+
+    // WPF-authoritative logical layout values shared by the WPF XAML and Avalonia consumer.
+    public const double TabContentMargin = 10;
+    public const double FieldLabelColumnWidth = 88;
+    public const double FieldMinWidth = 260;
+    public const double FormatButtonWidth = 84;
+    public const double ClearFormatButtonWidth = 52;
+    public const double ChooseFormatButtonWidth = 136;
+    public const double FormatButtonMargin = 8;
+    public const double AdjacentFormatButtonMargin = 6;
+    public const double TabHeight = 108;
+    public const double ResultsMinimumHeight = 120;
+    public const double ResultsBottomMargin = 7;
+    public const double ResultsHeaderHeight = 24;
+    public const double StatusMinimumHeight = 18;
+    public const double StatusBottomMargin = 8;
+    public const double ActionButtonSpacing = 8;
+    public const double ActionButtonHeight = 20;
+    public const double OptionsHeaderMinimumWidth = 112;
+    public const double AvaloniaOptionsBottomMargin = 13;
+    public const double FindAllButtonWidth = 76;
+    public const double FindNextButtonWidth = 80;
+    public const double ReplaceButtonWidth = 76;
+    public const double ReplaceAllButtonWidth = 88;
+    public const double CloseButtonWidth = 60;
+    public const double ResultBookColumnWidth = 110;
+    public const double ResultSheetColumnWidth = 100;
+    public const double ResultNameColumnWidth = 90;
+    public const double ResultCellColumnWidth = 70;
 
     public static IReadOnlyList<FindResultRow> BuildFindResultRows(Workbook workbook, IReadOnlyList<FindResult> results) =>
         results

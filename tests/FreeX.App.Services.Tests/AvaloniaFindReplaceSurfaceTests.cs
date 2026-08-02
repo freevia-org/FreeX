@@ -28,9 +28,10 @@ public sealed class AvaloniaFindReplaceSurfaceTests
         source.Should().Contain("? Fr(\"FindReplace_OptionsExpanded\", \"Options <<\")");
         source.Should().Contain(": Fr(\"FindReplace_Options\", \"Options >>\")");
         source.Should().Contain("AutomationProperties.SetName(optionsHeader, optionsHeaderText.Text);");
-        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"110,100,90,70,*,*\")");
+        source.Should().Contain("private static ColumnDefinitions FindReplaceResultColumns()");
+        source.Should().Contain("FindReplaceDialogPlanner.ResultBookColumnWidth");
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,*,Auto,Auto\")");
-        source.Should().Contain("resultsBorder.MinHeight = 120");
+        source.Should().Contain("resultsBorder.MinHeight = FindReplaceDialogPlanner.ResultsMinimumHeight");
         source.Should().Contain("Width = FindReplaceDialogPlanner.Width");
         source.Should().Contain("Height = FindReplaceDialogPlanner.Height");
         source.Should().NotContain("DockPanel.SetDock(resultsBorder");

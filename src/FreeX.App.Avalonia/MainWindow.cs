@@ -14210,18 +14210,18 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 .Replace("_", string.Empty, StringComparison.Ordinal);
 
         // ── Find tab: "Find what" box ───────────────────────────────────────────
-        var findBox = new TextBox { Text = _session.LastFindText, MinWidth = 260 };
+        var findBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
         AutomationProperties.SetName(findBox, "Find what");
         AutomationProperties.SetAutomationId(findBox, "FindReplaceFindBox");
         ApplyDialogTextBoxChrome(findBox);
 
         // ── Replace tab: "Find what" + "Replace with" boxes ─────────────────────
-        var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = 260 };
+        var replaceFindBox = new TextBox { Text = _session.LastFindText, MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
         AutomationProperties.SetName(replaceFindBox, "Find what");
         AutomationProperties.SetAutomationId(replaceFindBox, "FindReplaceReplaceFindBox");
         ApplyDialogTextBoxChrome(replaceFindBox);
 
-        var replaceWithBox = new TextBox { Text = "", MinWidth = 260 };
+        var replaceWithBox = new TextBox { Text = "", MinWidth = FindReplaceDialogPlanner.FieldMinWidth };
         AutomationProperties.SetName(replaceWithBox, "Replace with");
         AutomationProperties.SetAutomationId(replaceWithBox, "FindReplaceReplaceWithBox");
         ApplyDialogTextBoxChrome(replaceWithBox);
@@ -14246,14 +14246,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var findFormatButton = CreateFindReplaceFormatButton("FindReplaceFindFormatButton", Fr("FindReplace_Format", "Format..."));
         var findFormatClearButton = CreateFindReplaceFormatButton("FindReplaceFindClearFormatButton", Fr("FindReplace_Clear", "Clear"));
         var findChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceFindChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
-        findFormatButton.Margin = new Thickness(8, 0, 0, 0);
-        findFormatClearButton.Margin = new Thickness(6, 0, 0, 0);
-        findChooseFormatButton.Margin = new Thickness(6, 0, 0, 0);
+        findFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);
+        findFormatClearButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
+        findChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
 
         var findTabGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("88,*,Auto,Auto,Auto"),
-            Margin = new Thickness(10),
+            ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto"),
+            Margin = new Thickness(FindReplaceDialogPlanner.TabContentMargin),
         };
         var findLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(findLabel, 0);
@@ -14273,19 +14273,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var replaceWithFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithFormatButton", Fr("FindReplace_Format", "Format..."));
         var replaceWithFormatClearButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithClearFormatButton", Fr("FindReplace_Clear", "Clear"));
         var replaceWithChooseFormatButton = CreateFindReplaceFormatButton("FindReplaceReplaceWithChooseFormatFromCellButton", Fr("FindReplace_ChooseFromCell", "Choose From Cell..."));
-        replaceFindFormatButton.Margin = new Thickness(8, 0, 0, 0);
-        replaceFindFormatClearButton.Margin = new Thickness(6, 0, 0, 0);
-        replaceFindChooseFormatButton.Margin = new Thickness(6, 0, 0, 0);
-        replaceWithFormatButton.Margin = new Thickness(8, 0, 0, 0);
-        replaceWithFormatClearButton.Margin = new Thickness(6, 0, 0, 0);
-        replaceWithChooseFormatButton.Margin = new Thickness(6, 0, 0, 0);
+        replaceFindFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);
+        replaceFindFormatClearButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
+        replaceFindChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
+        replaceWithFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.FormatButtonMargin, 0, 0, 0);
+        replaceWithFormatClearButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
+        replaceWithChooseFormatButton.Margin = new Thickness(FindReplaceDialogPlanner.AdjacentFormatButtonMargin, 0, 0, 0);
 
         var replaceTabPanel = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,Auto"),
-            Margin = new Thickness(10),
+            Margin = new Thickness(FindReplaceDialogPlanner.TabContentMargin),
         };
-        var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions("88,*,Auto,Auto,Auto") };
+        var replaceFindRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto") };
         var replaceFindLabel = new TextBlock { Text = Fr("FindReplace_FindWhat", "Find what:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(replaceFindLabel, 0);
         Grid.SetColumn(replaceFindBox, 1);
@@ -14297,7 +14297,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         replaceFindRow.Children.Add(replaceFindFormatButton);
         replaceFindRow.Children.Add(replaceFindFormatClearButton);
         replaceFindRow.Children.Add(replaceFindChooseFormatButton);
-        var replaceWithRow = new Grid { ColumnDefinitions = new ColumnDefinitions("88,*,Auto,Auto,Auto") };
+        var replaceWithRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},*,Auto,Auto,Auto") };
         var replaceWithLabel = new TextBlock { Text = Fr("FindReplace_ReplaceWith", "Replace with:"), VerticalAlignment = AvaloniaVerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
         Grid.SetColumn(replaceWithLabel, 0);
         Grid.SetColumn(replaceWithBox, 1);
@@ -14323,9 +14323,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Items = { findTabItem, replaceTabItem },
             SelectedIndex = replaceMode ? 1 : 0,
-            Height = 108,
-            MinHeight = 108,
-            MaxHeight = 108,
+            Height = FindReplaceDialogPlanner.TabHeight,
+            MinHeight = FindReplaceDialogPlanner.TabHeight,
+            MaxHeight = FindReplaceDialogPlanner.TabHeight,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
@@ -14432,7 +14432,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         // ── Results list ────────────────────────────────────────────────────────
-        var resultsList = new ListBox { MinHeight = 120 };
+        var resultsList = new ListBox { MinHeight = FindReplaceDialogPlanner.ResultsMinimumHeight };
         AutomationProperties.SetName(resultsList, "Find all results");
         AutomationProperties.SetAutomationId(resultsList, "FindReplaceResultsList");
         resultsList.SelectionChanged += (_, _) =>
@@ -14443,7 +14443,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         resultsList.ItemTemplate = new FuncDataTemplate<WorkbookFindAllMatch>(
             (match, _) =>
             {
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("110,100,90,70,*,*") };
+                var row = new Grid { ColumnDefinitions = FindReplaceResultColumns() };
                 AddFindReplaceResultCell(row, match.Book, 0);
                 AddFindReplaceResultCell(row, match.Sheet, 1);
                 AddFindReplaceResultCell(row, match.Name, 2);
@@ -14455,7 +14455,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             supportsRecycling: true);
         var resultsHeader = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("110,100,90,70,*,*"),
+            ColumnDefinitions = FindReplaceResultColumns(),
             Background = Brush(245, 245, 245),
         };
         AddFindReplaceResultCell(resultsHeader, Fr("FindReplace_Book", "Book"), 0);
@@ -14478,23 +14478,23 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
 
         // ── Buttons ─────────────────────────────────────────────────────────────
-        var findAllButton = new Button { Content = Fr("FindReplace_FindAll", "Find All"), Width = 76, MinWidth = 76, Padding = new Thickness(4, 1) };
+        var findAllButton = new Button { Content = Fr("FindReplace_FindAll", "Find All"), Width = FindReplaceDialogPlanner.FindAllButtonWidth, MinWidth = FindReplaceDialogPlanner.FindAllButtonWidth, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findAllButton, "FindReplaceFindAllButton");
         ApplyDialogButtonChrome(findAllButton);
 
-        var findNextButton = new Button { Content = Fr("FindReplace_FindNext", "Find Next"), Width = 80, MinWidth = 80, Padding = new Thickness(4, 1) };
+        var findNextButton = new Button { Content = Fr("FindReplace_FindNext", "Find Next"), Width = FindReplaceDialogPlanner.FindNextButtonWidth, MinWidth = FindReplaceDialogPlanner.FindNextButtonWidth, Padding = new Thickness(4, 1) };
         AutomationProperties.SetAutomationId(findNextButton, "FindReplaceFindNextButton");
         ApplyDialogButtonChrome(findNextButton, isDefault: true);
 
-        var replaceButton = new Button { Content = Fr("FindReplace_Replace", "Replace"), Width = 76, MinWidth = 76, Padding = new Thickness(4, 1), IsVisible = false };
+        var replaceButton = new Button { Content = Fr("FindReplace_Replace", "Replace"), Width = FindReplaceDialogPlanner.ReplaceButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceButton, "FindReplaceReplaceButton");
         ApplyDialogButtonChrome(replaceButton);
 
-        var replaceAllButton = new Button { Content = Fr("FindReplace_ReplaceAll", "Replace All"), Width = 88, MinWidth = 88, Padding = new Thickness(4, 1), IsVisible = false };
+        var replaceAllButton = new Button { Content = Fr("FindReplace_ReplaceAll", "Replace All"), Width = FindReplaceDialogPlanner.ReplaceAllButtonWidth, MinWidth = FindReplaceDialogPlanner.ReplaceAllButtonWidth, Padding = new Thickness(4, 1), IsVisible = false };
         AutomationProperties.SetAutomationId(replaceAllButton, "FindReplaceReplaceAllButton");
         ApplyDialogButtonChrome(replaceAllButton);
 
-        var closeButton = new Button { Content = Fr("FindReplace_Close", "Close"), Width = 60, MinWidth = 60, Padding = new Thickness(4, 1), IsCancel = true };
+        var closeButton = new Button { Content = Fr("FindReplace_Close", "Close"), Width = FindReplaceDialogPlanner.CloseButtonWidth, MinWidth = FindReplaceDialogPlanner.CloseButtonWidth, Padding = new Thickness(4, 1), IsCancel = true };
         AutomationProperties.SetAutomationId(closeButton, "FindReplaceCloseButton");
         ApplyDialogButtonChrome(closeButton);
 
@@ -14503,9 +14503,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                                        replaceFindFormatButton, replaceFindFormatClearButton, replaceFindChooseFormatButton,
                                        replaceWithFormatButton, replaceWithFormatClearButton, replaceWithChooseFormatButton })
         {
-            button.Height = 20;
-            button.MinHeight = 20;
-            button.MaxHeight = 20;
+            button.Height = FindReplaceDialogPlanner.ActionButtonHeight;
+            button.MinHeight = FindReplaceDialogPlanner.ActionButtonHeight;
+            button.MaxHeight = FindReplaceDialogPlanner.ActionButtonHeight;
             button.Padding = new Thickness(4, 0);
             button.CornerRadius = new CornerRadius(0);
             button.Background = Brush(221, 221, 221);
@@ -14631,7 +14631,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = FindReplaceDialogPlanner.ActionButtonSpacing,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children = { findAllButton, findNextButton, replaceButton, replaceAllButton, closeButton },
         };
@@ -14672,12 +14672,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     optionsHeaderText,
                 },
             },
-            Width = 88,
-            MinWidth = 88,
-            MaxWidth = 88,
-            Height = 20,
-            MinHeight = 20,
-            MaxHeight = 20,
+            Width = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth,
+            MinWidth = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth,
+            MaxWidth = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth,
+            Height = FindReplaceDialogPlanner.ActionButtonHeight,
+            MinHeight = FindReplaceDialogPlanner.ActionButtonHeight,
+            MaxHeight = FindReplaceDialogPlanner.ActionButtonHeight,
             Padding = new Thickness(1, 0),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
@@ -14687,13 +14687,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetName(optionsHeader, Fr("FindReplace_Options", "Options"));
         AutomationProperties.SetAutomationId(optionsHeader, "FindReplaceOptionsExpander");
         ApplyDialogButtonChrome(optionsHeader);
-        optionsHeader.Height = 20;
-        optionsHeader.MinHeight = 20;
-        optionsHeader.MaxHeight = 20;
+        optionsHeader.Height = FindReplaceDialogPlanner.ActionButtonHeight;
+        optionsHeader.MinHeight = FindReplaceDialogPlanner.ActionButtonHeight;
+        optionsHeader.MaxHeight = FindReplaceDialogPlanner.ActionButtonHeight;
         optionsHeader.Padding = new Thickness(1, 0);
-        optionsHeader.Width = 88;
-        optionsHeader.MinWidth = 88;
-        optionsHeader.MaxWidth = 88;
+        optionsHeader.Width = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth;
+        optionsHeader.MinWidth = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth;
+        optionsHeader.MaxWidth = FindReplaceDialogPlanner.OptionsHeaderMinimumWidth;
+        optionsHeader.HorizontalContentAlignment = AvaloniaHorizontalAlignment.Left;
         optionsHeader.Background = Brushes.White;
         optionsHeader.BorderBrush = Brushes.White;
         optionsHeader.BorderThickness = new Thickness(0);
@@ -14730,20 +14731,25 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var root = new Grid
         {
-            Margin = new Thickness(12, 12, 28, 49),
+            Margin = new Thickness(
+                FindReplaceDialogPlanner.RootMargin,
+                FindReplaceDialogPlanner.RootMargin,
+                FindReplaceDialogPlanner.AvaloniaRootRightMargin,
+                FindReplaceDialogPlanner.AvaloniaRootBottomMargin),
             RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto"),
         };
         ConfigureDialogTabCycle(dialog, root);
 
-        tabs.Margin = new Thickness(0, 0, 0, 10);
-        optionsExpander.Margin = new Thickness(0, 0, 0, 10);
-        resultsBorder.MinHeight = 120;
-        resultsBorder.Margin = new Thickness(0, 0, 0, 7);
-        resultsHeader.Height = 24;
-        resultsHeader.MinHeight = 24;
-        resultsHeader.MaxHeight = 24;
+        tabs.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.TabContentMargin);
+        optionsExpander.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.AvaloniaOptionsBottomMargin);
+        resultsBorder.MinHeight = FindReplaceDialogPlanner.ResultsMinimumHeight;
+        resultsBorder.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.ResultsBottomMargin);
+        resultsHeader.Height = FindReplaceDialogPlanner.ResultsHeaderHeight;
+        resultsHeader.MinHeight = FindReplaceDialogPlanner.ResultsHeaderHeight;
+        resultsHeader.MaxHeight = FindReplaceDialogPlanner.ResultsHeaderHeight;
         resultsPanel.Background = Brush(242, 242, 242);
-        statusLabel.Margin = new Thickness(0, 0, 0, 8);
+        statusLabel.MinHeight = FindReplaceDialogPlanner.StatusMinimumHeight;
+        statusLabel.Margin = new Thickness(0, 0, 0, FindReplaceDialogPlanner.StatusBottomMargin);
         buttonRow.Margin = new Thickness(0);
 
         Grid.SetRow(tabs, 0);
@@ -14878,7 +14884,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = FindReplaceDialogPlanner.ActionButtonSpacing,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
             Children =
             {
@@ -18797,7 +18803,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var panel = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("88,150,80,150"),
+            ColumnDefinitions = new ColumnDefinitions($"{FindReplaceDialogPlanner.FieldLabelColumnWidth},150,80,150"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
             Margin = new Thickness(0, 8, 0, 0),
         };
@@ -18852,8 +18858,10 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static Button CreateFindReplaceFormatButton(string automationId, string content)
     {
         var width = content.Contains("Choose", StringComparison.OrdinalIgnoreCase)
-            ? 136
-            : content.Contains("Clear", StringComparison.OrdinalIgnoreCase) ? 52 : 84;
+            ? FindReplaceDialogPlanner.ChooseFormatButtonWidth
+            : content.Contains("Clear", StringComparison.OrdinalIgnoreCase)
+                ? FindReplaceDialogPlanner.ClearFormatButtonWidth
+                : FindReplaceDialogPlanner.FormatButtonWidth;
         var button = new Button
         {
             Content = content,
@@ -18894,6 +18902,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Grid.SetColumn(cell, column);
         row.Children.Add(cell);
     }
+
+    private static ColumnDefinitions FindReplaceResultColumns() =>
+        new($"{FindReplaceDialogPlanner.ResultBookColumnWidth},{FindReplaceDialogPlanner.ResultSheetColumnWidth},{FindReplaceDialogPlanner.ResultNameColumnWidth},{FindReplaceDialogPlanner.ResultCellColumnWidth},*,*");
 
     private static StackPanel CreateFindReplaceFormatRow(string label, Button chooseButton, Button clearButton) =>
         new()

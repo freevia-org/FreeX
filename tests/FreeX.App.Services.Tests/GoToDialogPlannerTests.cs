@@ -16,6 +16,28 @@ public sealed class GoToDialogPlannerTests
     }
 
     [Fact]
+    public void FindReplaceDialogLayout_UsesSharedWpfAuthorityMetrics()
+    {
+        FindReplaceDialogPlanner.RootMargin.Should().Be(12);
+        FindReplaceDialogPlanner.TabContentMargin.Should().Be(10);
+        FindReplaceDialogPlanner.FieldLabelColumnWidth.Should().Be(88);
+        FindReplaceDialogPlanner.FieldMinWidth.Should().Be(260);
+        FindReplaceDialogPlanner.FormatButtonWidth.Should().Be(84);
+        FindReplaceDialogPlanner.ClearFormatButtonWidth.Should().Be(52);
+        FindReplaceDialogPlanner.ChooseFormatButtonWidth.Should().Be(136);
+        FindReplaceDialogPlanner.ResultsMinimumHeight.Should().Be(120);
+        FindReplaceDialogPlanner.ResultsHeaderHeight.Should().Be(24);
+        FindReplaceDialogPlanner.ActionButtonSpacing.Should().Be(8);
+        FindReplaceDialogPlanner.ActionButtonHeight.Should().Be(20);
+        FindReplaceDialogPlanner.OptionsHeaderMinimumWidth.Should().Be(112);
+        FindReplaceDialogPlanner.AvaloniaOptionsBottomMargin.Should().Be(13);
+        FindReplaceDialogPlanner.ResultBookColumnWidth.Should().Be(110);
+        FindReplaceDialogPlanner.ResultSheetColumnWidth.Should().Be(100);
+        FindReplaceDialogPlanner.ResultNameColumnWidth.Should().Be(90);
+        FindReplaceDialogPlanner.ResultCellColumnWidth.Should().Be(70);
+    }
+
+    [Fact]
     public void GoToSpecialDialogSize_MatchesSharedWpfLogicalEvidenceTarget()
     {
         GoToSpecialDialogPlanner.Width.Should().Be(430);

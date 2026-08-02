@@ -63,6 +63,23 @@ public sealed class FindReplaceDialogXamlTests
     }
 
     [Fact]
+    public void Dialog_UsesSharedFindReplaceLayoutMetrics()
+    {
+        var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FindReplaceDialog.xaml");
+
+        xaml.Should().Contain("FindReplaceDialog.FindReplaceFieldLabelColumnWidth");
+        xaml.Should().Contain("FindReplaceDialogPlanner.FieldMinWidth");
+        xaml.Should().Contain("FindReplaceDialogPlanner.FormatButtonWidth");
+        xaml.Should().Contain("FindReplaceDialogPlanner.ClearFormatButtonWidth");
+        xaml.Should().Contain("FindReplaceDialogPlanner.ChooseFormatButtonWidth");
+        xaml.Should().Contain("FindReplaceDialogPlanner.ResultsMinimumHeight");
+        xaml.Should().Contain("FindReplaceDialog.FindReplaceResultBookColumnWidth");
+        xaml.Should().Contain("FindReplaceDialog.FindReplaceResultSheetColumnWidth");
+        xaml.Should().Contain("FindReplaceDialog.FindReplaceResultNameColumnWidth");
+        xaml.Should().Contain("FindReplaceDialog.FindReplaceResultCellColumnWidth");
+    }
+
+    [Fact]
     public void Dialog_SharesFindWhatTextAcrossFindAndReplaceTabs()
     {
         var document = LoadDialogXaml();

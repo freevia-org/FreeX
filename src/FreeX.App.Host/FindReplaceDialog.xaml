@@ -24,17 +24,17 @@
             <TabItem x:Name="FindTab" Header="{local:Loc Key=FindReplace_Find}">
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="88"/>
+                        <ColumnDefinition Width="{x:Static local:FindReplaceDialog.FindReplaceFieldLabelColumnWidth}"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Label Content="{local:Loc Key=FindReplace_FindWhat}" Target="{Binding ElementName=FindBox}" VerticalAlignment="Center"/>
-                    <TextBox x:Name="FindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
-                    <Button x:Name="FindFormatButton" Content="{local:Loc Key=FindReplace_Format}" Grid.Column="2" Width="84" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
-                    <Button x:Name="FindClearFormatButton" Content="{local:Loc Key=FindReplace_Clear}" Grid.Column="3" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
-                    <Button x:Name="FindChooseFormatFromCellButton" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Grid.Column="4" Width="136" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
+                    <TextBox x:Name="FindBox" Grid.Column="1" MinWidth="{x:Static services:FindReplaceDialogPlanner.FieldMinWidth}" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
+                    <Button x:Name="FindFormatButton" Content="{local:Loc Key=FindReplace_Format}" Grid.Column="2" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
+                    <Button x:Name="FindClearFormatButton" Content="{local:Loc Key=FindReplace_Clear}" Grid.Column="3" Width="{x:Static services:FindReplaceDialogPlanner.ClearFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
+                    <Button x:Name="FindChooseFormatFromCellButton" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Grid.Column="4" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
                 </Grid>
             </TabItem>
 
@@ -47,32 +47,32 @@
 
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="88"/>
+                            <ColumnDefinition Width="{x:Static local:FindReplaceDialog.FindReplaceFieldLabelColumnWidth}"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Label Content="{local:Loc Key=FindReplace_FindWhat}" Target="{Binding ElementName=ReplaceFindBox}" VerticalAlignment="Center"/>
-                        <TextBox x:Name="ReplaceFindBox" Grid.Column="1" MinWidth="260" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
-                        <Button x:Name="ReplaceFindFormatButton" Content="{local:Loc Key=FindReplace_Format}" Grid.Column="2" Width="84" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
-                        <Button x:Name="ReplaceFindClearFormatButton" Content="{local:Loc Key=FindReplace_Clear}" Grid.Column="3" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
-                        <Button x:Name="ReplaceFindChooseFormatFromCellButton" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Grid.Column="4" Width="136" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
+                        <TextBox x:Name="ReplaceFindBox" Grid.Column="1" MinWidth="{x:Static services:FindReplaceDialogPlanner.FieldMinWidth}" KeyDown="FindBox_KeyDown" TextChanged="FindBox_TextChanged"/>
+                        <Button x:Name="ReplaceFindFormatButton" Content="{local:Loc Key=FindReplace_Format}" Grid.Column="2" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Click="FindFormatButton_Click"/>
+                        <Button x:Name="ReplaceFindClearFormatButton" Content="{local:Loc Key=FindReplace_Clear}" Grid.Column="3" Width="{x:Static services:FindReplaceDialogPlanner.ClearFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="FindClearFormatButton_Click"/>
+                        <Button x:Name="ReplaceFindChooseFormatFromCellButton" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Grid.Column="4" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Click="ChooseFindFormatFromCellButton_Click"/>
                     </Grid>
 
                     <Grid x:Name="ReplaceRow" Grid.Row="1" Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="88"/>
+                            <ColumnDefinition Width="{x:Static local:FindReplaceDialog.FindReplaceFieldLabelColumnWidth}"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <Label Content="{local:Loc Key=FindReplace_ReplaceWith}" Target="{Binding ElementName=ReplaceBox}" VerticalAlignment="Center"/>
-                        <TextBox x:Name="ReplaceBox" Grid.Column="1" MinWidth="260"/>
-                        <Button x:Name="ReplaceWithFormatButton" Grid.Column="2" Content="{local:Loc Key=FindReplace_Format}" Width="84" Margin="8,0,0,0" Click="ReplaceWithFormatButton_Click"/>
-                        <Button x:Name="ReplaceWithClearFormatButton" Grid.Column="3" Content="{local:Loc Key=FindReplace_Clear}" Width="52" Margin="6,0,0,0" Visibility="Collapsed" Click="ReplaceWithClearFormatButton_Click"/>
-                        <Button x:Name="ReplaceWithChooseFormatFromCellButton" Grid.Column="4" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Width="136" Margin="6,0,0,0" Click="ChooseReplaceWithFormatFromCellButton_Click"/>
+                        <TextBox x:Name="ReplaceBox" Grid.Column="1" MinWidth="{x:Static services:FindReplaceDialogPlanner.FieldMinWidth}"/>
+                        <Button x:Name="ReplaceWithFormatButton" Grid.Column="2" Content="{local:Loc Key=FindReplace_Format}" Width="{x:Static services:FindReplaceDialogPlanner.FormatButtonWidth}" Margin="8,0,0,0" Click="ReplaceWithFormatButton_Click"/>
+                        <Button x:Name="ReplaceWithClearFormatButton" Grid.Column="3" Content="{local:Loc Key=FindReplace_Clear}" Width="{x:Static services:FindReplaceDialogPlanner.ClearFormatButtonWidth}" Margin="6,0,0,0" Visibility="Collapsed" Click="ReplaceWithClearFormatButton_Click"/>
+                        <Button x:Name="ReplaceWithChooseFormatFromCellButton" Grid.Column="4" Content="{local:Loc Key=FindReplace_ChooseFromCell}" Width="{x:Static services:FindReplaceDialogPlanner.ChooseFormatButtonWidth}" Margin="6,0,0,0" Click="ChooseReplaceWithFormatFromCellButton_Click"/>
                     </Grid>
                 </Grid>
             </TabItem>
@@ -80,6 +80,7 @@
 
         <Expander x:Name="OptionsExpander"
                   Grid.Row="1"
+                  MinWidth="{x:Static services:FindReplaceDialogPlanner.OptionsHeaderMinimumWidth}"
                   Header="{local:Loc Key=FindReplace_Options}"
                   IsExpanded="False"
                   Expanded="OptionsExpander_Expanded"
@@ -87,7 +88,7 @@
                   Margin="0,0,0,10">
             <Grid Margin="0,8,0,0">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="88"/>
+                    <ColumnDefinition Width="{x:Static local:FindReplaceDialog.FindReplaceFieldLabelColumnWidth}"/>
                     <ColumnDefinition Width="150"/>
                     <ColumnDefinition Width="80"/>
                     <ColumnDefinition Width="150"/>
@@ -130,14 +131,14 @@
                   CanUserDeleteRows="False"
                   IsReadOnly="True"
                   HeadersVisibility="Column"
-                  MinHeight="120"
+                  MinHeight="{x:Static services:FindReplaceDialogPlanner.ResultsMinimumHeight}"
                   Margin="0,0,0,8"
                   SelectionChanged="FindResultsGrid_SelectionChanged">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Book}" Binding="{Binding Book}" Width="110"/>
-                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Sheet}" Binding="{Binding Sheet}" Width="100"/>
-                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Name}" Binding="{Binding Name}" Width="90"/>
-                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Cell}" Binding="{Binding Cell}" Width="70"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Book}" Binding="{Binding Book}" Width="{x:Static local:FindReplaceDialog.FindReplaceResultBookColumnWidth}"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Sheet}" Binding="{Binding Sheet}" Width="{x:Static local:FindReplaceDialog.FindReplaceResultSheetColumnWidth}"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Name}" Binding="{Binding Name}" Width="{x:Static local:FindReplaceDialog.FindReplaceResultNameColumnWidth}"/>
+                <DataGridTextColumn Header="{local:Loc Key=FindReplace_Cell}" Binding="{Binding Cell}" Width="{x:Static local:FindReplaceDialog.FindReplaceResultCellColumnWidth}"/>
                 <DataGridTextColumn Header="{local:Loc Key=FindReplace_Value}" Binding="{Binding Value}" Width="*"/>
                 <DataGridTextColumn Header="{local:Loc Key=FindReplace_Formula}" Binding="{Binding Formula}" Width="*"/>
             </DataGrid.Columns>

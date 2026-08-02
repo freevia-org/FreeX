@@ -11,6 +11,12 @@ namespace FreeX.App.Host;
 
 public sealed partial class FindReplaceDialog : Window
 {
+    public static GridLength FindReplaceFieldLabelColumnWidth => new(FindReplaceDialogPlanner.FieldLabelColumnWidth);
+    public static DataGridLength FindReplaceResultBookColumnWidth => new(FindReplaceDialogPlanner.ResultBookColumnWidth);
+    public static DataGridLength FindReplaceResultSheetColumnWidth => new(FindReplaceDialogPlanner.ResultSheetColumnWidth);
+    public static DataGridLength FindReplaceResultNameColumnWidth => new(FindReplaceDialogPlanner.ResultNameColumnWidth);
+    public static DataGridLength FindReplaceResultCellColumnWidth => new(FindReplaceDialogPlanner.ResultCellColumnWidth);
+
     private readonly Func<Workbook> _getWorkbook;
     private readonly Func<SheetId?> _getCurrentSheetId;
     private readonly ICommandBus _commandBus;
