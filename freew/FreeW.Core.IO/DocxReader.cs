@@ -177,7 +177,8 @@ public static class DocxReader
     /// into <see cref="TextDocument.Protection"/>, the personal-information removal toggle into
     /// <see cref="TextDocument.RemovePersonalInformation"/>, the revision-tracking toggles into
     /// <see cref="TextDocument.TrackRevisions"/>, <see cref="TextDocument.DoNotTrackMoves"/>, and
-    /// <see cref="TextDocument.DoNotTrackFormatting"/>,
+    /// <see cref="TextDocument.DoNotTrackFormatting"/>, the spelling-indicator toggle into
+    /// <see cref="TextDocument.HideSpellingErrors"/>,
     /// and the w:autoHyphenation toggle into
     /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
@@ -221,6 +222,10 @@ public static class DocxReader
         // Preserve Word's w:removePersonalInformation package instruction. Metadata removal itself remains
         // the responsibility of the consuming application when it saves.
         document.RemovePersonalInformation = ReadToggle(root, "removePersonalInformation");
+
+        // Hide spelling errors (w:hideSpellingErrors): controls document-level proofing indicators without
+        // removing proofing metadata. Absent or explicitly off is Word's default.
+        document.HideSpellingErrors = ReadToggle(root, "hideSpellingErrors");
 
         // Update fields on open (w:updateFields): absent/explicitly-off is Word's default; an empty element
         // or any valid on token asks the consuming application to recalculate fields when opening the file.
