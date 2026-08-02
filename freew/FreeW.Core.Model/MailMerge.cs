@@ -1361,6 +1361,7 @@ public static class MailMerge
             DefaultRun = template.DefaultRun,
             DefaultParagraph = template.DefaultParagraph,
             DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
+            EmbedSystemFonts = template.EmbedSystemFonts,
             SaveSubsetFonts = template.SaveSubsetFonts
         };
 
@@ -1461,6 +1462,7 @@ public static class MailMerge
             DefaultRun = template.DefaultRun,
             DefaultParagraph = template.DefaultParagraph,
             DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
+            EmbedSystemFonts = template.EmbedSystemFonts,
             SaveSubsetFonts = template.SaveSubsetFonts
         };
 
