@@ -7548,10 +7548,18 @@ public static partial class ChartRenderPlanner
                 RectSeriesFillAlpha,
                 fillPlans,
                 varyByPoint);
+            var sliceCenter = OffsetExplodedSliceCenter(
+                center,
+                outerRadius,
+                startAngle,
+                endAngle,
+                series.PointStyles.TryGetValue(visibleValue.PointIndex, out var pointStyle)
+                    ? pointStyle.ExplosionPercent
+                    : null);
             primitives.Add(new ChartPieSlicePrimitive(
                 seriesIndex,
                 visibleValue.PointIndex,
-                center,
+                sliceCenter,
                 innerRadius,
                 outerRadius,
                 startAngle,
@@ -7568,6 +7576,23 @@ public static partial class ChartRenderPlanner
         }
 
         return primitives;
+    }
+
+    private static ChartPlanPoint OffsetExplodedSliceCenter(
+        ChartPlanPoint center,
+        double outerRadius,
+        double startAngle,
+        double endAngle,
+        int? explosionPercent)
+    {
+        if (!explosionPercent.HasValue || explosionPercent.Value <= 0 || outerRadius <= 0)
+            return center;
+
+        double midpoint = startAngle + (endAngle - startAngle) / 2;
+        double offset = outerRadius * Math.Clamp(explosionPercent.Value, 0, 100) / 100.0;
+        return new ChartPlanPoint(
+            center.X + offset * Math.Cos(midpoint),
+            center.Y + offset * Math.Sin(midpoint));
     }
 
     private static IReadOnlyList<(int PointIndex, double Value)> GetVisiblePieValues(ChartSeries series)
@@ -8525,8 +8550,16 @@ public static partial class ChartRenderPlanner
             string text = FormatDataLabel(labels, visibleValue.Value, total, categoryName, firstSeries.Name);
             if (!string.IsNullOrEmpty(text) || labels.ShowLegendKey)
             {
-                double labelX = centerX + labelRadius * Math.Cos(midAngle);
-                double labelY = centerY + labelRadius * Math.Sin(midAngle);
+                var labelCenter = OffsetExplodedSliceCenter(
+                    new ChartPlanPoint(centerX, centerY),
+                    radius,
+                    midAngle - sweepAngle / 2,
+                    midAngle + sweepAngle / 2,
+                    firstSeries.PointStyles.TryGetValue(visibleValue.PointIndex, out var pointStyle)
+                        ? pointStyle.ExplosionPercent
+                        : null);
+                double labelX = labelCenter.X + labelRadius * Math.Cos(midAngle);
+                double labelY = labelCenter.Y + labelRadius * Math.Sin(midAngle);
                 double labelWidth = Math.Max(64, text.Length * 12.0);
                 var labelPlan = ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                     SeriesIndex: 0,

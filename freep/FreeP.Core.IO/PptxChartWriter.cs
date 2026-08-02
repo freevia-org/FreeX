@@ -1338,6 +1338,12 @@ internal static class PptxChartWriter
             var dPt = new XElement(C + "dPt",
                 new XElement(C + "idx", new XAttribute("val", pointIndex)));
 
+            if (style?.ExplosionPercent is { } explosion)
+            {
+                dPt.Add(new XElement(C + "explosion",
+                    new XAttribute("val", Math.Clamp(explosion, 0, 100))));
+            }
+
             var spPr = BuildPointShapePropertiesEl(pointColor, style);
             if (spPr is not null)
                 dPt.Add(spPr);

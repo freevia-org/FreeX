@@ -807,6 +807,7 @@ internal static class PptxChartReader
                 ReadPointColorCompatibility(dptSpPr, scheme, series, idx);
 
                 var pointStyle = ReadPointStyle(dptSpPr, dptEl.Element(C + "marker"), scheme);
+                pointStyle = ApplyPointExplosion(dptEl, pointStyle);
                 if (pointStyle is not null)
                     series.PointStyles[idx] = pointStyle;
             }
@@ -942,6 +943,7 @@ internal static class PptxChartReader
             ReadPointColorCompatibility(dptSpPr, scheme, series, idx);
 
             var pointStyle = ReadPointStyle(dptSpPr, dptEl.Element(C + "marker"), scheme);
+            pointStyle = ApplyPointExplosion(dptEl, pointStyle);
             if (pointStyle is not null)
                 series.PointStyles[idx] = pointStyle;
         }
@@ -1041,6 +1043,19 @@ internal static class PptxChartReader
             pointStyle.Marker = markerStyle;
         }
 
+        return pointStyle;
+    }
+
+    private static ChartPointStyle? ApplyPointExplosion(
+        XElement dptEl,
+        ChartPointStyle? pointStyle)
+    {
+        var explosion = ParseNullableInt(dptEl.Element(C + "explosion")?.Attribute("val")?.Value);
+        if (!explosion.HasValue)
+            return pointStyle;
+
+        pointStyle ??= new ChartPointStyle();
+        pointStyle.ExplosionPercent = Math.Clamp(explosion.Value, 0, 100);
         return pointStyle;
     }
 

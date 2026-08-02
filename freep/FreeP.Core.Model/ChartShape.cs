@@ -385,6 +385,9 @@ public sealed class ChartMarkerStyle
 /// <summary>Point-level authored chart style override, keyed by zero-based point index.</summary>
 public sealed class ChartPointStyle
 {
+    /// <summary>Pie or doughnut slice explosion percentage from <c>c:explosion</c>.</summary>
+    public int? ExplosionPercent { get; set; }
+
     /// <summary>Optional data-label override for this individual point.</summary>
     public ChartDataLabels? DataLabels { get; set; }
 
