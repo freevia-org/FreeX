@@ -2836,6 +2836,17 @@ public sealed partial class MainWindow : Window
         r.Register(ChartTextOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartTextOptionsDialog));
         r.Register(ChartAreaOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAreaOptionsDialog));
         r.Register(ChartProtectionOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartProtectionOptionsDialog));
+        r.Register(ShapeTransparencyPlanner.FillCommandId, new ActionRibbonCommand(() => Editor.SetSelectedFillTransparency(0)));
+        r.Register(ShapeTransparencyPlanner.OutlineCommandId, new ActionRibbonCommand(() => Editor.SetSelectedOutlineTransparency(0)));
+        foreach (var option in ShapeTransparencyPlanner.Options)
+        {
+            r.Register(
+                ShapeTransparencyPlanner.OptionCommandId(ShapeTransparencyTarget.Fill, option.Percent),
+                new ActionRibbonCommand(() => Editor.SetSelectedFillTransparency(option.Percent)));
+            r.Register(
+                ShapeTransparencyPlanner.OptionCommandId(ShapeTransparencyTarget.Outline, option.Percent),
+                new ActionRibbonCommand(() => Editor.SetSelectedOutlineTransparency(option.Percent)));
+        }
         r.Register("freep.insert-link", new ActionRibbonCommand(OpenHyperlinkDialog));
         r.Register("freep.remove-link", new ActionRibbonCommand(() =>
         {

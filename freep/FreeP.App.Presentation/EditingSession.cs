@@ -1443,12 +1443,38 @@ public sealed class EditingSession
             Bus.Execute(new SetShapeFillCommand(_currentSlideIndex, id, fill));
     }
 
+    /// <summary>Sets fill transparency on all selected shapes while preserving fill kind, theme, and stops.</summary>
+    public void SetSelectedFillTransparency(double transparencyPercent)
+    {
+        if (CurrentSlide is null) return;
+        foreach (var id in _selectedShapeIds)
+        {
+            var shape = FindShape(CurrentSlide.Shapes, id);
+            var fill = ShapeTransparencyPlanner.ApplyFill(shape?.Fill, transparencyPercent);
+            if (shape?.Fill is not null && !ReferenceEquals(fill, shape.Fill))
+                Bus.Execute(new SetShapeFillCommand(_currentSlideIndex, id, fill));
+        }
+    }
+
     /// <summary>Sets outline on all selected shapes.</summary>
     public void SetSelectedOutline(ShapeOutline? outline)
     {
         if (CurrentSlide is null) return;
         foreach (var id in _selectedShapeIds)
             Bus.Execute(new SetShapeOutlineCommand(_currentSlideIndex, id, outline));
+    }
+
+    /// <summary>Sets outline transparency on all selected shapes while preserving stroke geometry.</summary>
+    public void SetSelectedOutlineTransparency(double transparencyPercent)
+    {
+        if (CurrentSlide is null) return;
+        foreach (var id in _selectedShapeIds)
+        {
+            var shape = FindShape(CurrentSlide.Shapes, id);
+            var outline = ShapeTransparencyPlanner.ApplyOutline(shape?.Outline, transparencyPercent);
+            if (shape?.Outline is not null && !ReferenceEquals(outline, shape.Outline))
+                Bus.Execute(new SetShapeOutlineCommand(_currentSlideIndex, id, outline));
+        }
     }
 
     /// <summary>
