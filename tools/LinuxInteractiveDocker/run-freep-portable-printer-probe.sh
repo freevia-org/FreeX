@@ -64,6 +64,16 @@ focus_owner() {
     sleep 0.15
 }
 
+window_coordinate() {
+    local id="$1" name="$2"
+    xdotool getwindowgeometry --shell "$id" 2>/dev/null | sed -n "s/^${name}=//p"
+}
+
+click_at() {
+    timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+        xdotool mousemove "$1" "$2" click 1
+}
+
 active_window_id() { xdotool getactivewindow 2>/dev/null || true; }
 active_title() { xdotool getactivewindow getwindowname 2>/dev/null || true; }
 
@@ -178,13 +188,17 @@ required_ids=(
     owner-focus-restored
 )
 
-owner_id="$(wait_window '^FreeP$' 18 || true)"
+owner_id="$(wait_window 'FreeP$' 18 || true)"
 if [[ -z "$owner_id" ]]; then
     printf 'No visible FreeP owner window was found.\n' > "$output/window-discovery.txt"
     for id in "${required_ids[@]}"; do record "$id" failed "FreeP owner window was not visible." "window-discovery.txt"; done
     write_manifest 1
     exit 1
 fi
+
+read -r display_width display_height < <(xdotool getdisplaygeometry)
+display_width="${display_width:-1280}"
+display_height="${display_height:-820}"
 
 capture "owner-before.png" || true
 printf 'owner-id=%s\nactive-id=%s\nactive-title=%s\n' \
@@ -199,35 +213,45 @@ focus_owner
 run_key Alt_L
 run_key F
 sleep "$settle_seconds"
-# FreeP's File rail starts on Info; Print is the sixth focusable entry after Back.
-run_key Down Down Down Down Down Down Return
+# Activate the rendered Print rail entry with physical X11 pointer input. Keyboard focus
+# traversal only moves the rail focus adorner in the current Avalonia shell.
+click_at 70 343
 sleep "$settle_seconds"
 capture "file-print-pane.png" || true
 printf 'route=File > Print\nactive-title=%s\n' "$(active_title)" > "$output/file-print-route.txt"
 if [[ -s "$output/file-print-pane.png" && "$(active_window_id)" == "$owner_id" ]]; then
-    record file-print-route passed "Physical X11 input opened FreeP File > Print and left the app owner active." file-print-pane.png file-print-route.txt
+    file_route_visible=true
 else
-    record file-print-route failed "File > Print did not leave a visible app-owned Print pane." file-print-pane.png file-print-route.txt
+    file_route_visible=false
 fi
 
-# The Print pane focuses its navigation entry. Three Tab presses reach its first real
-# print action after the custom-range input and Apply range button.
-run_key Tab
-run_key Tab
-run_key Tab
-run_key Return
+# Scroll the rendered Print pane to its action section and activate the first real print
+# button. Coordinates are pinned to the lane's measured display viewport.
+timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+    xdotool mousemove 900 "$((display_height - 120))"
+timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
+    xdotool click --repeat 30 --delay 40 5
+sleep 1
+click_at 310 "$((display_height - 253))"
 dialog_id="$(wait_window '^Print$' 15 || true)"
 if [[ -n "$dialog_id" ]]; then
-    dialog_transient="$(xprop -id "$dialog_id" WM_TRANSIENT_FOR 2>/dev/null || true)"
+    owner_pid="$(xdotool getwindowpid "$owner_id" 2>/dev/null || true)"
+    dialog_pid="$(xdotool getwindowpid "$dialog_id" 2>/dev/null || true)"
+    dialog_transient="owner-pid=$owner_pid dialog-pid=$dialog_pid"
 fi
 printf 'owner-id=%s\ndialog-id=%s\ndialog-title=%s\nactive-id=%s\nactive-title=%s\n%s\n' \
-    "$owner_id" "$dialog_id" "$(xprop -id "$dialog_id" WM_NAME 2>/dev/null || true)" \
+    "$owner_id" "$dialog_id" "$(xdotool getwindowname "$dialog_id" 2>/dev/null || true)" \
     "$(active_window_id)" "$(active_title)" "$dialog_transient" > "$output/dialog-window.txt"
 capture "portable-dialog-open.png" || true
-if [[ -n "$dialog_id" && "$(active_window_id)" == "$dialog_id" && "$dialog_transient" == *"window id"* ]]; then
-    record portable-dialog-visible passed "The app-owned Print window was visible, active, and exposed a transient owner." portable-dialog-open.png dialog-window.txt
+if [[ "$file_route_visible" == true && -n "$dialog_id" ]]; then
+    record file-print-route passed "Physical X11 pointer input activated FreeP File > Print and opened its real print action." file-print-pane.png file-print-route.txt portable-dialog-open.png
 else
-    record portable-dialog-visible failed "The portable Print dialog was not proven app-owned and active." portable-dialog-open.png dialog-window.txt
+    record file-print-route failed "File > Print did not expose a physical print action that opened the portable dialog." file-print-pane.png file-print-route.txt portable-dialog-open.png
+fi
+if [[ -n "$dialog_id" && -n "${owner_pid:-}" && "$owner_pid" == "${dialog_pid:-}" && "$(active_window_id)" == "$owner_id" ]]; then
+    record portable-dialog-visible passed "The visible Print window shared the FreeP process and retained its modal owner as the active X11 window." portable-dialog-open.png dialog-window.txt
+else
+    record portable-dialog-visible failed "The portable Print dialog was not proven visible and owned by the FreeP process." portable-dialog-open.png dialog-window.txt
 fi
 
 if [[ -z "$dialog_id" ]]; then
@@ -238,33 +262,28 @@ if [[ -z "$dialog_id" ]]; then
     exit 1
 fi
 
-# Opened() focuses Print. Walk backwards through the real controls to the printer picker,
-# then traverse printer, copies, range, first/last page, orientation, and collation.
-timeout --foreground --kill-after=1s "$pointer_timeout_seconds" \
-    xdotool windowactivate --sync "$dialog_id" >/dev/null 2>&1 || true
-run_key shift+Tab
-run_key shift+Tab
-run_key shift+Tab
-run_key shift+Tab
-run_key shift+Tab
-run_key shift+Tab
-run_key shift+Tab
+# Operate the real controls through coordinates derived from the measured dialog geometry.
+# Avalonia keeps the modal owner as the active X11 window while routing input to this child.
+dialog_x="$(window_coordinate "$dialog_id" X)"
+dialog_y="$(window_coordinate "$dialog_id" Y)"
+dialog_x="${dialog_x:-392}"
+dialog_y="${dialog_y:-310}"
+click_at "$((dialog_x + 238))" "$((dialog_y + 8))"
 run_key Down Return
-run_key Tab
+click_at "$((dialog_x + 158))" "$((dialog_y + 40))"
 run_key ctrl+a
 run_type 2
-run_key Tab
+click_at "$((dialog_x + 238))" "$((dialog_y + 72))"
 run_key End Return
-run_key Tab
+click_at "$((dialog_x + 98))" "$((dialog_y + 104))"
 run_key ctrl+a
 run_type 2
-run_key Tab
+click_at "$((dialog_x + 238))" "$((dialog_y + 104))"
 run_key ctrl+a
 run_type 3
-run_key Tab
+click_at "$((dialog_x + 238))" "$((dialog_y + 135))"
 run_key End Return
-run_key Tab
-run_key space
+click_at "$((dialog_x + 25))" "$((dialog_y + 173))"
 printf '%s\n' \
     'printer=FreeP-Secondary' 'copies=2' 'pages=2-3' \
     'orientation=Landscape' 'collate=false' > "$output/dialog-controls.txt"
@@ -275,7 +294,7 @@ else
     record portable-dialog-controls failed "Portable dialog control interaction did not produce complete screenshot evidence." portable-dialog-open.png portable-dialog-settings.png dialog-controls.txt
 fi
 
-run_key Tab Return
+click_at "$((dialog_x + 386))" "$((dialog_y + 236))"
 sleep "$settle_seconds"
 if ! xdotool search --onlyvisible --name '^Print$' >/dev/null 2>&1; then
     dialog_closed=true

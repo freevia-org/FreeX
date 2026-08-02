@@ -33,14 +33,16 @@ public sealed class PortablePrinterPhysicalValidationSourceTests
 
         probe.Should().Contain("run_key Alt_L");
         probe.Should().Contain("run_key F");
-        probe.Should().Contain("run_key Down Down Down Down Down Down Return");
+        probe.Should().Contain("click_at 70 343");
         probe.Should().Contain("wait_window '^Print$'");
-        probe.Should().Contain("WM_TRANSIENT_FOR");
+        probe.Should().Contain("xdotool getwindowpid");
+        probe.Should().Contain("owner-pid=$owner_pid dialog-pid=$dialog_pid");
         probe.Should().Contain("scrot -o");
         probe.Should().Contain("FreeP-Secondary");
         probe.Should().Contain("last-invocation.json");
         probe.Should().Contain("last-submitted.pdf");
         probe.Should().Contain("orientation-requested=4");
+        probe.Should().Contain("xdotool click --repeat 30 --delay 40 5");
         probe.Should().Contain("physical-x11-portable-printer");
         probe.Should().NotContain("ExecutePrintForTests");
         probe.Should().NotContain("SetFilePickerOverridesForTests");
