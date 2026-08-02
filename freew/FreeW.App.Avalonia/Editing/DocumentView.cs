@@ -3327,6 +3327,13 @@ public sealed class DocumentView : Control
     /// </summary>
     public Free.Shared.Pdf.PdfContentDocument BuildPdfContent()
     {
+        if (_viewMode != DocumentViewMode.PrintLayout)
+        {
+            var printView = new DocumentView { ViewMode = DocumentViewMode.PrintLayout };
+            printView.LoadDocument(_doc);
+            return printView.BuildPdfContent();
+        }
+
         // Ensure a layout exists (tests/headless may export before a Render pass).
         if (_laidOutWidth < 0 || _placed.Count == 0)
             Relayout(FallbackWidth);
@@ -7081,7 +7088,7 @@ public sealed class DocumentView : Control
             {
                 var run = para.Runs[runIndex];
                 var effectiveFormatting = ResolveRunFmt(run.Formatting, para);
-                if (effectiveFormatting.Hidden)
+                if (IsTextHiddenInCurrentView(effectiveFormatting))
                 {
                     FlushText();
                     modelOffset += run.Text.Length;
@@ -8234,7 +8241,7 @@ public sealed class DocumentView : Control
         {
             if (run.Image is not null || run.Shape is not null) continue; // skip non-text
             var effectiveFormatting = ResolveRunFmt(run.Formatting, paragraph);
-            if (effectiveFormatting.Hidden) continue;
+            if (IsTextHiddenInCurrentView(effectiveFormatting)) continue;
             foreach (var ch in run.Text)
             {
                 var h = BuildForLayout(ch.ToString(), effectiveFormatting).Height;
@@ -8292,7 +8299,7 @@ public sealed class DocumentView : Control
 
         for (var c = 0; c < cells.Count; c++)
         {
-            if (cells[c].Fmt.Hidden)
+            if (IsTextHiddenInCurrentView(cells[c].Fmt))
             {
                 measured[c] = 0;
                 heights[c] = 0;
@@ -8744,7 +8751,7 @@ public sealed class DocumentView : Control
         };
     }
 
-    private static bool UsesWordDefaultBodyLineBox(
+    private bool UsesWordDefaultBodyLineBox(
         Paragraph paragraph,
         ParagraphFormatting paragraphFormatting,
         IReadOnlyList<Cell> cells)
@@ -8756,7 +8763,7 @@ public sealed class DocumentView : Control
             !string.Equals(styleId, "Normal", StringComparison.OrdinalIgnoreCase))
             return false;
 
-        return cells.Count > 0 && cells.Where(cell => !cell.Fmt.Hidden).All(cell =>
+        return cells.Count > 0 && cells.Where(cell => !IsTextHiddenInCurrentView(cell.Fmt)).All(cell =>
             string.Equals(cell.Fmt.FontFamily, "Calibri", StringComparison.OrdinalIgnoreCase) &&
             Math.Abs((cell.Fmt.FontSizePt ?? DefaultFontSizePt) - 11.0) < 0.01);
     }
@@ -9298,7 +9305,7 @@ public sealed class DocumentView : Control
             if (!string.IsNullOrEmpty(run.Text))
             {
                 var formatting = ResolveRunFmt(run.Formatting, paragraph);
-                if (formatting.Hidden)
+                if (IsTextHiddenInCurrentView(formatting))
                     continue;
                 firstObjHeight = Build("Ag", formatting).Height;
                 break;
@@ -9453,7 +9460,7 @@ public sealed class DocumentView : Control
             if (!string.IsNullOrEmpty(run.Text))
             {
                 var fmt = ResolveRunFmt(run.Formatting, paragraph);
-                if (fmt.Hidden)
+                if (IsTextHiddenInCurrentView(fmt))
                 {
                     var hiddenY = ContentYToPageSpaceY(_layoutContentY);
                     var hiddenX = ColumnLeftFor(_layoutContentY);
@@ -9964,7 +9971,7 @@ public sealed class DocumentView : Control
 
         foreach (var run in paragraph.Runs)
         {
-            var hidden = ResolveRunFmt(run.Formatting, paragraph).Hidden;
+            var hidden = IsTextHiddenInCurrentView(ResolveRunFmt(run.Formatting, paragraph));
             foreach (var ch in run.Text)
             {
                 var w = hidden ? 0 : Build(ch.ToString(), fmt).WidthIncludingTrailingWhitespace;
@@ -11005,7 +11012,7 @@ public sealed class DocumentView : Control
         // AV-TAB: draw tab leader spans (dots/dashes/underline) before the glyph text.
         foreach (var (x1, x2, spanY, lineH, leader, spanFmt) in _tabLeaderSpans)
         {
-            if (leader == TabLeader.None || x2 <= x1 || spanFmt.Hidden) continue;
+            if (leader == TabLeader.None || x2 <= x1 || IsTextHiddenInCurrentView(spanFmt)) continue;
             DrawTabLeader(context, x1, x2, spanY, lineH, leader, spanFmt);
         }
 
@@ -11021,7 +11028,7 @@ public sealed class DocumentView : Control
             var revisionDecision = reviewPolicy.RevisionDecision(pc.Revision);
             if (!revisionDecision.IsTextVisible)
                 continue;
-            if (pc.Fmt.Hidden)
+            if (IsTextHiddenInCurrentView(pc.Fmt))
                 continue;
             var decorationPlan = RunDecorationVisualPlanner.Build(pc.Fmt, PxPerPoint);
 
@@ -21555,6 +21562,7 @@ public sealed class DocumentView : Control
         Underline     = baseRun.Underline || styleRun.Underline,
         Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
         Hidden        = baseRun.Hidden || styleRun.Hidden,
+        WebHidden     = baseRun.WebHidden || styleRun.WebHidden,
         SmallCaps     = baseRun.SmallCaps || styleRun.SmallCaps,
         AllCaps       = baseRun.AllCaps || styleRun.AllCaps,
         FontFamily    = styleRun.FontFamily ?? baseRun.FontFamily,
@@ -23079,6 +23087,9 @@ public sealed class DocumentView : Control
     /// (run override wins; then the style chain's Run values; then the document default size). Display-only —
     /// the model runs stay raw so the StyleId link round-trips on save.
     /// </summary>
+    private bool IsTextHiddenInCurrentView(RunFormatting formatting) =>
+        formatting.Hidden || (formatting.WebHidden && _viewMode == DocumentViewMode.WebLayout);
+
     private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph)
     {
         var resolved = _doc.DefaultRun;
@@ -23169,6 +23180,7 @@ public sealed class DocumentView : Control
         Underline = baseRun.Underline || over.Underline,
         Strikethrough = baseRun.Strikethrough || over.Strikethrough,
         Hidden = baseRun.Hidden || over.Hidden,
+        WebHidden = baseRun.WebHidden || over.WebHidden,
         SmallCaps = baseRun.SmallCaps || over.SmallCaps,
         AllCaps = baseRun.AllCaps || over.AllCaps,
     };

@@ -826,6 +826,49 @@ public sealed class DocumentViewPdfExportTests
             exportedText.Should().NotContain("NOTE_SECRET");
         }, CancellationToken.None);
 
+    [Fact]
+    public Task WebHiddenText_CollapsesOnlyInWebLayoutWhilePdfUsesPrintLayout() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("A"));
+            paragraph.Runs.Add(new Run("23456789", RunFormatting.Default with { WebHidden = true }));
+            paragraph.Runs.Add(new Run("B"));
+            document.Blocks.Add(paragraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            var printPdfText = string.Concat(view.BuildPdfContent().Pages
+                .SelectMany(page => page.Ops)
+                .OfType<PdfText>()
+                .Select(text => text.Text));
+            printPdfText.Should().Contain("23456789");
+            view.GetPlacedForBlock(0)
+                .Where(glyph => glyph.Ch is >= '2' and <= '9')
+                .Should().OnlyContain(glyph => glyph.W > 0);
+
+            view.ViewMode = DocumentViewMode.WebLayout;
+            view.Measure(new Size(900, 1200));
+            view.GetPlacedForBlock(0)
+                .Where(glyph => glyph.Ch is >= '2' and <= '9')
+                .Should().OnlyContain(glyph => glyph.W == 0);
+
+            var webModePdfText = string.Concat(view.BuildPdfContent().Pages
+                .SelectMany(page => page.Ops)
+                .OfType<PdfText>()
+                .Select(text => text.Text));
+            webModePdfText.Should().Contain("23456789",
+                "PDF export uses Word's print-layout semantics even when the live editor is in Web Layout");
+
+            view.ViewMode = DocumentViewMode.Draft;
+            view.Measure(new Size(900, 1200));
+            view.GetPlacedForBlock(0)
+                .Where(glyph => glyph.Ch is >= '2' and <= '9')
+                .Should().OnlyContain(glyph => glyph.W > 0);
+        }, CancellationToken.None);
+
     [Theory]
     [InlineData(false, false, 23, 740)]
     [InlineData(true, false, 23, 704)]
