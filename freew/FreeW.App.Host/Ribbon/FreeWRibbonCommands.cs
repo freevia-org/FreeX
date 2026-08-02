@@ -314,11 +314,21 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.format-painter", new FormatPainterCommand(editor));
 
         registry.Register("freew.font-family", new SelectionValueCommand(editor,
-            (selection, value) => selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(value))));
+            (selection, value) => selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily(value)),
+            value => editor.TrySetSelectedRunFormatting(
+                formatting => string.Equals(formatting.FontFamily, value, StringComparison.OrdinalIgnoreCase),
+                formatting => formatting with { FontFamily = value })));
         registry.Register("freew.font-size", new SelectionValueCommand(editor, (selection, value) =>
         {
             if (double.TryParse(value, out var points))
                 selection.ApplyPropertyValue(TextElement.FontSizeProperty, points * 96.0 / 72.0);
+        }, value =>
+        {
+            if (!double.TryParse(value, out var points))
+                return false;
+            return editor.TrySetSelectedRunFormatting(
+                formatting => formatting.FontSizePt is { } size && Math.Abs(size - points) < 0.0001,
+                formatting => formatting with { FontSizePt = points });
         }));
 
         // Insert tab — Pages: prepend a cover page, insert a blank page, or drop a horizontal rule / page break at the caret.
@@ -8921,13 +8931,18 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    private sealed class SelectionValueCommand(DocumentView editor, Action<TextSelection, string> apply) : IRibbonCommand
+    private sealed class SelectionValueCommand(
+        DocumentView editor,
+        Action<TextSelection, string> apply,
+        Func<string, bool>? tryModelApply = null) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             if (context.Parameters.TryGetValue("value", out var raw) && raw is string value && value.Length > 0)
             {
                 editor.Focus();
+                if (tryModelApply?.Invoke(value) == true)
+                    return;
                 apply(editor.Selection, value);
             }
         }

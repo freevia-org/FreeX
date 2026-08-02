@@ -4440,7 +4440,21 @@ public sealed class DocumentView : RichTextBox
 
     internal bool TryToggleSelectedRunFormatting(
         Func<RunFormatting, bool> isSet,
-        Func<RunFormatting, bool, RunFormatting> set)
+        Func<RunFormatting, bool, RunFormatting> set) =>
+        TryApplySelectedRunFormatting(isSet, set, toggle: true);
+
+    internal bool TrySetSelectedRunFormatting(
+        Func<RunFormatting, bool> isSet,
+        Func<RunFormatting, RunFormatting> set)
+    {
+        ArgumentNullException.ThrowIfNull(set);
+        return TryApplySelectedRunFormatting(isSet, (formatting, _) => set(formatting), toggle: false);
+    }
+
+    private bool TryApplySelectedRunFormatting(
+        Func<RunFormatting, bool> isSet,
+        Func<RunFormatting, bool, RunFormatting> set,
+        bool toggle)
     {
         ArgumentNullException.ThrowIfNull(isSet);
         ArgumentNullException.ThrowIfNull(set);
@@ -4486,7 +4500,9 @@ public sealed class DocumentView : RichTextBox
             range.StartOffset,
             range.EndOffset,
             isSet));
-        var target = !allSet;
+        if (!toggle && allSet)
+            return true;
+        var target = toggle ? !allSet : true;
 
         if (ranges.Count > 1)
             _commands.BeginUndoGroup();
