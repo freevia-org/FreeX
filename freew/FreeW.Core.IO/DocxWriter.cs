@@ -9211,6 +9211,12 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "webHidden"));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (f.CharacterSpacingPt != 0)
+            rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
+        if (f.KerningMinSizePt is { } kern && kern > 0)
+            rPr.Add(new XElement(W + "kern", new XAttribute(W + "val", PointsToHalfPoints(kern))));
+        if (f.PositionPt != 0)
+            rPr.Add(new XElement(W + "position", new XAttribute(W + "val", PointsToHalfPoints(f.PositionPt))));
         if (f.FontSizePt is { } size)
         {
             var halfPoints = PointsToHalfPoints(size);
@@ -9229,6 +9235,15 @@ public static class DocxWriter
                 new XAttribute(W + "val", lang),
                 new XAttribute(W + "eastAsia", lang),
                 new XAttribute(W + "bidi", lang)));
+        if (LigaturesToken(f.Ligatures) is { } ligatures)
+            rPr.Add(new XElement(W14 + "ligatures", new XAttribute(W14 + "val", ligatures)));
+        if (NumberFormToken(f.NumberForm) is { } numForm)
+            rPr.Add(new XElement(W14 + "numForm", new XAttribute(W14 + "val", numForm)));
+        if (NumberSpacingToken(f.NumberSpacing) is { } numSpacing)
+            rPr.Add(new XElement(W14 + "numSpacing", new XAttribute(W14 + "val", numSpacing)));
+        if (f.StylisticSet is { } styleSetId)
+            rPr.Add(new XElement(W14 + "stylisticSets",
+                new XElement(W14 + "styleSet", new XAttribute(W14 + "id", styleSetId))));
         return rPr.HasElements ? rPr : null;
     }
 

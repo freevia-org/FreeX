@@ -7054,6 +7054,23 @@ public static class DocxReader
                     ? defaultRun.VerticalAlign
                     : document.DefaultRun.VerticalAlign,
                 Rtl = defaultRun.Rtl || document.DefaultRun.Rtl,
+                CharacterSpacingPt = defaultRun.CharacterSpacingPt != 0
+                    ? defaultRun.CharacterSpacingPt
+                    : document.DefaultRun.CharacterSpacingPt,
+                KerningMinSizePt = defaultRun.KerningMinSizePt ?? document.DefaultRun.KerningMinSizePt,
+                PositionPt = defaultRun.PositionPt != 0
+                    ? defaultRun.PositionPt
+                    : document.DefaultRun.PositionPt,
+                Ligatures = defaultRun.Ligatures != LigatureMode.None
+                    ? defaultRun.Ligatures
+                    : document.DefaultRun.Ligatures,
+                StylisticSet = defaultRun.StylisticSet ?? document.DefaultRun.StylisticSet,
+                NumberForm = defaultRun.NumberForm != NumberForm.Default
+                    ? defaultRun.NumberForm
+                    : document.DefaultRun.NumberForm,
+                NumberSpacing = defaultRun.NumberSpacing != NumberSpacing.Default
+                    ? defaultRun.NumberSpacing
+                    : document.DefaultRun.NumberSpacing,
             };
         }
 
