@@ -628,6 +628,12 @@ public sealed class ChartShape
     /// <summary>Authored <c>ofPieChart/secondPieSize</c> percentage, when present.</summary>
     public int? OfPieSecondPieSizePercent { get; set; }
 
+    /// <summary>
+    /// Authored <c>ofPieChart/secondPiePt</c> category indices for a custom split.
+    /// The list is empty when the producer uses an automatic split rule.
+    /// </summary>
+    public List<int> OfPieCustomPointIndices { get; set; } = [];
+
     /// <summary>Whether the source explicitly included <c>ofPieChart/serLines</c>.</summary>
     public bool OfPieSeriesLinesSpecified { get; set; }
 

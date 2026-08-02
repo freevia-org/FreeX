@@ -1916,6 +1916,34 @@ public sealed class ChartDataCommandTests
     }
 
     [Fact]
+    public void SetChartPieOptions_AuthorsOfPieSettingsAndUndoRestoresThem()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.OfPie;
+        chart.OfPieType = OfPieType.Pie;
+        chart.OfPieSplitType = OfPieSplitType.Auto;
+
+        bus.Execute(new SetChartPieOptionsCommand(
+            0,
+            id,
+            new ChartPieOptions(0, 40, OfPieType.Bar, OfPieSplitType.Custom, 2, 75, new[] { 1, 3 })));
+
+        chart.OfPieType.Should().Be(OfPieType.Bar);
+        chart.OfPieSplitType.Should().Be(OfPieSplitType.Custom);
+        chart.OfPieSplitPosition.Should().Be(2);
+        chart.OfPieSecondPieSizePercent.Should().Be(75);
+        chart.OfPieCustomPointIndices.Should().Equal(1, 3);
+
+        bus.Undo();
+        chart.OfPieType.Should().Be(OfPieType.Pie);
+        chart.OfPieSplitType.Should().Be(OfPieSplitType.Auto);
+        chart.OfPieSplitPosition.Should().BeNull();
+        chart.OfPieSecondPieSizePercent.Should().BeNull();
+        chart.OfPieCustomPointIndices.Should().BeEmpty();
+    }
+
+    [Fact]
     public void OfPieChart_PreservesNativeFamilyAndSplitControlsThroughPptxRoundTrip()
     {
         var (p, _, _) = MakeChartPresentation();
@@ -1953,6 +1981,37 @@ public sealed class ChartDataCommandTests
         roundTripped.OfPieSeriesLinesSpecified.Should().BeTrue();
         roundTripped.BarGapWidthPercent.Should().Be(120);
         roundTripped.Series.Select(series => series.Name).Should().Equal("Sales", "Budget");
+    }
+
+    [Fact]
+    public void OfPieChart_PreservesCustomSecondPiePointIndicesThroughPptxRoundTrip()
+    {
+        var (p, _, _) = MakeChartPresentation();
+        var chart = p.Slides[0].Shapes[0].Chart!;
+        chart.ChartType = ChartType.OfPie;
+        chart.OfPieType = OfPieType.Pie;
+        chart.OfPieSplitType = OfPieSplitType.Custom;
+        chart.OfPieCustomPointIndices.AddRange(new[] { 1, 3 });
+        chart.RegenerateWorkbookOnSave = true;
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        using (var document = PresentationDocument.Open(stream, false))
+        {
+            var validator = new OpenXmlValidator(FileFormatVersions.Microsoft365);
+            var chartPart = document.PresentationPart!.SlideParts
+                .SelectMany(slidePart => slidePart.ChartParts)
+                .Single();
+            validator.Validate(chartPart)
+                .Where(error => error.ErrorType == ValidationErrorType.Schema)
+                .Should().BeEmpty();
+        }
+
+        stream.Position = 0;
+        var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        roundTripped.OfPieSplitType.Should().Be(OfPieSplitType.Custom);
+        roundTripped.OfPieCustomPointIndices.Should().Equal(1, 3);
     }
 
     [Fact]

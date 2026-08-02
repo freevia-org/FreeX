@@ -13,20 +13,25 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ChartPieOptionsPlanner _planner;
     private readonly TextBox _angleBox;
     private readonly TextBox _holeBox;
+    private readonly ComboBox? _ofPieTypeCombo;
+    private readonly ComboBox? _ofPieSplitTypeCombo;
+    private readonly TextBox? _ofPieSplitPositionBox;
+    private readonly TextBox? _ofPieSizeBox;
+    private readonly TextBox? _ofPieCustomPointsBox;
 
     public ChartPieOptionsDialog(EditingSession editor)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart
             ?? throw new InvalidOperationException("No chart is currently selected.");
-        if (chart.ChartType is not (ChartType.Pie or ChartType.Doughnut))
-            throw new InvalidOperationException("Select a pie or doughnut chart before editing pie options.");
+        if (chart.ChartType is not (ChartType.Pie or ChartType.Doughnut or ChartType.OfPie))
+            throw new InvalidOperationException("Select a pie, doughnut, or pie-of-pie chart before editing pie options.");
 
         _planner = ChartPieOptionsPlanner.FromChart(chart);
         var surface = ChartPieOptionsPlanner.BuildSurfacePlan();
         Title = surface.Title;
         Width = ChartPieOptionsPlanner.DefaultDialogWidth;
-        Height = ChartPieOptionsPlanner.DefaultDialogHeight;
+        Height = chart.ChartType == ChartType.OfPie ? ChartPieOptionsPlanner.DefaultDialogHeight : 250;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
@@ -41,6 +46,15 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             MinWidth = 150,
             IsEnabled = chart.ChartType == ChartType.Doughnut,
         };
+
+        if (chart.ChartType == ChartType.OfPie)
+        {
+            _ofPieTypeCombo = new ComboBox { ItemsSource = new[] { "Pie", "Bar" }, SelectedIndex = _planner.OfPieType == OfPieType.Bar ? 1 : 0, MinWidth = 150 };
+            _ofPieSplitTypeCombo = new ComboBox { ItemsSource = new[] { "Auto", "Custom", "Percent", "Position", "Value" }, SelectedIndex = (int)_planner.OfPieSplitType, MinWidth = 150 };
+            _ofPieSplitPositionBox = new TextBox { Text = (_planner.OfPieSplitPosition ?? 0).ToString(CultureInfo.CurrentCulture), MinWidth = 150 };
+            _ofPieSizeBox = new TextBox { Text = _planner.OfPieSecondPieSizePercent.ToString(CultureInfo.CurrentCulture), MinWidth = 150 };
+            _ofPieCustomPointsBox = new TextBox { Text = string.Join(",", _planner.OfPieCustomPointIndices), MinWidth = 150 };
+        }
 
         var buttons = new StackPanel
         {
@@ -58,6 +72,14 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var content = new StackPanel { Margin = new Thickness(14) };
         content.Children.Add(MakeRow(surface.FirstSliceAngleLabel, _angleBox));
         content.Children.Add(MakeRow(surface.DoughnutHoleLabel, _holeBox));
+        if (chart.ChartType == ChartType.OfPie)
+        {
+            content.Children.Add(MakeRow(surface.OfPieTypeLabel, _ofPieTypeCombo!));
+            content.Children.Add(MakeRow(surface.OfPieSplitTypeLabel, _ofPieSplitTypeCombo!));
+            content.Children.Add(MakeRow(surface.OfPieSplitPositionLabel, _ofPieSplitPositionBox!));
+            content.Children.Add(MakeRow(surface.OfPieSecondPieSizeLabel, _ofPieSizeBox!));
+            content.Children.Add(MakeRow(surface.OfPieCustomPointIndicesLabel, _ofPieCustomPointsBox!));
+        }
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
         Content = content;
@@ -73,6 +95,17 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         _angleBox.Text = (firstSliceAngleDegrees ?? 0).ToString(CultureInfo.CurrentCulture);
         _holeBox.Text = doughnutHolePercent.ToString(CultureInfo.CurrentCulture);
+    }
+
+    internal void SetOfPieOptionsForTests(OfPieType type, OfPieSplitType splitType, double? splitPosition, int secondPieSizePercent, string customPointIndices)
+    {
+        if (_ofPieTypeCombo is null)
+            throw new InvalidOperationException("The selected chart is not an OfPie chart.");
+        _ofPieTypeCombo.SelectedIndex = type == OfPieType.Bar ? 1 : 0;
+        _ofPieSplitTypeCombo!.SelectedIndex = (int)splitType;
+        _ofPieSplitPositionBox!.Text = (splitPosition ?? 0).ToString(CultureInfo.CurrentCulture);
+        _ofPieSizeBox!.Text = secondPieSizePercent.ToString(CultureInfo.CurrentCulture);
+        _ofPieCustomPointsBox!.Text = customPointIndices;
     }
 
     private void OnOk()
@@ -92,6 +125,14 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         _planner.SetFirstSliceAngleDegrees(ParseAngle(_angleBox.Text));
         _planner.SetDoughnutHolePercent(ParseHole(_holeBox.Text));
+        if (_ofPieTypeCombo is null)
+            return;
+
+        _planner.SetOfPieType(_ofPieTypeCombo.SelectedIndex == 1 ? OfPieType.Bar : OfPieType.Pie);
+        _planner.SetOfPieSplitType((OfPieSplitType)Math.Clamp(_ofPieSplitTypeCombo!.SelectedIndex, 0, 4));
+        _planner.SetOfPieSplitPosition(ParseOptionalDouble(_ofPieSplitPositionBox!.Text));
+        _planner.SetOfPieSecondPieSizePercent(ParseOfPieSize(_ofPieSizeBox!.Text));
+        _planner.SetOfPieCustomPointIndices(ParsePointIndices(_ofPieCustomPointsBox!.Text));
     }
 
     private static int ParseAngle(string? text)
@@ -106,6 +147,36 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value is >= 10 and <= 90)
             return value;
         throw new FormatException("Doughnut hole must be a whole number from 10 to 90.");
+    }
+
+    private static double? ParseOptionalDouble(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && value >= 0)
+            return value;
+        throw new FormatException("OfPie split position must be a non-negative number or blank.");
+    }
+
+    private static int ParseOfPieSize(string? text)
+    {
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value is >= 5 and <= 200)
+            return value;
+        throw new FormatException("Secondary plot size must be a whole number from 5 to 200.");
+    }
+
+    private static IReadOnlyList<int> ParsePointIndices(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return Array.Empty<int>();
+        var values = new List<int>();
+        foreach (var token in text.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!int.TryParse(token, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) || value < 0)
+                throw new FormatException("Custom secondary points must be non-negative whole numbers separated by commas.");
+            values.Add(value);
+        }
+        return values;
     }
 
     private static StackPanel MakeRow(string label, Control control)

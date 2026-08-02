@@ -3876,6 +3876,75 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_OfPiePieSplitsSecondarySlicesUsingAuthoredPosition()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 40, 30, 20, 10 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.OfPie,
+            OfPieType = OfPieType.Pie,
+            OfPieSplitType = OfPieSplitType.Position,
+            OfPieSplitPosition = 2
+        };
+        chart.Categories.AddRange(new[] { "A", "B", "C", "D" });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        scene.GeometryKind.Should().Be(ChartSceneGeometryKind.Pie);
+        scene.OfPieSecondaryType.Should().Be(OfPieType.Pie);
+        scene.PieSlices.Select(slice => slice.PointIndex).Should().Equal(0, 1);
+        scene.OfPieSecondarySlices.Select(slice => slice.PointIndex).Should().Equal(2, 3);
+        scene.OfPieSecondarySlices.Select(slice => slice.Center).Distinct().Should().ContainSingle();
+        scene.Rectangles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildScenePlan_OfPieBarUsesSecondaryColumnPrimitives()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 50, 25, 15, 10 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.OfPie,
+            OfPieType = OfPieType.Bar,
+            OfPieSplitType = OfPieSplitType.Percent,
+            OfPieSplitPosition = 20
+        };
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        scene.OfPieSecondaryType.Should().Be(OfPieType.Bar);
+        scene.PieSlices.Should().HaveCount(2);
+        scene.OfPieSecondarySlices.Should().BeEmpty();
+        scene.Rectangles.Should().HaveCount(2);
+        scene.Rectangles.Select(rectangle => rectangle.CategoryIndex).Should().Equal(2, 3);
+        scene.Rectangles[0].Bounds.Height.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void BuildScenePlan_OfPieCustomSplitUsesAuthoredPointIndices()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 40, 30, 20, 10 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.OfPie,
+            OfPieType = OfPieType.Pie,
+            OfPieSplitType = OfPieSplitType.Custom
+        };
+        chart.OfPieCustomPointIndices.AddRange(new[] { 1, 3 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        scene.PieSlices.Select(slice => slice.PointIndex).Should().Equal(0, 2);
+        scene.OfPieSecondarySlices.Select(slice => slice.PointIndex).Should().Equal(1, 3);
+    }
+
+    [Fact]
     public void BuildPieSlicePrimitives_UsesAuthoredFirstSliceAngle()
     {
         var series = new ChartSeries { Name = "Share" };

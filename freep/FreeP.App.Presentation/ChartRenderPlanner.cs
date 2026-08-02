@@ -586,6 +586,8 @@ public sealed class ChartScenePlan
     public IReadOnlyList<ChartAreaSeriesPrimitive> AreaSeries { get; init; } = Array.Empty<ChartAreaSeriesPrimitive>();
     public IReadOnlyList<ChartFunnelSegmentPrimitive> FunnelSegments { get; init; } = Array.Empty<ChartFunnelSegmentPrimitive>();
     public IReadOnlyList<ChartPieSlicePrimitive> PieSlices { get; init; } = Array.Empty<ChartPieSlicePrimitive>();
+    public OfPieType? OfPieSecondaryType { get; init; }
+    public IReadOnlyList<ChartPieSlicePrimitive> OfPieSecondarySlices { get; init; } = Array.Empty<ChartPieSlicePrimitive>();
     public IReadOnlyList<ChartPieSlicePrimitive> DoughnutSlices { get; init; } = Array.Empty<ChartPieSlicePrimitive>();
     public ChartScatterPrimitivePlan? Scatter { get; init; }
     public ChartBubblePrimitivePlan? Bubble { get; init; }
@@ -1551,6 +1553,8 @@ public static partial class ChartRenderPlanner
         IReadOnlyList<ChartAreaSeriesPrimitive> areaSeries = Array.Empty<ChartAreaSeriesPrimitive>();
         IReadOnlyList<ChartFunnelSegmentPrimitive> funnelSegments = Array.Empty<ChartFunnelSegmentPrimitive>();
         IReadOnlyList<ChartPieSlicePrimitive> pieSlices = Array.Empty<ChartPieSlicePrimitive>();
+        IReadOnlyList<ChartPieSlicePrimitive> ofPieSecondarySlices = Array.Empty<ChartPieSlicePrimitive>();
+        OfPieType? ofPieSecondaryType = null;
         IReadOnlyList<ChartPieSlicePrimitive> doughnutSlices = Array.Empty<ChartPieSlicePrimitive>();
         ChartScatterPrimitivePlan? scatter = null;
         ChartBubblePrimitivePlan? bubble = null;
@@ -1587,7 +1591,18 @@ public static partial class ChartRenderPlanner
                 }
                 break;
             case ChartSceneGeometryKind.Pie:
-                pieSlices = BuildPieSlicePrimitives(chart, plot, seriesColors, fillPlans);
+                if (chart.ChartType == ChartType.OfPie)
+                {
+                    var ofPie = BuildOfPiePrimitives(chart, plot, seriesColors, fillPlans);
+                    pieSlices = ofPie.PrimarySlices;
+                    ofPieSecondarySlices = ofPie.SecondarySlices;
+                    ofPieSecondaryType = chart.OfPieType;
+                    rectangles = ofPie.SecondaryBars;
+                }
+                else
+                {
+                    pieSlices = BuildPieSlicePrimitives(chart, plot, seriesColors, fillPlans);
+                }
                 break;
             case ChartSceneGeometryKind.Doughnut:
                 doughnutSlices = BuildDoughnutSlicePrimitives(chart, plot, seriesColors, fillPlans);
@@ -1675,6 +1690,8 @@ public static partial class ChartRenderPlanner
             AreaSeries = areaSeries,
             FunnelSegments = funnelSegments,
             PieSlices = pieSlices,
+            OfPieSecondaryType = ofPieSecondaryType,
+            OfPieSecondarySlices = ofPieSecondarySlices,
             DoughnutSlices = doughnutSlices,
             Scatter = scatter,
             Bubble = bubble,
@@ -6806,6 +6823,147 @@ public static partial class ChartRenderPlanner
         };
     }
 
+    private readonly record struct OfPieScenePrimitives(
+        IReadOnlyList<ChartPieSlicePrimitive> PrimarySlices,
+        IReadOnlyList<ChartPieSlicePrimitive> SecondarySlices,
+        IReadOnlyList<ChartRectPrimitive> SecondaryBars);
+
+    private static OfPieScenePrimitives BuildOfPiePrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
+    {
+        if (chart.Series.Count == 0 || !plot.HasPositiveArea)
+            return new(Array.Empty<ChartPieSlicePrimitive>(), Array.Empty<ChartPieSlicePrimitive>(), Array.Empty<ChartRectPrimitive>());
+
+        var values = GetVisiblePieValues(chart.Series[0]);
+        if (values.Count < 2)
+        {
+            var only = BuildPieSlicePrimitives(chart, plot, seriesColors, fillPlans);
+            return new(only, Array.Empty<ChartPieSlicePrimitive>(), Array.Empty<ChartRectPrimitive>());
+        }
+
+        var secondaryIndices = ResolveOfPieSecondaryIndices(chart, values);
+        var primaryIndices = values
+            .Select(value => value.PointIndex)
+            .Where(pointIndex => !secondaryIndices.Contains(pointIndex))
+            .ToHashSet();
+        if (primaryIndices.Count == 0)
+        {
+            int retained = secondaryIndices.OrderBy(pointIndex => pointIndex).First();
+            secondaryIndices.Remove(retained);
+            primaryIndices.Add(retained);
+        }
+        if (secondaryIndices.Count == 0)
+        {
+            int moved = primaryIndices.OrderByDescending(pointIndex => pointIndex).First();
+            primaryIndices.Remove(moved);
+            secondaryIndices.Add(moved);
+        }
+
+        double gap = Math.Min(16.0, plot.Width * 0.06);
+        double primaryWidth = Math.Max(1.0, (plot.Width - gap) * 0.58);
+        double secondaryWidth = Math.Max(1.0, plot.Width - gap - primaryWidth);
+        var primaryPlot = new ChartPlanRect(plot.X, plot.Y, primaryWidth, plot.Height);
+        double secondaryScale = Math.Clamp(chart.OfPieSecondPieSizePercent ?? 100, 40, 100) / 100.0;
+        double secondaryHeight = Math.Max(1.0, plot.Height * secondaryScale);
+        var secondaryPlot = new ChartPlanRect(
+            plot.X + primaryWidth + gap,
+            plot.Y + (plot.Height - secondaryHeight) / 2.0,
+            secondaryWidth,
+            secondaryHeight);
+
+        var primary = BuildSlicePrimitivesForSeries(
+            chart.Series[0], 0, primaryPlot, 0,
+            Math.Min(primaryPlot.Width, primaryPlot.Height) / 2.0 * 0.85,
+            ResolvePieStartAngle(chart), seriesColors, fillPlans,
+            ShouldVaryPointColors(chart), 1.0, 0,
+            primaryIndices);
+
+        if (chart.OfPieType == OfPieType.Bar)
+        {
+            return new(
+                primary,
+                Array.Empty<ChartPieSlicePrimitive>(),
+                BuildOfPieBarPrimitives(chart.Series[0], secondaryIndices, secondaryPlot, seriesColors, fillPlans, ShouldVaryPointColors(chart)));
+        }
+
+        var secondary = BuildSlicePrimitivesForSeries(
+            chart.Series[0], 0, secondaryPlot, 0,
+            Math.Min(secondaryPlot.Width, secondaryPlot.Height) / 2.0 * 0.85,
+            ResolvePieStartAngle(chart), seriesColors, fillPlans,
+            ShouldVaryPointColors(chart), 1.0, 0,
+            secondaryIndices);
+        return new(primary, secondary, Array.Empty<ChartRectPrimitive>());
+    }
+
+    private static HashSet<int> ResolveOfPieSecondaryIndices(
+        ChartShape chart,
+        IReadOnlyList<(int PointIndex, double Value)> values)
+    {
+        double total = values.Sum(value => value.Value);
+        var selected = chart.OfPieSplitType switch
+        {
+            OfPieSplitType.Position => values
+                .TakeLast(Math.Clamp((int)Math.Round(chart.OfPieSplitPosition ?? 2), 1, values.Count - 1))
+                .Select(value => value.PointIndex),
+            OfPieSplitType.Percent => values
+                .Where(value => value.Value / total * 100.0 <= Math.Clamp(chart.OfPieSplitPosition ?? 10, 0, 100))
+                .Select(value => value.PointIndex),
+            OfPieSplitType.Value => values
+                .Where(value => value.Value <= Math.Max(0, chart.OfPieSplitPosition ?? 0))
+                .Select(value => value.PointIndex),
+            OfPieSplitType.Custom when chart.OfPieCustomPointIndices.Count > 0 =>
+                values.Where(value => chart.OfPieCustomPointIndices.Contains(value.PointIndex)).Select(value => value.PointIndex),
+            OfPieSplitType.Custom => values.TakeLast(Math.Min(2, values.Count - 1)).Select(value => value.PointIndex),
+            _ => values.TakeLast(Math.Min(3, values.Count - 1)).Select(value => value.PointIndex)
+        };
+        var result = selected.ToHashSet();
+        if (result.Count == 0)
+            result.Add(values[^1].PointIndex);
+        if (result.Count == values.Count)
+            result.Remove(values[0].PointIndex);
+        return result;
+    }
+
+    private static IReadOnlyList<ChartRectPrimitive> BuildOfPieBarPrimitives(
+        ChartSeries series,
+        IReadOnlySet<int> pointIndices,
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans,
+        bool varyByPoint)
+    {
+        var values = GetVisiblePieValues(series)
+            .Where(value => pointIndices.Contains(value.PointIndex))
+            .ToArray();
+        if (values.Length == 0)
+            return Array.Empty<ChartRectPrimitive>();
+
+        double max = values.Max(value => value.Value);
+        double slot = plot.Width / values.Length;
+        var bars = new List<ChartRectPrimitive>(values.Length);
+        for (int index = 0; index < values.Length; index++)
+        {
+            var value = values[index];
+            double height = Math.Max(0.5, value.Value / max * Math.Max(1.0, plot.Height - 12.0));
+            var bounds = new ChartPlanRect(
+                plot.X + index * slot + slot * 0.14,
+                plot.Bottom - height,
+                Math.Max(1.0, slot * 0.72),
+                height);
+            bars.Add(new ChartRectPrimitive(
+                0,
+                value.PointIndex,
+                bounds,
+                ResolvePointFill(series, 0, value.PointIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
+                new ChartStrokePlan(new SrgbColor(0xFF, 0xFF, 0xFF), 230, 0.8)));
+        }
+
+        return bars;
+    }
+
     public static (double min, double max, double majorUnit) ComputePrimaryValueAxisRange(
         ChartShape chart)
     {
@@ -7681,10 +7839,13 @@ public static partial class ChartRenderPlanner
         ChartFillPlanSet? fillPlans,
         bool varyByPoint,
         double verticalScale,
-        double depthOffsetY)
+        double depthOffsetY,
+        IReadOnlySet<int>? includedPointIndices = null)
     {
-        var values = GetVisiblePieValues(series);
-        if (values.Count == 0)
+        var values = GetVisiblePieValues(series)
+            .Where(value => includedPointIndices is null || includedPointIndices.Contains(value.PointIndex))
+            .ToArray();
+        if (values.Length == 0)
             return Array.Empty<ChartPieSlicePrimitive>();
 
         double total = values.Sum(value => value.Value);
@@ -7695,7 +7856,7 @@ public static partial class ChartRenderPlanner
             plot.X + plot.Width / 2,
             plot.Y + plot.Height / 2);
         double startAngle = initialStartAngle;
-        var primitives = new List<ChartPieSlicePrimitive>(values.Count);
+        var primitives = new List<ChartPieSlicePrimitive>(values.Length);
         foreach (var visibleValue in values)
         {
             double sweepAngle = visibleValue.Value / total * 2 * Math.PI;

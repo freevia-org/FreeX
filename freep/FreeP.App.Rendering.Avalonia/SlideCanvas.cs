@@ -1679,7 +1679,7 @@ public sealed class SlideCanvas : Control
     private static void RenderPieChart(DrawingContext dc, ChartScenePlan scene)
     {
         var borderPen = new Pen(Brushes.White, 0.8);
-        foreach (var primitive in scene.PieSlices)
+        foreach (var primitive in scene.PieSlices.Concat(scene.OfPieSecondarySlices))
         {
             var fill = primitive.Fill!.Value;
             if (primitive.DepthFill is { } depthFill)
@@ -1711,6 +1711,9 @@ public sealed class SlideCanvas : Control
             var geo = ToPieSliceGeometry(primitive);
             dc.DrawGeometry(brush, borderPen, geo);
         }
+
+        if (scene.OfPieSecondaryType == OfPieType.Bar)
+            RenderColumnChart(dc, scene);
     }
 
     private static StreamGeometry ToPieSliceGeometry(ChartPieSlicePrimitive primitive, double offsetY = 0)

@@ -863,6 +863,34 @@ public sealed class ChartDataDialogPlannerTests
     }
 
     [Fact]
+    public void ChartPieOptionsPlanner_AuthorsOfPieSplitMembershipWithoutMutatingChart()
+    {
+        var chart = MakeChart();
+        chart.ChartType = ChartType.OfPie;
+        chart.OfPieType = OfPieType.Pie;
+        chart.OfPieSplitType = OfPieSplitType.Auto;
+
+        var planner = ChartPieOptionsPlanner.FromChart(chart);
+        planner.SetOfPieType(OfPieType.Bar);
+        planner.SetOfPieSplitType(OfPieSplitType.Custom);
+        planner.SetOfPieSplitPosition(2);
+        planner.SetOfPieSecondPieSizePercent(75);
+        planner.SetOfPieCustomPointIndices(new[] { 0, 2, 2, -1, 99 });
+
+        var options = planner.BuildCommitPlan();
+        options.FirstSliceAngleDegrees.Should().Be(chart.FirstSliceAngleDegrees);
+        options.DoughnutHolePercent.Should().Be(chart.DoughnutHolePercent);
+        options.OfPieType.Should().Be(OfPieType.Bar);
+        options.OfPieSplitType.Should().Be(OfPieSplitType.Custom);
+        options.OfPieSplitPosition.Should().Be(2);
+        options.OfPieSecondPieSizePercent.Should().Be(75);
+        options.OfPieCustomPointIndices.Should().Equal(0, 2);
+        chart.OfPieType.Should().Be(OfPieType.Pie);
+        chart.OfPieSplitType.Should().Be(OfPieSplitType.Auto);
+        chart.OfPieCustomPointIndices.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ChartPlotStyleOptionsPlanner_UsesWorkingCopyForScatterAndRadarStyles()
     {
         var chart = MakeChart();

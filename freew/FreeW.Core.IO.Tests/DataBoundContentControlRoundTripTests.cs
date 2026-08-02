@@ -13,7 +13,67 @@ public sealed class DataBoundContentControlRoundTripTests
         $"<?xml version=\"1.0\" encoding=\"utf-8\"?><ds:datastoreItem ds:itemID=\"{StoreItemId}\" xmlns:ds=\"http://schemas.openxmlformats.org/officeDocument/2006/customXml\"><ds:schemaRefs><ds:schemaRef ds:uri=\"urn:freew:test\"/></ds:schemaRefs></ds:datastoreItem>");
 
     [Fact]
-    public void BoundControl_RetainsCustomXmlGraphAndBindingAcrossEditedDisplayText()
+    public void BoundPlainTextControl_RefreshesDisplayedTextFromCustomXmlOnOpen()
+    {
+        using var input = BuildPackage();
+
+        var document = DocxReader.Read(input);
+
+        document.Paragraphs.Single().Runs.Single().Text.Should().Be("Original value");
+    }
+
+    [Fact]
+    public void BoundPlainTextControl_RefreshesAfterCustomXmlItemChanges()
+    {
+        using var input = BuildPackage();
+        var document = DocxReader.Read(input);
+        var itemIndex = document.Preserved.Parts.FindIndex(part => part.PartName == "/customXml/item1.xml");
+        document.Preserved.Parts[itemIndex] = document.Preserved.Parts[itemIndex] with
+        {
+            Bytes = Encoding.UTF8.GetBytes(
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>Updated value</name></root>")
+        };
+
+        CustomXmlDataBindingResolver.RefreshBoundPlainTextControls(document).Should().Be(1);
+
+        document.Paragraphs.Single().Runs.Single().Text.Should().Be("Updated value");
+    }
+
+    [Fact]
+    public void BoundPlainTextControl_MissingXPathTargetPreservesSerializedDisplayText()
+    {
+        using var input = BuildPackage(xpath: "/ns0:root/ns0:missing");
+
+        var document = DocxReader.Read(input);
+
+        document.Paragraphs.Single().Runs.Single().Text.Should().Be("Original display value");
+    }
+
+    [Fact]
+    public void BoundPlainTextControl_ResolvesNamespacedAttributeXPath()
+    {
+        var item = Encoding.UTF8.GetBytes(
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name code=\"A-17\">Original value</name></root>");
+        using var input = BuildPackage(xpath: "/ns0:root/ns0:name/@code", itemBytes: item);
+
+        var document = DocxReader.Read(input);
+
+        document.Paragraphs.Single().Runs.Single().Text.Should().Be("A-17");
+    }
+
+    [Fact]
+    public void BoundBlockPlainTextControl_RefreshesDisplayedTextFromCustomXmlOnOpen()
+    {
+        using var input = BuildPackage(blockLevel: true);
+
+        var document = DocxReader.Read(input);
+
+        document.Paragraphs.Single().BlockContentControl!.Kind.Should().Be(BlockContentControlKind.PlainText);
+        document.Paragraphs.Single().Runs.Single().Text.Should().Be("Original value");
+    }
+
+    [Fact]
+    public void BoundControl_RetainsCustomXmlGraphAndRefreshesEditedDisplayTextWhenReopened()
     {
         using var input = BuildPackage();
         var document = DocxReader.Read(input);
@@ -37,7 +97,7 @@ public sealed class DataBoundContentControlRoundTripTests
         var second = Write(reopened);
         EntryBytes(second, "customXml/item1.xml").Should().Equal(ItemBytes);
         EntryBytes(second, "customXml/itemProps1.xml").Should().Equal(ItemPropsBytes);
-        AssertBoundDocument(second, "Edited display value");
+        AssertBoundDocument(second, "Original value");
     }
 
     private static void AssertBoundDocument(byte[] package, string expectedText)
@@ -71,7 +131,10 @@ public sealed class DataBoundContentControlRoundTripTests
     private static string EntryText(byte[] package, string path) =>
         Encoding.UTF8.GetString(EntryBytes(package, path));
 
-    private static MemoryStream BuildPackage()
+    private static MemoryStream BuildPackage(
+        string xpath = "/ns0:root/ns0:name",
+        byte[]? itemBytes = null,
+        bool blockLevel = false)
     {
         var stream = new MemoryStream();
         using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
@@ -89,20 +152,34 @@ public sealed class DataBoundContentControlRoundTripTests
                   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
                 </Relationships>
                 """);
-            Add(zip, "word/document.xml", $$"""
-                <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-                  <w:body><w:p><w:sdt><w:sdtPr>
-                    <w:dataBinding w:prefixMappings="xmlns:ns0='urn:freew:test'" w:xpath="/ns0:root/ns0:name" w:storeItemID="{{StoreItemId}}"/>
-                    <w:id w:val="17"/><w:tag w:val="BoundName"/><w:text/>
-                  </w:sdtPr><w:sdtContent><w:r><w:t>Original display value</w:t></w:r></w:sdtContent></w:sdt></w:p><w:sectPr/></w:body>
-                </w:document>
-                """);
+            if (blockLevel)
+            {
+                Add(zip, "word/document.xml", $$"""
+                    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                      <w:body><w:sdt><w:sdtPr>
+                        <w:dataBinding w:prefixMappings="xmlns:ns0='urn:freew:test'" w:xpath="{{xpath}}" w:storeItemID="{{StoreItemId}}"/>
+                        <w:id w:val="17"/><w:tag w:val="BoundName"/><w:text/>
+                      </w:sdtPr><w:sdtContent><w:p><w:r><w:t>Original display value</w:t></w:r></w:p></w:sdtContent></w:sdt><w:sectPr/></w:body>
+                    </w:document>
+                    """);
+            }
+            else
+            {
+                Add(zip, "word/document.xml", $$"""
+                    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+                      <w:body><w:p><w:sdt><w:sdtPr>
+                        <w:dataBinding w:prefixMappings="xmlns:ns0='urn:freew:test'" w:xpath="{{xpath}}" w:storeItemID="{{StoreItemId}}"/>
+                        <w:id w:val="17"/><w:tag w:val="BoundName"/><w:text/>
+                      </w:sdtPr><w:sdtContent><w:r><w:t>Original display value</w:t></w:r></w:sdtContent></w:sdt></w:p><w:sectPr/></w:body>
+                    </w:document>
+                    """);
+            }
             Add(zip, "word/_rels/document.xml.rels", """
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
                   <Relationship Id="rIdCustomXml" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml" Target="../customXml/item1.xml"/>
                 </Relationships>
                 """);
-            Add(zip, "customXml/item1.xml", ItemBytes);
+            Add(zip, "customXml/item1.xml", itemBytes ?? ItemBytes);
             Add(zip, "customXml/itemProps1.xml", ItemPropsBytes);
             Add(zip, "customXml/_rels/item1.xml.rels", """
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">

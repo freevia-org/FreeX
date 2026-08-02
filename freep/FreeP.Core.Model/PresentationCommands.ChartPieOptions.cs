@@ -1,6 +1,6 @@
 namespace FreeP.Core.Model;
 
-/// <summary>Atomically updates the authored pie/doughnut rotation and doughnut hole settings.</summary>
+/// <summary>Atomically updates authored pie, doughnut, and pie-of-pie settings.</summary>
 public sealed class SetChartPieOptionsCommand : IPresentationCommand
 {
     private readonly int _slideIndex;
@@ -39,11 +39,16 @@ public sealed class SetChartPieOptionsCommand : IPresentationCommand
     }
 
     private static bool Supports(ChartShape? chart) =>
-        chart is not null && chart.ChartType is ChartType.Pie or ChartType.Doughnut;
+        chart is not null && chart.ChartType is (ChartType.Pie or ChartType.Doughnut or ChartType.OfPie);
 
     private static ChartPieOptions ReadOptions(ChartShape chart) => new(
         chart.FirstSliceAngleDegrees,
-        Math.Clamp(chart.DoughnutHolePercent, 10, 90));
+        Math.Clamp(chart.DoughnutHolePercent, 10, 90),
+        chart.ChartType == ChartType.OfPie ? chart.OfPieType : null,
+        chart.ChartType == ChartType.OfPie ? chart.OfPieSplitType : null,
+        chart.ChartType == ChartType.OfPie ? chart.OfPieSplitPosition : null,
+        chart.ChartType == ChartType.OfPie ? chart.OfPieSecondPieSizePercent : null,
+        chart.ChartType == ChartType.OfPie ? chart.OfPieCustomPointIndices.ToArray() : null);
 
     private static void ApplyOptions(ChartShape chart, ChartPieOptions options)
     {
@@ -51,5 +56,18 @@ public sealed class SetChartPieOptionsCommand : IPresentationCommand
             ? Math.Clamp(angle, 0, 359)
             : null;
         chart.DoughnutHolePercent = Math.Clamp(options.DoughnutHolePercent, 10, 90);
+        if (chart.ChartType != ChartType.OfPie || options.OfPieType is null)
+            return;
+
+        chart.OfPieType = options.OfPieType.Value;
+        chart.OfPieSplitType = options.OfPieSplitType;
+        chart.OfPieSplitPosition = options.OfPieSplitPosition;
+        chart.OfPieSecondPieSizePercent = options.OfPieSecondPieSizePercent is { } size
+            ? Math.Clamp(size, 5, 200)
+            : null;
+        chart.OfPieCustomPointIndices = options.OfPieCustomPointIndices?
+            .Where(index => index >= 0)
+            .Distinct()
+            .ToList() ?? [];
     }
 }

@@ -505,6 +505,12 @@ internal static class PptxChartReader
             el.Element(C + "splitPos")?.Attribute("val")?.Value);
         shape.OfPieSecondPieSizePercent = ParseNullableInt(
             el.Element(C + "secondPieSize")?.Attribute("val")?.Value);
+        shape.OfPieCustomPointIndices = (el.Element(C + "custSplit")?.Elements(C + "secondPiePt") ?? Enumerable.Empty<XElement>())
+            .Concat(el.Elements(C + "secondPiePt"))
+            .Select(point => ParseNullableInt(point.Attribute("val")?.Value))
+            .OfType<int>()
+            .Distinct()
+            .ToList();
         shape.BarGapWidthPercent = ParseNullableInt(
             el.Element(C + "gapWidth")?.Attribute("val")?.Value);
         shape.OfPieSeriesLinesSpecified = el.Element(C + "serLines") is not null;
