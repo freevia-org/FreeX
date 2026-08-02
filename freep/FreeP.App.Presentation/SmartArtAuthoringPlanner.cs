@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Security.Cryptography;
 using System.Xml;
@@ -498,11 +499,22 @@ public static class SmartArtAuthoringPlanner
         smartArt.QuickStyle.Title = title;
         smartArt.QuickStyle.Category = category;
         smartArt.QuickStyle.StyleLabels.Clear();
+        smartArt.QuickStyle.StyleLabelMetadata.Clear();
         foreach (var label in styleDefinition.Elements(Diagram + "styleLbl"))
         {
             var name = label.Attribute("name")?.Value;
-            if (!string.IsNullOrWhiteSpace(name))
-                smartArt.QuickStyle.StyleLabels.Add(name);
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            smartArt.QuickStyle.StyleLabels.Add(name);
+            smartArt.QuickStyle.StyleLabelMetadata.Add(new SmartArtQuickStyleLabelMetadata
+            {
+                Name = name,
+                LineReferenceIndex = ParseNullableInt(label.Element(Diagram + "lnRef")?.Attribute("idx")?.Value),
+                FillReferenceIndex = ParseNullableInt(label.Element(Diagram + "fillRef")?.Attribute("idx")?.Value),
+                EffectReferenceIndex = ParseNullableInt(label.Element(Diagram + "effectRef")?.Attribute("idx")?.Value),
+                FontReferenceIndex = label.Element(Diagram + "fontRef")?.Attribute("idx")?.Value,
+            });
         }
 
         return new SmartArtQuickStyleApplyResult(
@@ -982,6 +994,11 @@ public static class SmartArtAuthoringPlanner
         attributes.Add(new XAttribute("val", color.SchemeRole ?? color.Resolved.ToString()[1..]));
         return new XElement(Drawing + name, attributes, previous.Nodes());
     }
+
+    private static int? ParseNullableInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
 
     private static SmartArtColorGalleryEntry ResolveGalleryEntry(SmartArtColorPreset preset) =>
         preset switch

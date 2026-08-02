@@ -539,6 +539,58 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void ApplyQuickStylePreset_RefreshesStyleLabelReferenceMetadata()
+    {
+        var smartArt = new SmartArtShape
+        {
+            Data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan")),
+            QuickStyle = new SmartArtQuickStyleMetadata
+            {
+                UniqueId = "old-style",
+                StyleLabelMetadata =
+                {
+                    new SmartArtQuickStyleLabelMetadata
+                    {
+                        Name = "stale",
+                        LineReferenceIndex = 99,
+                        FillReferenceIndex = 99,
+                        EffectReferenceIndex = 99,
+                        FontReferenceIndex = "stale",
+                    }
+                }
+            }
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        smartArt.Parts["ppt/diagrams/quickStyle1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/quickStyle1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml",
+            Bytes = Encoding.UTF8.GetBytes(
+                "<dgm:styleDef xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" uniqueId=\"old-style\"><dgm:styleLbl name=\"node0\"><dgm:lnRef idx=\"2\" /><dgm:fillRef idx=\"4\" /><dgm:effectRef idx=\"6\" /><dgm:fontRef idx=\"minor\" /></dgm:styleLbl></dgm:styleDef>")
+        };
+
+        var result = SmartArtAuthoringPlanner.ApplyQuickStylePreset(
+            smartArt,
+            SmartArtQuickStylePreset.IntenseEffect);
+
+        result.Applied.Should().BeTrue();
+        smartArt.QuickStyle!.StyleLabelMetadata.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new SmartArtQuickStyleLabelMetadata
+            {
+                Name = "node0",
+                LineReferenceIndex = 2,
+                FillReferenceIndex = 4,
+                EffectReferenceIndex = 6,
+                FontReferenceIndex = "minor",
+            });
+    }
+
+    [Fact]
     public void ChangeText_UpdatesTargetNodeAndLiveLayoutText()
     {
         var data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"), ("n2", "Build"));
