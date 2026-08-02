@@ -3080,8 +3080,9 @@ public static class DocxReader
     /// whose checked state comes from the nested w14:checked/@val ("1"/"true"/"on"); a w:date marks a
     /// date picker (recovering its w:dateFormat, w:fullDate, w:calendar, w:lid, and
     /// w:storeMappedDataAs); a w:dropDownList / w:comboBox marks a list control (recovering its
-    /// w:listItem choices); a w:picture marks a picture control; a w:richText marks a rich-text control;
-    /// anything else is a plain-text control. A null/absent w:sdtPr yields a default plain-text control.
+    /// w:listItem choices); a w:picture marks a picture control; a w:equation marks an inline equation
+    /// control; a w:richText marks a rich-text control; anything else is a plain-text control. A
+    /// null/absent w:sdtPr yields a default plain-text control.
     /// </summary>
     private static void AddContentControlRuns(
         Paragraph paragraph,
@@ -3260,6 +3261,10 @@ public static class DocxReader
 
         if (sdtPr?.Element(W + "group") is not null)
             return new ContentControl(ContentControlKind.Group, normTag, normAlias,
+                LockMode: lockMode, WordMetadata: wordMetadata);
+
+        if (sdtPr?.Element(W + "equation") is not null)
+            return new ContentControl(ContentControlKind.Equation, normTag, normAlias,
                 LockMode: lockMode, WordMetadata: wordMetadata);
 
         if (sdtPr?.Element(W + "richText") is not null)
