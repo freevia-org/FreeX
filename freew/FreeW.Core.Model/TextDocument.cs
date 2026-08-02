@@ -3692,6 +3692,20 @@ public sealed class TextDocument
     public bool SaveSubsetFonts { get; set; }
 
     /// <summary>
+    /// Whether page borders measured from the text area should exclude the document header region.
+    /// Maps to <c>w:settings/w:bordersDoNotSurroundHeader</c>. False is Word's default and is omitted from
+    /// newly authored packages. This document-global setting is retained independently of page-border geometry.
+    /// </summary>
+    public bool PageBordersDoNotSurroundHeader { get; set; }
+
+    /// <summary>
+    /// Whether page borders measured from the text area should exclude the document footer region.
+    /// Maps to <c>w:settings/w:bordersDoNotSurroundFooter</c>. False is Word's default and is omitted from
+    /// newly authored packages. This document-global setting is retained independently of page-border geometry.
+    /// </summary>
+    public bool PageBordersDoNotSurroundFooter { get; set; }
+
+    /// <summary>
     /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
     /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
     /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);

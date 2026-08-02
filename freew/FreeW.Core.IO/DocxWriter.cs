@@ -210,6 +210,8 @@ public static class DocxWriter
             || document.DoNotAutoCompressPictures
             || document.EmbedSystemFonts
             || document.SaveSubsetFonts
+            || document.PageBordersDoNotSurroundHeader
+            || document.PageBordersDoNotSurroundFooter
             || document.Page.AutoHyphenation
             || anyDifferentOddEvenPages
             || document.Page.MirrorMargins
@@ -275,7 +277,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.EmbedSystemFonts, document.SaveSubsetFonts, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.EmbedSystemFonts, document.SaveSubsetFonts, document.PageBordersDoNotSurroundHeader, document.PageBordersDoNotSurroundFooter, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8278,7 +8280,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, bool embedSystemFonts, bool saveSubsetFonts, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, bool embedSystemFonts, bool saveSubsetFonts, bool pageBordersDoNotSurroundHeader, bool pageBordersDoNotSurroundFooter, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8326,6 +8328,10 @@ public static class DocxWriter
             // in CT_Settings schema order.
             if (mirrorMargins)
                 fresh.Add(new XElement(W + "mirrorMargins"));
+            if (pageBordersDoNotSurroundHeader)
+                fresh.Add(new XElement(W + "bordersDoNotSurroundHeader"));
+            if (pageBordersDoNotSurroundFooter)
+                fresh.Add(new XElement(W + "bordersDoNotSurroundFooter"));
             if (gutterAtTop)
                 fresh.Add(new XElement(W + "gutterAtTop"));
             if (hideSpellingErrors)
@@ -8380,6 +8386,8 @@ public static class DocxWriter
         OverlaySetting(settings, "saveSubsetFonts", saveSubsetFonts ? new XElement(W + "saveSubsetFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
+        OverlaySetting(settings, "bordersDoNotSurroundHeader", pageBordersDoNotSurroundHeader ? new XElement(W + "bordersDoNotSurroundHeader") : null);
+        OverlaySetting(settings, "bordersDoNotSurroundFooter", pageBordersDoNotSurroundFooter ? new XElement(W + "bordersDoNotSurroundFooter") : null);
         OverlaySetting(settings, "gutterAtTop", gutterAtTop ? new XElement(W + "gutterAtTop") : null);
         OverlaySetting(settings, "hideSpellingErrors", hideSpellingErrors ? new XElement(W + "hideSpellingErrors") : null);
         OverlaySetting(settings, "hideGrammaticalErrors", hideGrammaticalErrors ? new XElement(W + "hideGrammaticalErrors") : null);
