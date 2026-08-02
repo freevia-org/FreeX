@@ -213,6 +213,82 @@ public sealed class DocumentViewTrackEditTests
             run.Formatting.AllCaps && !run.Formatting.SmallCaps);
     }
 
+    [StaFact]
+    public void RibbonFontFamily_SelectedRangeTracksAndUndoRestoresInheritedFamily()
+    {
+        var view = BuildView("Hello world");
+        view.RevisionAuthor = "Type Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.font-family"), out var command).Should().BeTrue();
+
+        command!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "Arial" }));
+
+        var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
+        formatted.Formatting.FontFamily.Should().Be("Arial");
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Type Reviewer");
+        formatted.FormatRevision.PreviousFormatting.FontFamily.Should().Be("Calibri");
+        RenderedRun(view, "world").FontFamily.Source.Should().Be("Arial");
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.FontFamily == "Calibri" && run.FormatRevision == null);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world")
+            .Formatting.FontFamily.Should().Be("Arial");
+    }
+
+    [StaFact]
+    public void RibbonFontSize_SelectedRangeTracksPointsAndUndoRestoresInheritedSize()
+    {
+        var view = BuildView("Hello world");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.font-size"), out var command).Should().BeTrue();
+
+        command!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "16" }));
+
+        var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world");
+        formatted.Formatting.FontSizePt.Should().Be(16);
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.PreviousFormatting.FontSizePt.Should().Be(11);
+        RenderedRun(view, "world").FontSize.Should().BeApproximately(16 * 96.0 / 72.0, 0.001);
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.FontSizePt == 11 && run.FormatRevision == null);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world")
+            .Formatting.FontSizePt.Should().Be(16);
+    }
+
+    [StaFact]
+    public void RibbonFontFamilyAndSize_CollapsedCaretKeepNativePendingFormatting()
+    {
+        var view = BuildView("Hello");
+        view.MoveCaretToBlockForTest(0, 5);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.font-family"), out var family).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.font-size"), out var size).Should().BeTrue();
+
+        family!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "Arial" }));
+        size!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "16" }));
+
+        view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.FontFamilyProperty)
+            .Should().Be(new System.Windows.Media.FontFamily("Arial"));
+        view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.FontSizeProperty)
+            .Should().Be(16 * 96.0 / 72.0);
+    }
+
     private static WpfRun RenderedRun(DocumentView view, string text) =>
         view.Document.Blocks.OfType<WpfParagraph>()
             .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())
