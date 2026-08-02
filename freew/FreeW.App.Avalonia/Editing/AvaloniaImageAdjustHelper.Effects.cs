@@ -77,7 +77,8 @@ internal static partial class AvaloniaImageAdjustHelper
             };
             result = CompositeHalo(pixels, width, height, stride, preset.Blur, preset.Distance,
                 PictureEffectVisualPlanner.ResolveShadowOpacity(image, preset.Opacity),
-                Color.FromRgb(0, 0, 0), image);
+                ParseColor(PictureEffectVisualPlanner.ResolveShadowColorHex(image), Color.FromRgb(0, 0, 0)),
+                image);
         }
         else if (image.GlowSizePt > 0)
         {
@@ -118,7 +119,8 @@ internal static partial class AvaloniaImageAdjustHelper
             return CompositeHaloExpanded(
                 pixels, width, height, stride, preset.Blur, preset.Distance,
                 PictureEffectVisualPlanner.ResolveShadowOpacity(image, preset.Opacity),
-                Color.FromRgb(0, 0, 0), image);
+                ParseColor(PictureEffectVisualPlanner.ResolveShadowColorHex(image), Color.FromRgb(0, 0, 0)),
+                image);
         }
 
         if (image.GlowSizePt > 0)

@@ -5,6 +5,36 @@ namespace FreeW.App.Presentation.Tests;
 
 public sealed class PictureEffectVisualPlannerTests
 {
+    [Fact]
+    public void ImportedShadow_UsesAuthoredColor()
+    {
+        var image = new InlineImage([], 1, 1)
+        {
+            ImportedEffects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowColorHex = "102030",
+            },
+        };
+
+        PictureEffectVisualPlanner.ResolveShadowColorHex(image).Should().Be("102030");
+    }
+
+    [Fact]
+    public void PresetShadow_KeepsBlackFallbackWhenNoImportedShadowExists()
+    {
+        var image = new InlineImage([], 1, 1)
+        {
+            ImportedEffects = new ShapeEffectLst
+            {
+                HasGlow = true,
+                ShadowColorHex = "102030",
+            },
+        };
+
+        PictureEffectVisualPlanner.ResolveShadowColorHex(image).Should().Be("000000");
+    }
+
     [Theory]
     [InlineData(0, 0)]
     [InlineData(25000, 0.25)]
