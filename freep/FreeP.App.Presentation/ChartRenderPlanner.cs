@@ -570,6 +570,8 @@ public sealed class ChartScenePlan
     public IReadOnlyList<ChartDataLabelPlan> DataLabels { get; init; } = Array.Empty<ChartDataLabelPlan>();
     /// <summary>Optional two-segment connectors from pie/doughnut slices to outside data labels.</summary>
     public IReadOnlyList<ChartLineSegmentPrimitive> DataLabelLeaderLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
+    /// <summary>PowerPoint pie-of-pie/bar-of-pie series connectors between the two plots.</summary>
+    public IReadOnlyList<ChartLineSegmentPrimitive> OfPieSeriesLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     public ChartDataTablePrimitivePlan DataTable { get; init; }
     public ChartSecondaryValueAxisPrimitivePlan SecondaryAxis { get; init; }
     public IReadOnlyList<ChartTextPlan> CategoryAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
@@ -1650,6 +1652,9 @@ public static partial class ChartRenderPlanner
             seriesColors);
         var trendlines = BuildTrendlinePrimitives(chart, plot, geometryKind, seriesColors);
         var dataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans);
+        var ofPieSeriesLines = chart.ChartType == ChartType.OfPie
+            ? BuildOfPieSeriesLines(chart, ofPieSecondaryType, pieSlices, ofPieSecondarySlices, rectangles)
+            : Array.Empty<ChartLineSegmentPrimitive>();
 
         return new ChartScenePlan
         {
@@ -1675,6 +1680,7 @@ public static partial class ChartRenderPlanner
                 geometryKind,
                 dataLabels,
                 geometryKind == ChartSceneGeometryKind.Pie ? pieSlices : doughnutSlices),
+            OfPieSeriesLines = ofPieSeriesLines,
             DataTable = BuildDataTablePrimitivePlan(chart, frame, seriesColors, fillPlans),
             SecondaryAxis = BuildSecondaryValueAxisPrimitivePlan(chart, frame),
             CategoryAxisLabels = BuildCategoryAxisLabelPlans(chart, frame),
@@ -1756,6 +1762,74 @@ public static partial class ChartRenderPlanner
                 stroke));
         }
 
+        return lines;
+    }
+
+    private static IReadOnlyList<ChartLineSegmentPrimitive> BuildOfPieSeriesLines(
+        ChartShape chart,
+        OfPieType? secondaryType,
+        IReadOnlyList<ChartPieSlicePrimitive> primarySlices,
+        IReadOnlyList<ChartPieSlicePrimitive> secondarySlices,
+        IReadOnlyList<ChartRectPrimitive> secondaryBars)
+    {
+        if (!chart.OfPieSeriesLinesSpecified ||
+            secondaryType is null ||
+            primarySlices.Count == 0 ||
+            (secondaryType == OfPieType.Pie && secondarySlices.Count == 0) ||
+            (secondaryType == OfPieType.Bar && secondaryBars.Count == 0))
+        {
+            return Array.Empty<ChartLineSegmentPrimitive>();
+        }
+
+        ChartPlanPoint primaryCenter = primarySlices[0].Center;
+        double primaryRadius = primarySlices.Max(slice => slice.OuterRadius);
+        double primaryRadiusY = primarySlices.Max(slice => slice.OuterRadiusY);
+
+        ChartPlanPoint secondaryCenter;
+        double secondaryRadius;
+        double secondaryRadiusY;
+        if (secondaryType == OfPieType.Pie)
+        {
+            secondaryCenter = secondarySlices[0].Center;
+            secondaryRadius = secondarySlices.Max(slice => slice.OuterRadius);
+            secondaryRadiusY = secondarySlices.Max(slice => slice.OuterRadiusY);
+        }
+        else
+        {
+            var bounds = secondaryBars.Aggregate(
+                new ChartPlanRect(
+                    secondaryBars.Min(bar => bar.Bounds.X),
+                    secondaryBars.Min(bar => bar.Bounds.Y),
+                    0,
+                    0),
+                (current, bar) => new ChartPlanRect(
+                    Math.Min(current.X, bar.Bounds.X),
+                    Math.Min(current.Y, bar.Bounds.Y),
+                    Math.Max(current.Right, bar.Bounds.Right) - Math.Min(current.X, bar.Bounds.X),
+                    Math.Max(current.Bottom, bar.Bounds.Bottom) - Math.Min(current.Y, bar.Bounds.Y)));
+            secondaryCenter = new ChartPlanPoint(bounds.X + bounds.Width / 2.0, bounds.Y + bounds.Height / 2.0);
+            secondaryRadius = bounds.Width / 2.0;
+            secondaryRadiusY = bounds.Height / 2.0;
+        }
+
+        double primaryYInset = primaryRadiusY * 0.62;
+        double secondaryYInset = secondaryRadiusY * 0.62;
+        var stroke = new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), 220, 0.8);
+        var lines = new ChartLineSegmentPrimitive[2];
+        lines[0] = new ChartLineSegmentPrimitive(
+            -1,
+            -1,
+            -1,
+            new ChartPlanPoint(primaryCenter.X + primaryRadius, primaryCenter.Y - primaryYInset),
+            new ChartPlanPoint(secondaryCenter.X - secondaryRadius, secondaryCenter.Y - secondaryYInset),
+            stroke);
+        lines[1] = new ChartLineSegmentPrimitive(
+            -1,
+            -1,
+            -1,
+            new ChartPlanPoint(primaryCenter.X + primaryRadius, primaryCenter.Y + primaryYInset),
+            new ChartPlanPoint(secondaryCenter.X - secondaryRadius, secondaryCenter.Y + secondaryYInset),
+            stroke);
         return lines;
     }
 

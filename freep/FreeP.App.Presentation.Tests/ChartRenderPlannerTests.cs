@@ -3901,6 +3901,49 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_OfPieSeriesLines_EmitsTwoConnectorsOnlyWhenEnabled()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 40, 30, 20, 10 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.OfPie,
+            OfPieType = OfPieType.Pie,
+            OfPieSplitType = OfPieSplitType.Position,
+            OfPieSplitPosition = 2,
+            OfPieSeriesLinesSpecified = true
+        };
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        scene.OfPieSeriesLines.Should().HaveCount(2);
+        scene.OfPieSeriesLines.Should().OnlyContain(line => line.Start.X < line.End.X);
+    }
+
+    [Fact]
+    public void BuildScenePlan_OfPieSeriesLines_StaysEmptyWhenFlagIsOmitted_AndSupportsBarSecondary()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 50, 25, 15, 10 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.OfPie,
+            OfPieType = OfPieType.Bar,
+            OfPieSplitType = OfPieSplitType.Percent,
+            OfPieSplitPosition = 20
+        };
+        chart.Series.Add(series);
+
+        var disabled = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+        disabled.OfPieSeriesLines.Should().BeEmpty();
+
+        chart.OfPieSeriesLinesSpecified = true;
+        var enabled = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+        enabled.OfPieSeriesLines.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void BuildScenePlan_OfPieBarUsesSecondaryColumnPrimitives()
     {
         var series = new ChartSeries { Name = "Share" };

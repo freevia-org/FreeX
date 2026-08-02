@@ -1678,6 +1678,9 @@ public sealed class SlideCanvas : Control
 
     private static void RenderPieChart(DrawingContext dc, ChartScenePlan scene)
     {
+        foreach (var seriesLine in scene.OfPieSeriesLines)
+            dc.DrawLine(ToPen(seriesLine.Stroke), ToPoint(seriesLine.Start), ToPoint(seriesLine.End));
+
         var borderPen = new Pen(Brushes.White, 0.8);
         foreach (var primitive in scene.PieSlices.Concat(scene.OfPieSecondarySlices))
         {
