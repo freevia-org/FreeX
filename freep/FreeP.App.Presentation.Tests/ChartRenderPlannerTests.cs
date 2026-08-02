@@ -3925,6 +3925,26 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_OfPieCustomSplitUsesAuthoredPointIndices()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 40, 30, 20, 10 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.OfPie,
+            OfPieType = OfPieType.Pie,
+            OfPieSplitType = OfPieSplitType.Custom
+        };
+        chart.OfPieCustomPointIndices.AddRange(new[] { 1, 3 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        scene.PieSlices.Select(slice => slice.PointIndex).Should().Equal(0, 2);
+        scene.OfPieSecondarySlices.Select(slice => slice.PointIndex).Should().Equal(1, 3);
+    }
+
+    [Fact]
     public void BuildPieSlicePrimitives_UsesAuthoredFirstSliceAngle()
     {
         var series = new ChartSeries { Name = "Share" };

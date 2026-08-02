@@ -6914,6 +6914,8 @@ public static partial class ChartRenderPlanner
             OfPieSplitType.Value => values
                 .Where(value => value.Value <= Math.Max(0, chart.OfPieSplitPosition ?? 0))
                 .Select(value => value.PointIndex),
+            OfPieSplitType.Custom when chart.OfPieCustomPointIndices.Count > 0 =>
+                values.Where(value => chart.OfPieCustomPointIndices.Contains(value.PointIndex)).Select(value => value.PointIndex),
             OfPieSplitType.Custom => values.TakeLast(Math.Min(2, values.Count - 1)).Select(value => value.PointIndex),
             _ => values.TakeLast(Math.Min(3, values.Count - 1)).Select(value => value.PointIndex)
         };
