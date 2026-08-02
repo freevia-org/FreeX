@@ -9520,10 +9520,11 @@ public sealed class DocumentView : RichTextBox
         // the view→model round-trip (CommitToModel's ReadTable reconstructs Borders from the view but
         // recovers the toggles and style id from this tag, which WPF FlowDocument tables can't express).
         var isPaginationSegment = paginationPage is not null && segmentCount > 1;
+        var autoFitColumnWidthsDip = ResolveContentAutoFitColumnWidths(table, document);
         var wpf = new WpfTable
         {
             BreakPageBefore = isPaginationSegment && segmentIndex > 0,
-            Margin = ResolveTableBlockMargin(table, document),
+            Margin = ResolveTableBlockMargin(table, document, autoFitColumnWidthsDip?.Sum()),
             Tag = new WpfTableTag(
                 table.Formatting,
                 table.TableStyleId,
@@ -9550,7 +9551,9 @@ public sealed class DocumentView : RichTextBox
             // WPF FlowDocument tables only support column-level (not per-cell) widths, so the model's
             // column widths drive TableColumn.Width here; per-cell widths are preserved in the model
             // for docx round-trip but not individually rendered.
-            if (c < table.ColumnWidthsPt.Count && table.ColumnWidthsPt[c] > 0)
+            if (autoFitColumnWidthsDip is not null)
+                column.Width = new GridLength(autoFitColumnWidthsDip[c]);
+            else if (c < table.ColumnWidthsPt.Count && table.ColumnWidthsPt[c] > 0)
                 column.Width = new GridLength(table.ColumnWidthsPt[c] * PxPerPoint);
             wpf.Columns.Add(column);
         }
@@ -9865,28 +9868,82 @@ public sealed class DocumentView : RichTextBox
         return paragraphs;
     }
 
-    private static Thickness ResolveTableBlockMargin(ModelTable table, TextDocument document)
+    private static Thickness ResolveTableBlockMargin(
+        ModelTable table,
+        TextDocument document,
+        double? measuredWidthDip = null)
     {
         var indent = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
-        var widthPt = table.PreferredWidthPt is > 0
-            ? table.PreferredWidthPt.Value
-            : table.ColumnWidthsPt.Count > 0
-                ? table.ColumnWidthsPt.Where(width => width > 0).Sum()
-                : 0;
-        if (widthPt <= 0)
+        var widthDip = measuredWidthDip is > 0
+            ? measuredWidthDip.Value
+            : table.PreferredWidthPt is > 0
+                ? table.PreferredWidthPt.Value * PxPerPoint
+                : table.ColumnWidthsPt.Count > 0
+                    ? table.ColumnWidthsPt.Where(width => width > 0).Sum() * PxPerPoint
+                    : 0;
+        if (widthDip <= 0)
             return new Thickness(indent, 0, 0, 0);
 
         var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
         var contentWidth = document.Page.ColumnCount > 1
             ? DocumentViewLayoutPlanner.BuildColumnPlan(document.Page, metrics.ContentWidthDip, usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
-        var slack = Math.Max(0, contentWidth - widthPt * PxPerPoint - indent);
+        var slack = Math.Max(0, contentWidth - widthDip - indent);
         return table.Alignment switch
         {
             TableAlignment.Center => new Thickness(indent + slack / 2, 0, slack / 2, 0),
             TableAlignment.Right => new Thickness(indent + slack, 0, 0, 0),
             _ => new Thickness(indent, 0, slack, 0)
         };
+    }
+
+    private static IReadOnlyList<double>? ResolveContentAutoFitColumnWidths(
+        ModelTable table,
+        TextDocument document)
+    {
+        if (table.AutoFit != AutoFitMode.Contents
+            || table.PreferredWidthPt is not null
+            || table.ColumnWidthsPt.Count != 0
+            || table.ColumnCount == 0
+            || table.Rows.SelectMany(row => row.Cells).Any(cell =>
+                cell.GridSpan != 1 || cell.TextDirection != CellTextDirection.Horizontal))
+        {
+            return null;
+        }
+
+        const double contentAllowanceDip = 14;
+        var widths = Enumerable.Repeat(contentAllowanceDip, table.ColumnCount).ToArray();
+        foreach (var row in table.Rows)
+        {
+            for (var columnIndex = 0; columnIndex < row.Cells.Count && columnIndex < widths.Length; columnIndex++)
+            {
+                var cell = row.Cells[columnIndex];
+                var contentWidth = cell.Paragraphs.Count == 0
+                    ? 0
+                    : cell.Paragraphs.Max(paragraph => paragraph.Runs.Sum(run =>
+                        MeasureRunText(run.Text, run, paragraph, document)));
+                widths[columnIndex] = Math.Max(
+                    widths[columnIndex],
+                    contentWidth + contentAllowanceDip);
+            }
+        }
+
+        var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
+        var availableWidth = document.Page.ColumnCount > 1
+            ? DocumentViewLayoutPlanner.BuildColumnPlan(
+                document.Page,
+                metrics.ContentWidthDip,
+                usePageColumns: true).WidthDip
+            : metrics.ContentWidthDip;
+        var totalWidth = widths.Sum();
+        if (totalWidth > availableWidth && totalWidth > 0)
+        {
+            var scale = availableWidth / totalWidth;
+            for (var i = 0; i < widths.Length; i++)
+                widths[i] *= scale;
+        }
+
+        return widths;
     }
 
     private static System.Windows.Controls.Grid BuildCellContentHost(
