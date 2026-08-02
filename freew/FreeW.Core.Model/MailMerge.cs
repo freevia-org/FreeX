@@ -1362,7 +1362,9 @@ public static class MailMerge
             DefaultParagraph = template.DefaultParagraph,
             DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
             EmbedSystemFonts = template.EmbedSystemFonts,
-            SaveSubsetFonts = template.SaveSubsetFonts
+            SaveSubsetFonts = template.SaveSubsetFonts,
+            PageBordersDoNotSurroundHeader = template.PageBordersDoNotSurroundHeader,
+            PageBordersDoNotSurroundFooter = template.PageBordersDoNotSurroundFooter
         };
 
         foreach (var (id, style) in template.Styles)
@@ -1463,7 +1465,9 @@ public static class MailMerge
             DefaultParagraph = template.DefaultParagraph,
             DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
             EmbedSystemFonts = template.EmbedSystemFonts,
-            SaveSubsetFonts = template.SaveSubsetFonts
+            SaveSubsetFonts = template.SaveSubsetFonts,
+            PageBordersDoNotSurroundHeader = template.PageBordersDoNotSurroundHeader,
+            PageBordersDoNotSurroundFooter = template.PageBordersDoNotSurroundFooter
         };
 
         foreach (var (id, style) in template.Styles)
