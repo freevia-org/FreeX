@@ -322,6 +322,30 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingImageShadow_UsesImportedColorAndPreservesBlackPresetFallback()
+    {
+        static System.Windows.Media.Color RenderColor(ShapeEffectLst? importedEffects)
+        {
+            var doc = DocWithFloating();
+            var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+            image.ShadowPreset = 1;
+            image.ImportedEffects = importedEffects;
+
+            var canvas = new Canvas();
+            var view = new DocumentView();
+            view.SetFloatingCanvas(canvas);
+            view.LoadModel(doc);
+
+            return canvas.Children.OfType<Image>().Single().Effect
+                .Should().BeOfType<DropShadowEffect>().Subject.Color;
+        }
+
+        RenderColor(new ShapeEffectLst { HasShadow = true, ShadowColorHex = "102030" })
+            .Should().Be(System.Windows.Media.Color.FromRgb(0x10, 0x20, 0x30));
+        RenderColor(null).Should().Be(System.Windows.Media.Colors.Black);
+    }
+
+    [StaFact]
     public void ObjectFormatSquareImage_UsesItsPositionedFigureForWordWrap()
     {
         var view = new DocumentView();

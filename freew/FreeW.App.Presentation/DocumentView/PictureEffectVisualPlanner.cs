@@ -6,6 +6,16 @@ public static class PictureEffectVisualPlanner
 {
     public const double PresetGlowOpacity = 0.60;
 
+    public static string ResolveShadowColorHex(InlineImage image)
+    {
+        ArgumentNullException.ThrowIfNull(image);
+
+        return image.ImportedEffects is { HasShadow: true } imported &&
+               !string.IsNullOrWhiteSpace(imported.ShadowColorHex)
+            ? imported.ShadowColorHex
+            : "000000";
+    }
+
     public static double ResolveShadowOpacity(InlineImage image, double presetOpacity)
     {
         ArgumentNullException.ThrowIfNull(image);

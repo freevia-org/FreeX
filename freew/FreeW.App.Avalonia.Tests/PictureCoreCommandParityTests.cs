@@ -518,6 +518,65 @@ public sealed class PictureCoreCommandParityTests
     }
 
     [Fact]
+    public async Task ImportedShadowColor_ControlsExpandedHaloAndPresetFallback()
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 16;
+            const int height = 12;
+            var source = OpaqueRaster(width, height);
+
+            static InlineImage ShadowImage(string? importedColor)
+            {
+                return new InlineImage(OnePixelPng(), 160, 120)
+                {
+                    ShadowPreset = 1,
+                    ImportedEffects = importedColor is not null
+                        ? new ShapeEffectLst
+                        {
+                            HasShadow = true,
+                            ShadowAlpha = 100000,
+                            ShadowColorHex = importedColor,
+                        }
+                        : null,
+                };
+            }
+
+            var red = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage("FF0000"));
+            var preset = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(null));
+
+            static IEnumerable<(byte B, byte G, byte R, byte A)> OutsidePixels(
+                AvaloniaPictureEffectRaster raster)
+            {
+                for (var y = 0; y < raster.Height; y++)
+                for (var x = 0; x < raster.Width; x++)
+                {
+                    var inSource = x >= raster.SourcePixelRect.X &&
+                                   x < raster.SourcePixelRect.Right &&
+                                   y >= raster.SourcePixelRect.Y &&
+                                   y < raster.SourcePixelRect.Bottom;
+                    if (inSource)
+                        continue;
+
+                    var offset = y * raster.Stride + x * 4;
+                    yield return (
+                        raster.Pixels[offset],
+                        raster.Pixels[offset + 1],
+                        raster.Pixels[offset + 2],
+                        raster.Pixels[offset + 3]);
+                }
+            }
+
+            OutsidePixels(red).Should().Contain(pixel =>
+                pixel.R > 0 && pixel.G == 0 && pixel.B == 0 && pixel.A > 0);
+            OutsidePixels(preset).Where(pixel => pixel.A > 0)
+                .Should().OnlyContain(pixel => pixel.R == 0 && pixel.G == 0 && pixel.B == 0);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ExpandedEffectCacheFeedsInlineAndFloatingDrawRectsWithoutChangingSourceGeometry()
     {
         await Session.Dispatch(() =>

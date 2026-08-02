@@ -12681,7 +12681,11 @@ public sealed class DocumentView : RichTextBox
                 ShadowDepth  = dist,
                 Direction    = 315,
                 Opacity      = PictureEffectVisualPlanner.ResolveShadowOpacity(image, opacity),
-                Color        = System.Windows.Media.Colors.Black
+                Color        = TryParseColor(
+                    "#" + PictureEffectVisualPlanner.ResolveShadowColorHex(image),
+                    out var shadowColor)
+                    ? shadowColor
+                    : System.Windows.Media.Colors.Black
             };
         }
         else if (image.GlowSizePt > 0)
