@@ -56,4 +56,23 @@ public sealed class SlideShowScreenModeTests
 
         index.Should().Be(2);
     }
+
+    [Fact]
+    public async Task AvaloniaHost_NumericJumpUsesDeckNumberWhenHiddenSlideIsSkipped()
+    {
+        var index = -1;
+        var title = string.Empty;
+        await Session.Dispatch(() =>
+        {
+            var presentation = MakePresentation(3);
+            presentation.Slides[1].IsHidden = true;
+            var window = new SlideShowWindow(presentation, startIndex: 0);
+            window.ExecuteSlideNumberJump(3);
+            index = window.Controller.CurrentSlideIndex;
+            title = window.Controller.CurrentSlide?.Title ?? string.Empty;
+        }, CancellationToken.None);
+
+        index.Should().Be(1);
+        title.Should().Be("Slide 3");
+    }
 }

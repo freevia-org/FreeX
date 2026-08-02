@@ -427,18 +427,43 @@ public static class SlideShowHostPlanner
     public static SlideShowHostCommand PlanSlideNumberJump(
         SlideShowController controller,
         IReadOnlyList<Slide> slides,
-        int oneBasedSlideNumber)
+        int oneBasedSlideNumber,
+        IReadOnlyList<int>? sourceSlideIndices = null)
     {
         ArgumentNullException.ThrowIfNull(controller);
         ArgumentNullException.ThrowIfNull(slides);
 
-        if (oneBasedSlideNumber <= 0 || oneBasedSlideNumber > slides.Count)
+        if (oneBasedSlideNumber <= 0)
             return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+
+        var targetIndex = oneBasedSlideNumber - 1;
+        if (sourceSlideIndices is not null)
+        {
+            if (sourceSlideIndices.Count != slides.Count)
+                return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+
+            targetIndex = -1;
+            var sourceSlideIndex = oneBasedSlideNumber - 1;
+            for (var routeIndex = 0; routeIndex < sourceSlideIndices.Count; routeIndex++)
+            {
+                if (sourceSlideIndices[routeIndex] == sourceSlideIndex)
+                {
+                    targetIndex = routeIndex;
+                    break;
+                }
+            }
+            if (targetIndex < 0)
+                return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+        }
+        else if (targetIndex >= slides.Count)
+        {
+            return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+        }
 
         return PlanJump(
             controller,
             slides,
-            oneBasedSlideNumber - 1,
+            targetIndex,
             animateSlide: false,
             stopAutoAdvance: true);
     }

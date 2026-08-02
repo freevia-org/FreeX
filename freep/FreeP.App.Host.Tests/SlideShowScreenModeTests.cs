@@ -37,4 +37,17 @@ public sealed class SlideShowScreenModeTests
 
         window.Controller.CurrentSlideIndex.Should().Be(2);
     }
+
+    [StaFact]
+    public void WpfHost_NumericJumpUsesDeckNumberWhenHiddenSlideIsSkipped()
+    {
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        var window = new SlideShowWindow(presentation, startIndex: 0);
+
+        window.ExecuteSlideNumberJump(3);
+
+        window.Controller.CurrentSlideIndex.Should().Be(1);
+        window.Controller.CurrentSlide!.Title.Should().Be("Slide 3");
+    }
 }

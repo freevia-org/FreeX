@@ -304,7 +304,8 @@ public sealed class SlideShowWindow : Window
         ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
             _controller,
             _playbackRoute.Slides,
-            oneBasedSlideNumber));
+            oneBasedSlideNumber,
+            _playbackRoute.SourceSlideIndices));
     }
 
     /// <summary>The underlying state machine (for test assertions).</summary>
@@ -563,7 +564,8 @@ public sealed class SlideShowWindow : Window
             ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
                 _controller,
                 _playbackRoute.Slides,
-                slideNumber));
+                slideNumber,
+                _playbackRoute.SourceSlideIndices));
         }
 
         return true;
