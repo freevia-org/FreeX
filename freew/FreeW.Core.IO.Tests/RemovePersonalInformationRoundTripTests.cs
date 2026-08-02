@@ -6,6 +6,8 @@ namespace FreeW.Core.IO.Tests;
 public sealed class RemovePersonalInformationRoundTripTests
 {
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    private static readonly XNamespace Cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+    private static readonly XNamespace Dc = "http://purl.org/dc/elements/1.1/";
 
     [Fact]
     public void EnabledSetting_EmitsCanonicalXmlAndSavesStably()
@@ -83,6 +85,96 @@ public sealed class RemovePersonalInformationRoundTripTests
 
         XNode.DeepEquals(firstSettings, ReadXml(secondSave, "word/settings.xml")).Should().BeTrue();
         Read(secondSave).RemovePersonalInformation.Should().Be(expected);
+    }
+
+    [Fact]
+    public void EnabledSetting_AnonymizesGeneratedPersonalMetadataWithoutMutatingModel()
+    {
+        var document = PersonalizedDocument(removePersonalInformation: true);
+
+        var bytes = Write(document);
+
+        var core = ReadXml(bytes, "docProps/core.xml");
+        core.Root!.Element(Dc + "creator").Should().BeNull();
+        core.Root.Element(Cp + "lastModifiedBy").Should().NotBeNull();
+        core.Root.Element(Cp + "lastModifiedBy")!.Value.Should().BeEmpty();
+
+        var documentXml = ReadXml(bytes, "word/document.xml");
+        documentXml.Descendants().Attributes(W + "author")
+            .Select(attribute => attribute.Value)
+            .Should().HaveCount(3).And.OnlyContain(author => author == "Author");
+
+        var comments = ReadXml(bytes, "word/comments.xml");
+        comments.Descendants(W + "comment").Attributes(W + "author")
+            .Select(attribute => attribute.Value)
+            .Should().Equal("Author", "Author");
+        comments.Descendants(W + "comment").Attributes(W + "initials")
+            .Select(attribute => attribute.Value)
+            .Should().Equal("A", "A");
+
+        document.Properties.Author.Should().Be("Core Alice");
+        document.Properties.LastModifiedBy.Should().Be("Core Bob");
+        document.Comments[1].Author.Should().Be("Editor");
+        document.Comments[1].Replies.Single().Author.Should().Be("Lead Author");
+        document.Paragraphs.Single().Runs.Single().RevisionAuthor.Should().Be("Revision Alice");
+    }
+
+    [Fact]
+    public void DisabledSetting_PreservesGeneratedPersonalMetadata()
+    {
+        var bytes = Write(PersonalizedDocument(removePersonalInformation: false));
+
+        var core = ReadXml(bytes, "docProps/core.xml");
+        core.Root!.Element(Dc + "creator")!.Value.Should().Be("Core Alice");
+        core.Root.Element(Cp + "lastModifiedBy")!.Value.Should().Be("Core Bob");
+
+        var documentXml = ReadXml(bytes, "word/document.xml");
+        documentXml.Descendants().Attributes(W + "author")
+            .Select(attribute => attribute.Value)
+            .Should().Equal("Paragraph Carol", "Revision Alice", "Format Bob");
+
+        var comments = ReadXml(bytes, "word/comments.xml");
+        comments.Descendants(W + "comment").Attributes(W + "author")
+            .Select(attribute => attribute.Value)
+            .Should().Equal("Editor", "Lead Author");
+        comments.Descendants(W + "comment").Attributes(W + "initials")
+            .Select(attribute => attribute.Value)
+            .Should().Equal("ED", "LA");
+    }
+
+    private static TextDocument PersonalizedDocument(bool removePersonalInformation)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.RemovePersonalInformation = removePersonalInformation;
+        document.Properties.Author = "Core Alice";
+        document.Properties.LastModifiedBy = "Core Bob";
+        document.Blocks.Clear();
+
+        var paragraph = new Paragraph
+        {
+            ParagraphFormatRevision = new ParagraphFormatRevision(
+                ParagraphFormatting.Default,
+                "Paragraph Carol",
+                "2026-08-02T04:00:00Z")
+        };
+        paragraph.Runs.Add(new Run("tracked")
+        {
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Revision Alice",
+            RevisionDateXml = "2026-08-02T04:01:00Z",
+            Formatting = RunFormatting.Default with { Bold = true },
+            FormatRevision = new FormatRevision(
+                RunFormatting.Default,
+                "Format Bob",
+                "2026-08-02T04:02:00Z")
+        });
+        document.Blocks.Add(paragraph);
+
+        var comment = new Comment(1, "First", "Editor", "ED");
+        comment.AddReply(2, "Reply", "Lead Author", "LA");
+        document.Comments[comment.Id] = comment;
+        paragraph.Runs[0].CommentId = comment.Id;
+        return document;
     }
 
     private static XDocument SettingsDocument(params XElement?[] settings)

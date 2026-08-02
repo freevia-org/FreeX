@@ -248,16 +248,22 @@ public static class DocxWriter
         var hasExtendedProps = preservedParts.Any(p => p.PartName == OpcPackageProperties.ExtendedPropertiesPartName);
 
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true);
+        void WritePersonalInformationPart(string entryPath, XDocument content)
+        {
+            if (document.RemovePersonalInformation)
+                SanitizePersonalInformation(content);
+            WritePart(archive, entryPath, content);
+        }
+
         WritePart(archive, "[Content_Types].xml", BuildContentTypes(imageExtensions, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasCustomProps, hasSettings, hasBibliography, charts, embeddedObjects.Any(part => !part.EmbeddedObject.IsLinked), smartArts, hasEmbeddedFonts, preservedParts, document.Preserved.ContentTypeDefaults, options.MainDocumentContentType));
         WritePart(archive, "_rels/.rels", BuildPackageRels(hasCustomProps, hasExtendedProps, preservedParts));
-        WritePart(
-            archive,
+        WritePersonalInformationPart(
             OpcPackageProperties.CorePropertiesZipEntry,
             BuildCoreProperties(document));
         if (hasCustomProps)
             WritePart(archive, OpcPackageProperties.CustomPropertiesZipEntry, BuildCustomProperties(document.Preserved.OriginalCustomProperties, document.Page.WatermarkOptions, document.Page.Watermark, document.MarkedAsFinal));
         WritePart(archive, "word/_rels/document.xml.rels", BuildDocumentRels(images, hyperlinks, subDocuments, emitNumbering, headerFooterParts, hasFootnotes, hasEndnotes, hasComments, hasSettings, hasBibliography, charts, embeddedObjects, smartArts, hasEmbeddedFonts, preservedParts));
-        WritePart(archive, "word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, subDocuments, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
+        WritePersonalInformationPart("word/document.xml", BuildDocument(document, images, charts, embeddedObjects, smartArts, hyperlinks, subDocuments, headerFooterParts, preservedNumbering, restartOverrides, preservedParts));
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
@@ -284,7 +290,7 @@ public static class DocxWriter
         // image media bytes go under word/media/.
         foreach (var part in headerFooterParts)
         {
-            WritePart(archive, "word/" + part.FileName,
+            WritePersonalInformationPart("word/" + part.FileName,
                 BuildHeaderFooter(part.IsHeader ? W + "hdr" : W + "ftr", part, preservedNumbering, restartOverrides));
             if (part.Images.Count > 0 || part.PreservedDrawings.Count > 0 || part.Hyperlinks.Count > 0)
             {
@@ -296,7 +302,7 @@ public static class DocxWriter
         }
         if (hasFootnotes)
         {
-            WritePart(archive, FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnoteImages, footnotePreservedDrawings, footnoteHyperlinks, preservedNumbering, restartOverrides));
+            WritePersonalInformationPart(FootnotesPartName.TrimStart('/'), BuildFootnotes(document, footnoteImages, footnotePreservedDrawings, footnoteHyperlinks, preservedNumbering, restartOverrides));
             if (footnoteImages.Count > 0 || footnotePreservedDrawings.Count > 0 || footnoteHyperlinks.Count > 0)
             {
                 WritePart(archive, "word/_rels/footnotes.xml.rels", BuildNoteRels(footnoteImages, footnotePreservedDrawings, footnoteHyperlinks));
@@ -307,7 +313,7 @@ public static class DocxWriter
         }
         if (hasEndnotes)
         {
-            WritePart(archive, EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnoteImages, endnotePreservedDrawings, endnoteHyperlinks, preservedNumbering, restartOverrides));
+            WritePersonalInformationPart(EndnotesPartName.TrimStart('/'), BuildEndnotes(document, endnoteImages, endnotePreservedDrawings, endnoteHyperlinks, preservedNumbering, restartOverrides));
             if (endnoteImages.Count > 0 || endnotePreservedDrawings.Count > 0 || endnoteHyperlinks.Count > 0)
             {
                 WritePart(archive, "word/_rels/endnotes.xml.rels", BuildNoteRels(endnoteImages, endnotePreservedDrawings, endnoteHyperlinks));
@@ -318,7 +324,7 @@ public static class DocxWriter
         }
         if (hasComments)
         {
-            WritePart(archive, CommentsPartName.TrimStart('/'), BuildComments(document, commentImages, commentPreservedDrawings, commentHyperlinks, preservedNumbering, restartOverrides));
+            WritePersonalInformationPart(CommentsPartName.TrimStart('/'), BuildComments(document, commentImages, commentPreservedDrawings, commentHyperlinks, preservedNumbering, restartOverrides));
             // word/commentsExtended.xml threads replies + carries resolved state. Always emitted alongside the
             // comments part (it has an entry per comment even for a flat, single-comment document) so modern
             // Word treats every comment as a thread root and the reply/resolve plumbing round-trips.
@@ -970,6 +976,25 @@ public static class DocxWriter
 
     private static void WritePart(ZipArchive archive, string entryPath, XDocument content)
         => OpcXml.WriteXmlEntry(archive, entryPath, content);
+
+    private static void SanitizePersonalInformation(XDocument content)
+    {
+        if (content.Root is not { } root)
+            return;
+
+        XNamespace cp = "http://schemas.openxmlformats.org/package/2006/metadata/core-properties";
+        XNamespace dc = "http://purl.org/dc/elements/1.1/";
+        if (root.Name == cp + "coreProperties")
+        {
+            root.Element(dc + "creator")?.Remove();
+            root.SetElementValue(cp + "lastModifiedBy", string.Empty);
+        }
+
+        foreach (var author in root.DescendantsAndSelf().Attributes(W + "author"))
+            author.Value = "Author";
+        foreach (var initials in root.DescendantsAndSelf().Attributes(W + "initials"))
+            initials.Value = "A";
+    }
 
     private static void WriteBinaryPart(ZipArchive archive, string entryPath, byte[] content)
     {

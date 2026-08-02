@@ -3596,9 +3596,9 @@ public sealed class TextDocument
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
 
     /// <summary>
-    /// Whether consuming applications should remove personal information from document metadata when saving.
+    /// Whether personal information should be removed from document metadata when saving.
     /// Maps to <c>w:settings/w:removePersonalInformation</c>. False is Word's default and is omitted from
-    /// newly authored packages; this flag preserves the package instruction and does not itself strip metadata.
+    /// newly authored packages. The DOCX writer applies Word's author anonymization policy when enabled.
     /// </summary>
     public bool RemovePersonalInformation { get; set; }
 
