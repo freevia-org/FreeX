@@ -1629,6 +1629,7 @@ public sealed class ChartDataCommandTests
         var chart = p.Slides[0].Shapes[0].Chart!;
         chart.Series[1].SmoothLine = true;
         chart.Series[1].OnSecondaryAxis = true;
+        chart.Series[1].InvertIfNegative = true;
         chart.Series[1].LineStyle = new ChartLineStyle
         {
             Color = new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4)),
@@ -1690,11 +1691,13 @@ public sealed class ChartDataCommandTests
                     Forward = 1.5,
                     Backward = 0.5,
                     DisplayEquation = true,
-                })));
+                },
+                InvertIfNegative: false)));
 
         var series = chart.Series[1];
         series.SmoothLine.Should().BeFalse();
         series.OnSecondaryAxis.Should().BeFalse();
+        series.InvertIfNegative.Should().BeFalse();
         series.FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
         series.Fill.Should().BeNull();
         series.LineStyle!.WidthPt.Should().Be(2.25);
@@ -1731,6 +1734,7 @@ public sealed class ChartDataCommandTests
         var roundTripped = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
         roundTripped.Series[1].SmoothLine.Should().BeFalse();
         roundTripped.Series[1].OnSecondaryAxis.Should().BeFalse();
+        roundTripped.Series[1].InvertIfNegative.Should().BeFalse();
         roundTripped.Series[1].FillColor!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
         roundTripped.Series[1].Fill.Should().BeNull();
         roundTripped.Series[1].LineStyle!.WidthPt.Should().Be(2.25);
@@ -1772,6 +1776,7 @@ public sealed class ChartDataCommandTests
         bus.Undo();
         series.SmoothLine.Should().BeTrue();
         series.OnSecondaryAxis.Should().BeTrue();
+        series.InvertIfNegative.Should().BeTrue();
         var revertedLine = series.LineStyle!;
         var revertedMarker = series.MarkerStyle!;
         revertedLine.WidthPt.Should().Be(1.5);

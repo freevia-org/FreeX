@@ -17,4 +17,5 @@ public sealed record ChartSeriesOptions(
     bool ShowBubbleSize = false,
     ChartErrorBars? ErrorBars = null,
     ChartTrendline? Trendline = null,
-    ChartType? OverrideChartType = null);
+    ChartType? OverrideChartType = null,
+    bool? InvertIfNegative = null);

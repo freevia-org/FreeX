@@ -9,6 +9,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
 
     private bool? _oldSmoothLine;
     private bool _oldOnSecondaryAxis;
+    private bool? _oldInvertIfNegative;
     private ChartType? _oldOverrideChartType;
     private ChartAxis? _oldSecondaryValueAxis;
     private ChartLineStyle? _oldLineStyle;
@@ -37,6 +38,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
 
         _oldSmoothLine = series.SmoothLine;
         _oldOnSecondaryAxis = series.OnSecondaryAxis;
+        _oldInvertIfNegative = series.InvertIfNegative;
         _oldOverrideChartType = series.OverrideChartType;
         _oldSecondaryValueAxis = CloneAxis(chart.SecondaryValueAxis);
         _oldLineStyle = CloneLineStyle(series.LineStyle);
@@ -48,6 +50,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
         _oldTrendline = CloneTrendline(series.Trendline);
 
         series.SmoothLine = _newOptions.SmoothLine;
+        series.InvertIfNegative = _newOptions.InvertIfNegative;
         // The current writer emits combo overrides as a secondary line plot group.
         // Keep the model internally valid even when the dialog only changes the type.
         series.OnSecondaryAxis = _newOptions.OnSecondaryAxis || _newOptions.OverrideChartType.HasValue;
@@ -98,6 +101,7 @@ public sealed class SetChartSeriesOptionsCommand : IPresentationCommand
 
         series.SmoothLine = _oldSmoothLine;
         series.OnSecondaryAxis = _oldOnSecondaryAxis;
+        series.InvertIfNegative = _oldInvertIfNegative;
         series.OverrideChartType = _oldOverrideChartType;
         chart.SecondaryValueAxis = CloneAxis(_oldSecondaryValueAxis);
         series.LineStyle = CloneLineStyle(_oldLineStyle);
