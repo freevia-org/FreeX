@@ -487,6 +487,9 @@ public static class FreePRibbon
             group.Medium("freep.insert-chart-bar", FreePRibbonText.InsertChartBarLabel, RibbonCommandIconKind.ChartColumn, FreePRibbonText.InsertChartBarKeyTip);
             group.Medium("freep.insert-chart-line", FreePRibbonText.InsertChartLineLabel, RibbonCommandIconKind.ChartLine, FreePRibbonText.InsertChartLineKeyTip);
             group.Medium("freep.insert-chart-pie", FreePRibbonText.InsertChartPieLabel, RibbonCommandIconKind.ChartPie, FreePRibbonText.InsertChartPieKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartOfPieCommandId,
+                FreePRibbonText.InsertChartOfPieLabel, RibbonCommandIconKind.ChartPie,
+                FreePRibbonText.InsertChartOfPieKeyTip);
             group.Medium(SlideObjectInsertionPlanner.ChartColumnStackedCommandId,
                 FreePRibbonText.InsertChartColumnStackedLabel, RibbonCommandIconKind.ChartColumn,
                 FreePRibbonText.InsertChartColumnStackedKeyTip);

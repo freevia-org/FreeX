@@ -209,6 +209,8 @@ public sealed class LocTests
             "Ribbon_Command_InsertChartLine_KeyTip",
             "Ribbon_Command_InsertChartPie_Label",
             "Ribbon_Command_InsertChartPie_KeyTip",
+            "Ribbon_Command_InsertChartOfPie_Label",
+            "Ribbon_Command_InsertChartOfPie_KeyTip",
             "Ribbon_Command_InsertChartColumnStacked_Label",
             "Ribbon_Command_InsertChartColumnStacked_KeyTip",
             "Ribbon_Command_InsertChartColumnStacked100_Label",

@@ -389,6 +389,7 @@ public class RibbonEditorCompleteness5BTests
         Assert.Contains("freep.insert-chart-bar",    ids);
         Assert.Contains("freep.insert-chart-line",   ids);
         Assert.Contains("freep.insert-chart-pie",    ids);
+        Assert.Contains("freep.insert-chart-of-pie", ids);
         Assert.Contains("freep.insert-chart-column-stacked", ids);
         Assert.Contains("freep.insert-chart-column-stacked-100", ids);
         Assert.Contains("freep.insert-chart-bar-stacked", ids);
@@ -910,6 +911,16 @@ public class RibbonEditorCompleteness5BTests
         Exec(reg, "freep.insert-chart-pie");
         var added = pres.Slides[0].Shapes.Last();
         Assert.Equal(ChartType.Pie, added.Chart!.ChartType);
+    }
+
+    [Fact]
+    public void Cmd_InsertChartOfPie_AddsOfPieChart()
+    {
+        var (ed, pres) = MakeSession();
+        var reg = MakeRegistry(ed);
+        Exec(reg, "freep.insert-chart-of-pie");
+        var added = pres.Slides[0].Shapes.Last();
+        Assert.Equal(ChartType.OfPie, added.Chart!.ChartType);
     }
 
     [Fact]
@@ -1510,6 +1521,7 @@ public class RibbonEditorCompleteness5BTests
     [InlineData("freep.insert-chart-bar")]
     [InlineData("freep.insert-chart-line")]
     [InlineData("freep.insert-chart-pie")]
+    [InlineData("freep.insert-chart-of-pie")]
     [InlineData("freep.shape-triangle")]
     [InlineData("freep.shape-diamond")]
     [InlineData("freep.shape-hexagon")]
