@@ -4272,15 +4272,65 @@ public sealed class DocumentView : RichTextBox
         if (_formatPainter is not { } clipboard || Selection.IsEmpty)
             return false;
 
-        if (!_formatPainterLocked)
-            _formatPainter = null; // disarm first in single-shot mode; locked mode stays armed
+        var selectedRange = SelectedVisibleTextRange();
+        if (selectedRange is null)
+            return false;
 
-        // Run formatting: stamp the captured character formatting onto the selected text via WPF
-        // selection property values (covers partial-run selections), mirroring the inverse of
-        // ReadRunFormatting / BuildRun. Paragraph formatting then routes through the model bus.
-        ApplyRunFormattingToSelection(clipboard.ApplyTo(RunFormatting.Default));
-        var captured = clipboard.Paragraph;
-        FormatSelectedModelParagraphs(_ => captured);
+        CommitToModel();
+        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
+        for (var i = 0; i < selectedRange.Value.VisibleBlockIndices.Count; i++)
+        {
+            var modelIndex = ModelIndexFromVisible(selectedRange.Value.VisibleBlockIndices[i]);
+            if (modelIndex < 0 || modelIndex >= _model.Blocks.Count
+                || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
+            {
+                continue;
+            }
+
+            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
+            var start = i == 0 ? selectedRange.Value.StartOffset : 0;
+            var end = i == selectedRange.Value.VisibleBlockIndices.Count - 1
+                ? selectedRange.Value.EndOffset
+                : textLength;
+            start = Math.Clamp(start, 0, textLength);
+            end = Math.Clamp(end, 0, textLength);
+            if (end > start)
+                ranges.Add((modelIndex, start, end));
+        }
+
+        if (ranges.Count == 0)
+            return false;
+
+        _commands.BeginUndoGroup();
+        try
+        {
+            foreach (var range in ranges)
+            {
+                _commands.Execute(new FormatRunRangeCommand(
+                    range.BlockIndex,
+                    range.StartOffset,
+                    range.EndOffset,
+                    clipboard.ApplyTo));
+            }
+
+            foreach (var blockIndex in ranges.Select(range => range.BlockIndex).Distinct())
+            {
+                var paragraph = (ModelParagraph)_model.Blocks[blockIndex];
+                _commands.Execute(new SetParagraphFormattingCommand(
+                    blockIndex,
+                    clipboard.ApplyTo(paragraph.Formatting)));
+            }
+
+            _commands.CommitUndoGroup("Format Painter");
+        }
+        catch
+        {
+            _commands.AbortUndoGroup();
+            throw;
+        }
+
+        if (!_formatPainterLocked)
+            _formatPainter = null;
         return true;
     }
 
@@ -4308,13 +4358,12 @@ public sealed class DocumentView : RichTextBox
         var decorations = selection.GetPropertyValue(Inline.TextDecorationsProperty) as TextDecorationCollection;
         var capitals = selection.GetPropertyValue(Typography.CapitalsProperty);
 
-        // Model-only fields (character border, shading, language) are not in the WPF selection property
-        // bag; recover them from the caret run's CharacterFormatMarker tag instead. This gives the "at
-        // caret" value, matching how CaptureCaretParagraphFormatting works for paragraph-level fields.
+        // Model-only fields are not in the WPF selection property bag. Start with the full model snapshot
+        // carried by the caret run, then overlay the properties WPF can represent and may have changed.
         var caretRun = (CaretPosition?.Parent as WpfRun ?? selection.Start.Parent as WpfRun);
-        var charFmt = (caretRun?.Tag as RunMarkers)?.CharacterFormat;
+        var retained = (caretRun?.Tag as RunMarkers)?.CharacterFormat?.Formatting ?? RunFormatting.Default;
 
-        return new RunFormatting
+        return retained with
         {
             Bold = selection.GetPropertyValue(TextElement.FontWeightProperty) is FontWeight w && w >= FontWeights.Bold,
             Italic = selection.GetPropertyValue(TextElement.FontStyleProperty) is FontStyle s && s == FontStyles.Italic,
@@ -4326,11 +4375,11 @@ public sealed class DocumentView : RichTextBox
             FontFamily = selection.GetPropertyValue(TextElement.FontFamilyProperty) is FontFamily family ? family.Source : null,
             FontSizePt = fontSizePt,
             ColorHex = selection.GetPropertyValue(TextElement.ForegroundProperty) is SolidColorBrush fg ? ToHex(fg.Color) : null,
-            HighlightColorHex = selection.GetPropertyValue(TextElement.BackgroundProperty) is SolidColorBrush bg ? ToHex(bg.Color) : null,
-            CharacterBorder = charFmt?.Border,
-            CharacterShadingHex = charFmt?.ShadingHex,
-            CharacterShadingPattern = charFmt?.ShadingPattern ?? ShadingPattern.Clear,
-            LanguageTag = charFmt?.LanguageTag,
+            HighlightColorHex = retained.CharacterShadingHex is not null
+                ? retained.HighlightColorHex
+                : selection.GetPropertyValue(TextElement.BackgroundProperty) is SolidColorBrush bg
+                    ? ToHex(bg.Color)
+                    : null,
         };
     }
 
@@ -10790,6 +10839,10 @@ public sealed class DocumentView : RichTextBox
             FontWeight = fmt.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = fmt.Italic ? FontStyles.Italic : FontStyles.Normal
         };
+        // WPF has no property slots for several Word run properties (advanced typography, character
+        // border/shading metadata, proofing language). Keep the authoritative model snapshot on every
+        // live run so a later CommitToModel cannot silently erase properties the compositor cannot paint.
+        AddMarker(wpf, markers => markers with { CharacterFormat = new CharacterFormatMarker(fmt) });
         // Right-to-left run direction (w:rtl): force this run RTL even inside an LTR paragraph.
         if (fmt.Rtl)
             wpf.FlowDirection = System.Windows.FlowDirection.RightToLeft;
@@ -10823,7 +10876,6 @@ public sealed class DocumentView : RichTextBox
         // underline+overline as a visual approximation (WPF Run cannot draw a real box border inline).
         if (decorationPlan.Border is { } charBdr && decorationPlan.HasBorder)
         {
-            AddMarker(wpf, m => m with { CharacterFormat = (m.CharacterFormat ?? new CharacterFormatMarker(null, null, ShadingPattern.Clear, null)) with { Border = charBdr } });
             // Visual hint: underline + overline in the border colour, thickness proportional to width.
             if (TryParseColor(charBdr.ColorHex, out var bdrColor))
             {
@@ -10838,13 +10890,6 @@ public sealed class DocumentView : RichTextBox
                 wpf.TextDecorations = bdrDecorations;
             }
         }
-        // Character shading pattern and language tag also ride in RunMarkers when set.
-        if (fmt.CharacterShadingHex is not null || fmt.LanguageTag is not null)
-            AddMarker(wpf, m =>
-            {
-                var cf = m.CharacterFormat ?? new CharacterFormatMarker(null, null, ShadingPattern.Clear, null);
-                return m with { CharacterFormat = cf with { ShadingHex = fmt.CharacterShadingHex, ShadingPattern = fmt.CharacterShadingPattern, LanguageTag = fmt.LanguageTag } };
-            });
         // WPF xml:lang / Language for spell-check: set the run's language so the built-in spell checker
         // uses the correct dictionary when one is installed. Falls back to the system default when null.
         if (fmt.LanguageTag is { Length: > 0 } lang)
@@ -11336,15 +11381,11 @@ public sealed class DocumentView : RichTextBox
         CharacterFormatMarker? CharacterFormat = null);
 
     /// <summary>
-    /// Carries the model-only run properties that have no WPF FlowDocument property slot — character
-    /// border, character shading pattern, and proofing language — on the WPF run's Tag so they survive
-    /// a BuildRun → CommitToModel round-trip. ReadRunFormatting(WpfRun) recovers them from the tag.
+    /// Carries the authoritative run-formatting snapshot on the WPF run's Tag. WPF exposes only a subset
+    /// of Word's run properties, so ReadRunFormatting overlays the live WPF values onto this snapshot and
+    /// preserves everything the host cannot represent directly.
     /// </summary>
-    private sealed record CharacterFormatMarker(
-        ParagraphBorder? Border,
-        string? ShadingHex,
-        ShadingPattern ShadingPattern,
-        string? LanguageTag);
+    private sealed record CharacterFormatMarker(RunFormatting Formatting);
 
     /// <summary>
     /// Merge a marker facet into the run's composite <see cref="RunMarkers"/> Tag (creating it on first
@@ -14471,6 +14512,8 @@ public sealed class DocumentView : RichTextBox
             Selection.Select(anchor, caret);
     }
 
+    internal bool ApplyFormatPainterToSelectionForTest() => TryApplyFormatPainter();
+
     internal void BackspaceForTest()
     {
         if (!TryRecordTrackedBackspace())
@@ -16720,18 +16763,15 @@ public sealed class DocumentView : RichTextBox
 
         var capitals = Typography.GetCapitals(run);
 
-        // Recover model-only fields (character border, shading, language) from the CharacterFormatMarker
-        // tag set by BuildRun. The background brush is also inspected for the highlight/shading fallback
-        // (plain runs without the marker use the background as-is for HighlightColorHex).
-        var charFmt = (run.Tag as RunMarkers)?.CharacterFormat;
-        var charBorder = charFmt?.Border;
-        var charShadingHex = charFmt?.ShadingHex;
-        var charShadingPattern = charFmt?.ShadingPattern ?? ShadingPattern.Clear;
-        var languageTag = charFmt?.LanguageTag;
+        // Recover the complete model snapshot set by BuildRun. Live WPF properties are overlaid below;
+        // model-only Word properties remain authoritative through an edit/commit round-trip.
+        var retained = (run.Tag as RunMarkers)?.CharacterFormat?.Formatting ?? RunFormatting.Default;
+        var charBorder = retained.CharacterBorder;
+        var charShadingHex = retained.CharacterShadingHex;
 
         // The background brush is the rendered colour of either CharacterShading or Highlight; use the
         // marker to tell them apart (marker present → shading, no marker → highlight).
-        string? highlightHex = null;
+        var highlightHex = retained.HighlightColorHex;
         if (run.Background is SolidColorBrush bg)
         {
             if (charShadingHex is null)
@@ -16739,7 +16779,7 @@ public sealed class DocumentView : RichTextBox
             // else: the background was set from CharacterShadingHex; don't also capture as highlight.
         }
 
-        return new RunFormatting
+        return retained with
         {
             Bold = run.FontWeight >= FontWeights.Bold,
             Italic = run.FontStyle == FontStyles.Italic,
@@ -16751,8 +16791,12 @@ public sealed class DocumentView : RichTextBox
             // if CharacterBorder is set we strip all decorations and trust the model marker; the real
             // underline/strikethrough state comes back through the next full round-trip from the model.
             // For the common case (no character border), the standard paths apply unchanged.
-            Underline = charBorder is null && run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true,
-            Strikethrough = charBorder is null && run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true,
+            Underline = charBorder is null
+                ? run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true
+                : retained.Underline,
+            Strikethrough = charBorder is null
+                ? run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true
+                : retained.Strikethrough,
             SmallCaps = capitals == FontCapitals.SmallCaps,
             AllCaps = capitals == FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
@@ -16762,10 +16806,6 @@ public sealed class DocumentView : RichTextBox
             FontSizePt = fontSizePt,
             ColorHex = run.Foreground is SolidColorBrush brush ? ToHex(brush.Color) : null,
             HighlightColorHex = highlightHex,
-            CharacterBorder = charBorder,
-            CharacterShadingHex = charShadingHex,
-            CharacterShadingPattern = charShadingPattern,
-            LanguageTag = languageTag,
         };
     }
 
@@ -16942,6 +16982,7 @@ public sealed class DocumentView : RichTextBox
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
             SmallCaps = r.SmallCaps || style.SmallCaps || d.SmallCaps,
             AllCaps = r.AllCaps || style.AllCaps || d.AllCaps,
+            Rtl = r.Rtl || style.Rtl || d.Rtl,
             VerticalAlign = r.VerticalAlign != VerticalAlign.Baseline ? r.VerticalAlign
                 : style.VerticalAlign != VerticalAlign.Baseline ? style.VerticalAlign
                 : d.VerticalAlign,
@@ -16954,6 +16995,23 @@ public sealed class DocumentView : RichTextBox
             CharacterShadingPattern = r.CharacterShadingHex is not null ? r.CharacterShadingPattern
                 : style.CharacterShadingHex is not null ? style.CharacterShadingPattern
                 : d.CharacterShadingPattern,
+            CharacterSpacingPt = r.CharacterSpacingPt != 0 ? r.CharacterSpacingPt
+                : style.CharacterSpacingPt != 0 ? style.CharacterSpacingPt
+                : d.CharacterSpacingPt,
+            KerningMinSizePt = r.KerningMinSizePt ?? style.KerningMinSizePt ?? d.KerningMinSizePt,
+            PositionPt = r.PositionPt != 0 ? r.PositionPt
+                : style.PositionPt != 0 ? style.PositionPt
+                : d.PositionPt,
+            Ligatures = r.Ligatures != LigatureMode.None ? r.Ligatures
+                : style.Ligatures != LigatureMode.None ? style.Ligatures
+                : d.Ligatures,
+            StylisticSet = r.StylisticSet ?? style.StylisticSet ?? d.StylisticSet,
+            NumberForm = r.NumberForm != NumberForm.Default ? r.NumberForm
+                : style.NumberForm != NumberForm.Default ? style.NumberForm
+                : d.NumberForm,
+            NumberSpacing = r.NumberSpacing != NumberSpacing.Default ? r.NumberSpacing
+                : style.NumberSpacing != NumberSpacing.Default ? style.NumberSpacing
+                : d.NumberSpacing,
             // Language is direct-only until FreeW gains explicit style/default language inheritance tracking.
             LanguageTag = r.LanguageTag,
         };
