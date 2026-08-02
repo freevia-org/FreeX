@@ -210,7 +210,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             _cfFormulaSnapshot.Clear();
             _cfThresholdSnapshot.Clear();
             _dvFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteRuleFormulas(sheet, insertRightOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, insertRightOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
             _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, insertRightOp);
         }
@@ -317,7 +317,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             _cfFormulaSnapshot.Clear();
             _cfThresholdSnapshot.Clear();
             _dvFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteRuleFormulas(sheet, insertDownOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, insertDownOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
             _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, insertDownOp);
         }
@@ -387,7 +387,7 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
         // verifies that this sequence leaves the model identical to its initial state.
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));
@@ -1889,7 +1889,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             _cfFormulaSnapshot.Clear();
             _cfThresholdSnapshot.Clear();
             _dvFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteRuleFormulas(sheet, deleteLeftOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, deleteLeftOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
             _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteLeftOp);
         }
@@ -1987,7 +1987,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
             _cfFormulaSnapshot.Clear();
             _cfThresholdSnapshot.Clear();
             _dvFormulaSnapshot.Clear();
-            RowColumnShiftHelpers.RewriteRuleFormulas(sheet, deleteUpOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, deleteUpOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
             _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, deleteUpOp);
         }
@@ -2026,7 +2026,7 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
 
         _snapshot.Restore(ctx.GetSheet(_sheetId));

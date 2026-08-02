@@ -100,7 +100,15 @@ public static partial class BuiltInFunctions
             total += ToNumber(arg);
             count++;
         }
-        return count == 0 ? ErrorValue.DivByZero : NumberResult(total / count);
+        // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary
+        // arithmetic result (FormulaEvaluator.Operators.cs), mirroring the fix already applied
+        // to Sum()/Sumproduct(): round the accumulated total the same way SUM would, then round
+        // the quotient the same way the '/' operator would, so AVERAGE(range) stays interchangeable
+        // with SUM(range)/COUNT(range) computed via the ordinary arithmetic operators, e.g.
+        // AVERAGE(0.1,0.1,0.1) == SUM(0.1,0.1,0.1)/3 == 0.1 exactly.
+        if (count == 0) return ErrorValue.DivByZero;
+        double roundedTotal = FormulaEvaluator.RoundTo15SignificantDigits(total);
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(roundedTotal / count));
     }
 
     private static ScalarValue AverageA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -118,7 +126,10 @@ public static partial class BuiltInFunctions
             }
         }
 
-        return count == 0 ? ErrorValue.DivByZero : NumberResult(total / count);
+        // See the identical rounding rationale on Average() above.
+        if (count == 0) return ErrorValue.DivByZero;
+        double roundedTotal = FormulaEvaluator.RoundTo15SignificantDigits(total);
+        return NumberResult(FormulaEvaluator.RoundTo15SignificantDigits(roundedTotal / count));
     }
 
     private static ScalarValue Min(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

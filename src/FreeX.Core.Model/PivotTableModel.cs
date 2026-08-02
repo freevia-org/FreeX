@@ -43,6 +43,14 @@ public sealed class PivotCacheModel
     /// </summary>
     public string? RawRecordsXml { get; set; }
     public List<PivotCacheFieldModel> Fields { get; } = [];
+    /// <summary>
+    /// R116-io-pivot-calcitem-part: Calculated Items (PivotTable Analyze &gt; Fields, Items &amp; Sets &gt;
+    /// Calculated Item) belong to CT_PivotCacheDefinition (ECMA-376 18.10.1.3), not
+    /// CT_pivotTableDefinition -- every PivotTableModel that shares this cache surfaces the SAME list
+    /// (mirroring real Excel, where a calculated item is a cache-wide concept every pivot on that cache
+    /// sees identically), loaded from this cache's own pivotCacheDefinitionN.xml part.
+    /// </summary>
+    public List<PivotCalculatedItemModel> CalculatedItems { get; } = [];
 }
 
 public enum PivotCacheSourceType

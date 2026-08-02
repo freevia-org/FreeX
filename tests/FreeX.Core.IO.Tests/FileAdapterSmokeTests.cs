@@ -21376,8 +21376,13 @@ public partial class FileAdapterSmokeTests
             pivotXml.ToString().Should().Contain("defaultSubtotal=\"1\"");
             pivotXml.ToString().Should().Contain("subtotalTop=\"1\"");
             pivotXml.ToString().Should().NotContain("calculatedFields");
-            pivotXml.ToString().Should().Contain("calculatedItems");
-            pivotXml.ToString().Should().Contain("formula=\"East+West\"");
+            // R116-io-pivot-calcitem-part: calculatedItems is a CT_PivotCacheDefinition child (ECMA-376
+            // 18.10.1.3), not CT_pivotTableDefinition -- it now lives on the shared pivotCacheDefinition
+            // part instead of pivotTableN.xml (the old location was schema-invalid and real Excel
+            // repaired/dropped it on open).
+            pivotXml.ToString().Should().NotContain("calculatedItems");
+            cacheXml.ToString().Should().Contain("calculatedItems");
+            cacheXml.ToString().Should().Contain("formula=\"East+West\"");
             pivotXml.ToString().Should().NotContain("calculatedField=\"Revenue\"");
             cacheXml.ToString().Should().Contain("databaseField=\"0\"");
             cacheXml.ToString().Should().Contain("name=\"Revenue\"");

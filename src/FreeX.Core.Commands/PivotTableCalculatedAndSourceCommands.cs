@@ -197,13 +197,19 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
                 cache.SourceReference = _sourceRange.ToString();
                 cache.SourceTableName = matchedTable?.Name;
                 cache.SourceTableId = matchedTable?.Id;
+                // R116-commands-pivot-slicer-changesource: an explicit "Change Data Source" must
+                // RECONCILE cache.Fields against the new headers the same way an ordinary refresh does
+                // (PivotTableRefreshService.ReconcileCacheFields), not unconditionally rebuild every
+                // field from scratch. A field whose name survives the source change keeps its existing
+                // SharedItems order/index via PivotCacheFieldFactory.MergeFromSourceData -- a full
+                // rebuild would renumber SharedItems purely based on the NEW source's row order, silently
+                // corrupting a pivot-bound slicer's SlicerModel.CacheItems[].Index (a positional index
+                // into SharedItems that Change Data Source never touches) even though the user's
+                // selection didn't change. A header with no existing same-named field (a genuinely new
+                // column) still gets a brand-new field built from scratch, same as before.
+                var reconciledFields = PivotCacheFieldFactory.ReconcileFields(cache.Fields, headers, sourceSheet, _sourceRange);
                 cache.Fields.Clear();
-                // R114-commands-pivot-sharedItems: an explicit "Change Data Source" must populate
-                // SharedItems from the NEW live source the same way AddPivotTableCommand does for a
-                // brand-new pivot -- otherwise a slicer bound to a field on the redirected cache would
-                // lose its filter items even though it had them (or could have had them) before.
-                for (var index = 0; index < headers.Count; index++)
-                    cache.Fields.Add(PivotCacheFieldFactory.BuildFromSourceData(headers[index], sourceSheet, _sourceRange, index));
+                cache.Fields.AddRange(reconciledFields);
             }
             else
             {
@@ -292,11 +298,14 @@ public sealed class ChangePivotTableSourceCommand : IWorkbookCommand
             RawRecordsXml = original.RawRecordsXml,
         };
 
-        // R114-commands-pivot-sharedItems: same as the same-SourceType branch above -- populate
-        // SharedItems from the new live source so a slicer bound to a field on this redirected cache
-        // (or added fresh against it afterward) has real filter items instead of an empty list.
-        for (var index = 0; index < headers.Count; index++)
-            redirected.Fields.Add(PivotCacheFieldFactory.BuildFromSourceData(headers[index], sourceSheet, sourceRange, index));
+        // R116-commands-pivot-slicer-changesource: same as the same-SourceType branch above --
+        // RECONCILE against the ORIGINAL cache's fields (by name) via PivotCacheFieldFactory.
+        // ReconcileFields rather than unconditionally rebuilding every field from scratch, so a field
+        // that survives the SourceType crossing (e.g. redirecting a range-backed pivot onto a table
+        // covering the same columns) keeps its existing SharedItems order/index -- a pivot-bound
+        // slicer's SlicerModel.CacheItems[].Index must keep meaning what it always meant even when the
+        // crossing forced a whole new PivotCacheModel object.
+        redirected.Fields.AddRange(PivotCacheFieldFactory.ReconcileFields(original.Fields, headers, sourceSheet, sourceRange));
 
         return redirected;
     }

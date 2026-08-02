@@ -84,8 +84,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("StorageProvider,");
         source.Should().Contain("target.FileAccessIdentity");
         source.Should().Contain("fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(");
-        source.Should().Contain("_session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, target.Path, fileAccessIdentity);");
-        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
+        source.Should().Contain("_session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, targetPath, fileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(targetPath, fileAccessIdentity);");
 
         var recentBlock = ExtractSourceBlock(
             source,
@@ -929,7 +929,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("new RecentFileRegistrationRequest(");
         source.Should().Contain("FileAccessIdentity: fileAccessIdentity ?? target.FileAccessIdentity");
         source.Should().Contain("RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
-        source.Should().Contain("RecordRecentWorkbook(target.Path, fileAccessIdentity);");
+        source.Should().Contain("RecordRecentWorkbook(targetPath, fileAccessIdentity);");
         normalizedSource.Should().Contain("ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));\n            RefreshViewportSizeForZoom();\n            RecordRecentWorkbook(target.Path, target.FileAccessIdentity);");
         source.Should().Contain("Closing += MainWindow_Closing;");
         source.Should().Contain("private async Task CloseWorkbookAsync()");
@@ -1622,7 +1622,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("var saveWarnings = await _saveService.SaveAsync");
-        source.Should().Contain("RefreshShell(FormatSaveCompletionStatus(target.Path, saveWarnings));");
+        source.Should().Contain("RefreshShell(FormatSaveCompletionStatus(targetPath, saveWarnings));");
         source.Should().Contain("private static string FormatSaveCompletionStatus(string path, IReadOnlyList<string> warnings)");
         source.Should().Contain("with {warnings.Count} warning(s)");
     }

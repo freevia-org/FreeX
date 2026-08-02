@@ -1484,7 +1484,112 @@ internal static partial class RowColumnShiftHelpers
             entry.PivotTable.LastRenderedRange = entry.LastRenderedRange is { } lastRenderedRange
                 ? shift.ShiftRange(lastRenderedRange)
                 : null;
+
+            RemapPivotFieldSourceIndexes(entry.PivotTable, entry.SourceRange, sourceRange, shift);
+
             hostSheet.PivotTables.Add(entry.PivotTable);
+        }
+    }
+
+    // R116-commands-pivot-column-shift-fieldindex: PivotFieldModel/PivotDataFieldModel.SourceFieldIndex
+    // (plus PivotSortModel.FieldIndex, PivotLabelFilterModel/PivotValueFilterModel.SourceFieldIndex, and
+    // PivotCalculatedItemModel.SourceFieldIndex) are raw ordinals naming one of the pivot's live source
+    // columns, captured once when each binding was created. Every refresh re-derives `headers`/`rows`/
+    // `cache.Fields` fresh from the CURRENT physical column layout (ReadHeaders/ReadSourceRows/
+    // ReconcileCacheFields in PivotTableRefreshService), so when an ordinary column insert/delete lands
+    // strictly inside a pivot's SourceRange, ShiftRangeColumnsUp/Down leaves Start.Col alone and pushes
+    // every later column left/right -- the SourceRange silently grows/shrinks to keep covering the same
+    // fields, but every existing SourceFieldIndex-based binding stays numerically unchanged and now
+    // silently names a DIFFERENT physical column. It stays in-bounds (so IsValidField/IsValidDataField's
+    // bounds-only pruning never catches it), so a completely ordinary "insert a column in the middle of my
+    // data" edit followed by a refresh/slicer-click silently mis-binds row/column grouping, data-field
+    // aggregation, sort, and label/value filters to the wrong column with no error. Real Excel's pivot
+    // field bindings survive a mid-range column insert/delete unchanged (an insert only ever appends a new
+    // field to the END of the field list; existing fields keep referring to the same source column) --
+    // mirror that here by remapping every source-column-based binding through the SAME AddressShift that
+    // just moved the pivot's SourceRange, so each binding keeps pointing at the identical physical column
+    // it named before the edit. A column that was itself deleted has no valid destination -- ShiftIndex
+    // returns null for it -- so the binding is set to the existing -1 "invalid" sentinel, which
+    // IsValidField/IsValidDataField already prune on the very next refresh, exactly like a field whose
+    // backing column vanished any other way (R92-app-pivot-drilldown-5-3).
+    private static void RemapPivotFieldSourceIndexes(
+        PivotTableModel pivotTable,
+        GridRange oldSourceRange,
+        GridRange newSourceRange,
+        AddressShift shift)
+    {
+        // Only a column-axis shift can move which physical column a SourceFieldIndex names. A row
+        // shift never changes column identity, and a whole-row SourceRange (spans every column
+        // already) is left untouched by ShiftRangeColumnsUp/Down itself (see their own
+        // IsWholeRowSelection guard), so there is nothing to remap for it either.
+        if (shift.Axis != AddressShiftAxis.Columns ||
+            oldSourceRange.Start.Sheet != shift.SheetId ||
+            SelectionRangeService.IsWholeRowSelection(oldSourceRange))
+        {
+            return;
+        }
+
+        int Remap(int sourceFieldIndex)
+        {
+            // Already invalid (e.g. a calculated data field's -1 placeholder, or a stale binding
+            // from an earlier edit) -- nothing meaningful to shift.
+            if (sourceFieldIndex < 0)
+                return sourceFieldIndex;
+
+            var absoluteCol = oldSourceRange.Start.Col + (uint)sourceFieldIndex;
+            if (shift.ShiftIndex(absoluteCol) is not { } shiftedAbsoluteCol)
+                return -1;
+
+            return (int)(shiftedAbsoluteCol - newSourceRange.Start.Col);
+        }
+
+        for (var index = 0; index < pivotTable.RowFields.Count; index++)
+        {
+            var field = pivotTable.RowFields[index];
+            pivotTable.RowFields[index] = field with { SourceFieldIndex = Remap(field.SourceFieldIndex) };
+        }
+
+        for (var index = 0; index < pivotTable.ColumnFields.Count; index++)
+        {
+            var field = pivotTable.ColumnFields[index];
+            pivotTable.ColumnFields[index] = field with { SourceFieldIndex = Remap(field.SourceFieldIndex) };
+        }
+
+        for (var index = 0; index < pivotTable.PageFields.Count; index++)
+        {
+            var field = pivotTable.PageFields[index];
+            pivotTable.PageFields[index] = field with { SourceFieldIndex = Remap(field.SourceFieldIndex) };
+        }
+
+        for (var index = 0; index < pivotTable.DataFields.Count; index++)
+        {
+            var field = pivotTable.DataFields[index];
+            pivotTable.DataFields[index] = field with { SourceFieldIndex = Remap(field.SourceFieldIndex) };
+        }
+
+        for (var index = 0; index < pivotTable.CalculatedItems.Count; index++)
+        {
+            var item = pivotTable.CalculatedItems[index];
+            pivotTable.CalculatedItems[index] = item with { SourceFieldIndex = Remap(item.SourceFieldIndex) };
+        }
+
+        for (var index = 0; index < pivotTable.LabelFilters.Count; index++)
+        {
+            var filter = pivotTable.LabelFilters[index];
+            pivotTable.LabelFilters[index] = filter with { SourceFieldIndex = Remap(filter.SourceFieldIndex) };
+        }
+
+        for (var index = 0; index < pivotTable.ValueFilters.Count; index++)
+        {
+            var filter = pivotTable.ValueFilters[index];
+            if (filter.SourceFieldIndex is { } filterSourceFieldIndex)
+                pivotTable.ValueFilters[index] = filter with { SourceFieldIndex = Remap(filterSourceFieldIndex) };
+        }
+
+        for (var index = 0; index < pivotTable.Sorts.Count; index++)
+        {
+            var sort = pivotTable.Sorts[index];
+            pivotTable.Sorts[index] = sort with { FieldIndex = Remap(sort.FieldIndex) };
         }
     }
 

@@ -38,7 +38,12 @@ public sealed class R28_StdevSNamedFormulaAggregateTests
 
         var result = _evaluator.Evaluate("=STDEV.S(MyRange)", sheet, workbook);
 
-        result.Should().Be(new NumberValue(3.0276503540974917));
+        // R116: Stdev()/VarS() now round their accumulated mean and sum-of-squared-deviations
+        // to 15 significant digits (matching Excel's documented precision and the sibling
+        // SUM/AVERAGE/PRODUCT fixes -- see R116_AggregateFunctions15SigRoundingTests), which
+        // shifts the last bit of this sqrt(variance) result relative to the previous unrounded
+        // computation.
+        result.Should().Be(new NumberValue(3.027650354097492));
     }
 
     [Fact]
@@ -49,6 +54,11 @@ public sealed class R28_StdevSNamedFormulaAggregateTests
 
         var result = _evaluator.Evaluate("=STDEV(MyRange)", sheet, workbook);
 
-        result.Should().Be(new NumberValue(3.0276503540974917));
+        // R116: Stdev()/VarS() now round their accumulated mean and sum-of-squared-deviations
+        // to 15 significant digits (matching Excel's documented precision and the sibling
+        // SUM/AVERAGE/PRODUCT fixes -- see R116_AggregateFunctions15SigRoundingTests), which
+        // shifts the last bit of this sqrt(variance) result relative to the previous unrounded
+        // computation.
+        result.Should().Be(new NumberValue(3.027650354097492));
     }
 }

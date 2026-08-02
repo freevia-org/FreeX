@@ -47,7 +47,29 @@ public static partial class PivotTableRefreshService
         return styledAny;
     }
 
-    public static void Refresh(Workbook workbook, Sheet targetSheet, PivotTableModel pivotTable)
+    /// <param name="rescanCacheSharedItems">
+    /// R116-commands-pivot-refresh-scope: R115 made <see cref="ReconcileCacheFields"/> re-derive every
+    /// SURVIVING cache field's SharedItems from a full row-by-row scan of that field's entire source
+    /// column (<see cref="PivotCacheFieldFactory.MergeFromSourceData"/> -&gt; BuildFromSourceData),
+    /// unconditionally, on every call to this method -- but <see cref="Refresh"/> is not only the F5 /
+    /// "Refresh PivotTable" entry point (<see cref="RefreshPivotTableCommand"/>, the only caller that
+    /// passes <see langword="true"/> here): it is also the choke point every OTHER pivot-mutating
+    /// command funnels through, including a single slicer/timeline selection click
+    /// (<c>PivotTableSlicerCommands</c>/<c>PivotTableSlicerTimelineCommands</c>), page/label/value filter
+    /// changes, layout/view/options changes, calculated-item edits, rename/move/clear-view, and inserting
+    /// a pivot chart. None of those mutate a single source cell, so re-scanning every field's entire
+    /// source column on each of them added an O(fieldCount * rowCount) cost -- on top of the pivot's own
+    /// O(rowCount) recompute this method already does -- to what is meant to be an instant, frequent,
+    /// interactive UI action; Excel does not re-derive shared items for a slicer click or a filter change
+    /// on an already-refreshed pivot. Defaulting to <see langword="false"/> means every one of those
+    /// non-refresh callers automatically gets the cheap path without having to remember an argument (the
+    /// new default IS the fix); only a genuine "the source data may have changed" refresh opts in.
+    /// <see cref="ChangePivotTableSourceCommand"/> also leaves this <see langword="false"/> -- it already
+    /// reconciles cache.Fields itself against the NEW source before calling <see cref="Refresh"/>, so
+    /// asking this method to redo it here would just be the exact same O(fieldCount * rowCount) scan
+    /// twice for one "Change Data Source" action.
+    /// </param>
+    public static void Refresh(Workbook workbook, Sheet targetSheet, PivotTableModel pivotTable, bool rescanCacheSharedItems = false)
     {
         var sourceSheet = workbook.GetSheet(pivotTable.SourceRange.Start.Sheet);
         if (sourceSheet is null || pivotTable.DataFields.Count == 0)
@@ -109,9 +131,20 @@ public static partial class PivotTableRefreshService
         // cache never called it at all, so its SharedItems were frozen at creation-time forever.
         // Excel re-derives shared items on every refresh (independent of the "number of items to
         // retain" stale-item-retention setting, which controls whether OLD items linger, not whether
-        // NEW ones appear) -- so run this unconditionally, for every cache source type, on every
-        // refresh.
-        if (cache is not null)
+        // NEW ones appear).
+        //
+        // R116-commands-pivot-refresh-scope: "on every refresh" above means every call where the
+        // SOURCE DATA may genuinely have changed since the cache was last reconciled -- NOT every call
+        // to this method. This method is the choke point for every pivot-mutating command (slicer/
+        // timeline clicks, page/label/value filters, layout/view/options, calculated items, rename/
+        // move/clear-view, pivot-chart insert), none of which touch a source cell, and each of those
+        // was paying the SAME full per-field source-column rescan a genuine refresh does -- an
+        // O(fieldCount * rowCount) cost on what must be an instant, frequent, interactive action (a
+        // single slicer button click). Real Excel does not rescan the underlying range for a slicer
+        // click or a filter change on an already-refreshed pivot, so this only runs when the caller
+        // affirmatively asks for it via rescanCacheSharedItems (see that parameter's doc comment for
+        // exactly which callers do and don't).
+        if (cache is not null && rescanCacheSharedItems)
             ReconcileCacheFields(cache, headers, sourceSheet, pivotTable.SourceRange);
 
         // R92-app-pivot-drilldown-5-3: a source shrink (columns deleted, or an entire field's
@@ -439,29 +472,12 @@ public static partial class PivotTableRefreshService
     /// </summary>
     private static void ReconcileCacheFields(PivotCacheModel cache, IReadOnlyList<string> liveHeaders, Sheet sourceSheet, GridRange sourceRange)
     {
-        var existingByName = new Dictionary<string, PivotCacheFieldModel>(StringComparer.Ordinal);
-        foreach (var field in cache.Fields)
-            existingByName.TryAdd(field.Name, field);
-
-        var reconciled = new List<PivotCacheFieldModel>(liveHeaders.Count);
-        for (var index = 0; index < liveHeaders.Count; index++)
-        {
-            var header = liveHeaders[index];
-            reconciled.Add(existingByName.TryGetValue(header, out var existing)
-                // R115-commands-pivot-sharedItems-refresh: a header that already has a same-named
-                // field keeps that field's identity/grouping/number-format but must still pick up any
-                // NEW distinct value the live data has grown since the last refresh -- otherwise a
-                // pivot-bound slicer resolved after this refresh never sees it (SlicerItemResolver
-                // reads exactly this cached list, not the live source).
-                ? PivotCacheFieldFactory.MergeFromSourceData(existing, sourceSheet, sourceRange, index)
-                // R114-commands-pivot-sharedItems: a header that has no existing same-named field (a
-                // truly new column the table grew into) must get its SharedItems populated from the
-                // live source data the same way a brand-new pivot's cache does -- otherwise a slicer
-                // added against this newly-appeared field would have no filter items, exactly like the
-                // brand-new-pivot case.
-                : PivotCacheFieldFactory.BuildFromSourceData(header, sourceSheet, sourceRange, index));
-        }
-
+        // R116-commands-pivot-slicer-changesource: delegates to the shared choke point in
+        // PivotCacheFieldFactory so this ordinary-refresh path and ChangePivotTableSourceCommand's
+        // explicit "Change Data Source" path can never drift apart on how a surviving field's
+        // SharedItems are reconciled (see PivotCacheFieldFactory.ReconcileFields for the full
+        // rationale -- merge-and-preserve-order via MergeFromSourceData, not a full rebuild).
+        var reconciled = PivotCacheFieldFactory.ReconcileFields(cache.Fields, liveHeaders, sourceSheet, sourceRange);
         cache.Fields.Clear();
         cache.Fields.AddRange(reconciled);
     }

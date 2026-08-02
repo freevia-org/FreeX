@@ -734,9 +734,14 @@ public sealed partial class XlsxFileAdapter
     // here had it backwards, which anchored a newly-inserted pageFields/rowFields/colFields container
     // AFTER pivotTableStyleInfo (near the very end of the element sequence) whenever the part already had
     // a native <filters> element, instead of near the front where it belongs.
+    // R116-io-pivot-calcitem-part: "calculatedItems" removed -- it was never a real
+    // CT_pivotTableDefinition child (CT_CalculatedItem's real home is CT_PivotCacheDefinition; see
+    // XlsxPivotTableWriter.Cache.cs's ToPivotCacheCalculatedItemsXml). Listing it here only taught this
+    // anchor search to treat a stale, schema-invalid leftover element (from a file an earlier, buggy
+    // FreeX version saved) as a legitimate positional sibling of dataFields/pivotTableStyleInfo.
     private static readonly string[] PivotFieldContainerCanonicalOrder =
     [
-        "rowFields", "colFields", "pageFields", "dataFields", "calculatedItems",
+        "rowFields", "colFields", "pageFields", "dataFields",
         "pivotTableStyleInfo", "valueFilters", "labelFilters", "filters", "pivotSorts", "extLst",
     ];
 

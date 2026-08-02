@@ -90,4 +90,49 @@ public sealed class ExternalUriLauncherTests
 
         result.Should().Be(ExternalUriLaunchResult.LaunchFailed);
     }
+
+    // R116: a file:// URI's decoded LocalPath can parse fine as Uri text while still being a path
+    // Path.GetFullPath refuses to normalize (e.g. one long enough to throw PathTooLongException --
+    // verified directly against this repo's actual net10.0 runtime, not just documentation: a
+    // 40,000-char segment parses as a valid absolute file:// Uri with an empty host, yet
+    // Path.GetFullPath(uri.LocalPath) throws). HyperlinkNavigationPlanner.TryNormalizeExplicitLocalPath
+    // already rejects exactly this shape via the identical Path.GetFullPath call, reclassifying the
+    // hyperlink as External instead of LocalFile -- so this shared allowlist must reject it too, or
+    // the External branch in both shells hands it straight to Process.Start/ShellExecute, bypassing
+    // the "never shell-exec local files" guard entirely. This goes through Open(), the real entry
+    // point both shells call for an External-kind hyperlink.
+    [Fact]
+    public void Open_LocalFileUriWithPathTooLongTarget_DoesNotLaunch()
+    {
+        var target = "file:///C:/" + new string('a', 40_000) + ".exe";
+        var launched = new List<Uri>();
+
+        var result = ExternalUriLauncher.Open(target, launched.Add);
+
+        result.Should().Be(ExternalUriLaunchResult.BlockedScheme);
+        launched.Should().BeEmpty();
+    }
+
+    // No-regression sibling: a syntactically well-formed local file:// URI (the shape FreeW's
+    // document-hyperlink and FreeX's LocalFile-classified targets both rely on) must still be let
+    // through unchanged.
+    [Fact]
+    public void TryCreateAllowedUri_WellFormedLocalFileUri_IsAllowed()
+    {
+        var accepted = ExternalUriLauncher.TryCreateAllowedUri("file:///C:/Temp/book.xlsx", out var uri);
+
+        accepted.Should().BeTrue();
+        uri!.LocalPath.Should().Be(@"C:\Temp\book.xlsx");
+    }
+
+    [Fact]
+    public void TryCreateAllowedUri_PathTooLongLocalPath_IsRejected()
+    {
+        var target = "file:///C:/" + new string('a', 40_000) + ".exe";
+
+        var accepted = ExternalUriLauncher.TryCreateAllowedUri(target, out var uri);
+
+        accepted.Should().BeFalse();
+        uri.Should().BeNull();
+    }
 }

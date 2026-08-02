@@ -71,7 +71,11 @@ public static partial class BuiltInFunctions
             }
             else if (a is NumberValue or BoolValue or DateTimeValue) { result *= ToNumber(a); sawNumeric = true; }
         }
-        return NumberResult(sawNumeric ? result : 0);
+        // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary
+        // arithmetic result (FormulaEvaluator.Operators.cs), mirroring the fix already applied
+        // to Sum()/Sumproduct() above, so PRODUCT(range) stays interchangeable with the
+        // textually-expanded chain of * over the same cells.
+        return NumberResult(sawNumeric ? FormulaEvaluator.RoundTo15SignificantDigits(result) : 0);
     }
 
     private static ScalarValue SumSq(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
