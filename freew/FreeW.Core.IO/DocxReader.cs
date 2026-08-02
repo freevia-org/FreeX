@@ -7039,6 +7039,11 @@ public static class DocxReader
                 FontFamily = defaultRun.FontFamily ?? document.DefaultRun.FontFamily,
                 FontSizePt = defaultRun.FontSizePt ?? document.DefaultRun.FontSizePt,
                 ColorHex = defaultRun.ColorHex ?? document.DefaultRun.ColorHex,
+                HighlightColorHex = defaultRun.HighlightColorHex ?? document.DefaultRun.HighlightColorHex,
+                CharacterShadingHex = defaultRun.CharacterShadingHex ?? document.DefaultRun.CharacterShadingHex,
+                CharacterShadingPattern = defaultRun.CharacterShadingHex is not null
+                    ? defaultRun.CharacterShadingPattern
+                    : document.DefaultRun.CharacterShadingPattern,
                 LanguageTag = defaultRun.LanguageTag ?? document.DefaultRun.LanguageTag,
                 Bold = defaultRun.Bold,
                 Italic = defaultRun.Italic,
