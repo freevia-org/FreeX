@@ -711,6 +711,37 @@ public sealed class EditingSession
         _selectedShapeIds.Count == 1
         && SetZoomObjectProperties(_selectedShapeIds[0], properties);
 
+    /// <summary>Applies supported Zoom properties to one Summary Zoom tile only.</summary>
+    public bool SetSummaryZoomTileProperties(
+        uint shapeId,
+        string sectionId,
+        ZoomObjectProperties properties)
+    {
+        var slide = CurrentSlide;
+        var shape = slide is null ? null : FindShape(slide.Shapes, shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom }
+            || shape.PreservedObject?.ObjectKind != PreservedObjectKind.Zoom
+            || string.IsNullOrWhiteSpace(sectionId)
+            || shape.PreservedObject.SummaryZoomTargets.All(target =>
+                !string.Equals(target.SectionId, sectionId, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var before = shape.PreservedObject.RawXml;
+        Bus.Execute(new SetSummaryZoomTilePropertiesCommand(
+            _currentSlideIndex,
+            shapeId,
+            sectionId,
+            properties));
+        return !string.Equals(before, shape.PreservedObject.RawXml, StringComparison.Ordinal);
+    }
+
+    /// <summary>Applies supported properties to one selected Summary Zoom tile.</summary>
+    public bool SetSelectedSummaryZoomTileProperties(
+        string sectionId,
+        ZoomObjectProperties properties) =>
+        _selectedShapeIds.Count == 1
+        && SetSummaryZoomTileProperties(_selectedShapeIds[0], sectionId, properties);
+
     /// <summary>Sets a user-authored cover image on one Slide or Section Zoom.</summary>
     public bool SetZoomCoverImage(uint shapeId, byte[] imageBytes, string contentType)
     {

@@ -1,4 +1,6 @@
 using FreeP.Core.Model;
+using System.Xml;
+using System.Xml.Linq;
 
 namespace FreeP.App.Compositor;
 
@@ -15,8 +17,72 @@ public static class ZoomObjectPropertiesPlanner
         int ScaleFactorX,
         int ScaleFactorY);
 
+    public sealed record SummaryZoomTilePropertiesEdit(
+        string SectionId,
+        ZoomObjectProperties Properties);
+
     public static ZoomObjectProperties Effective(PreservedObjectInfo? info) =>
         info?.ZoomProperties ?? new ZoomObjectProperties(true, "preview", null, true);
+
+    /// <summary>
+    /// Reads one Summary Zoom tile's native properties, falling back to the object-level
+    /// projection for older packages that do not carry a tile-local <c>zmPr</c>.
+    /// </summary>
+    public static ZoomObjectProperties EffectiveSummaryTile(
+        PreservedObjectInfo? info,
+        string sectionId)
+    {
+        var fallback = Effective(info);
+        if (info is null || string.IsNullOrWhiteSpace(sectionId)
+            || string.IsNullOrWhiteSpace(info.RawXml))
+            return fallback;
+
+        try
+        {
+            var root = XElement.Parse(info.RawXml, LoadOptions.PreserveWhitespace);
+            var tile = root.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "summaryZmObj", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(element.Attribute("sectionId")?.Value, sectionId,
+                    StringComparison.OrdinalIgnoreCase));
+            var properties = tile?.Descendants().FirstOrDefault(element =>
+                string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase));
+            return properties is null ? fallback : Read(properties, fallback);
+        }
+        catch (XmlException)
+        {
+            return fallback;
+        }
+    }
+
+    private static ZoomObjectProperties Read(XElement properties, ZoomObjectProperties fallback)
+    {
+        var value = new ZoomObjectProperties(
+            ReadNullableBoolean(properties.Attribute("returnToParent")?.Value),
+            properties.Attribute("imageType")?.Value,
+            properties.Attribute("transitionDur")?.Value,
+            ReadNullableBoolean(properties.Attribute("showBg")?.Value),
+            ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("l")?.Value),
+            ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("t")?.Value),
+            ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("r")?.Value),
+            ReadNullableInt(properties.Descendants().FirstOrDefault(element => element.Name.LocalName == "srcRect")?.Attribute("b")?.Value));
+        return value.IsEmpty ? fallback : value;
+    }
+
+    private static bool? ReadNullableBoolean(string? value) =>
+        string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().ToLowerInvariant() switch
+            {
+                "1" or "true" or "on" => true,
+                "0" or "false" or "off" => false,
+                _ => null,
+            };
+
+    private static int? ReadNullableInt(string? value) =>
+        int.TryParse(value, System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
 
     public static bool IsSupportedImageType(string? imageType) =>
         string.Equals(imageType, "preview", StringComparison.OrdinalIgnoreCase)

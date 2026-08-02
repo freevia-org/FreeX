@@ -106,6 +106,58 @@ public sealed class SummaryZoomInsertionPlannerTests
     }
 
     [Fact]
+    public void Summary_zoom_tile_properties_are_individual_and_drive_navigation()
+    {
+        var presentation = BuildPresentation();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}" });
+        var firstProperties = new ZoomObjectProperties(
+            ReturnToParent: false,
+            ImageType: "cover",
+            TransitionDuration: "90000",
+            ShowBackground: false,
+            CropLeft: 5000);
+
+        session.SetSummaryZoomTileProperties(
+            shape.Id, "{SECTION-ONE}", firstProperties).Should().BeTrue();
+
+        var root = XElement.Parse(shape.PreservedObject!.RawXml);
+        var firstTile = root.Descendants().Single(element =>
+            element.Name.LocalName == "summaryZmObj"
+            && element.Attribute("sectionId")?.Value == "{SECTION-ONE}");
+        var secondTile = root.Descendants().Single(element =>
+            element.Name.LocalName == "summaryZmObj"
+            && element.Attribute("sectionId")?.Value == "{SECTION-TWO}");
+        firstTile.Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("imageType")!.Value.Should().Be("cover");
+        firstTile.Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Descendants().Single(element => element.Name.LocalName == "srcRect")
+            .Attribute("l")!.Value.Should().Be("5000");
+        secondTile.Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("imageType")!.Value.Should().Be("preview");
+
+        ZoomNavigationService.TryGetTargetSlideIndex(
+            presentation,
+            shape.PreservedObject,
+            0.25,
+            0.25,
+            out _,
+            out var returnToParent,
+            out var transitionDuration,
+            out var showBackground).Should().BeTrue();
+        returnToParent.Should().BeFalse();
+        transitionDuration.Should().Be(90000);
+        showBackground.Should().BeFalse();
+
+        session.Undo();
+        XElement.Parse(shape.PreservedObject.RawXml).Descendants()
+            .Single(element => element.Name.LocalName == "summaryZmObj"
+                && element.Attribute("sectionId")?.Value == "{SECTION-ONE}")
+            .Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("imageType")!.Value.Should().Be("preview");
+    }
+
+    [Fact]
     public void Summary_zoom_tile_cover_images_are_individual_and_undoable()
     {
         var presentation = BuildPresentation();

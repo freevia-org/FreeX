@@ -4846,16 +4846,27 @@ public sealed partial class MainWindow : Window
             return;
 
         var selectedShapeId = GetSingleSelectedShapeId();
-        var summaryTargets = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
-            && ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject is { } info
-            ? info.SummaryZoomTargets
-            : (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
-        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets);
+        var selectedInfo = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
+            ? ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject
+            : null;
+        var summaryTargets = selectedInfo?.SummaryZoomTargets
+            ?? (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
+        var summaryTileProperties = summaryTargets.Count == 0
+            ? Array.Empty<ZoomObjectProperties>()
+            : summaryTargets.Select(target =>
+                ZoomObjectPropertiesPlanner.EffectiveSummaryTile(selectedInfo, target.SectionId)).ToArray();
+        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets, summaryTileProperties);
         if (IsVisible)
             dialog.Owner = this;
         if (dialog.ShowDialog() == true)
         {
-            var changed = Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+            var changed = dialog.SummaryTileProperties is { } tileProperties
+                && selectedShapeId is uint summaryPropertiesShapeId
+                ? Editor.SetSummaryZoomTileProperties(
+                    summaryPropertiesShapeId,
+                    tileProperties.SectionId,
+                    tileProperties.Properties)
+                : Editor.SetSelectedZoomObjectProperties(dialog.Properties);
             if (dialog.SummaryTileLayout is { } tile && selectedShapeId is uint summaryShapeId)
                 changed |= Editor.SetSummaryZoomTileLayout(
                     summaryShapeId,

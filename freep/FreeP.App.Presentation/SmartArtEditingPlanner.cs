@@ -332,6 +332,39 @@ public static class SmartArtEditingPlanner
                     BuildOutline(data));
             }
 
+            if (stack.Count > level)
+                stack.RemoveRange(level, stack.Count - level);
+
+            if (row.IsAssistant)
+            {
+                if (data.Family != SmartArtFamily.Hierarchy)
+                {
+                    return new SmartArtTextPaneApplyResult(
+                        false,
+                        "Assistant nodes are supported only in hierarchy SmartArt.",
+                        0,
+                        BuildOutline(data));
+                }
+
+                if (level == 0)
+                {
+                    return new SmartArtTextPaneApplyResult(
+                        false,
+                        "A root SmartArt node cannot be an assistant.",
+                        0,
+                        BuildOutline(data));
+                }
+
+                if (stack[level - 1].Children.Any(child => !child.IsAssistant))
+                {
+                    return new SmartArtTextPaneApplyResult(
+                        false,
+                        "SmartArt assistants must remain before regular reports.",
+                        0,
+                        BuildOutline(data));
+                }
+            }
+
             var explicitId = NormalizeModelId(row.ModelId);
             var candidateId = explicitId
                 ?? (index < existingNodes.Count ? NormalizeModelId(existingNodes[index].ModelId) : null)
@@ -366,9 +399,6 @@ public static class SmartArtEditingPlanner
                 IsAssistant = row.IsAssistant,
                 Picture = preservedNode?.Picture
             };
-
-            if (stack.Count > level)
-                stack.RemoveRange(level, stack.Count - level);
 
             if (level == 0)
                 rebuiltRoots.Add(node);

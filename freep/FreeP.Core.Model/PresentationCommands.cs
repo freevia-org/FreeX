@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Commands;
 using Free.Shared.Drawing;
@@ -1012,6 +1013,181 @@ public sealed class SetMediaCaptionTracksCommand : IPresentationCommand
             && pair.First.Label == pair.Second.Label
             && pair.First.IsExternal == pair.Second.IsExternal
             && pair.First.Bytes.SequenceEqual(pair.Second.Bytes));
+    }
+}
+
+/// <summary>Edits one native Summary Zoom tile's supported format properties.</summary>
+public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly string _sectionId;
+    private readonly ZoomObjectProperties _newValue;
+    private string? _oldRawXml;
+
+    public SetSummaryZoomTilePropertiesCommand(
+        int slideIndex,
+        uint shapeId,
+        string sectionId,
+        ZoomObjectProperties properties)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _sectionId = string.IsNullOrWhiteSpace(sectionId)
+            ? throw new ArgumentException("A Summary Zoom tile section id is required.", nameof(sectionId))
+            : sectionId.Trim();
+        _newValue = Validate(properties);
+    }
+
+    public string Label => "Format Summary Zoom Tile";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        if (!TryGetTarget(presentation, out var info))
+            return false;
+
+        return TryPatchRawXml(info.RawXml, out var patched)
+            && !string.Equals(info.RawXml, patched, StringComparison.Ordinal);
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        if (!TryGetTarget(presentation, out var info)
+            || !TryPatchRawXml(info.RawXml, out var patched))
+            return;
+
+        _oldRawXml ??= info.RawXml;
+        info.RawXml = patched;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        if (_oldRawXml is null || !TryGetTarget(presentation, out var info))
+            return;
+
+        info.RawXml = _oldRawXml;
+    }
+
+    private bool TryGetTarget(Presentation presentation, out PreservedObjectInfo info)
+    {
+        info = null!;
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return false;
+
+        var shape = FindShape(presentation.Slides[_slideIndex].Shapes, _shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom }
+            || shape.PreservedObject is not { } preserved
+            || preserved.SummaryZoomTargets.All(target =>
+                !string.Equals(target.SectionId, _sectionId, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        info = preserved;
+        return true;
+    }
+
+    private bool TryPatchRawXml(string rawXml, out string patchedXml)
+    {
+        patchedXml = rawXml;
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return false;
+
+        XDocument document;
+        try { document = XDocument.Parse(rawXml, LoadOptions.PreserveWhitespace); }
+        catch (XmlException) { return false; }
+
+        var target = document.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "summaryZmObj", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(element.Attribute("sectionId")?.Value, _sectionId,
+                StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+            return false;
+
+        var properties = target.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase));
+        if (properties is null)
+        {
+            properties = new XElement(target.Name.Namespace + "zmPr");
+            target.Add(properties);
+        }
+
+        SetAttribute(properties, "returnToParent", _newValue.ReturnToParent);
+        SetAttribute(properties, "imageType", _newValue.ImageType);
+        SetAttribute(properties, "transitionDur", _newValue.TransitionDuration);
+        SetAttribute(properties, "showBg", _newValue.ShowBackground);
+        SetCrop(properties, _newValue);
+        patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    private static ZoomObjectProperties Validate(ZoomObjectProperties properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        if (properties.ImageType is not null
+            && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Zoom imageType must be 'preview' or 'cover'.", nameof(properties));
+
+        return properties with
+        {
+            ImageType = properties.ImageType?.Trim().ToLowerInvariant(),
+            TransitionDuration = properties.TransitionDuration?.Trim(),
+        };
+    }
+
+    private static void SetAttribute(XElement element, string name, bool? value)
+    {
+        if (value is null) element.Attribute(name)?.Remove();
+        else element.SetAttributeValue(name, value.Value ? "1" : "0");
+    }
+
+    private static void SetAttribute(XElement element, string name, string? value)
+    {
+        if (value is null) element.Attribute(name)?.Remove();
+        else element.SetAttributeValue(name, value);
+    }
+
+    private static void SetAttribute(XElement element, string name, int? value)
+    {
+        if (value is null) element.Attribute(name)?.Remove();
+        else element.SetAttributeValue(name, value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private static void SetCrop(XElement properties, ZoomObjectProperties value)
+    {
+        XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var blipFill = properties.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "blipFill", StringComparison.OrdinalIgnoreCase));
+        if (blipFill is null)
+            return;
+
+        var values = new[] { value.CropLeft, value.CropTop, value.CropRight, value.CropBottom };
+        var srcRect = blipFill.Element(drawing + "srcRect");
+        if (values.All(item => item is null))
+        {
+            srcRect?.Remove();
+            return;
+        }
+
+        srcRect ??= new XElement(drawing + "srcRect");
+        SetAttribute(srcRect, "l", value.CropLeft);
+        SetAttribute(srcRect, "t", value.CropTop);
+        SetAttribute(srcRect, "r", value.CropRight);
+        SetAttribute(srcRect, "b", value.CropBottom);
+        if (srcRect.Parent is null)
+            blipFill.AddFirst(srcRect);
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 }
 
