@@ -262,7 +262,8 @@ internal sealed class BackstageView : UserControl
 
     private Control BuildExportPane()
     {
-        var plan = PresentationExportPlanner.BuildBackstageExportPlan();
+        var plan = PresentationExportPlanner.BuildBackstageExportPlan(
+            videoExportAvailable: _callbacks.CanExportVideo());
         var panel = CreatePane(maxWidth: 720);
         panel.Children.Add(AvaloniaBackstageChrome.CreateHeading(plan.Heading, PaneStyle));
         panel.Children.Add(AvaloniaBackstageChrome.CreateNote(
@@ -273,18 +274,6 @@ internal sealed class BackstageView : UserControl
         var deferredActions = plan.DeferredActions
             .Where(action => action.IsEnabled)
             .ToList();
-        if (_callbacks.CanExportVideo() &&
-            deferredActions.All(action => action.CommandId != PresentationExportPlanner.VideoExportCommandId))
-        {
-            var video = PresentationExportPlanner.BuildFormatDescriptors()
-                .Single(descriptor => descriptor.Format == PresentationExportFormat.Video);
-            deferredActions.Add(new PresentationBackstageExportActionPlan(
-                video.Format,
-                video.CommandId,
-                video.DisplayName,
-                video.Description,
-                IsEnabled: true));
-        }
 
         AddExportGroup(panel, plan.DeferredGroupHeading, deferredActions);
         return panel;

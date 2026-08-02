@@ -40,6 +40,21 @@ public sealed class PresentationExportPlannerTests
             "Print has its own Backstage pane and is not an export action");
     }
 
+    [Fact]
+    public void BackstageExportPlan_ReflectsHostVideoCapability()
+    {
+        var deferred = PresentationExportPlanner.BuildBackstageExportPlan();
+        deferred.DeferredActions.Single(action =>
+                action.Format == PresentationExportFormat.Video)
+            .IsEnabled.Should().BeFalse();
+
+        var available = PresentationExportPlanner.BuildBackstageExportPlan(
+            videoExportAvailable: true);
+        available.DeferredActions.Single(action =>
+                action.Format == PresentationExportFormat.Video)
+            .IsEnabled.Should().BeTrue();
+    }
+
     private static Presentation BuildHandoutDeck(int slideCount)
     {
         var presentation = Presentation.CreateEmpty();

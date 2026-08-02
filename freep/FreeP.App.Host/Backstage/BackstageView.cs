@@ -252,13 +252,12 @@ internal sealed class BackstageView : UserControl
 
     private UIElement BuildExportPane()
     {
-        var plan = PresentationExportPlanner.BuildBackstageExportPlan();
+        var plan = PresentationExportPlanner.BuildBackstageExportPlan(
+            videoExportAvailable: _actions.CanExportVideo());
         var fixedLayoutAdditionalActions = plan.FixedLayoutActions
             .Where(action => action.CommandId != PresentationExportPlanner.PdfExportCommandId);
         var additionalGroups = fixedLayoutAdditionalActions
-            .Concat(plan.DeferredActions.Where(action =>
-                action.IsEnabled ||
-                (action.Format == PresentationExportFormat.Video && _actions.CanExportVideo())))
+            .Concat(plan.DeferredActions.Where(action => action.IsEnabled))
             .GroupBy(action => action.Format is PresentationExportFormat.NotesPagePdf
                 ? plan.FixedLayoutGroupHeading
                 : plan.DeferredGroupHeading)
