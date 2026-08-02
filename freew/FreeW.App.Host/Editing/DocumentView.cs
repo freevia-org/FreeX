@@ -6413,7 +6413,7 @@ public sealed class DocumentView : RichTextBox
                 root,
                 widthPx,
                 heightPx,
-                reflection.Opacity,
+                reflection,
                 reflDistPx,
                 borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
             root.Tag = image;
@@ -12646,7 +12646,7 @@ public sealed class DocumentView : RichTextBox
         if (PictureEffectVisualPlanner.BuildReflectionPlan(image) is { } reflection)
         {
             var reflContainer = BuildReflectionContainer(
-                inlineRoot, widthPx, heightPx, reflection.Opacity, reflection.DistanceDip,
+                inlineRoot, widthPx, heightPx, reflection, reflection.DistanceDip,
                 borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
             return new InlineUIContainer(reflContainer) { BaselineAlignment = BaselineAlignment.Bottom };
         }
@@ -12731,7 +12731,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static System.Windows.Controls.StackPanel BuildReflectionContainer(
         FrameworkElement imageRoot, double widthPx, double heightPx,
-        double reflOpacity, double distPx, double borderWidthPx)
+        PictureReflectionVisualPlan reflection, double distPx, double borderWidthPx)
     {
         var totalW = widthPx + borderWidthPx * 2;
         var totalH = heightPx + borderWidthPx * 2;
@@ -12750,8 +12750,12 @@ public sealed class DocumentView : RichTextBox
         var fadeMask = new System.Windows.Media.LinearGradientBrush(
             new System.Windows.Media.GradientStopCollection
             {
-                new(Color.FromArgb((byte)(reflOpacity * 255), 0, 0, 0), 0.0),
-                new(Color.FromArgb(0, 0, 0, 0), 1.0),
+                new(
+                    Color.FromArgb((byte)(reflection.Opacity * 255), 0, 0, 0),
+                    reflection.StartPosition),
+                new(
+                    Color.FromArgb((byte)(reflection.EndOpacity * 255), 0, 0, 0),
+                    reflection.EndPosition),
             },
             new System.Windows.Point(0, 0), new System.Windows.Point(0, 1));
 
