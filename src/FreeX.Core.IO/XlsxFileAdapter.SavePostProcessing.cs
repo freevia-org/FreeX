@@ -484,6 +484,21 @@ public sealed partial class XlsxFileAdapter
             // on this source-package save path.
             packageStream.Position = 0;
             RewritePivotTableLayoutState(packageStream, workbook, numberFormatIdMap);
+
+            // R117-io-pivotcache-sharedItems-growth: sibling of the two rewrites above, but for the
+            // PRESERVED pivotCacheDefinitionN.xml part rather than pivotTableDefinitionN.xml.
+            // PivotTableRefreshService.ReconcileCacheFields (R115/R116) appends newly-discovered
+            // distinct values onto cache.Fields[].SharedItems in memory on an ordinary refresh, but
+            // XlsxPivotTableWriter.Save (the only code that would otherwise regenerate a cacheField's
+            // <sharedItems> from the current model) is gated behind !hasSourcePackage, so on THIS save
+            // path the preserved <sharedItems> list stays frozen at whatever it was when the file was
+            // last saved. Without this, a pivot-bound slicer's newly APPENDED CacheItems entry (see
+            // ExtendBoundSlicerCacheItems) points at an index past the end of the reloaded
+            // PivotCacheFieldModel.SharedItems list -- SlicerItemResolver.ResolvePivotCacheItems then
+            // silently skips it (index >= sharedItems.Count) -- so the new value would still be invisible
+            // after a save + reload, just for a different reason than before this fix.
+            packageStream.Position = 0;
+            RewritePivotCacheSharedItems(packageStream, workbook);
         }
 
         // P7: slicer/timeline selection/range/level lives in preserved native parts. PreserveSourcePackageParts
@@ -860,6 +875,96 @@ public sealed partial class XlsxFileAdapter
             }
         }
     }
+
+    /// <summary>
+    /// R117-io-pivotcache-sharedItems-growth: appends a native <c>&lt;s&gt;</c>/<c>&lt;n&gt;</c>/
+    /// <c>&lt;d&gt;</c>/<c>&lt;b&gt;</c> element to a preserved pivotCacheDefinition part's
+    /// <c>&lt;sharedItems&gt;</c> for every index in <see cref="PivotCacheFieldModel.SharedItems"/> that
+    /// the preserved XML does not yet represent, matched purely by ELEMENT COUNT/POSITION (the same
+    /// append-only, index-stable contract <see cref="PivotCacheFieldFactory.MergeFromSourceData"/>
+    /// already guarantees the in-memory list itself never renumbers). Only APPENDS: an untouched field
+    /// (no growth since last save) leaves the preserved XML byte-identical, and no existing element's
+    /// value/position is ever modified. Deliberately does not touch the <c>&lt;sharedItems&gt;</c>
+    /// element's own summary attributes (containsString/minValue/maxValue/etc.) -- those stay exactly as
+    /// preserved; a genuinely new value can make them slightly stale until the next full rebuild, a
+    /// narrower and safer scope than also renormalizing header attributes on every incidental save.
+    /// </summary>
+    private static void RewritePivotCacheSharedItems(Stream packageStream, Workbook workbook)
+    {
+        if (workbook.PivotCaches.Count == 0)
+            return;
+
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+
+        foreach (var cache in workbook.PivotCaches)
+        {
+            if (string.IsNullOrWhiteSpace(cache.PackagePart))
+                continue;
+
+            var cachePath = XlsxPackagePath.NormalizePackagePath(cache.PackagePart);
+            var entry = archive.GetEntry(cachePath);
+            if (entry is null)
+                continue;
+
+            var cacheXml = XlsxPackageXmlEditor.LoadXml(entry);
+            var root = cacheXml.Root;
+            if (root is null || root.Name != workbookNs + "pivotCacheDefinition")
+                continue;
+
+            var cacheFieldElements = root
+                .Element(workbookNs + "cacheFields")?
+                .Elements(workbookNs + "cacheField")
+                .ToList();
+            if (cacheFieldElements is null)
+                continue;
+
+            var changed = false;
+            for (var index = 0; index < cacheFieldElements.Count && index < cache.Fields.Count; index++)
+            {
+                var fieldElement = cacheFieldElements[index];
+                var field = cache.Fields[index];
+                if (!string.Equals(fieldElement.Attribute("name")?.Value, field.Name, StringComparison.Ordinal))
+                    continue; // Positions drifted from the model (a column was inserted/removed some
+                              // other way) -- safer to leave this field's preserved XML untouched than
+                              // guess which model field it corresponds to.
+
+                if (field.SharedItems is not { Count: > 0 } sharedItems)
+                    continue;
+
+                var sharedItemsElement = fieldElement.Element(workbookNs + "sharedItems");
+                if (sharedItemsElement is null)
+                    continue;
+
+                var existingCount = sharedItemsElement
+                    .Elements()
+                    .Count(element => element.Name == workbookNs + "s" ||
+                                       element.Name == workbookNs + "n" ||
+                                       element.Name == workbookNs + "d" ||
+                                       element.Name == workbookNs + "b" ||
+                                       element.Name == workbookNs + "m");
+                if (existingCount >= sharedItems.Count)
+                    continue;
+
+                var kinds = field.SharedItemKinds;
+                for (var itemIndex = existingCount; itemIndex < sharedItems.Count; itemIndex++)
+                {
+                    var kind = kinds is not null && itemIndex < kinds.Count ? kinds[itemIndex] : InferSharedItemKind(field);
+                    sharedItemsElement.Add(new XElement(workbookNs + kind.ToString(), new XAttribute("v", sharedItems[itemIndex])));
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, cacheXml);
+        }
+    }
+
+    // Falls back to inferring a shared item's native element name from the field's type flags when
+    // SharedItemKinds wasn't recorded for it (e.g. a field built without per-item kind tracking) --
+    // mirrors PivotCacheFieldFactory.BuildFromSourceData's own type-detection precedence.
+    private static char InferSharedItemKind(PivotCacheFieldModel field) =>
+        field.ContainsDate ? 'd' : field.ContainsNumber ? 'n' : 's';
 
     // OOXML CT_pivotTableDefinition spells grand-total visibility as rowGrandTotals/colGrandTotals, both
     // defaulting to true when omitted (mirrors XlsxPivotTableReader.cs's ReadGrandTotal).

@@ -145,7 +145,20 @@ public static partial class PivotTableRefreshService
         // affirmatively asks for it via rescanCacheSharedItems (see that parameter's doc comment for
         // exactly which callers do and don't).
         if (cache is not null && rescanCacheSharedItems)
+        {
             ReconcileCacheFields(cache, headers, sourceSheet, pivotTable.SourceRange);
+
+            // R117-commands-pivot-slicer-growth: ReconcileCacheFields (via
+            // PivotCacheFieldFactory.MergeFromSourceData) just appended any genuinely NEW distinct
+            // value onto the surviving field's SharedItems, at a brand-new index past the end of the
+            // list -- but nothing else ever revisits an ALREADY-EXISTING slicer's CacheItems to add an
+            // entry for that new index. SlicerItemResolver.ResolvePivotCacheItems only ever resolves a
+            // caption for an index already present in CacheItems (foreach item in slicer.CacheItems),
+            // so a newly-appeared value stayed invisible in that slicer's tile list forever, even after
+            // Refresh. Extend every slicer bound to THIS pivot table now, while cache.Fields still
+            // reflects the just-reconciled SharedItems.
+            ExtendBoundSlicerCacheItems(workbook, pivotTable, cache);
+        }
 
         // R92-app-pivot-drilldown-5-3: a source shrink (columns deleted, or an entire field's
         // backing column gone) can leave some fields' SourceFieldIndex pointing past the new
@@ -480,5 +493,63 @@ public static partial class PivotTableRefreshService
         var reconciled = PivotCacheFieldFactory.ReconcileFields(cache.Fields, liveHeaders, sourceSheet, sourceRange);
         cache.Fields.Clear();
         cache.Fields.AddRange(reconciled);
+    }
+
+    /// <summary>
+    /// R117-commands-pivot-slicer-growth: appends a <see cref="SlicerCacheItem"/> to every slicer bound
+    /// to <paramref name="pivotTable"/> (by <see cref="SlicerModel.SourcePivotTableName"/> +
+    /// <see cref="SlicerModel.SourceFieldName"/>) for each index in the field's
+    /// <see cref="PivotCacheFieldModel.SharedItems"/> that the slicer's existing
+    /// <see cref="SlicerModel.CacheItems"/> does not yet represent. SharedItems is append-only
+    /// (<see cref="PivotCacheFieldFactory.MergeFromSourceData"/>), so a brand-new distinct value always
+    /// lands at a brand-new index at the END of that list -- this only ever APPENDS, in ascending index
+    /// order, and never touches an existing entry's <see cref="SlicerCacheItem.Index"/>/
+    /// <see cref="SlicerCacheItem.IsSelected"/>, so an untouched refresh (no new distinct values) is a
+    /// complete no-op and a user's prior per-item selection/deselection survives unchanged.
+    /// <para>
+    /// A brand-new item defaults to <c>IsSelected: true</c> -- Excel shows a newly-appeared pivot field
+    /// value as included/selected by default in a slicer that has not explicitly excluded it (mirroring
+    /// <c>AddSlicerCommand.BuildInitialCacheItems</c>'s own "all items selected" seed for a fresh
+    /// slicer). This never touches <see cref="SlicerModel.SelectedItems"/> itself -- only the resolver's
+    /// projection of CacheItems into SelectedItems, which already only fires when SelectedItems is still
+    /// empty -- so a user's existing explicit filter (captured via <c>SetSlicerSelectionCommand</c>) is
+    /// completely unaffected.
+    /// </para>
+    /// <para>
+    /// Deliberately skips a slicer whose CacheItems is currently empty: an empty CacheItems means either
+    /// a table slicer (no pivot cache binding at all -- SourceFieldName wouldn't resolve a field here
+    /// anyway) or a pivot slicer that was never seeded with cache items in the first place (a distinct,
+    /// pre-existing gap this fix does not attempt to change the shape of).
+    /// </para>
+    /// </summary>
+    private static void ExtendBoundSlicerCacheItems(Workbook workbook, PivotTableModel pivotTable, PivotCacheModel cache)
+    {
+        if (workbook.Slicers.Count == 0 || string.IsNullOrWhiteSpace(pivotTable.Name))
+            return;
+
+        foreach (var slicer in workbook.Slicers)
+        {
+            if (slicer.CacheItems.Count == 0)
+                continue;
+            if (!string.Equals(slicer.SourcePivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (string.IsNullOrWhiteSpace(slicer.SourceFieldName))
+                continue;
+
+            var field = cache.Fields.FirstOrDefault(candidate =>
+                string.Equals(candidate.Name, slicer.SourceFieldName, StringComparison.OrdinalIgnoreCase));
+            if (field?.SharedItems is not { Count: > 0 } sharedItems)
+                continue;
+
+            var existingIndices = new HashSet<int>(slicer.CacheItems.Count);
+            foreach (var item in slicer.CacheItems)
+                existingIndices.Add(item.Index);
+
+            for (var index = 0; index < sharedItems.Count; index++)
+            {
+                if (existingIndices.Add(index))
+                    slicer.CacheItems.Add(new SlicerCacheItem(index, IsSelected: true));
+            }
+        }
     }
 }

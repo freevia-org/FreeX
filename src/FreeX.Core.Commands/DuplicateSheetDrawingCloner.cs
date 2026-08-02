@@ -136,7 +136,11 @@ internal static class DuplicateSheetDrawingCloner
                 SourceSheetName = copy.Name,
                 SourceTableId = slicer.SourceTableId,
                 SourceTableColumnId = slicer.SourceTableColumnId,
-                CacheItems = slicer.CacheItems,
+                // R117-commands-pivot-slicer-growth: CacheItems is now a mutable List<> (a later
+                // refresh can append newly-appeared indices to it); copy the list rather than aliasing
+                // the source slicer's instance, or a refresh-driven append to one would silently mutate
+                // the other's cache items too.
+                CacheItems = slicer.CacheItems.ToList(),
                 AvailableItems = slicer.AvailableItems,
                 SelectionCaptured = slicer.SelectionCaptured
             };

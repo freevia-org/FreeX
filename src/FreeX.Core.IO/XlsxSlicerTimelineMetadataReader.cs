@@ -66,7 +66,7 @@ internal static class XlsxSlicerTimelineMetadataReader
                         SourceSheetName = hasDrawing ? drawingMetadata.SheetName : null,
                         SourceTableId = cache?.TableId,
                         SourceTableColumnId = cache?.TableColumnId,
-                        CacheItems = cache?.CacheItems ?? []
+                        CacheItems = (cache?.CacheItems ?? []).ToList()
                     };
                     slicer.SelectedItems.AddRange(cache?.SelectedItems ?? []);
                     slicers.Add(slicer);

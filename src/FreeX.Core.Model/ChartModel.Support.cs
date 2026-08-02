@@ -154,12 +154,26 @@ public sealed record ChartSeriesVerbatimFormulas(
 /// <c>&lt;c:numCache&gt;</c> / <c>&lt;c:strCache&gt;</c> elements in the chart XML.
 /// Used as a fallback when the series data range formula is an unresolvable named range
 /// (e.g. <c>Sheet1!rngMyData</c>) so FreeX can still render the chart without recalc.
+/// <para>
+/// R117-io-chart-embedded-bubble-size-1: <see cref="SizeValues"/> carries a Bubble series'
+/// cached <c>&lt;c:bubbleSize&gt;</c> numCache (aligned by point index with <see cref="Values"/>,
+/// which for Bubble already holds the cached <c>&lt;c:yVal&gt;</c>). It is null for every other
+/// chart type/family, including Stock: a Stock chart's Open/High/Low/Close are each their own
+/// classic <c>&lt;c:ser&gt;</c> (with their own <c>&lt;c:val&gt;</c> cache), so the reader
+/// (<c>XlsxChartSeriesRangeReader.TryReadEmbeddedSeriesData</c>) already captures each dimension
+/// as its own list entry (in the fixed Open/High/Low/Close document order OOXML requires) -- no
+/// extra field is needed on this record for Stock, only a consumer that knows to re-merge that
+/// ordered list back into one High/Low/Open/Close-shaped series (see
+/// <c>ChartRenderer.BuildEmbeddedCellLookup</c> and
+/// <c>ChartLayoutRequestBuilder.BuildFromEmbeddedData</c>).
+/// </para>
 /// </summary>
 public sealed record ChartEmbeddedSeriesData(
     int SeriesIndex,
     string? SeriesName,
     IReadOnlyList<string> Categories,
-    IReadOnlyList<double?> Values);
+    IReadOnlyList<double?> Values,
+    IReadOnlyList<double?>? SizeValues = null);
 
 public enum ChartBubbleSizeRepresents { Area, Width }
 
