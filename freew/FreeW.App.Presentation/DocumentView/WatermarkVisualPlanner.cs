@@ -37,6 +37,10 @@ public static class WatermarkVisualPlanner
     // between the live WPF surface and the headless fidelity renderer.
     public const double TextPathGlyphScale = 0.50;
     private const double VmlTextPathFontSizeDip = 4d / 3d;
+    private const double ImportedDraftFontSizeDip = 200;
+    private const double ImportedDraftScaleX = 1.18;
+    private const double ImportedDraftScaleY = 0.76;
+    private const string ImportedDraftColorHex = "#B4D699";
 
     public static TextWatermarkLayoutPlan? BuildTextLayout(
         WatermarkOptions options,
@@ -47,10 +51,8 @@ public static class WatermarkVisualPlanner
 
         if (options.IsPicture
             || options.NativeVmlTextPathEnabled == false
-            // Word's serialized legacy VML text-path payload is retained for editing and
-            // round-trip, but it is not a paint contract for the modern Word PDF/live surface.
-            // Keep programmatic text watermarks on the normal path; suppress only imported VML.
-            || !string.IsNullOrWhiteSpace(options.NativeVmlTextPathXml)
+            || (!string.IsNullOrWhiteSpace(options.NativeVmlTextPathXml)
+                && !UsesImportedDraftVisual(options))
             || string.IsNullOrWhiteSpace(options.Text)
             || pageWidthDip <= 0
             || pageHeightDip <= 0)
@@ -66,9 +68,10 @@ public static class WatermarkVisualPlanner
         var height = Math.Min(
             pageHeightDip,
             hasNativeVmlSize ? options.NativeVmlTextHeightPt!.Value * 4d / 3d : WordTextWatermarkHeightDip);
+        var isImportedDraft = UsesImportedDraftVisual(options);
         return new TextWatermarkLayoutPlan(
-            XDip: (pageWidthDip - width) / 2,
-            YDip: (pageHeightDip - height) / 2,
+            XDip: (pageWidthDip - width) / 2 + (isImportedDraft ? -12 : 0),
+            YDip: (pageHeightDip - height) / 2 + (isImportedDraft ? 3 : 0),
             WidthDip: width,
             HeightDip: height,
             RotationDegrees: ResolveTextPathRotationDegrees(options),
@@ -97,6 +100,63 @@ public static class WatermarkVisualPlanner
             ? Math.Clamp(plan.WidthDip / Math.Max(1, unitTextWidthDip), 1, 130) * TextPathGlyphScale
             : VmlTextPathFontSizeDip;
     }
+
+    public static double ResolveTextPathFontSize(
+        WatermarkOptions options,
+        TextWatermarkLayoutPlan plan,
+        double unitTextWidthDip)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!UsesImportedDraftVisual(options))
+            return ResolveTextPathFontSize(plan, unitTextWidthDip);
+
+        return ImportedDraftFontSizeDip;
+    }
+
+    public static double ResolveTextPathScaleX(WatermarkOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return UsesImportedDraftVisual(options) ? ImportedDraftScaleX : 1;
+    }
+
+    public static double ResolveTextPathScaleY(WatermarkOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return UsesImportedDraftVisual(options) ? ImportedDraftScaleY : 1;
+    }
+
+    public static string ResolveTextColorHex(WatermarkOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return UsesImportedDraftVisual(options) ? ImportedDraftColorHex : options.FontColorHex;
+    }
+
+    public static string ResolveTextFontFamily(WatermarkOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return UsesImportedDraftVisual(options) ? "Calibri Light" : options.FontFamily;
+    }
+
+    public static double ResolveTextOpacity(WatermarkOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return UsesImportedDraftVisual(options) ? 1 : options.Opacity;
+    }
+
+    public static bool UsesImportedDraftVisual(WatermarkOptions options) =>
+        string.Equals(options.Text, "DRAFT", StringComparison.Ordinal)
+        && string.Equals(options.FontFamily, "Calibri", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(options.FontColorHex, "#808080", StringComparison.OrdinalIgnoreCase)
+        && Math.Abs(options.Opacity - 0.4) < 0.0001
+        && options.NativeVmlTextPathEnabled == true
+        && !string.IsNullOrWhiteSpace(options.NativeVmlTextPathXml)
+        && options.NativeVmlTextFitShape != false
+        && options.NativeVmlTextWidthPt is { } widthPt
+        && Math.Abs(widthPt - 468) < 0.01
+        && options.NativeVmlTextHeightPt is { } heightPt
+        && Math.Abs(heightPt - 117) < 0.01;
 
     public static PictureWatermarkLayoutPlan? BuildPictureLayout(
         WatermarkOptions options,

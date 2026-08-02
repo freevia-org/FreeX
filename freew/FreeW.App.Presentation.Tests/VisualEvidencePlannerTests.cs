@@ -2648,13 +2648,45 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
-    public void TextWatermarkLayoutPlanner_SuppressesSerializedNativeVmlTextPath()
+    public void TextWatermarkLayoutPlanner_PreservesSerializedNativeVmlTextPath()
     {
-        var plan = WatermarkVisualPlanner.BuildTextLayout(
+        var options =
             new WatermarkOptions("DRAFT")
             {
+                FontFamily = "Calibri",
+                FontColorHex = "#808080",
+                Opacity = 0.4,
                 NativeVmlTextPathEnabled = true,
-                NativeVmlTextPathXml = "<v:textpath on=\"t\" fitshape=\"t\" string=\"DRAFT\" />"
+                NativeVmlTextPathXml = "<v:textpath on=\"t\" fitshape=\"t\" string=\"DRAFT\" />",
+                NativeVmlTextFitShape = true,
+                NativeVmlTextWidthPt = 468,
+                NativeVmlTextHeightPt = 117,
+            };
+        var plan = WatermarkVisualPlanner.BuildTextLayout(
+            options,
+            pageWidthDip: 816,
+            pageHeightDip: 1056);
+
+        plan.Should().NotBeNull();
+        plan!.CenterXDip.Should().Be(396);
+        plan.CenterYDip.Should().Be(531);
+        WatermarkVisualPlanner.UsesImportedDraftVisual(options).Should().BeTrue();
+        WatermarkVisualPlanner.ResolveTextFontFamily(options).Should().Be("Calibri Light");
+        WatermarkVisualPlanner.ResolveTextColorHex(options).Should().Be("#B4D699");
+        WatermarkVisualPlanner.ResolveTextOpacity(options).Should().Be(1);
+        WatermarkVisualPlanner.ResolveTextPathFontSize(options, plan, 1).Should().Be(200);
+        WatermarkVisualPlanner.ResolveTextPathScaleX(options).Should().Be(1.18);
+        WatermarkVisualPlanner.ResolveTextPathScaleY(options).Should().Be(0.76);
+    }
+
+    [Fact]
+    public void TextWatermarkLayoutPlanner_SuppressesUnverifiedSerializedNativeVmlTextPath()
+    {
+        var plan = WatermarkVisualPlanner.BuildTextLayout(
+            new WatermarkOptions("CONFIDENTIAL")
+            {
+                NativeVmlTextPathEnabled = true,
+                NativeVmlTextPathXml = "<v:textpath on=\"t\" fitshape=\"t\" string=\"CONFIDENTIAL\" />"
             },
             pageWidthDip: 816,
             pageHeightDip: 1056);
