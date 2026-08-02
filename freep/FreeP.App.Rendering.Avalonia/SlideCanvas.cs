@@ -66,10 +66,17 @@ public sealed class SlideCanvas : Control
             o => o.ActiveTextEditShapeId,
             (o, v) => o.ActiveTextEditShapeId = v);
 
+    public static readonly DirectProperty<SlideCanvas, bool> RenderSlideBackgroundProperty =
+        AvaloniaProperty.RegisterDirect<SlideCanvas, bool>(
+            nameof(RenderSlideBackground),
+            o => o.RenderSlideBackground,
+            (o, v) => o.RenderSlideBackground = v);
+
     private Presentation? _presentation;
     private Slide? _slide;
     private int _slideIndex;
     private uint? _activeTextEditShapeId;
+    private bool _renderSlideBackground = true;
 
     public Presentation? Presentation
     {
@@ -81,6 +88,19 @@ public sealed class SlideCanvas : Control
     {
         get => _slide;
         set { SetAndRaise(SlideProperty, ref _slide, value); Refresh(); }
+    }
+
+    /// <summary>Whether the compositor paints the slide background.</summary>
+    public bool RenderSlideBackground
+    {
+        get => _renderSlideBackground;
+        set
+        {
+            if (_renderSlideBackground == value)
+                return;
+            SetAndRaise(RenderSlideBackgroundProperty, ref _renderSlideBackground, value);
+            Refresh();
+        }
     }
 
     public int SlideIndex
@@ -3569,6 +3589,10 @@ public sealed class SlideCanvas : Control
         }
         _slideWidthDip  = _presentation.SlideSizeCxEmu / 9525.0;
         _slideHeightDip = _presentation.SlideSizeCyEmu / 9525.0;
-        _cachedOps      = SlideCompositor.Compose(_presentation, _slide, _slideIndex);
+        _cachedOps      = SlideCompositor.Compose(
+            _presentation,
+            _slide,
+            _slideIndex,
+            RenderSlideBackground);
     }
 }

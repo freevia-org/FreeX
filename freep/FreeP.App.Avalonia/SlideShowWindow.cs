@@ -73,6 +73,7 @@ public sealed class SlideShowWindow : Window
     private readonly AvaloniaSlideShowMediaController _mediaController;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private PresenterViewWindow? _presenterViewWindow;
+    private bool _zoomShowBackgroundForTransition = true;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
     private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
     private SlideShowAnimationStepPlaybackReadinessPlan? _lastAnimationStepPlaybackReadinessPlan;
@@ -958,6 +959,8 @@ public sealed class SlideShowWindow : Window
             zoomTransitionDurationMs);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
+        _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
+        _slideCanvas.RenderSlideBackground = true;
         RefreshInkOverlay();
 
         var slide = plan.Slide;
@@ -1023,6 +1026,7 @@ public sealed class SlideShowWindow : Window
         _transitionFlashOverlay.IsVisible = false;
         _transitionFlashOverlay.Opacity = 0;
         _slideCanvas.ZIndex = 0;
+        _slideCanvas.RenderSlideBackground = true;
         _slideCanvas.Slide   = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.Clip = null;
@@ -1331,6 +1335,7 @@ public sealed class SlideShowWindow : Window
             onComplete: () =>
             {
                 _slideCanvas.RenderTransform = null;
+                _slideCanvas.RenderSlideBackground = true;
                 _transitionBackImage.IsVisible = false;
             });
     }
@@ -1833,7 +1838,10 @@ public sealed class SlideShowWindow : Window
             ? SlideShowPlaybackPlanner.ZoomInStartScale
             : SlideShowPlaybackPlanner.ZoomOutStartScale;
 
+        // Capture the outgoing slide with its own background, then apply showBg to the
+        // incoming destination surface only.
         _slideCanvas.Slide = slide;
+        _slideCanvas.RenderSlideBackground = _zoomShowBackgroundForTransition;
         _slideCanvas.Opacity = 1;
         _slideCanvas.RenderTransformOrigin = RelativePoint.Center;
         var transform = new ScaleTransform(startScale, startScale);

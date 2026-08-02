@@ -62,6 +62,7 @@ public sealed class SlideShowWindow : Window
     private readonly Action<int, string?>? _setSlideNotesText;
     private readonly DispatcherTimer  _autoAdvanceTimer;
     private PresenterViewWindow? _presenterViewWindow;
+    private bool _zoomShowBackgroundForTransition = true;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
     private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
     private SlideShowAnimationStepPlaybackReadinessPlan? _lastAnimationStepPlaybackReadinessPlan;
@@ -613,7 +614,9 @@ public sealed class SlideShowWindow : Window
                     _controller,
                     _presentation.Slides,
                     targetSlideIndex,
-                    pointerIntent.ReturnToParent));
+                    pointerIntent.ReturnToParent,
+                    pointerIntent.TransitionDurationMs,
+                    pointerIntent.ShowBackground));
                 break;
             case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
                 ActivateHyperlink(pointerIntent.Hyperlink);
@@ -874,11 +877,16 @@ public sealed class SlideShowWindow : Window
         Close();
     }
 
-    private void NavigateToSlide(Slide slide, int index, bool animated, int? zoomTransitionDurationMs = null)
+    private void NavigateToSlide(
+        Slide slide,
+        int index,
+        bool animated,
+        int? zoomTransitionDurationMs = null,
+        bool zoomShowBackground = true)
     {
         _ = slide;  // passed for callers that need it; we use _controller.CurrentSlide
         _ = index;
-        DisplayCurrentSlide(animated, zoomTransitionDurationMs);
+        DisplayCurrentSlide(animated, zoomTransitionDurationMs, zoomShowBackground);
     }
 
     private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
@@ -901,7 +909,8 @@ public sealed class SlideShowWindow : Window
                     command.Slide,
                     command.SlideIndex,
                     command.AnimateSlide,
-                    command.TransitionDurationMs);
+                    command.TransitionDurationMs,
+                    command.UseDestinationBackground);
                 break;
         }
     }
@@ -917,15 +926,21 @@ public sealed class SlideShowWindow : Window
     /// Renders the controller's current slide with the optional entry transition.
     /// When <paramref name="animated"/> is false (first display, Home/End, Back), skip the transition.
     /// </summary>
-    private void DisplayCurrentSlide(bool animated, int? zoomTransitionDurationMs = null)
+    private void DisplayCurrentSlide(
+        bool animated,
+        int? zoomTransitionDurationMs = null,
+        bool zoomShowBackground = true)
     {
         var plan = SlideShowHostPlanner.BuildDisplayPlan(
             _presentation,
             _controller,
             animated,
-            zoomTransitionDurationMs);
+            zoomTransitionDurationMs,
+            zoomShowBackground);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
+        _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
+        _slideCanvas.RenderSlideBackground = true;
         // Ink state follows the route through the shared session controller.
         RefreshInkOverlay();
 
@@ -993,6 +1008,7 @@ public sealed class SlideShowWindow : Window
         _transitionFlashOverlay.Opacity = 0;
         Grid.SetZIndex(_transitionFlashOverlay, 0);
         Grid.SetZIndex(_slideCanvas, 0);
+        _slideCanvas.RenderSlideBackground = true;
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.Clip = null;
@@ -2955,7 +2971,10 @@ public sealed class SlideShowWindow : Window
             ? SlideShowPlaybackPlanner.ZoomInStartScale
             : SlideShowPlaybackPlanner.ZoomOutStartScale;
 
+        // Capture the outgoing slide with its own background, then apply showBg to the
+        // incoming destination surface only.
         _slideCanvas.Slide = slide;
+        _slideCanvas.RenderSlideBackground = _zoomShowBackgroundForTransition;
         _slideCanvas.Opacity = 1;
         var transform = new ScaleTransform(startScale, startScale, w / 2, h / 2);
         _slideCanvas.RenderTransform = transform;
@@ -2979,6 +2998,7 @@ public sealed class SlideShowWindow : Window
         animationX.Completed += (_, _) =>
         {
             _slideCanvas.RenderTransform = Transform.Identity;
+            _slideCanvas.RenderSlideBackground = true;
             _transitionBackImage.Visibility = Visibility.Collapsed;
         };
 
