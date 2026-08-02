@@ -154,6 +154,7 @@ public sealed class R66_PrintedMergedRangeGridlineSuppressionTests
                 WorksheetPrintErrorValue.Displayed,
                 0.0,
                 0.0,
+                new Workbook(),
                 false,
                 sheet,
             ]);

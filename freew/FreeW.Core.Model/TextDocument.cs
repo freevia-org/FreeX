@@ -1092,15 +1092,22 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// <summary>
     /// Creates a date-picker content control run. The run's <see cref="Text"/> is the displayed date text
     /// and <paramref name="dateFormat"/> is the control's w:dateFormat (defaults to <see
-    /// cref="ContentControl.DefaultDateFormat"/>). Serialises as a w:sdt with a w:date w:sdtPr.
+    /// cref="ContentControl.DefaultDateFormat"/>). Optional <paramref name="dateMetadata"/> preserves
+    /// Word's date value, calendar, locale, and mapped-data representation. Serialises as a w:sdt with
+    /// a w:date w:sdtPr.
     /// </summary>
     public static Run DatePickerControl(
-        string text, string? tag = null, string? alias = null, string? dateFormat = null) =>
+        string text,
+        string? tag = null,
+        string? alias = null,
+        string? dateFormat = null,
+        ContentControlDateMetadata? dateMetadata = null) =>
         new(text)
         {
             Control = new ContentControl(
                 ContentControlKind.DatePicker, tag, alias,
-                DateFormat: dateFormat ?? ContentControl.DefaultDateFormat)
+                DateFormat: dateFormat ?? ContentControl.DefaultDateFormat,
+                DateMetadata: dateMetadata)
         };
 
     /// <summary>
@@ -1314,12 +1321,23 @@ public sealed record ContentControlWordMetadata(
     string? Color = null);
 
 /// <summary>
+/// Word-specific date-picker metadata from w:date. Null fields represent absent OOXML values and are
+/// omitted when the control is saved.
+/// </summary>
+public sealed record ContentControlDateMetadata(
+    string? FullDate = null,
+    string? Calendar = null,
+    string? LanguageId = null,
+    string? StoreMappedDataAs = null);
+
+/// <summary>
 /// An immutable content-control (structured document tag / w:sdt) mark carried by a <see cref="Run"/>.
 /// Records the control <see cref="Kind"/>, an optional <see cref="Tag"/> (w:tag) and <see cref="Alias"/>
 /// (w:alias), and the kind-specific extras: <see cref="Checked"/> (checkbox state), <see cref="DateFormat"/>
-/// (a date picker's w:dateFormat string), and <see cref="ListItems"/> (the w:listItem choices of a
-/// drop-down list or combo box). Document-part lists and building-block gallery controls additionally retain
-/// <see cref="DocPartGallery"/>, <see cref="DocPartCategory"/>, and <see cref="DocPartUnique"/>.
+/// (a date picker's w:dateFormat string), <see cref="DateMetadata"/> (the remaining w:date metadata), and
+/// <see cref="ListItems"/> (the w:listItem choices of a drop-down list or combo box). Document-part lists
+/// and building-block gallery controls additionally retain <see cref="DocPartGallery"/>,
+/// <see cref="DocPartCategory"/>, and <see cref="DocPartUnique"/>.
 /// Modelled as an immutable record so it mirrors how other small marks
 /// (<see cref="PageBorder"/>, <see cref="TableFormatting"/>) are modelled and so consecutive runs can
 /// share one instance to coalesce into a single w:sdt on save.
@@ -1335,7 +1353,8 @@ public sealed record ContentControl(
     ContentControlWordMetadata? WordMetadata = null,
     string? DocPartGallery = null,
     string? DocPartCategory = null,
-    bool DocPartUnique = false)
+    bool DocPartUnique = false,
+    ContentControlDateMetadata? DateMetadata = null)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";

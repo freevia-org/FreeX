@@ -152,6 +152,7 @@ public sealed class R74_PrintedBorderEdgePrecedenceTests
                 WorksheetPrintErrorValue.Displayed,
                 0.0,
                 0.0,
+                new Workbook(),
                 false,
                 sheet,
             ]);

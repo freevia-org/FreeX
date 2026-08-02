@@ -44,6 +44,81 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void MapleMuffins_UsesWordCadenceAndSharedOrangeWrapperGeometry()
+    {
+        PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(2, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(816);
+        plan.Polygons[0].Points.Take(4).Should().Equal(
+            new PageBorderArtPoint(37, 45),
+            new PageBorderArtPoint(35, 44),
+            new PageBorderArtPoint(34, 41),
+            new PageBorderArtPoint(35, 38));
+        plan.Polygons[1].Red.Should().Be(0xFF);
+        plan.Polygons[1].Green.Should().Be(0x80);
+        plan.Polygons[2].Red.Should().Be(0xBF);
+        plan.Polygons[184].Points[0].Should().Be(new PageBorderArtPoint(37, 1005));
+    }
+
+    [Fact]
+    public void CakeSlice_UsesWordCadenceAndSharedCreamPinkLayerGeometry()
+    {
+        PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(3, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(510);
+        plan.Polygons[0].Points.Take(4).Should().Equal(
+            new PageBorderArtPoint(39, 36),
+            new PageBorderArtPoint(44, 34),
+            new PageBorderArtPoint(49, 36),
+            new PageBorderArtPoint(54, 32));
+        plan.Polygons[1].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xFF && polygon.Green == 0xEE && polygon.Blue == 0xCA);
+        plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xFF && polygon.Green == 0x99 && polygon.Blue == 0xC2);
+        plan.Polygons[115].Points[0].Should().Be(new PageBorderArtPoint(39, 996));
+    }
+
+    [Fact]
+    public void BirdsFlight_UsesWordCadenceAndSharedNavySilhouette()
+    {
+        PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(35, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(102);
+        plan.Polygons[0].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0x04 && polygon.Green == 0x07 && polygon.Blue == 0x50);
+        plan.Polygons[0].Points.Take(4).Should().Equal(
+            new PageBorderArtPoint(34, 35),
+            new PageBorderArtPoint(39, 37),
+            new PageBorderArtPoint(46, 48),
+            new PageBorderArtPoint(49, 44));
+        plan.Polygons[23].Points[0].Should().Be(new PageBorderArtPoint(34, 995));
+    }
+
+    [Fact]
+    public void PaintedEggs_UsesWordCadenceAndOrderedMottledEggGeometry()
+    {
+        PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(66, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(918);
+        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(38, 56));
+        plan.Polygons[1].Points.Take(3).Should().Equal(
+            new PageBorderArtPoint(43, 32),
+            new PageBorderArtPoint(50, 30),
+            new PageBorderArtPoint(56, 34));
+        plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xFF && polygon.Green == 0xFF && polygon.Blue == 0xFF);
+        plan.Polygons[207].Points[0].Should().Be(new PageBorderArtPoint(38, 1016));
+    }
+
+    [Fact]
     public void ShorebirdTracks_UsesMeasuredAlternatingFootprintCadenceAndSharedSegments()
     {
         PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(83, 3, 816, 1056, 32, out var motifs)

@@ -49,7 +49,7 @@ public sealed class R91_FormulaFunctionAutocompletePlannerTests
     public void Commit_ReplacesTypedPrefixWithNameAndOpeningParen()
     {
         var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
-            "=SU", tokenStart: 1, tokenLength: 2, chosenName: "SUM");
+            "=SU", tokenStart: 1, tokenLength: 2, chosenName: "SUM", isFunction: true);
 
         text.Should().Be("=SUM(");
         caretIndex.Should().Be(5);
@@ -59,7 +59,7 @@ public sealed class R91_FormulaFunctionAutocompletePlannerTests
     public void Commit_MidFormula_PreservesTextAfterToken()
     {
         var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
-            "=1+SU+2", tokenStart: 3, tokenLength: 2, chosenName: "SUM");
+            "=1+SU+2", tokenStart: 3, tokenLength: 2, chosenName: "SUM", isFunction: true);
 
         text.Should().Be("=1+SUM(+2");
         caretIndex.Should().Be(7);
@@ -114,5 +114,63 @@ public sealed class R91_FormulaFunctionAutocompletePlannerTests
     {
         FormulaFunctionAutocompletePlanner.MoveSelection(currentIndex: -1, candidateCount: 0, delta: 1)
             .Should().Be(-1);
+    }
+
+    // ── R114: defined-name/table-name candidates must not get a trailing "(" ───────────────────
+    // FormulaFunctionAutocompletePlanner.BuildCandidates() deliberately merges built-in function
+    // names with workbook defined names and structured-table names into one candidate list (see
+    // BuildCandidates_IncludesDefinedAndTableNamesAlongsideFunctions above), but only function names
+    // are callable. Committing a defined name or table name must insert the bare name -- never
+    // "SalesTotal(" -- or the formula is left with an unbalanced parenthesis.
+
+    [Fact]
+    public void R114_Commit_DefinedNameCandidate_InsertsBareNameWithNoOpeningParen()
+    {
+        var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
+            "=Sale", tokenStart: 1, tokenLength: 4, chosenName: "SalesTotal", isFunction: false);
+
+        text.Should().Be("=SalesTotal");
+        caretIndex.Should().Be(11);
+    }
+
+    [Fact]
+    public void R114_Commit_TableNameCandidate_MidFormula_InsertsBareNameWithNoOpeningParen()
+    {
+        var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
+            "=SUM(Sale)", tokenStart: 5, tokenLength: 4, chosenName: "SalesTable", isFunction: false);
+
+        text.Should().Be("=SUM(SalesTable)");
+        caretIndex.Should().Be(15);
+    }
+
+    [Fact]
+    public void R114_Commit_FunctionCandidate_StillAppendsOpeningParen_NoRegression()
+    {
+        var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
+            "=Sale", tokenStart: 1, tokenLength: 4, chosenName: "SUM", isFunction: true);
+
+        text.Should().Be("=SUM(");
+        caretIndex.Should().Be(5);
+    }
+
+    [Fact]
+    public void R114_IsFunctionCandidate_MatchesBuiltInFunctionNameCaseInsensitively()
+    {
+        FormulaFunctionAutocompletePlanner.IsFunctionCandidate("sum", SampleFunctionNames)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void R114_IsFunctionCandidate_DefinedNameNotInFunctionList_ReturnsFalse()
+    {
+        FormulaFunctionAutocompletePlanner.IsFunctionCandidate("SalesTotal", SampleFunctionNames)
+            .Should().BeFalse();
+    }
+
+    [Fact]
+    public void R114_IsFunctionCandidate_NullFunctionNames_ReturnsFalse_NoRegression()
+    {
+        FormulaFunctionAutocompletePlanner.IsFunctionCandidate("SUM", null)
+            .Should().BeFalse();
     }
 }

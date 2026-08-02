@@ -90,7 +90,7 @@ public static partial class PivotTableRefreshService
                 // narrower field-count it writes into each <pivotCacheRecords><r> (which re-resolves
                 // against the current, live source range), producing a corrupt cache Excel repairs
                 // or misreads on open.
-                ReconcileCacheFields(cache, ReadHeaders(sourceSheet, liveTable.Range));
+                ReconcileCacheFields(cache, ReadHeaders(sourceSheet, liveTable.Range), sourceSheet, liveTable.Range);
             }
         }
 
@@ -415,7 +415,7 @@ public static partial class PivotTableRefreshService
     /// column's grouping. A no-op fast path (headers already match by name and position) avoids
     /// churning cache.Fields identity on every ordinary refresh.
     /// </summary>
-    private static void ReconcileCacheFields(PivotCacheModel cache, IReadOnlyList<string> liveHeaders)
+    private static void ReconcileCacheFields(PivotCacheModel cache, IReadOnlyList<string> liveHeaders, Sheet sourceSheet, GridRange sourceRange)
     {
         if (cache.Fields.Count == liveHeaders.Count)
         {
@@ -438,11 +438,16 @@ public static partial class PivotTableRefreshService
             existingByName.TryAdd(field.Name, field);
 
         var reconciled = new List<PivotCacheFieldModel>(liveHeaders.Count);
-        foreach (var header in liveHeaders)
+        for (var index = 0; index < liveHeaders.Count; index++)
         {
+            var header = liveHeaders[index];
+            // R114-commands-pivot-sharedItems: a header that has no existing same-named field (a truly
+            // new column the table grew into) must get its SharedItems populated from the live source
+            // data the same way a brand-new pivot's cache does -- otherwise a slicer added against this
+            // newly-appeared field would have no filter items, exactly like the brand-new-pivot case.
             reconciled.Add(existingByName.TryGetValue(header, out var existing)
                 ? existing
-                : new PivotCacheFieldModel(header));
+                : PivotCacheFieldFactory.BuildFromSourceData(header, sourceSheet, sourceRange, index));
         }
 
         cache.Fields.Clear();

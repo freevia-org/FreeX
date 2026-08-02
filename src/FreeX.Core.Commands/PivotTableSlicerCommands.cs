@@ -303,7 +303,14 @@ public sealed class AddSlicerCommand : IWorkbookCommand
             CacheName = $"Slicer_{PivotTableSlicerTimelineCommandHelpers.SanitizeCacheName(_slicerName, "Slicer")}",
             SourcePivotTableName = target.Value.PivotTable.Name,
             SourceFieldName = headers[sourceFieldIndex],
-            DrawingAnchor = PivotTableFloatingControlAnchor.CreateDefault(target.Value.PivotTable)
+            DrawingAnchor = PivotTableFloatingControlAnchor.CreateDefault(target.Value.PivotTable),
+            // R114-commands-pivot-sharedItems: SlicerItemResolver.ResolveAvailableItems only resolves a
+            // pivot slicer's items when CacheItems is non-empty (mirroring the native
+            // <data><tabular><items> list a loaded workbook's slicer cache carries) -- a freshly
+            // inserted slicer with an empty CacheItems can never show any filter button, even once its
+            // bound field's SharedItems is populated. Seed one cache item per shared item, all selected
+            // (Excel's own "(All items selected)" initial state for a brand-new slicer).
+            CacheItems = BuildInitialCacheItems(ctx.Workbook, target.Value.PivotTable, headers[sourceFieldIndex])
         };
         ctx.Workbook.Slicers.Add(slicer);
         _addedSlicer = slicer;
@@ -315,6 +322,27 @@ public sealed class AddSlicerCommand : IWorkbookCommand
         if (_addedSlicer is not null)
             ctx.Workbook.Slicers.Remove(_addedSlicer);
         _addedSlicer = null;
+    }
+
+    /// <summary>
+    /// Seeds a freshly inserted pivot slicer's <see cref="SlicerModel.CacheItems"/> -- one entry per
+    /// distinct value in the bound cache field's <see cref="PivotCacheFieldModel.SharedItems"/>, all
+    /// selected -- so <see cref="SlicerItemResolver.ResolveAvailableItems"/> has something to resolve
+    /// immediately, without requiring a save+reload round-trip first. Returns an empty list (matching
+    /// the pre-fix behaviour) when the cache or field can't be resolved, or the field carries no shared
+    /// items yet (e.g. an OLAP/external cache this codebase doesn't model shared items for).
+    /// </summary>
+    private static IReadOnlyList<SlicerCacheItem> BuildInitialCacheItems(Workbook workbook, PivotTableModel pivotTable, string fieldName)
+    {
+        var cache = CommandGuards.FindPivotCache(workbook, pivotTable);
+        var field = cache?.Fields.FirstOrDefault(candidate => string.Equals(candidate.Name, fieldName, StringComparison.OrdinalIgnoreCase));
+        if (field?.SharedItems is not { Count: > 0 } sharedItems)
+            return [];
+
+        var items = new List<SlicerCacheItem>(sharedItems.Count);
+        for (var index = 0; index < sharedItems.Count; index++)
+            items.Add(new SlicerCacheItem(index, IsSelected: true));
+        return items;
     }
 }
 

@@ -572,7 +572,7 @@ internal static class PptxChartReader
         Dictionary<int, ChartSeries> idxMap)
     {
         int seriesIndex = 0;
-        foreach (var serEl in chartEl.Elements(C + "ser"))
+        foreach (var serEl in OrderedSeriesElements(chartEl))
         {
             var series = new ChartSeries();
             ReadSeriesNameAndColor(serEl, shape, scheme, seriesIndex, series);
@@ -628,7 +628,7 @@ internal static class PptxChartReader
         Dictionary<int, ChartSeries> idxMap)
     {
         int seriesIndex = 0;
-        foreach (var serEl in chartEl.Elements(C + "ser"))
+        foreach (var serEl in OrderedSeriesElements(chartEl))
         {
             var series = new ChartSeries();
             ReadSeriesNameAndColor(serEl, shape, scheme, seriesIndex, series);
@@ -709,6 +709,7 @@ internal static class PptxChartReader
         series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
         series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
         series.ErrorBars = ReadErrorBars(serEl.Element(C + "errBars"));
+        series.Trendline = ReadTrendline(serEl.Element(C + "trendline"));
 
         // Fall back to the OOXML series index in the theme accent cycle. Combo-chart
         // plot groups can arrive out of visual order, so the group-local index would
@@ -731,7 +732,7 @@ internal static class PptxChartReader
         Dictionary<int, ChartSeries> idxMap)
     {
         int seriesIndex = 0;
-        foreach (var serEl in chartEl.Elements(C + "ser"))
+        foreach (var serEl in OrderedSeriesElements(chartEl))
         {
             var series = new ChartSeries();
 
@@ -823,6 +824,35 @@ internal static class PptxChartReader
 
             seriesIndex++;
         }
+    }
+
+    private static IReadOnlyList<XElement> OrderedSeriesElements(XElement chartEl)
+    {
+        var series = chartEl.Elements(C + "ser").ToList();
+        if (series.Count < 2)
+            return series;
+
+        // c:order is the authored plot/legend order. PowerPoint can leave the
+        // physical c:ser elements in a different order after series edits, so
+        // XML position is not a reliable substitute. If a producer omits the
+        // token on any series, retain the source order rather than inventing a
+        // partial reorder.
+        var ordered = series
+            .Select((element, sourceIndex) => new
+            {
+                Element = element,
+                SourceIndex = sourceIndex,
+                Order = ParseNullableInt(element.Element(C + "order")?.Attribute("val")?.Value),
+            })
+            .ToList();
+        if (ordered.Any(item => item.Order is null))
+            return series;
+
+        return ordered
+            .OrderBy(item => item.Order)
+            .ThenBy(item => item.SourceIndex)
+            .Select(item => item.Element)
+            .ToList();
     }
 
     private static ChartErrorBars? ReadErrorBars(XElement? element)

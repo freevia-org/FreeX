@@ -1,3 +1,5 @@
+using FreeX.Core.Model;
+
 namespace FreeX.App.Presentation.NamedRanges;
 
 public enum NamedRangeFilterOption
@@ -11,16 +13,24 @@ public enum NamedRangeFilterOption
 
 public static class NamedRangeDialogPlanner
 {
+    /// <summary>
+    /// R114-app-name-manager-workbook-sentinel-3-2: Workbook/Worksheet filtering must key off the
+    /// item's actual <see cref="NamedRangeViewModel.ScopeSheetId"/> identity (null = workbook-global),
+    /// not the display-label string. A worksheet can legally be named exactly "Workbook" (nothing in
+    /// <see cref="FreeX.Core.Model.Workbook.ValidateSheetNameStructure"/> reserves that text), so a
+    /// name actually scoped to such a sheet would otherwise carry the display label "Workbook" too and
+    /// get misclassified as workbook-scoped by a string comparison.
+    /// </summary>
     public static IReadOnlyList<NamedRangeViewModel> FilterItems(
         IEnumerable<NamedRangeViewModel> items,
         NamedRangeFilterOption filter) =>
         filter switch
         {
             NamedRangeFilterOption.Workbook => items
-                .Where(item => string.Equals(item.Scope, "Workbook", StringComparison.OrdinalIgnoreCase))
+                .Where(item => item.ScopeSheetId is null)
                 .ToList(),
             NamedRangeFilterOption.Worksheet => items
-                .Where(item => !string.Equals(item.Scope, "Workbook", StringComparison.OrdinalIgnoreCase))
+                .Where(item => item.ScopeSheetId is not null)
                 .ToList(),
             NamedRangeFilterOption.Errors => items
                 .Where(HasFormulaError)
@@ -45,13 +55,27 @@ public static class NamedRangeDialogPlanner
 }
 
 /// <summary>View model for a row in the named ranges list.</summary>
-public sealed class NamedRangeViewModel(string name, string value, string refersTo, string scope, string comment)
+/// <param name="scopeSheetId">
+///   The row's actual scope identity: null for a workbook-global name, or the owning sheet's
+///   <see cref="SheetId"/> for a sheet-scoped name (Excel "localSheetId") -- tracked separately
+///   from <paramref name="scope"/> (the display label) because a sheet can legally be named
+///   exactly "Workbook", which would otherwise make the display label alone ambiguous with the
+///   workbook-global scope sentinel.
+/// </param>
+public sealed class NamedRangeViewModel(
+    string name,
+    string value,
+    string refersTo,
+    string scope,
+    string comment,
+    SheetId? scopeSheetId = null)
 {
     public string Name { get; } = name;
     public string Value { get; } = value;
     public string RefersTo { get; } = refersTo;
     public string Scope { get; } = scope;
     public string Comment { get; } = comment;
+    public SheetId? ScopeSheetId { get; } = scopeSheetId;
 
     public string Address => RefersTo;
 }

@@ -140,6 +140,7 @@ public sealed class R46_PrintedWrapTextVerticalClipTests
                 WorksheetPrintErrorValue.Displayed,
                 0.0,
                 0.0,
+                new Workbook(),
                 false,
                 null,
             ]);

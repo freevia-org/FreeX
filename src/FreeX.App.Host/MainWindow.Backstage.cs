@@ -567,6 +567,11 @@ public partial class MainWindow
             // tracking, dependency graph, and dependency-plan cache before dropping the reference,
             // or that state leaks for the life of the app (see RecalcEngine.RetireWorkbook).
             _recalcEngine.RetireWorkbook(outgoingWorkbook);
+            // R114-commands-workbook-retire-1: this window's CommandBus is app-lifetime too (see
+            // App.CreateWorkbookCommandBus) and is keyed by WorkbookId with no other eviction path
+            // -- without this the outgoing workbook's undo/redo stack (up to the 50 MB byte
+            // budget) would stay a live entry in it forever.
+            _commandBus.Retire(outgoingWorkbook.Id);
         }
         _workbook = wb;
         _workbookRef.Current = wb;
@@ -675,6 +680,11 @@ public partial class MainWindow
                 // dropping the reference, or that state leaks for the life of the app (see
                 // RecalcEngine.RetireWorkbook).
                 _recalcEngine.RetireWorkbook(outgoingWorkbook);
+                // R114-commands-workbook-retire-1: this window's CommandBus is app-lifetime too
+                // (see App.CreateWorkbookCommandBus) and is keyed by WorkbookId with no other
+                // eviction path -- without this the outgoing workbook's undo/redo stack (up to the
+                // 50 MB byte budget) would stay a live entry in it forever.
+                _commandBus.Retire(outgoingWorkbook.Id);
             }
             _currentXlsxFeatureReport = plan.FeatureReport;
             _workbook = plan.Workbook;

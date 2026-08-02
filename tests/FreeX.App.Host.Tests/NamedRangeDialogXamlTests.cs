@@ -318,7 +318,8 @@ public sealed class NamedRangeDialogXamlTests
     public void Planner_FiltersWorkbookAndWorksheetScopedNames()
     {
         var workbookName = new NamedRangeViewModel("Sales", "Sheet1!A1:A2", "Sheet1!A1:A2", "Workbook", "");
-        var sheetName = new NamedRangeViewModel("Local", "Sheet2!B1:B2", "Sheet2!B1:B2", "Sheet2", "");
+        var sheetName = new NamedRangeViewModel(
+            "Local", "Sheet2!B1:B2", "Sheet2!B1:B2", "Sheet2", "", scopeSheetId: new SheetId(Guid.NewGuid()));
 
         NamedRangeDialogPlanner.FilterItems([workbookName, sheetName], NamedRangeFilterOption.All)
             .Should().Equal(workbookName, sheetName);

@@ -71,6 +71,10 @@ public sealed record PageBorderArtFilledShapePlan(
 public static class PageBorderArtVisualPlanner
 {
     public const int ApplesArtId = 1;
+    public const int MapleMuffinsArtId = 2;
+    public const int CakeSliceArtId = 3;
+    public const int BirdsFlightArtId = 35;
+    public const int PaintedEggsArtId = 66;
     public const int ShadowedSquaresArtId = 57;
     public const int ShorebirdTracksArtId = 83;
     public const int DecorativeArchArtId = 89;
@@ -130,6 +134,90 @@ public static class PageBorderArtVisualPlanner
         motifs = BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt)
             .Select(placement => new PageBorderShadowedSquareMotif(placement.Xdip, placement.Ydip, placement.SizeDip))
             .ToList();
+        return true;
+    }
+
+    public static bool TryBuildMapleMuffinsFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != MapleMuffinsArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var polygons = new List<PageBorderArtPolygon>();
+        foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
+            AddMapleMuffin(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
+        plan = new PageBorderArtFilledShapePlan([], polygons);
+        return true;
+    }
+
+    public static bool TryBuildCakeSliceFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != CakeSliceArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var polygons = new List<PageBorderArtPolygon>();
+        foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
+            AddCakeSlice(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
+        plan = new PageBorderArtFilledShapePlan([], polygons);
+        return true;
+    }
+
+    public static bool TryBuildBirdsFlightFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != BirdsFlightArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var polygons = new List<PageBorderArtPolygon>();
+        foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
+            AddBirdInFlight(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
+        plan = new PageBorderArtFilledShapePlan([], polygons);
+        return true;
+    }
+
+    public static bool TryBuildPaintedEggsFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != PaintedEggsArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var polygons = new List<PageBorderArtPolygon>();
+        foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
+            AddPaintedEgg(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
+        plan = new PageBorderArtFilledShapePlan([], polygons);
         return true;
     }
 
@@ -681,6 +769,120 @@ public static class PageBorderArtVisualPlanner
             AddWhitePolygon(polygons, Point,
                 (4, 19), (0, 14), (4, 10), (10, 13), (10, 17));
         }
+    }
+
+    private static void AddMapleMuffin(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
+            polygons.Add(new PageBorderArtPolygon(
+                points.Select(point => Point(point.X, point.Y)).ToList(),
+                red,
+                green,
+                blue));
+
+        Add(0, 0, 0,
+            (5, 13), (3, 12), (2, 9), (3, 6), (6, 4), (11, 4), (12, 2), (20, 2),
+            (21, 4), (26, 4), (29, 6), (30, 9), (29, 12), (27, 13), (26, 17), (6, 17));
+        Add(0xFF, 0x80, 0,
+            (5, 12), (4, 10), (4, 7), (7, 5), (12, 5), (13, 4), (19, 4), (20, 5),
+            (25, 5), (28, 7), (28, 10), (26, 11), (22, 10), (19, 11), (16, 10),
+            (13, 11), (9, 10), (6, 11));
+        Add(0xBF, 0x40, 0,
+            (6, 12), (10, 11), (13, 12), (16, 11), (19, 12), (22, 11), (26, 12),
+            (25, 15), (7, 15));
+        Add(0, 0, 0, (8, 14), (24, 14), (22, 31), (10, 31));
+        Add(0xFF, 0x80, 0, (10, 15), (22, 15), (20, 29), (12, 29));
+        Add(0xBF, 0x40, 0, (11, 16), (13, 16), (14, 28), (12, 28));
+        Add(0xBF, 0x40, 0, (15, 16), (17, 16), (18, 28), (15, 28));
+        Add(0xBF, 0x40, 0, (19, 16), (21, 16), (20, 28), (18, 28));
+    }
+
+    private static void AddCakeSlice(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
+            polygons.Add(new PageBorderArtPolygon(
+                points.Select(point => Point(point.X, point.Y)).ToList(),
+                red,
+                green,
+                blue));
+
+        Add(0, 0, 0,
+            (7, 4), (12, 2), (17, 4), (22, 0), (26, 2), (27, 5), (31, 9), (31, 15),
+            (29, 18), (29, 24), (26, 26), (25, 32), (20, 31), (17, 29), (11, 28),
+            (6, 25), (2, 24), (1, 20), (3, 16), (3, 12), (5, 8));
+        Add(0xFF, 0xEE, 0xCA,
+            (5, 10), (9, 7), (17, 9), (22, 10), (27, 15), (26, 18), (23, 20),
+            (17, 18), (11, 16), (6, 14));
+        Add(0xFF, 0x99, 0xC2,
+            (8, 6), (13, 5), (19, 7), (22, 4), (25, 5), (26, 8), (29, 10), (29, 14),
+            (27, 16), (24, 13), (20, 10), (14, 9), (9, 9));
+        Add(0xFF, 0x99, 0xC2,
+            (9, 14), (15, 15), (21, 18), (25, 20), (25, 22), (21, 21), (15, 18), (9, 16));
+        Add(0xFF, 0xEE, 0xCA,
+            (4, 19), (8, 17), (14, 20), (22, 23), (26, 25), (25, 28), (21, 29),
+            (16, 27), (10, 26), (4, 23));
+    }
+
+    private static void AddBirdInFlight(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        polygons.Add(new PageBorderArtPolygon(
+            [
+                Point(2, 3), Point(7, 5), Point(14, 16), Point(17, 12), Point(23, 6), Point(25, 0),
+                Point(25, 6), Point(22, 13), Point(30, 7), Point(31, 8), Point(24, 15), Point(22, 19),
+                Point(31, 23), Point(32, 26), Point(26, 26), Point(20, 24), Point(20, 29), Point(27, 32),
+                Point(20, 31), Point(16, 26), Point(11, 31), Point(8, 32), Point(8, 27), Point(11, 22),
+                Point(7, 18), Point(6, 13), Point(6, 7),
+            ],
+            0x04,
+            0x07,
+            0x50));
+    }
+
+    private static void AddPaintedEgg(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
+            polygons.Add(new PageBorderArtPolygon(
+                points.Select(point => Point(point.X, point.Y)).ToList(), red, green, blue));
+
+        Add(0, 0, 0,
+            (6, 24), (14, 26), (22, 25), (28, 23), (32, 26), (29, 30), (22, 32),
+            (13, 32), (7, 29));
+        Add(0, 0, 0,
+            (11, 0), (18, -2), (24, 2), (28, 8), (29, 15), (26, 22), (21, 27),
+            (14, 29), (7, 26), (1, 21), (0, 14), (3, 8), (7, 3));
+        Add(0xFF, 0xFF, 0xFF,
+            (12, 2), (18, 0), (23, 4), (27, 9), (27, 15), (24, 21), (19, 25),
+            (13, 27), (7, 24), (3, 19), (2, 14), (5, 8), (8, 4));
+        Add(0, 0, 0, (8, 4), (13, 1), (17, 4), (16, 9), (11, 8));
+        Add(0, 0, 0, (18, 1), (23, 3), (26, 8), (23, 10), (19, 7));
+        Add(0, 0, 0, (5, 12), (9, 9), (12, 10), (10, 15), (6, 16));
+        Add(0, 0, 0, (14, 12), (18, 10), (21, 13), (18, 17), (14, 16));
+        Add(0, 0, 0, (21, 17), (25, 16), (26, 21), (23, 24), (20, 22));
+        Add(0, 0, 0, (3, 18), (8, 18), (12, 22), (10, 26), (6, 24));
     }
 
     private static void AddVineCorner(

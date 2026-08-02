@@ -105,6 +105,85 @@ public sealed class RowColumnShiftAddressStateTests
         workbook.PivotCaches.Should().ContainSingle().Which.SourceReference.Should().Be("A5:C8");
     }
 
+    // R114-outline-group-insert-extend-1: grouping rows 3-8 at level 1 (Data > Group in Excel)
+    // creates ONE contiguous collapsible band. Inserting a row strictly inside that band (row 5,
+    // between the group's boundaries) must extend the band to cover the new row instead of leaving
+    // it at implicit level 0 -- which would split the single group into two separate runs on either
+    // side of the insertion point (verified against real Excel's Insert Sheet Rows behavior; see
+    // RowOutlineGroupScope.Resolve in GroupRowsCommand.cs, which detects group membership purely
+    // from contiguous same-or-deeper outline levels). The group here is also fully collapsed
+    // (GroupHiddenRows covers every detail row, CollapsedAnchorRows marks the summary row below the
+    // run), so the newly-inserted row must join the hidden set too or the collapsed band would show
+    // a visible gap.
+    [Fact]
+    public void R114_InsertRows_StrictlyInsideGroup_ExtendsOutlineLevelAndHiddenStateToNewRow()
+    {
+        var (workbook, sheet, ctx) = Setup();
+        for (uint r = 3; r <= 8; r++)
+        {
+            sheet.RowOutlineLevels[r] = 1;
+            sheet.GroupHiddenRows.Add(r);
+        }
+        sheet.CollapsedAnchorRows.Add(9);
+
+        var command = new InsertRowsCommand(sheet.Id, beforeRow: 5, count: 1);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        // The whole band (old 3,4 untouched + new 5 + old 5..8 now shifted to 6..9) must share
+        // level 1 with no gap, and the newly-inserted row must be hidden like the rest of the
+        // (still fully collapsed) run.
+        for (uint r = 3; r <= 9; r++)
+        {
+            sheet.RowOutlineLevels.Should().ContainKey(r).WhoseValue.Should().Be(1, because: $"row {r} must remain part of the single extended group");
+            sheet.GroupHiddenRows.Should().Contain(r, because: $"row {r} must stay hidden by the still-collapsed extended group");
+        }
+        sheet.CollapsedAnchorRows.Should().Contain(10);
+
+        command.Revert(ctx);
+
+        // Undo must restore the pre-insert group exactly (rows 3-8 at level 1, no row 5-only entry).
+        for (uint r = 3; r <= 8; r++)
+            sheet.RowOutlineLevels.Should().ContainKey(r).WhoseValue.Should().Be(1);
+        sheet.RowOutlineLevels.Should().NotContainKey(9);
+        sheet.CollapsedAnchorRows.Should().Contain(9);
+    }
+
+    // Sibling/no-regression coverage: inserting a row immediately ABOVE an existing group (not
+    // strictly inside it -- the row above the insertion point is outside the group) must NOT pull
+    // the new row into the group, mirroring Excel (a row inserted before a group's first row does
+    // not become part of that group).
+    [Fact]
+    public void R114_InsertRows_AtGroupTopBoundary_DoesNotExtendGroupToNewRow()
+    {
+        var (workbook, sheet, ctx) = Setup();
+        for (uint r = 3; r <= 8; r++)
+            sheet.RowOutlineLevels[r] = 1;
+
+        var command = new InsertRowsCommand(sheet.Id, beforeRow: 3, count: 1);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        sheet.RowOutlineLevels.Should().NotContainKey(3, because: "the new row sits above the group, not inside it");
+        for (uint r = 4; r <= 9; r++)
+            sheet.RowOutlineLevels.Should().ContainKey(r).WhoseValue.Should().Be(1);
+    }
+
+    // Sibling coverage: the identical fix applies to the Columns axis (ColOutlineLevels /
+    // GroupHiddenCols), reached via InsertColumnsCommand through the same
+    // ShiftOutlineAndGroupCollections choke point.
+    [Fact]
+    public void R114_InsertColumns_StrictlyInsideGroup_ExtendsOutlineLevelToNewColumn()
+    {
+        var (workbook, sheet, ctx) = Setup();
+        for (uint c = 3; c <= 8; c++)
+            sheet.ColOutlineLevels[c] = 1;
+
+        var command = new InsertColumnsCommand(sheet.Id, beforeCol: 5, count: 1);
+        command.Apply(ctx).Success.Should().BeTrue();
+
+        for (uint c = 3; c <= 9; c++)
+            sheet.ColOutlineLevels.Should().ContainKey(c).WhoseValue.Should().Be(1, because: $"column {c} must remain part of the single extended group");
+    }
+
     [Fact]
     public void DeleteRows_ShiftsAndRemovesRemainingAddressBearingStateAndUndoRestores()
     {

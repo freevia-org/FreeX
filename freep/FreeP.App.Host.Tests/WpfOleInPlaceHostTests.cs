@@ -29,4 +29,35 @@ public sealed class WpfOleInPlaceHostTests
             .Should().BeFalse();
         overlay.Children.Count.Should().Be(0);
     }
+
+    [StaFact]
+    public void InlineAttachmentRejectsEmptyPayloadWithoutReplacingFallback()
+    {
+        var fallback = new TextBlock { Text = "OLE" };
+        var container = new Border { Child = fallback };
+
+        WpfOleInPlaceHost.AttachInline(
+                container,
+                new InlineOleObjectInfo(),
+                width: 42,
+                height: 20)
+            .Should().BeFalse();
+        container.Child.Should().BeSameAs(fallback);
+    }
+
+    [StaFact]
+    public void InlineAttachmentDefersNativeHostUntilContainerLoads()
+    {
+        var fallback = new TextBlock { Text = "OLE" };
+        var container = new Border { Child = fallback };
+        var inline = new InlineOleObjectInfo
+        {
+            EmbeddedBytes = [1, 2, 3],
+            FileName = "embedded.bin",
+        };
+
+        WpfOleInPlaceHost.AttachInline(container, inline, width: 42, height: 20)
+            .Should().BeTrue();
+        container.Child.Should().BeSameAs(fallback);
+    }
 }

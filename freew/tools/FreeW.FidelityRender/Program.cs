@@ -1547,6 +1547,50 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
             DrawSoftwareBat(canvas, motif);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var muffinPlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, muffinPlan);
+        return;
+    }
+    if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var cakePlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, cakePlan);
+        return;
+    }
+    if (PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var birdPlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, birdPlan);
+        return;
+    }
+    if (PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var eggPlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, eggPlan);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildVineFrame(
             border.ArtId,
             border.WidthPt,

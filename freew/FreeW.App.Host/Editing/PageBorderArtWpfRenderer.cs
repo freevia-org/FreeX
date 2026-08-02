@@ -116,6 +116,54 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var muffinPlan))
+        {
+            DrawFilledShapePlan(context, frame, muffinPlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var cakePlan))
+        {
+            DrawFilledShapePlan(context, frame, cakePlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var birdPlan))
+        {
+            DrawFilledShapePlan(context, frame, birdPlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var eggPlan))
+        {
+            DrawFilledShapePlan(context, frame, eggPlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,

@@ -292,10 +292,10 @@ public sealed partial class MainWindowSourceHygieneTests
         var hostPlannerPath = Path.Combine(appHostDirectory, "SparklineValuePlanner.cs");
         const string assignment = "SheetGrid.SparklineValues = sheet is null";
         const string cacheRoute = "_sparklineValueCache.GetOrCreate(";
-        const string directRoute = "SheetGrid.SparklineValues = SparklineSeriesReader.BuildValues(sheet)";
-        const string readerCall = "SparklineSeriesReader.BuildValues(sheet)";
+        const string directRoute = "SheetGrid.SparklineValues = SparklineSeriesReader.BuildValues(_workbook, sheet)";
+        const string readerCall = "SparklineSeriesReader.BuildValues(_workbook, sheet)";
         const string oldPlannerCall = "SparklineValuePlanner.BuildValues(sheet)";
-        const string cacheCallback = "() => SparklineSeriesReader.BuildValues(sheet)";
+        const string cacheCallback = "() => SparklineSeriesReader.BuildValues(_workbook, sheet)";
 
         File.Exists(hostPlannerPath).Should().BeFalse("Host should call the shared Presentation sparkline reader directly");
         viewportSource.Should().Contain(assignment);

@@ -449,8 +449,9 @@ public partial class MainWindow
 
     private void CommitFunctionAutocomplete(System.Windows.Controls.TextBox editor, string chosenName)
     {
+        var isFunction = FormulaFunctionAutocompletePlanner.IsFunctionCandidate(chosenName, BuiltInFunctions.Names);
         var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
-            editor.Text, _functionAutocompleteTokenStart, _functionAutocompleteTokenLength, chosenName);
+            editor.Text, _functionAutocompleteTokenStart, _functionAutocompleteTokenLength, chosenName, isFunction);
         HideFormulaFunctionAutocomplete();
         ApplyTextEdit(editor, new ExcelTextEdit(text, caretIndex, 0));
         if (ReferenceEquals(editor, _inlineEditor))

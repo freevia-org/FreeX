@@ -57,6 +57,24 @@ public interface ICommandBus
     /// value from its underlying <c>UndoRedoStack</c>.
     /// </remarks>
     long GetUndoStackVersion(WorkbookId workbookId) => 0;
+
+    /// <summary>
+    /// Releases <paramref name="workbookId"/>'s undo/redo stack and any pending repeatable-command
+    /// factory. A bus that keys its stacks by <see cref="WorkbookId"/> forever (e.g.
+    /// <see cref="CommandBus"/>'s app-lifetime instance in a host that reuses one bus across
+    /// File &gt; Open / File &gt; New) would otherwise leak up to the full undo byte budget per
+    /// workbook that was ever loaded into the window, for the life of the process. Call this right
+    /// before dropping the last reference to a replaced/closed workbook -- mirroring
+    /// <c>RecalcEngine.RetireWorkbook</c> -- and only when no other window still shares that
+    /// workbook instance.
+    /// </summary>
+    /// <remarks>
+    /// Has a default no-op implementation so pre-existing test fakes that implement
+    /// <see cref="ICommandBus"/> without a real backing stack continue to compile unchanged.
+    /// <see cref="CommandBus"/> (the only production implementation) overrides it to actually
+    /// evict the workbook's entries.
+    /// </remarks>
+    void Retire(WorkbookId workbookId) { }
 }
 
 public interface ICommandStackChangeNotifier

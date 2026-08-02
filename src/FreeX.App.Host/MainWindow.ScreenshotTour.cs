@@ -7556,11 +7556,12 @@ public partial class MainWindow
         UpdateLayout();
     }
 
-    private IReadOnlyList<string> GetFormulaAuthoringNamesScopeOptions() =>
-        new[] { "Workbook" }
-            .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+    private IReadOnlyList<NamedRangeScopeOption> GetFormulaAuthoringNamesScopeOptions()
+    {
+        var options = new List<NamedRangeScopeOption> { new("Workbook", null) };
+        options.AddRange(_workbook.Sheets.Select(sheet => new NamedRangeScopeOption(sheet.Name, sheet.Id)));
+        return options;
+    }
 
     private static string FormatFormulaAuthoringNamesRangeReference(Sheet sheet, GridRange range) =>
         $"{sheet.Name}!{range.Start.ToA1()}:{range.End.ToA1()}";

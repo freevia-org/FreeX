@@ -232,8 +232,15 @@ public partial class GridView
         style.BorderDiagonalDown.Style != BorderStyle.None ||
         style.BorderDiagonalUp.Style != BorderStyle.None;
 
-    private static bool HasVisibleCellSurface(CellStyle style) =>
-        style.FillColor.HasValue ||
+    // theme is accepted (rather than reading style.FillColor alone) because a cell whose fill was
+    // set purely via a Theme Color picker (FillThemeColor with no baked FillColor -- see
+    // StyleDiff.Apply in CellStyle.cs, which sets FillThemeColor without ever baking FillColor)
+    // would otherwise be invisible to this presence check and get silently dropped from
+    // BuildRenderCellStyleLookup, so DrawCellSurface would never even be called for it.
+    // ResolveFillColor always returns a value once either field is set, for any theme, so this
+    // presence result is theme-independent and safe to cache across theme swaps.
+    private static bool HasVisibleCellSurface(CellStyle style, WorkbookTheme theme) =>
+        style.ResolveFillColor(theme).HasValue ||
         style.FillPatternStyle != CellFillPatternStyle.None ||
         style.GradientFill is not null;
 
@@ -253,13 +260,19 @@ public partial class GridView
         DrawingContext dc,
         Rect rect,
         CellStyle? style,
+        WorkbookTheme theme,
         Dictionary<CellColor, SolidColorBrush>? brushCache = null,
         Dictionary<CellColor, Pen>? fillPatternPenCache = null)
     {
         if (style is null || style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
             return;
 
-        var color = style.FillPatternColor ?? CellColor.Black;
+        // Re-resolve against the CURRENT theme rather than reading the baked FillPatternColor
+        // directly: a theme-bound pattern color (FillPatternThemeColor) must repaint after a
+        // Theme Colors swap, matching CellStyle.ResolveFillPatternColor's contract and the
+        // font/fill-color fix applied throughout this file (see ResolveFontColor/ResolveFillColor
+        // call sites in GridView.Rendering.cs).
+        var color = style.ResolveFillPatternColor(theme) ?? CellColor.Black;
         var pen = FillPatternPenForCellColor(color, brushCache, fillPatternPenCache);
         const double step = 6;
 

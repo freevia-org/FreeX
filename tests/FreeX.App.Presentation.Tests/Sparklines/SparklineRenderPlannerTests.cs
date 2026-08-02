@@ -17,7 +17,7 @@ public sealed class SparklineRenderPlannerTests
     [Fact]
     public void ReadSeries_ReadsNumberDateAndBoolCells_SkipsBlanks()
     {
-        var (_, sheet) = BuildSheet();
+        var (workbook, sheet) = BuildSheet();
         // A1:A4 — number, bool, blank, number. Round-8 finding N5: the blank at A3 is no longer
         // dropped — the default DisplayEmptyCellsAs (Gap) keeps its position in the series as NaN
         // so the layout engine breaks the line there, matching Excel's default gap behavior.
@@ -32,7 +32,7 @@ public sealed class SparklineRenderPlannerTests
             DataRange = Range(sheet.Id, 1, 1, 4, 1),
         };
 
-        var series = SparklineRenderPlanner.ReadSeries(sheet, sparkline);
+        var series = SparklineRenderPlanner.ReadSeries(workbook, sheet, sparkline);
 
         series.Should().HaveCount(4);
         series[0].Should().Be(3);
@@ -44,7 +44,7 @@ public sealed class SparklineRenderPlannerTests
     [Fact]
     public void ReadSeries_SkipsHiddenRows()
     {
-        var (_, sheet) = BuildSheet();
+        var (workbook, sheet) = BuildSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new NumberValue(2));
         sheet.SetCell(new CellAddress(sheet.Id, 3, 1), new NumberValue(3));
@@ -57,13 +57,13 @@ public sealed class SparklineRenderPlannerTests
             DataRange = Range(sheet.Id, 1, 1, 3, 1),
         };
 
-        SparklineRenderPlanner.ReadSeries(sheet, sparkline).Should().Equal(1, 3);
+        SparklineRenderPlanner.ReadSeries(workbook, sheet, sparkline).Should().Equal(1, 3);
     }
 
     [Fact]
     public void BuildValues_KeyedById()
     {
-        var (_, sheet) = BuildSheet();
+        var (workbook, sheet) = BuildSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(5));
         var sparkline = new SparklineModel
         {
@@ -72,7 +72,7 @@ public sealed class SparklineRenderPlannerTests
         };
         sheet.Sparklines.Add(sparkline);
 
-        var values = SparklineRenderPlanner.BuildValues(sheet);
+        var values = SparklineRenderPlanner.BuildValues(workbook, sheet);
 
         values.Should().ContainKey(sparkline.Id);
         values[sparkline.Id].Should().Equal(5);
@@ -81,7 +81,7 @@ public sealed class SparklineRenderPlannerTests
     [Fact]
     public void Plan_AppliesInsetAndSkipsCellsNotLaidOut()
     {
-        var (_, sheet) = BuildSheet();
+        var (workbook, sheet) = BuildSheet();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(2));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(4));
 
@@ -100,7 +100,7 @@ public sealed class SparklineRenderPlannerTests
         sheet.Sparklines.Add(visible);
         sheet.Sparklines.Add(offscreen);
 
-        var values = SparklineRenderPlanner.BuildValues(sheet);
+        var values = SparklineRenderPlanner.BuildValues(workbook, sheet);
         var instructions = SparklineRenderPlanner.Plan(sheet, values, Lookup, inset: 3);
 
         instructions.Should().HaveCount(1);
@@ -127,7 +127,7 @@ public sealed class SparklineRenderPlannerTests
     [Fact]
     public void Plan_DropsEmptySeries()
     {
-        var (_, sheet) = BuildSheet();
+        var (workbook, sheet) = BuildSheet();
         // Round-8 finding N5: a single blank cell is no longer an empty series — the default
         // DisplayEmptyCellsAs (Gap) keeps its position as NaN, so Plan would emit an instruction
         // for it. Only a data range over the supported-cell cap now yields a genuinely empty
@@ -140,7 +140,7 @@ public sealed class SparklineRenderPlannerTests
         };
         sheet.Sparklines.Add(sparkline);
 
-        var values = SparklineRenderPlanner.BuildValues(sheet);
+        var values = SparklineRenderPlanner.BuildValues(workbook, sheet);
         var instructions = SparklineRenderPlanner.Plan(sheet, values, AlwaysAt);
 
         instructions.Should().BeEmpty();
@@ -217,7 +217,7 @@ public sealed class SparklineRenderPlannerTests
         sheet.Sparklines.Should().NotBeEmpty("fixture must contain at least one sparkline");
 
         var sp = sheet.Sparklines[0];
-        var series = SparklineSeriesReader.ReadSeries(sheet, sp);
+        var series = SparklineSeriesReader.ReadSeries(workbook, sheet, sp);
         series.Should().HaveCount(7, "fixture data is A2:A8 = 7 values");
         series.Should().Equal(3, 7, 2, 9, 5, 1, 8);
     }

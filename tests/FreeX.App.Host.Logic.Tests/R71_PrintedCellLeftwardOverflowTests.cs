@@ -197,6 +197,7 @@ public sealed class R71_PrintedCellLeftwardOverflowTests
                 WorksheetPrintErrorValue.Displayed,
                 0.0,
                 0.0,
+                new Workbook(),
                 false,
                 null,
             ]);

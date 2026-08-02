@@ -82,7 +82,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue BinomDistRangeScalar(ScalarValue trialsValue, ScalarValue probabilityValue, ScalarValue successStartValue, ScalarValue successEndValue)
     {
-        int n = (int)Math.Truncate(ToNumber(trialsValue));
+        if (!TryTruncateToInt32(ToNumber(trialsValue), out int n)) return ErrorValue.Num;
         double p = ToNumber(probabilityValue);
         int k1 = (int)Math.Truncate(ToNumber(successStartValue));
         int k2 = successEndValue is BlankValue ? k1 : (int)Math.Truncate(ToNumber(successEndValue));
@@ -154,7 +154,7 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue NegbinomDistScalar(ScalarValue failuresValue, int r, double p, bool cum)
     {
-        int f = (int)Math.Truncate(ToNumber(failuresValue));
+        if (!TryTruncateToInt32(ToNumber(failuresValue), out int f)) return ErrorValue.Num;
         if (f < 0 || r < 1 || p <= 0 || p > 1) return ErrorValue.Num;
 
         if (!cum)

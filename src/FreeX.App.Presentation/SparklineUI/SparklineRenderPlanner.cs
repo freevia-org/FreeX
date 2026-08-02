@@ -34,16 +34,20 @@ public static class SparklineRenderPlanner
     /// Reads every sparkline on <paramref name="sheet"/> into its numeric series, keyed by id.
     /// Delegates to <see cref="SparklineSeriesReader.BuildValues"/>: data ranges over the
     /// supported cell cap are reported as empty, and only number / date / bool cells contribute.
+    /// <paramref name="workbook"/> must own <paramref name="sheet"/> -- it resolves each
+    /// sparkline's data range to its own source sheet when that differs from the host sheet
+    /// (Excel's cross-sheet sparkline data range).
     /// </summary>
-    public static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildValues(Sheet sheet) =>
-        SparklineSeriesReader.BuildValues(sheet);
+    public static IReadOnlyDictionary<Guid, IReadOnlyList<double>> BuildValues(Workbook workbook, Sheet sheet) =>
+        SparklineSeriesReader.BuildValues(workbook, sheet);
 
     /// <summary>
     /// Reads a single sparkline's data range into its numeric series. Hidden rows and columns are
-    /// skipped; non-numeric cells are ignored.
+    /// skipped; non-numeric cells are ignored. <paramref name="workbook"/> must own
+    /// <paramref name="sheet"/> -- see <see cref="BuildValues"/>.
     /// </summary>
-    public static IReadOnlyList<double> ReadSeries(Sheet sheet, SparklineModel sparkline) =>
-        SparklineSeriesReader.ReadSeries(sheet, sparkline);
+    public static IReadOnlyList<double> ReadSeries(Workbook workbook, Sheet sheet, SparklineModel sparkline) =>
+        SparklineSeriesReader.ReadSeries(workbook, sheet, sparkline);
 
     /// <summary>
     /// Builds the cell-local draw instructions for every sparkline whose <see cref="SparklineModel.Location"/>

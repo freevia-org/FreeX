@@ -4381,6 +4381,46 @@ public sealed class DocumentView : Control
         {
             return BuildPdfBatBorderOps(batMotifs, artOriginXDip, artOriginTopDip, pageHeightPt);
         }
+        if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var muffinPlan))
+        {
+            return BuildPdfFilledShapeBorderOps(muffinPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
+        if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var cakePlan))
+        {
+            return BuildPdfFilledShapeBorderOps(cakePlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
+        if (PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var birdPlan))
+        {
+            return BuildPdfFilledShapeBorderOps(birdPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
+        if (PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(
+                border.ArtId,
+                border.WidthPt,
+                artFrameWidthDip,
+                artFrameHeightDip,
+                artInsetDip,
+                out var eggPlan))
+        {
+            return BuildPdfFilledShapeBorderOps(eggPlan, artOriginXDip, artOriginTopDip, pageHeightPt);
+        }
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,
@@ -10289,6 +10329,54 @@ public sealed class DocumentView : Control
                 context.DrawGeometry(Brushes.Black, null, geometry);
             }
 
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildMapleMuffinsFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var muffinPlan))
+        {
+            DrawFilledShapePlan(context, frame, muffinPlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildCakeSliceFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var cakePlan))
+        {
+            DrawFilledShapePlan(context, frame, cakePlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var birdPlan))
+        {
+            DrawFilledShapePlan(context, frame, birdPlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var eggPlan))
+        {
+            DrawFilledShapePlan(context, frame, eggPlan);
             return true;
         }
 

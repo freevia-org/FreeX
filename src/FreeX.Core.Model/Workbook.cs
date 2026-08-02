@@ -342,6 +342,18 @@ public sealed class Workbook
 
         NamedRangeMetadataByName.Remove(name);
         NamedRangeMetadataByName[name] = metadata ?? NamedRangeMetadata.WorkbookScope;
+
+        // A defined name is unique per scope regardless of whether it resolves to a range or a
+        // formula/constant expression (Excel ground truth: Name Manager never lets a range name
+        // and a formula name coexist under the same text at the same scope). Without this,
+        // NamedRanges[name] and NamedFormulas[name] could both exist simultaneously; the formula
+        // evaluator always resolves a bare name via NamedRanges first (see
+        // FormulaEvaluator.References.cs EvaluateNamedRange), so the stale NamedFormulas entry
+        // would become permanently unreachable while still occupying the name -- silently
+        // changing what every pre-existing formula referencing this name evaluates to, with the
+        // old formula definition left dangling in the model. Defining the range explicitly
+        // supersedes any previous formula-kind definition of the same name.
+        NamedFormulas.Remove(name);
     }
 
     /// <summary>Remove a named range. Returns true if found and removed.</summary>
@@ -399,6 +411,12 @@ public sealed class Workbook
         _scopedNamedRanges[key] = range;
         _scopedNamedRangeMetadata ??= new Dictionary<(string, SheetId), NamedRangeMetadata>(ScopedNameKeyComparer.Instance);
         _scopedNamedRangeMetadata[key] = metadata ?? NamedRangeMetadata.WorkbookScope;
+
+        // Same cross-kind-uniqueness invariant as the workbook-global overload above: a
+        // sheet-scoped name cannot simultaneously be a range and a formula, or the formula
+        // evaluator's range-first resolution (see IsSheetScopedName / EvaluateNamedRange in
+        // FormulaEvaluator.References.cs) silently strands the formula definition unreachable.
+        _scopedNamedFormulas?.Remove(key);
     }
 
     /// <summary>
@@ -413,6 +431,11 @@ public sealed class Workbook
         var key = (name, scopeSheetId);
         _scopedNamedFormulas ??= new Dictionary<(string, SheetId), string>(ScopedNameKeyComparer.Instance);
         _scopedNamedFormulas[key] = formulaText;
+
+        // Mirror image of the guard in DefineNamedRange(..., scopeSheetId): defining a name as a
+        // formula supersedes any previous range-kind definition of the same (name, scope) key.
+        if (_scopedNamedRanges is not null && _scopedNamedRanges.Remove(key))
+            _scopedNamedRangeMetadata?.Remove(key);
     }
 
     /// <summary>

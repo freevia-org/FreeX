@@ -661,6 +661,20 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
     // pivotTable.SourceRange.Start.Sheet the same way) — real Excel instead keeps the pivot table
     // in place showing its last-cached values after the source sheet disappears.
     private List<(PivotTableModel Pivot, GridRange OldValue)>? _pivotSourceRangeDeleteSnapshot;
+    // R114: SparklineModel.DataRange (and the optional group-level DateAxisRange) are the same
+    // shape of field as ChartModel.DataRange/PivotTableModel.SourceRange above — a GridRange that
+    // can legitimately point at a different sheet than its host sheet (Excel's Sparkline "Edit
+    // Data" dialog allows a cross-sheet source range; see XlsxSparklineMapper.cs) — but were never
+    // remapped here. Left dangling, XlsxSparklineMapper.Save's validSparklines filter requires
+    // ResolveSheetName(...) to succeed for DataRange.Start.Sheet, so a cross-sheet sparkline whose
+    // data-source sheet was deleted was silently dropped ENTIRELY on the next save — not merely
+    // losing its data reference like a chart/pivot would, since sparklines have no "broken but
+    // still present" representation in the writer once ResolveSheetName returns null — whereas
+    // real Excel keeps the sparkline in place with a stale/broken reference. Mirrors the chart/
+    // pivot remap-onto-host-sheet fallback immediately above for the same "GridRange cannot
+    // express a sheetless/cleared reference" reason.
+    private List<(SparklineModel Sparkline, GridRange OldDataRange)>? _sparklineDataRangeDeleteSnapshot;
+    private List<(SparklineModel Sparkline, GridRange OldDateAxisRange)>? _sparklineDateAxisRangeDeleteSnapshot;
     // String sheet-name refs on model objects that named the deleted sheet — cleared so no
     // dangling deleted-sheet reference remains (mirrors RenameSheetCommand's T6 block, but the
     // sheet has no new name to rewrite onto, so these are nulled instead of renamed).
@@ -885,6 +899,32 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
                     _pivotSourceRangeDeleteSnapshot.Add((pivot, pivot.SourceRange));
                     var anchor = new CellAddress(s.Id, 1, 1);
                     pivot.SourceRange = new GridRange(anchor, anchor);
+                }
+            }
+        }
+
+        // R114: mirrors the chart DataRange / pivot SourceRange passes above for
+        // SparklineModel.DataRange and its optional group-level DateAxisRange — see the field doc
+        // comments above for why sparklines need the same remap-onto-host-sheet fallback (unlike
+        // charts/pivots, a dangling sparkline data-source sheet reference causes the ENTIRE
+        // sparkline to be dropped on save, not just the reference).
+        _sparklineDataRangeDeleteSnapshot = [];
+        _sparklineDateAxisRangeDeleteSnapshot = [];
+        foreach (var s in ctx.Workbook.Sheets)
+        {
+            var anchor = new CellAddress(s.Id, 1, 1);
+            foreach (var sparkline in s.Sparklines)
+            {
+                if (sparkline.DataRange.Start.Sheet == _sheetId)
+                {
+                    _sparklineDataRangeDeleteSnapshot.Add((sparkline, sparkline.DataRange));
+                    sparkline.DataRange = new GridRange(anchor, anchor);
+                }
+
+                if (sparkline.DateAxisRange is { } dateAxisRange && dateAxisRange.Start.Sheet == _sheetId)
+                {
+                    _sparklineDateAxisRangeDeleteSnapshot.Add((sparkline, dateAxisRange));
+                    sparkline.DateAxisRange = new GridRange(anchor, anchor);
                 }
             }
         }
@@ -1209,6 +1249,16 @@ public sealed class RemoveSheetCommand : IWorkbookCommand, IWholeWorkbookRecalcC
             if (_pivotSourceRangeDeleteSnapshot is not null)
                 foreach (var (pivot, oldValue) in _pivotSourceRangeDeleteSnapshot)
                     pivot.SourceRange = oldValue;
+
+            // R114 restore: undo the DataRange/DateAxisRange remap from the Apply-side pass above
+            // (mirrors the chart DataRange / pivot SourceRange restores immediately above it).
+            if (_sparklineDataRangeDeleteSnapshot is not null)
+                foreach (var (sparkline, oldValue) in _sparklineDataRangeDeleteSnapshot)
+                    sparkline.DataRange = oldValue;
+
+            if (_sparklineDateAxisRangeDeleteSnapshot is not null)
+                foreach (var (sparkline, oldValue) in _sparklineDateAxisRangeDeleteSnapshot)
+                    sparkline.DateAxisRange = oldValue;
 
             if (_pivotCacheNameDeleteSnapshot is not null)
                 foreach (var (cache, oldValue) in _pivotCacheNameDeleteSnapshot)

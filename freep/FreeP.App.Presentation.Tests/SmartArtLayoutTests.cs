@@ -68,6 +68,58 @@ public sealed class SmartArtLayoutTests
     private static SrgbColor SolidDrawFill(DrawOp op) =>
         ((ResolvedFill.Solid)((DrawOp.Shape)op).Fill).Color;
 
+    [Fact]
+    public void WhiteOutlineQuickStyle_UsesWhiteNodeAndConnectorOutlines()
+    {
+        var plan = SmartArtStylePlanner.Build(
+            SmartArtFamily.List,
+            new SmartArtQuickStyleMetadata
+            {
+                UniqueId = "simple2",
+                Title = "White Outline",
+                Category = "Simple"
+            },
+            colors: null,
+            DefaultTheme());
+
+        plan.GetNodeStyle(0, 0, SmartArtFamily.List).Outline.Resolved.Should().Be(SrgbColor.White);
+        plan.Connector.Outline.Resolved.Should().Be(SrgbColor.White);
+        plan.Connector.WidthPt.Should().Be(1.25);
+    }
+
+    [Fact]
+    public void NativeSimpleQuickStylesUseDistinctLiveProfiles()
+    {
+        var baseColor = SrgbColor.FromRgb(0x4472C4);
+
+        SmartArtStylePlan Build(string id, string title) => SmartArtStylePlanner.Build(
+            SmartArtFamily.List,
+            new SmartArtQuickStyleMetadata { UniqueId = id, Title = title },
+            colors: new SmartArtColorMetadata
+            {
+                Palette = { new ThemeAwareColor(baseColor) }
+            },
+            DefaultTheme());
+
+        var simple = Build("simple1", "Simple Fill");
+        var subtle = Build("simple3", "Subtle Effect");
+        var moderate = Build("simple4", "Moderate Effect");
+        var intense = Build("simple5", "Intense Effect");
+
+        simple.GetNodeStyle(0, 0, SmartArtFamily.List).Fill.Resolved.Should().Be(baseColor);
+        subtle.GetNodeStyle(0, 0, SmartArtFamily.List).Fill.Resolved
+            .Should().Be(ThemeColorTransform.ApplyTint(baseColor, 0.32));
+        moderate.GetNodeStyle(0, 0, SmartArtFamily.List).Fill.Resolved
+            .Should().Be(ThemeColorTransform.ApplyTint(baseColor, 0.88));
+        intense.GetNodeStyle(0, 0, SmartArtFamily.List).Fill.Resolved
+            .Should().Be(ThemeColorTransform.ApplyShade(baseColor, 0.72));
+
+        simple.GetNodeStyle(0, 0, SmartArtFamily.List).OutlineWidthPt.Should().Be(1.0);
+        subtle.GetNodeStyle(0, 0, SmartArtFamily.List).OutlineWidthPt.Should().Be(0.85);
+        moderate.GetNodeStyle(0, 0, SmartArtFamily.List).OutlineWidthPt.Should().Be(1.1);
+        intense.GetNodeStyle(0, 0, SmartArtFamily.List).OutlineWidthPt.Should().Be(1.4);
+    }
+
     // ── Family classification tests ───────────────────────────────────────────────
 
     [Theory]

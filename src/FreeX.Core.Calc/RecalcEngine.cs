@@ -1293,7 +1293,8 @@ public sealed class RecalcEngine
             workbook,
             refs,
             ref cacheableForDependencyPlan,
-            namedFormulaStack: null);
+            namedFormulaStack: null,
+            localScopeNames: null);
 
         if (containsSelfExcludingCall &&
             IsCellExcludedBySelfExcludingCall(ast, sheetId, formulaCell, workbook))
@@ -2279,7 +2280,8 @@ public sealed class RecalcEngine
         FreeX.Core.Model.Workbook? workbook,
         FormulaDependencySet refs,
         ref bool cacheableForDependencyPlan,
-        HashSet<string>? namedFormulaStack)
+        HashSet<string>? namedFormulaStack,
+        HashSet<string>? localScopeNames)
     {
         switch (node)
         {
@@ -2366,6 +2368,22 @@ public sealed class RecalcEngine
 
             case NamedRangeNode named:
             {
+                // A LET binding name or LAMBDA parameter name shadows any same-named workbook/
+                // sheet-scoped defined name for the whole body/scope, exactly like
+                // FormulaEvaluator.LocalScopes.cs's EvaluateLet/EvaluateLambda and
+                // FormulaEvaluator.References.cs's EvaluateNamedRange (which checks
+                // context.TryResolveLambdaBinding BEFORE ever consulting the workbook's named
+                // ranges). The evaluator never reads the shadowed outer name here, so the
+                // dependency graph must not register a (possibly self-looping, see
+                // R114-calc-let-lambda-shadow) edge onto it either. An explicit sheet qualifier
+                // (Sheet2!x) can never refer to a local binding -- those are always bare
+                // identifiers -- so only the unqualified form is checked.
+                if (named.SheetQualifier is null &&
+                    localScopeNames is not null && localScopeNames.Contains(named.Name))
+                {
+                    return false;
+                }
+
                 cacheableForDependencyPlan = false;
 
                 // An explicit sheet qualifier (e.g. the "Sheet2" in "Sheet2!Data") must resolve
@@ -2445,7 +2463,8 @@ public sealed class RecalcEngine
                             workbook,
                             refs,
                             ref cacheableForDependencyPlan,
-                            namedFormulaStack);
+                            namedFormulaStack,
+                            localScopeNames);
                     }
                     catch (FormulaParseException)
                     {
@@ -2494,13 +2513,13 @@ public sealed class RecalcEngine
 
             case BinaryOpNode binary:
             {
-                var leftHasVolatile = CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
-                var rightHasVolatile = CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                var leftHasVolatile = CollectReferences(binary.Left, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames);
+                var rightHasVolatile = CollectReferences(binary.Right, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames);
                 return leftHasVolatile || rightHasVolatile;
             }
 
             case UnaryOpNode unary:
-                return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                return CollectReferences(unary.Operand, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames);
 
             // R111-calc-union-intersection-endpoint-deps: a parenthesized multi-area union
             // (e.g. "(A1:A5,C1:C5)", parsed to UnionNode -- see R93_AreasUnionValueModelTests),
@@ -2523,7 +2542,7 @@ public sealed class RecalcEngine
                 var hasVolatile = false;
                 for (var i = 0; i < areas.Count; i++)
                 {
-                    if (CollectReferences(areas[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack))
+                    if (CollectReferences(areas[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames))
                         hasVolatile = true;
                 }
                 return hasVolatile;
@@ -2536,15 +2555,15 @@ public sealed class RecalcEngine
                 // minimum correct for the common case: any cell that could affect either operand's
                 // extent or value still dirties this formula, and a volatile function on either
                 // side still marks it volatile -- never silently dropped as before.
-                var leftHasVolatile = CollectReferences(intersection.Left, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
-                var rightHasVolatile = CollectReferences(intersection.Right, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                var leftHasVolatile = CollectReferences(intersection.Left, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames);
+                var rightHasVolatile = CollectReferences(intersection.Right, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames);
                 return leftHasVolatile || rightHasVolatile;
             }
 
             case NamedRangeEndpointNode endpointNode:
             {
-                var startHasVolatile = CollectReferences(endpointNode.Start, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
-                var endHasVolatile = CollectReferences(endpointNode.End, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack);
+                var startHasVolatile = CollectReferences(endpointNode.Start, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames);
+                var endHasVolatile = CollectReferences(endpointNode.End, defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames);
                 return startHasVolatile || endHasVolatile;
             }
 
@@ -2601,13 +2620,81 @@ public sealed class RecalcEngine
                 return false;
             }
 
+            // LET(name1, val1, ..., nameN, valN, calc_expr): the binding-name slots (even-indexed
+            // arguments) are pure identifier declarations parsed as NamedRangeNode -- see
+            // FormulaEvaluator.LocalScopes.cs's EvaluateLet -- never evaluated as a name reference,
+            // so they must NOT fall into the NamedRangeNode case below (which would otherwise
+            // resolve them against any coincidentally-same-named workbook/sheet-scoped defined
+            // name and register a bogus, possibly self-looping dependency edge -- R114-calc-let-
+            // lambda-shadow). Each value expression can see only the bindings already assigned by
+            // EARLIER pairs (EvaluateLet builds its dictionary sequentially, so a later pair's
+            // value expression sees the earlier names, but not itself or any later one), and
+            // calc_expr sees every binding. Recurse with an accumulated local-scope set so any
+            // NamedRangeNode matching an in-scope binding name (checked in the NamedRangeNode case
+            // above) is treated as a pure local reference -- no dependency edge -- exactly as the
+            // evaluator's own shadowing means no such dependency is ever actually read.
+            case FunctionCallNode letCall when string.Equals(letCall.FunctionName, "LET", StringComparison.OrdinalIgnoreCase) &&
+                letCall.Arguments.Count >= 3 && letCall.Arguments.Count % 2 == 1:
+            {
+                var letArgs = letCall.Arguments;
+                var pairCount = (letArgs.Count - 1) / 2;
+                var hasVolatile = false;
+                HashSet<string>? scopeNames = localScopeNames is null
+                    ? null
+                    : new HashSet<string>(localScopeNames, StringComparer.OrdinalIgnoreCase);
+
+                for (var i = 0; i < pairCount; i++)
+                {
+                    if (CollectReferences(letArgs[i * 2 + 1], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, scopeNames))
+                        hasVolatile = true;
+
+                    if (letArgs[i * 2] is NamedRangeNode letName)
+                    {
+                        scopeNames ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        scopeNames.Add(letName.Name);
+                    }
+                }
+
+                if (CollectReferences(letArgs[^1], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, scopeNames))
+                    hasVolatile = true;
+
+                return hasVolatile;
+            }
+
+            // LAMBDA([param1, param2, ...,] body): every argument except the last is a parameter
+            // name, parsed as NamedRangeNode -- see FormulaEvaluator.LocalScopes.cs's
+            // EvaluateLambda -- never a name reference, and all of them are simultaneously in
+            // scope for the single body expression (unlike LET's sequential bindings). Same
+            // rationale as the LET case above: skip the parameter-name slots and recurse into the
+            // body with them added to the local scope so a same-named workbook/sheet-scoped
+            // defined name is correctly shadowed instead of contributing a bogus dependency edge.
+            case FunctionCallNode lambdaCall when string.Equals(lambdaCall.FunctionName, "LAMBDA", StringComparison.OrdinalIgnoreCase) &&
+                lambdaCall.Arguments.Count >= 1:
+            {
+                var lambdaArgs = lambdaCall.Arguments;
+                HashSet<string>? scopeNames = localScopeNames is null
+                    ? null
+                    : new HashSet<string>(localScopeNames, StringComparer.OrdinalIgnoreCase);
+
+                for (var i = 0; i < lambdaArgs.Count - 1; i++)
+                {
+                    if (lambdaArgs[i] is NamedRangeNode paramName)
+                    {
+                        scopeNames ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                        scopeNames.Add(paramName.Name);
+                    }
+                }
+
+                return CollectReferences(lambdaArgs[^1], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, scopeNames);
+            }
+
             case FunctionCallNode func:
             {
                 var containsVolatileFunction = IsVolatileFunctionName(func.FunctionName) && !IsNonVolatileCellOrInfoCall(func);
                 var arguments = func.Arguments;
                 for (var i = 0; i < arguments.Count; i++)
                 {
-                    if (CollectReferences(arguments[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack))
+                    if (CollectReferences(arguments[i], defaultSheetId, formulaCell, workbook, refs, ref cacheableForDependencyPlan, namedFormulaStack, localScopeNames))
                         containsVolatileFunction = true;
                 }
 

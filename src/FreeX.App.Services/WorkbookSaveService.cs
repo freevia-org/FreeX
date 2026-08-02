@@ -115,44 +115,50 @@ public sealed class WorkbookSaveService
     private void ReplaceExistingFileWithFallback(string tempPath, string path)
     {
         var backupPath = CreateTemporaryPath(path, ".bak");
-        var deleteBackup = false;
-        _fileOperations.CopyFile(path, backupPath, overwrite: false);
+
+        // Vacate `path` first by renaming the live file out of the way. This is a plain,
+        // non-destructive rename -- if it throws, `path` still holds the untouched original and
+        // there is nothing to clean up. Critically, this means the step below never overwrites
+        // live data: it always moves `tempPath` into a `path` that has already been vacated, so a
+        // partial/interrupted move (the failure mode File.Move can hit on filesystems that lack
+        // atomic same-volume rename-with-replace, e.g. FAT32/exFAT, many SMB/NAS shares, or cloud
+        // sync placeholder filesystems) can never leave `path` holding truncated live data -- at
+        // worst it leaves `path` simply missing, which RestoreFallbackBackup always repairs.
+        _fileOperations.MoveFile(path, backupPath, overwrite: false);
 
         try
         {
-            _fileOperations.MoveFile(tempPath, path, overwrite: true);
-            deleteBackup = true;
+            _fileOperations.MoveFile(tempPath, path, overwrite: false);
         }
         catch
         {
             try
             {
-                deleteBackup = RestoreFallbackBackup(path, backupPath);
+                RestoreFallbackBackup(path, backupPath);
             }
             catch
             {
-                deleteBackup = false;
+                // Best effort: keep the original save failure below rather than masking it with a
+                // restore failure. The backup at backupPath is deliberately left in place so the
+                // user's last good save is not lost even if the automatic restore could not run.
             }
 
             throw;
         }
-        finally
-        {
-            if (deleteBackup && _fileOperations.FileExists(backupPath))
-                _fileOperations.DeleteFile(backupPath);
-        }
+
+        _fileOperations.DeleteFile(backupPath);
     }
 
-    private bool RestoreFallbackBackup(string path, string backupPath)
+    private void RestoreFallbackBackup(string path, string backupPath)
     {
-        if (!_fileOperations.FileExists(backupPath))
-            return true;
-
+        // The move into `path` failed partway through (or never started). Because `path` was
+        // vacated up front, it holds either nothing or, at worst, a partially-written copy of the
+        // new content -- never live data -- so it is always safe to discard whatever is there and
+        // restore the backup unconditionally.
         if (_fileOperations.FileExists(path))
-            return true;
+            _fileOperations.DeleteFile(path);
 
         _fileOperations.MoveFile(backupPath, path, overwrite: false);
-        return true;
     }
 
     private static string CreateTemporaryPath(string path, string extension)

@@ -2275,9 +2275,24 @@ public static class PptxPackageReader
         foreach (var label in root.Descendants().Where(e => e.Name.LocalName == "styleLbl"))
         {
             var name = label.Attribute("name")?.Value;
-            if (!string.IsNullOrWhiteSpace(name)
-                && !metadata.StyleLabels.Contains(name, StringComparer.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+
+            if (!metadata.StyleLabels.Contains(name, StringComparer.OrdinalIgnoreCase))
                 metadata.StyleLabels.Add(name);
+
+            var lineReference = label.Elements().FirstOrDefault(e => e.Name.LocalName == "lnRef");
+            var fillReference = label.Elements().FirstOrDefault(e => e.Name.LocalName == "fillRef");
+            var effectReference = label.Elements().FirstOrDefault(e => e.Name.LocalName == "effectRef");
+            var fontReference = label.Elements().FirstOrDefault(e => e.Name.LocalName == "fontRef");
+            metadata.StyleLabelMetadata.Add(new SmartArtQuickStyleLabelMetadata
+            {
+                Name = name,
+                LineReferenceIndex = ParseNullableInt(lineReference?.Attribute("idx")?.Value),
+                FillReferenceIndex = ParseNullableInt(fillReference?.Attribute("idx")?.Value),
+                EffectReferenceIndex = ParseNullableInt(effectReference?.Attribute("idx")?.Value),
+                FontReferenceIndex = fontReference?.Attribute("idx")?.Value,
+            });
         }
 
         return metadata;
@@ -5915,6 +5930,11 @@ public static class PptxPackageReader
 
     private static bool? ParseNullableBoolean(string? value) =>
         value is null ? null : ParseBoolean(value);
+
+    private static int? ParseNullableInt(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
 
     // Kept as the product-model adapter for non-theme DrawingML color helpers and source contracts.
     private static bool TryParseHex6(string? hex, out SrgbColor color)

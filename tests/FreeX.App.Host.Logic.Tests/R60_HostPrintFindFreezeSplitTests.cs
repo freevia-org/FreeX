@@ -518,6 +518,7 @@ public sealed class R60_HostPrintFindFreezeSplitTests
                 WorksheetPrintErrorValue.Displayed,
                 0.0,
                 0.0,
+                new Workbook(),
                 blackAndWhite,
                 null,
             ]);

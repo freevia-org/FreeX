@@ -549,12 +549,56 @@ internal static partial class RowColumnShiftHelpers
             RestoreDictionary(sheet.RowOutlineLevels, ShiftDictionaryKeys(snapshot.RowOutlineLevels, shift));
             RestoreSet(sheet.GroupHiddenRows, ShiftIndexes(snapshot.GroupHiddenRows, shift));
             RestoreSet(sheet.CollapsedAnchorRows, ShiftIndexes(snapshot.CollapsedAnchorRows, shift));
+            ExtendOutlineGroupIntoInsertedIndexes(sheet.RowOutlineLevels, sheet.GroupHiddenRows, shift);
         }
         else
         {
             RestoreDictionary(sheet.ColOutlineLevels, ShiftDictionaryKeys(snapshot.ColOutlineLevels, shift));
             RestoreSet(sheet.GroupHiddenCols, ShiftIndexes(snapshot.GroupHiddenCols, shift));
             RestoreSet(sheet.CollapsedAnchorCols, ShiftIndexes(snapshot.CollapsedAnchorCols, shift));
+            ExtendOutlineGroupIntoInsertedIndexes(sheet.ColOutlineLevels, sheet.GroupHiddenCols, shift);
+        }
+    }
+
+    // R114-outline-group-insert-extend-1: Excel's outline groups are purely positional -- a
+    // contiguous run of rows/columns sharing outlineLevel >= 1 IS the group (see
+    // RowOutlineGroupScope.Resolve in GroupRowsCommand.cs, which walks exactly such runs). The
+    // plain per-key remap above (ShiftDictionaryKeys/ShiftIndexes, using AddressShift.ShiftIndex)
+    // only relocates *existing* level entries; it never assigns a level to a newly-inserted
+    // row/column, so inserting in the middle of a group (e.g. Insert Sheet Rows at row 5 inside a
+    // 3-8 group) left the new row at implicit level 0 and split one collapsible band into two.
+    // Real Excel instead extends the enclosing run to cover the inserted rows/columns. Detect that
+    // case here (Insert only -- Delete never creates a new index that needs a level) by checking
+    // whether the index immediately above the insertion point (untouched by the shift, since it is
+    // < shift.Start) and the index immediately below it (the first pre-existing index pushed past
+    // the inserted block, landing at shift.Start + shift.Count) already carry the SAME nonzero
+    // level -- i.e. the insertion point fell strictly inside one contiguous run. If so, stamp that
+    // level onto every newly-inserted index too (and, if the enclosing run is currently collapsed
+    // on both sides, hide the new indexes as well so the whole extended band still collapses as one
+    // unit instead of leaving a visible gap).
+    private static void ExtendOutlineGroupIntoInsertedIndexes(
+        Dictionary<uint, int> levels,
+        HashSet<uint> hiddenIndexes,
+        AddressShift shift)
+    {
+        if (shift.Kind != AddressShiftKind.Insert || shift.Start == 0)
+            return;
+
+        var above = shift.Start - 1;
+        var below = shift.Start + shift.Count;
+
+        if (!levels.TryGetValue(above, out var aboveLevel) || aboveLevel <= 0)
+            return;
+        if (!levels.TryGetValue(below, out var belowLevel) || belowLevel != aboveLevel)
+            return;
+
+        for (var i = shift.Start; i < below; i++)
+            levels[i] = aboveLevel;
+
+        if (hiddenIndexes.Contains(above) && hiddenIndexes.Contains(below))
+        {
+            for (var i = shift.Start; i < below; i++)
+                hiddenIndexes.Add(i);
         }
     }
 
