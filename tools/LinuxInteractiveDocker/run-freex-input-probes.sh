@@ -2365,6 +2365,142 @@ probe_grid_drag_parity() {
     fi
 }
 
+probe_split_pane_pointer() {
+    local split_before="split-pane-before.png" split_after="split-pane-open.png"
+    local divider_before="split-pane-divider-before.png" divider_after="split-pane-divider-after.png"
+    local wheel_before="split-pane-wheel-before.png" wheel_after="split-pane-wheel-after.png"
+    local scrollbar_before="split-pane-scrollbar-before.png" scrollbar_after="split-pane-scrollbar-after.png"
+    local postcondition="split-pane-pointer-postcondition.txt"
+    local artifacts="$split_before;$split_after;$divider_before;$divider_after;$wheel_before;$wheel_after;$scrollbar_before;$scrollbar_after;$postcondition"
+    local split_open=false divider_passed=false wheel_passed=false scrollbar_passed=false
+    local split_row_y split_column_x drag_y top_right_left top_right_width top_right_top top_right_height
+    local scrollbar_x scrollbar_y
+
+    # C5 gives the real View > Split command a deterministic two-axis anchor. The coordinates
+    # below deliberately come from the calibrated cell pitch, so the probe remains bounded and
+    # does not claim a result when the rendered split is not where the product placed it.
+    if select_cell 2 4 C5; then
+        capture "$split_before"
+        enter_view_keytip
+        keytip_key s
+        sleep "$settle_seconds"
+        capture "$split_after"
+        if screen_changed "$output/$split_before" "$output/$split_after" 300; then
+            split_open=true
+        fi
+    fi
+
+    split_row_y="$((a1_y + cell_height * 4))"
+    split_column_x="$((a1_x + cell_width * 2))"
+    drag_y="$((split_row_y + cell_height))"
+    if $split_open; then
+        capture "$divider_before"
+        focus_app
+        xdotool_mousemove_sync "$((split_column_x + cell_width))" "$split_row_y"
+        xdotool mousedown 1
+        sleep 0.18
+        xdotool_mousemove_sync "$((split_column_x + cell_width))" "$drag_y"
+        sleep 0.18
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        capture "$divider_after"
+        if screen_changed "$output/$divider_before" "$output/$divider_after" 300; then
+            divider_passed=true
+        fi
+        # The horizontal divider was dragged one row down; use that observed target for the
+        # subsequent top-right quadrant and scrollbar coordinates.
+        split_row_y="$drag_y"
+    else
+        capture "$divider_before"
+        capture "$divider_after"
+    fi
+
+    # The top-right pane owns vertical wheel input. Compare only that quadrant so a changed
+    # selection or footer cannot accidentally satisfy the postcondition.
+    top_right_left="$split_column_x"
+    top_right_width="$((window_x + window_width - top_right_left))"
+    top_right_top="$a1_y"
+    top_right_height="$((split_row_y - top_right_top))"
+    if $split_open && (( top_right_width > 40 && top_right_height > 40 )); then
+        capture "$wheel_before"
+        crop_region "$wheel_before" "split-pane-wheel-before-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        focus_app
+        xdotool_mousemove_sync "$((top_right_left + top_right_width * 3 / 4))" "$((top_right_top + top_right_height / 2))"
+        xdotool click 5
+        sleep "$settle_seconds"
+        capture "$wheel_after"
+        crop_region "$wheel_after" "split-pane-wheel-after-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        if region_changed "$output/split-pane-wheel-before-crop.png" "$output/split-pane-wheel-after-crop.png" 80; then
+            wheel_passed=true
+        fi
+    else
+        capture "$wheel_before"
+        capture "$wheel_after"
+    fi
+
+    # The top-right mini-scrollbar is the horizontal track immediately above the horizontal
+    # divider. A track click must move its independent pane and visibly change that quadrant.
+    scrollbar_x="$((split_column_x + top_right_width * 3 / 4))"
+    scrollbar_y="$((split_row_y - 5))"
+    if $split_open && (( top_right_width > 40 )); then
+        capture "$scrollbar_before"
+        crop_region "$scrollbar_before" "split-pane-scrollbar-before-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        focus_app
+        xdotool_mousemove_sync "$scrollbar_x" "$scrollbar_y" click 1
+        sleep "$settle_seconds"
+        capture "$scrollbar_after"
+        crop_region "$scrollbar_after" "split-pane-scrollbar-after-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        if region_changed "$output/split-pane-scrollbar-before-crop.png" "$output/split-pane-scrollbar-after-crop.png" 80; then
+            scrollbar_passed=true
+        fi
+    else
+        capture "$scrollbar_before"
+        capture "$scrollbar_after"
+    fi
+
+    write_artifact "$postcondition" \
+        "schema-version=1\nselector=split-pane-pointer\nsplit-open=$split_open\ndivider-gesture=horizontal-divider-drag\ndivider-coordinate=$((split_column_x + cell_width)),$split_row_y\ndivider-target-y=$drag_y\ndivider-postcondition=$divider_passed\nactive-pane-gesture=top-right-wheel-down\nactive-pane-crop=$top_right_left,$top_right_top,${top_right_width}x${top_right_height}\nactive-pane-postcondition=$wheel_passed\nmini-scrollbar-gesture=top-right-horizontal-track-click\nmini-scrollbar-coordinate=$scrollbar_x,$scrollbar_y\nmini-scrollbar-postcondition=$scrollbar_passed\n"
+
+    if $divider_passed; then
+        record "split-pane-divider-drag-physical" "passed" \
+            "$divider_before; $divider_after; target-y=$drag_y" \
+            "A real X11 pointer drag moved the rendered split divider and changed the captured worksheet surface." \
+            "$artifacts"
+    else
+        record "split-pane-divider-drag-physical" "failed" \
+            "$divider_before; $divider_after; $postcondition" \
+            "The physical divider drag did not produce an observable rendered postcondition." \
+            "$artifacts"
+    fi
+    if $wheel_passed; then
+        record "split-pane-active-pane-wheel-physical" "passed" \
+            "$wheel_before; $wheel_after; split-pane-wheel-before-crop.png; split-pane-wheel-after-crop.png; $postcondition" \
+            "A real X11 wheel event over the top-right quadrant changed that quadrant's rendered content." \
+            "$artifacts;split-pane-wheel-before-crop.png;split-pane-wheel-after-crop.png"
+    else
+        record "split-pane-active-pane-wheel-physical" "failed" \
+            "$wheel_before; $wheel_after; $postcondition" \
+            "The active-pane wheel route did not produce an observable top-right quadrant change." \
+            "$artifacts"
+    fi
+    if $scrollbar_passed; then
+        record "split-pane-mini-scrollbar-physical" "passed" \
+            "$scrollbar_before; $scrollbar_after; split-pane-scrollbar-before-crop.png; split-pane-scrollbar-after-crop.png; $postcondition" \
+            "A real X11 track click on the top-right mini-scrollbar changed the rendered split-pane content." \
+            "$artifacts;split-pane-scrollbar-before-crop.png;split-pane-scrollbar-after-crop.png"
+    else
+        record "split-pane-mini-scrollbar-physical" "failed" \
+            "$scrollbar_before; $scrollbar_after; $postcondition" \
+            "The mini-scrollbar interaction did not produce an observable postcondition." \
+            "$artifacts"
+    fi
+    if $split_open; then
+        enter_view_keytip
+        keytip_key s
+    fi
+    send_key Escape || true
+}
+
 outline_toggle_visible() {
     local screenshot="$1" center_x="$2" center_y="$3" left top metrics white_score border_score
     left=$((center_x - 7))
@@ -4262,6 +4398,19 @@ if [[ "$probe_selector" == "grid-drag" ]]; then
     exit 0
 fi
 
+if [[ "$probe_selector" == "split-pane-pointer" ]]; then
+    # Focused Wave104 lane for divider drag, active-pane wheel ownership, and mini-scrollbar input.
+    probe_split_pane_pointer
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused split-pane pointer probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
 if [[ "$probe_selector" == "outline-group" ]]; then
     # Focused iteration mode for physical row and column grouping plus visible outline controls.
     probe_outline_group_physical
@@ -4622,6 +4771,7 @@ probe_worksheet_context_clear
 probe_clipboard_roundtrips
 probe_sheet_tabs
 probe_window_management
+probe_split_pane_pointer
 probe_outline_group_physical
 probe_outline_column_group_physical
 probe_outline_nested_rows_physical

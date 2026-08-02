@@ -48,6 +48,28 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void SplitPanePointerSelectorRequiresIndependentPhysicalEvidenceRows()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        runner.Should().Contain("\"split-pane-pointer\"");
+        runner.Should().Contain("split-pane-divider-drag-physical");
+        runner.Should().Contain("split-pane-active-pane-wheel-physical");
+        runner.Should().Contain("split-pane-mini-scrollbar-physical");
+        probe.Should().Contain("probe_split_pane_pointer()");
+        probe.Should().Contain("enter_view_keytip");
+        probe.Should().Contain("xdotool mousedown 1");
+        probe.Should().Contain("xdotool click 5");
+        probe.Should().Contain("split-pane-pointer-postcondition.txt");
+        probe.Should().Contain("divider-postcondition=$divider_passed");
+        probe.Should().Contain("active-pane-postcondition=$wheel_passed");
+        probe.Should().Contain("mini-scrollbar-postcondition=$scrollbar_passed");
+    }
+
+    [Fact]
     public void PhysicalEvidencePackagingUsesLongPathSafeExactFileCopies()
     {
         var script = File.ReadAllText(RepositoryFileLocator.Find(

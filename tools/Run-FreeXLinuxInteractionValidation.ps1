@@ -35,7 +35,7 @@ param(
 
     [string]$ExistingX11Manifest = "",
 
-    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
+    [ValidateSet("all", "backstage-print", "sheet-tabs", "name-box-dropdown", "name-box-dropdown-parity", "pivot-field-list", "pivot-table-details-double-click", "autofilter-recalculation", "formula-whole-range-point", "formula-multi-area-point", "formula-multi-area-edit", "formula-reference-grip", "formula-3d-grip", "formula-3d-native-xlsx", "grid-drag", "split-pane-pointer", "outline-group", "outline-nested-group", "outline-nested-save-reopen", "outline-nested-filter-save-reopen")]
     [string]$PhysicalProbeSelector = "all",
 
     [string]$PhysicalDocumentPath = "",
@@ -1240,6 +1240,12 @@ try {
             "grid-selection-border-move-physical",
             "grid-selection-border-copy-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "split-pane-pointer") {
+        @(
+            "split-pane-divider-drag-physical",
+            "split-pane-active-pane-wheel-physical",
+            "split-pane-mini-scrollbar-physical"
+        )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
         @("outline-group-physical", "outline-columns-group-physical")
     } elseif ($PhysicalProbeSelector -eq "outline-nested-group") {
@@ -1274,6 +1280,9 @@ try {
         "outline-columns-group-physical",
         "outline-nested-rows-group-physical",
         "outline-nested-columns-group-physical",
+        "split-pane-divider-drag-physical",
+        "split-pane-active-pane-wheel-physical",
+        "split-pane-mini-scrollbar-physical",
         "dialog-format-cells-keyboard",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
@@ -1356,6 +1365,12 @@ try {
             "grid-selection-border-move-physical",
             "grid-selection-border-copy-physical"
         )
+    } elseif ($PhysicalProbeSelector -eq "split-pane-pointer") {
+        @(
+            "split-pane-divider-drag-physical",
+            "split-pane-active-pane-wheel-physical",
+            "split-pane-mini-scrollbar-physical"
+        )
     } elseif ($PhysicalProbeSelector -eq "outline-group") {
         @("outline-group-physical", "outline-columns-group-physical")
     } elseif ($PhysicalProbeSelector -eq "outline-nested-group") {
@@ -1379,6 +1394,9 @@ try {
         "outline-columns-group-physical",
         "outline-nested-rows-group-physical",
         "outline-nested-columns-group-physical",
+        "split-pane-divider-drag-physical",
+        "split-pane-active-pane-wheel-physical",
+        "split-pane-mini-scrollbar-physical",
         "native-save-as-f12-cancel",
         "native-open-ctrl-f12-cancel",
         "backstage-print-ctrl-shift-f12-cancel",
