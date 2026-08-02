@@ -80,6 +80,7 @@ public enum SmartArtLayoutPreset
     ArrowRibbon,
     CircleProcess,
     CircleArrowProcess,
+    IncreasingCircleProcess,
     FunnelProcess,
     VerticalProcess,
     PictureAccentProcess,
@@ -229,6 +230,7 @@ public static class SmartArtAuthoringPlanner
     public const string ArrowRibbonLayoutCommandId = "freep.smartart.layout.arrow-ribbon";
     public const string CircleProcessLayoutCommandId = "freep.smartart.layout.circle-process";
     public const string CircleArrowProcessLayoutCommandId = "freep.smartart.layout.circle-arrow-process";
+    public const string IncreasingCircleProcessLayoutCommandId = "freep.smartart.layout.increasing-circle-process";
     public const string FunnelProcessLayoutCommandId = "freep.smartart.layout.funnel-process";
     public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
     public const string PictureAccentProcessLayoutCommandId = "freep.smartart.layout.picture-accent-process";
@@ -603,6 +605,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/circleProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.CircleArrowProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/circleArrowProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.IncreasingCircleProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/increasingCircleProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.FunnelProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalProcess =>

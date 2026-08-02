@@ -1659,6 +1659,27 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void IncreasingCircleProcess_ReturnsGrowingCirclesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/increasingCircleProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("increasingCircleProcess is a live authoring layout");
+        var circles = shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Ellipse).ToList();
+        circles.Should().HaveCount(4);
+        circles.Select(s => s.ExtentCxEmu).Should().BeInAscendingOrder();
+        circles.Select(s => s.ExtentCyEmu).Should().Equal(circles.Select(s => s.ExtentCxEmu));
+        circles.Select(s => s.OffsetYEmu + s.ExtentCyEmu).Distinct().Should().ContainSingle(
+            "increasing circles share a bottom baseline");
+        circles.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C", "D");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "adjacent circles remain connected after text edits");
+    }
+
+    [Fact]
     public void FunnelProcess_ReturnsNarrowingStageSegmentsAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");

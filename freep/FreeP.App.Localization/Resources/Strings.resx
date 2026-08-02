@@ -1516,6 +1516,12 @@
   <data name="Ribbon_Command_SmartArtCircleProcess_KeyTip" xml:space="preserve">
     <value>C</value>
   </data>
+  <data name="Ribbon_Command_SmartArtIncreasingCircleProcess_Label" xml:space="preserve">
+    <value>Increasing Circle Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtIncreasingCircleProcess_KeyTip" xml:space="preserve">
+    <value>ICP</value>
+  </data>
   <data name="Ribbon_Command_SmartArtFunnelProcess_Label" xml:space="preserve">
     <value>Funnel Process</value>
   </data>

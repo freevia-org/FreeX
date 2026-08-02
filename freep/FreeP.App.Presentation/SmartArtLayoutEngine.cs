@@ -135,6 +135,9 @@ public static class SmartArtLayoutEngine
         if (IsCircleArrowProcessLayout(data.LayoutUniqueId))
             return LayoutCircleArrowProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsIncreasingCircleProcessLayout(data.LayoutUniqueId))
+            return LayoutIncreasingCircleProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsFunnelProcessLayout(data.LayoutUniqueId))
             return LayoutFunnelProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1005,6 +1008,81 @@ public static class SmartArtLayoutEngine
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan) =>
         LayoutCircleProcess(nodes, fx, fy, fcx, fcy, stylePlan);
+
+    /// <summary>
+    /// Increasing Circle Process geometry: a left-to-right sequence of circles whose
+    /// diameters grow with the authored order. The circles share a bottom baseline and
+    /// are joined by straight connectors, which keeps the progression editable through
+    /// the renderer-neutral shape contract consumed by both WPF and Avalonia.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutIncreasingCircleProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        if (n == 0)
+            return [];
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long innerW = Math.Max(fcx - 2 * padX, 1L);
+        long innerH = Math.Max(fcy - 2 * padY, 1L);
+        long gap = n > 1 ? Math.Max((long)(innerW * 0.025), 1L) : 0L;
+        double minimumScale = n == 1 ? 1.0 : 0.52;
+        double normalizedDiameterSum = Enumerable.Range(0, n)
+            .Select(index => minimumScale + (1.0 - minimumScale) * index / Math.Max(n - 1, 1))
+            .Sum();
+        long maxDiameter = Math.Max(
+            Math.Min((long)(innerH * 0.62),
+                (long)((innerW - Math.Max(n - 1, 0) * gap) / normalizedDiameterSum)),
+            1L);
+
+        var diameters = Enumerable.Range(0, n)
+            .Select(index => Math.Max(
+                (long)(maxDiameter * (minimumScale + (1.0 - minimumScale) * index / Math.Max(n - 1, 1))),
+                1L))
+            .ToArray();
+        var shapes = new List<SlideShape>(n * 2);
+        var centers = new (long x, long y)[n];
+        long currentX = fx + padX;
+        long baseline = fy + padY + innerH;
+        uint idCounter = 760;
+
+        for (int index = 0; index < n; index++)
+        {
+            long diameter = diameters[index];
+            long y = baseline - diameter;
+            var style = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.Process);
+            centers[index] = (currentX + diameter / 2, y + diameter / 2);
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[index].Text,
+                style,
+                currentX,
+                y,
+                diameter,
+                diameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+            currentX += diameter + gap;
+        }
+
+        for (int index = 0; index < n - 1; index++)
+        {
+            long fromX = centers[index].x + diameters[index] / 2;
+            long toX = centers[index + 1].x - diameters[index + 1] / 2;
+            shapes.Add(MakeConnector(
+                idCounter++,
+                fromX,
+                centers[index].y,
+                toX,
+                centers[index + 1].y,
+                stylePlan.Connector));
+        }
+
+        return shapes;
+    }
 
     /// <summary>
     /// Funnel process geometry: ordered stages stack vertically and narrow toward
@@ -3619,6 +3697,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "circlearrowprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsIncreasingCircleProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "increasingcircleprocess", StringComparison.Ordinal);
     }
 
     private static bool IsFunnelProcessLayout(string uniqueId)

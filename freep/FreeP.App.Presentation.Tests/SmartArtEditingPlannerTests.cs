@@ -33,6 +33,7 @@ public sealed class SmartArtEditingPlannerTests
     [InlineData(SmartArtLayoutPreset.ArrowRibbon, "arrowRibbon", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleProcess, "circleProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleArrowProcess, "circleArrowProcess", SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.IncreasingCircleProcess, "increasingCircleProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.FunnelProcess, "funnelProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, "verticalProcess", SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.PictureAccentProcess, "pictureAccentProcess", SmartArtFamily.Process)]

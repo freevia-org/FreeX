@@ -6302,6 +6302,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.ArrowRibbonLayoutCommandId,
                 SmartArtAuthoringPlanner.CircleProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
+                SmartArtAuthoringPlanner.IncreasingCircleProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.VerticalProcessLayoutCommandId,
                 SmartArtAuthoringPlanner.VerticalBlockListLayoutCommandId,

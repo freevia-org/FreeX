@@ -1078,6 +1078,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.ArrowRibbon, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.CircleArrowProcess, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.IncreasingCircleProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.FunnelProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.PictureAccentProcess, SmartArtFamily.Process)]

@@ -865,6 +865,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.CircleArrowProcessLayoutCommandId,
                 FreePRibbonText.SmartArtCircleArrowProcessCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtCircleArrowProcessCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.IncreasingCircleProcessLayoutCommandId,
+                FreePRibbonText.SmartArtIncreasingCircleProcessCommand.Label, RibbonCommandIconKind.Refresh,
+                FreePRibbonText.SmartArtIncreasingCircleProcessCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.FunnelProcessLayoutCommandId,
                 FreePRibbonText.SmartArtFunnelProcessCommand.Label, RibbonCommandIconKind.Rectangle,
                 FreePRibbonText.SmartArtFunnelProcessCommand.KeyTip);
