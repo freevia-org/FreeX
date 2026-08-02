@@ -18,18 +18,25 @@ internal sealed class ZoomObjectPropertiesDialog : Window
     private readonly TextBox _cropEdges;
     private readonly TextBlock _validation;
     private readonly IReadOnlyList<SummaryZoomTarget> _summaryTargets;
+    private readonly IReadOnlyList<ZoomObjectProperties> _summaryTileProperties;
     private readonly ComboBox? _summaryTile;
     private readonly TextBox? _summaryOffset;
     private readonly TextBox? _summaryScale;
 
     internal ZoomObjectProperties Properties { get; private set; }
     internal ZoomObjectPropertiesPlanner.SummaryZoomTileLayoutEdit? SummaryTileLayout { get; private set; }
+    internal ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit? SummaryTileProperties { get; private set; }
 
     internal ZoomObjectPropertiesDialog(
         ZoomObjectProperties current,
-        IReadOnlyList<SummaryZoomTarget>? summaryTargets = null)
+        IReadOnlyList<SummaryZoomTarget>? summaryTargets = null,
+        IReadOnlyList<ZoomObjectProperties>? summaryTileProperties = null)
     {
         _summaryTargets = summaryTargets ?? Array.Empty<SummaryZoomTarget>();
+        _summaryTileProperties = summaryTileProperties is { Count: var count }
+            && count == _summaryTargets.Count
+            ? summaryTileProperties
+            : Enumerable.Repeat(current, _summaryTargets.Count).ToArray();
         Title = ZoomObjectPropertiesPlanner.DialogTitle;
         Width = 440;
         CanResize = false;
@@ -167,6 +174,13 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             cropTop,
             cropRight,
             cropBottom);
+        if (_summaryTile is not null && _summaryTile.SelectedIndex >= 0
+            && _summaryTile.SelectedIndex < _summaryTargets.Count)
+        {
+            SummaryTileProperties = new ZoomObjectPropertiesPlanner.SummaryZoomTilePropertiesEdit(
+                _summaryTargets[_summaryTile.SelectedIndex].SectionId,
+                Properties);
+        }
         Close(true);
     }
 
@@ -178,6 +192,14 @@ internal sealed class ZoomObjectPropertiesDialog : Window
             return;
 
         var target = _summaryTargets[_summaryTile.SelectedIndex];
+        var properties = _summaryTileProperties[_summaryTile.SelectedIndex];
+        _imageType.SelectedItem = ZoomObjectPropertiesPlanner.IsSupportedImageType(properties.ImageType)
+            ? properties.ImageType!.ToLowerInvariant()
+            : "preview";
+        _transitionDuration.Text = properties.TransitionDuration ?? string.Empty;
+        _cropEdges.Text = ZoomObjectPropertiesPlanner.FormatCropEdges(properties);
+        _returnToParent.IsChecked = properties.ReturnToParent ?? true;
+        _showBackground.IsChecked = properties.ShowBackground ?? true;
         _summaryOffset.Text = ZoomObjectPropertiesPlanner.FormatFactorPair(
             target.OffsetFactorX, target.OffsetFactorY);
         _summaryScale.Text = ZoomObjectPropertiesPlanner.FormatFactorPair(
