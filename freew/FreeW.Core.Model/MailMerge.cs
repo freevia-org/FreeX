@@ -1605,9 +1605,10 @@ public static class MailMerge
         var first = records[0];
         for (var d = 1; d < records.Count; d++)
         {
-            var blocks = records[d].Blocks;
+            var record = records[d];
+            var blocks = record.Blocks;
             if (mode == MailMergeOutputMode.Letters)
-                ForcePageBreakBeforeRecord(first, blocks);
+                StartNextLetterSection(first, record);
 
             foreach (var block in blocks)
                 first.Blocks.Add(block);
@@ -1633,18 +1634,25 @@ public static class MailMerge
         }
     }
 
-    private static void ForcePageBreakBeforeRecord(TextDocument first, IList<Block> blocks)
+    private static void StartNextLetterSection(TextDocument combined, TextDocument nextRecord)
     {
-        // Word's Letters output starts each record on a new page. If the record starts with a paragraph,
-        // keep the content and put the break on that paragraph; otherwise insert a dedicated break block.
-        if (blocks.Count > 0 && blocks[0] is Paragraph lead)
+        var completedSection = new Section(combined.Page.Clone(), SectionBreakKind.NextPage)
         {
-            lead.Formatting = lead.Formatting with { PageBreakBefore = true };
-        }
+            HeadersFooters = CloneSectionHeadersFooters(
+                combined.FinalSectionHeadersFooters,
+                headerFooter => headerFooter)
+        };
+
+        if (combined.Blocks.LastOrDefault() is Paragraph { SectionBreak: null } paragraph)
+            paragraph.SectionBreak = completedSection;
         else
-        {
-            first.Blocks.Add(DocumentOps.CreatePageBreak());
-        }
+            combined.Blocks.Add(new Paragraph { SectionBreak = completedSection });
+
+        CopyPageSettings(nextRecord.Page, combined.Page);
+        CopySectionHeadersFooters(
+            nextRecord.FinalSectionHeadersFooters,
+            combined.FinalSectionHeadersFooters,
+            headerFooter => headerFooter);
     }
 
     private static string Lookup(IReadOnlyDictionary<string, string> row, string name) =>
