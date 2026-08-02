@@ -257,17 +257,18 @@ public static class AvaloniaCompactDialogChrome
     /// <summary>
     /// Applies Avalonia-host template compensation for the shared WPF read-only document padding.
     /// The resulting Avalonia <see cref="Thickness"/> is host-specific, not a shared WPF metric:
-    /// Avalonia's TextBox template contributes a six-pixel leading content inset for this surface family.
+    /// Avalonia's TextBox template contributes a four-pixel leading content inset for this surface family.
     /// </summary>
     public static void ApplyAvaloniaReadOnlyDocumentTemplatePadding(TextBox textBox, double sharedPadding)
     {
         ArgumentNullException.ThrowIfNull(textBox);
 
         textBox.Padding = new Thickness(
-            sharedPadding + 6,
+            sharedPadding + 4,
             sharedPadding,
             sharedPadding,
             sharedPadding);
+        textBox.Margin = new Thickness(2, 0, 1, 0);
         // WPF's multiline read-only document host keeps its content pinned to the
         // top edge. The shared compact chrome defaults single-line inputs to center
         // alignment, so restore the document template's vertical behavior here.
@@ -302,6 +303,20 @@ public static class AvaloniaCompactDialogChrome
             {
                 new Setter(TextBox.BorderBrushProperty, ReadOnlyDocumentFocusedBorderBrush),
                 new Setter(TextBox.BorderThicknessProperty, new Thickness(1)),
+            },
+        });
+        textBox.Styles.Add(new Style(selector => selector
+            .OfType<TextBox>()
+            .Class(":focus")
+            .Template()
+            .OfType<Border>()
+            .Name("PART_BorderElement"))
+        {
+            Setters =
+            {
+                new Setter(Border.BorderBrushProperty, ReadOnlyDocumentFocusedBorderBrush),
+                new Setter(Border.BorderThicknessProperty, new Thickness(1)),
+                new Setter(Border.BackgroundProperty, Brushes.White),
             },
         });
         textBox.GotFocus += (_, _) => textBox.BorderBrush = ReadOnlyDocumentFocusedBorderBrush;

@@ -69,6 +69,12 @@ public sealed class LegalNoticesDialogVisualParityTests
                 .SelectMany(presenter => presenter.GetVisualDescendants().OfType<AccessText>())
                 .Should().OnlyContain(accessText =>
                     accessText.Foreground.Should().BeAssignableTo<ISolidColorBrush>().Subject.Color == Colors.Black);
+            var focusedDocumentBorder = ((TextBox)tabItems[0].Content!)
+                .GetVisualDescendants()
+                .OfType<Border>()
+                .Single(border => border.Name == "PART_BorderElement");
+            ((ISolidColorBrush)focusedDocumentBorder.BorderBrush!)
+                .Color.Should().Be(Color.FromRgb(86, 157, 229));
             ((TextBox)tabItems[0].Content!).Padding.Top
                 .Should().BeGreaterThan(LegalNoticesDialogMetrics.TextPadding);
 
@@ -79,7 +85,8 @@ public sealed class LegalNoticesDialogVisualParityTests
                 text.Focusable.Should().BeTrue();
                 text.AcceptsReturn.Should().BeTrue();
                 text.AcceptsTab.Should().BeTrue();
-                text.Padding.Left.Should().Be(LegalNoticesDialogMetrics.TextPadding + 6);
+                text.Margin.Should().Be(new Thickness(2, 0, 1, 0));
+                text.Padding.Left.Should().Be(LegalNoticesDialogMetrics.TextPadding + 4);
                 text.Padding.Top.Should().BeGreaterThanOrEqualTo(LegalNoticesDialogMetrics.TextPadding);
                 text.Padding.Right.Should().Be(LegalNoticesDialogMetrics.TextPadding);
                 text.Padding.Bottom.Should().Be(LegalNoticesDialogMetrics.TextPadding);
