@@ -5118,7 +5118,8 @@ public sealed class DocumentView : Control
         double pageTopDip,
         double pageHeightPt)
     {
-        if (rendered is null || image.Bytes.Length == 0)
+        var displayBytes = image.DisplayBytes;
+        if (rendered is null || displayBytes.Length == 0)
             return null;
 
         var contentType = image.Format switch
@@ -5135,7 +5136,7 @@ public sealed class DocumentView : Control
             // The shared operation can preserve PNG/JPEG bytes, source crop, source alpha, and
             // the model transparency as a PDF graphics-state opacity without touching the live
             // cache or changing the document's media part.
-            imageBytes = image.Bytes;
+            imageBytes = displayBytes;
             opacity = 1.0 - Math.Clamp(image.TransparencyPct / 100.0, 0.0, 1.0);
         }
         else
@@ -9533,9 +9534,9 @@ public sealed class DocumentView : Control
         Bitmap? decoded = null;
         try
         {
-            if (image.PngBytes.Length > 0)
+            if (image.DisplayBytes.Length > 0)
             {
-                using var stream = new MemoryStream(image.PngBytes);
+                using var stream = new MemoryStream(image.DisplayBytes);
                 decoded = new Bitmap(stream);
                 var applied = AvaloniaImageAdjustHelper.ApplyWithBounds(decoded, image);
                 rendered = new AvaloniaRenderedImage(applied.Bitmap, applied.SourcePixelRect);

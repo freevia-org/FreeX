@@ -1025,7 +1025,7 @@ public static class DrawingObjectVisualPlanner
     private static DrawingObjectImagePlan BuildImagePlan(InlineImage image) =>
         new(
             image.Format,
-            image.Bytes.Length,
+            image.DisplayBytes.Length,
             image.HasCrop,
             image.HasAdjustments,
             image.HasRecolor,

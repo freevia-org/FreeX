@@ -33,6 +33,30 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
     }
 
     [Fact]
+    public void Open_PathAwareWorkflowResolvesLocalLinkedImagePreview()
+    {
+        var preview = new byte[] { 0x89, 0x50, 0x4E, 0x47, 1, 2, 3, 4 };
+        File.WriteAllBytes(Path.Combine(_tempDir, "linked.png"), preview);
+        var source = Document("Body");
+        source.Paragraphs.Single().Runs.Add(Run.FromImage(new InlineImage([], 24, 18)
+        {
+            LinkedImageTarget = "linked.png"
+        }));
+        var adapter = new FakeDocumentAdapter(
+            [new FileFormatDescriptor(".docx", "Word Document")])
+        {
+            LoadAction = _ => source
+        };
+        var workflow = new DocumentPersistenceWorkflow([adapter]);
+        var path = WriteText("Linked.docx", "stub");
+
+        var result = workflow.Open(path);
+
+        result.Document.Paragraphs.Single().Runs.Single(run => run.Image is not null)
+            .Image!.ResolvedLinkedImageBytes.Should().Equal(preview);
+    }
+
+    [Fact]
     public void BuildFormatCapabilityRows_ReportsTemplateCompatibilityImportAndExportTruth()
     {
         var workflow = new DocumentPersistenceWorkflow();
@@ -263,8 +287,12 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
 
         public Action<TextDocument, Stream>? SaveAction { get; init; }
 
+        public Func<Stream, TextDocument>? LoadAction { get; init; }
+
         public TextDocument Load(Stream stream)
         {
+            if (LoadAction is not null)
+                return LoadAction(stream);
             using var reader = new StreamReader(stream, leaveOpen: true);
             return Document(reader.ReadToEnd());
         }

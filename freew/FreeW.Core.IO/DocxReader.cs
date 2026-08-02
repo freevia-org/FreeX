@@ -30,7 +30,9 @@ public static class DocxReader
     public static TextDocument Read(string path)
     {
         using var stream = File.OpenRead(path);
-        return Read(stream);
+        var document = Read(stream);
+        LinkedImagePreviewResolver.ResolveLocalPreviews(document, path);
+        return document;
     }
 
     public static TextDocument Read(Stream stream)
