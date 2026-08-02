@@ -4031,15 +4031,21 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Clear all character formatting in every model paragraph spanned by the selection (or the caret's
-    /// paragraph): each run's formatting is reset to <see cref="RunFormatting.Default"/> while its text is
-    /// kept (see <see cref="DropCap.ClearFormatting"/>). One reversible <see cref="FormatParagraphRunsCommand"/>
-    /// per paragraph on the undo/redo bus; the view re-renders so the reset shows immediately.
+    /// Clear character formatting in the exact selected text, or in the caret's paragraph when the selection is
+    /// collapsed. Each affected run's formatting is reset to <see cref="RunFormatting.Default"/> while its text
+    /// is kept. The exact-range path authors tracked formatting metadata and both paths use the undo/redo bus.
     /// </summary>
     public void ClearFormatting()
     {
         if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
             return;
+
+        if (TrySetSelectedRunFormatting(
+                formatting => formatting == RunFormatting.Default,
+                _ => RunFormatting.Default))
+        {
+            return;
+        }
 
         Focus();
         CommitToModel();
