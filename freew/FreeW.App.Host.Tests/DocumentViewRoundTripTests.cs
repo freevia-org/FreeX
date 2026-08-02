@@ -1589,6 +1589,38 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void ContentAutoFitFlowTable_SatisfiesMergedCellContentWithinAuthoredWidth()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(3, 3);
+        table.AutoFit = AutoFitMode.Contents;
+        table.PreferredWidthPt = 360;
+        table.ColumnWidthsPt.AddRange([120.0, 120.0, 120.0]);
+        table.Rows[0].Cells.Clear();
+        table.Rows[0].Cells.Add(new FreeW.Core.Model.TableCell("A long merged heading across two columns")
+        {
+            GridSpan = 2
+        });
+        table.Rows[0].Cells.Add(new FreeW.Core.Model.TableCell("C"));
+        table.Rows[1].Cells[0] = new FreeW.Core.Model.TableCell("Wide first-column content");
+        table.Rows[1].Cells[1] = new FreeW.Core.Model.TableCell("B");
+        table.Rows[1].Cells[2] = new FreeW.Core.Model.TableCell("C");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).Single();
+        rendered.Columns.Should().HaveCount(3);
+        rendered.Columns[0].Width.Value.Should().BeGreaterThan(rendered.Columns[1].Width.Value);
+        rendered.Columns[1].Width.Value.Should().BeApproximately(rendered.Columns[2].Width.Value, 1,
+            "the widest column in the merged span owns the unmet minimum");
+        rendered.Columns.Sum(column => column.Width.Value)
+            .Should().BeApproximately(360 * (96.0 / 72.0), 0.01);
+    }
+
+    [StaFact]
     public void TablePagination_WithoutRepeatHeader_RendersPlannedPageBreakSegments()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
