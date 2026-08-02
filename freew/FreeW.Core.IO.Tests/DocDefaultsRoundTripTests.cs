@@ -15,7 +15,9 @@ namespace FreeW.Core.IO.Tests;
 public class DocDefaultsRoundTripTests
 {
     private const string Wns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    private const string W14ns = "http://schemas.microsoft.com/office/word/2010/wordml";
     private static readonly XNamespace W = Wns;
+    private static readonly XNamespace W14 = W14ns;
 
     private static void AddPart(ZipArchive zip, string path, string xml)
     {
@@ -39,7 +41,7 @@ public class DocDefaultsRoundTripTests
             var rPrPart = rPrDefaultXml is null ? "" : $"<w:rPrDefault>{rPrDefaultXml}</w:rPrDefault>";
             var pPrPart = pPrDefaultXml is null ? "" : $"<w:pPrDefault>{pPrDefaultXml}</w:pPrDefault>";
             AddPart(zip, "word/styles.xml",
-                $"<w:styles xmlns:w=\"{Wns}\"><w:docDefaults>{rPrPart}{pPrPart}</w:docDefaults></w:styles>");
+                $"<w:styles xmlns:w=\"{Wns}\" xmlns:w14=\"{W14ns}\"><w:docDefaults>{rPrPart}{pPrPart}</w:docDefaults></w:styles>");
         }
         ms.Position = 0;
         return DocxReader.Read(ms);
@@ -167,5 +169,154 @@ public class DocDefaultsRoundTripTests
 
         doc2.DefaultRun.FontFamily.Should().Be("Calibri");
         doc2.DefaultRun.FontSizePt.Should().Be(11);
+    }
+
+    [Fact]
+    public void DocDefaults_ClassicCharacterProperties_RoundTripInCanonicalOrder()
+    {
+        var doc = Read(
+            "<w:rPr>" +
+            "<w:rFonts w:ascii=\"Aptos\"/><w:b/><w:i/>" +
+            "<w:caps/><w:smallCaps/><w:strike/><w:dstrike/>" +
+            "<w:noProof/><w:vanish/><w:webHidden/><w:color w:val=\"123456\"/>" +
+            "<w:sz w:val=\"22\"/>" +
+            "<w:u w:val=\"single\"/>" +
+            "<w:vertAlign w:val=\"superscript\"/><w:rtl/><w:lang w:val=\"ar-SA\"/>" +
+            "</w:rPr>");
+
+        doc.DefaultRun.AllCaps.Should().BeTrue();
+        doc.DefaultRun.SmallCaps.Should().BeTrue();
+        doc.DefaultRun.Strikethrough.Should().BeTrue();
+        doc.DefaultRun.Underline.Should().BeTrue();
+        doc.DefaultRun.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+        doc.DefaultRun.Rtl.Should().BeTrue();
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "rFonts", "b", "i", "caps", "smallCaps", "strike", "dstrike", "noProof",
+            "vanish", "webHidden", "color", "sz", "szCs", "u", "vertAlign", "rtl", "lang");
+        rPr.Element(W + "u")!.Attribute(W + "val")!.Value.Should().Be("single");
+        rPr.Element(W + "vertAlign")!.Attribute(W + "val")!.Value.Should().Be("superscript");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.AllCaps.Should().BeTrue();
+        reopened.DefaultRun.SmallCaps.Should().BeTrue();
+        reopened.DefaultRun.Strikethrough.Should().BeTrue();
+        reopened.DefaultRun.Underline.Should().BeTrue();
+        reopened.DefaultRun.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+        reopened.DefaultRun.Rtl.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DocDefaults_AdvancedTypography_RoundTripsInCoreThenExtensionOrder()
+    {
+        var doc = Read(
+            "<w:rPr>" +
+            "<w:spacing w:val=\"30\"/><w:kern w:val=\"24\"/><w:position w:val=\"-4\"/>" +
+            "<w14:ligatures w14:val=\"standardContextual\"/>" +
+            "<w14:numForm w14:val=\"oldStyle\"/><w14:numSpacing w14:val=\"tabular\"/>" +
+            "<w14:stylisticSets><w14:styleSet w14:id=\"7\"/></w14:stylisticSets>" +
+            "</w:rPr>");
+
+        doc.DefaultRun.CharacterSpacingPt.Should().Be(1.5);
+        doc.DefaultRun.KerningMinSizePt.Should().Be(12);
+        doc.DefaultRun.PositionPt.Should().Be(-2);
+        doc.DefaultRun.Ligatures.Should().Be(LigatureMode.StandardContextual);
+        doc.DefaultRun.NumberForm.Should().Be(NumberForm.OldStyle);
+        doc.DefaultRun.NumberSpacing.Should().Be(NumberSpacing.Tabular);
+        doc.DefaultRun.StylisticSet.Should().Be(7);
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "rFonts", "spacing", "kern", "position", "sz", "szCs",
+            "ligatures", "numForm", "numSpacing", "stylisticSets");
+        rPr.Element(W + "spacing")!.Attribute(W + "val")!.Value.Should().Be("30");
+        rPr.Element(W + "kern")!.Attribute(W + "val")!.Value.Should().Be("24");
+        rPr.Element(W + "position")!.Attribute(W + "val")!.Value.Should().Be("-4");
+        rPr.Element(W14 + "stylisticSets")!
+            .Element(W14 + "styleSet")!
+            .Attribute(W14 + "id")!.Value.Should().Be("7");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.CharacterSpacingPt.Should().Be(1.5);
+        reopened.DefaultRun.KerningMinSizePt.Should().Be(12);
+        reopened.DefaultRun.PositionPt.Should().Be(-2);
+        reopened.DefaultRun.Ligatures.Should().Be(LigatureMode.StandardContextual);
+        reopened.DefaultRun.NumberForm.Should().Be(NumberForm.OldStyle);
+        reopened.DefaultRun.NumberSpacing.Should().Be(NumberSpacing.Tabular);
+        reopened.DefaultRun.StylisticSet.Should().Be(7);
+    }
+
+    [Fact]
+    public void DocDefaults_NamedHighlight_RoundTripsWithCanonicalHighlightAndShadingFallback()
+    {
+        var doc = Read("<w:rPr><w:highlight w:val=\"yellow\"/></w:rPr>");
+
+        doc.DefaultRun.HighlightColorHex.Should().Be("#FFFF00");
+        doc.DefaultRun.CharacterShadingHex.Should().BeNull();
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "rFonts", "sz", "szCs", "highlight", "shd");
+        rPr.Element(W + "highlight")!.Attribute(W + "val")!.Value.Should().Be("yellow");
+        rPr.Element(W + "shd")!.Attribute(W + "fill")!.Value.Should().Be("FFFF00");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.HighlightColorHex.Should().Be("#FFFF00");
+        reopened.DefaultRun.CharacterShadingHex.Should().BeNull();
+    }
+
+    [Fact]
+    public void DocDefaults_PatternedCharacterShading_RoundTripsWithoutBecomingHighlight()
+    {
+        var doc = Read("<w:rPr><w:shd w:val=\"pct25\" w:color=\"auto\" w:fill=\"ABCDEF\"/></w:rPr>");
+
+        doc.DefaultRun.HighlightColorHex.Should().BeNull();
+        doc.DefaultRun.CharacterShadingHex.Should().Be("#ABCDEF");
+        doc.DefaultRun.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "rFonts", "sz", "szCs", "shd");
+        rPr.Element(W + "highlight").Should().BeNull();
+        rPr.Element(W + "shd")!.Attribute(W + "val")!.Value.Should().Be("pct25");
+        rPr.Element(W + "shd")!.Attribute(W + "fill")!.Value.Should().Be("ABCDEF");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.HighlightColorHex.Should().BeNull();
+        reopened.DefaultRun.CharacterShadingHex.Should().Be("#ABCDEF");
+        reopened.DefaultRun.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
     }
 }

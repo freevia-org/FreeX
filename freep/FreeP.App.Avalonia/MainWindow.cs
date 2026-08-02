@@ -4215,15 +4215,26 @@ public sealed partial class MainWindow : Window
             return;
 
         var selectedShapeId = GetSingleSelectedShapeId();
-        var summaryTargets = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
-            && ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject is { } info
-            ? info.SummaryZoomTargets
-            : (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
-        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets);
+        var selectedInfo = selectedShapeId is uint shapeId && Editor.CurrentSlide is { } slide
+            ? ShapeTreeLookup.Find(slide, shapeId)?.PreservedObject
+            : null;
+        var summaryTargets = selectedInfo?.SummaryZoomTargets
+            ?? (IReadOnlyList<SummaryZoomTarget>)Array.Empty<SummaryZoomTarget>();
+        var summaryTileProperties = summaryTargets.Count == 0
+            ? Array.Empty<ZoomObjectProperties>()
+            : summaryTargets.Select(target =>
+                ZoomObjectPropertiesPlanner.EffectiveSummaryTile(selectedInfo, target.SectionId)).ToArray();
+        var dialog = new ZoomObjectPropertiesDialog(current, summaryTargets, summaryTileProperties);
         var result = await dialog.ShowDialog<bool?>(this);
         if (result == true)
         {
-            var changed = Editor.SetSelectedZoomObjectProperties(dialog.Properties);
+            var changed = dialog.SummaryTileProperties is { } tileProperties
+                && selectedShapeId is uint summaryPropertiesShapeId
+                ? Editor.SetSummaryZoomTileProperties(
+                    summaryPropertiesShapeId,
+                    tileProperties.SectionId,
+                    tileProperties.Properties)
+                : Editor.SetSelectedZoomObjectProperties(dialog.Properties);
             if (dialog.SummaryTileLayout is { } tile && selectedShapeId is uint summaryShapeId)
                 changed |= Editor.SetSummaryZoomTileLayout(
                     summaryShapeId,
@@ -7832,9 +7843,7 @@ public sealed partial class MainWindow : Window
                 _selectedMediaCaptionTrackIndex ?? -1,
                 descriptor);
         LastMediaCaptionTrackMutationResult =
-            PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(
-                media,
-                LastMediaCaptionAuthoringMutationPlan);
+            Editor.ApplyMediaCaptionAuthoring(LastMediaCaptionAuthoringMutationPlan);
         if (LastMediaCaptionTrackMutationResult.Succeeded)
         {
             _selectedMediaCaptionTrackIndex = NormalizeMediaCaptionSelectionAfterMutation(
@@ -10287,32 +10296,37 @@ public sealed partial class MainWindow : Window
     internal SlideShowCustomShowMutationResult CreateCustomShow(
         string? name,
         IEnumerable<string?> slideIds) =>
-        SlideShowCustomShowPlanner.CreateCustomShow(_presentation, name, slideIds);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.CreateCustomShow(presentation, name, slideIds));
 
     internal SlideShowCustomShowMutationResult RenameCustomShow(
         int customShowIndex,
         string? name) =>
-        SlideShowCustomShowPlanner.RenameCustomShow(_presentation, customShowIndex, name);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.RenameCustomShow(presentation, customShowIndex, name));
 
     internal SlideShowCustomShowMutationResult DeleteCustomShow(int customShowIndex) =>
-        SlideShowCustomShowPlanner.DeleteCustomShow(_presentation, customShowIndex);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.DeleteCustomShow(presentation, customShowIndex));
 
     internal SlideShowCustomShowMutationResult UpdateCustomShowSlides(
         int customShowIndex,
         IEnumerable<string?> slideIds) =>
-        SlideShowCustomShowPlanner.UpdateCustomShowSlides(_presentation, customShowIndex, slideIds);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.UpdateCustomShowSlides(presentation, customShowIndex, slideIds));
 
     internal SlideShowCustomShowMutationResult MoveCustomShowSlide(
         int customShowIndex,
         int sourceSlideIndex,
         string? sourceSlideId,
         int targetSlideIndex) =>
-        SlideShowCustomShowPlanner.MoveCustomShowSlide(
-            _presentation,
-            customShowIndex,
-            sourceSlideIndex,
-            sourceSlideId,
-            targetSlideIndex);
+        Editor.ApplyCustomShowMutation(presentation =>
+            SlideShowCustomShowPlanner.MoveCustomShowSlide(
+                presentation,
+                customShowIndex,
+                sourceSlideIndex,
+                sourceSlideId,
+                targetSlideIndex));
 
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {

@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Xml;
 using System.Xml.Linq;
 using Free.Shared.Commands;
 using Free.Shared.Drawing;
@@ -398,6 +399,60 @@ public sealed class DeleteSlideCommand : IPresentationCommand
     private sealed record SectionSnapshot(string Id, string Name, IReadOnlyList<string> SlideIds);
 
     private sealed record CustomShowSnapshot(uint Id, string Name, IReadOnlyList<string> SlideIds);
+}
+
+/// <summary>Replaces the complete named custom-show collection as one undoable edit.</summary>
+public sealed class ReplaceCustomShowsCommand : IPresentationCommand
+{
+    private readonly IReadOnlyList<PresentationCustomShow> _before;
+    private readonly IReadOnlyList<PresentationCustomShow> _after;
+
+    public ReplaceCustomShowsCommand(
+        IEnumerable<PresentationCustomShow> before,
+        IEnumerable<PresentationCustomShow> after)
+    {
+        _before = CloneShows(before);
+        _after = CloneShows(after);
+    }
+
+    public string Label => "Edit Custom Show";
+
+    public bool HasEffect(Presentation presentation) =>
+        !ShowsEqual(presentation.CustomShows, _after);
+
+    public void Apply(Presentation presentation) => Replace(presentation, _after);
+
+    public void Revert(Presentation presentation) => Replace(presentation, _before);
+
+    private static void Replace(
+        Presentation presentation,
+        IReadOnlyList<PresentationCustomShow> shows)
+    {
+        presentation.CustomShows.Clear();
+        presentation.CustomShows.AddRange(CloneShows(shows));
+    }
+
+    private static List<PresentationCustomShow> CloneShows(
+        IEnumerable<PresentationCustomShow> shows) =>
+        shows.Select(show =>
+        {
+            var clone = new PresentationCustomShow { Id = show.Id, Name = show.Name };
+            clone.SlideIds.AddRange(show.SlideIds);
+            return clone;
+        }).ToList();
+
+    private static bool ShowsEqual(
+        IReadOnlyList<PresentationCustomShow> left,
+        IReadOnlyList<PresentationCustomShow> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        return left.Zip(right).All(pair =>
+            pair.First.Id == pair.Second.Id
+            && pair.First.Name == pair.Second.Name
+            && pair.First.SlideIds.SequenceEqual(pair.Second.SlideIds));
+    }
 }
 
 /// <summary>
@@ -866,6 +921,273 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
             element.Attribute(name)?.Remove();
         else
             element.SetAttributeValue(name, value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+}
+
+/// <summary>Replaces one media object's caption-track collection as one undoable edit.</summary>
+public sealed class SetMediaCaptionTracksCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly IReadOnlyList<MediaCaptionTrackInfo> _before;
+    private readonly IReadOnlyList<MediaCaptionTrackInfo> _after;
+
+    public SetMediaCaptionTracksCommand(
+        int slideIndex,
+        uint shapeId,
+        IEnumerable<MediaCaptionTrackInfo> before,
+        IEnumerable<MediaCaptionTrackInfo> after)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _before = CloneTracks(before);
+        _after = CloneTracks(after);
+    }
+
+    public string Label => "Edit Media Captions";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        var media = FindMedia(presentation);
+        return media is not null && !TracksEqual(media.CaptionTracks, _after);
+    }
+
+    public void Apply(Presentation presentation) => ReplaceTracks(FindMedia(presentation), _after);
+
+    public void Revert(Presentation presentation) => ReplaceTracks(FindMedia(presentation), _before);
+
+    private MediaInfo? FindMedia(Presentation presentation)
+    {
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return null;
+
+        return FindMedia(presentation.Slides[_slideIndex].Shapes);
+    }
+
+    private MediaInfo? FindMedia(IEnumerable<SlideShape> shapes)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == _shapeId && shape.Kind == SlideShapeKind.Media)
+                return shape.Media;
+            if (shape.Children.Count > 0 && FindMedia(shape.Children) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
+    private static void ReplaceTracks(MediaInfo? media, IReadOnlyList<MediaCaptionTrackInfo> tracks)
+    {
+        if (media is null)
+            return;
+
+        media.CaptionTracks.Clear();
+        media.CaptionTracks.AddRange(CloneTracks(tracks));
+    }
+
+    private static List<MediaCaptionTrackInfo> CloneTracks(IEnumerable<MediaCaptionTrackInfo> tracks) =>
+        tracks.Select(track => new MediaCaptionTrackInfo
+        {
+            RelationshipId = track.RelationshipId,
+            Source = track.Source,
+            Bytes = track.Bytes.ToArray(),
+            ContentType = track.ContentType,
+            Language = track.Language,
+            Label = track.Label,
+            IsExternal = track.IsExternal
+        }).ToList();
+
+    private static bool TracksEqual(
+        IReadOnlyList<MediaCaptionTrackInfo> left,
+        IReadOnlyList<MediaCaptionTrackInfo> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        return left.Zip(right).All(pair =>
+            pair.First.RelationshipId == pair.Second.RelationshipId
+            && pair.First.Source == pair.Second.Source
+            && pair.First.ContentType == pair.Second.ContentType
+            && pair.First.Language == pair.Second.Language
+            && pair.First.Label == pair.Second.Label
+            && pair.First.IsExternal == pair.Second.IsExternal
+            && pair.First.Bytes.SequenceEqual(pair.Second.Bytes));
+    }
+}
+
+/// <summary>Edits one native Summary Zoom tile's supported format properties.</summary>
+public sealed class SetSummaryZoomTilePropertiesCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly string _sectionId;
+    private readonly ZoomObjectProperties _newValue;
+    private string? _oldRawXml;
+
+    public SetSummaryZoomTilePropertiesCommand(
+        int slideIndex,
+        uint shapeId,
+        string sectionId,
+        ZoomObjectProperties properties)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _sectionId = string.IsNullOrWhiteSpace(sectionId)
+            ? throw new ArgumentException("A Summary Zoom tile section id is required.", nameof(sectionId))
+            : sectionId.Trim();
+        _newValue = Validate(properties);
+    }
+
+    public string Label => "Format Summary Zoom Tile";
+
+    public bool HasEffect(Presentation presentation)
+    {
+        if (!TryGetTarget(presentation, out var info))
+            return false;
+
+        return TryPatchRawXml(info.RawXml, out var patched)
+            && !string.Equals(info.RawXml, patched, StringComparison.Ordinal);
+    }
+
+    public void Apply(Presentation presentation)
+    {
+        if (!TryGetTarget(presentation, out var info)
+            || !TryPatchRawXml(info.RawXml, out var patched))
+            return;
+
+        _oldRawXml ??= info.RawXml;
+        info.RawXml = patched;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        if (_oldRawXml is null || !TryGetTarget(presentation, out var info))
+            return;
+
+        info.RawXml = _oldRawXml;
+    }
+
+    private bool TryGetTarget(Presentation presentation, out PreservedObjectInfo info)
+    {
+        info = null!;
+        if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
+            return false;
+
+        var shape = FindShape(presentation.Slides[_slideIndex].Shapes, _shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom }
+            || shape.PreservedObject is not { } preserved
+            || preserved.SummaryZoomTargets.All(target =>
+                !string.Equals(target.SectionId, _sectionId, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        info = preserved;
+        return true;
+    }
+
+    private bool TryPatchRawXml(string rawXml, out string patchedXml)
+    {
+        patchedXml = rawXml;
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return false;
+
+        XDocument document;
+        try { document = XDocument.Parse(rawXml, LoadOptions.PreserveWhitespace); }
+        catch (XmlException) { return false; }
+
+        var target = document.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "summaryZmObj", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(element.Attribute("sectionId")?.Value, _sectionId,
+                StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+            return false;
+
+        var properties = target.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase));
+        if (properties is null)
+        {
+            properties = new XElement(target.Name.Namespace + "zmPr");
+            target.Add(properties);
+        }
+
+        SetAttribute(properties, "returnToParent", _newValue.ReturnToParent);
+        SetAttribute(properties, "imageType", _newValue.ImageType);
+        SetAttribute(properties, "transitionDur", _newValue.TransitionDuration);
+        SetAttribute(properties, "showBg", _newValue.ShowBackground);
+        SetCrop(properties, _newValue);
+        patchedXml = document.Root!.ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    private static ZoomObjectProperties Validate(ZoomObjectProperties properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        if (properties.ImageType is not null
+            && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Zoom imageType must be 'preview' or 'cover'.", nameof(properties));
+
+        return properties with
+        {
+            ImageType = properties.ImageType?.Trim().ToLowerInvariant(),
+            TransitionDuration = properties.TransitionDuration?.Trim(),
+        };
+    }
+
+    private static void SetAttribute(XElement element, string name, bool? value)
+    {
+        if (value is null) element.Attribute(name)?.Remove();
+        else element.SetAttributeValue(name, value.Value ? "1" : "0");
+    }
+
+    private static void SetAttribute(XElement element, string name, string? value)
+    {
+        if (value is null) element.Attribute(name)?.Remove();
+        else element.SetAttributeValue(name, value);
+    }
+
+    private static void SetAttribute(XElement element, string name, int? value)
+    {
+        if (value is null) element.Attribute(name)?.Remove();
+        else element.SetAttributeValue(name, value.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private static void SetCrop(XElement properties, ZoomObjectProperties value)
+    {
+        XNamespace drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var blipFill = properties.Descendants().FirstOrDefault(element =>
+            string.Equals(element.Name.LocalName, "blipFill", StringComparison.OrdinalIgnoreCase));
+        if (blipFill is null)
+            return;
+
+        var values = new[] { value.CropLeft, value.CropTop, value.CropRight, value.CropBottom };
+        var srcRect = blipFill.Element(drawing + "srcRect");
+        if (values.All(item => item is null))
+        {
+            srcRect?.Remove();
+            return;
+        }
+
+        srcRect ??= new XElement(drawing + "srcRect");
+        SetAttribute(srcRect, "l", value.CropLeft);
+        SetAttribute(srcRect, "t", value.CropTop);
+        SetAttribute(srcRect, "r", value.CropRight);
+        SetAttribute(srcRect, "b", value.CropBottom);
+        if (srcRect.Parent is null)
+            blipFill.AddFirst(srcRect);
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
     }
 }
 

@@ -103,6 +103,8 @@ public sealed class SlideShowWindow : Window
     private readonly Rectangle _screenModeOverlay;
     private SlideShowScreenMode _screenMode;
     private string _slideNumberBuffer = string.Empty;
+    private Slide? _revealedHiddenSlide;
+    private int _revealedHiddenSlideSourceIndex = -1;
 
     // Per-shape animation state for the current slide.
     // Maps shapeId → the Image element in _animOverlay that represents that shape.
@@ -316,7 +318,32 @@ public sealed class SlideShowWindow : Window
         ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
             _controller,
             _playbackRoute.Slides,
-            oneBasedSlideNumber));
+            oneBasedSlideNumber,
+            _playbackRoute.SourceSlideIndices));
+    }
+
+    public Slide? ExecuteHiddenSlideReveal()
+    {
+        if (_controller.CurrentSlideIndex < 0 ||
+            _controller.CurrentSlideIndex >= _playbackRoute.SourceSlideIndices.Count)
+        {
+            return null;
+        }
+
+        var currentSourceIndex = _revealedHiddenSlideSourceIndex >= 0
+            ? _revealedHiddenSlideSourceIndex
+            : _playbackRoute.SourceSlideIndices[_controller.CurrentSlideIndex];
+        var target = SlideShowHostPlanner.FindNextHiddenSlide(
+            _presentation,
+            _playbackRoute,
+            currentSourceIndex);
+        if (target is null)
+            return null;
+
+        _revealedHiddenSlide = target.Slide;
+        _revealedHiddenSlideSourceIndex = target.SourceSlideIndex;
+        DisplayCurrentSlide(animated: false);
+        return _revealedHiddenSlide;
     }
 
     /// <summary>The underlying state machine (for test assertions).</summary>
@@ -554,6 +581,13 @@ public sealed class SlideShowWindow : Window
             return;
         }
 
+        if (e.Key == Key.H)
+        {
+            ExecuteHiddenSlideReveal();
+            e.Handled = true;
+            return;
+        }
+
         if (TryHandleSlideNumberKey(e.Key.ToString()))
         {
             e.Handled = true;
@@ -598,7 +632,8 @@ public sealed class SlideShowWindow : Window
             ApplyHostCommand(SlideShowHostPlanner.PlanSlideNumberJump(
                 _controller,
                 _playbackRoute.Slides,
-                slideNumber));
+                slideNumber,
+                _playbackRoute.SourceSlideIndices));
         }
 
         return true;
@@ -611,7 +646,7 @@ public sealed class SlideShowWindow : Window
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
 
-        var slide = _controller.CurrentSlide;
+        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
         var pt = e.GetPosition(_slideCanvas);
         var inkResult = BeginPresenterInkStroke(pt.X, pt.Y);
         if (inkResult.IsHandled)
@@ -652,7 +687,9 @@ public sealed class SlideShowWindow : Window
                     _controller,
                     _presentation.Slides,
                     targetSlideIndex,
-                    pointerIntent.ReturnToParent));
+                    pointerIntent.ReturnToParent,
+                    pointerIntent.TransitionDurationMs,
+                    pointerIntent.ShowBackground));
                 break;
             case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
                 ActivateHyperlink(pointerIntent.Hyperlink);
@@ -667,7 +704,7 @@ public sealed class SlideShowWindow : Window
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        var slide = _controller.CurrentSlide;
+        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
         if (slide is null) { Cursor = Cursor.Default; return; }
         var pt    = e.GetPosition(_slideCanvas);
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
@@ -911,15 +948,22 @@ public sealed class SlideShowWindow : Window
         Close();
     }
 
-    private void NavigateToSlide(Slide slide, int index, bool animated, int? zoomTransitionDurationMs = null)
+    private void NavigateToSlide(
+        Slide slide,
+        int index,
+        bool animated,
+        int? zoomTransitionDurationMs = null,
+        bool zoomShowBackground = true)
     {
         _ = slide;
         _ = index;
-        DisplayCurrentSlide(animated, zoomTransitionDurationMs);
+        DisplayCurrentSlide(animated, zoomTransitionDurationMs, zoomShowBackground);
     }
 
     private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
     {
+        _revealedHiddenSlide = null;
+        _revealedHiddenSlideSourceIndex = -1;
         var now = nowUtc ?? DateTimeOffset.UtcNow;
         if (command.StopAutoAdvance)
             _autoAdvanceTimer.Stop();
@@ -938,7 +982,8 @@ public sealed class SlideShowWindow : Window
                     command.Slide,
                     command.SlideIndex,
                     command.AnimateSlide,
-                    command.TransitionDurationMs);
+                    command.TransitionDurationMs,
+                    command.UseDestinationBackground);
                 break;
         }
     }
@@ -950,20 +995,26 @@ public sealed class SlideShowWindow : Window
 
     // ── Slide display + transitions ───────────────────────────────────────────────
 
-    private void DisplayCurrentSlide(bool animated, int? zoomTransitionDurationMs = null)
+    private void DisplayCurrentSlide(
+        bool animated,
+        int? zoomTransitionDurationMs = null,
+        bool zoomShowBackground = true)
     {
         var plan = SlideShowHostPlanner.BuildDisplayPlan(
             _presentation,
             _controller,
             animated,
-            zoomTransitionDurationMs);
+            zoomTransitionDurationMs,
+            zoomShowBackground);
+        if (_revealedHiddenSlide is not null)
+            plan = plan with { Transition = null, AutoAdvanceAfterMs = null };
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
         _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
         _slideCanvas.RenderSlideBackground = true;
         RefreshInkOverlay();
 
-        var slide = plan.Slide;
+        var slide = _revealedHiddenSlide ?? plan.Slide;
         if (slide is null) return;
 
         // DA2: cancel any in-flight transition/animation timers from the PREVIOUS slide so
@@ -975,7 +1026,9 @@ public sealed class SlideShowWindow : Window
         var captionTracks = PresentationMediaTranscriptPlanner
             .BuildTranscriptPlan(_presentation)
             .Tracks
-            .Where(track => track.SlideIndex == CurrentPresentationSlideIndex)
+            .Where(track => track.SlideIndex == (_revealedHiddenSlideSourceIndex >= 0
+                ? _revealedHiddenSlideSourceIndex
+                : CurrentPresentationSlideIndex))
             .ToArray();
 
         _mediaController.EnterSlide(
@@ -1006,7 +1059,7 @@ public sealed class SlideShowWindow : Window
     {
         var width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : _slideDipW;
         var height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : _slideDipH;
-        var slide = _controller.CurrentSlide;
+        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
         if (slide is null)
         {
             _mediaController.SetCanvasBounds(width, height);
@@ -3715,7 +3768,7 @@ public sealed class SlideShowWindow : Window
 
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
-                PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));
+                PlayFallbackAnimation(anim, plan.DelayMs, plan.DurationMs);
                 continue;
             }
 
@@ -5902,6 +5955,35 @@ public sealed class SlideShowWindow : Window
     }
 
     /// <summary>Best-effort fallback for shapes without an overlay element.</summary>
+    private void PlayFallbackAnimation(ShapeAnimation animation, int delayMs, int durationMs)
+    {
+        var visibilityPlan = SlideShowPlaybackPlanner.PlanFallbackVisibility(animation);
+        if (visibilityPlan.SuppressAtStart)
+        {
+            _slideCanvas.SuppressedShapeIds.Add(animation.ShapeId);
+            _slideCanvas.Refresh();
+        }
+
+        if (visibilityPlan.SuppressAtStart || visibilityPlan.SuppressAtCompletion)
+        {
+            DelayedAction(
+                Math.Max(0, delayMs) + Math.Max(0, durationMs),
+                () =>
+                {
+                    if (visibilityPlan.SuppressAtCompletion)
+                        _slideCanvas.SuppressedShapeIds.Add(animation.ShapeId);
+                    else
+                        RevealShape(animation.ShapeId);
+
+                    _slideCanvas.Refresh();
+                });
+            return;
+        }
+
+        PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(animation, delayMs));
+    }
+
+    /// <summary>Best-effort emphasis fallback for shapes without an overlay element.</summary>
     private void PlayFallbackAnimation(SlideShowFallbackAnimationPlaybackPlan? plan)
     {
         if (plan is null) return;

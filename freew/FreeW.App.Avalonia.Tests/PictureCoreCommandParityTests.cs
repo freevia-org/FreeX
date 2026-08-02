@@ -407,6 +407,211 @@ public sealed class PictureCoreCommandParityTests
     }
 
     [Fact]
+    public async Task ImportedGlowAlpha_ControlsExpandedHaloAndPresetFallback()
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 16;
+            const int height = 12;
+            var source = OpaqueRaster(width, height);
+
+            static InlineImage GlowImage(int? importedAlpha)
+            {
+                return new InlineImage(OnePixelPng(), 160, 120)
+                {
+                    GlowSizePt = 12,
+                    GlowColorHex = "FF0000",
+                    ImportedEffects = importedAlpha is int alpha
+                        ? new ShapeEffectLst { HasGlow = true, GlowAlpha = alpha }
+                        : null,
+                };
+            }
+
+            var transparent = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(0));
+            var quarter = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(25000));
+            var opaque = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(100000));
+            var preset = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(null));
+            var importedDefault = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(60000));
+
+            static int OutsideAlpha(AvaloniaPictureEffectRaster raster)
+            {
+                var alpha = 0;
+                for (var y = 0; y < raster.Height; y++)
+                for (var x = 0; x < raster.Width; x++)
+                {
+                    var inSource = x >= raster.SourcePixelRect.X &&
+                                   x < raster.SourcePixelRect.Right &&
+                                   y >= raster.SourcePixelRect.Y &&
+                                   y < raster.SourcePixelRect.Bottom;
+                    if (!inSource)
+                        alpha += raster.Pixels[y * raster.Stride + x * 4 + 3];
+                }
+
+                return alpha;
+            }
+
+            OutsideAlpha(transparent).Should().Be(0);
+            OutsideAlpha(quarter).Should().BeGreaterThan(0).And.BeLessThan(OutsideAlpha(opaque));
+            preset.Pixels.Should().Equal(importedDefault.Pixels);
+            preset.SourcePixelRect.Should().Be(importedDefault.SourcePixelRect);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ImportedShadowAlpha_ControlsExpandedHaloAndPresetFallback()
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 16;
+            const int height = 12;
+            var source = OpaqueRaster(width, height);
+
+            static InlineImage ShadowImage(int? importedAlpha)
+            {
+                return new InlineImage(OnePixelPng(), 160, 120)
+                {
+                    ShadowPreset = 1,
+                    ImportedEffects = importedAlpha is int alpha
+                        ? new ShapeEffectLst { HasShadow = true, ShadowAlpha = alpha }
+                        : null,
+                };
+            }
+
+            var transparent = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(0));
+            var quarter = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(25000));
+            var opaque = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(100000));
+            var preset = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(null));
+            static int OutsideAlpha(AvaloniaPictureEffectRaster raster)
+            {
+                var alpha = 0;
+                for (var y = 0; y < raster.Height; y++)
+                for (var x = 0; x < raster.Width; x++)
+                {
+                    var inSource = x >= raster.SourcePixelRect.X &&
+                                   x < raster.SourcePixelRect.Right &&
+                                   y >= raster.SourcePixelRect.Y &&
+                                   y < raster.SourcePixelRect.Bottom;
+                    if (!inSource)
+                        alpha += raster.Pixels[y * raster.Stride + x * 4 + 3];
+                }
+
+                return alpha;
+            }
+
+            OutsideAlpha(transparent).Should().Be(0);
+            OutsideAlpha(quarter).Should().BeGreaterThan(0).And.BeLessThan(OutsideAlpha(opaque));
+            OutsideAlpha(preset).Should().BeGreaterThan(0);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ImportedShadowColor_ControlsExpandedHaloAndPresetFallback()
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 16;
+            const int height = 12;
+            var source = OpaqueRaster(width, height);
+
+            static InlineImage ShadowImage(string? importedColor)
+            {
+                return new InlineImage(OnePixelPng(), 160, 120)
+                {
+                    ShadowPreset = 1,
+                    ImportedEffects = importedColor is not null
+                        ? new ShapeEffectLst
+                        {
+                            HasShadow = true,
+                            ShadowAlpha = 100000,
+                            ShadowColorHex = importedColor,
+                        }
+                        : null,
+                };
+            }
+
+            var red = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage("FF0000"));
+            var preset = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(null));
+
+            static IEnumerable<(byte B, byte G, byte R, byte A)> OutsidePixels(
+                AvaloniaPictureEffectRaster raster)
+            {
+                for (var y = 0; y < raster.Height; y++)
+                for (var x = 0; x < raster.Width; x++)
+                {
+                    var inSource = x >= raster.SourcePixelRect.X &&
+                                   x < raster.SourcePixelRect.Right &&
+                                   y >= raster.SourcePixelRect.Y &&
+                                   y < raster.SourcePixelRect.Bottom;
+                    if (inSource)
+                        continue;
+
+                    var offset = y * raster.Stride + x * 4;
+                    yield return (
+                        raster.Pixels[offset],
+                        raster.Pixels[offset + 1],
+                        raster.Pixels[offset + 2],
+                        raster.Pixels[offset + 3]);
+                }
+            }
+
+            OutsidePixels(red).Should().Contain(pixel =>
+                pixel.R > 0 && pixel.G == 0 && pixel.B == 0 && pixel.A > 0);
+            OutsidePixels(preset).Where(pixel => pixel.A > 0)
+                .Should().OnlyContain(pixel => pixel.R == 0 && pixel.G == 0 && pixel.B == 0);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ImportedShadowDirection_ControlsExpandedRasterRegistration()
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 16;
+            const int height = 12;
+            var source = OpaqueRaster(width, height);
+
+            static InlineImage ShadowImage(int direction)
+            {
+                return new InlineImage(OnePixelPng(), 16, 12)
+                {
+                    ShadowPreset = 1,
+                    ImportedEffects = new ShapeEffectLst
+                    {
+                        HasShadow = true,
+                        ShadowBlurRad = 0,
+                        ShadowDist = 5 * 12700,
+                        ShadowDir = direction * 60000,
+                        ShadowAlpha = 100000,
+                    },
+                };
+            }
+
+            var east = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(0));
+            var west = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(180));
+            var north = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(90));
+
+            west.SourcePixelRect.X.Should().BeGreaterThan(east.SourcePixelRect.X);
+            north.SourcePixelRect.Y.Should().BeGreaterThan(east.SourcePixelRect.Y);
+            east.SourcePixelRect.Width.Should().Be(width);
+            east.SourcePixelRect.Height.Should().Be(height);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ExpandedEffectCacheFeedsInlineAndFloatingDrawRectsWithoutChangingSourceGeometry()
     {
         await Session.Dispatch(() =>

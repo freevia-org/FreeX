@@ -4,6 +4,7 @@ using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using WpfFloater = System.Windows.Documents.Floater;
 using WpfParagraph = System.Windows.Documents.Paragraph;
@@ -224,6 +225,37 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingImageReflection_UsesImportedStartAlphaAndDistance()
+    {
+        var doc = DocWithFloating();
+        var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        image.ReflectionPreset = 1;
+        image.ImportedEffects = new ShapeEffectLst
+        {
+            HasReflection = true,
+            ReflectionStartAlpha = 35000,
+            ReflectionStartPosition = 20000,
+            ReflectionEndAlpha = 10000,
+            ReflectionEndPosition = 80000,
+            ReflectionDist = 38100,
+        };
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+
+        var reflection = canvas.Children.OfType<StackPanel>().Should().ContainSingle().Which;
+        var surface = reflection.Children[1].Should().BeOfType<System.Windows.Shapes.Rectangle>().Subject;
+        surface.Margin.Top.Should().Be(4);
+        var mask = surface.OpacityMask.Should().BeOfType<System.Windows.Media.LinearGradientBrush>().Subject;
+        mask.GradientStops[0].Color.A.Should().Be((byte)(0.35 * 255));
+        mask.GradientStops[0].Offset.Should().Be(0.2);
+        mask.GradientStops[1].Color.A.Should().Be((byte)(0.1 * 255));
+        mask.GradientStops[1].Offset.Should().Be(0.8);
+    }
+
+    [StaFact]
     public void ObjectFormatSquareImage_UsesWordMeasuredReflectionDistance()
     {
         var canvas = new Canvas();
@@ -268,6 +300,106 @@ public sealed class FloatingImageRenderTests
 
         Canvas.GetTop(canvas.Children.OfType<FrameworkElement>().Single())
             .Should().BeApproximately(123.3333333333, 0.01);
+    }
+
+    [StaFact]
+    public void FloatingImageGlow_UsesImportedAlphaAndPreservesPresetFallback()
+    {
+        static double RenderOpacity(ShapeEffectLst? importedEffects)
+        {
+            var doc = DocWithFloating();
+            var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+            image.GlowSizePt = 5;
+            image.ImportedEffects = importedEffects;
+
+            var canvas = new Canvas();
+            var view = new DocumentView();
+            view.SetFloatingCanvas(canvas);
+            view.LoadModel(doc);
+
+            return canvas.Children.OfType<Image>().Single().Effect
+                .Should().BeOfType<DropShadowEffect>().Subject.Opacity;
+        }
+
+        RenderOpacity(new ShapeEffectLst { HasGlow = true, GlowAlpha = 0 }).Should().Be(0);
+        RenderOpacity(new ShapeEffectLst { HasGlow = true, GlowAlpha = 25000 }).Should().Be(0.25);
+        RenderOpacity(new ShapeEffectLst { HasGlow = true, GlowAlpha = 100000 }).Should().Be(1);
+        RenderOpacity(null).Should().Be(PictureEffectVisualPlanner.PresetGlowOpacity);
+    }
+
+    [StaFact]
+    public void FloatingImageShadow_UsesImportedAlphaAndPreservesPresetFallback()
+    {
+        static double RenderOpacity(ShapeEffectLst? importedEffects)
+        {
+            var doc = DocWithFloating();
+            var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+            image.ShadowPreset = 2;
+            image.ImportedEffects = importedEffects;
+
+            var canvas = new Canvas();
+            var view = new DocumentView();
+            view.SetFloatingCanvas(canvas);
+            view.LoadModel(doc);
+
+            return canvas.Children.OfType<Image>().Single().Effect
+                .Should().BeOfType<DropShadowEffect>().Subject.Opacity;
+        }
+
+        RenderOpacity(new ShapeEffectLst { HasShadow = true, ShadowAlpha = 0 }).Should().Be(0);
+        RenderOpacity(new ShapeEffectLst { HasShadow = true, ShadowAlpha = 25000 }).Should().Be(0.25);
+        RenderOpacity(new ShapeEffectLst { HasShadow = true, ShadowAlpha = 100000 }).Should().Be(1);
+        RenderOpacity(null).Should().Be(0.55);
+    }
+
+    [StaFact]
+    public void FloatingImageShadow_UsesImportedColorAndPreservesBlackPresetFallback()
+    {
+        static System.Windows.Media.Color RenderColor(ShapeEffectLst? importedEffects)
+        {
+            var doc = DocWithFloating();
+            var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+            image.ShadowPreset = 1;
+            image.ImportedEffects = importedEffects;
+
+            var canvas = new Canvas();
+            var view = new DocumentView();
+            view.SetFloatingCanvas(canvas);
+            view.LoadModel(doc);
+
+            return canvas.Children.OfType<Image>().Single().Effect
+                .Should().BeOfType<DropShadowEffect>().Subject.Color;
+        }
+
+        RenderColor(new ShapeEffectLst { HasShadow = true, ShadowColorHex = "102030" })
+            .Should().Be(System.Windows.Media.Color.FromRgb(0x10, 0x20, 0x30));
+        RenderColor(null).Should().Be(System.Windows.Media.Colors.Black);
+    }
+
+    [StaFact]
+    public void FloatingImageShadow_UsesImportedBlurDistanceAndDirection()
+    {
+        var doc = DocWithFloating();
+        var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        image.ShadowPreset = 1;
+        image.ImportedEffects = new ShapeEffectLst
+        {
+            HasShadow = true,
+            ShadowBlurRad = 76200,
+            ShadowDist = 63500,
+            ShadowDir = 5400000,
+        };
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+
+        var effect = canvas.Children.OfType<Image>().Single().Effect
+            .Should().BeOfType<DropShadowEffect>().Subject;
+        effect.BlurRadius.Should().Be(6);
+        effect.ShadowDepth.Should().Be(5);
+        effect.Direction.Should().Be(90);
     }
 
     [StaFact]

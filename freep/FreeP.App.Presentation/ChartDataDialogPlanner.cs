@@ -266,6 +266,10 @@ public sealed class ChartDataDialogPlanner
         {
             _chartType = chartType;
             EnsureCoordinateShape();
+            if (chartType == ChartType.Stock)
+            {
+                EnsureStockSeriesShape();
+            }
             if (IsScatterLike(chartType))
             {
                 SeedMissingCoordinates();
@@ -582,6 +586,36 @@ public sealed class ChartDataDialogPlanner
 
     private static bool IsScatterLike(ChartType chartType) =>
         chartType is ChartType.Scatter or ChartType.Bubble;
+
+    private void EnsureStockSeriesShape()
+    {
+        // A stockChart's OHLC roles are carried by four series. Keep existing
+        // values when changing an ordinary chart to Stock, then add only the
+        // missing roles so the result is immediately renderable and editable.
+        string[] names = ["Open", "High", "Low", "Close"];
+        while (_grid.SeriesCount < names.Length)
+            _grid.AddSeries(names[_grid.SeriesCount]);
+
+        if (_grid.SeriesCount > names.Length &&
+            names.Skip(1).All(name => FindSeriesIndex(name) >= 0))
+        {
+            return;
+        }
+
+        for (var index = 0; index < names.Length; index++)
+            _grid.SetSeriesName(index, names[index]);
+    }
+
+    private int FindSeriesIndex(string name)
+    {
+        for (var index = 0; index < _grid.SeriesCount; index++)
+        {
+            if (string.Equals(_grid.GetSeriesName(index), name, StringComparison.OrdinalIgnoreCase))
+                return index;
+        }
+
+        return -1;
+    }
 
     private static IReadOnlyList<ChartDataDialogValueKind> ColumnKinds(ChartType chartType) =>
         chartType switch

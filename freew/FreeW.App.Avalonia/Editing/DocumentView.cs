@@ -471,7 +471,9 @@ public sealed class DocumentView : Control
         bool UnderlineIndeterminate     = false,
         bool StrikethroughIndeterminate = false,
         bool FamilyIndeterminate        = false,
-        bool SizeIndeterminate          = false);
+        bool SizeIndeterminate          = false,
+        bool DoubleStrikethroughIndeterminate = false,
+        bool HiddenIndeterminate        = false);
 
     public string GetCellText(int block, int row, int col)
     {
@@ -3404,7 +3406,7 @@ public sealed class DocumentView : Control
                 _ => 0,
             };
             var baselineFromTopPt = (yWithinPagePx + drawOffsetDip) / PxPerPoint + fontSizePt;
-            var yPt = pageHeightPt - baselineFromTopPt;
+            var yPt = pageHeightPt - baselineFromTopPt + runFmt.PositionPt;
 
             var decorationPlan = RunDecorationVisualPlanner.Build(runFmt, PxPerPoint);
             if (decorationPlan.HasBackground)
@@ -3476,7 +3478,8 @@ public sealed class DocumentView : Control
             if (runFmt.Underline)
             {
                 var underlineY = pageHeightPt
-                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.82) / PxPerPoint;
+                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.82) / PxPerPoint
+                    + runFmt.PositionPt;
                 pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
                     Math.Max(0, xPt),
                     underlineY,
@@ -3486,10 +3489,27 @@ public sealed class DocumentView : Control
                     decorationLineWidthPt));
             }
 
-            if (runFmt.Strikethrough)
+            if (runFmt.DoubleStrikethrough)
+            {
+                foreach (var fraction in new[] { 0.46, 0.54 })
+                {
+                    var strikeY = pageHeightPt
+                        - (yWithinPagePx + Math.Max(1, runLineHeight) * fraction) / PxPerPoint
+                        + runFmt.PositionPt;
+                    pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
+                        Math.Max(0, xPt),
+                        strikeY,
+                        Math.Max(0, xPt) + runWidthPt,
+                        strikeY,
+                        color,
+                        decorationLineWidthPt));
+                }
+            }
+            else if (runFmt.Strikethrough)
             {
                 var strikeY = pageHeightPt
-                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.5) / PxPerPoint;
+                    - (yWithinPagePx + Math.Max(1, runLineHeight) * 0.5) / PxPerPoint
+                    + runFmt.PositionPt;
                 pagesOps[runPageIndex].Add(new Free.Shared.Pdf.PdfLine(
                     Math.Max(0, xPt),
                     strikeY,
@@ -4128,7 +4148,7 @@ public sealed class DocumentView : Control
             var fontSizePt = fmt.FontSizePt ?? DefaultFontSizePt;
             var xPt = (xDip - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
             var yWithinPagePx = yDip - _surfacePlan.PageTopDip(pageIndex);
-            var yPt = pageHeightPt - (yWithinPagePx / PxPerPoint + fontSizePt);
+            var yPt = pageHeightPt - (yWithinPagePx / PxPerPoint + fontSizePt) + fmt.PositionPt;
             var face = fmt.Bold ? Free.Shared.Pdf.PdfFontFace.Bold : Free.Shared.Pdf.PdfFontFace.Regular;
             pagesOps[pageIndex].Add(new Free.Shared.Pdf.PdfText(
                 Math.Max(0, xPt), yPt, fontSizePt, face, ParseColor(fmt.ColorHex), text));
@@ -5066,9 +5086,9 @@ public sealed class DocumentView : Control
             ? string.Empty
             : $"{border.ColorHex}|{border.WidthPt}|{border.BottomOnly}|{border.LineStyle}|" +
               $"{border.Top}|{border.Left}|{border.Bottom}|{border.Right}";
-        return $"{fmt.FontFamily}|{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.VerticalAlign}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
+        return $"{fmt.FontFamily}|{fmt.Bold}|{fmt.Italic}|{fmt.FontSizePt}|{fmt.VerticalAlign}|{fmt.PositionPt}|{fmt.ColorHex}|{fmt.HighlightColorHex}|" +
                $"{fmt.CharacterShadingHex}|{fmt.CharacterShadingPattern}|{fmt.Underline}|" +
-               $"{fmt.Strikethrough}|{borderKey}";
+               $"{fmt.Strikethrough}|{fmt.DoubleStrikethrough}|{borderKey}";
     }
 
     private static DocumentFloatingObjectSnapshot BuildInlineDrawingSnapshot(
@@ -6278,7 +6298,8 @@ public sealed class DocumentView : Control
                 return;
 
             var fontSizePt = currentFormatting.FontSizePt ?? DefaultFontSizePt;
-            var baselineDip = currentY + currentHeight * 0.82;
+            var baselineDip = currentY + currentHeight * 0.82
+                + RunBaselinePositionPlanner.ResolveOffsetDip(currentFormatting, PxPerPoint);
             var baselinePt = pageHeightPt - ((baselineDip - pageTopDip) / PxPerPoint);
             var face = currentFormatting.Bold
                 ? currentFormatting.Italic ? PdfFontFace.BoldItalic : PdfFontFace.Bold
@@ -7088,6 +7109,9 @@ public sealed class DocumentView : Control
             {
                 var run = para.Runs[runIndex];
                 var effectiveFormatting = ResolveRunFmt(run.Formatting, para);
+                if (sb.Length > 0 && effectiveFormatting != segFmt)
+                    FlushText();
+                segFmt = effectiveFormatting;
                 if (IsTextHiddenInCurrentView(effectiveFormatting))
                 {
                     FlushText();
@@ -7099,9 +7123,6 @@ public sealed class DocumentView : Control
                 var fieldText = ResolveHfField(run, pageNumberText, pageCount);
                 var isField = fieldText is not null;
                 var text = fieldText ?? run.Text;
-                if (effectiveFormatting.FontSizePt.HasValue)
-                    segFmt = effectiveFormatting;
-
                 if (run.Image is { } image)
                 {
                     FlushText();
@@ -9235,7 +9256,7 @@ public sealed class DocumentView : Control
             // AV-COL-NONTXT AG2: shift X to the column band that this image's content-Y falls in.
             var x = ColumnLeftFor(imgContentY) + AlignmentOffset(alignment, textWidth, width);
             _images.Add((new Rect(x, imgPageSpaceY, width, height), DecodeRenderedImage(image), image, image.ReflectionPreset));
-            _layoutContentY = imgContentY + height + ReflectionExtraHeight(image.ReflectionPreset, height) + gap;
+            _layoutContentY = imgContentY + height + ReflectionExtraHeight(image, height) + gap;
         }
     }
 
@@ -9335,7 +9356,7 @@ public sealed class DocumentView : Control
                 _images.Add((new Rect(x, pageSpaceY, width, height), DecodeRenderedImage(image), image, image.ReflectionPreset));
                 _placed.Add(new PlacedChar(blockIndex, glyphOffset++, x, pageSpaceY, 0, height,
                     RunFormatting.Default, '\0', Sentinel: false));
-                _layoutContentY = contentY + height + ReflectionExtraHeight(image.ReflectionPreset, height) + gap;
+                _layoutContentY = contentY + height + ReflectionExtraHeight(image, height) + gap;
                 continue;
             }
 
@@ -11088,6 +11109,10 @@ public sealed class DocumentView : Control
             var formatRevisionHighlighted = pc.HasFormatRevision && reviewPolicy.ShouldHighlightFormattingChanges;
             if (formatRevisionHighlighted && string.IsNullOrWhiteSpace(drawFmt.ColorHex))
                 drawFmt = drawFmt with { ColorHex = ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor) };
+            var baselineOffsetDip = RunBaselinePositionPlanner.ResolveOffsetDip(drawFmt, PxPerPoint);
+            var positionedPc = Math.Abs(baselineOffsetDip) < 0.001
+                ? pc
+                : pc with { Y = pc.Y + baselineOffsetDip };
 
             if (pc.EquationElement is { } equationElement)
             {
@@ -11105,28 +11130,27 @@ public sealed class DocumentView : Control
                 DrawCharacterBorder(context, placedIndex, pc, decorationPlan);
                 // Still draw underline/strikethrough across the tab gap if the run has them.
                 if (drawFmt.Underline)
-                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
-                if (drawFmt.Strikethrough)
-                    DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
-                DrawRevisionDecoration(context, pc, revisionDecision, revisionColorHex);
+                    DrawDecoration(context, positionedPc, positionedPc.Y + pc.LineHeight * 0.82, drawFmt);
+                DrawStrikethroughDecorations(context, positionedPc, drawFmt);
+                DrawRevisionDecoration(context, positionedPc, revisionDecision, revisionColorHex);
                 if (formatRevisionHighlighted)
-                    DrawFormatRevisionDecoration(context, pc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
+                    DrawFormatRevisionDecoration(context, positionedPc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
                 continue;
             }
 
             var ft = Build(pc.Ch.ToString(), drawFmt);
+            drawY += baselineOffsetDip;
             context.DrawText(ft, new Point(pc.X, drawY));
 
             DrawCharacterBorder(context, placedIndex, pc, decorationPlan);
             if (drawFmt.Underline)
-                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.82, drawFmt);
-            if (drawFmt.Strikethrough)
-                DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, drawFmt);
-            DrawRevisionDecoration(context, pc, revisionDecision, revisionColorHex);
+                DrawDecoration(context, positionedPc, positionedPc.Y + pc.LineHeight * 0.82, drawFmt);
+            DrawStrikethroughDecorations(context, positionedPc, drawFmt);
+            DrawRevisionDecoration(context, positionedPc, revisionDecision, revisionColorHex);
             if (formatRevisionHighlighted)
-                DrawFormatRevisionDecoration(context, pc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
+                DrawFormatRevisionDecoration(context, positionedPc, ReviewRevisionColorPlanner.ResolveColorHex(revisionColors, pc.FormatRevisionAuthor));
             if (!pc.IsCell && proofingOffsets.Contains((pc.Block, pc.Offset)))
-                DrawProofingSquiggle(context, pc);
+                DrawProofingSquiggle(context, positionedPc);
         }
 
         foreach (var (mx, my, text, fmt) in _markers)
@@ -11174,7 +11198,8 @@ public sealed class DocumentView : Control
                 var ft = Build(item.Text, item.Fmt);
                 var alignOffset = AlignmentOffset(item.Alignment, item.AvailableWidth,
                     ft.WidthIncludingTrailingWhitespace, isLast: true);
-                context.DrawText(ft, new Point(item.X + alignOffset, item.Y));
+                var baselineOffsetDip = RunBaselinePositionPlanner.ResolveOffsetDip(item.Fmt, PxPerPoint);
+                context.DrawText(ft, new Point(item.X + alignOffset, item.Y + baselineOffsetDip));
             }
 
             // AV-NOTERENDER: footnote-band separators + footnote/endnote text (pre-computed in
@@ -11194,6 +11219,7 @@ public sealed class DocumentView : Control
                     drawFmt = drawFmt with { FontSizePt = sz };
                     drawY = note.Y - (note.Fmt.FontSizePt ?? NoteFontSizePt) * PxPerPoint * 0.15;
                 }
+                drawY += RunBaselinePositionPlanner.ResolveOffsetDip(drawFmt, PxPerPoint);
                 context.DrawText(Build(note.Text, drawFmt), new Point(note.X, drawY));
             }
 
@@ -11505,7 +11531,7 @@ public sealed class DocumentView : Control
             {
                 var visualRect = rendered.VisualRect(rect);
                 context.DrawImage(rendered.Bitmap, visualRect);
-                DrawFloatingImageReflection(context, rect, rendered, reflectionPreset);
+                DrawFloatingImageReflection(context, rect, rendered, model);
             }
             else
             {
@@ -11566,16 +11592,15 @@ public sealed class DocumentView : Control
         DrawingContext context,
         Rect imageRect,
         AvaloniaRenderedImage rendered,
-        int reflectionPreset)
+        InlineImage image)
     {
-        var parameters = ReflectionParameters(reflectionPreset);
+        var parameters = ReflectionParameters(image);
         if (parameters is null)
             return;
 
-        var (opacity, distance) = parameters.Value;
         var reflectionRect = new Rect(
             imageRect.X,
-            imageRect.Bottom + distance,
+            imageRect.Bottom + parameters.DistanceDip,
             imageRect.Width,
             imageRect.Height);
         var fadeMask = new LinearGradientBrush
@@ -11584,8 +11609,11 @@ public sealed class DocumentView : Control
             EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
         };
         fadeMask.GradientStops.Add(new global::Avalonia.Media.GradientStop(
-            Color.FromArgb((byte)Math.Round(opacity * 255), 0, 0, 0), 0));
-        fadeMask.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromArgb(0, 0, 0, 0), 1));
+            Color.FromArgb((byte)Math.Round(parameters.Opacity * 255), 0, 0, 0),
+            parameters.StartPosition));
+        fadeMask.GradientStops.Add(new global::Avalonia.Media.GradientStop(
+            Color.FromArgb((byte)Math.Round(parameters.EndOpacity * 255), 0, 0, 0),
+            parameters.EndPosition));
 
         var mirror = Matrix.Identity;
         mirror = mirror * Matrix.CreateTranslation(0, -imageRect.Bottom);
@@ -11598,20 +11626,13 @@ public sealed class DocumentView : Control
         context.DrawImage(rendered.Bitmap, rendered.VisualRect(imageRect));
     }
 
-    private static (double Opacity, double Distance)? ReflectionParameters(int preset) => preset switch
-    {
-        1 => (0.5, 0),
-        2 => (0.5, 4 * PxPerPoint),
-        3 => (0.5, 8 * PxPerPoint),
-        4 => (1.0, 0),
-        5 => (1.0, 4 * PxPerPoint),
-        _ => null,
-    };
+    internal static PictureReflectionVisualPlan? ReflectionParameters(InlineImage image) =>
+        PictureEffectVisualPlanner.BuildReflectionPlan(image);
 
-    private static double ReflectionExtraHeight(int preset, double imageHeight)
+    private static double ReflectionExtraHeight(InlineImage image, double imageHeight)
     {
-        return ReflectionParameters(preset) is { } parameters
-            ? imageHeight + parameters.Distance
+        return ReflectionParameters(image) is { } parameters
+            ? imageHeight + parameters.DistanceDip
             : 0;
     }
 
@@ -11816,10 +11837,19 @@ public sealed class DocumentView : Control
                         context.DrawLine(decorationPen,
                             new Point(point.X, point.Y + glyph.Height * 0.82),
                             new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.82));
-                    if (glyph.Formatting.Strikethrough)
+                    if (glyph.Formatting.DoubleStrikethrough)
+                    {
+                        foreach (var fraction in new[] { 0.46, 0.54 })
+                            context.DrawLine(decorationPen,
+                                new Point(point.X, point.Y + glyph.Height * fraction),
+                                new Point(point.X + glyph.Width, point.Y + glyph.Height * fraction));
+                    }
+                    else if (glyph.Formatting.Strikethrough)
+                    {
                         context.DrawLine(decorationPen,
                             new Point(point.X, point.Y + glyph.Height * 0.5),
                             new Point(point.X + glyph.Width, point.Y + glyph.Height * 0.5));
+                    }
                 }
                 rotation?.Dispose();
             }
@@ -15523,6 +15553,19 @@ public sealed class DocumentView : Control
         context.DrawLine(pen, new Point(pc.X, yLine), new Point(pc.X + pc.W, yLine));
     }
 
+    private void DrawStrikethroughDecorations(DrawingContext context, PlacedChar pc, RunFormatting formatting)
+    {
+        if (formatting.DoubleStrikethrough)
+        {
+            DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.46, formatting);
+            DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.54, formatting);
+        }
+        else if (formatting.Strikethrough)
+        {
+            DrawDecoration(context, pc, pc.Y + pc.LineHeight * 0.5, formatting);
+        }
+    }
+
     /// <summary>
     /// AV-TRACKEDIT: draw the tracked-change mark for a glyph — a revision-coloured underline under a tracked
     /// insertion (Word's w:ins decoration) or a revision-coloured strikethrough across a tracked deletion
@@ -17846,6 +17889,10 @@ public sealed class DocumentView : Control
     public void ToggleItalic() => ToggleRunFlag(f => f.Italic, (f, v) => f with { Italic = v });
     public void ToggleUnderline() => ToggleRunFlag(f => f.Underline, (f, v) => f with { Underline = v });
     public void ToggleStrikethrough() => ToggleRunFlag(f => f.Strikethrough, (f, v) => f with { Strikethrough = v });
+    public void ToggleDoubleStrikethrough() => ToggleRunFlag(
+        f => f.DoubleStrikethrough,
+        (f, v) => f with { DoubleStrikethrough = v });
+    public void ToggleHidden() => ToggleRunFlag(f => f.Hidden, (f, v) => f with { Hidden = v });
     public void ToggleSmallCaps() => ToggleRunFlag(f => f.SmallCaps, (f, v) => f with { SmallCaps = v });
     public void ToggleAllCaps() => ToggleRunFlag(f => f.AllCaps, (f, v) => f with { AllCaps = v });
 
@@ -21561,6 +21608,7 @@ public sealed class DocumentView : Control
         Italic        = baseRun.Italic || styleRun.Italic,
         Underline     = baseRun.Underline || styleRun.Underline,
         Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
+        DoubleStrikethrough = baseRun.DoubleStrikethrough || styleRun.DoubleStrikethrough,
         Hidden        = baseRun.Hidden || styleRun.Hidden,
         WebHidden     = baseRun.WebHidden || styleRun.WebHidden,
         NoProof       = baseRun.NoProof || styleRun.NoProof,
@@ -21632,6 +21680,8 @@ public sealed class DocumentView : Control
         var italicMixed     = false;
         var underlineMixed  = false;
         var strikeMixed     = false;
+        var doubleStrikeMixed = false;
+        var hiddenMixed     = false;
         var familyMixed     = false;
         var sizeMixed       = false;
 
@@ -21642,6 +21692,8 @@ public sealed class DocumentView : Control
             if (fmt.Italic      != firstFmt.Italic)      italicMixed    = true;
             if (fmt.Underline   != firstFmt.Underline)   underlineMixed = true;
             if (fmt.Strikethrough != firstFmt.Strikethrough) strikeMixed = true;
+            if (fmt.DoubleStrikethrough != firstFmt.DoubleStrikethrough) doubleStrikeMixed = true;
+            if (fmt.Hidden      != firstFmt.Hidden)      hiddenMixed    = true;
             if (fmt.FontFamily  != firstFmt.FontFamily)  familyMixed    = true;
             if (fmt.FontSizePt  != firstFmt.FontSizePt)  sizeMixed      = true;
         }
@@ -21654,7 +21706,9 @@ public sealed class DocumentView : Control
             UnderlineIndeterminate:     underlineMixed,
             StrikethroughIndeterminate: strikeMixed,
             FamilyIndeterminate:        familyMixed,
-            SizeIndeterminate:          sizeMixed);
+            SizeIndeterminate:          sizeMixed,
+            DoubleStrikethroughIndeterminate: doubleStrikeMixed,
+            HiddenIndeterminate:        hiddenMixed);
     }
 
     // ── Undo-group pass-throughs (used by FontDialog to group all format steps) ─────────────────
@@ -23180,6 +23234,7 @@ public sealed class DocumentView : Control
         Italic = baseRun.Italic || over.Italic,
         Underline = baseRun.Underline || over.Underline,
         Strikethrough = baseRun.Strikethrough || over.Strikethrough,
+        DoubleStrikethrough = baseRun.DoubleStrikethrough || over.DoubleStrikethrough,
         Hidden = baseRun.Hidden || over.Hidden,
         WebHidden = baseRun.WebHidden || over.WebHidden,
         NoProof = baseRun.NoProof || over.NoProof,
@@ -23641,13 +23696,21 @@ public sealed class DocumentView : Control
             fmt.Italic ? FontStyle.Italic : FontStyle.Normal,
             fmt.Bold ? FontWeight.Bold : FontWeight.Normal);
 
-        return new FormattedText(
+        var formatted = new FormattedText(
             text,
             CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
             typeface,
             FontSizePx(fmt),
             BrushFor(fmt.ColorHex));
+        var featurePlan = RunOpenTypeFeaturePlanner.Build(fmt);
+        if (featurePlan.AvaloniaFeatureSettings.Count > 0)
+        {
+            formatted.SetFontFeatures(new FontFeatureCollection(
+                featurePlan.AvaloniaFeatureSettings.Select(FontFeature.Parse)));
+        }
+
+        return formatted;
     }
 
     // Layout must use the same superscript/subscript scale that drawing uses. Otherwise a marker

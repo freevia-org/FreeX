@@ -61,6 +61,32 @@ public sealed class SlideShowCustomShowPlannerTests
     }
 
     [Fact]
+    public void FindNextHiddenSlide_RevealsTheNextHiddenDeckSlide()
+    {
+        var presentation = MakePresentation("Intro", "Hidden one", "Visible", "Hidden two");
+        presentation.Slides[1].IsHidden = true;
+        presentation.Slides[3].IsHidden = true;
+        var route = SlideShowCustomShowPlanner.BuildFullPresentationRoute(presentation);
+
+        var target = SlideShowHostPlanner.FindNextHiddenSlide(presentation, route, 0);
+
+        target!.Slide.Title.Should().Be("Hidden one");
+        target.SourceSlideIndex.Should().Be(1);
+    }
+
+    [Fact]
+    public void FindNextHiddenSlide_DoesNotRevealSlidesOutsideCustomShow()
+    {
+        var presentation = MakePresentation("Intro", "Hidden", "Review");
+        presentation.Slides[1].IsHidden = true;
+        var route = SlideShowCustomShowPlanner.BuildCustomShowRoute(
+            presentation,
+            new SlideShowCustomSlideSequence("Review", new[] { presentation.Slides[0].Id, presentation.Slides[2].Id }));
+
+        SlideShowHostPlanner.FindNextHiddenSlide(presentation, route, 0).Should().BeNull();
+    }
+
+    [Fact]
     public void TryBuildNamedCustomShowRoute_SelectsShowByNameCaseInsensitively()
     {
         var presentation = MakePresentation("Intro", "Deep dive", "Appendix");

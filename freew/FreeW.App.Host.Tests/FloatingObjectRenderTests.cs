@@ -298,7 +298,10 @@ public sealed class FloatingObjectRenderTests
             Italic = true,
             Underline = true,
             Strikethrough = true,
-            ColorHex = "#C00000"
+            ColorHex = "#C00000",
+            NumberForm = NumberForm.OldStyle,
+            NumberSpacing = NumberSpacing.Tabular,
+            StylisticSet = 4,
         }));
         var second = new Paragraph();
         second.Runs.Add(new Run("next", RunFormatting.Default with { FontFamily = "Courier New" }));
@@ -328,6 +331,9 @@ public sealed class FloatingObjectRenderTests
             .Be(Color.FromRgb(0xC0, 0x00, 0x00));
         richGlyph.TextDecorations.Should().Contain(decoration => decoration.Location == TextDecorationLocation.Underline);
         richGlyph.TextDecorations.Should().Contain(decoration => decoration.Location == TextDecorationLocation.Strikethrough);
+        System.Windows.Documents.Typography.GetNumeralStyle(richGlyph).Should().Be(FontNumeralStyle.OldStyle);
+        System.Windows.Documents.Typography.GetNumeralAlignment(richGlyph).Should().Be(FontNumeralAlignment.Tabular);
+        System.Windows.Documents.Typography.GetStylisticSet4(richGlyph).Should().BeTrue();
         Canvas.GetTop(glyphs[4]).Should().BeGreaterThan(Canvas.GetTop(glyphs[0]),
             "the second paragraph must use a shared hard-break line");
     }

@@ -711,6 +711,37 @@ public sealed class EditingSession
         _selectedShapeIds.Count == 1
         && SetZoomObjectProperties(_selectedShapeIds[0], properties);
 
+    /// <summary>Applies supported Zoom properties to one Summary Zoom tile only.</summary>
+    public bool SetSummaryZoomTileProperties(
+        uint shapeId,
+        string sectionId,
+        ZoomObjectProperties properties)
+    {
+        var slide = CurrentSlide;
+        var shape = slide is null ? null : FindShape(slide.Shapes, shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom }
+            || shape.PreservedObject?.ObjectKind != PreservedObjectKind.Zoom
+            || string.IsNullOrWhiteSpace(sectionId)
+            || shape.PreservedObject.SummaryZoomTargets.All(target =>
+                !string.Equals(target.SectionId, sectionId, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        var before = shape.PreservedObject.RawXml;
+        Bus.Execute(new SetSummaryZoomTilePropertiesCommand(
+            _currentSlideIndex,
+            shapeId,
+            sectionId,
+            properties));
+        return !string.Equals(before, shape.PreservedObject.RawXml, StringComparison.Ordinal);
+    }
+
+    /// <summary>Applies supported properties to one selected Summary Zoom tile.</summary>
+    public bool SetSelectedSummaryZoomTileProperties(
+        string sectionId,
+        ZoomObjectProperties properties) =>
+        _selectedShapeIds.Count == 1
+        && SetSummaryZoomTileProperties(_selectedShapeIds[0], sectionId, properties);
+
     /// <summary>Sets a user-authored cover image on one Slide or Section Zoom.</summary>
     public bool SetZoomCoverImage(uint shapeId, byte[] imageBytes, string contentType)
     {
@@ -2127,6 +2158,128 @@ public sealed class EditingSession
     }
 
     /// <summary>
+    /// Applies a prepared caption mutation through the shared command bus so caption authoring
+    /// participates in the same undo/redo contract as the other slide edits.
+    /// </summary>
+    public PresentationMediaCaptionTrackMutationResult ApplyMediaCaptionAuthoring(
+        PresentationMediaCaptionAuthoringMutationPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var mediaShape = PresentationMediaTranscriptPlanner.FindSelectedMediaShape(
+            CurrentSlide,
+            SelectedShapeIds);
+        var media = mediaShape?.Media;
+        if (mediaShape is null || media is null)
+            return PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(media, plan);
+
+        var before = CloneCaptionTracks(media.CaptionTracks);
+        var staged = new MediaInfo
+        {
+            IsVideo = media.IsVideo,
+            PlaybackStartMode = media.PlaybackStartMode,
+            Loop = media.Loop,
+            Bytes = media.Bytes.ToArray(),
+            ContentType = media.ContentType,
+            SourcePackagePath = media.SourcePackagePath,
+            LinkUrl = media.LinkUrl
+        };
+        staged.CaptionTracks.AddRange(CloneCaptionTracks(before));
+
+        var result = PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(staged, plan);
+        if (!result.Succeeded)
+            return result;
+
+        Bus.Execute(new SetMediaCaptionTracksCommand(
+            CurrentSlideIndex,
+            mediaShape.Id,
+            before,
+            staged.CaptionTracks));
+
+        if (result.TrackIndex >= 0 && result.TrackIndex < media.CaptionTracks.Count)
+            return PresentationMediaCaptionTrackMutationResult.Success(
+                result.TrackIndex,
+                media.CaptionTracks[result.TrackIndex]);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Runs a custom-show authoring mutation against a staged snapshot and commits the resulting
+    /// collection through the shared undo bus. The planner remains responsible for validation and
+    /// normalization; the command bus owns the reversible presentation state transition.
+    /// </summary>
+    public T ApplyCustomShowMutation<T>(Func<Presentation, T> mutation)
+    {
+        ArgumentNullException.ThrowIfNull(mutation);
+
+        var before = CloneCustomShows(Presentation.CustomShows);
+        T result;
+        try
+        {
+            result = mutation(Presentation);
+        }
+        catch
+        {
+            RestoreCustomShows(Presentation, before);
+            throw;
+        }
+
+        var after = CloneCustomShows(Presentation.CustomShows);
+        RestoreCustomShows(Presentation, before);
+        if (!CustomShowsEqual(before, after))
+        {
+            Bus.Execute(new ReplaceCustomShowsCommand(before, after));
+        }
+
+        return result;
+    }
+
+    private static List<MediaCaptionTrackInfo> CloneCaptionTracks(
+        IEnumerable<MediaCaptionTrackInfo> tracks) =>
+        tracks.Select(track => new MediaCaptionTrackInfo
+        {
+            RelationshipId = track.RelationshipId,
+            Source = track.Source,
+            Bytes = track.Bytes.ToArray(),
+            ContentType = track.ContentType,
+            Language = track.Language,
+            Label = track.Label,
+            IsExternal = track.IsExternal
+        }).ToList();
+
+    private static List<PresentationCustomShow> CloneCustomShows(
+        IEnumerable<PresentationCustomShow> shows) =>
+        shows.Select(show =>
+        {
+            var clone = new PresentationCustomShow { Id = show.Id, Name = show.Name };
+            clone.SlideIds.AddRange(show.SlideIds);
+            return clone;
+        }).ToList();
+
+    private static void RestoreCustomShows(
+        Presentation presentation,
+        IReadOnlyList<PresentationCustomShow> shows)
+    {
+        presentation.CustomShows.Clear();
+        foreach (var show in CloneCustomShows(shows))
+            presentation.CustomShows.Add(show);
+    }
+
+    private static bool CustomShowsEqual(
+        IReadOnlyList<PresentationCustomShow> left,
+        IReadOnlyList<PresentationCustomShow> right)
+    {
+        if (left.Count != right.Count)
+            return false;
+
+        return left.Zip(right).All(pair =>
+            pair.First.Id == pair.Second.Id
+            && pair.First.Name == pair.Second.Name
+            && pair.First.SlideIds.SequenceEqual(pair.Second.SlideIds));
+    }
+
+    /// <summary>
     /// Creates and inserts an embedded OLE package from raw file bytes. The package payload
     /// remains editable/activatable after save and the insertion is one undoable shape add.
     /// </summary>
@@ -2453,16 +2606,35 @@ public sealed class EditingSession
             Legend    = LegendPosition.Bottom,
         };
 
-        // Default sample data — 3 categories, 2 series.
-        chart.Categories.AddRange(["Q1", "Q2", "Q3"]);
+        if (chartType == ChartType.Stock)
+        {
+            chart.Categories.AddRange(["Day 1", "Day 2", "Day 3"]);
+            foreach (var (name, values) in new[]
+            {
+                ("Open",  new double?[] { 10, 12, 11 }),
+                ("High",  new double?[] { 14, 16, 15 }),
+                ("Low",   new double?[] { 8, 9, 10 }),
+                ("Close", new double?[] { 13, 11, 14 }),
+            })
+            {
+                var series = new ChartSeries { Name = name };
+                series.Values.AddRange(values);
+                chart.Series.Add(series);
+            }
+        }
+        else
+        {
+            // Default sample data — 3 categories, 2 series.
+            chart.Categories.AddRange(["Q1", "Q2", "Q3"]);
 
-        var s1 = new ChartSeries { Name = "Series 1" };
-        s1.Values.AddRange([4.3, 2.5, 3.5]);
-        chart.Series.Add(s1);
+            var s1 = new ChartSeries { Name = "Series 1" };
+            s1.Values.AddRange([4.3, 2.5, 3.5]);
+            chart.Series.Add(s1);
 
-        var s2 = new ChartSeries { Name = "Series 2" };
-        s2.Values.AddRange([2.4, 4.4, 1.8]);
-        chart.Series.Add(s2);
+            var s2 = new ChartSeries { Name = "Series 2" };
+            s2.Values.AddRange([2.4, 4.4, 1.8]);
+            chart.Series.Add(s2);
+        }
 
         var shape = new SlideShape
         {

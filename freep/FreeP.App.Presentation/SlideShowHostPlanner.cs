@@ -92,6 +92,8 @@ public sealed record SlideShowPresenterState(
     SlideShowPresenterDisplayIntent DisplayIntent,
     SlideShowPresenterToolPlan ToolPlan);
 
+public sealed record SlideShowHiddenSlideTarget(Slide Slide, int SourceSlideIndex);
+
 public sealed record SlideShowHostCommand
 {
     private SlideShowHostCommand(
@@ -233,6 +235,31 @@ public static class SlideShowHostPlanner
 {
     public const double EmusPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
     public const string NoSlidesStatusText = "No slides";
+
+    public static SlideShowHiddenSlideTarget? FindNextHiddenSlide(
+        Presentation presentation,
+        SlideShowPlaybackRoute playbackRoute,
+        int currentSourceSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(playbackRoute);
+
+        var routeSources = playbackRoute.CustomShowName is null
+            ? null
+            : playbackRoute.SourceSlideIndices.ToHashSet();
+        var firstCandidate = Math.Max(-1, currentSourceSlideIndex) + 1;
+        for (var sourceIndex = firstCandidate; sourceIndex < presentation.Slides.Count; sourceIndex++)
+        {
+            if (routeSources is not null && !routeSources.Contains(sourceIndex))
+                continue;
+
+            var slide = presentation.Slides[sourceIndex];
+            if (slide.IsHidden)
+                return new SlideShowHiddenSlideTarget(slide, sourceIndex);
+        }
+
+        return null;
+    }
 
     public static SlideShowHostIntent IntentFromKeyName(string? keyName) =>
         keyName?.Trim() switch
@@ -427,18 +454,43 @@ public static class SlideShowHostPlanner
     public static SlideShowHostCommand PlanSlideNumberJump(
         SlideShowController controller,
         IReadOnlyList<Slide> slides,
-        int oneBasedSlideNumber)
+        int oneBasedSlideNumber,
+        IReadOnlyList<int>? sourceSlideIndices = null)
     {
         ArgumentNullException.ThrowIfNull(controller);
         ArgumentNullException.ThrowIfNull(slides);
 
-        if (oneBasedSlideNumber <= 0 || oneBasedSlideNumber > slides.Count)
+        if (oneBasedSlideNumber <= 0)
             return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+
+        var targetIndex = oneBasedSlideNumber - 1;
+        if (sourceSlideIndices is not null)
+        {
+            if (sourceSlideIndices.Count != slides.Count)
+                return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+
+            targetIndex = -1;
+            var sourceSlideIndex = oneBasedSlideNumber - 1;
+            for (var routeIndex = 0; routeIndex < sourceSlideIndices.Count; routeIndex++)
+            {
+                if (sourceSlideIndices[routeIndex] == sourceSlideIndex)
+                {
+                    targetIndex = routeIndex;
+                    break;
+                }
+            }
+            if (targetIndex < 0)
+                return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+        }
+        else if (targetIndex >= slides.Count)
+        {
+            return SlideShowHostCommand.HandledNoOp(stopAutoAdvance: true);
+        }
 
         return PlanJump(
             controller,
             slides,
-            oneBasedSlideNumber - 1,
+            targetIndex,
             animateSlide: false,
             stopAutoAdvance: true);
     }

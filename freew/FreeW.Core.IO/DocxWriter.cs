@@ -7520,7 +7520,7 @@ public static class DocxWriter
     {
         // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
         // validator rejects the run. The relevant slots, in order, are:
-        //   rFonts, b, i, caps, smallCaps, strike, noProof, vanish, webHidden, color, spacing, kern, position, sz,
+        //   rFonts, b, i, caps, smallCaps, strike, dstrike, noProof, vanish, webHidden, color, spacing, kern, position, sz,
         //   szCs, u, shd,
         //   vertAlign, <w14 extension region>.
         // The advanced-typography elements added for Z1 occupy these slots:
@@ -7543,6 +7543,8 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "smallCaps"));
         if (f.Strikethrough)
             rPr.Add(new XElement(W + "strike"));
+        if (f.DoubleStrikethrough)
+            rPr.Add(new XElement(W + "dstrike"));
         if (f.NoProof)
             rPr.Add(new XElement(W + "noProof"));
         if (f.Hidden)
@@ -9175,8 +9177,8 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds the <c>w:rPr</c> inside <c>w:docDefaults/w:rPrDefault</c>. Emits only the core fields that
-    /// carry meaningful document-default run formatting (font family/size, colour, language, bold/italic).
+    /// Builds the <c>w:rPr</c> inside <c>w:docDefaults/w:rPrDefault</c>. Emits the core fields that
+    /// carry meaningful document-default run formatting, in CT_RPr schema order.
     /// Returns null when the default run is indistinguishable from a no-op so that documents with no
     /// meaningful run defaults do not gain a spurious w:rPrDefault element.
     /// </summary>
@@ -9193,6 +9195,14 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "b"));
         if (f.Italic)
             rPr.Add(new XElement(W + "i"));
+        if (f.AllCaps)
+            rPr.Add(new XElement(W + "caps"));
+        if (f.SmallCaps)
+            rPr.Add(new XElement(W + "smallCaps"));
+        if (f.Strikethrough)
+            rPr.Add(new XElement(W + "strike"));
+        if (f.DoubleStrikethrough)
+            rPr.Add(new XElement(W + "dstrike"));
         if (f.NoProof)
             rPr.Add(new XElement(W + "noProof"));
         if (f.Hidden)
@@ -9201,17 +9211,53 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "webHidden"));
         if (f.ColorHex is { Length: > 0 } color)
             rPr.Add(new XElement(W + "color", new XAttribute(W + "val", color.TrimStart('#'))));
+        if (f.CharacterSpacingPt != 0)
+            rPr.Add(new XElement(W + "spacing", new XAttribute(W + "val", PointsToDxa(f.CharacterSpacingPt))));
+        if (f.KerningMinSizePt is { } kern && kern > 0)
+            rPr.Add(new XElement(W + "kern", new XAttribute(W + "val", PointsToHalfPoints(kern))));
+        if (f.PositionPt != 0)
+            rPr.Add(new XElement(W + "position", new XAttribute(W + "val", PointsToHalfPoints(f.PositionPt))));
         if (f.FontSizePt is { } size)
         {
             var halfPoints = PointsToHalfPoints(size);
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
             rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
         }
+        if (f.CharacterShadingHex is not { Length: > 0 }
+            && f.HighlightColorHex is { Length: > 0 } highlightToken
+            && HexToHighlightToken(highlightToken) is { } namedHighlight)
+            rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
+        if (f.Underline)
+            rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
+        if (f.CharacterShadingHex is { Length: > 0 } charShading)
+            rPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", ShadingPatterns.ToToken(f.CharacterShadingPattern)),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", charShading.TrimStart('#'))));
+        else if (f.HighlightColorHex is { Length: > 0 } highlight)
+            rPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", highlight.TrimStart('#'))));
+        if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+            rPr.Add(new XElement(W + "vertAlign",
+                new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
+        if (f.Rtl)
+            rPr.Add(new XElement(W + "rtl"));
         if (f.LanguageTag is { Length: > 0 } lang)
             rPr.Add(new XElement(W + "lang",
                 new XAttribute(W + "val", lang),
                 new XAttribute(W + "eastAsia", lang),
                 new XAttribute(W + "bidi", lang)));
+        if (LigaturesToken(f.Ligatures) is { } ligatures)
+            rPr.Add(new XElement(W14 + "ligatures", new XAttribute(W14 + "val", ligatures)));
+        if (NumberFormToken(f.NumberForm) is { } numForm)
+            rPr.Add(new XElement(W14 + "numForm", new XAttribute(W14 + "val", numForm)));
+        if (NumberSpacingToken(f.NumberSpacing) is { } numSpacing)
+            rPr.Add(new XElement(W14 + "numSpacing", new XAttribute(W14 + "val", numSpacing)));
+        if (f.StylisticSet is { } styleSetId)
+            rPr.Add(new XElement(W14 + "stylisticSets",
+                new XElement(W14 + "styleSet", new XAttribute(W14 + "id", styleSetId))));
         return rPr.HasElements ? rPr : null;
     }
 

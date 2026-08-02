@@ -108,15 +108,22 @@ public static class ZoomNavigationService
         if (presentation is null || zoom?.ObjectKind != PreservedObjectKind.Zoom)
             return false;
 
-        returnToParent = zoom.ZoomProperties?.ReturnToParent ?? true;
-        transitionDurationMs = ParseTransitionDuration(zoom.ZoomProperties?.TransitionDuration);
-        showBackground = zoom.ZoomProperties?.ShowBackground ?? true;
-
         if (zoom.SummaryZoomTargets.Count > 0)
         {
             var target = SelectSummaryTarget(zoom.SummaryZoomTargets, relativeX, relativeY);
-            return target is not null && TryGetFirstSectionSlideIndex(presentation, target.SectionId, out slideIndex);
+            if (target is null)
+                return false;
+
+            var properties = ZoomObjectPropertiesPlanner.EffectiveSummaryTile(zoom, target.SectionId);
+            returnToParent = properties.ReturnToParent ?? true;
+            transitionDurationMs = ParseTransitionDuration(properties.TransitionDuration);
+            showBackground = properties.ShowBackground ?? true;
+            return TryGetFirstSectionSlideIndex(presentation, target.SectionId, out slideIndex);
         }
+
+        returnToParent = zoom.ZoomProperties?.ReturnToParent ?? true;
+        transitionDurationMs = ParseTransitionDuration(zoom.ZoomProperties?.TransitionDuration);
+        showBackground = zoom.ZoomProperties?.ShowBackground ?? true;
 
         var numericId = zoom.ZoomTargetSlideNumericId ?? ReadTargetSlideNumericId(zoom.RawXml);
         if (numericId.HasValue)

@@ -350,7 +350,7 @@ public static class DrawingObjectTextLayoutPlanner
                     glyph.Offset,
                     line.Index,
                     TextInsetDip + alignmentOffset + glyph.X,
-                    TextInsetDip + y,
+                    TextInsetDip + y + RunBaselinePositionPlanner.ResolveOffsetDip(glyph.Formatting),
                     glyph.Width,
                     glyph.Height,
                     glyph.Formatting));
@@ -365,7 +365,7 @@ public static class DrawingObjectTextLayoutPlanner
                     caret.Offset,
                     line.Index,
                     TextInsetDip + alignmentOffset + caret.X,
-                    TextInsetDip + y,
+                    TextInsetDip + y + RunBaselinePositionPlanner.ResolveOffsetDip(caret.Formatting),
                     line.LineHeight));
             }
             y += line.LineHeight;

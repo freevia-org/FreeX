@@ -58,6 +58,31 @@ public class ImageEffectsRoundTripTests
     private static InlineImage ReadBackImage(TextDocument document) =>
         RoundTrip(document).Paragraphs.First().Runs.Single(r => r.Image is not null).Image!;
 
+    private static InlineImage ReadBackImageWithoutEffectAlpha(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/document.xml")!;
+            XDocument xml;
+            using (var input = entry.Open())
+                xml = XDocument.Load(input);
+
+            xml.Descendants(A + "alpha").Remove();
+            entry.Delete();
+
+            var replacement = zip.CreateEntry("word/document.xml");
+            using var output = replacement.Open();
+            xml.Save(output);
+        }
+
+        stream.Position = 0;
+        return DocxReader.Read(stream).Paragraphs.First().Runs.Single(r => r.Image is not null).Image!;
+    }
+
     // ── Shadow ────────────────────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -182,6 +207,27 @@ public class ImageEffectsRoundTripTests
         read.ImportedEffects.GlowRad.Should().Be(63500);
         read.ImportedEffects.ReflectionStartAlpha.Should().Be(50000);
         read.ImportedEffects.ReflectionScaleY.Should().Be(-100000);
+    }
+
+    [Fact]
+    public void ImportedEffects_WithoutAlphaTransforms_DefaultToOpaque()
+    {
+        var image = new InlineImage(MinimalPng(), 100, 80)
+        {
+            ImportedEffects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowAlpha = 25000,
+                HasGlow = true,
+                GlowAlpha = 25000,
+            },
+        };
+
+        var read = ReadBackImageWithoutEffectAlpha(DocumentWith(image));
+
+        read.ImportedEffects.Should().NotBeNull();
+        read.ImportedEffects!.ShadowAlpha.Should().Be(100000);
+        read.ImportedEffects.GlowAlpha.Should().Be(100000);
     }
 
     // ── Soft Edge ─────────────────────────────────────────────────────────────────────────────────────

@@ -465,6 +465,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         Italic = overlay.Italic || baseFmt.Italic,
         Underline = overlay.Underline || baseFmt.Underline,
         Strikethrough = overlay.Strikethrough || baseFmt.Strikethrough,
+        DoubleStrikethrough = overlay.DoubleStrikethrough || baseFmt.DoubleStrikethrough,
         NoProof = overlay.NoProof || baseFmt.NoProof,
         Hidden = overlay.Hidden || baseFmt.Hidden,
         WebHidden = overlay.WebHidden || baseFmt.WebHidden,
@@ -1051,7 +1052,18 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             if ((string?)tp.Attribute(Style + "text-underline-style") is { } ul)
                 fmt = fmt with { Underline = !string.Equals(ul, "none", StringComparison.OrdinalIgnoreCase) };
             if ((string?)tp.Attribute(Style + "text-line-through-style") is { } lt)
-                fmt = fmt with { Strikethrough = !string.Equals(lt, "none", StringComparison.OrdinalIgnoreCase) };
+            {
+                var enabled = !string.Equals(lt, "none", StringComparison.OrdinalIgnoreCase);
+                var isDouble = string.Equals(
+                    (string?)tp.Attribute(Style + "text-line-through-type"),
+                    "double",
+                    StringComparison.OrdinalIgnoreCase);
+                fmt = fmt with
+                {
+                    Strikethrough = enabled && !isDouble,
+                    DoubleStrikethrough = enabled && isDouble
+                };
+            }
             if (ParseLength((string?)tp.Attribute(Fo + "font-size")) is { } size)
                 fmt = fmt with { FontSizePt = size };
             if (ParseColor((string?)tp.Attribute(Fo + "color")) is { } color)
@@ -1185,7 +1197,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
         }
 
         private static bool IsDefaultRun(RunFormatting f) =>
-            !f.Bold && !f.Italic && !f.Underline && !f.Strikethrough
+            !f.Bold && !f.Italic && !f.Underline && !f.Strikethrough && !f.DoubleStrikethrough
             && f.FontSizePt is null && f.ColorHex is null && string.IsNullOrEmpty(f.FontFamily)
             && f.HighlightColorHex is null && f.VerticalAlign == VerticalAlign.Baseline;
 
@@ -1193,7 +1205,7 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             $"{(int)f.Alignment}|{f.IndentLeftPt}|{f.IndentRightPt}|{f.FirstLineIndentPt}|{f.SpaceBeforePt}|{f.SpaceAfterPt}");
 
         private static string RunKey(RunFormatting f) => string.Create(CultureInfo.InvariantCulture,
-            $"{f.Bold}|{f.Italic}|{f.Underline}|{f.Strikethrough}|{f.FontSizePt}|{f.ColorHex}|{f.FontFamily}|{f.HighlightColorHex}|{(int)f.VerticalAlign}");
+            $"{f.Bold}|{f.Italic}|{f.Underline}|{f.Strikethrough}|{f.DoubleStrikethrough}|{f.FontSizePt}|{f.ColorHex}|{f.FontFamily}|{f.HighlightColorHex}|{(int)f.VerticalAlign}");
 
         private static XElement BuildParaStyle(string name, ParagraphFormatting f)
         {
@@ -1223,6 +1235,11 @@ public sealed class OdtFileAdapter : IDocumentFileAdapter
             if (f.Italic) props.Add(new XAttribute(Fo + "font-style", "italic"));
             if (f.Underline) props.Add(new XAttribute(Style + "text-underline-style", "solid"));
             if (f.Strikethrough) props.Add(new XAttribute(Style + "text-line-through-style", "solid"));
+            if (f.DoubleStrikethrough)
+            {
+                props.SetAttributeValue(Style + "text-line-through-style", "solid");
+                props.SetAttributeValue(Style + "text-line-through-type", "double");
+            }
             if (f.FontSizePt is { } sz) props.Add(new XAttribute(Fo + "font-size", sz.ToString("0.##", CultureInfo.InvariantCulture) + "pt"));
             if (f.ColorHex is { } c) props.Add(new XAttribute(Fo + "color", FormatColor(c)));
             if (!string.IsNullOrEmpty(f.FontFamily)) props.Add(new XAttribute(Fo + "font-family", f.FontFamily));

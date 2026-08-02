@@ -1069,6 +1069,64 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void ApplyTextPaneOutline_RejectsAssistantOutsideHierarchyWithoutMutation()
+    {
+        var data = MakeFlatData(SmartArtFamily.Process, ("root", "Step"));
+
+        var result = SmartArtEditingPlanner.ApplyTextPaneOutline(data,
+        [
+            new("Step", 0, IsAssistant: true, ModelId: "root")
+        ]);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("Assistant nodes are supported only in hierarchy SmartArt.");
+        data.Nodes.Should().ContainSingle();
+        data.Nodes[0].Text.Should().Be("Step");
+        data.Nodes[0].IsAssistant.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ApplyTextPaneOutline_RejectsRootAssistantWithoutMutation()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+
+        var result = SmartArtEditingPlanner.ApplyTextPaneOutline(data,
+        [
+            new("Leader", 0, IsAssistant: true, ModelId: "root")
+        ]);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("A root SmartArt node cannot be an assistant.");
+        data.Nodes.Should().ContainSingle();
+        data.Nodes[0].Text.Should().Be("Leader");
+        data.Nodes[0].IsAssistant.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ApplyTextPaneOutline_RejectsAssistantAfterReportWithoutMutation()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        data.Nodes[0].Children.Add(new SmartArtNode
+        {
+            ModelId = "report",
+            Text = "Report",
+            Level = 1,
+        });
+
+        var result = SmartArtEditingPlanner.ApplyTextPaneOutline(data,
+        [
+            new("Leader", 0, ModelId: "root"),
+            new("Report", 1, ModelId: "report"),
+            new("Assistant", 1, IsAssistant: true, ModelId: "assistant")
+        ]);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("SmartArt assistants must remain before regular reports.");
+        data.Nodes[0].Children.Select(child => (child.ModelId, child.IsAssistant))
+            .Should().Equal(("report", false));
+    }
+
+    [Fact]
     public void ApplyTextPaneOutline_PreservesPicturePayloadsByStableNodeId()
     {
         var picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" };

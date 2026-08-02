@@ -4370,7 +4370,9 @@ public sealed class DocumentView : RichTextBox
             Bold = selection.GetPropertyValue(TextElement.FontWeightProperty) is FontWeight w && w >= FontWeights.Bold,
             Italic = selection.GetPropertyValue(TextElement.FontStyleProperty) is FontStyle s && s == FontStyles.Italic,
             Underline = decorations?.Contains(TextDecorations.Underline[0]) == true,
-            Strikethrough = decorations?.Contains(TextDecorations.Strikethrough[0]) == true,
+            Strikethrough = retained.DoubleStrikethrough
+                ? retained.Strikethrough
+                : decorations?.Contains(TextDecorations.Strikethrough[0]) == true,
             SmallCaps = capitals is FontCapitals.SmallCaps,
             AllCaps = capitals is FontCapitals.AllSmallCaps,
             VerticalAlign = verticalAlign,
@@ -4431,8 +4433,7 @@ public sealed class DocumentView : RichTextBox
         var decorations = new TextDecorationCollection();
         if (fmt.Underline)
             decorations.Add(TextDecorations.Underline);
-        if (fmt.Strikethrough)
-            decorations.Add(TextDecorations.Strikethrough);
+        AddStrikethroughDecorations(decorations, fmt);
         selection.ApplyPropertyValue(Inline.TextDecorationsProperty, decorations);
     }
 
@@ -6398,22 +6399,21 @@ public sealed class DocumentView : RichTextBox
         ApplyImageWpfEffects(root, image);
 
         // Floating overlays use the same preset-specific reflection geometry as inline pictures.
-        if (image.ReflectionPreset > 0)
+        if (PictureEffectVisualPlanner.BuildReflectionPlan(image) is { } reflection)
         {
             var isImportedObjectFormatReflection = image is
             {
                 AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
                 ReflectionPreset: 2
             };
-            var reflOpacity = image.ReflectionPreset <= 3 ? 0.5 : 1.0;
             var reflDistPx = (isImportedObjectFormatReflection
-                ? 13.0
-                : image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 }) * PxPerPoint;
+                ? 13.0 * PxPerPoint
+                : reflection.DistanceDip);
             root = BuildReflectionContainer(
                 root,
                 widthPx,
                 heightPx,
-                reflOpacity,
+                reflection,
                 reflDistPx,
                 borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
             root.Tag = image;
@@ -6652,7 +6652,7 @@ public sealed class DocumentView : RichTextBox
             text,
             layoutWidth,
             layoutHeight,
-            (value, formatting) => MeasureFloatingShapeText(value, formatting).WidthIncludingTrailingWhitespace,
+            (value, formatting) => MeasureFloatingShapeText(value, formatting).Width,
             formatting => MeasureFloatingShapeText("Ag", formatting).Height);
 
         var canvas = new Canvas
@@ -6685,10 +6685,10 @@ public sealed class DocumentView : RichTextBox
             var decorations = new TextDecorationCollection();
             if (formatting.Underline)
                 decorations.Add(TextDecorations.Underline);
-            if (formatting.Strikethrough)
-                decorations.Add(TextDecorations.Strikethrough);
+            AddStrikethroughDecorations(decorations, formatting);
             if (decorations.Count > 0)
                 glyphText.TextDecorations = decorations;
+            ApplyOpenTypeTypography(glyphText, formatting);
             Canvas.SetLeft(glyphText, glyph.X);
             Canvas.SetTop(glyphText, glyph.Y);
             canvas.Children.Add(glyphText);
@@ -6704,7 +6704,7 @@ public sealed class DocumentView : RichTextBox
         return canvas;
     }
 
-    private static FormattedText MeasureFloatingShapeText(string value, RunFormatting formatting)
+    private static System.Windows.Size MeasureFloatingShapeText(string value, RunFormatting formatting)
     {
         var typeface = new Typeface(
             formatting.FontFamily is { Length: > 0 } family ? new FontFamily(family) : new FontFamily("Segoe UI"),
@@ -6714,7 +6714,7 @@ public sealed class DocumentView : RichTextBox
         var brush = TryParseColor(formatting.ColorHex, out var color)
             ? new SolidColorBrush(color)
             : Brushes.Black;
-        return new FormattedText(
+        var formatted = new FormattedText(
             value,
             System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
@@ -6722,6 +6722,22 @@ public sealed class DocumentView : RichTextBox
             (formatting.FontSizePt ?? 9) * PxPerPoint,
             brush,
             1.0);
+        if (!RunOpenTypeFeaturePlanner.Build(formatting).HasFeatures)
+            return new System.Windows.Size(formatted.WidthIncludingTrailingWhitespace, formatted.Height);
+
+        var textBlock = new TextBlock
+        {
+            Text = value,
+            FontFamily = formatting.FontFamily is { Length: > 0 } featureFamily
+                ? new FontFamily(featureFamily)
+                : new FontFamily("Segoe UI"),
+            FontSize = (formatting.FontSizePt ?? 9) * PxPerPoint,
+            FontWeight = formatting.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = formatting.Italic ? FontStyles.Italic : FontStyles.Normal,
+        };
+        ApplyOpenTypeTypography(textBlock, formatting);
+        textBlock.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+        return textBlock.DesiredSize;
     }
 
     private FrameworkElement BuildDrawingWordArtVisual(DrawingObjectVisualPlan plan)
@@ -10900,6 +10916,7 @@ public sealed class DocumentView : RichTextBox
         {
             wpf.FontSize = size * PxPerPoint;
         }
+        ApplyBaselinePositionPresentation(wpf, fmt);
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         var decorationPlan = RunDecorationVisualPlanner.Build(fmt, PxPerPoint);
@@ -10941,14 +10958,14 @@ public sealed class DocumentView : RichTextBox
             Typography.SetCapitals(wpf, FontCapitals.AllSmallCaps);
         else if (fmt.SmallCaps)
             Typography.SetCapitals(wpf, FontCapitals.SmallCaps);
+        ApplyOpenTypeTypography(wpf, fmt);
 
         var decorations = wpf.TextDecorations is { } existingDecorations
             ? new TextDecorationCollection(existingDecorations)
             : new TextDecorationCollection();
         if (fmt.Underline)
             decorations.Add(TextDecorations.Underline);
-        if (fmt.Strikethrough)
-            decorations.Add(TextDecorations.Strikethrough);
+        AddStrikethroughDecorations(decorations, fmt);
 
         // A tracked-change run carries a RevisionMarker tag UNCONDITIONALLY so CommitToModel can
         // round-trip the kind/author/date in every display mode. The visual chrome (colour, decoration,
@@ -12088,6 +12105,8 @@ public sealed class DocumentView : RichTextBox
             wpf.FontFamily = new FontFamily(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
+        ApplyBaselinePositionPresentation(wpf, fmt);
+        ApplyOpenTypeTypography(wpf, fmt);
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = run.FieldKind + " field";
@@ -12624,11 +12643,10 @@ public sealed class DocumentView : RichTextBox
         ApplyImageWpfEffects(inlineRoot, image);
 
         // Reflection: render a mirrored low-opacity copy below the image using a VisualBrush.
-        if (image.ReflectionPreset > 0)
+        if (PictureEffectVisualPlanner.BuildReflectionPlan(image) is { } reflection)
         {
-            var reflOpacity = image.ReflectionPreset <= 3 ? 0.5 : 1.0;
-            var reflDistPx  = image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 } * PxPerPoint;
-            var reflContainer = BuildReflectionContainer(inlineRoot, widthPx, heightPx, reflOpacity, reflDistPx,
+            var reflContainer = BuildReflectionContainer(
+                inlineRoot, widthPx, heightPx, reflection, reflection.DistanceDip,
                 borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
             return new InlineUIContainer(reflContainer) { BaselineAlignment = BaselineAlignment.Bottom };
         }
@@ -12647,21 +12665,18 @@ public sealed class DocumentView : RichTextBox
         // Shadow overrides glow if both are set; WPF Effect is a single Effect per element.
         if (image.ShadowPreset > 0)
         {
-            var (blur, dist, opacity) = image.ShadowPreset switch
-            {
-                1 => (4.0, 3.0, 0.50),
-                2 => (6.0, 5.0, 0.55),
-                3 => (8.0, 7.0, 0.60),
-                4 => (4.0, 4.0, 0.50),
-                _ => (10.0, 10.0, 0.65)
-            };
+            var shadow = PictureEffectVisualPlanner.BuildShadowPlan(image);
             root.Effect = new System.Windows.Media.Effects.DropShadowEffect
             {
-                BlurRadius   = blur,
-                ShadowDepth  = dist,
-                Direction    = 315,
-                Opacity      = opacity,
-                Color        = System.Windows.Media.Colors.Black
+                BlurRadius   = shadow.BlurPoints,
+                ShadowDepth  = shadow.DistancePoints,
+                Direction    = shadow.DirectionDegrees,
+                Opacity      = shadow.Opacity,
+                Color        = TryParseColor(
+                    "#" + shadow.ColorHex,
+                    out var shadowColor)
+                    ? shadowColor
+                    : System.Windows.Media.Colors.Black
             };
         }
         else if (image.GlowSizePt > 0)
@@ -12680,7 +12695,7 @@ public sealed class DocumentView : RichTextBox
             {
                 BlurRadius  = image.GlowSizePt * PxPerPoint,
                 ShadowDepth = 0,
-                Opacity     = 0.6,
+                Opacity     = PictureEffectVisualPlanner.ResolveGlowOpacity(image),
                 Color       = glowColor
             };
         }
@@ -12716,7 +12731,7 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     private static System.Windows.Controls.StackPanel BuildReflectionContainer(
         FrameworkElement imageRoot, double widthPx, double heightPx,
-        double reflOpacity, double distPx, double borderWidthPx)
+        PictureReflectionVisualPlan reflection, double distPx, double borderWidthPx)
     {
         var totalW = widthPx + borderWidthPx * 2;
         var totalH = heightPx + borderWidthPx * 2;
@@ -12735,8 +12750,12 @@ public sealed class DocumentView : RichTextBox
         var fadeMask = new System.Windows.Media.LinearGradientBrush(
             new System.Windows.Media.GradientStopCollection
             {
-                new(Color.FromArgb((byte)(reflOpacity * 255), 0, 0, 0), 0.0),
-                new(Color.FromArgb(0, 0, 0, 0), 1.0),
+                new(
+                    Color.FromArgb((byte)(reflection.Opacity * 255), 0, 0, 0),
+                    reflection.StartPosition),
+                new(
+                    Color.FromArgb((byte)(reflection.EndOpacity * 255), 0, 0, 0),
+                    reflection.EndPosition),
             },
             new System.Windows.Point(0, 0), new System.Windows.Point(0, 1));
 
@@ -13893,6 +13912,64 @@ public sealed class DocumentView : RichTextBox
         };
         RenderChartScene(canvas, scene);
         return canvas;
+    }
+
+    private static void ApplyBaselinePositionPresentation(WpfRun run, RunFormatting formatting)
+    {
+        var offsetDip = RunBaselinePositionPlanner.ResolveOffsetDip(formatting, PxPerPoint);
+        if (Math.Abs(offsetDip) < 0.001)
+            return;
+
+        run.TextEffects.Add(new TextEffect
+        {
+            Transform = new TranslateTransform(0, offsetDip)
+        });
+    }
+
+    private static void ApplyOpenTypeTypography(DependencyObject target, RunFormatting formatting)
+    {
+        var plan = RunOpenTypeFeaturePlanner.Build(formatting);
+        if (plan.NumberForm is { } numberForm)
+        {
+            Typography.SetNumeralStyle(target, numberForm == FreeW.Core.Model.NumberForm.OldStyle
+                ? FontNumeralStyle.OldStyle
+                : FontNumeralStyle.Lining);
+        }
+        if (plan.NumberSpacing is { } numberSpacing)
+        {
+            Typography.SetNumeralAlignment(target, numberSpacing == FreeW.Core.Model.NumberSpacing.Tabular
+                ? FontNumeralAlignment.Tabular
+                : FontNumeralAlignment.Proportional);
+        }
+        if (plan.StylisticSet is { } stylisticSet)
+            SetStylisticSet(target, stylisticSet);
+    }
+
+    private static void SetStylisticSet(DependencyObject target, int stylisticSet)
+    {
+        switch (stylisticSet)
+        {
+            case 1: Typography.SetStylisticSet1(target, true); break;
+            case 2: Typography.SetStylisticSet2(target, true); break;
+            case 3: Typography.SetStylisticSet3(target, true); break;
+            case 4: Typography.SetStylisticSet4(target, true); break;
+            case 5: Typography.SetStylisticSet5(target, true); break;
+            case 6: Typography.SetStylisticSet6(target, true); break;
+            case 7: Typography.SetStylisticSet7(target, true); break;
+            case 8: Typography.SetStylisticSet8(target, true); break;
+            case 9: Typography.SetStylisticSet9(target, true); break;
+            case 10: Typography.SetStylisticSet10(target, true); break;
+            case 11: Typography.SetStylisticSet11(target, true); break;
+            case 12: Typography.SetStylisticSet12(target, true); break;
+            case 13: Typography.SetStylisticSet13(target, true); break;
+            case 14: Typography.SetStylisticSet14(target, true); break;
+            case 15: Typography.SetStylisticSet15(target, true); break;
+            case 16: Typography.SetStylisticSet16(target, true); break;
+            case 17: Typography.SetStylisticSet17(target, true); break;
+            case 18: Typography.SetStylisticSet18(target, true); break;
+            case 19: Typography.SetStylisticSet19(target, true); break;
+            case 20: Typography.SetStylisticSet20(target, true); break;
+        }
     }
 
     private static void RenderChartScene(Canvas canvas, ChartScene scene)
@@ -16890,7 +16967,7 @@ public sealed class DocumentView : RichTextBox
             Underline = charBorder is null
                 ? run.TextDecorations?.Contains(TextDecorations.Underline[0]) == true
                 : retained.Underline,
-            Strikethrough = charBorder is null
+            Strikethrough = charBorder is null && !retained.DoubleStrikethrough
                 ? run.TextDecorations?.Contains(TextDecorations.Strikethrough[0]) == true
                 : retained.Strikethrough,
             SmallCaps = capitals == FontCapitals.SmallCaps,
@@ -17078,6 +17155,7 @@ public sealed class DocumentView : RichTextBox
             Italic = r.Italic || style.Italic || d.Italic,
             Underline = r.Underline || style.Underline || d.Underline,
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
+            DoubleStrikethrough = r.DoubleStrikethrough || StyleRunDoubleStrikethrough(paragraph, document) || d.DoubleStrikethrough,
             Hidden = r.Hidden || style.Hidden || d.Hidden,
             WebHidden = r.WebHidden || style.WebHidden || d.WebHidden,
             NoProof = r.NoProof || StyleRunNoProof(paragraph, document) || d.NoProof,
@@ -17200,6 +17278,26 @@ public sealed class DocumentView : RichTextBox
             ? style.Run
             : RunFormatting.Default;
 
+    private static void AddStrikethroughDecorations(TextDecorationCollection decorations, RunFormatting formatting)
+    {
+        if (!formatting.DoubleStrikethrough)
+        {
+            if (formatting.Strikethrough)
+                decorations.Add(TextDecorations.Strikethrough);
+            return;
+        }
+
+        decorations.Add(DoubleStrikethroughDecoration(-0.055));
+        decorations.Add(DoubleStrikethroughDecoration(0.055));
+    }
+
+    private static TextDecoration DoubleStrikethroughDecoration(double offset) => new()
+    {
+        Location = TextDecorationLocation.Strikethrough,
+        PenOffset = offset,
+        PenOffsetUnit = TextDecorationUnit.FontRenderingEmSize,
+    };
+
     private static bool StyleRunNoProof(ModelParagraph paragraph, TextDocument document)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -17209,6 +17307,22 @@ public sealed class DocumentView : RichTextBox
             && document.Styles.TryGetValue(styleId, out var style))
         {
             if (style.Run.NoProof)
+                return true;
+            styleId = style.BasedOnStyleId;
+        }
+
+        return false;
+    }
+
+    private static bool StyleRunDoubleStrikethrough(ModelParagraph paragraph, TextDocument document)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var styleId = paragraph.StyleId;
+        while (!string.IsNullOrEmpty(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (style.Run.DoubleStrikethrough)
                 return true;
             styleId = style.BasedOnStyleId;
         }

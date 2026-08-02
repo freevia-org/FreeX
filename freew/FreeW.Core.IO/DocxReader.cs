@@ -2092,6 +2092,7 @@ public static class DocxReader
         Italic = direct.Italic || inherited.Italic,
         Underline = direct.Underline || inherited.Underline,
         Strikethrough = direct.Strikethrough || inherited.Strikethrough,
+        DoubleStrikethrough = direct.DoubleStrikethrough || inherited.DoubleStrikethrough,
         NoProof = direct.NoProof || inherited.NoProof,
         Hidden = direct.Hidden || inherited.Hidden,
         WebHidden = direct.WebHidden || inherited.WebHidden,
@@ -4382,7 +4383,12 @@ public static class DocxReader
             if (innerShdw is not null && long.TryParse(innerShdw.Attribute("dir")?.Value, out var bevelDir))
                 image.BevelPreset = (int)(bevelDir / (90 * 60000)) + 1;
 
-            var importedEffects = new ShapeEffectLst();
+            // DrawingML color transforms default to fully opaque when a:alpha is absent.
+            var importedEffects = new ShapeEffectLst
+            {
+                ShadowAlpha = 100000,
+                GlowAlpha = 100000,
+            };
             if (outerShdw is not null)
             {
                 importedEffects.HasShadow = true;
@@ -6647,6 +6653,7 @@ public static class DocxReader
             Italic = ReadToggle(rPr, "i"),
             Underline = underline is not null && (underline.Attribute(W + "val")?.Value ?? "single") != "none",
             Strikethrough = ReadToggle(rPr, "strike"),
+            DoubleStrikethrough = ReadToggle(rPr, "dstrike"),
             NoProof = ReadToggle(rPr, "noProof"),
             Hidden = ReadToggle(rPr, "vanish"),
             WebHidden = ReadToggle(rPr, "webHidden"),
@@ -7037,12 +7044,43 @@ public static class DocxReader
                 FontFamily = defaultRun.FontFamily ?? document.DefaultRun.FontFamily,
                 FontSizePt = defaultRun.FontSizePt ?? document.DefaultRun.FontSizePt,
                 ColorHex = defaultRun.ColorHex ?? document.DefaultRun.ColorHex,
+                HighlightColorHex = defaultRun.HighlightColorHex ?? document.DefaultRun.HighlightColorHex,
+                CharacterShadingHex = defaultRun.CharacterShadingHex ?? document.DefaultRun.CharacterShadingHex,
+                CharacterShadingPattern = defaultRun.CharacterShadingHex is not null
+                    ? defaultRun.CharacterShadingPattern
+                    : document.DefaultRun.CharacterShadingPattern,
                 LanguageTag = defaultRun.LanguageTag ?? document.DefaultRun.LanguageTag,
                 Bold = defaultRun.Bold,
                 Italic = defaultRun.Italic,
+                AllCaps = defaultRun.AllCaps || document.DefaultRun.AllCaps,
+                SmallCaps = defaultRun.SmallCaps || document.DefaultRun.SmallCaps,
+                Strikethrough = defaultRun.Strikethrough || document.DefaultRun.Strikethrough,
+                DoubleStrikethrough = defaultRun.DoubleStrikethrough || document.DefaultRun.DoubleStrikethrough,
                 NoProof = defaultRun.NoProof || document.DefaultRun.NoProof,
                 Hidden = defaultRun.Hidden || document.DefaultRun.Hidden,
                 WebHidden = defaultRun.WebHidden || document.DefaultRun.WebHidden,
+                Underline = defaultRun.Underline || document.DefaultRun.Underline,
+                VerticalAlign = defaultRun.VerticalAlign != VerticalAlign.Baseline
+                    ? defaultRun.VerticalAlign
+                    : document.DefaultRun.VerticalAlign,
+                Rtl = defaultRun.Rtl || document.DefaultRun.Rtl,
+                CharacterSpacingPt = defaultRun.CharacterSpacingPt != 0
+                    ? defaultRun.CharacterSpacingPt
+                    : document.DefaultRun.CharacterSpacingPt,
+                KerningMinSizePt = defaultRun.KerningMinSizePt ?? document.DefaultRun.KerningMinSizePt,
+                PositionPt = defaultRun.PositionPt != 0
+                    ? defaultRun.PositionPt
+                    : document.DefaultRun.PositionPt,
+                Ligatures = defaultRun.Ligatures != LigatureMode.None
+                    ? defaultRun.Ligatures
+                    : document.DefaultRun.Ligatures,
+                StylisticSet = defaultRun.StylisticSet ?? document.DefaultRun.StylisticSet,
+                NumberForm = defaultRun.NumberForm != NumberForm.Default
+                    ? defaultRun.NumberForm
+                    : document.DefaultRun.NumberForm,
+                NumberSpacing = defaultRun.NumberSpacing != NumberSpacing.Default
+                    ? defaultRun.NumberSpacing
+                    : document.DefaultRun.NumberSpacing,
             };
         }
 

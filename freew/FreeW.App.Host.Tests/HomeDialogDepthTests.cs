@@ -55,6 +55,8 @@ public sealed class HomeDialogDepthTests
         var fmt = new RunFormatting
         {
             Bold               = true,
+            DoubleStrikethrough = true,
+            Hidden             = true,
             CharacterSpacingPt = 1.5,
             KerningMinSizePt   = 12.0,
             PositionPt         = 2.0,
@@ -67,6 +69,8 @@ public sealed class HomeDialogDepthTests
 
         // FormatSelectedModelRuns updates the model directly; no commit needed.
         var run = view.Model.Blocks.OfType<Paragraph>().First().Runs.First().Formatting;
+        run.DoubleStrikethrough.Should().BeTrue();
+        run.Hidden.Should().BeTrue();
         run.CharacterSpacingPt.Should().BeApproximately(1.5, 0.01);
         run.KerningMinSizePt.Should().BeApproximately(12.0, 0.01);
         run.PositionPt.Should().BeApproximately(2.0, 0.01);

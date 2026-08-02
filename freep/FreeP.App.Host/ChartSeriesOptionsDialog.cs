@@ -28,6 +28,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly CheckBox _showSeriesLabelsCheck;
     private readonly CheckBox _showLegendKeysCheck;
     private readonly CheckBox _showBubbleSizeCheck;
+    private readonly CheckBox _showLeaderLinesCheck;
     private readonly CheckBox _errorBarsCheck;
     private readonly ComboBox _errorDirectionCombo;
     private readonly ComboBox _errorBarTypeCombo;
@@ -108,6 +109,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _showSeriesLabelsCheck = new CheckBox { Content = surface.SeriesLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showLegendKeysCheck = new CheckBox { Content = surface.LegendKeysLabel, Margin = new Thickness(20, 0, 0, 0) };
         _showBubbleSizeCheck = new CheckBox { Content = surface.BubbleSizeLabelsLabel, Margin = new Thickness(20, 0, 0, 0) };
+        _showLeaderLinesCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.LeaderLinesLabel, IsThreeState = true, Margin = new Thickness(20, 0, 0, 0) };
         _errorBarsCheck = new CheckBox { Content = ChartSeriesOptionsPlanner.ErrorBarsLabel };
         _errorDirectionCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorDirectionOptions, DisplayMemberPath = nameof(ChartErrorDirectionOption.Label), MinWidth = 150 };
         _errorBarTypeCombo = new ComboBox { ItemsSource = ChartSeriesOptionsPlanner.ErrorBarTypeOptions, DisplayMemberPath = nameof(ChartErrorBarTypeOption.Label), MinWidth = 150 };
@@ -175,6 +177,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         content.Children.Add(_showSeriesLabelsCheck);
         content.Children.Add(_showLegendKeysCheck);
         content.Children.Add(_showBubbleSizeCheck);
+        content.Children.Add(_showLeaderLinesCheck);
         content.Children.Add(_errorBarsCheck);
         content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.ErrorDirectionLabel, _errorDirectionCombo));
         content.Children.Add(MakeRow(ChartSeriesOptionsPlanner.ErrorBarTypeLabel, _errorBarTypeCombo));
@@ -249,6 +252,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         bool? labelItalic = null,
         string? labelColor = null,
         bool showBubbleSize = false,
+        bool? showLeaderLines = null,
         bool errorBars = false,
         bool trendline = false,
         ChartTrendlineType trendlineType = ChartTrendlineType.Linear,
@@ -281,6 +285,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _showSeriesLabelsCheck.IsChecked = showSeriesLabels;
         _showLegendKeysCheck.IsChecked = showLegendKeys;
         _showBubbleSizeCheck.IsChecked = showBubbleSize;
+        _showLeaderLinesCheck.IsChecked = showLeaderLines;
         _errorBarsCheck.IsChecked = errorBars;
         _trendlineCheck.IsChecked = trendline;
         _trendlineTypeCombo.SelectedIndex = FindTrendlineTypeIndex(trendlineType);
@@ -331,6 +336,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _showSeriesLabelsCheck.IsChecked = _planner.ShowSeriesLabels;
         _showLegendKeysCheck.IsChecked = _planner.ShowLegendKeys;
         _showBubbleSizeCheck.IsChecked = _planner.ShowBubbleSize;
+        _showLeaderLinesCheck.IsChecked = _planner.ShowLeaderLines;
         _errorBarsCheck.IsChecked = _planner.ErrorBarsEnabled;
         _errorDirectionCombo.SelectedIndex = FindErrorDirectionIndex(_planner.ErrorDirection);
         _errorBarTypeCombo.SelectedIndex = FindErrorBarTypeIndex(_planner.ErrorBarType);
@@ -378,6 +384,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         _planner.SetShowSeriesLabels(_showSeriesLabelsCheck.IsChecked == true);
         _planner.SetShowLegendKeys(_showLegendKeysCheck.IsChecked == true);
         _planner.SetShowBubbleSize(_showBubbleSizeCheck.IsChecked == true);
+        _planner.SetShowLeaderLines(_showLeaderLinesCheck.IsChecked);
         _planner.SetErrorBarsEnabled(_errorBarsCheck.IsChecked == true);
         if (_errorDirectionCombo.SelectedItem is ChartErrorDirectionOption direction)
             _planner.SetErrorDirection(direction.Value);

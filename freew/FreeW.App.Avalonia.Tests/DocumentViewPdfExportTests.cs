@@ -759,6 +759,72 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_PreservesRunBaselinePositionForBodyAndHeader() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var body = new Paragraph();
+            body.Runs.Add(new Run("BodyBase"));
+            body.Runs.Add(new Run("BodyRaised", RunFormatting.Default with { PositionPt = 3 }));
+            document.Blocks.Add(body);
+
+            var headerParagraph = new Paragraph();
+            headerParagraph.Runs.Add(new Run("HeaderBase"));
+            headerParagraph.Runs.Add(new Run("HeaderLowered", RunFormatting.Default with { PositionPt = -2 }));
+            document.FinalSectionHeadersFooters.Header = new HeaderFooter();
+            document.FinalSectionHeadersFooters.Header.Paragraphs.Add(headerParagraph);
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var text = view.BuildPdfContent().Pages.SelectMany(page => page.Ops).OfType<PdfText>().ToArray();
+            var bodyBase = text.Single(item => item.Text == "BodyBase");
+            var bodyRaised = text.Single(item => item.Text == "BodyRaised");
+            var headerBase = text.Single(item => item.Text == "HeaderBase");
+            var headerLowered = text.Single(item => item.Text == "HeaderLowered");
+
+            bodyRaised.Y.Should().BeApproximately(bodyBase.Y + 3, 0.001);
+            headerLowered.Y.Should().BeApproximately(headerBase.Y - 2, 0.001);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_ExportsDoubleStrikeAsTwoLinesAndPreservesSingleStrikeControl() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("Double", RunFormatting.Default with
+            {
+                DoubleStrikethrough = true,
+                ColorHex = "#CC0000",
+            }));
+            paragraph.Runs.Add(new Run(" Single", RunFormatting.Default with
+            {
+                Strikethrough = true,
+                ColorHex = "#0055AA",
+            }));
+            document.Blocks.Add(paragraph);
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var ops = view.BuildPdfContent().Pages[0].Ops;
+            var doubleLines = ops.OfType<PdfLine>()
+                .Where(line => line.Color == new PdfColor(0xCC, 0x00, 0x00))
+                .ToArray();
+            var singleLines = ops.OfType<PdfLine>()
+                .Where(line => line.Color == new PdfColor(0x00, 0x55, 0xAA))
+                .ToArray();
+
+            doubleLines.Should().HaveCount(2);
+            doubleLines.Select(line => line.Y1).Should().OnlyHaveUniqueItems();
+            singleLines.Should().ContainSingle();
+            doubleLines.Concat(singleLines).Should().OnlyContain(line =>
+                line.X2 > line.X1 && line.LineWidth > 0 && Math.Abs(line.Y1 - line.Y2) < 0.001);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task HiddenText_RemainsAddressableButIsSuppressedAcrossLiveLayoutAndPdf() =>
         Session.Dispatch(() =>
         {

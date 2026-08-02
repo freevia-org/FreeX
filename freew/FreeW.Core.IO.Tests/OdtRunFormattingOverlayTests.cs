@@ -3,6 +3,21 @@ namespace FreeW.Core.IO.Tests;
 public sealed class OdtRunFormattingOverlayTests
 {
     [Fact]
+    public void MergeRunFormatting_PreservesDoubleStrikethroughFromEitherLayer()
+    {
+        var inherited = OdtFileAdapter.MergeRunFormatting(
+            new RunFormatting { DoubleStrikethrough = true },
+            new RunFormatting { Strikethrough = true });
+        var direct = OdtFileAdapter.MergeRunFormatting(
+            RunFormatting.Default,
+            new RunFormatting { DoubleStrikethrough = true });
+
+        inherited.DoubleStrikethrough.Should().BeTrue();
+        inherited.Strikethrough.Should().BeTrue();
+        direct.DoubleStrikethrough.Should().BeTrue();
+    }
+
+    [Fact]
     public void MergeRunFormatting_PreservesWebHiddenFromEitherLayer()
     {
         var inherited = OdtFileAdapter.MergeRunFormatting(

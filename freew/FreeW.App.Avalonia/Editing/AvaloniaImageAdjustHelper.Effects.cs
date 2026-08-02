@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Editing;
@@ -66,20 +67,17 @@ internal static partial class AvaloniaImageAdjustHelper
         byte[] result;
         if (image.ShadowPreset > 0)
         {
-            var preset = image.ShadowPreset switch
-            {
-                1 => (Blur: 4.0, Distance: 3.0, Opacity: 0.50),
-                2 => (Blur: 6.0, Distance: 5.0, Opacity: 0.55),
-                3 => (Blur: 8.0, Distance: 7.0, Opacity: 0.60),
-                4 => (Blur: 4.0, Distance: 4.0, Opacity: 0.50),
-                _ => (Blur: 10.0, Distance: 10.0, Opacity: 0.65),
-            };
-            result = CompositeHalo(pixels, width, height, stride, preset.Blur, preset.Distance,
-                preset.Opacity, Color.FromRgb(0, 0, 0), image);
+            var shadow = PictureEffectVisualPlanner.BuildShadowPlan(image);
+            result = CompositeHalo(
+                pixels, width, height, stride, shadow.BlurPoints,
+                shadow.OffsetXPoints, shadow.OffsetYPoints, shadow.Opacity,
+                ParseColor(shadow.ColorHex, Color.FromRgb(0, 0, 0)),
+                image);
         }
         else if (image.GlowSizePt > 0)
         {
-            result = CompositeHalo(pixels, width, height, stride, image.GlowSizePt, 0, 0.60,
+            result = CompositeHalo(pixels, width, height, stride, image.GlowSizePt, 0, 0,
+                PictureEffectVisualPlanner.ResolveGlowOpacity(image),
                 ParseColor(image.GlowColorHex, Color.FromRgb(0x44, 0x72, 0xC4)), image);
         }
         else if (image.SoftEdgePt > 0)
@@ -104,23 +102,19 @@ internal static partial class AvaloniaImageAdjustHelper
     {
         if (image.ShadowPreset > 0)
         {
-            var preset = image.ShadowPreset switch
-            {
-                1 => (Blur: 4.0, Distance: 3.0, Opacity: 0.50),
-                2 => (Blur: 6.0, Distance: 5.0, Opacity: 0.55),
-                3 => (Blur: 8.0, Distance: 7.0, Opacity: 0.60),
-                4 => (Blur: 4.0, Distance: 4.0, Opacity: 0.50),
-                _ => (Blur: 10.0, Distance: 10.0, Opacity: 0.65),
-            };
+            var shadow = PictureEffectVisualPlanner.BuildShadowPlan(image);
             return CompositeHaloExpanded(
-                pixels, width, height, stride, preset.Blur, preset.Distance, preset.Opacity,
-                Color.FromRgb(0, 0, 0), image);
+                pixels, width, height, stride, shadow.BlurPoints,
+                shadow.OffsetXPoints, shadow.OffsetYPoints, shadow.Opacity,
+                ParseColor(shadow.ColorHex, Color.FromRgb(0, 0, 0)),
+                image);
         }
 
         if (image.GlowSizePt > 0)
         {
             return CompositeHaloExpanded(
-                pixels, width, height, stride, image.GlowSizePt, 0, 0.60,
+                pixels, width, height, stride, image.GlowSizePt, 0, 0,
+                PictureEffectVisualPlanner.ResolveGlowOpacity(image),
                 ParseColor(image.GlowColorHex, Color.FromRgb(0x44, 0x72, 0xC4)), image);
         }
 
@@ -271,16 +265,16 @@ internal static partial class AvaloniaImageAdjustHelper
         int height,
         int stride,
         double blurPoints,
-        double distancePoints,
+        double offsetXPoints,
+        double offsetYPoints,
         double opacity,
         Color color,
         InlineImage image)
     {
         var blurRadius = EffectPixels(blurPoints, image, width, height);
         var blurred = BlurAlpha(pixels, width, height, stride, blurRadius);
-        var distance = EffectPixels(distancePoints, image, width, height);
-        var dx = distance;
-        var dy = distance;
+        var dx = EffectOffsetPixels(offsetXPoints, image, width, height);
+        var dy = EffectOffsetPixels(offsetYPoints, image, width, height);
         var result = new byte[pixels.Length];
 
         for (var y = 0; y < height; y++)
@@ -308,17 +302,19 @@ internal static partial class AvaloniaImageAdjustHelper
         int height,
         int stride,
         double blurPoints,
-        double distancePoints,
+        double offsetXPoints,
+        double offsetYPoints,
         double opacity,
         Color color,
         InlineImage image)
     {
         var blurRadius = EffectPixels(blurPoints, image, width, height);
-        var distance = EffectPixels(distancePoints, image, width, height);
-        var sourceX = blurRadius + Math.Max(0, -distance) + 1;
-        var sourceY = blurRadius + Math.Max(0, -distance) + 1;
-        var rightInset = blurRadius + Math.Max(0, distance) + 1;
-        var bottomInset = blurRadius + Math.Max(0, distance) + 1;
+        var offsetX = EffectOffsetPixels(offsetXPoints, image, width, height);
+        var offsetY = EffectOffsetPixels(offsetYPoints, image, width, height);
+        var sourceX = blurRadius + Math.Max(0, -offsetX) + 1;
+        var sourceY = blurRadius + Math.Max(0, -offsetY) + 1;
+        var rightInset = blurRadius + Math.Max(0, offsetX) + 1;
+        var bottomInset = blurRadius + Math.Max(0, offsetY) + 1;
         var expandedWidth = width + sourceX + rightInset;
         var expandedHeight = height + sourceY + bottomInset;
         var expandedStride = checked(expandedWidth * 4);
@@ -340,8 +336,8 @@ internal static partial class AvaloniaImageAdjustHelper
             var sourceAlpha = hasSource
                 ? pixels[sourceOffsetY * stride + sourceOffsetX * 4 + 3] / 255.0
                 : 0;
-            var haloX = Math.Clamp(x - distance, 0, expandedWidth - 1);
-            var haloY = Math.Clamp(y - distance, 0, expandedHeight - 1);
+            var haloX = Math.Clamp(x - offsetX, 0, expandedWidth - 1);
+            var haloY = Math.Clamp(y - offsetY, 0, expandedHeight - 1);
             var haloAlpha = blurred[haloY * expandedWidth + haloX] / 255.0 * opacity;
             var haloPremul = haloAlpha * (1 - sourceAlpha);
 
@@ -416,6 +412,9 @@ internal static partial class AvaloniaImageAdjustHelper
             ? Math.Clamp(Math.Max(1, (int)Math.Round(points * pointScale)), 1, 32)
             : 0;
     }
+
+    private static int EffectOffsetPixels(double points, InlineImage image, int width, int height) =>
+        points == 0 ? 0 : Math.Sign(points) * EffectPixels(Math.Abs(points), image, width, height);
 
     private static Color ParseColor(string? hex, Color fallback)
     {
