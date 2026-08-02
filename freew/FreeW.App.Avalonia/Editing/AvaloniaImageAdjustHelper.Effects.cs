@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Editing;
@@ -79,7 +80,8 @@ internal static partial class AvaloniaImageAdjustHelper
         }
         else if (image.GlowSizePt > 0)
         {
-            result = CompositeHalo(pixels, width, height, stride, image.GlowSizePt, 0, 0.60,
+            result = CompositeHalo(pixels, width, height, stride, image.GlowSizePt, 0,
+                PictureEffectVisualPlanner.ResolveGlowOpacity(image),
                 ParseColor(image.GlowColorHex, Color.FromRgb(0x44, 0x72, 0xC4)), image);
         }
         else if (image.SoftEdgePt > 0)
@@ -120,7 +122,8 @@ internal static partial class AvaloniaImageAdjustHelper
         if (image.GlowSizePt > 0)
         {
             return CompositeHaloExpanded(
-                pixels, width, height, stride, image.GlowSizePt, 0, 0.60,
+                pixels, width, height, stride, image.GlowSizePt, 0,
+                PictureEffectVisualPlanner.ResolveGlowOpacity(image),
                 ParseColor(image.GlowColorHex, Color.FromRgb(0x44, 0x72, 0xC4)), image);
         }
 

@@ -12700,7 +12700,7 @@ public sealed class DocumentView : RichTextBox
             {
                 BlurRadius  = image.GlowSizePt * PxPerPoint,
                 ShadowDepth = 0,
-                Opacity     = 0.6,
+                Opacity     = PictureEffectVisualPlanner.ResolveGlowOpacity(image),
                 Color       = glowColor
             };
         }

@@ -407,6 +407,62 @@ public sealed class PictureCoreCommandParityTests
     }
 
     [Fact]
+    public async Task ImportedGlowAlpha_ControlsExpandedHaloAndPresetFallback()
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 16;
+            const int height = 12;
+            var source = OpaqueRaster(width, height);
+
+            static InlineImage GlowImage(int? importedAlpha)
+            {
+                return new InlineImage(OnePixelPng(), 160, 120)
+                {
+                    GlowSizePt = 12,
+                    GlowColorHex = "FF0000",
+                    ImportedEffects = importedAlpha is int alpha
+                        ? new ShapeEffectLst { HasGlow = true, GlowAlpha = alpha }
+                        : null,
+                };
+            }
+
+            var transparent = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(0));
+            var quarter = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(25000));
+            var opaque = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(100000));
+            var preset = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(null));
+            var importedDefault = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, GlowImage(60000));
+
+            static int OutsideAlpha(AvaloniaPictureEffectRaster raster)
+            {
+                var alpha = 0;
+                for (var y = 0; y < raster.Height; y++)
+                for (var x = 0; x < raster.Width; x++)
+                {
+                    var inSource = x >= raster.SourcePixelRect.X &&
+                                   x < raster.SourcePixelRect.Right &&
+                                   y >= raster.SourcePixelRect.Y &&
+                                   y < raster.SourcePixelRect.Bottom;
+                    if (!inSource)
+                        alpha += raster.Pixels[y * raster.Stride + x * 4 + 3];
+                }
+
+                return alpha;
+            }
+
+            OutsideAlpha(transparent).Should().Be(0);
+            OutsideAlpha(quarter).Should().BeGreaterThan(0).And.BeLessThan(OutsideAlpha(opaque));
+            preset.Pixels.Should().Equal(importedDefault.Pixels);
+            preset.SourcePixelRect.Should().Be(importedDefault.SourcePixelRect);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ExpandedEffectCacheFeedsInlineAndFloatingDrawRectsWithoutChangingSourceGeometry()
     {
         await Session.Dispatch(() =>
