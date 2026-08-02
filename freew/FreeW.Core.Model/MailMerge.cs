@@ -1300,9 +1300,8 @@ public static class MailMerge
     }
 
     /// <summary>
-    /// The distinct merge-field names appearing anywhere in the document body (paragraph runs and table
-    /// cell paragraphs), in first-appearance order, de-duplicated case-insensitively. Header/footer and
-    /// footnote/comment text are not scanned — merge fields live in the body flow.
+    /// The distinct merge-field names appearing in any mergeable document story or visible drawing text,
+    /// in first-appearance order and de-duplicated case-insensitively.
     /// </summary>
     public static IReadOnlyList<string> FieldNames(TextDocument doc)
     {
@@ -1325,6 +1324,17 @@ public static class MailMerge
 
         foreach (var block in doc.Blocks)
             ScanBlock(block, Scan);
+        ScanSectionHeadersFooters(doc.FinalSectionHeadersFooters, Scan);
+        foreach (var footnote in doc.Footnotes.OrderBy(entry => entry.Key).Select(entry => entry.Value))
+            foreach (var paragraph in footnote.Content)
+                ScanParagraph(paragraph, Scan);
+        foreach (var endnote in doc.Endnotes.OrderBy(entry => entry.Key).Select(entry => entry.Value))
+            foreach (var paragraph in endnote.Content)
+                ScanParagraph(paragraph, Scan);
+        foreach (var comment in doc.Comments.OrderBy(entry => entry.Key).Select(entry => entry.Value))
+            foreach (var node in comment.ThreadInOrder())
+                foreach (var paragraph in node.Content)
+                    ScanParagraph(paragraph, Scan);
 
         return result;
     }
@@ -1745,17 +1755,116 @@ public static class MailMerge
         switch (block)
         {
             case Paragraph p:
-                foreach (var run in p.Runs)
-                    scan(run.Text);
+                ScanParagraph(p, scan);
                 break;
             case Table t:
                 foreach (var row in t.Rows)
                     foreach (var cell in row.Cells)
                         foreach (var p in cell.Paragraphs)
-                            foreach (var run in p.Runs)
-                                scan(run.Text);
+                            ScanParagraph(p, scan);
                 break;
         }
+    }
+
+    private static void ScanParagraph(Paragraph paragraph, Action<string> scan)
+    {
+        foreach (var run in paragraph.Runs)
+            ScanRun(run, scan);
+        if (paragraph.SectionBreak is { } section)
+            ScanSectionHeadersFooters(section.HeadersFooters, scan);
+    }
+
+    private static void ScanRun(Run run, Action<string> scan)
+    {
+        if (run.Ruby is { } ruby)
+        {
+            foreach (var fragment in ruby.BaseFragments)
+                scan(fragment.Text);
+            foreach (var fragment in ruby.PhoneticFragments)
+                scan(fragment.Text);
+        }
+        else
+        {
+            scan(run.Text);
+        }
+
+        if (run.Shape is { } shape)
+            foreach (var paragraph in shape.TextParagraphs)
+                ScanParagraph(paragraph, scan);
+        if (run.WordArt is { } wordArt)
+            scan(wordArt.Text);
+        if (run.SmartArt is { } smartArt)
+            foreach (var node in smartArt.Nodes)
+                ScanSmartArtNode(node, scan);
+        if (run.Chart is { } chart)
+            ScanChart(chart, scan);
+        if (run.DrawingGroup is { } drawingGroup)
+            ScanDrawingGroup(drawingGroup, scan);
+    }
+
+    private static void ScanSmartArtNode(SmartArtNode node, Action<string> scan)
+    {
+        scan(node.Text);
+        foreach (var child in node.Children)
+            ScanSmartArtNode(child, scan);
+    }
+
+    private static void ScanChart(Chart chart, Action<string> scan)
+    {
+        if (chart.Title is { } title)
+            scan(title);
+        if (chart.CategoryAxisTitle is { } categoryAxisTitle)
+            scan(categoryAxisTitle);
+        if (chart.ValueAxisTitle is { } valueAxisTitle)
+            scan(valueAxisTitle);
+        foreach (var category in chart.Categories)
+            scan(category);
+        foreach (var series in chart.Series)
+            if (series.Name is { } name)
+                scan(name);
+    }
+
+    private static void ScanDrawingGroup(DrawingGroup group, Action<string> scan)
+    {
+        foreach (var child in group.Children)
+        {
+            switch (child)
+            {
+                case Shape shape:
+                    foreach (var paragraph in shape.TextParagraphs)
+                        ScanParagraph(paragraph, scan);
+                    break;
+                case WordArt wordArt:
+                    scan(wordArt.Text);
+                    break;
+                case SmartArt smartArt:
+                    foreach (var node in smartArt.Nodes)
+                        ScanSmartArtNode(node, scan);
+                    break;
+                case Chart chart:
+                    ScanChart(chart, scan);
+                    break;
+                case DrawingGroup nested:
+                    ScanDrawingGroup(nested, scan);
+                    break;
+            }
+        }
+    }
+
+    private static void ScanSectionHeadersFooters(SectionHeadersFooters stories, Action<string> scan)
+    {
+        foreach (var story in new[]
+                 {
+                     stories.Header,
+                     stories.Footer,
+                     stories.EvenHeader,
+                     stories.EvenFooter,
+                     stories.FirstHeader,
+                     stories.FirstFooter
+                 })
+            if (story is not null)
+                foreach (var paragraph in story.Paragraphs)
+                    ScanParagraph(paragraph, scan);
     }
 
     private static Block CloneBlock(Block block, IReadOnlyDictionary<string, string> row)
@@ -1828,6 +1937,8 @@ public static class MailMerge
             wordArt.Text = transform(wordArt.Text);
         if (run.SmartArt is { } smartArt)
             TransformSmartArtText(smartArt, transform);
+        if (run.Chart is { } chart)
+            TransformChartText(chart, transform);
         if (run.DrawingGroup is { } drawingGroup)
             TransformDrawingGroupText(drawingGroup, transform);
     }
@@ -1859,6 +1970,21 @@ public static class MailMerge
             TransformSmartArtNodeText(child, transform);
     }
 
+    private static void TransformChartText(Chart chart, Func<string, string> transform)
+    {
+        if (chart.Title is not null)
+            chart.Title = transform(chart.Title);
+        if (chart.CategoryAxisTitle is not null)
+            chart.CategoryAxisTitle = transform(chart.CategoryAxisTitle);
+        if (chart.ValueAxisTitle is not null)
+            chart.ValueAxisTitle = transform(chart.ValueAxisTitle);
+        for (var index = 0; index < chart.Categories.Count; index++)
+            chart.Categories[index] = transform(chart.Categories[index]);
+        foreach (var series in chart.Series)
+            if (series.Name is not null)
+                series.Name = transform(series.Name);
+    }
+
     private static void TransformDrawingGroupText(DrawingGroup group, Func<string, string> transform)
     {
         foreach (var child in group.Children)
@@ -1873,6 +1999,9 @@ public static class MailMerge
                     break;
                 case SmartArt smartArt:
                     TransformSmartArtText(smartArt, transform);
+                    break;
+                case Chart chart:
+                    TransformChartText(chart, transform);
                     break;
                 case DrawingGroup nested:
                     TransformDrawingGroupText(nested, transform);

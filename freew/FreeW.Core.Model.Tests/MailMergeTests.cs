@@ -46,6 +46,43 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void FieldNames_FromDocument_ScansDrawingAndAnnotationStories()
+    {
+        var doc = new TextDocument();
+        var paragraph = new Paragraph("Body «BodyField»");
+        paragraph.Runs.Add(Run.FromShape(Shape.TextBoxWith("Shape «ShapeField»", 80, 30)));
+        paragraph.Runs.Add(Run.FromWordArt(new WordArt("Art «ArtField»")));
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["«CategoryField»"],
+            [1d],
+            seriesName: "«SeriesField»",
+            title: "«ChartTitleField»");
+        chart.CategoryAxisTitle = "«CategoryAxisField»";
+        chart.ValueAxisTitle = "«ValueAxisField»";
+        paragraph.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(paragraph);
+        doc.Header = new HeaderFooter("Header «HeaderField»");
+        doc.Footnotes[1] = new Footnote(1, "Foot «FootField»");
+        doc.Endnotes[2] = new Endnote(2, "End «EndField»");
+        doc.Comments[3] = new Comment(3, "Comment «CommentField»");
+
+        MailMerge.FieldNames(doc).Should().Equal(
+            "BodyField",
+            "ShapeField",
+            "ArtField",
+            "ChartTitleField",
+            "CategoryAxisField",
+            "ValueAxisField",
+            "CategoryField",
+            "SeriesField",
+            "HeaderField",
+            "FootField",
+            "EndField",
+            "CommentField");
+    }
+
+    [Fact]
     public void Substitute_ReplacesPresentField()
     {
         var row = new Dictionary<string, string> { ["Name"] = "Ada" };
@@ -262,6 +299,50 @@ public class MailMergeTests
         shape.PlainText.Should().Contain("«Name»");
         wordArt.Text.Should().Contain("«Name»");
         smartArt.Nodes[0].Text.Should().Contain("«Name»");
+    }
+
+    [Fact]
+    public void MergeRecord_SubstitutesEveryVisibleChartTextSurface()
+    {
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Category «Name»"],
+            [1d],
+            seriesName: "Series «Name»",
+            title: "Title «Name»");
+        chart.CategoryAxisTitle = "Category axis «Name»";
+        chart.ValueAxisTitle = "Value axis «Name»";
+        var groupedChart = Chart.Create(
+            ChartKind.Line,
+            ["Grouped category «Name»"],
+            [2d],
+            seriesName: "Grouped series «Name»",
+            title: "Grouped title «Name»");
+        var group = new DrawingGroup();
+        group.Children.Add(groupedChart);
+        group.ChildOffsets.Add((0, 0));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        var template = new TextDocument { Blocks = { paragraph } };
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["Name"] = "Ada" });
+
+        var mergedChart = merged.Paragraphs.Single().Runs[0].Chart!;
+        mergedChart.Should().NotBeSameAs(chart);
+        mergedChart.Title.Should().Be("Title Ada");
+        mergedChart.CategoryAxisTitle.Should().Be("Category axis Ada");
+        mergedChart.ValueAxisTitle.Should().Be("Value axis Ada");
+        mergedChart.Categories.Should().Equal("Category Ada");
+        mergedChart.Series.Single().Name.Should().Be("Series Ada");
+        var mergedGroupedChart = (Chart)merged.Paragraphs.Single().Runs[1].DrawingGroup!.Children.Single();
+        mergedGroupedChart.Title.Should().Be("Grouped title Ada");
+        mergedGroupedChart.Categories.Should().Equal("Grouped category Ada");
+        mergedGroupedChart.Series.Single().Name.Should().Be("Grouped series Ada");
+        chart.Title.Should().Contain("«Name»");
+        groupedChart.Title.Should().Contain("«Name»");
     }
 
     [Fact]

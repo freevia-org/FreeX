@@ -15,6 +15,14 @@ public sealed class MailMergeRichContentRoundTripTests
         group.Children.Add(new WordArt("Banner «Name»"));
         group.ChildOffsets.Add((0, 0));
         group.ChildOffsets.Add((92, 0));
+        var chart = Chart.Create(
+            ChartKind.Column,
+            ["Category «Name»"],
+            [1d],
+            seriesName: "Series «Name»",
+            title: "Chart «Name»");
+        chart.CategoryAxisTitle = "Category axis «Name»";
+        chart.ValueAxisTitle = "Value axis «Name»";
 
         var paragraph = new Paragraph("Dear «Name»");
         paragraph.Runs.Add(Run.FromEquation(Equation.FromText("x+1")));
@@ -22,6 +30,7 @@ public sealed class MailMergeRichContentRoundTripTests
         paragraph.Runs.Add(Run.FromWordArt(new WordArt("Art «Name»")));
         paragraph.Runs.Add(Run.FromSmartArt(smartArt));
         paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        paragraph.Runs.Add(Run.FromChart(chart));
         paragraph.Runs.Add(Run.FootnoteReference(1));
         var template = new TextDocument { Blocks = { paragraph } };
         template.Properties.Title = "Rich merge";
@@ -47,7 +56,13 @@ public sealed class MailMergeRichContentRoundTripTests
         var reopenedGroup = runs[5].DrawingGroup!;
         ((Shape)reopenedGroup.Children[0]).PlainText.Should().Be("Grouped Ada");
         ((WordArt)reopenedGroup.Children[1]).Text.Should().Be("Banner Ada");
-        runs[6].FootnoteId.Should().Be(1);
+        var reopenedChart = runs[6].Chart!;
+        reopenedChart.Title.Should().Be("Chart Ada");
+        reopenedChart.CategoryAxisTitle.Should().Be("Category axis Ada");
+        reopenedChart.ValueAxisTitle.Should().Be("Value axis Ada");
+        reopenedChart.Categories.Should().Equal("Category Ada");
+        reopenedChart.Series.Single().Name.Should().Be("Series Ada");
+        runs[7].FootnoteId.Should().Be(1);
         reopened.Footnotes[1].PlainText.Should().Be("Footnote Ada");
         reopened.Properties.Title.Should().Be("Rich merge");
     }
