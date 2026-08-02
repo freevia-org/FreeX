@@ -38,6 +38,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SetScreenMode(screenMode);");
         source.Should().Contain("SlideShowHostPlanner.PlanAdvance(");
         source.Should().Contain("SlideShowHostPlanner.PlanBack(");
+        source.Should().Contain("command.UseDestinationBackground");
+        source.Should().Contain("DisplayCurrentSlide(animated, zoomTransitionDurationMs, zoomShowBackground);");
         source.Should().Contain("SlideShowHostPlanner.PlanTrigger(");
         source.Should().Contain("SlideShowHostPlanner.PlanInternalSlideJump(");
         source.Should().Contain("SlideShowHostPlanner.BuildDisplayPlan(");

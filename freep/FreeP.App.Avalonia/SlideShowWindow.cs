@@ -913,11 +913,16 @@ public sealed class SlideShowWindow : Window
         Close();
     }
 
-    private void NavigateToSlide(Slide slide, int index, bool animated, int? zoomTransitionDurationMs = null)
+    private void NavigateToSlide(
+        Slide slide,
+        int index,
+        bool animated,
+        int? zoomTransitionDurationMs = null,
+        bool zoomShowBackground = true)
     {
         _ = slide;
         _ = index;
-        DisplayCurrentSlide(animated, zoomTransitionDurationMs);
+        DisplayCurrentSlide(animated, zoomTransitionDurationMs, zoomShowBackground);
     }
 
     private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
@@ -940,7 +945,8 @@ public sealed class SlideShowWindow : Window
                     command.Slide,
                     command.SlideIndex,
                     command.AnimateSlide,
-                    command.TransitionDurationMs);
+                    command.TransitionDurationMs,
+                    command.UseDestinationBackground);
                 break;
         }
     }
@@ -952,13 +958,17 @@ public sealed class SlideShowWindow : Window
 
     // ── Slide display + transitions ───────────────────────────────────────────────
 
-    private void DisplayCurrentSlide(bool animated, int? zoomTransitionDurationMs = null)
+    private void DisplayCurrentSlide(
+        bool animated,
+        int? zoomTransitionDurationMs = null,
+        bool zoomShowBackground = true)
     {
         var plan = SlideShowHostPlanner.BuildDisplayPlan(
             _presentation,
             _controller,
             animated,
-            zoomTransitionDurationMs);
+            zoomTransitionDurationMs,
+            zoomShowBackground);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
         _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
