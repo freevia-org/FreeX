@@ -70,7 +70,7 @@ internal static class StyleDialog
         if (isModify)
             name.IsReadOnly = true;
 
-        var basedOn = new ComboBox { MinWidth = 280 };
+        var basedOn = new ComboBox { MinWidth = 280, Height = StyleDialogMetrics.ComboBoxHeight };
         var basedOnEntries = StyleDialogPlanner.BuildStyleOptions(styleNamesById, "(none)").ToList();
         basedOn.ItemsSource = basedOnEntries;
         basedOn.DisplayMemberPath = "Key";
@@ -84,7 +84,7 @@ internal static class StyleDialog
 
         // "Style for following paragraph" (Word's w:next): the style the next paragraph takes when Enter is
         // pressed at the end of one carrying this style. "(same style)" maps to null (keep this style).
-        var nextStyle = new ComboBox { MinWidth = 280 };
+        var nextStyle = new ComboBox { MinWidth = 280, Height = StyleDialogMetrics.ComboBoxHeight };
         var nextEntries = StyleDialogPlanner.BuildStyleOptions(styleNamesById, "(same style)").ToList();
         nextStyle.ItemsSource = nextEntries;
         nextStyle.DisplayMemberPath = "Key";
@@ -96,23 +96,23 @@ internal static class StyleDialog
                 nextStyle.SelectedIndex = match;
         }
 
-        var bold = new CheckBox { Content = "Bold", IsChecked = seedRun.Bold, Margin = new Thickness(0, 0, 12, 0) };
-        var italic = new CheckBox { Content = "Italic", IsChecked = seedRun.Italic, Margin = new Thickness(0, 0, 12, 0) };
-        var underline = new CheckBox { Content = "Underline", IsChecked = seedRun.Underline };
+        var bold = new CheckBox { Content = "Bold", IsChecked = seedRun.Bold, Height = StyleDialogMetrics.CheckBoxHeight, Margin = new Thickness(0, 0, 12, 0) };
+        var italic = new CheckBox { Content = "Italic", IsChecked = seedRun.Italic, Height = StyleDialogMetrics.CheckBoxHeight, Margin = new Thickness(0, 0, 12, 0) };
+        var underline = new CheckBox { Content = "Underline", IsChecked = seedRun.Underline, Height = StyleDialogMetrics.CheckBoxHeight };
         var effects = new StackPanel { Orientation = Orientation.Horizontal };
         effects.Children.Add(bold);
         effects.Children.Add(italic);
         effects.Children.Add(underline);
 
-        var size = new ComboBox { MinWidth = 100 };
+        var size = new ComboBox { MinWidth = 100, Height = StyleDialogMetrics.ComboBoxHeight };
         size.ItemsSource = StyleDialogPlanner.FontSizes.Select(s => s.Label).ToList();
         size.SelectedIndex = StyleDialogPlanner.IndexOfSize(seedRun.FontSizePt);
 
-        var color = new ComboBox { MinWidth = 160 };
+        var color = new ComboBox { MinWidth = 160, Height = StyleDialogMetrics.ComboBoxHeight };
         color.ItemsSource = StyleDialogPlanner.Colors.Select(c => c.Label).ToList();
         color.SelectedIndex = StyleDialogPlanner.IndexOfColor(seedRun.ColorHex);
 
-        var alignment = new ComboBox { MinWidth = 160 };
+        var alignment = new ComboBox { MinWidth = 160, Height = StyleDialogMetrics.ComboBoxHeight };
         alignment.ItemsSource = StyleDialogPlanner.AlignmentLabels.ToList();
         alignment.SelectedIndex = (int)seedPara.Alignment;
 

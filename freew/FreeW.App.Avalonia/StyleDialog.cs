@@ -16,10 +16,10 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
         AvaloniaCompactDialogChrome.WindowsStyle with
         {
-            // WPF's compact combo fields render at 21 logical pixels in this dialog.
-            // Keep the correction local; other dialogs retain the shared 22px density.
-            ControlHeight = 21,
-            ButtonHeight = 21,
+            // These are the measured WPF metrics for this dialog. Keep the correction local;
+            // other dialogs retain their own shared density contracts.
+            ControlHeight = StyleDialogMetrics.ComboBoxHeight,
+            ButtonHeight = StyleDialogMetrics.ButtonHeight,
             ButtonPadding = new Thickness(10, 1),
             ComboBoxBackgroundBrush = new LinearGradientBrush
             {
@@ -50,6 +50,8 @@ internal sealed class StyleDialog : FreeWDialogWindow
     private readonly ParagraphFormatting _seedParagraph;
 
     internal static double ControlHeightForTests => DialogChromeStyle.ControlHeight;
+    internal static double ButtonHeightForTests => DialogChromeStyle.ButtonHeight;
+    internal static double CheckBoxHeightForTests => StyleDialogMetrics.CheckBoxHeight;
 
     private StyleDialog(
         string title,
@@ -242,6 +244,9 @@ internal sealed class StyleDialog : FreeWDialogWindow
         foreach (var checkBox in new[] { _bold, _italic, _underline })
         {
             AvaloniaCompactDialogChrome.ApplyCompactCheckBox(checkBox, DialogChromeStyle);
+            checkBox.Height = StyleDialogMetrics.CheckBoxHeight;
+            checkBox.MinHeight = StyleDialogMetrics.CheckBoxHeight;
+            checkBox.MaxHeight = StyleDialogMetrics.CheckBoxHeight;
             checkBox.Foreground = Brushes.Black;
         }
     }

@@ -1,6 +1,7 @@
 using System.IO;
 using Avalonia.Headless;
 using FreeW.App.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -30,14 +31,20 @@ public sealed class DesignDialogParityTests
         borderSource.Should().Contain("BordersAndShadingDialogPlanner.ArtBorders");
 
         var styleSource = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "StyleDialog.cs"));
-        styleSource.Should().Contain("ControlHeight = 21");
-        styleSource.Should().Contain("other dialogs retain the shared 22px density");
+        styleSource.Should().Contain("ControlHeight = StyleDialogMetrics.ComboBoxHeight");
+        styleSource.Should().Contain("ButtonHeight = StyleDialogMetrics.ButtonHeight");
+        styleSource.Should().Contain("other dialogs retain their own shared density contracts");
     }
 
     [Fact]
     public void StyleDialog_UsesWpfCompactControlHeight()
     {
-        StyleDialog.ControlHeightForTests.Should().Be(21);
+        StyleDialog.ControlHeightForTests.Should().Be(22);
+        StyleDialog.ButtonHeightForTests.Should().Be(20);
+        StyleDialogMetrics.ComboBoxHeight.Should().Be(22);
+        StyleDialog.CheckBoxHeightForTests.Should().Be(15);
+        StyleDialogMetrics.CheckBoxHeight.Should().Be(15);
+        StyleDialogMetrics.ButtonHeight.Should().Be(20);
     }
 
     [Fact]

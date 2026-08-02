@@ -48,6 +48,12 @@ public static class StyleDialogMetrics
     public const double DialogMargin = 16;
     public const double FieldBottomMargin = 10;
     public const double NameTextBoxHeight = 20;
+    // WPF's native ComboBox template measures these fields at 22 logical pixels.
+    public const double ComboBoxHeight = 22;
+    // The three formatting toggles occupy a 15-pixel WPF checkbox row.
+    public const double CheckBoxHeight = 15;
+    // The WPF shared button row paints a 20-pixel button surface in this dialog.
+    public const double ButtonHeight = 20;
     public const double ActionRowTopMargin = 12;
 }
 
