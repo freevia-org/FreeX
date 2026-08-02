@@ -1,6 +1,7 @@
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 using System.Linq;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace FreeP.App.Compositor;
@@ -733,6 +734,33 @@ public sealed class EditingSession
         _selectedShapeIds.Count == 1
         && SetZoomCoverImage(_selectedShapeIds[0], imageBytes, contentType);
 
+    /// <summary>Restores the rendered target preview on one Slide or Section Zoom.</summary>
+    public bool ResetZoomCoverImage(uint shapeId, byte[] previewBytes, string contentType)
+    {
+        var slide = CurrentSlide;
+        var shape = slide is null ? null : FindShape(slide.Shapes, shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom }
+            || shape.PreservedObject?.ObjectKind != PreservedObjectKind.Zoom
+            || shape.PreservedObject.SummaryZoomTargets.Count != 0)
+            return false;
+
+        Bus.Execute(new SetZoomCoverImageCommand(
+            _currentSlideIndex,
+            shapeId,
+            previewBytes,
+            contentType,
+            useCoverImage: false));
+        return string.Equals(
+            shape.PreservedObject.ZoomProperties?.ImageType,
+            "preview",
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Restores the rendered target preview on the single selected Zoom.</summary>
+    public bool ResetSelectedZoomCoverImage(byte[] previewBytes, string contentType) =>
+        _selectedShapeIds.Count == 1
+        && ResetZoomCoverImage(_selectedShapeIds[0], previewBytes, contentType);
+
     /// <summary>Sets a cover image on one Summary Zoom tile identified by section id.</summary>
     public bool SetSummaryZoomTileCoverImage(
         uint shapeId,
@@ -766,6 +794,41 @@ public sealed class EditingSession
         _selectedShapeIds.Count == 1
         && SetSummaryZoomTileCoverImage(_selectedShapeIds[0], sectionId, imageBytes, contentType);
 
+    /// <summary>Restores the rendered preview on one Summary Zoom tile.</summary>
+    public bool ResetSummaryZoomTileCoverImage(
+        uint shapeId,
+        string sectionId,
+        byte[] previewBytes,
+        string contentType)
+    {
+        var slide = CurrentSlide;
+        var shape = slide is null ? null : FindShape(slide.Shapes, shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom }
+            || shape.PreservedObject?.ObjectKind != PreservedObjectKind.Zoom
+            || string.IsNullOrWhiteSpace(sectionId)
+            || shape.PreservedObject.SummaryZoomTargets.All(target =>
+                !string.Equals(target.SectionId, sectionId, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        Bus.Execute(new SetZoomCoverImageCommand(
+            _currentSlideIndex,
+            shapeId,
+            previewBytes,
+            contentType,
+            sectionId,
+            useCoverImage: false));
+        return HasSummaryTileImageType(shape.PreservedObject, sectionId, "preview");
+    }
+
+    /// <summary>Restores the rendered preview on one selected Summary Zoom tile.</summary>
+    public bool ResetSelectedSummaryZoomTileCoverImage(
+        string sectionId,
+        byte[] previewBytes,
+        string contentType) =>
+        _selectedShapeIds.Count == 1
+        && ResetSummaryZoomTileCoverImage(
+            _selectedShapeIds[0], sectionId, previewBytes, contentType);
+
     private static bool HasSummaryTileCover(PreservedObjectInfo info, string sectionId)
     {
         try
@@ -781,6 +844,30 @@ public sealed class EditingSession
                         StringComparison.OrdinalIgnoreCase)));
         }
         catch
+        {
+            return false;
+        }
+    }
+
+    private static bool HasSummaryTileImageType(
+        PreservedObjectInfo info,
+        string sectionId,
+        string imageType)
+    {
+        try
+        {
+            var root = XElement.Parse(info.RawXml);
+            return root.Descendants().Any(element =>
+                element.Name.LocalName == "summaryZmObj"
+                && string.Equals(element.Attribute("sectionId")?.Value, sectionId,
+                    StringComparison.OrdinalIgnoreCase)
+                && string.Equals(
+                    element.Descendants().FirstOrDefault(child => child.Name.LocalName == "zmPr")
+                        ?.Attribute("imageType")?.Value,
+                    imageType,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+        catch (XmlException)
         {
             return false;
         }
