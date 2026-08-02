@@ -68,6 +68,7 @@ public sealed class FindReplaceDialogXamlTests
         var xaml = XamlLocalizationTestHelper.ReadLocalizedXaml("FindReplaceDialog.xaml");
 
         xaml.Should().Contain("FindReplaceDialog.FindReplaceFieldLabelColumnWidth");
+        xaml.Should().NotContain("FindReplaceDialogPlanner.OptionsHeaderMinimumWidth");
         xaml.Should().Contain("FindReplaceDialogPlanner.FieldMinWidth");
         xaml.Should().Contain("FindReplaceDialogPlanner.FormatButtonWidth");
         xaml.Should().Contain("FindReplaceDialogPlanner.ClearFormatButtonWidth");

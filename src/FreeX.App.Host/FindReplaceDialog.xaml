@@ -80,7 +80,6 @@
 
         <Expander x:Name="OptionsExpander"
                   Grid.Row="1"
-                  MinWidth="{x:Static services:FindReplaceDialogPlanner.OptionsHeaderMinimumWidth}"
                   Header="{local:Loc Key=FindReplace_Options}"
                   IsExpanded="False"
                   Expanded="OptionsExpander_Expanded"
