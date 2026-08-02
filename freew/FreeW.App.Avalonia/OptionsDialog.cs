@@ -36,8 +36,22 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     private readonly CheckBox _correctTwoInitialCaps = new();
     private readonly CheckBox _capitalizeDayNames = new();
     private readonly CheckBox _replaceText = new();
-    private readonly Border _replacements = new() { Height = 180, VerticalAlignment = VerticalAlignment.Top };
+    private readonly Border _replacements = new()
+    {
+        Height = OptionsDialogPlanner.ReplacementTableHeight,
+        VerticalAlignment = VerticalAlignment.Top
+    };
     private readonly Grid _replacementGrid = new();
+    // WPF DataGrid exposes an unnamed add-row Button in its visual tree. Keep the same inert tree
+    // artifact so the parity harness can compare action ordering without filtering framework controls.
+    private readonly Button _replacementAddRowPlaceholder = new()
+    {
+        IsVisible = false,
+        IsHitTestVisible = false,
+        IsTabStop = false,
+        Width = 0,
+        Height = 0,
+    };
     private readonly List<ReplacementEditor> _replacementEditors = [];
     private readonly TextBlock _status = new();
 
@@ -56,7 +70,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         _surface = OptionsDialogPlanner.BuildSurface(_seed, SystemLanguageLabel());
 
         Title = _surface.Title;
-        Width = 460;
+        Width = OptionsDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -73,7 +87,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyTextBox(_uiLanguage, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
-        var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
+        var tabs = new TabControl { Margin = new Thickness(OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, 0) };
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
         tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
@@ -82,18 +96,21 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         var buttons = AvaloniaDialogButtonRowFactory.CreateOkCancel(
             Accept,
             Close,
-            buttonWidth: 84,
-            rowMargin: new Thickness(16, 8, 16, 12),
+            buttonWidth: OptionsDialogPlanner.ActionButtonWidth,
+            rowMargin: new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ActionRowTopMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ActionRowBottomMargin),
             style: DialogChromeStyle);
-        DockPanel.SetDock(buttons, Dock.Bottom);
 
-        Content = new DockPanel
+        Content = new StackPanel
         {
-            LastChildFill = true,
             Children =
             {
+                tabs,
+                _status,
                 buttons,
-                new StackPanel { Children = { tabs, _status } },
             },
         };
 
@@ -151,7 +168,11 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     {
         var grid = new Grid
         {
-            Margin = new Thickness(16, 16, 16, 12),
+            Margin = new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentBottomMargin),
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
         };
         AddRow(grid, 0, _surface.General.RecentFilesLabel, _recentFilesCap);
@@ -165,7 +186,14 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         foreach (var spec in _surface.AutoCorrect.Toggles)
             ConfigureToggle(ToggleFor(spec.Kind), spec);
 
-        var panel = new StackPanel { Margin = new Thickness(16, 16, 16, 12), Spacing = 4 };
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentBottomMargin)
+        };
         panel.Children.Add(_correctTwoInitialCaps);
         panel.Children.Add(_capitalizeDayNames);
         panel.Children.Add(_replaceText);
@@ -173,13 +201,13 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         {
             Text = _surface.AutoCorrect.ReplacementsLabel,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, OptionsDialogPlanner.SectionHeaderTopMargin, 0, 0),
         });
         panel.Children.Add(_replacements);
         panel.Children.Add(new TextBlock
         {
             Text = _surface.AutoCorrect.ReplacementsHelpText,
-            FontSize = 11,
+            FontSize = OptionsDialogPlanner.HelpTextFontSize,
             Foreground = Brushes.Gray,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 4, 0, 0),
@@ -199,10 +227,17 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         _replacementGrid.Children.Add(HeaderCell("Replace", 0));
         _replacementGrid.Children.Add(HeaderCell("With", 1));
 
-        foreach (var replacement in _seed.AutoCorrect?.Replacements ?? [])
+        OptionsDialogPlanner.TryParseAutoCorrectReplacements(
+            _surface.AutoCorrect.ReplacementsText,
+            out var replacements,
+            out _);
+        foreach (var replacement in replacements)
             AddReplacementRow(replacement.Replace, replacement.With);
 
         AddReplacementRow();
+        Grid.SetRow(_replacementAddRowPlaceholder, 1);
+        Grid.SetColumn(_replacementAddRowPlaceholder, 0);
+        _replacementGrid.Children.Add(_replacementAddRowPlaceholder);
         _replacements.Child = new ScrollViewer
         {
             Content = _replacementGrid,
@@ -285,11 +320,25 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             _hyperlinks,
         };
 
-        var rules = new StackPanel { Margin = new Thickness(16, 4, 16, 0), Spacing = 4 };
+        var rules = new StackPanel
+        {
+            Margin = new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ToggleTopMargin,
+                OptionsDialogPlanner.ContentMargin,
+                0)
+        };
         foreach (var box in ruleBoxes)
             rules.Children.Add(box);
 
-        var panel = new StackPanel { Margin = new Thickness(16, 16, 16, 12) };
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentBottomMargin)
+        };
         panel.Children.Add(_autoCorrectEnabled);
         panel.Children.Add(new TextBlock
         {
@@ -313,7 +362,8 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     {
         box.Content = spec.Label;
         box.IsChecked = spec.IsChecked;
-        box.Margin = new Thickness(0, 4, 0, 0);
+        box.Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
     }
 
     private CheckBox ToggleFor(OptionsDialogToggleKind kind) =>

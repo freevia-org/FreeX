@@ -47,7 +47,7 @@ public sealed class OptionsDialogVisualParityTests
 
                 var buttons = dialog.GetLogicalDescendants()
                     .OfType<Button>()
-                    .Where(button => button is not ToggleButton)
+                    .Where(button => button is not ToggleButton && button.Content is not null)
                     .ToArray();
                 buttons.Select(button => button.Content?.ToString())
                     .Should().Equal(ShellStrings.Current.Ok, ShellStrings.Current.Cancel);
@@ -100,6 +100,57 @@ public sealed class OptionsDialogVisualParityTests
                 dialog.Result.AutoCorrect.ReplaceText.Should().BeTrue();
                 dialog.Result.AutoCorrect.Replacements
                     .Should().ContainSingle(replacement => replacement.Replace == "adn" && replacement.With == "and");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Options_matches_wpf_action_order_and_autocorrect_state_policy()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new OptionsDialog(new FreeWOptions
+            {
+                AutoCorrectEnabled = false,
+                AutoFormat = AutoFormatOptions.Default,
+                AutoCorrect = new AutoCorrectOptions
+                {
+                    CorrectTwoInitialCapitals = true,
+                    ReplaceText = false,
+                    Replacements = [new AutoCorrectReplacement("teh", "the")],
+                },
+            });
+            try
+            {
+                var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
+                var root = dialog.Content.Should().BeOfType<StackPanel>().Subject;
+                root.Children.Should().HaveCount(3);
+                root.Children[0].Should().BeSameAs(tabs);
+                root.Children[1].Should().BeSameAs(GetField<TextBlock>(dialog, "_status"));
+                root.Children[2].Should().BeOfType<StackPanel>();
+
+                tabs.Items.Cast<TabItem>().Select(item => item.Header?.ToString())
+                    .Should().Equal("General", "AutoCorrect", "AutoFormat As You Type");
+
+                var checks = dialog.GetLogicalDescendants().OfType<CheckBox>().ToArray();
+                var master = checks.Single(check => check.Content?.ToString() == "Enable AutoCorrect (smart typing) as you type");
+                var smartQuotes = checks.Single(check => check.Content?.ToString()!.StartsWith("Straight quotes", StringComparison.Ordinal) == true);
+                var replaceText = checks.Single(check => check.Content?.ToString() == "Replace text as you type");
+                var table = GetField<Border>(dialog, "_replacements");
+
+                master.IsChecked.Should().BeFalse();
+                smartQuotes.IsEnabled.Should().BeFalse();
+                replaceText.IsChecked.Should().BeFalse();
+                table.IsEnabled.Should().BeFalse();
+
+                master.IsChecked = true;
+                smartQuotes.IsEnabled.Should().BeTrue();
+                replaceText.IsChecked = true;
+                table.IsEnabled.Should().BeTrue();
             }
             finally
             {

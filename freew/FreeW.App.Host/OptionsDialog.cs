@@ -57,7 +57,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         CanUserAddRows = true,
         CanUserDeleteRows = true,
         HeadersVisibility = DataGridHeadersVisibility.Column,
-        Height = 180,
+        Height = OptionsDialogPlanner.ReplacementTableHeight,
         Margin = new Thickness(0, 6, 0, 0),
     };
     private readonly ObservableCollection<ReplacementRow> _replacementRows = new();
@@ -73,7 +73,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         Owner = owner;
         Title = _surface.Title;
-        Width = 460;
+        Width = OptionsDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -88,12 +88,19 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _recentFilesCap.Text = _options.RecentFilesCap.ToString(CultureInfo.CurrentCulture);
         _uiLanguage.Text = _options.UiLanguage;
 
-        var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
+        var tabs = new TabControl { Margin = new Thickness(OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, 0) };
         tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });
 
-        var buttons = DialogButtonRowFactory.Create(Commit, buttonWidth: 84, rowMargin: new Thickness(16, 8, 16, 12));
+        var buttons = DialogButtonRowFactory.Create(
+            Commit,
+            buttonWidth: OptionsDialogPlanner.ActionButtonWidth,
+            rowMargin: new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ActionRowTopMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ActionRowBottomMargin));
 
         var outer = new StackPanel();
         outer.Children.Add(tabs);
@@ -105,7 +112,14 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private FrameworkElement BuildGeneralTab()
     {
-        var grid = new Grid { Margin = new Thickness(16, 16, 16, 12) };
+        var grid = new Grid
+        {
+            Margin = new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentBottomMargin)
+        };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var i = 0; i < 3; i++)
@@ -119,21 +133,9 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private FrameworkElement BuildAutoFormatTab()
     {
-        var af = _options.AutoFormat ?? AutoFormatOptions.Default;
         ConfigureToggle(_autoCorrectEnabled, _surface.AutoFormat.MasterToggle);
         foreach (var spec in _surface.AutoFormat.RuleToggles)
             ConfigureToggle(ToggleFor(spec.Kind), spec);
-        _autoCorrectEnabled.IsChecked = _options.AutoCorrectEnabled;
-        _smartQuotes.IsChecked = af.SmartQuotes;
-        _dashes.IsChecked = af.Dashes;
-        _ellipsis.IsChecked = af.Ellipsis;
-        _symbols.IsChecked = af.Symbols;
-        _capitalization.IsChecked = af.Capitalization;
-        _bulletedLists.IsChecked = af.BulletedLists;
-        _numberedLists.IsChecked = af.NumberedLists;
-        _ordinals.IsChecked = af.Ordinals;
-        _fractions.IsChecked = af.Fractions;
-        _hyperlinks.IsChecked = af.Hyperlinks;
 
         var ruleBoxes = new[]
         {
@@ -141,7 +143,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _bulletedLists, _numberedLists, _ordinals, _fractions, _hyperlinks,
         };
 
-        var rules = new StackPanel { Margin = new Thickness(16, 4, 16, 0) };
+        var rules = new StackPanel { Margin = new Thickness(OptionsDialogPlanner.ContentMargin, OptionsDialogPlanner.ToggleTopMargin, OptionsDialogPlanner.ContentMargin, 0) };
         foreach (var box in ruleBoxes)
         {
             box.Margin = new Thickness(0, 4, 0, 0);
@@ -158,14 +160,21 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _autoCorrectEnabled.Checked += (_, _) => SyncEnabled();
         _autoCorrectEnabled.Unchecked += (_, _) => SyncEnabled();
 
-        var panel = new StackPanel { Margin = new Thickness(16, 16, 16, 12) };
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentBottomMargin)
+        };
         _autoCorrectEnabled.Margin = new Thickness(0, 0, 0, 8);
         panel.Children.Add(_autoCorrectEnabled);
         panel.Children.Add(new TextBlock
         {
             Text = _surface.AutoFormat.RuleSectionLabel,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 4, 0, 0)
+            Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0)
         });
         panel.Children.Add(rules);
         SyncEnabled();
@@ -174,14 +183,14 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private FrameworkElement BuildAutoCorrectTab()
     {
-        var ac = _options.AutoCorrect ?? AutoCorrectOptions.Default;
         foreach (var spec in _surface.AutoCorrect.Toggles)
             ConfigureToggle(ToggleFor(spec.Kind), spec);
-        _correctTwoInitialCaps.IsChecked = ac.CorrectTwoInitialCapitals;
-        _capitalizeDayNames.IsChecked = ac.CapitalizeDayNames;
-        _replaceText.IsChecked = ac.ReplaceText;
 
-        foreach (var r in ac.Replacements ?? new List<AutoCorrectReplacement>())
+        OptionsDialogPlanner.TryParseAutoCorrectReplacements(
+            _surface.AutoCorrect.ReplacementsText,
+            out var replacements,
+            out _);
+        foreach (var r in replacements)
             _replacementRows.Add(new ReplacementRow { Replace = r.Replace, With = r.With });
 
         _replacements.Columns.Add(new DataGridTextColumn
@@ -200,26 +209,33 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var toggles = new[] { _correctTwoInitialCaps, _capitalizeDayNames, _replaceText };
 
-        var panel = new StackPanel { Margin = new Thickness(16, 16, 16, 12) };
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentBottomMargin)
+        };
         foreach (var box in toggles)
         {
-            box.Margin = new Thickness(0, 4, 0, 0);
+            box.Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0);
             panel.Children.Add(box);
         }
         panel.Children.Add(new TextBlock
         {
             Text = _surface.AutoCorrect.ReplacementsLabel,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, OptionsDialogPlanner.SectionHeaderTopMargin, 0, 0),
         });
         panel.Children.Add(_replacements);
         panel.Children.Add(new TextBlock
         {
             Text = _surface.AutoCorrect.ReplacementsHelpText,
-            FontSize = 11,
+            FontSize = OptionsDialogPlanner.HelpTextFontSize,
             Foreground = System.Windows.Media.Brushes.Gray,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 6, 0, 0),
+            Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin + 2, 0, 0),
         });
 
         // The replace table only applies when "Replace text as you type" is on; mirror that in the UI.

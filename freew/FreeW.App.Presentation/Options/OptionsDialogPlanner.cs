@@ -10,6 +10,19 @@ namespace FreeW.App.Presentation.Options;
 /// </summary>
 public static class OptionsDialogPlanner
 {
+    // Portable WPF-authority metrics consumed by both desktop adapters.
+    public const int DialogWidth = 460;
+    public const int TabMargin = 14;
+    public const int ContentMargin = 16;
+    public const int ContentBottomMargin = 12;
+    public const int ActionRowTopMargin = 8;
+    public const int ActionRowBottomMargin = 12;
+    public const int ActionButtonWidth = 84;
+    public const int ReplacementTableHeight = 180;
+    public const int ToggleTopMargin = 4;
+    public const int SectionHeaderTopMargin = 12;
+    public const int HelpTextFontSize = 11;
+
     public const string Title = "FreeW Options";
     public const string GeneralTabHeader = "General";
     public const string AutoCorrectTabHeader = "AutoCorrect";
