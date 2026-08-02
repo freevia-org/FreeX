@@ -219,6 +219,8 @@ public sealed class SlideObjectInsertionPlannerTests
     [InlineData(SlideObjectInsertionPlanner.ChartStockCommandId, ChartType.Stock)]
     [InlineData(SlideObjectInsertionPlanner.ChartSurfaceCommandId, ChartType.Surface)]
     [InlineData(SlideObjectInsertionPlanner.ChartSurface3DCommandId, ChartType.Surface3D)]
+    [InlineData(SlideObjectInsertionPlanner.ChartFunnelCommandId, ChartType.Funnel)]
+    [InlineData(SlideObjectInsertionPlanner.ChartWaterfallCommandId, ChartType.Waterfall)]
     public void ApplyCommand_InsertsExpectedChart(string commandId, ChartType chartType)
     {
         var editor = MakeSession();
