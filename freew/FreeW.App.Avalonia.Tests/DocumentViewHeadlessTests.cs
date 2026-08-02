@@ -144,6 +144,36 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task Bibliography_field_keeps_cached_result_visible_when_generated_region_follows()
+    {
+        string? visible = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph
+            {
+                Runs =
+                {
+                    new Run("Bibliography field cache: "),
+                    Run.ComplexFieldRun(" BIBLIOGRAPHY \\l 1033 ", "References")
+                }
+            });
+            doc.Blocks.Add(new Paragraph("References") { StyleId = Citations.HeadingStyleId });
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 1200));
+            visible = string.Concat(view.GetPlacedForBlock(0).Select(item => item.Ch));
+        });
+
+        if (!ran)
+            return;
+
+        visible.Should().Contain("Bibliography field cache: References");
+    }
+
+    [Fact]
     public async Task Unstyled_runs_inherit_document_default_run_formatting()
     {
         IReadOnlyList<RunFormatting>? formatting = null;

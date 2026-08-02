@@ -48,14 +48,9 @@ public static class ComplexFieldDisplayPlanner
                 IsFieldCode: true,
                 SuppressedResult: false);
 
-        var suppressed = ShouldSuppressCachedResult(field, document);
         return new ComplexFieldDisplayPlan(
-            suppressed ? string.Empty : resolvedResult,
+            resolvedResult,
             IsFieldCode: false,
-            SuppressedResult: suppressed);
+            SuppressedResult: false);
     }
-
-    public static bool ShouldSuppressCachedResult(ComplexField field, TextDocument document) =>
-        string.Equals(field.Keyword, "BIBLIOGRAPHY", StringComparison.Ordinal)
-        && document.Blocks.Any(Citations.IsBibliographyParagraph);
 }

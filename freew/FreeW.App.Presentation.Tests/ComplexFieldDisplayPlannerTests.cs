@@ -46,7 +46,7 @@ public sealed class ComplexFieldDisplayPlannerTests
     }
 
     [Fact]
-    public void Build_HidesBibliographyCacheOnlyWhenGeneratedRegionOwnsTheResult()
+    public void Build_KeepsBibliographyCacheVisibleWhenGeneratedRegionFollows()
     {
         var document = TextDocument.CreateEmpty();
         document.Blocks.Clear();
@@ -55,8 +55,8 @@ public sealed class ComplexFieldDisplayPlannerTests
 
         var plan = ComplexFieldDisplayPlanner.Build(field, "Stale cache", document);
 
-        plan.Text.Should().BeEmpty();
-        plan.SuppressedResult.Should().BeTrue();
+        plan.Text.Should().Be("Stale cache");
+        plan.SuppressedResult.Should().BeFalse();
         plan.IsFieldCode.Should().BeFalse();
     }
 }
