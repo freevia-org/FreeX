@@ -203,11 +203,18 @@ public sealed class DocumentViewTableStructureTests
         rowIndexesByPage[2].Should().Equal(0, 7, 8);
         renderedCellHitCountByPage.Should().Equal([12, 20, 12]);
         headerCellHeights.Should().NotBeEmpty();
-        headerCellHeights.Should().OnlyContain(height => Math.Abs(height - 40.0) <= 0.1,
-            "the authored 30pt header height must be consumed as 40 DIP");
+        const double spacingDip = 1.8 * 96.0 / 72.0;
+        var headerSurfaceHeight = 40.0 - 3 * spacingDip;
+        headerCellHeights.Should().OnlyContain(height => Math.Abs(height - headerSurfaceHeight) <= 0.1,
+            "the authored 40-DIP row schedule remains intact while the first-row cell surface reserves the serialized outer and inner spacing");
         bodyCellHeights.Should().NotBeEmpty();
-        bodyCellHeights.Should().OnlyContain(height => Math.Abs(height - (58.0 * 96.0 / 72.0)) <= 0.1,
-            "the authored 58pt body height must be consumed as approximately 77.333 DIP");
+        var bodyRowHeight = 58.0 * 96.0 / 72.0;
+        var interiorBodySurfaceHeight = bodyRowHeight - 2 * spacingDip;
+        var lastBodySurfaceHeight = bodyRowHeight - 3 * spacingDip;
+        bodyCellHeights.Should().HaveCount(2);
+        bodyCellHeights.Should().Contain(height => Math.Abs(height - interiorBodySurfaceHeight) <= 0.1);
+        bodyCellHeights.Should().Contain(height => Math.Abs(height - lastBodySurfaceHeight) <= 0.1,
+            "the final row reserves the larger authored outer-edge spacing without changing nominal row pagination");
         placedTextByPage.Should().ContainKey(2);
         placedTextByPage[2].Should().Contain("Page area");
         placedTextByPage[2].Should().Contain("Segment 7");

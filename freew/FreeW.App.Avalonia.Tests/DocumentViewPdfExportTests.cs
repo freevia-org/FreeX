@@ -758,6 +758,74 @@ public sealed class DocumentViewPdfExportTests
             borders[1].Should().Be(new PdfStrokeRect(68.125, 56.125, 493.75, 703.75, new PdfColor(0xA0, 0x20, 0xF0), 2));
         }, CancellationToken.None);
 
+    [Fact]
+    public Task HiddenText_RemainsAddressableButIsSuppressedAcrossLiveLayoutAndPdf() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Blocks.Clear();
+
+            var body = new Paragraph();
+            body.Runs.Add(new Run("A"));
+            body.Runs.Add(new Run("23456789", RunFormatting.Default with { Hidden = true }));
+            body.Runs.Add(new Run("B"));
+            body.Runs.Add(Run.FootnoteReference(1));
+            document.Blocks.Add(body);
+
+            var table = Table.Create(1, 1);
+            var cellParagraph = new Paragraph();
+            cellParagraph.Runs.Add(new Run("C"));
+            cellParagraph.Runs.Add(new Run("JKLMNOPQ", RunFormatting.Default with { Hidden = true }));
+            cellParagraph.Runs.Add(new Run("D"));
+            table.Rows[0].Cells[0].Paragraphs.Clear();
+            table.Rows[0].Cells[0].Paragraphs.Add(cellParagraph);
+            document.Blocks.Add(table);
+
+            var header = new HeaderFooter();
+            var headerParagraph = new Paragraph();
+            headerParagraph.Runs.Add(new Run("Header "));
+            headerParagraph.Runs.Add(new Run("HEADER_SECRET", RunFormatting.Default with { Hidden = true }));
+            headerParagraph.Runs.Add(new Run("Visible"));
+            header.Paragraphs.Add(headerParagraph);
+            document.FinalSectionHeadersFooters.Header = header;
+
+            var footnote = new Footnote(1);
+            var noteParagraph = new Paragraph();
+            noteParagraph.Runs.Add(new Run("Footnote "));
+            noteParagraph.Runs.Add(new Run("NOTE_SECRET", RunFormatting.Default with { Hidden = true }));
+            noteParagraph.Runs.Add(new Run("Visible"));
+            footnote.Content.Add(noteParagraph);
+            document.Footnotes[1] = footnote;
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+            var pdf = view.BuildPdfContent();
+
+            var bodyPlacement = view.GetPlacedForBlock(0);
+            string.Concat(bodyPlacement.Select(glyph => glyph.Ch)).Should().Contain("23456789");
+            bodyPlacement
+                .Where(glyph => glyph.Ch is >= '2' and <= '9')
+                .Should().OnlyContain(glyph => glyph.W == 0);
+
+            var tablePlacement = view.GetPlacedForBlock(1);
+            string.Concat(tablePlacement.Select(glyph => glyph.Ch)).Should().Contain("JKLMNOPQ");
+            tablePlacement
+                .Where(glyph => glyph.Ch is >= 'J' and <= 'Q')
+                .Should().OnlyContain(glyph => glyph.W == 0);
+
+            var exportedText = string.Concat(pdf.Pages
+                .SelectMany(page => page.Ops)
+                .OfType<PdfText>()
+                .Select(text => text.Text));
+            exportedText.Should().Contain("A").And.Contain("B");
+            exportedText.Should().Contain("Header").And.Contain("Visible");
+            exportedText.Should().Contain("Footnote");
+            exportedText.Should().NotContain("23456789");
+            exportedText.Should().NotContain("JKLMNOPQ");
+            exportedText.Should().NotContain("HEADER_SECRET");
+            exportedText.Should().NotContain("NOTE_SECRET");
+        }, CancellationToken.None);
+
     [Theory]
     [InlineData(false, false, 23, 740)]
     [InlineData(true, false, 23, 704)]

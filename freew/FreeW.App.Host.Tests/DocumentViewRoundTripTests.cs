@@ -1581,6 +1581,48 @@ public sealed class DocumentViewRoundTripTests
         return string.Join(" ", text);
     }
 
+    [StaFact]
+    public void HiddenText_CollapsesInTheEditorAndSurvivesRoundTrip()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Visible A"));
+        paragraph.Runs.Add(new Run("SECRET", RunFormatting.Default with
+        {
+            Hidden = true,
+            FontSizePt = 17,
+            ColorHex = "#123456",
+        }));
+        paragraph.Runs.Add(new Run("Visible B"));
+        document.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var renderedParagraph = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .Single();
+        var renderedRuns = renderedParagraph.Inlines
+            .OfType<System.Windows.Documents.Run>()
+            .ToArray();
+        var hidden = renderedRuns.Single(run => run.Text == "SECRET");
+        hidden.FontSize.Should().Be(0.015);
+        hidden.Foreground.Should().BeSameAs(System.Windows.Media.Brushes.Transparent);
+        hidden.Background.Should().BeNull();
+        hidden.TextDecorations.Should().BeNull();
+
+        view.CommitToModel();
+
+        var recovered = view.Model.Paragraphs.Single().Runs;
+        recovered.Select(run => run.Text).Should().Equal("Visible A", "SECRET", "Visible B");
+        recovered[1].Formatting.Hidden.Should().BeTrue();
+        recovered[1].Formatting.FontSizePt.Should().Be(17);
+        recovered[1].Formatting.ColorHex.Should().Be("#123456");
+        recovered[0].Formatting.Hidden.Should().BeFalse();
+        recovered[2].Formatting.Hidden.Should().BeFalse();
+    }
+
     private static System.Windows.Controls.Border SpacedCellSurface(System.Windows.Documents.TableCell cell) =>
         cell.Blocks.OfType<BlockUIContainer>().Single().Child
             .Should().BeOfType<System.Windows.Controls.Grid>().Subject.Children
