@@ -6333,6 +6333,7 @@ public sealed class MainWindowHeadlessTests
                 SmartArtAuthoringPlanner.HorizontalBulletListLayoutCommandId,
                 SmartArtAuthoringPlanner.HorizontalBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
+                SmartArtAuthoringPlanner.GroupedListLayoutCommandId,
                 SmartArtAuthoringPlanner.BasicBlockListLayoutCommandId,
                 SmartArtAuthoringPlanner.StackedListLayoutCommandId,
                 SmartArtAuthoringPlanner.DescendingBlockListLayoutCommandId,

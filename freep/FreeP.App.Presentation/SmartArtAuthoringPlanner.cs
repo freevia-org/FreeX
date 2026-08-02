@@ -92,6 +92,7 @@ public enum SmartArtLayoutPreset
     HorizontalBulletList,
     HorizontalBlockList,
     TrapezoidList,
+    GroupedList,
     BasicCycle,
     MultidirectionalCycle,
     Cycle2,
@@ -242,6 +243,7 @@ public static class SmartArtAuthoringPlanner
     public const string HorizontalBulletListLayoutCommandId = "freep.smartart.layout.horizontal-bullet-list";
     public const string HorizontalBlockListLayoutCommandId = "freep.smartart.layout.horizontal-block-list";
     public const string TrapezoidListLayoutCommandId = "freep.smartart.layout.trapezoid-list";
+    public const string GroupedListLayoutCommandId = "freep.smartart.layout.grouped-list";
     public const string BasicCycleLayoutCommandId = "freep.smartart.layout.basic-cycle";
     public const string MultidirectionalCycleLayoutCommandId = "freep.smartart.layout.multidirectional-cycle";
     public const string Cycle2LayoutCommandId = "freep.smartart.layout.cycle-2";
@@ -629,6 +631,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.TrapezoidList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/trapezoidList", SmartArtFamily.List),
+            SmartArtLayoutPreset.GroupedList =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/groupedList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.MultidirectionalCycle =>

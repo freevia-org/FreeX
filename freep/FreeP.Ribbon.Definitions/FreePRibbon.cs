@@ -907,6 +907,9 @@ public static class FreePRibbon
             group.Medium(SmartArtAuthoringPlanner.TrapezoidListLayoutCommandId,
                 FreePRibbonText.SmartArtTrapezoidListCommand.Label, RibbonCommandIconKind.List,
                 FreePRibbonText.SmartArtTrapezoidListCommand.KeyTip);
+            group.Medium(SmartArtAuthoringPlanner.GroupedListLayoutCommandId,
+                FreePRibbonText.SmartArtGroupedListCommand.Label, RibbonCommandIconKind.List,
+                FreePRibbonText.SmartArtGroupedListCommand.KeyTip);
             group.Medium(SmartArtAuthoringPlanner.BasicCycleLayoutCommandId,
                 FreePRibbonText.SmartArtBasicCycleCommand.Label, RibbonCommandIconKind.Refresh,
                 FreePRibbonText.SmartArtBasicCycleCommand.KeyTip);
