@@ -7388,83 +7388,76 @@ internal static class FreeWRibbonCommands
             if (LabelSetupDialog.Ask(Window.GetWindow(editor)) is not { } label)
                 return; // cancelled
 
-            // Apply the label-sheet page geometry first so the table fits the physical sheet.
-            editor.ApplyPageSettings(page =>
-            {
-                page.WidthPt        = label.PageWidthPt;
-                page.HeightPt       = label.PageHeightPt;
-                page.Landscape      = label.Landscape;
-                page.MarginLeftPt   = label.MarginPt;
-                page.MarginRightPt  = label.MarginPt;
-                page.MarginTopPt    = label.MarginPt;
-                page.MarginBottomPt = label.MarginPt;
-            });
-
-            // Insert the label grid — the editor routes this through the undo/redo bus.
-            editor.InsertTable(label.Rows, label.Columns);
-
-            // Populate cells with merged content when the session has recipient data.
-            PopulateLabelCells(label.Rows, label.Columns);
-
-            editor.Focus();
+            ApplyLabelSheet(editor, session, label);
         }
 
-        // Populate each cell of the freshly-inserted table (which is the last block in the document)
-        // with the per-record merged template content.  The editor body at the time Labels is invoked
-        // serves as the label template (typically pre-populated with «Field» placeholders).  Records
-        // advance one per cell left-to-right, top-to-bottom.  Excess cells (beyond the last record)
-        // are left with the default empty paragraph.
-        private void PopulateLabelCells(int rows, int columns)
+        internal static IReadOnlyList<IReadOnlyList<FreeW.Core.Model.Paragraph>> BuildLabelCellContents(
+            DocumentView editor,
+            MailMergeSession session,
+            int capacity)
         {
-            var data = session.Data;
-            if (data is not { Count: > 0 })
-                return; // no recipients — leave grid blank
+            if (session.Data is not { Count: > 0 } data)
+                return [];
 
-            // The template is the current editor content, already committed by InsertTable.
-            // Use the session's stashed template when a preview is active; otherwise the
-            // current model is the template.
             var template = session.IsPreviewing ? session.Template! : editor.Model;
+            var state = new MergeState();
+            var contents = new List<IReadOnlyList<FreeW.Core.Model.Paragraph>>(
+                Math.Min(capacity, data.Count));
+            var recordIndex = 0;
 
-            // The label table was just inserted; it is the last block in the model.
-            var blockIndex = editor.Model.Blocks.Count - 1;
-            if (blockIndex < 0 || editor.Model.Blocks[blockIndex] is not FreeW.Core.Model.Table)
-                return; // safety — should never happen right after InsertTable
-
-            var mergeState = new MergeState();
-            int recordIndex = 0;
-
-            for (int r = 0; r < rows; r++)
+            while (contents.Count < capacity && recordIndex < data.Count)
             {
-                for (int c = 0; c < columns; c++)
+                state.SequenceNumber++;
+                var row = session.AugmentRow(data.Rows[recordIndex]);
+                var merged = MailMerge.MergeRecordWithRules(template, row, state, recordIndex + 1);
+                if (state.SkipRecordRequested)
                 {
-                    if (recordIndex >= data.Count)
-                        return; // no more records; remaining cells stay empty
-
-                    var row = session.AugmentRow(data.Rows[recordIndex]);
-                    mergeState.SequenceNumber++;
-                    // Merge the template for this record, then extract the body paragraphs.
-                    var merged = MailMerge.MergeRecordWithRules(template, row, mergeState, recordIndex + 1);
-                    if (mergeState.SkipRecordRequested)
-                    {
-                        // «Skip Record If» fired — don't consume a cell; try same cell with next record.
-                        mergeState.SequenceNumber--;
-                        recordIndex++;
-                        c--; // retry this cell
-                        if (c < -1) c = -1; // clamp
-                        continue;
-                    }
-
-                    // Extract body paragraphs from the merged document as the cell content.
-                    var paragraphs = merged.Blocks
-                        .OfType<FreeW.Core.Model.Paragraph>()
-                        .ToList();
-
-                    editor.SetTableCellContent(blockIndex, r, c, paragraphs);
-                    // Next Record directives consume one additional source row after this label.
-                    recordIndex += mergeState.AdvanceRecordRequested ? 2 : 1;
+                    state.SequenceNumber--;
+                    recordIndex++;
+                    continue;
                 }
+
+                contents.Add(merged.Blocks.OfType<FreeW.Core.Model.Paragraph>().ToList());
+                recordIndex += state.AdvanceRecordRequested ? 2 : 1;
             }
+
+            return contents;
         }
+
+    }
+
+    internal static void ApplyLabelSheet(
+        DocumentView editor,
+        MailMergeSession session,
+        LabelSetupResult label)
+    {
+        editor.CommitToModel();
+        var rows = Math.Max(1, label.Rows);
+        var columns = Math.Max(1, label.Columns);
+        var cellContents = LabelsCommand.BuildLabelCellContents(editor, session, rows * columns);
+
+        editor.ApplyPageSettings(page =>
+        {
+            page.WidthPt = label.PageWidthPt;
+            page.HeightPt = label.PageHeightPt;
+            page.Landscape = label.Landscape;
+            page.MarginLeftPt = label.MarginPt;
+            page.MarginRightPt = label.MarginPt;
+            page.MarginTopPt = label.MarginPt;
+            page.MarginBottomPt = label.MarginPt;
+        });
+
+        var blockIndex = editor.InsertTable(rows, columns);
+        for (var index = 0; index < cellContents.Count; index++)
+        {
+            editor.SetTableCellContent(
+                blockIndex,
+                index / columns,
+                index % columns,
+                cellContents[index]);
+        }
+
+        editor.Focus();
     }
 
     // The user's choice from the preview navigation dialog.
