@@ -2760,6 +2760,12 @@ public static class DocxWriter
             sdtPr.Add(new XElement(W + "tag", new XAttribute(W + "val", tag)));
         switch (control.Kind)
         {
+            case ContentControlKind.PlainText:
+                var text = new XElement(W + "text");
+                if (control.PlainTextMultiLine is { } multiLine)
+                    text.Add(new XAttribute(W + "multiLine", multiLine ? "1" : "0"));
+                sdtPr.Add(text);
+                break;
             case ContentControlKind.CheckBox:
                 sdtPr.Add(new XElement(W14 + "checkbox",
                     new XElement(W14 + "checked", new XAttribute(W14 + "val", control.Checked ? "1" : "0"))));

@@ -3264,8 +3264,11 @@ public static class DocxReader
             return new ContentControl(ContentControlKind.RichText, normTag, normAlias,
                 LockMode: lockMode, WordMetadata: wordMetadata);
 
+        var plainText = sdtPr?.Element(W + "text");
         return new ContentControl(ContentControlKind.PlainText, normTag, normAlias,
-            LockMode: lockMode, WordMetadata: wordMetadata);
+            LockMode: lockMode,
+            WordMetadata: wordMetadata,
+            PlainTextMultiLine: ReadNullableOnOffAttribute(plainText?.Attribute(W + "multiLine")));
     }
 
     private static ContentControlDateMetadata? ReadContentControlDateMetadata(XElement date)
@@ -3325,6 +3328,9 @@ public static class DocxReader
             ?? element.Attribute(W15 + "val")?.Value;
         return value is null or "1" or "true" or "on";
     }
+
+    private static bool? ReadNullableOnOffAttribute(XAttribute? attribute) =>
+        attribute is null ? null : ReadOnOffValue(attribute.Value);
 
     /// <summary>
     /// Reads the w:listItem choices (w:displayText / w:value) of a w:dropDownList / w:comboBox element

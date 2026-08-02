@@ -1064,11 +1064,23 @@ public sealed class Run(string text, RunFormatting? formatting = null)
 
     /// <summary>
     /// Creates a plain-text content control run carrying <paramref name="text"/> as its content, tagged
-    /// with the optional <paramref name="tag"/> / <paramref name="alias"/>. Serialises as a w:sdt
-    /// (plain-text) wrapping the run.
+    /// with the optional <paramref name="tag"/> / <paramref name="alias"/>. The nullable
+    /// <paramref name="multiLine"/> preserves absent, explicitly disabled, and enabled w:multiLine
+    /// states. Serialises as a w:sdt (plain-text) wrapping the run.
     /// </summary>
-    public static Run PlainTextControl(string text, string? tag = null, string? alias = null) =>
-        new(text) { Control = new ContentControl(ContentControlKind.PlainText, tag, alias) };
+    public static Run PlainTextControl(
+        string text,
+        string? tag = null,
+        string? alias = null,
+        bool? multiLine = null) =>
+        new(text)
+        {
+            Control = new ContentControl(
+                ContentControlKind.PlainText,
+                tag,
+                alias,
+                PlainTextMultiLine: multiLine)
+        };
 
     /// <summary>
     /// Creates a checkbox content control run. The run's <see cref="Text"/> is the checked (☒) or
@@ -1342,7 +1354,8 @@ public sealed record ContentControlDateMetadata(
 /// (w:alias), and the kind-specific extras: <see cref="Checked"/> (checkbox state), <see cref="DateFormat"/>
 /// (a date picker's w:dateFormat string), <see cref="DateMetadata"/> (the remaining w:date metadata), and
 /// <see cref="ListItems"/> (the w:listItem choices of a drop-down list or combo box), and
-/// <see cref="ListLastValue"/> (the optional w:lastValue on the list owner). Document-part lists
+/// <see cref="ListLastValue"/> (the optional w:lastValue on the list owner), and
+/// <see cref="PlainTextMultiLine"/> (the optional w:text/@w:multiLine state). Document-part lists
 /// and building-block gallery controls additionally retain <see cref="DocPartGallery"/>,
 /// <see cref="DocPartCategory"/>, and <see cref="DocPartUnique"/>.
 /// Modelled as an immutable record so it mirrors how other small marks
@@ -1362,7 +1375,8 @@ public sealed record ContentControl(
     string? DocPartCategory = null,
     bool DocPartUnique = false,
     ContentControlDateMetadata? DateMetadata = null,
-    string? ListLastValue = null)
+    string? ListLastValue = null,
+    bool? PlainTextMultiLine = null)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";
