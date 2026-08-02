@@ -6555,6 +6555,36 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_grid_matrix_shape_composes_shared_four_quadrant_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Matrix,
+                "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix",
+                ["A", "B", "C", "D", "Unused"]);
+            window.Editor.CurrentSlide!.Shapes.Clear();
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(4, "Avalonia consumes the shared four-quadrant Grid Matrix plan");
+        liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("A", "B", "C", "D");
+        liveShapes.Select(op => op.BoundsDip.X).Distinct().Should().HaveCount(2);
+        liveShapes.Select(op => op.BoundsDip.Y).Distinct().Should().HaveCount(2);
+        liveShapes.All(op => op.Text is not null).Should().BeTrue(
+            "Grid Matrix has no relationship connector operations");
+    }
+
+    [Fact]
     public async Task SmartArt_funnel_process_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];

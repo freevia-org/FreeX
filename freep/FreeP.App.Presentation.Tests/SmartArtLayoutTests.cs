@@ -2685,17 +2685,32 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void GridMatrix_UsesLiveMultiRowMatrixGeometry()
+    public void GridMatrix_UsesDedicatedFourQuadrantGeometryAndStableRoles()
     {
         var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D", "E", "F");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix";
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().NotBeNull("gridMatrix is admitted to the shared live Matrix engine");
-        result!.Should().HaveCount(6);
+        result.Should().NotBeNull("gridMatrix is admitted to the dedicated shared live plan");
+        result!.Should().HaveCount(4, "PowerPoint Grid Matrix renders only its first four Level 1 components");
+        result.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle);
+        result.Should().NotContain(shape => shape.Kind == SlideShapeKind.Connector,
+            "Grid Matrix emphasizes components along two axes and has no flow connectors");
+
+        result.Select(shape => shape.PlainText).Should().Equal("A", "B", "C", "D");
+        result.Select(shape => shape.Name).Should().Equal(
+            "SmartArt_GridMatrix_Quadrant_TopLeft_1",
+            "SmartArt_GridMatrix_Quadrant_TopRight_2",
+            "SmartArt_GridMatrix_Quadrant_BottomLeft_3",
+            "SmartArt_GridMatrix_Quadrant_BottomRight_4");
         result.Select(shape => shape.OffsetXEmu).Distinct().Should().HaveCount(2);
-        result.Select(shape => shape.OffsetYEmu).Distinct().Should().HaveCount(3);
+        result.Select(shape => shape.OffsetYEmu).Distinct().Should().HaveCount(2);
+        result.Select(shape => shape.ExtentCxEmu).Distinct().Should().ContainSingle();
+        result.Select(shape => shape.ExtentCyEmu).Distinct().Should().ContainSingle();
+        result.Select(shape => shape.ExtentCxEmu).Should().Equal(result.Select(shape => shape.ExtentCyEmu));
+        result.Max(shape => shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+        result.Max(shape => shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
     }
 
     [Fact]

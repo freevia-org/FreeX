@@ -3468,6 +3468,80 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_GridMatrixSmartArt_UsesDedicatedSharedFourQuadrantPlan()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix",
+            nodes: [("A", "A"), ("B", "B"), ("C", "C"), ("D", "D"), ("E", "Unused")],
+            parOfConnections: []);
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        var ops = SlideCompositor.Compose(presentation, presentation.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        liveShapes.Should().HaveCount(4, "the WPF host consumes the shared four-quadrant plan");
+        liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("A", "B", "C", "D");
+        liveShapes.Select(op => op.BoundsDip.X).Distinct().Should().HaveCount(2);
+        liveShapes.Select(op => op.BoundsDip.Y).Distinct().Should().HaveCount(2);
+        liveShapes.Should().OnlyContain(op => Math.Abs(op.BoundsDip.Width - op.BoundsDip.Height) < 0.01,
+            "the shared Grid Matrix cells use a square centered envelope");
+    }
+
+    [Fact]
+    public void RoundTrip_GridMatrix_AuthoringAndDrawingCacheRemainSchemaShaped()
+    {
+        var sourcePath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix",
+            nodes: [("A", "A"), ("B", "B"), ("C", "C"), ("D", "D")],
+            parOfConnections: []);
+        var presentation = PptxPackageReader.Read(sourcePath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+
+        SmartArtAuthoringPlanner.ApplyLayoutPreset(smartArt, SmartArtLayoutPreset.GridMatrix)
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var cache = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            shape.OffsetXEmu,
+            shape.OffsetYEmu,
+            shape.ExtentCxEmu,
+            shape.ExtentCyEmu,
+            presentation.Theme!);
+        cache.Applied.Should().BeTrue(cache.Message);
+        cache.ShapeCount.Should().Be(4);
+
+        var savedPath = WriteToPptx(presentation);
+        using (var archive = ZipFile.OpenRead(savedPath))
+        {
+            var entry = archive.GetEntry("ppt/diagrams/drawing1.xml");
+            entry.Should().NotBeNull();
+            using var reader = new StreamReader(entry!.Open(), Encoding.UTF8);
+            var document = XDocument.Parse(reader.ReadToEnd());
+            var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+            document.Root!.Name.Should().Be(dsp + "drawing");
+            document.Descendants(dsp + "sp").Should().HaveCount(4);
+            document.Descendants(dsp + "cxnSp").Should().BeEmpty();
+            document.Descendants(dsp + "cNvPr").Select(element => (string?)element.Attribute("name"))
+                .Should().Contain("SmartArt_GridMatrix_Quadrant_TopLeft_1")
+                .And.Contain("SmartArt_GridMatrix_Quadrant_BottomRight_4");
+        }
+
+        var reopened = PptxPackageReader.Read(savedPath);
+        var reopenedSmartArt = reopened.Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+        reopenedSmartArt.Data!.LayoutUniqueId.Should().EndWith("/gridMatrix");
+        reopenedSmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        reopenedSmartArt.FallbackShapes.Select(s => s.PlainText).Should().Equal("A", "B", "C", "D");
+    }
+
+    [Fact]
     public void Reader_ParsesVerticalBlockListAsLiveLayoutAndWpfConsumesSharedPlan()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

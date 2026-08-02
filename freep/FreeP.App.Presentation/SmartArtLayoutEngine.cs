@@ -16,7 +16,8 @@ namespace FreeP.App.Compositor;
 ///   <see cref="SmartArtFamily.List"/>      — vertical stack of boxes
 ///   <see cref="SmartArtFamily.Cycle"/>     — N boxes on a circle with arrow connectors
 ///   <see cref="SmartArtFamily.Hierarchy"/> — tree (root top, children below, connector lines)
-///   <see cref="SmartArtFamily.Matrix"/>    — two-column grid of boxes with additional rows
+///   <see cref="SmartArtFamily.Matrix"/>    — bounded matrix-family layouts, including the
+///                                           dedicated four-quadrant Grid Matrix plan
 ///
 /// Returns null for <see cref="SmartArtFamily.Unknown"/> → compositor falls back to cached drawing.
 ///
@@ -185,6 +186,9 @@ public static class SmartArtLayoutEngine
 
         if (IsTitledMatrixLayout(data.LayoutUniqueId))
             return LayoutTitledMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
+        if (IsGridMatrixLayout(data.LayoutUniqueId))
+            return LayoutGridMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
         if (IsCycle2Layout(data.LayoutUniqueId))
             return LayoutCycle2(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan, theme);
@@ -1810,6 +1814,59 @@ public static class SmartArtLayoutEngine
                 boxH,
                 NodeFontSizePt,
                 DrawingShapeKind.Rectangle));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Grid Matrix is a four-component, two-axis layout rather than an unlimited list grid.
+    /// PowerPoint renders only the first four Level 1 entries in row-major quadrants and leaves
+    /// later text available in the text pane. The centered square envelope also preserves the
+    /// native layout's behavior when a wide graphic frame has unused horizontal space.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutGridMatrix(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var components = nodes
+            .Where(node => node.Level == 0 && !string.IsNullOrWhiteSpace(node.Text))
+            .Take(4)
+            .ToList();
+        if (components.Count == 0)
+            return null;
+
+        long outerPad = Math.Max((long)(Math.Min(fcx, fcy) * OuterPaddingFrac), 1L);
+        long availableW = Math.Max(fcx - 2 * outerPad, 1L);
+        long availableH = Math.Max(fcy - 2 * outerPad, 1L);
+        long gridSize = Math.Min(availableW, availableH);
+        long gap = gridSize >= 3
+            ? Math.Min(Math.Max((long)(gridSize * GapFrac), 1L), gridSize - 2)
+            : 0L;
+        long cellSize = Math.Max((gridSize - gap) / 2, 1L);
+        long gridX = fx + (fcx - gridSize) / 2;
+        long gridY = fy + (fcy - gridSize) / 2;
+
+        string[] roles = ["TopLeft", "TopRight", "BottomLeft", "BottomRight"];
+        var shapes = new List<SlideShape>(components.Count);
+        uint idCounter = 900;
+        for (int index = 0; index < components.Count; index++)
+        {
+            int row = index / 2;
+            int column = index % 2;
+            var shape = MakeBox(
+                idCounter++,
+                components[index].Text,
+                stylePlan.GetNodeStyle(index, components[index].Level, SmartArtFamily.Matrix),
+                gridX + column * (cellSize + gap),
+                gridY + row * (cellSize + gap),
+                cellSize,
+                cellSize,
+                NodeFontSizePt,
+                DrawingShapeKind.Rectangle);
+            shape.Name = $"SmartArt_GridMatrix_Quadrant_{roles[index]}_{index + 1}";
+            shapes.Add(shape);
         }
 
         return shapes;
@@ -4245,6 +4302,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "titledmatrix", StringComparison.Ordinal);
+    }
+
+    private static bool IsGridMatrixLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "gridmatrix", StringComparison.Ordinal);
     }
 
     private static bool IsDescendingBlockListLayout(string uniqueId)
