@@ -17197,6 +17197,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var borderRightToggle = CreateFormatCellsBorderSideToggle("Right", "FormatCellsBorderRightToggle");
         var borderInsideHorizontalToggle = CreateFormatCellsBorderSideToggle("Inside horizontal", "FormatCellsBorderInsideHorizontalToggle");
         var borderInsideVerticalToggle = CreateFormatCellsBorderSideToggle("Inside vertical", "FormatCellsBorderInsideVerticalToggle");
+        // WPF exposes interior borders through the Inside preset and renders the resulting
+        // lines in the preview; it does not expose separate Inside horizontal/vertical buttons.
+        // Keep these state holders for the shared planner, but do not put them in the visual tree.
+        borderInsideHorizontalToggle.IsVisible = false;
+        borderInsideVerticalToggle.IsVisible = false;
 
         // Per-edge "Individual border details": each outer edge (Top/Right/Bottom/Left) gets its
         // OWN style ComboBox (a "None" entry + the BorderStyle values) and its OWN color picker, so
@@ -17972,13 +17977,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Children =
                 {
                     borderDiagramGrid,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 6,
-                        HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
-                        Children = { borderInsideHorizontalToggle, borderInsideVerticalToggle },
-                    },
                 },
             });
 
@@ -18052,20 +18050,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         // in the visual tree for existing automation and Accept() readback without a second row.
         borderPresetBox.IsVisible = false;
 
-        var borderDetailsRow = new StackPanel
+        var borderDetailsExpander = new Expander
         {
-            Spacing = 13,
             Margin = new Thickness(124, 4, 0, 0),
-            Children =
+            Header = StripDisplayMnemonic(UiText.Get("FormatCells_IndividualBorderDetails")),
+            IsExpanded = true,
+            Content = new Border
             {
-                new TextBlock
-                {
-                    Text = StripDisplayMnemonic(UiText.Get("FormatCells_IndividualBorderDetails")),
-                    FontWeight = FontWeight.SemiBold,
-                },
-                borderDetailsGrid,
+                Margin = new Thickness(0, 8, 0, 0),
+                Child = borderDetailsGrid,
             },
         };
+        AutomationProperties.SetAutomationId(borderDetailsExpander, "FormatCellsBorderDetailsExpander");
+        AvaloniaCompactDialogChrome.ApplyWpfExpander(borderDetailsExpander);
 
         var borderTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabBorder"),
@@ -18080,7 +18077,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Children =
                 {
                     borderGroupsRow,
-                    borderDetailsRow,
+                    borderDetailsExpander,
                     new Border { Height = 2 },
                 },
             });
