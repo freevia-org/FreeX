@@ -466,7 +466,7 @@ public class DocumentMergeTests
     {
         var source = new TextDocument();
         var paragraph = new Paragraph();
-        paragraph.Runs.Add(new Run("Bold bit", new RunFormatting { Bold = true, ColorHex = "#FF0000" }));
+        paragraph.Runs.Add(new Run("Bold bit", new RunFormatting { Bold = true, Hidden = true, ColorHex = "#FF0000" }));
         paragraph.Runs.Add(new Run(" plain"));
         paragraph.StyleId = "Heading1";
         source.Blocks.Add(paragraph);
@@ -477,6 +477,7 @@ public class DocumentMergeTests
         clonedParagraph.PlainText.Should().Be("Bold bit plain");
         clonedParagraph.StyleId.Should().Be("Heading1");
         clonedParagraph.Runs[0].Formatting.Bold.Should().BeTrue();
+        clonedParagraph.Runs[0].Formatting.Hidden.Should().BeTrue();
         clonedParagraph.Runs[0].Formatting.ColorHex.Should().Be("#FF0000");
 
         // The clone is independent: mutating it must not touch the source.

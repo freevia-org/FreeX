@@ -210,6 +210,14 @@ public sealed record RunFormatting
     public bool Italic { get; init; }
     public bool Underline { get; init; }
     public bool Strikethrough { get; init; }
+
+    /// <summary>
+    /// Whether the run is hidden text (<c>w:rPr/w:vanish</c>). Defaults to false. As with the other
+    /// non-nullable run toggles, style and document-default inheritance resolves this property with
+    /// logical OR; a direct false value therefore means "not set here", not an explicit inheritance reset.
+    /// </summary>
+    public bool Hidden { get; init; }
+
     public string? FontFamily { get; init; }
     public double? FontSizePt { get; init; }
     public string? ColorHex { get; init; }
