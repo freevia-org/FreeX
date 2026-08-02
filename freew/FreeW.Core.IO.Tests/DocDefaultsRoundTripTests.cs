@@ -15,7 +15,9 @@ namespace FreeW.Core.IO.Tests;
 public class DocDefaultsRoundTripTests
 {
     private const string Wns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    private const string W14ns = "http://schemas.microsoft.com/office/word/2010/wordml";
     private static readonly XNamespace W = Wns;
+    private static readonly XNamespace W14 = W14ns;
 
     private static void AddPart(ZipArchive zip, string path, string xml)
     {
@@ -39,7 +41,7 @@ public class DocDefaultsRoundTripTests
             var rPrPart = rPrDefaultXml is null ? "" : $"<w:rPrDefault>{rPrDefaultXml}</w:rPrDefault>";
             var pPrPart = pPrDefaultXml is null ? "" : $"<w:pPrDefault>{pPrDefaultXml}</w:pPrDefault>";
             AddPart(zip, "word/styles.xml",
-                $"<w:styles xmlns:w=\"{Wns}\"><w:docDefaults>{rPrPart}{pPrPart}</w:docDefaults></w:styles>");
+                $"<w:styles xmlns:w=\"{Wns}\" xmlns:w14=\"{W14ns}\"><w:docDefaults>{rPrPart}{pPrPart}</w:docDefaults></w:styles>");
         }
         ms.Position = 0;
         return DocxReader.Read(ms);
@@ -211,5 +213,53 @@ public class DocDefaultsRoundTripTests
         reopened.DefaultRun.Underline.Should().BeTrue();
         reopened.DefaultRun.VerticalAlign.Should().Be(VerticalAlign.Superscript);
         reopened.DefaultRun.Rtl.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DocDefaults_AdvancedTypography_RoundTripsInCoreThenExtensionOrder()
+    {
+        var doc = Read(
+            "<w:rPr>" +
+            "<w:spacing w:val=\"30\"/><w:kern w:val=\"24\"/><w:position w:val=\"-4\"/>" +
+            "<w14:ligatures w14:val=\"standardContextual\"/>" +
+            "<w14:numForm w14:val=\"oldStyle\"/><w14:numSpacing w14:val=\"tabular\"/>" +
+            "<w14:stylisticSets><w14:styleSet w14:id=\"7\"/></w14:stylisticSets>" +
+            "</w:rPr>");
+
+        doc.DefaultRun.CharacterSpacingPt.Should().Be(1.5);
+        doc.DefaultRun.KerningMinSizePt.Should().Be(12);
+        doc.DefaultRun.PositionPt.Should().Be(-2);
+        doc.DefaultRun.Ligatures.Should().Be(LigatureMode.StandardContextual);
+        doc.DefaultRun.NumberForm.Should().Be(NumberForm.OldStyle);
+        doc.DefaultRun.NumberSpacing.Should().Be(NumberSpacing.Tabular);
+        doc.DefaultRun.StylisticSet.Should().Be(7);
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "rFonts", "spacing", "kern", "position", "sz", "szCs",
+            "ligatures", "numForm", "numSpacing", "stylisticSets");
+        rPr.Element(W + "spacing")!.Attribute(W + "val")!.Value.Should().Be("30");
+        rPr.Element(W + "kern")!.Attribute(W + "val")!.Value.Should().Be("24");
+        rPr.Element(W + "position")!.Attribute(W + "val")!.Value.Should().Be("-4");
+        rPr.Element(W14 + "stylisticSets")!
+            .Element(W14 + "styleSet")!
+            .Attribute(W14 + "id")!.Value.Should().Be("7");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.CharacterSpacingPt.Should().Be(1.5);
+        reopened.DefaultRun.KerningMinSizePt.Should().Be(12);
+        reopened.DefaultRun.PositionPt.Should().Be(-2);
+        reopened.DefaultRun.Ligatures.Should().Be(LigatureMode.StandardContextual);
+        reopened.DefaultRun.NumberForm.Should().Be(NumberForm.OldStyle);
+        reopened.DefaultRun.NumberSpacing.Should().Be(NumberSpacing.Tabular);
+        reopened.DefaultRun.StylisticSet.Should().Be(7);
     }
 }
