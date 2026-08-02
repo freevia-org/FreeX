@@ -121,8 +121,14 @@ public sealed class SmartArtEditingPlannerTests
         result.Family.Should().Be(expectedFamily);
         smartArt.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
         smartArt.Data.Family.Should().Be(expectedFamily);
-        XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes))
-            .Root!.Attribute("uniqueId")!.Value.Should().Be(result.LayoutUniqueId);
+        var layout = XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes));
+        layout.Root!.Attribute("uniqueId")!.Value.Should().Be(result.LayoutUniqueId);
+        layout.Root.Element(XName.Get("title", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Attribute("val")!.Value.Should().Be(ToLayoutTitle(preset));
+        layout.Root
+            .Element(XName.Get("catLst", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Element(XName.Get("cat", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Attribute("type")!.Value.Should().Be(expectedFamily.ToString().ToLowerInvariant());
     }
 
     [Fact]
@@ -151,8 +157,33 @@ public sealed class SmartArtEditingPlannerTests
             part.ContentType.Contains("diagramLayout", StringComparison.OrdinalIgnoreCase));
         var layout = XDocument.Parse(Encoding.UTF8.GetString(layoutPart.Bytes));
         layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/layout/basicCycle");
+        layout.Root.Element(XName.Get("title", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Attribute("val")!.Value.Should().Be("Basic Cycle");
+        layout.Root
+            .Element(XName.Get("catLst", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Element(XName.Get("cat", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))!
+            .Attribute("type")!.Value.Should().Be("cycle");
         layout.Root.Element(XName.Get("layoutNode", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))
             .Should().NotBeNull();
+    }
+
+    private static string ToLayoutTitle(SmartArtLayoutPreset preset)
+    {
+        var name = preset.ToString();
+        var title = new StringBuilder(name.Length + 8);
+        for (var index = 0; index < name.Length; index++)
+        {
+            if (index > 0 && char.IsUpper(name[index]) &&
+                (char.IsLower(name[index - 1]) ||
+                 index + 1 < name.Length && char.IsLower(name[index + 1])))
+            {
+                title.Append(' ');
+            }
+
+            title.Append(name[index]);
+        }
+
+        return title.ToString();
     }
 
     [Fact]

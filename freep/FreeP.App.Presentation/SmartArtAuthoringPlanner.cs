@@ -741,6 +741,7 @@ public static class SmartArtAuthoringPlanner
             return NotAppliedLayout("The native SmartArt layout definition is missing.");
 
         layoutDefinition.SetAttributeValue("uniqueId", layoutId);
+        SetLayoutPresentationMetadata(layoutDefinition, preset, family);
         layoutPart.Bytes = Serialize(document);
         EnsureDataRelationship(smartArt);
         EnsureDiagramRelationship(smartArt, "lo", "rIdFreePLayout");
@@ -983,6 +984,56 @@ public static class SmartArtAuthoringPlanner
                 new XElement(Diagram + "presOf"),
                 new XElement(Diagram + "constrLst"),
                 new XElement(Diagram + "ruleLst"))));
+
+    private static void SetLayoutPresentationMetadata(
+        XElement layoutDefinition,
+        SmartArtLayoutPreset preset,
+        SmartArtFamily family)
+    {
+        var title = layoutDefinition.Element(Diagram + "title");
+        if (title is null)
+        {
+            title = new XElement(Diagram + "title");
+            layoutDefinition.AddFirst(title);
+        }
+
+        title.SetAttributeValue("val", ToLayoutTitle(preset));
+
+        var categoryList = layoutDefinition.Element(Diagram + "catLst");
+        if (categoryList is null)
+        {
+            categoryList = new XElement(Diagram + "catLst");
+            layoutDefinition.Add(categoryList);
+        }
+
+        var category = categoryList.Element(Diagram + "cat");
+        if (category is null)
+        {
+            category = new XElement(Diagram + "cat");
+            categoryList.Add(category);
+        }
+
+        category.SetAttributeValue("type", family.ToString().ToLowerInvariant());
+    }
+
+    private static string ToLayoutTitle(SmartArtLayoutPreset preset)
+    {
+        var name = preset.ToString();
+        var builder = new StringBuilder(name.Length + 8);
+        for (var index = 0; index < name.Length; index++)
+        {
+            if (index > 0 && char.IsUpper(name[index]) &&
+                (char.IsLower(name[index - 1]) ||
+                 index + 1 < name.Length && char.IsLower(name[index + 1])))
+            {
+                builder.Append(' ');
+            }
+
+            builder.Append(name[index]);
+        }
+
+        return builder.ToString();
+    }
 
     private static XDocument CreateEmptyQuickStyleDefinition() =>
         new(new XElement(
