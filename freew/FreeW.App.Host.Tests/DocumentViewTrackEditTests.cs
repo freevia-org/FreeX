@@ -289,6 +289,53 @@ public sealed class DocumentViewTrackEditTests
             .Should().Be(16 * 96.0 / 72.0);
     }
 
+    [StaFact]
+    public void CharacterBorder_SelectedRangeTracksOnlyExactCharactersAndUndoRestoresParagraph()
+    {
+        var view = BuildView("Hello world");
+        view.RevisionAuthor = "Border Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var border = new ParagraphBorder("#0070C0", 1);
+
+        view.SetCharacterBorder(border);
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Single(run => run.Text == "Hello ").Formatting.CharacterBorder.Should().BeNull();
+        var formatted = paragraph.Runs.Single(run => run.Text == "world");
+        formatted.Formatting.CharacterBorder.Should().Be(border);
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Border Reviewer");
+        formatted.FormatRevision.PreviousFormatting.CharacterBorder.Should().BeNull();
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.CharacterBorder == null && run.FormatRevision == null);
+    }
+
+    [StaFact]
+    public void CharacterShading_SelectedRangeTracksOnlyExactCharactersAndUndoRestoresParagraph()
+    {
+        var view = BuildView("Hello world");
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 0, 0, 5);
+
+        view.SetCharacterShading("#FFFF00", ShadingPattern.Pct25);
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        var formatted = paragraph.Runs.Single(run => run.Text == "Hello");
+        formatted.Formatting.CharacterShadingHex.Should().Be("#FFFF00");
+        formatted.Formatting.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
+        formatted.FormatRevision.Should().NotBeNull();
+        paragraph.Runs.Single(run => run.Text == " world").Formatting.CharacterShadingHex.Should().BeNull();
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.CharacterShadingHex == null
+            && run.Formatting.CharacterShadingPattern == ShadingPattern.Clear
+            && run.FormatRevision == null);
+    }
+
     private static WpfRun RenderedRun(DocumentView view, string text) =>
         view.Document.Blocks.OfType<WpfParagraph>()
             .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())
