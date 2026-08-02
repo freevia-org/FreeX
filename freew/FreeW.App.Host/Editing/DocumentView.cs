@@ -1430,7 +1430,8 @@ public sealed class DocumentView : RichTextBox
     /// Insert a table at the caret (after the block the caret sits in, else at the end), routing
     /// through the undo/redo command bus so the insert is reversible. Re-renders the surface.
     /// </summary>
-    public void InsertTable(int rows, int columns)
+    /// <returns>The model block index of the inserted table.</returns>
+    public int InsertTable(int rows, int columns)
     {
         // Capture the user's in-progress edits before mutating the model out from under the view.
         CommitToModel();
@@ -1443,6 +1444,7 @@ public sealed class DocumentView : RichTextBox
         // immediately and the user can type straight into the table. BringBlockIntoView moves the caret to
         // the table leaf's first insertion position (inside cell 1).
         BringBlockIntoView(index);
+        return index;
     }
 
     /// <summary>

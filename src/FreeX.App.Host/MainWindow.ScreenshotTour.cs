@@ -2215,6 +2215,11 @@ public partial class MainWindow
             new StyleDiff(FillColor: new CellColor(255, 242, 204)));
 
         _workbook.DefineNamedRange("HomeTourData", sortRange);
+        // R118: this bypasses the command bus (unlike the real Define Name flows in
+        // MainWindow.Editing.cs/FormulaCommands.cs/NamedRangeDialog.xaml.cs), so the Name Box's
+        // revision-keyed range index (MainWindow.WorkbookUiState.cs EnsureNameBoxRangeIndex) would
+        // not otherwise learn this name was added until some later command bumps the revision.
+        InvalidateNavigationCaches();
         SeedHomeClipboardCellsEditingInternalClipboard(sheet, copySourceRange);
         SetSelectionRange(pasteTargetRange, pasteTargetRange.Start);
         UpdateViewport();
@@ -4528,6 +4533,9 @@ public partial class MainWindow
 
         var namedRange = new GridRange(new CellAddress(sheet.Id, 2, 2), new CellAddress(sheet.Id, 3, 3));
         _workbook.DefineNamedRange("Sales", namedRange);
+        // R118: see the matching note above HomeTourData -- this direct define bypasses the command
+        // bus, so the Name Box's cached range index must be told about it explicitly.
+        InvalidateNavigationCaches();
         const string nameBoxShape = "Tour Name Box Shape";
         const string nameBoxPicture = "Tour Name Box Picture";
         const string nameBoxTextBox = "Tour Name Box Text Box";
@@ -7529,6 +7537,9 @@ public partial class MainWindow
         _workbook.DefineNamedRange("Revenue", revenueRange);
         _workbook.DefineNamedRange("Cost", costRange);
         _workbook.DefineNamedRange("Profit", profitRange);
+        // R118: see the matching note above HomeTourData -- these direct defines bypass the command
+        // bus, so the Name Box's cached range index must be told about them explicitly.
+        InvalidateNavigationCaches();
 
         SetSelectionRange(authoringRange, new CellAddress(sheet.Id, 2, 5));
         EnsureCellVisible(authoringRange.Start);

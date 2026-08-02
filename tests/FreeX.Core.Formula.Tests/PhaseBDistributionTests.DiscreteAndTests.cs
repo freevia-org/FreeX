@@ -47,9 +47,9 @@ public partial class PhaseBDistributionTests
         AssertColumnApproximately(Eval("NEGBINOM.DIST(A1:A2,D1:D2,C1:C2,E1:E2)", sheet), Calc("NEGBINOM.DIST(4,4,0.25,FALSE)"), Calc("NEGBINOM.DIST(6,5,0.5,TRUE)"));
         AssertColumnApproximately(Eval("HYPGEOM.DIST(E1:E2,A1:A2,D1:D2,B1:B2,F1:F2)", sheet), Calc("HYPGEOM.DIST(0,4,4,8,FALSE)"), Calc("HYPGEOM.DIST(1,6,5,10,TRUE)"));
 
-        Eval("BINOM.DIST(A1:A2,B1:C1,0.5,FALSE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("NEGBINOM.DIST(A1:A2,B1:C1,0.5,FALSE)", sheet).Should().Be(ErrorValue.Value);
-        Eval("HYPGEOM.DIST(E1:E2,A1:C1,8,5,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("BINOM.DIST(A1:A2,B1:B3,0.5,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("NEGBINOM.DIST(A1:A2,B1:B3,0.5,FALSE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("HYPGEOM.DIST(E1:E2,A1:A3,8,5,FALSE)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -204,6 +204,6 @@ public partial class PhaseBDistributionTests
             Calc("BINOM.DIST.RANGE(10,0.5,3)"),
             Calc("BINOM.DIST.RANGE(12,0.25,2)"));
 
-        Eval("BINOM.DIST.RANGE(A1:A2,B1:C1,3)", sheet).Should().Be(ErrorValue.Value);
+        Eval("BINOM.DIST.RANGE(A1:A2,B1:B3,3)", sheet).Should().Be(ErrorValue.Value);
     }
 }

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -240,7 +241,26 @@ internal static class PivotCacheFieldFactory
     /// path can drift from the other and silently reintroduce a full SharedItems rebuild that renumbers
     /// a pivot-bound slicer's <see cref="SlicerModel.CacheItems"/> indices out from under it.
     /// A field whose header has no existing same-named match (a truly new column) still gets a
-    /// brand-new field built from scratch via <see cref="BuildFromSourceData"/>, exactly as before.
+    /// brand-new field built from scratch via <see cref="BuildFromSourceData"/>.
+    ///
+    /// R118-commands-pivot-duplicate-header: nothing in this codebase prevents two source columns from
+    /// sharing identical header text (<c>AddPivotTableCommand</c> builds one cache field per column
+    /// directly from header text with no uniqueness check -- unlike real Excel, which auto-suffixes a
+    /// repeated header, e.g. "Category2"), so <paramref name="existingFields"/> can legitimately contain
+    /// two (or more) entries with the same <see cref="PivotCacheFieldModel.Name"/>. A plain
+    /// name-keyed dictionary cannot represent that: collapsing to one entry per name would silently
+    /// re-match EVERY later same-named live header against the FIRST same-named existing field,
+    /// corrupting that first field's actual match (column 0's field merged against column N's live
+    /// data) while leaving column N's own existing field dropped entirely -- and the resulting
+    /// misattributed SharedItems still passes <c>XlsxFileAdapter.SavePostProcessing</c>'s save-time
+    /// name-equality sanity check, since the name genuinely IS correct, just at the wrong position.
+    /// Matching positional-first (existing[i] against liveHeaders[i] when the name still agrees there)
+    /// before falling back to a by-name search resolves each same-named existing field to the live
+    /// column it actually already tracked, exactly like Excel's own by-name matching would if it had
+    /// never allowed the duplicate name to exist in the first place. The by-name fallback (for a
+    /// genuinely reordered/moved column) still behaves identically to the pre-r118 dictionary lookup
+    /// whenever names are unique, since positional-first degrades to "the one existing field with this
+    /// name" the same way TryAdd's first-wins dictionary did.
     /// </summary>
     internal static List<PivotCacheFieldModel> ReconcileFields(
         IEnumerable<PivotCacheFieldModel> existingFields,
@@ -248,17 +268,49 @@ internal static class PivotCacheFieldFactory
         Sheet sourceSheet,
         GridRange sourceRange)
     {
-        var existingByName = new Dictionary<string, PivotCacheFieldModel>(StringComparer.Ordinal);
-        foreach (var field in existingFields)
-            existingByName.TryAdd(field.Name, field);
+        var existingList = existingFields as IReadOnlyList<PivotCacheFieldModel> ?? existingFields.ToList();
+        var consumed = new bool[existingList.Count];
 
         var reconciled = new List<PivotCacheFieldModel>(liveHeaders.Count);
         for (var index = 0; index < liveHeaders.Count; index++)
         {
             var header = liveHeaders[index];
-            reconciled.Add(existingByName.TryGetValue(header, out var existing)
-                ? MergeFromSourceData(existing, sourceSheet, sourceRange, index)
-                : BuildFromSourceData(header, sourceSheet, sourceRange, index));
+            var matchIndex = -1;
+
+            // Positional-first: the existing field genuinely AT this column position, if its name
+            // still agrees with the live header there, is the unambiguous match -- and the ONLY way to
+            // tell apart two existing fields that share a name, since name alone cannot distinguish
+            // them. This also keeps the ordinary unique-name case behaving exactly as before whenever
+            // a column's position happens to be stable across a refresh (the common case).
+            if (index < existingList.Count && !consumed[index] && existingList[index].Name == header)
+            {
+                matchIndex = index;
+            }
+            else
+            {
+                // Fallback for a genuinely moved/reordered (or duplicate-named but shifted) column:
+                // the first not-yet-consumed existing field with this name, scanned in original order --
+                // matching the pre-r118 dictionary's first-occurrence-wins behaviour when names are
+                // unique, while still never reusing an existing field two live headers already claimed.
+                for (var candidate = 0; candidate < existingList.Count; candidate++)
+                {
+                    if (!consumed[candidate] && existingList[candidate].Name == header)
+                    {
+                        matchIndex = candidate;
+                        break;
+                    }
+                }
+            }
+
+            if (matchIndex >= 0)
+            {
+                consumed[matchIndex] = true;
+                reconciled.Add(MergeFromSourceData(existingList[matchIndex], sourceSheet, sourceRange, index));
+            }
+            else
+            {
+                reconciled.Add(BuildFromSourceData(header, sourceSheet, sourceRange, index));
+            }
         }
 
         return reconciled;

@@ -132,14 +132,28 @@ public sealed class RecalcEngine
     /// Recalculate all cells affected by changes to the given cells.
     /// Returns a report of what was recalculated.
     /// </summary>
-    public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells) =>
-        Recalculate(workbook, changedCells, resolveSpillDependents: true);
+    /// <param name="skipDataTableBodyCells">
+    /// R118-calc-except-data-tables: when true, any formula cell that falls inside a registered
+    /// What-If Analysis Data Table's result body (<see cref="Sheet.TryGetDataTableRange"/>) is left
+    /// exactly as it was instead of being evaluated -- mirroring how <paramref name="restrictWritesToSheet"/>
+    /// (below) lets the topological order still cross into cells it must not mutate. This is how
+    /// <see cref="Model.WorkbookCalculationMode.AutomaticExceptDataTables"/> ("Automatic Except for
+    /// Data Tables") is honored: everything else recalculates live, but a Data Table's results stay
+    /// frozen until an explicit <see cref="RecalculateAllFormulas"/> (F9) or
+    /// <see cref="RecalculateSheetFormulas"/> (Shift+F9) call, both of which never pass this flag so
+    /// they always force a fresh Data Table result. Defaults to false so every other caller (F9,
+    /// Shift+F9, Goal Seek, Scenario Summary, and ordinary plain-Automatic-mode recalculation) keeps
+    /// computing Data Tables exactly as before.
+    /// </param>
+    public RecalcReport Recalculate(Workbook workbook, IReadOnlyList<CellAddress> changedCells, bool skipDataTableBodyCells = false) =>
+        Recalculate(workbook, changedCells, resolveSpillDependents: true, skipDataTableBodyCells: skipDataTableBodyCells);
 
     private RecalcReport Recalculate(
         Workbook workbook,
         IReadOnlyList<CellAddress> changedCells,
         bool resolveSpillDependents,
-        SheetId? restrictWritesToSheet = null)
+        SheetId? restrictWritesToSheet = null,
+        bool skipDataTableBodyCells = false)
     {
         if (changedCells.Count == 0 &&
             _volatileCells.Count == 0 &&
@@ -345,6 +359,13 @@ public sealed class RecalcEngine
 
             var sheet = workbook.GetSheet(addr.Sheet);
             if (sheet is null) continue;
+
+            // R118-calc-except-data-tables: leave a Data Table result cell exactly as it was rather
+            // than evaluating it -- see the skipDataTableBodyCells parameter doc above. Cheaply
+            // skipped via HasDataTableRanges for the overwhelming majority of sheets that have never
+            // created a Data Table.
+            if (skipDataTableBodyCells && sheet.HasDataTableRanges && sheet.TryGetDataTableRange(addr, out _))
+                continue;
 
             var cell = sheet.GetCell(addr);
             if (cell is null || !cell.HasFormula) continue;
@@ -584,7 +605,7 @@ public sealed class RecalcEngine
         // (bounded by MaxSpillDependentPasses as a sane guard against runaway chains).
         if (resolveSpillDependents && spillTargetsMayHaveChanged)
         {
-            ResolveSpillTargetDependentsFixpoint(workbook, ref report, restrictWritesToSheet, vacatedSpillCells);
+            ResolveSpillTargetDependentsFixpoint(workbook, ref report, restrictWritesToSheet, vacatedSpillCells, skipDataTableBodyCells);
         }
 
         // Retry anchors that were showing #SPILL! as of some earlier pass. Excel re-spills the
@@ -633,7 +654,7 @@ public sealed class RecalcEngine
 
             if (retryAnchors is not null)
             {
-                var retryReport = Recalculate(workbook, retryAnchors, resolveSpillDependents: false, restrictWritesToSheet: restrictWritesToSheet);
+                var retryReport = Recalculate(workbook, retryAnchors, resolveSpillDependents: false, restrictWritesToSheet: restrictWritesToSheet, skipDataTableBodyCells: skipDataTableBodyCells);
                 report = MergeRecalcReports(report, retryReport);
 
                 // If a retried anchor actually re-spilled (its #SPILL! cleared because the blocker
@@ -649,7 +670,7 @@ public sealed class RecalcEngine
                 });
 
                 if (anyReSpilled)
-                    ResolveSpillTargetDependentsFixpoint(workbook, ref report, restrictWritesToSheet);
+                    ResolveSpillTargetDependentsFixpoint(workbook, ref report, restrictWritesToSheet, skipDataTableBodyCells: skipDataTableBodyCells);
             }
         }
 
@@ -1933,7 +1954,8 @@ public sealed class RecalcEngine
         Workbook workbook,
         ref RecalcReport report,
         SheetId? restrictWritesToSheet = null,
-        IReadOnlyList<CellAddress>? vacatedSpillCells = null)
+        IReadOnlyList<CellAddress>? vacatedSpillCells = null,
+        bool skipDataTableBodyCells = false)
     {
         // Track, per dependent cell, how many distinct spill-target precedents it read the
         // last time it was scheduled. A cell must only be skipped as "already handled" if its
@@ -1981,7 +2003,7 @@ public sealed class RecalcEngine
             if (spillDependents.Count == 0)
                 break;
 
-            var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false, restrictWritesToSheet: restrictWritesToSheet);
+            var spillReport = Recalculate(workbook, spillDependents, resolveSpillDependents: false, restrictWritesToSheet: restrictWritesToSheet, skipDataTableBodyCells: skipDataTableBodyCells);
             report = MergeRecalcReports(report, spillReport);
         }
     }
@@ -2432,8 +2454,18 @@ public sealed class RecalcEngine
                 var formulaText = workbook?.TryGetNamedFormulaText(named.Name, resolveSheetId);
                 if (formulaText is not null && !string.IsNullOrWhiteSpace(formulaText))
                 {
+                    // Keyed by (name, defining-scope) — not the bare name — via the exact same
+                    // FormulaEvaluator.NamedFormulaVisitingKey the evaluator's own identical-purpose
+                    // cycle guard uses (FormulaEvaluator.References.cs), so two textually-distinct
+                    // sheet-scoped formulas that happen to share a name (e.g. Sheet1's own "Foo" and
+                    // Sheet2's own "Foo") don't falsely collide with each other here just because one
+                    // references the other via an explicit sheet qualifier (R118-calc-named-formula-
+                    // scope-key). sheetScopedIsFormula/resolveSheetId above already computed exactly
+                    // which scope this formulaText actually came from -- reuse that, don't re-derive.
+                    var visitingKey = FormulaEvaluator.NamedFormulaVisitingKey(
+                        named.Name, sheetScopedIsFormula ? resolveSheetId : null);
                     namedFormulaStack ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    if (!namedFormulaStack.Add(named.Name))
+                    if (!namedFormulaStack.Add(visitingKey))
                         return false;
 
                     try
@@ -2472,7 +2504,7 @@ public sealed class RecalcEngine
                     }
                     finally
                     {
-                        namedFormulaStack.Remove(named.Name);
+                        namedFormulaStack.Remove(visitingKey);
                     }
                 }
                 return false;

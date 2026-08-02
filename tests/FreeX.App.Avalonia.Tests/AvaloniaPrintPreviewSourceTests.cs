@@ -21,7 +21,8 @@ public sealed class AvaloniaPrintPreviewSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(overflowButton, PrintPreviewDialogPlanner.CloseButtonAutomationId)");
         source.Should().Contain("CreatePreviewToolbarButton(documentToolbarPlan.NavigationButtons[0])");
         source.Should().Contain("AutomationProperties.SetAutomationId(button, plan.AutomationId)");
-        source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.PrintWhatOptions, plan.Settings.PrintWhatSelectedIndex)");
+        source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, printWhatOptions, plan.Settings.PrintWhatSelectedIndex)");
+        source.Should().Contain("DisableUnsupportedPrintWhatScopes(plan.Settings.PrintWhatOptions)");
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.SidesOptions, plan.Settings.SidesSelectedIndex)");
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.CollationOptions, plan.Settings.CollationSelectedIndex)");
         source.Should().Contain("CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.OrientationOptions, plan.Settings.OrientationSelectedIndex)");

@@ -119,7 +119,10 @@ public sealed partial class XlsxFileAdapter
         if (sourceParts.HasDrawings)
             XlsxWorksheetVmlReferencePreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
         if (sourceParts.HasFormControls)
+        {
             XlsxWorksheetFormControlPreserver.Preserve(sourceArchive, generatedArchive, context, workbook);
+            CloneFormControlsForDuplicatedSheets(sourceArchive, generatedArchive, context, workbook);
+        }
         if (sourceParts.HasLegacyComments)
             XlsxLegacyCommentPreserver.Preserve(sourceArchive, generatedArchive, workbook);
         if (sourceParts.HasFormControls && sourceParts.HasLegacyComments)
@@ -539,6 +542,66 @@ public sealed partial class XlsxFileAdapter
                     newWorksheetPath,
                     candidateQueryTableRelationships,
                     context.PackageRelNs);
+            }
+        }
+    }
+
+    // R118-io-duplicate-sheet-form-control-1: mirrors CloneQueryTablesForDuplicatedSheets above.
+    // FreeX's Form Control model IS faithfully cloned in memory onto a duplicated sheet by
+    // DuplicateSheetDrawingCloner.CopyDrawingCollections (same ShapeId, remapped Anchor), but the
+    // package-level <controls>/<legacyDrawing>/ctrlProps triad that actually makes a legacy Form
+    // Control visible/interactive in Excel is written ONLY by
+    // XlsxWorksheetFormControlPreserver.Preserve, whose per-sheet loop iterates exclusively over
+    // context.SourceSheets -- names/paths present in the ORIGINALLY LOADED package. A sheet created
+    // this session via Duplicate Sheet / "Move or Copy... Create a copy" never had an on-disk
+    // counterpart at load time, so it is never a key there and the control silently vanishes from the
+    // saved package even though the in-memory model still carries it. Identify the duplication by
+    // CONTENT (same technique as the queryTable clone above, since nothing in the model records "this
+    // sheet was duplicated from that one") and delegate the actual part/relationship cloning to
+    // XlsxWorksheetFormControlPreserver.CloneOntoDuplicatedSheet.
+    private static void CloneFormControlsForDuplicatedSheets(
+        ZipArchive sourceArchive,
+        ZipArchive generatedArchive,
+        XlsxSourcePackagePreservationContext? context,
+        Workbook workbook)
+    {
+        if (context is null)
+            return;
+
+        var newSheetNames = context.TargetSheets.Keys
+            .Where(name => !context.SourceSheets.ContainsKey(name))
+            .ToList();
+        if (newSheetNames.Count == 0)
+            return;
+
+        foreach (var (candidateName, candidateSourcePath) in context.SourceSheets)
+        {
+            if (!IsWorksheetPartPath(candidateSourcePath))
+                continue;
+            if (!context.TargetSheets.ContainsKey(candidateName))
+                continue; // The candidate sheet itself was removed -- nothing left to duplicate from.
+
+            var candidateSheet = workbook.GetSheet(candidateName);
+            if (candidateSheet is null || candidateSheet.FormControls.Count == 0)
+                continue;
+
+            foreach (var newSheetName in newSheetNames)
+            {
+                var newWorksheetPath = context.TargetSheets[newSheetName];
+                if (!IsWorksheetPartPath(newWorksheetPath))
+                    continue;
+
+                var newSheet = workbook.GetSheet(newSheetName);
+                if (newSheet is null || newSheet.FormControls.Count == 0 || !SheetContentsMatch(candidateSheet, newSheet))
+                    continue;
+
+                XlsxWorksheetFormControlPreserver.CloneOntoDuplicatedSheet(
+                    sourceArchive,
+                    generatedArchive,
+                    context,
+                    candidateSourcePath,
+                    newWorksheetPath,
+                    newSheet);
             }
         }
     }

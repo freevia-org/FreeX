@@ -116,6 +116,7 @@ internal static class FreePRibbonIcons
             ["freep.insert-chart-bar"]    = RibbonCommandIconKind.ChartColumn,
             ["freep.insert-chart-line"]   = RibbonCommandIconKind.ChartLine,
             ["freep.insert-chart-pie"]    = RibbonCommandIconKind.ChartPie,
+            ["freep.insert-chart-of-pie"] = RibbonCommandIconKind.ChartPie,
             ["freep.insert-chart-column-stacked"] = RibbonCommandIconKind.ChartColumn,
             ["freep.insert-chart-column-stacked-100"] = RibbonCommandIconKind.ChartColumn,
             ["freep.insert-chart-bar-stacked"] = RibbonCommandIconKind.ChartColumn,

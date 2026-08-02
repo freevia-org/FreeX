@@ -573,6 +573,20 @@ internal sealed class MailMergeEngine
         if (!plan.Success || plan.Result is not { } result)
             return;
 
+        ApplyLabels(result);
+    }
+
+    /// <summary>
+    /// Apply a label-sheet setup, insert its grid, and populate cells from the active recipient list.
+    /// Records flow left-to-right and top-to-bottom; skipped records do not consume a label cell.
+    /// </summary>
+    public void ApplyLabels(LabelSetupResult result)
+    {
+        var rows = Math.Max(1, result.Rows);
+        var columns = Math.Max(1, result.Columns);
+        var cellContents = BuildLabelCellContents(rows * columns);
+        var existingTables = _editor.Document.Blocks.OfType<Table>().ToList();
+
         _editor.ApplyPageSettings(page =>
         {
             page.WidthPt = result.PageWidthPt;
@@ -583,8 +597,60 @@ internal sealed class MailMergeEngine
             page.MarginBottomPt = result.MarginPt;
             page.Landscape = result.Landscape;
         });
-        _editor.InsertTable(result.Rows, result.Columns);
-        ShowInfo($"Inserted a {result.Rows} x {result.Columns} label grid.");
+        _editor.InsertTable(rows, columns);
+
+        var tableBlockIndex = -1;
+        for (var i = 0; i < _editor.Document.Blocks.Count; i++)
+        {
+            if (_editor.Document.Blocks[i] is Table table && !existingTables.Contains(table))
+            {
+                tableBlockIndex = i;
+                break;
+            }
+        }
+
+        if (tableBlockIndex >= 0)
+        {
+            for (var index = 0; index < cellContents.Count; index++)
+            {
+                _editor.SetTableCellContent(
+                    tableBlockIndex,
+                    index / columns,
+                    index % columns,
+                    cellContents[index]);
+            }
+        }
+
+        ShowInfo($"Inserted a {rows} x {columns} label grid.");
+    }
+
+    private IReadOnlyList<IReadOnlyList<Paragraph>> BuildLabelCellContents(int capacity)
+    {
+        if (Session.Data is not { Count: > 0 } data)
+            return [];
+
+        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
+        var state = new MergeState();
+        var contents = new List<IReadOnlyList<Paragraph>>(Math.Min(capacity, data.Count));
+        var recordIndex = 0;
+
+        while (contents.Count < capacity && recordIndex < data.Count)
+        {
+            state.SequenceNumber++;
+            var row = Session.AugmentRow(data.Rows[recordIndex]);
+            var merged = MailMerge.MergeRecordWithRules(template, row, state, recordIndex + 1);
+            if (state.SkipRecordRequested)
+            {
+                state.SequenceNumber--;
+                recordIndex++;
+                continue;
+            }
+
+            contents.Add(merged.Blocks.OfType<Paragraph>().ToList());
+            recordIndex += state.AdvanceRecordRequested ? 2 : 1;
+        }
+
+        return contents;
     }
 
     /// <summary>

@@ -102,7 +102,7 @@ public partial class PhaseBDistributionTests
         AssertColumnApproximately(Eval("F.INV(A1:A2,B1:B2,C1:C2)", probabilities), Calc("F.INV(0.25,5,10)"), Calc("F.INV(0.75,8,12)"));
         AssertColumnApproximately(Eval("F.INV.RT(A1:A2,B1:B2,C1:C2)", probabilities), Calc("F.INV.RT(0.25,5,10)"), Calc("F.INV.RT(0.75,8,12)"));
 
-        Eval("F.DIST(A1:A2,B1:C1,10,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("F.DIST(A1:A2,B1:B3,10,TRUE)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public partial class PhaseBDistributionTests
         AssertColumnApproximately(Eval("CHISQ.INV(C1:C2,B1:B2)", sheet), Calc("CHISQ.INV(0.5,5)"), Calc("CHISQ.INV(0.95,8)"));
         AssertColumnApproximately(Eval("CHISQ.INV.RT(C1:C2,B1:B2)", sheet), Calc("CHISQ.INV.RT(0.5,5)"), Calc("CHISQ.INV.RT(0.95,8)"));
 
-        Eval("CHISQ.DIST(A1:A2,B1:C1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        Eval("CHISQ.DIST(A1:A2,B1:B3,TRUE)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

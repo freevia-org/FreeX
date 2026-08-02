@@ -153,6 +153,10 @@ public sealed partial class MainWindow
         var printerName = fixturePrinterName ?? PrintPreviewDefaultPrinterName;
         var pageCount = parityPages?.Count ?? context.PageCount;
         var navigator = PrintPreviewPageNavigator.Create(pageCount);
+        // Ephemeral print-job settings (Print What / Sides / Collation / Copies / Printer / page
+        // range / ignore print area) tracked across the settings-rail's own controls -- see
+        // CreatePrintPreviewSettingsRail's interactive wiring below.
+        var currentSettings = new PrintPreviewSettings();
         var documentToolbarPlan = PrintPreviewSurfacePlanner.CreateDocumentToolbarPlan(
             pageCount,
             PrintPreviewSettingsTextResolver);
@@ -246,6 +250,30 @@ public sealed partial class MainWindow
             lastButton.IsEnabled = navigator.CanGoNext;
         }
 
+        // Re-resolves the active sheet's pagination (honoring the current Ignore Print Area
+        // setting) and repaints the current page. Called after any settings-rail control that can
+        // change what the active sheet's preview pages look like (orientation, paper size, margins,
+        // scaling, print gridlines/headings, ignore print area) so the preview never keeps showing a
+        // stale layout for a setting the user just changed (R118-print-preview-settings-rail-wiring).
+        void RepaginateAndRender()
+        {
+            if (parityPages is null &&
+                PrintPreviewPaginationContext.TryCreate(
+                    _session.Workbook,
+                    _session.ActiveSheet,
+                    PrintPreviewTextMeasurer,
+                    out var updatedContext,
+                    ResolveWorkbookDirectoryForHeaderFooter(),
+                    currentSettings.IgnorePrintArea))
+            {
+                context = updatedContext;
+                pageCount = updatedContext.PageCount;
+                navigator = PrintPreviewPageNavigator.Create(pageCount).JumpTo(navigator.CurrentIndex);
+            }
+
+            Render();
+        }
+
         firstButton.Click += (_, _) =>
         {
             navigator = navigator.JumpTo(0);
@@ -317,18 +345,36 @@ public sealed partial class MainWindow
             documentToolbar,
             pageHost,
             PrintPreviewSurfacePlanner.CreateFindBarPlan(PrintPreviewSettingsTextResolver));
+        // The parity fixture path (a static, pre-rendered set of pages captured for cross-platform
+        // screenshot comparison) has no live sheet/session behind it, so its rail stays the
+        // read-only snapshot it always was. A real preview is backed by the live active sheet and
+        // its settings rail is fully interactive (R118-print-preview-settings-rail-wiring) --
+        // previously canUpdatePrintPreviewSettings was hardcoded false even for real previews, which
+        // left every control (Print What/Sides/Collation/Orientation/Paper Size/Margins/Scaling/
+        // Ignore Print Area/Print Options) wired to nothing.
         var settingsRail = CreatePrintPreviewSettingsRail(
             PrintPreviewSurfacePlanner.CreateSettingsRailPlan(
-                // WPF's canonical parity dialog is constructed without a live sheet, so its rail
-                // starts from the shared default state (Narrow margins and 1..1 page fields). Keep
-                // normal production previews sheet-backed while making the shared fixture honest.
                 parityPages is null ? _session.ActiveSheet : null,
                 parityPages is null ? pageCount : 1,
                 printerName,
-                new PrintPreviewSettings(),
+                currentSettings,
+                // "Print Selection" stays disabled regardless of the actual grid selection: unlike
+                // WPF's RenderWorksheet(printRangeOverride: selection), this preview's pagination
+                // context (PrintPreviewPaginationContext) always paginates the active sheet's
+                // configured print area/used range, with no selection-scoped override yet. Leaving
+                // this option selectable without that support would recreate the exact
+                // looks-functional-does-nothing bug this fix removes for every other control
+                // (R118-print-preview-settings-rail-wiring; tracked as a leftOpen follow-up).
                 hasSelection: false,
-                canUpdatePrintPreviewSettings: false,
-                PrintPreviewSettingsTextResolver));
+                canUpdatePrintPreviewSettings: parityPages is null,
+                PrintPreviewSettingsTextResolver),
+            parityPages is null
+                ? new PrintPreviewSettingsRailInteraction(
+                    _session.ActiveSheet.Id,
+                    () => currentSettings,
+                    updated => currentSettings = updated,
+                    RepaginateAndRender)
+                : null);
         var topToolbar = CreatePrintPreviewTopToolbar(
             topToolbarPlan,
             exportButton,
@@ -477,8 +523,205 @@ public sealed partial class MainWindow
         };
     }
 
-    private static ScrollViewer CreatePrintPreviewSettingsRail(PrintPreviewSettingsRailPlan plan)
+    /// <summary>
+    /// Wiring context for a live (non-parity-fixture) settings rail: which sheet the sheet-mutating
+    /// commands (orientation/paper size/margins/scaling/print options) apply to, accessors for the
+    /// ephemeral <see cref="PrintPreviewSettings"/> the rail's non-command controls update in place,
+    /// and the callback that re-paginates and repaints the active preview page after any change
+    /// (R118-print-preview-settings-rail-wiring). Null for the static parity-capture fixture, whose
+    /// rail intentionally stays a read-only snapshot.
+    /// </summary>
+    private sealed record PrintPreviewSettingsRailInteraction(
+        SheetId SheetId,
+        Func<PrintPreviewSettings> GetSettings,
+        Action<PrintPreviewSettings> SetSettings,
+        Action Repaginate);
+
+    private ScrollViewer CreatePrintPreviewSettingsRail(
+        PrintPreviewSettingsRailPlan plan,
+        PrintPreviewSettingsRailInteraction? interaction)
     {
+        void ApplyAction(PrintPreviewSettingsPanelActionPlan action)
+        {
+            if (interaction is null)
+                return;
+
+            switch (action.Kind)
+            {
+                case PrintPreviewSettingsPanelActionKind.UpdatePreviewSettings:
+                    if (action.Settings is null)
+                        return;
+
+                    interaction.SetSettings(action.Settings);
+                    if (action.RefreshPreview)
+                        interaction.Repaginate();
+                    break;
+
+                case PrintPreviewSettingsPanelActionKind.ExecuteCommand:
+                    if (action.Command is { } command)
+                        _session.ExecuteReviewCommand(command);
+                    if (action.RefreshPreview)
+                        interaction.Repaginate();
+                    break;
+
+                case PrintPreviewSettingsPanelActionKind.OpenCustomMargins:
+                case PrintPreviewSettingsPanelActionKind.OpenPageSetup:
+                    // "Custom Margins..."/"Custom Scaling Options..." would normally open a nested
+                    // Page Setup dialog from within this already-modal Print Preview window; that
+                    // nested-dialog flow isn't wired up on the Avalonia shell yet, so the placeholder
+                    // pick is simply reverted by the caller's ResetSelection handling below rather
+                    // than silently pretending a dialog opened.
+                    break;
+            }
+        }
+
+        var copiesBox = new TextBox
+        {
+            Text = plan.CopiesText,
+            Width = plan.CopiesBoxWidth,
+            Height = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+            MinHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+            MaxHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
+            Padding = new Thickness(4, 1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            BorderBrush = Brush(130, 130, 130),
+            BorderThickness = new Thickness(1),
+            VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        if (interaction is not null)
+        {
+            copiesBox.TextChanged += (_, _) => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreateCopiesAction(interaction.GetSettings(), copiesBox.Text));
+        }
+
+        var printerBox = CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName);
+        if (interaction is not null)
+        {
+            printerBox.SelectionChanged += (_, _) => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreatePrinterAction(
+                    interaction.GetSettings(),
+                    printerBox.SelectedItem as string ?? plan.PrinterName));
+        }
+
+        var printerPropertiesButton = new Button
+        {
+            Content = plan.PrinterPropertiesButtonText,
+            Height = PrintPreviewSurfacePlanner.SettingsButtonHeight,
+            MinHeight = PrintPreviewSurfacePlanner.SettingsButtonHeight,
+            MaxHeight = PrintPreviewSurfacePlanner.SettingsButtonHeight,
+            Padding = new Thickness(6, 1),
+            Background = Brushes.White,
+            BorderBrush = Brush(112, 112, 112),
+            BorderThickness = new Thickness(1),
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+
+        // "Print Entire Workbook" stays disabled on the live rail too: PrintPreviewPaginationContext
+        // only ever paginates the one active sheet passed to it (there is no multi-sheet workbook
+        // pagination context yet), so selecting this choice could update the setting but could never
+        // re-paginate the preview to show it -- the same looks-functional-does-nothing gap this fix
+        // removes everywhere else (R118-print-preview-settings-rail-wiring; leftOpen follow-up).
+        var printWhatOptions = interaction is null
+            ? plan.Settings.PrintWhatOptions
+            : DisableUnsupportedPrintWhatScopes(plan.Settings.PrintWhatOptions);
+        var printWhatBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, printWhatOptions, plan.Settings.PrintWhatSelectedIndex);
+        if (interaction is not null)
+        {
+            printWhatBox.SelectionChanged += (_, _) => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreatePrintWhatAction(plan.Settings, interaction.GetSettings(), printWhatBox.SelectedIndex));
+        }
+
+        var pageRangeRow = CreatePageRangeRow(
+            plan.PageRange,
+            interaction is null
+                ? null
+                : (fromText, toText) => ApplyAction(
+                    PrintPreviewSettingsPanelPlanner.CreatePageRangeAction(interaction.GetSettings(), fromText, toText)));
+
+        var sidesBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.SidesOptions, plan.Settings.SidesSelectedIndex);
+        if (interaction is not null)
+        {
+            sidesBox.SelectionChanged += (_, _) => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreateSidesAction(plan.Settings, interaction.GetSettings(), sidesBox.SelectedIndex));
+        }
+
+        var collationBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.CollationOptions, plan.Settings.CollationSelectedIndex);
+        if (interaction is not null)
+        {
+            collationBox.SelectionChanged += (_, _) => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreateCollationAction(plan.Settings, interaction.GetSettings(), collationBox.SelectedIndex));
+        }
+
+        var orientationBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.OrientationOptions, plan.Settings.OrientationSelectedIndex);
+        AutomationProperties.SetAutomationId(orientationBox, "PrintPreviewSettingsOrientationBox");
+        if (interaction is not null)
+        {
+            orientationBox.SelectionChanged += (_, _) => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreateOrientationAction(interaction.SheetId, plan.Settings, orientationBox.SelectedIndex));
+        }
+
+        var paperSizeBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.PaperSizeOptions, plan.Settings.PaperSizeSelectedIndex);
+        AutomationProperties.SetAutomationId(paperSizeBox, "PrintPreviewSettingsPaperSizeBox");
+        if (interaction is not null)
+        {
+            paperSizeBox.SelectionChanged += (_, _) => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreatePaperSizeAction(interaction.SheetId, plan.Settings, paperSizeBox.SelectedIndex));
+        }
+
+        var marginsBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.MarginOptions, plan.Settings.MarginsSelectedIndex);
+        AutomationProperties.SetAutomationId(marginsBox, "PrintPreviewSettingsMarginsBox");
+        if (interaction is not null)
+        {
+            marginsBox.SelectionChanged += (_, _) =>
+            {
+                var action = PrintPreviewSettingsPanelPlanner.CreateMarginsAction(interaction.SheetId, plan.Settings, marginsBox.SelectedIndex);
+                ApplyAction(action);
+                if (action.ResetSelection)
+                    marginsBox.SelectedIndex = plan.Settings.MarginsSelectedIndex;
+            };
+        }
+
+        var scalingBox = CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.ScalingOptions, plan.Settings.ScalingSelectedIndex);
+        AutomationProperties.SetAutomationId(scalingBox, "PrintPreviewSettingsScalingBox");
+        if (interaction is not null)
+        {
+            scalingBox.SelectionChanged += (_, _) =>
+            {
+                var action = PrintPreviewSettingsPanelPlanner.CreateScalingAction(interaction.SheetId, plan.Settings, scalingBox.SelectedIndex);
+                ApplyAction(action);
+                if (action.ResetSelection)
+                    scalingBox.SelectedIndex = plan.Settings.ScalingSelectedIndex;
+            };
+        }
+
+        var ignorePrintAreaBox = new CheckBox { Content = plan.IgnorePrintAreaText, IsChecked = plan.Settings.IgnorePrintAreaChecked, IsEnabled = plan.Settings.IgnorePrintAreaEnabled, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily };
+        AutomationProperties.SetAutomationId(ignorePrintAreaBox, "PrintPreviewSettingsIgnorePrintAreaBox");
+        if (interaction is not null)
+        {
+            ignorePrintAreaBox.IsCheckedChanged += (_, _) => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreateIgnorePrintAreaAction(interaction.GetSettings(), ignorePrintAreaBox.IsChecked == true));
+        }
+
+        var printGridlinesBox = new CheckBox { Content = plan.PrintGridlinesText, IsChecked = plan.Settings.PrintGridlines, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily };
+        var printHeadingsBox = new CheckBox { Content = plan.PrintHeadingsText, IsChecked = plan.Settings.PrintHeadings, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily };
+        AutomationProperties.SetAutomationId(printGridlinesBox, "PrintPreviewSettingsGridlinesBox");
+        AutomationProperties.SetAutomationId(printHeadingsBox, "PrintPreviewSettingsHeadingsBox");
+        if (interaction is not null)
+        {
+            void ApplyPrintOptions() => ApplyAction(
+                PrintPreviewSettingsPanelPlanner.CreatePrintOptionsAction(
+                    interaction.SheetId,
+                    printGridlinesBox.IsChecked == true,
+                    printHeadingsBox.IsChecked == true));
+
+            printGridlinesBox.IsCheckedChanged += (_, _) => ApplyPrintOptions();
+            printHeadingsBox.IsCheckedChanged += (_, _) => ApplyPrintOptions();
+        }
+
         var panel = new StackPanel
         {
             Spacing = PrintPreviewSurfacePlanner.SettingsRailSpacing,
@@ -486,57 +729,30 @@ public sealed partial class MainWindow
             Children =
             {
                 CreateSettingsSection(plan.CopiesSectionText),
-                new TextBox
-                {
-                    Text = plan.CopiesText,
-                    Width = plan.CopiesBoxWidth,
-                    Height = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
-                    MinHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
-                    MaxHeight = PrintPreviewSurfacePlanner.SettingsTextBoxHeight,
-                    Padding = new Thickness(4, 1),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    BorderBrush = Brush(130, 130, 130),
-                    BorderThickness = new Thickness(1),
-                    VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-                },
+                copiesBox,
                 CreateSettingsSection(plan.PrinterSectionText),
-                CreatePreviewComboBox(plan.PrinterComboWidth, plan.PrinterName),
-                new Button
-                {
-                    Content = plan.PrinterPropertiesButtonText,
-                    Height = PrintPreviewSurfacePlanner.SettingsButtonHeight,
-                    MinHeight = PrintPreviewSurfacePlanner.SettingsButtonHeight,
-                    MaxHeight = PrintPreviewSurfacePlanner.SettingsButtonHeight,
-                    Padding = new Thickness(6, 1),
-                    Background = Brushes.White,
-                    BorderBrush = Brush(112, 112, 112),
-                    BorderThickness = new Thickness(1),
-                    FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-                },
+                printerBox,
+                printerPropertiesButton,
                 CreateSettingsSection(plan.PrintWhatLabelText),
-                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.PrintWhatOptions, plan.Settings.PrintWhatSelectedIndex),
+                printWhatBox,
                 CreateSettingsSection(plan.PagesLabelText),
-                CreatePageRangeRow(plan.PageRange),
+                pageRangeRow,
                 CreateSettingsSection(plan.SidesSectionText),
-                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.SidesOptions, plan.Settings.SidesSelectedIndex),
+                sidesBox,
                 CreateSettingsSection(plan.CollationSectionText),
-                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.CollationOptions, plan.Settings.CollationSelectedIndex),
+                collationBox,
                 CreateSettingsSection(plan.OrientationLabelText),
-                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.OrientationOptions, plan.Settings.OrientationSelectedIndex),
+                orientationBox,
                 CreateSettingsSection(plan.PaperSizeLabelText),
-                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.PaperSizeOptions, plan.Settings.PaperSizeSelectedIndex),
+                paperSizeBox,
                 CreateSettingsSection(plan.MarginsLabelText),
-                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.MarginOptions, plan.Settings.MarginsSelectedIndex),
+                marginsBox,
                 CreateSettingsSection(plan.ScalingLabelText),
-                CreatePreviewChoiceComboBox(plan.ChoiceComboWidth, plan.Settings.ScalingOptions, plan.Settings.ScalingSelectedIndex),
-                new CheckBox { Content = plan.IgnorePrintAreaText, IsChecked = plan.Settings.IgnorePrintAreaChecked, IsEnabled = plan.Settings.IgnorePrintAreaEnabled, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                scalingBox,
+                ignorePrintAreaBox,
                 CreateSettingsSection(plan.PrintOptionsSectionText),
-                new CheckBox { Content = plan.PrintGridlinesText, IsChecked = plan.Settings.PrintGridlines, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
-                new CheckBox { Content = plan.PrintHeadingsText, IsChecked = plan.Settings.PrintHeadings, MinHeight = 20, MaxHeight = 20, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                printGridlinesBox,
+                printHeadingsBox,
             },
         };
 
@@ -549,7 +765,9 @@ public sealed partial class MainWindow
         };
     }
 
-    private static Grid CreatePageRangeRow(PrintPreviewPageRangeFieldsPlan plan)
+    private static Grid CreatePageRangeRow(
+        PrintPreviewPageRangeFieldsPlan plan,
+        Action<string, string>? onChanged = null)
     {
         var row = new Grid
         {
@@ -584,6 +802,12 @@ public sealed partial class MainWindow
             BorderThickness = new Thickness(1),
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
+        if (onChanged is not null)
+        {
+            fromBox.TextChanged += (_, _) => onChanged(fromBox.Text ?? "", toBox.Text ?? "");
+            toBox.TextChanged += (_, _) => onChanged(fromBox.Text ?? "", toBox.Text ?? "");
+        }
+
         Grid.SetColumn(fromBox, 0);
         Grid.SetColumn(toLabel, 1);
         Grid.SetColumn(toBox, 2);
@@ -592,6 +816,12 @@ public sealed partial class MainWindow
         row.Children.Add(toBox);
         return row;
     }
+
+    private static IReadOnlyList<PrintPreviewChoice<PrintWhat>> DisableUnsupportedPrintWhatScopes(
+        IReadOnlyList<PrintPreviewChoice<PrintWhat>> options) =>
+        options
+            .Select(option => option.Value == PrintWhat.EntireWorkbook ? option with { IsEnabled = false } : option)
+            .ToArray();
 
     private static TextBlock CreateSettingsSection(string text) =>
         new()

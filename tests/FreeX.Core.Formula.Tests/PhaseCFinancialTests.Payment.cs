@@ -89,7 +89,7 @@ public partial class PhaseCFinancialTests
             Calc("RATE(60,-188.71,10000,0,0,0.01)"),
             Calc("RATE(60,-188.71,10000,0,0,0.05)"));
 
-        EvalWithData("PMT(0.05/12,A1:A2,B1:C1)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (1, 3, 12000.0)).Should().Be(ErrorValue.Value);
+        EvalWithData("PMT(0.05/12,A1:A2,B1:B3)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0)).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public partial class PhaseCFinancialTests
             Calc("PPMT(0.05/12,1,60,10000,0,0)"),
             Calc("PPMT(0.05/12,1,60,10000,500,1)"));
 
-        EvalWithData("IPMT(0.05/12,1,A1:A2,B1:C1)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0), (1, 3, 12000.0)).Should().Be(ErrorValue.Value);
+        EvalWithData("IPMT(0.05/12,1,A1:A2,B1:B3)", (1, 1, 60.0), (2, 1, 72.0), (1, 2, 10000.0)).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

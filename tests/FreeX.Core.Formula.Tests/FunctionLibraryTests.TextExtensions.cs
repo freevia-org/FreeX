@@ -62,9 +62,12 @@ public partial class FunctionLibraryTests
             (1, 2, new NumberValue(2)),
             (1, 3, new NumberValue(3)));
 
-        _eval.Evaluate("=REPLACE(A1:A2,B1:C1,2,\"X\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=REPLACE(A1:A2,2,B1:C1,\"X\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=REPLACE(A1:A2,2,2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        // A row-vector (1x2) crossed with a column-vector (2x1) is now a valid cross-broadcast
+        // (R118-formula-arity3plus-cross-broadcast), so this uses B1:B3 (a same-axis, differently
+        // sized column) to keep testing a genuine shape mismatch.
+        _eval.Evaluate("=REPLACE(A1:A2,B1:B3,2,\"X\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACE(A1:A2,2,B1:B3,\"X\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=REPLACE(A1:A2,2,2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]
@@ -513,9 +516,9 @@ public partial class FunctionLibraryTests
         // Regression guard for R62-formula-array-broadcast-6-1: a 2x1 column vector crossed with
         // a 1x2 row vector must 2-D cross-broadcast into a 2x2 spilled result, not #VALUE! -- DOLLAR
         // is 2-arg (routed through MapBinaryMathArgs, the fixed helper). FIXED's third (no_commas)
-        // argument routes it through MapTernaryTextArgs instead, which this bucket intentionally
-        // left with its narrower (exact-shape-or-1x1) broadcast rule -- see
-        // FixedAndDollar_TernaryHelperShapeMismatch_StillReturnsValueError below.
+        // argument routes it through MapTernaryTextArgs instead, which now applies the SAME
+        // cross-broadcast rule (R118-formula-arity3plus-cross-broadcast) -- see
+        // Fixed_TernaryHelperRowVectorAndColumnVectorArguments_SpillToCrossBroadcastMatrix below.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1234.56)),
             (2, 1, new NumberValue(-12.34)),
@@ -548,21 +551,25 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void FixedAndDollar_TernaryHelperShapeMismatch_StillReturnsValueError()
+    public void Fixed_TernaryHelperRowVectorAndColumnVectorArguments_SpillToCrossBroadcastMatrix()
     {
-        // FIXED(number, decimals, no_commas) is a 3-arg call routed through MapTernaryTextArgs,
-        // which this bucket did NOT extend to the row-vector x column-vector cross-broadcast rule
-        // (R62-formula-array-broadcast-6-1 was scoped to MapBinaryMathArgs to limit blast radius
-        // across ~40 other pinned ternary/quaternary/N-ary tests) -- so a row-vector/column-vector
-        // combination here is still (and correctly, for the currently-shipped fix) a #VALUE!, unlike
-        // the 2-arg DOLLAR case above.
+        // Regression guard for R118-formula-arity3plus-cross-broadcast: FIXED(number, decimals,
+        // no_commas) is a 3-arg call routed through MapTernaryTextArgs (unlike DOLLAR's 2-arg
+        // MapBinaryMathArgs, already covered above), so this proves the SAME row-vector (1x2) x
+        // column-vector (2x1) cross-broadcast now also spills a 2x2 matrix here instead of #VALUE!.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(1234.56)),
             (2, 1, new NumberValue(-12.34)),
             (1, 2, new NumberValue(1)),
             (1, 3, new NumberValue(0)));
 
-        _eval.Evaluate("=FIXED(A1:A2,B1:C1,TRUE)", sheet).Should().Be(ErrorValue.Value);
+        var fixedResult = _eval.Evaluate("=FIXED(A1:A2,B1:C1,TRUE)", sheet).Should().BeOfType<RangeValue>().Subject;
+        fixedResult.RowCount.Should().Be(2);
+        fixedResult.ColCount.Should().Be(2);
+        ((TextValue)fixedResult.At(1, 1)).Value.Should().Be("1234.6");
+        ((TextValue)fixedResult.At(1, 2)).Value.Should().Be("1235");
+        ((TextValue)fixedResult.At(2, 1)).Value.Should().Be("-12.3");
+        ((TextValue)fixedResult.At(2, 2)).Value.Should().Be("-12");
     }
 
     [Fact]
@@ -1138,8 +1145,8 @@ public partial class FunctionLibraryTests
             (1, 2, new TextValue(",")),
             (1, 3, new TextValue(".")));
 
-        _eval.Evaluate("=NUMBERVALUE(A1:A2,B1:C1,\".\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=NUMBERVALUE(A1:A2,\".\",B1:C1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,B1:B3,\".\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=NUMBERVALUE(A1:A2,\".\",B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

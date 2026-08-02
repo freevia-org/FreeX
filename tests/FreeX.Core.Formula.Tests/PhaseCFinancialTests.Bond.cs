@@ -192,7 +192,7 @@ public partial class PhaseCFinancialTests
         AssertApproxColumn(EvalWithData("DURATION(A1:A2,B1:B2,C1:C2,D1:D2,F1:F2,G1:G2)", cells), Calc("DURATION(43831,45658,0.08,0.05,2,0)"), Calc("DURATION(43845,45672,0.07,0.06,4,1)"));
         AssertApproxColumn(EvalWithData("MDURATION(A1:A2,B1:B2,C1:C2,D1:D2,F1:F2,G1:G2)", cells), Calc("MDURATION(43831,45658,0.08,0.05,2,0)"), Calc("MDURATION(43845,45672,0.07,0.06,4,1)"));
 
-        EvalWithData("PRICE(A1:A2,B1:C1,0.08,0.05,100,2,0)", cells).Should().Be(ErrorValue.Value);
+        EvalWithData("PRICE(A1:A2,B1:B3,0.08,0.05,100,2,0)", cells).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

@@ -2045,18 +2045,7 @@ public sealed partial class MainWindow : Window
     {
         var result = await MailMergeDialogs.AskLabelsAsync(this);
         if (result is { } labels)
-        {
-            _editor.ApplyPageSettings(page =>
-            {
-                page.WidthPt = labels.PageWidthPt;
-                page.HeightPt = labels.PageHeightPt;
-                page.MarginLeftPt = labels.MarginPt;
-                page.MarginRightPt = labels.MarginPt;
-                page.MarginTopPt = labels.MarginPt;
-                page.MarginBottomPt = labels.MarginPt;
-                page.Landscape = labels.Landscape;
-            });
-        }
+            _mailMerge?.ApplyLabels(labels);
         _editor.Focus();
     }
 

@@ -25,7 +25,13 @@ public sealed partial class FormulaEvaluator
     /// reference or an explicit sheet-qualified one) produces the identical key, so real
     /// circular chains through that single definition are still caught.
     /// </summary>
-    private static string NamedFormulaVisitingKey(string name, FreeX.Core.Model.SheetId? scopeSheetId) =>
+    /// <remarks>
+    /// Internal (not private) so <c>FreeX.Core.Calc.RecalcEngine.CollectReferences</c> can key its own
+    /// identical-purpose dependency-graph recursion guard the exact same way (R118-calc-named-formula-scope-key)
+    /// instead of the bare defined-name text, which falsely collided two distinct same-named sheet-scoped
+    /// formulas and silently dropped the dependency edge onto the inner one's precedent cells.
+    /// </remarks>
+    internal static string NamedFormulaVisitingKey(string name, FreeX.Core.Model.SheetId? scopeSheetId) =>
         scopeSheetId is { } id ? name + "\u0001" + id.Value.ToString("N") : name;
 
     /// <summary>

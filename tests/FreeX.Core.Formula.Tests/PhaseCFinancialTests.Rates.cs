@@ -70,8 +70,8 @@ public partial class PhaseCFinancialTests
             Calc("PDURATION(0.1,100,200)"),
             Calc("PDURATION(0.1,100,250)"));
 
-        EvalWithData("RRI(A1:A2,B1:C1,200)", (1, 1, 10.0), (2, 1, 20.0), (1, 2, 100.0), (1, 3, 125.0)).Should().Be(ErrorValue.Value);
-        EvalWithData("PDURATION(A1:A2,B1:C1,200)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 100.0), (1, 3, 125.0)).Should().Be(ErrorValue.Value);
+        EvalWithData("RRI(A1:A2,B1:B3,200)", (1, 1, 10.0), (2, 1, 20.0), (1, 2, 100.0)).Should().Be(ErrorValue.Value);
+        EvalWithData("PDURATION(A1:A2,B1:B3,200)", (1, 1, 0.1), (2, 1, 0.2), (1, 2, 100.0)).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

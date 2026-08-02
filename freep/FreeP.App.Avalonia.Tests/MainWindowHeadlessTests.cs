@@ -1767,6 +1767,7 @@ public sealed class MainWindowHeadlessTests
     [InlineData("freep.insert-chart-bar", ChartType.BarClustered)]
     [InlineData("freep.insert-chart-line", ChartType.Line)]
     [InlineData("freep.insert-chart-pie", ChartType.Pie)]
+    [InlineData("freep.insert-chart-of-pie", ChartType.OfPie)]
     [InlineData("freep.insert-chart-column-stacked", ChartType.ColumnStacked)]
     [InlineData("freep.insert-chart-column-stacked-100", ChartType.ColumnStacked100)]
     [InlineData("freep.insert-chart-bar-stacked", ChartType.BarStacked)]

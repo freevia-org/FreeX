@@ -284,12 +284,13 @@ public partial class FunctionLibraryTests
     public void DateDifference_TrulyMismatchedRangeArgumentShapes_ReturnValueError()
     {
         // Sibling no-regression: ranges that conflict on the SAME axis (neither equal nor size-1)
-        // must still be a genuine #VALUE! shape mismatch. DAYS360/YEARFRAC are always routed
-        // through MapTernaryTextArgs (even for their 2-arg form, via a scalar third default
-        // argument) -- this bucket intentionally left that N-ary helper family with its narrower
-        // (exact-shape-or-1x1) broadcast rule to limit blast radius across other pinned tests, so
-        // a row-vector/column-vector combination there is still (and correctly, for the
-        // currently-shipped fix) a #VALUE!, unlike DAYS/NETWORKDAYS above.
+        // must still be a genuine #VALUE! shape mismatch. DAYS/NETWORKDAYS (2-arg, MapBinaryMathArgs)
+        // and DAYS360/YEARFRAC (routed through MapTernaryTextArgs, even for their 2-arg form via a
+        // scalar third default argument) now BOTH grow-broadcast a row-vector x column-vector pair
+        // into a spilled matrix (R118-formula-arity3plus-cross-broadcast extended MapTernaryTextArgs
+        // to the same rule MapBinaryMathArgs already had), so every case below uses B1:B3 -- a
+        // same-axis, differently-sized column vector against A1:A2 -- to keep testing a genuine
+        // shape mismatch rather than a valid cross-broadcast.
         var sheet = MakeSheet(
             (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
             (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
@@ -302,10 +303,28 @@ public partial class FunctionLibraryTests
 
         _eval.Evaluate("=DAYS(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=NETWORKDAYS(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DAYS360(A1:A2,B1:C1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DAYS360(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=YEARFRAC(A1:A2,B1:C1,0)", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=YEARFRAC(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DAYS360(A1:A2,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DAYS360(A1:A2,B1,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=YEARFRAC(A1:A2,B1:B3,0)", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=YEARFRAC(A1:A2,B1,B1:B3)", sheet).Should().Be(ErrorValue.Value);
+    }
+
+    [Fact]
+    public void DateDifference_TernaryRowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix()
+    {
+        // Regression guard for R118-formula-arity3plus-cross-broadcast: DAYS360/YEARFRAC route
+        // through MapTernaryTextArgs (unlike DAYS/NETWORKDAYS's MapBinaryMathArgs, already covered
+        // by DateDifference_RowVectorAndColumnVectorRangeArguments_SpillToCrossBroadcastMatrix
+        // above), so this proves the SAME row-vector (1x2) x column-vector (2x1) cross-broadcast
+        // now also spills a 2x2 matrix for the ternary helper instead of #VALUE!.
+        var sheet = MakeSheet(
+            (1, 1, new NumberValue(new DateTime(2024, 1, 1).ToOADate())),
+            (2, 1, new NumberValue(new DateTime(2024, 1, 2).ToOADate())),
+            (1, 2, new NumberValue(new DateTime(2024, 1, 5).ToOADate())),
+            (1, 3, new NumberValue(new DateTime(2024, 1, 10).ToOADate())));
+
+        AssertGrid(_eval.Evaluate("=DAYS360(A1:A2,B1:C1)", sheet), new double[,] { { 4, 9 }, { 3, 8 } });
+        AssertGrid(_eval.Evaluate("=YEARFRAC(A1:A2,B1:C1,0)", sheet), new double[,] { { 4.0 / 360.0, 9.0 / 360.0 }, { 3.0 / 360.0, 8.0 / 360.0 } });
     }
 
     [Fact]
@@ -580,8 +599,11 @@ public partial class FunctionLibraryTests
             (1, 4, new TextValue("D")),
             (1, 5, new TextValue("Y")));
 
-        _eval.Evaluate("=DATEDIF(A1:A2,B1:C1,\"D\")", sheet).Should().Be(ErrorValue.Value);
-        _eval.Evaluate("=DATEDIF(A1:A2,B1,D1:E1)", sheet).Should().Be(ErrorValue.Value);
+        // A row-vector (1x2) crossed with a column-vector (2x1) is now a valid cross-broadcast
+        // (R118-formula-arity3plus-cross-broadcast), so this uses B1:B3 (a same-axis, differently
+        // sized column) to keep testing a genuine shape mismatch.
+        _eval.Evaluate("=DATEDIF(A1:A2,B1:B3,\"D\")", sheet).Should().Be(ErrorValue.Value);
+        _eval.Evaluate("=DATEDIF(A1:A2,B1,B1:B3)", sheet).Should().Be(ErrorValue.Value);
     }
 
     [Fact]

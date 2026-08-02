@@ -1055,7 +1055,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("PrintPreviewPaginationContext.TryCreate(_session.Workbook, sheet, PrintPreviewTextMeasurer, out var context, ResolveWorkbookDirectoryForHeaderFooter())");
         source.Should().NotContain("internal sealed class PrintPreviewPaginationContext");
         source.Should().NotContain("var plan = PagePaginationPlanner.Paginate(");
-        sharedSource.Should().Contain("PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out var printRanges)");
+        sharedSource.Should().Contain("PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out printRanges)");
         sharedSource.Should().Contain("PagePaginationPlanner.Paginate(");
     }
 

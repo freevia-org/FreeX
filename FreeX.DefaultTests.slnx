@@ -17,7 +17,9 @@
     <Project Path="tests/Free.Shared.Theme.Tests/Free.Shared.Theme.Tests.csproj" />
     <Project Path="freep/FreeP.Ribbon.Definitions.Tests/FreeP.Ribbon.Definitions.Tests.csproj" />
     <Project Path="freep/FreeP.App.Host.Tests/FreeP.App.Host.Tests.csproj" />
+    <Project Path="freep/FreeP.App.Localization.Tests/FreeP.App.Localization.Tests.csproj" />
     <Project Path="freep/FreeP.App.Presentation.Tests/FreeP.App.Presentation.Tests.csproj" />
+    <Project Path="freep/FreeP.App.Recording.Tests/FreeP.App.Recording.Tests.csproj" />
     <Project Path="freep/FreeP.App.Rendering.Avalonia.Tests/FreeP.App.Rendering.Avalonia.Tests.csproj" />
     <Project Path="freep/FreeP.App.Avalonia.Tests/FreeP.App.Avalonia.Tests.csproj" />
   </Folder>

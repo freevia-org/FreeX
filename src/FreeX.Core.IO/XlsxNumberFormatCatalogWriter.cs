@@ -7,7 +7,7 @@ namespace FreeX.Core.IO;
 
 internal static class XlsxNumberFormatCatalogWriter
 {
-    public static IReadOnlyDictionary<int, int> Save(Stream xlsxStream, Workbook workbook)
+    public static PivotNumberFormatIdMap Save(Stream xlsxStream, Workbook workbook)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var stylesEntry = archive.GetEntry("xl/styles.xml") ?? archive.CreateEntry("xl/styles.xml");
@@ -15,11 +15,11 @@ internal static class XlsxNumberFormatCatalogWriter
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         var root = stylesXml.Root;
         if (root is null)
-            return new Dictionary<int, int>();
+            return PivotNumberFormatIdMap.Empty;
 
-        var catalog = BuildNumberFormatCatalog(workbook);
+        var (catalog, pivotFormatCodesById) = BuildNumberFormatCatalog(workbook);
         if (catalog.Count == 0)
-            return new Dictionary<int, int>();
+            return PivotNumberFormatIdMap.Empty;
 
         var numFmts = root.Element(workbookNs + "numFmts");
         if (numFmts is null)
@@ -89,9 +89,47 @@ internal static class XlsxNumberFormatCatalogWriter
                 new XAttribute("formatCode", formatCode)));
         }
 
+        // R118-io-numfmt-pivot-sentinel-collision: PivotValueFieldPlanner hardcodes the SAME sentinel
+        // numFmtId (164) for every distinct custom format string a user types into Value Field Settings,
+        // so `catalog` above (a plain id -> single-code dictionary) can only ever carry ONE of two
+        // colliding pivot data fields' format codes -- the loop just above already resolved that single
+        // surviving code's final id. Any OTHER distinct format code that pivot data fields declared under
+        // the same sentinel id never got a numFmt entry (or a remap target) at all; give each of them
+        // their own entry/id here, keyed by (sentinelId, formatCode) so XlsxPivotTableWriter and
+        // XlsxFileAdapter.SavePostProcessing can resolve each dataField by its OWN format-code text
+        // instead of purely by the shared sentinel id.
+        var pivotCodeRemap = new Dictionary<(int NumberFormatId, string FormatCode), int>();
+        foreach (var (numberFormatId, formatCodes) in pivotFormatCodesById)
+        {
+            if (remap.TryGetValue(numberFormatId, out var primaryFinalId))
+                pivotCodeRemap[(numberFormatId, formatCodes[0])] = primaryFinalId;
+
+            for (var index = 1; index < formatCodes.Count; index++)
+            {
+                var formatCode = formatCodes[index];
+
+                var equivalent = FindEquivalentNumberFormat(numFmts, workbookNs, formatCode);
+                if (equivalent is not null && XlsxXmlAttributeReader.ReadIntAttribute(equivalent, "numFmtId") is { } equivalentId)
+                {
+                    pivotCodeRemap[(numberFormatId, formatCode)] = equivalentId;
+                    continue;
+                }
+
+                while (usedIds.Contains(nextId))
+                    nextId++;
+                pivotCodeRemap[(numberFormatId, formatCode)] = nextId;
+                usedIds.Add(nextId);
+                numFmts.Add(new XElement(
+                    workbookNs + "numFmt",
+                    new XAttribute("numFmtId", nextId.ToString(CultureInfo.InvariantCulture)),
+                    new XAttribute("formatCode", formatCode)));
+                nextId++;
+            }
+        }
+
         numFmts.SetAttributeValue("count", numFmts.Elements(workbookNs + "numFmt").Count().ToString(CultureInfo.InvariantCulture));
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/styles.xml", stylesXml);
-        return remap;
+        return new PivotNumberFormatIdMap(remap, pivotCodeRemap);
     }
 
     public static void RemapPivotTableNumberFormats(
@@ -130,7 +168,7 @@ internal static class XlsxNumberFormatCatalogWriter
         }
     }
 
-    private static Dictionary<int, string> BuildNumberFormatCatalog(Workbook workbook)
+    private static (Dictionary<int, string> Catalog, Dictionary<int, List<string>> PivotFormatCodesById) BuildNumberFormatCatalog(Workbook workbook)
     {
         // workbook.NumberFormatCatalog carries every custom numFmt that was present in the
         // ORIGINAL file (loaded wholesale by XlsxWorkbookMetadataReader.LoadNumberFormatCatalog),
@@ -157,6 +195,13 @@ internal static class XlsxNumberFormatCatalogWriter
             }
         }
 
+        // R118-io-numfmt-pivot-sentinel-collision: PivotValueFieldPlanner.ResolveNumberFormatState
+        // hardcodes numFmtId 164 for EVERY distinct custom format string typed into Value Field Settings,
+        // so two data fields with different custom formats legitimately share one NumberFormatId here.
+        // `catalog` (a plain id -> single-code dictionary) can only hold one code per id -- tracking every
+        // DISTINCT code seen per id separately (in insertion order) lets Save() give each one its own
+        // final numFmtId instead of silently letting the last-processed field's code overwrite the rest.
+        var pivotFormatCodesById = new Dictionary<int, List<string>>();
         foreach (var sheet in workbook.Sheets)
         {
             foreach (var pivot in sheet.PivotTables)
@@ -166,15 +211,28 @@ internal static class XlsxNumberFormatCatalogWriter
                     if (field.NumberFormatId is >= 164 and var numberFormatId &&
                         !string.IsNullOrWhiteSpace(field.NumberFormatCode))
                     {
+                        if (!pivotFormatCodesById.TryGetValue(numberFormatId, out var formatCodes))
+                        {
+                            formatCodes = [];
+                            pivotFormatCodesById[numberFormatId] = formatCodes;
+                        }
+
+                        if (!formatCodes.Contains(field.NumberFormatCode, StringComparer.Ordinal))
+                            formatCodes.Add(field.NumberFormatCode);
+
                         // Referenced directly by a live pivot data field -- always live, no liveness
-                        // check needed (unlike the workbook-wide catalog above).
-                        catalog[numberFormatId] = field.NumberFormatCode;
+                        // check needed (unlike the workbook-wide catalog above). Keep the FIRST distinct
+                        // code seen at this id as the catalog's representative entry so the main Save()
+                        // loop's existing single-id resolution (exact match / equivalent / reallocate)
+                        // stays exactly as before for the common (non-colliding) case; any additional
+                        // distinct codes are resolved separately from pivotFormatCodesById below.
+                        catalog[numberFormatId] = formatCodes[0];
                     }
                 }
             }
         }
 
-        return catalog;
+        return (catalog, pivotFormatCodesById);
     }
 
     /// <summary>

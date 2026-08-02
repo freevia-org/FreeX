@@ -259,6 +259,18 @@ internal static class DataTableFormulaRewriter
     private const int MaxInlineDepth = 32;
 
     /// <summary>
+    /// Matches a bare (unqualified) same-sheet cell reference such as <c>A1</c> or <c>$B$2</c>, the same
+    /// shape <see cref="InlineAndSubstitute"/> expands. The leading negative lookbehind excludes anything
+    /// already sheet-qualified (preceded by <c>!</c>, <c>'</c> or <c>]</c>) so a genuinely cross-sheet
+    /// reference is never mistaken for a local one; the trailing negative lookahead excludes a reference
+    /// immediately followed by <c>(</c> so a function name that happens to look cell-shaped (e.g.
+    /// <c>LOG10(A1)</c>) is never matched.
+    /// </summary>
+    private static readonly Regex CellReferenceRegex = new(
+        @"(?<![A-Za-z0-9_!'\]])\$?(?<col>[A-Za-z]{1,3})\$?(?<row>[0-9]+)(?![A-Za-z0-9_(])",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
+    /// <summary>
     /// Rewrites <paramref name="formula"/> (the data-table result formula, hosted on <paramref name="sheet"/>)
     /// so every reference to the input cell <paramref name="from"/> — whether written as a bare local
     /// reference (A1) or as an explicit same-sheet-qualified reference (Sheet1!A1 / 'Sheet 1'!A1) —
@@ -376,12 +388,8 @@ internal static class DataTableFormulaRewriter
         // folds these into the ancestor set, so a genuine cycle (A -> B -> A) is what actually stops.
         var expandedThisPass = new HashSet<CellAddress>();
         var literalSpans = StringLiteralRegex.Matches(formula);
-        var expanded = Regex.Replace(
+        var expanded = CellReferenceRegex.Replace(
             formula,
-            // Trailing lookahead also excludes '(' so a function name that happens to look like a
-            // cell reference immediately followed by its argument list (e.g. LOG10(A1)) is never
-            // mistaken for a cell reference — a real cell reference is never followed by '('.
-            @"(?<![A-Za-z0-9_!'\]])\$?(?<col>[A-Za-z]{1,3})\$?(?<row>[0-9]+)(?![A-Za-z0-9_(])",
             match =>
             {
                 foreach (Match literal in literalSpans)
@@ -421,8 +429,7 @@ internal static class DataTableFormulaRewriter
 
                 expandedThisPass.Add(referenced);
                 return $"({referencedFormula})";
-            },
-            RegexOptions.IgnoreCase);
+            });
 
         if (expandedThisPass.Count == 0)
             return formula;
@@ -434,6 +441,130 @@ internal static class DataTableFormulaRewriter
         var nextVisited = new HashSet<CellAddress>(visited);
         nextVisited.UnionWith(expandedThisPass);
         return InlineAndSubstitute(expanded, from, to, sheet, depth + 1, nextVisited);
+    }
+
+    /// <summary>
+    /// Collects every same-sheet formula cell that <see cref="InlineAndSubstitute"/> would actually
+    /// textually inline into a Data Table body while chasing a reference to <paramref name="from"/> (the
+    /// table's input cell) from <paramref name="formula"/> (a driver/header formula). Used (not by the
+    /// substitution path itself, but by the auto-refresh staleness check) to recognise an edit landing on
+    /// an INTERMEDIATE precedent cell -- one <paramref name="from"/> is reached through only, never
+    /// referenced directly by the driver formula -- as a reason to re-derive the table body, exactly as
+    /// an edit to the driver cell itself already does.
+    ///
+    /// R118-data-table-intermediate-precedent-refresh's own first cut of this method ignored
+    /// <paramref name="from"/> entirely and walked every same-sheet reference reachable from
+    /// <paramref name="formula"/>, treating ANY precedent -- even one <see cref="ReplaceCellReference"/>
+    /// would substitute directly, with no inlining at all -- as requiring a body refresh. That is wrong:
+    /// <see cref="ReplaceCellReference"/> only ever calls <see cref="InlineAndSubstitute"/> (and thus only
+    /// ever inlines anything) when <paramref name="from"/> is NOT already a direct bare/qualified
+    /// reference in the current formula text -- see its own short-circuit. A directly-referenced precedent
+    /// (e.g. driver formula "B1*A1" with input cell B1: A1 is substituted-around, never inlined) remains a
+    /// live reference in the baked body formula and is already correctly kept fresh by ordinary
+    /// dependency-graph recalculation; treating it as a "driver precedent" too just forces a needless
+    /// (if usually harmless) body rewrite -- and, combined with the AutomaticExceptDataTables freeze
+    /// (which must leave a just-rewritten cell's stale/blank value untouched rather than the cell's PRIOR
+    /// value), turns that needless rewrite into a permanently blanked body (see
+    /// WorkbookCellEditService.RecalculateIfAutomatic and DataTableAutoRefreshEffects.Apply's own
+    /// CalculationMode gate). So this walk must stop the instant <paramref name="from"/> is found directly
+    /// in the current formula -- mirroring <see cref="InlineAndSubstitute"/>'s own short-circuit exactly --
+    /// and only descend into (and collect) same-sheet FORMULA-cell references when it is not.
+    ///
+    /// <paramref name="result"/> doubles as the visited/cycle-guard set: once a cell is added it is never
+    /// re-expanded, so a genuine reference cycle (A references B, B references A) terminates instead of
+    /// recursing forever, and <paramref name="depth"/> is capped at <see cref="MaxInlineDepth"/> as an
+    /// extra backstop.
+    /// </summary>
+    public static void CollectSameSheetPrecedents(string formula, CellAddress from, Sheet sheet, HashSet<CellAddress> result, int depth = 0)
+    {
+        if (depth >= MaxInlineDepth || string.IsNullOrWhiteSpace(formula))
+            return;
+
+        // Mirrors ReplaceCellReference's own gate: if 'from' is already reachable as a direct bare or
+        // same-sheet-qualified reference in this formula text, InlineAndSubstitute never runs at all for
+        // this formula -- substitution succeeds immediately and nothing this formula references is ever
+        // textually inlined into the body because of THIS chase. Stop here.
+        if (ContainsDirectReference(formula, from, sheet))
+            return;
+
+        var literalSpans = StringLiteralRegex.Matches(formula);
+        foreach (Match match in CellReferenceRegex.Matches(formula))
+        {
+            var insideLiteral = false;
+            foreach (Match literal in literalSpans)
+            {
+                if (match.Index >= literal.Index && match.Index < literal.Index + literal.Length)
+                {
+                    insideLiteral = true;
+                    break;
+                }
+            }
+            if (insideLiteral)
+                continue; // inside a string literal — never treat as a reference
+
+            var colName = match.Groups["col"].Value.ToUpperInvariant();
+            if (!uint.TryParse(match.Groups["row"].Value, out var row) || row == 0)
+                continue;
+
+            uint col;
+            try
+            {
+                col = CellAddress.ColumnNameToNumber(colName);
+            }
+            catch
+            {
+                continue;
+            }
+
+            var referenced = new CellAddress(sheet.Id, row, col);
+            var referencedFormula = sheet.GetCell(referenced)?.FormulaText;
+            if (string.IsNullOrWhiteSpace(referencedFormula))
+                continue; // not a formula cell -- stays a live bare reference, never inlined, no need to expand
+
+            if (!result.Add(referenced))
+                continue; // already visited on this walk — cycle guard / dedupe
+
+            CollectSameSheetPrecedents(referencedFormula, from, sheet, result, depth + 1);
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="formula"/> already contains a direct (bare or same-sheet-qualified)
+    /// reference to <paramref name="from"/>, outside any string literal -- the same condition
+    /// <see cref="ReplaceDirectCellReference"/> tests via actual substitution, factored out as a
+    /// side-effect-free boolean check so <see cref="CollectSameSheetPrecedents"/> can gate on it without
+    /// performing (or needing to undo) a substitution.
+    /// </summary>
+    private static bool ContainsDirectReference(string formula, CellAddress from, Sheet? sheet)
+    {
+        var literalSpans = StringLiteralRegex.Matches(formula);
+        bool IsOutsideLiteral(Match m)
+        {
+            foreach (Match literal in literalSpans)
+            {
+                if (m.Index >= literal.Index && m.Index < literal.Index + literal.Length)
+                    return false;
+            }
+            return true;
+        }
+
+        var barePattern = $@"(?<![A-Za-z0-9_!'\]])\$?{Regex.Escape(CellAddress.NumberToColumnName(from.Col))}\$?{from.Row}(?![A-Za-z0-9_])";
+        foreach (Match m in Regex.Matches(formula, barePattern, RegexOptions.IgnoreCase))
+        {
+            if (IsOutsideLiteral(m))
+                return true;
+        }
+
+        if (sheet is not null && BuildSameSheetQualifiedPattern(sheet.Name, from) is { } qualifiedPattern)
+        {
+            foreach (Match m in Regex.Matches(formula, qualifiedPattern, RegexOptions.IgnoreCase))
+            {
+                if (IsOutsideLiteral(m))
+                    return true;
+            }
+        }
+
+        return false;
     }
 }
 
@@ -665,7 +796,7 @@ internal sealed class DataTableBodyRefreshCommand : IWorkbookCommand
 /// Table (<see cref="Sheet.DataTableRegistrations"/>) and, if so, re-derives that table's body from
 /// the driver cell's now-current formula text via <see cref="DataTableBodyRefreshCommand"/>.
 /// </summary>
-internal static class DataTableAutoRefreshEffects
+public static class DataTableAutoRefreshEffects
 {
     /// <summary>
     /// Best-effort, matching StructuredTableEditEffects: a refresh that fails (e.g. because the
@@ -674,6 +805,21 @@ internal static class DataTableAutoRefreshEffects
     /// committed by the time this runs. Returns every body cell address a refresh wrote, so the
     /// caller can fold them into its own <see cref="CommandOutcome.AffectedCells"/> and get them
     /// recalculated.
+    ///
+    /// R118-calc-except-data-tables: this is the single choke point deciding whether an edit gets to
+    /// re-derive (rewrite) a Data Table body's formula TEXT at all -- gated here on
+    /// <see cref="WorkbookCalculationMode.Automatic"/> so it agrees with
+    /// WorkbookCellEditService.RecalculateIfAutomatic's own calc-mode decision about whether to
+    /// re-evaluate a body's VALUE. Splitting those two decisions across independent code paths (one
+    /// deciding whether to rewrite the formula text, the other independently deciding whether to
+    /// evaluate it) is exactly what let a body cell get rewritten to a brand-new, not-yet-evaluated
+    /// (blank-valued) Cell here while AutomaticExceptDataTables/Manual's recalc-time skip then left it
+    /// forever unevaluated -- neither "frozen at its previous value" (the desired behaviour) nor
+    /// correctly recomputed, just blank. In AutomaticExceptDataTables and Manual mode, a Data Table's
+    /// body (formula text AND value) must stay completely untouched at edit time no matter what changed
+    /// -- including an edit that lands squarely on the master/driver formula cell itself -- and only
+    /// <see cref="RefreshAllTables"/> (driven from F9 / Shift+F9, which always forces every Data Table
+    /// fresh regardless of calc mode) re-derives it.
     /// </summary>
     public static IReadOnlyList<CellAddress> Apply(
         ICommandContext ctx,
@@ -681,6 +827,9 @@ internal static class DataTableAutoRefreshEffects
         List<IWorkbookCommand> applied)
     {
         if (edits.Count == 0)
+            return [];
+
+        if (ctx.Workbook.CalculationMode != WorkbookCalculationMode.Automatic)
             return [];
 
         Dictionary<SheetId, List<CellAddress>>? editsBySheet = null;
@@ -705,7 +854,7 @@ internal static class DataTableAutoRefreshEffects
 
             foreach (var registration in sheet.DataTableRegistrations)
             {
-                if (!IsDriverCellAmongEdits(registration, editedAddresses))
+                if (!IsDriverCellAmongEdits(sheet, registration, editedAddresses))
                     continue;
 
                 var refreshCommand = new DataTableBodyRefreshCommand(registration);
@@ -723,21 +872,67 @@ internal static class DataTableAutoRefreshEffects
     }
 
     /// <summary>
-    /// Whether any address in <paramref name="editedAddresses"/> is a driver cell for
-    /// <paramref name="registration"/>'s table: its master formula cell always; for a one-variable
-    /// table, also any OTHER header row/column cell (see DataTableBodyWriter's per-orientation
-    /// header lookup, which every body column/row besides the master's own re-reads live).
+    /// Unconditionally re-derives every registered Data Table's body on <paramref name="sheet"/>, from
+    /// its driver formula's CURRENT text, regardless of what (if anything) changed since the last
+    /// calculation and regardless of <see cref="WorkbookCalculationMode"/> -- F9 (Calculate Now) /
+    /// Shift+F9 (Calculate Sheet) always force a fresh Data Table result no matter the calc mode (see
+    /// <see cref="Apply"/>'s own CalculationMode gate, which is what leaves a body's formula text stale
+    /// while AutomaticExceptDataTables/Manual mode is otherwise in effect). Called from
+    /// WorkbookCellEditService.RecalculateAll/RecalculateSheet so a driver/precedent edit that landed
+    /// while frozen is picked up the moment the user actually asks for a recalculation, not just its
+    /// VALUE (which ordinary full recalculation already refreshes) but its formula TEXT too.
     /// </summary>
-    private static bool IsDriverCellAmongEdits(DataTableRegistration registration, List<CellAddress> editedAddresses)
+    public static IReadOnlyList<CellAddress> RefreshAllTables(ICommandContext ctx, Sheet sheet)
+    {
+        if (!sheet.HasDataTableRanges)
+            return [];
+
+        List<CellAddress>? affectedCells = null;
+        foreach (var registration in sheet.DataTableRegistrations)
+        {
+            var outcome = new DataTableBodyRefreshCommand(registration).Apply(ctx);
+            if (outcome.Success && outcome.AffectedCells is { Count: > 0 } cells)
+                (affectedCells ??= []).AddRange(cells);
+        }
+
+        return affectedCells ?? [];
+    }
+
+    /// <summary>
+    /// Whether any address in <paramref name="editedAddresses"/> is a driver cell for
+    /// <paramref name="registration"/>'s table -- its master formula cell always; for a one-variable
+    /// table, also any OTHER header row/column cell (see DataTableBodyWriter's per-orientation header
+    /// lookup, which every body column/row besides the master's own re-reads live) -- OR any INTERMEDIATE
+    /// cell that a driver formula reaches only indirectly (e.g. driver cell D1 = "=C1" where C1 itself
+    /// holds the formula that actually references the input cell). DataTableFormulaRewriter.InlineAndSubstitute
+    /// textually inlines such an intermediate cell's formula text into the table body at
+    /// substitution time (see its own remarks), so the body stays "live" only against that frozen
+    /// snapshot -- an edit that lands on D1 itself is already caught by ordinary recalculation AND by
+    /// the direct check above, but an edit to C1 changes what a fresh substitution would produce
+    /// without ever touching a cell this method previously recognised, silently freezing the body
+    /// forever. <see cref="DataTableFormulaRewriter.CollectSameSheetPrecedents"/> walks the same
+    /// same-sheet reference chain InlineAndSubstitute would, so any cell it could ever inline is
+    /// treated as a driver here too.
+    /// </summary>
+    private static bool IsDriverCellAmongEdits(Sheet sheet, DataTableRegistration registration, List<CellAddress> editedAddresses)
     {
         var tableRange = registration.TableRange;
+        HashSet<CellAddress>? precedents = null;
+
         foreach (var address in editedAddresses)
         {
             if (address.Equals(registration.FormulaCell))
                 return true;
 
+            if (address.Sheet == tableRange.Start.Sheet)
+            {
+                precedents ??= CollectDriverPrecedents(sheet, registration);
+                if (precedents.Contains(address))
+                    return true;
+            }
+
             if (registration.SecondInputCell is not null)
-                continue; // two-variable tables have only the single corner driver cell above
+                continue; // two-variable tables have only the single corner driver cell (+ its precedents) above
 
             if (address.Sheet != tableRange.Start.Sheet)
                 continue;
@@ -757,5 +952,54 @@ internal static class DataTableAutoRefreshEffects
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The full set of same-sheet cells that would actually get textually inlined into the body while
+    /// substituting every driver formula of <paramref name="registration"/>'s table for its input
+    /// cell(s): its master/corner formula cell always, plus -- for a one-variable table -- every OTHER
+    /// header row/column cell too, since each hosts its own independent result formula (see
+    /// DataTableBodyWriter's per-orientation header lookup). A two-variable table's header row/column
+    /// cells are themselves trial-value inputs, never formulas, so only the corner cell's chain applies
+    /// there, checked against BOTH its input cells (<see cref="DataTableRegistration.InputCell"/>, the row
+    /// input, and <see cref="DataTableRegistration.SecondInputCell"/>, the column input) since
+    /// ComputeAndApplyTwoVariableBody substitutes each independently and either substitution failing to
+    /// find its input cell directly triggers its own inlining pass (see
+    /// <see cref="DataTableFormulaRewriter.CollectSameSheetPrecedents"/>'s remarks on why this must be
+    /// gated per input cell, not a blind reachability walk).
+    /// </summary>
+    private static HashSet<CellAddress> CollectDriverPrecedents(Sheet sheet, DataTableRegistration registration)
+    {
+        var result = new HashSet<CellAddress>();
+
+        void CollectFrom(CellAddress driverCell)
+        {
+            var formula = sheet.GetCell(driverCell)?.FormulaText;
+            if (string.IsNullOrWhiteSpace(formula))
+                return;
+
+            DataTableFormulaRewriter.CollectSameSheetPrecedents(formula, registration.InputCell, sheet, result);
+            if (registration.SecondInputCell is { } secondInput)
+                DataTableFormulaRewriter.CollectSameSheetPrecedents(formula, secondInput, sheet, result);
+        }
+
+        CollectFrom(registration.FormulaCell);
+
+        if (registration.SecondInputCell is null)
+        {
+            var tableRange = registration.TableRange;
+            if (registration.IsRowOriented)
+            {
+                for (uint row = tableRange.Start.Row + 1; row <= tableRange.End.Row; row++)
+                    CollectFrom(new CellAddress(tableRange.Start.Sheet, row, tableRange.Start.Col));
+            }
+            else
+            {
+                for (uint col = tableRange.Start.Col + 1; col <= tableRange.End.Col; col++)
+                    CollectFrom(new CellAddress(tableRange.Start.Sheet, tableRange.Start.Row, col));
+            }
+        }
+
+        return result;
     }
 }

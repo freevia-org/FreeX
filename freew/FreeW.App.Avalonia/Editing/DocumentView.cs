@@ -491,6 +491,26 @@ public sealed class DocumentView : Control
         _bus.Execute(new CellTextCommand(block, row, col, text));
     }
 
+    /// <summary>
+    /// Replace a table cell's paragraphs while preserving their run and paragraph formatting.
+    /// Used by label mail merge so each recipient cell receives the merged template content.
+    /// </summary>
+    public void SetTableCellContent(
+        int blockIndex,
+        int rowIndex,
+        int columnIndex,
+        IReadOnlyList<Paragraph> paragraphs)
+    {
+        if (IsEditingLocked)
+            return;
+
+        _bus.Execute(new SetTableCellContentCommand(
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphs));
+    }
+
     public TextDocument Document => _doc;
     public string? CurrentParagraphStyleId => CurrentParagraph()?.StyleId;
 

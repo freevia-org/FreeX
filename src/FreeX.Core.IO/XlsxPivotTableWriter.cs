@@ -18,7 +18,7 @@ internal static partial class XlsxPivotTableWriter
     public static void Save(
         Stream xlsxStream,
         Workbook workbook,
-        IReadOnlyDictionary<int, int> numberFormatIdMap)
+        PivotNumberFormatIdMap numberFormatIdMap)
     {
         using var archive = new ZipArchive(xlsxStream, ZipArchiveMode.Update, leaveOpen: true);
         var workbookEntry = archive.GetEntry("xl/workbook.xml");
@@ -235,7 +235,7 @@ internal static partial class XlsxPivotTableWriter
         IReadOnlyDictionary<int, string> cachePartById,
         IReadOnlyDictionary<int, PivotCacheModel> cacheById,
         IReadOnlyDictionary<int, IReadOnlyDictionary<string, int>> calculatedFieldIndexesByCacheId,
-        IReadOnlyDictionary<int, int> numberFormatIdMap,
+        PivotNumberFormatIdMap numberFormatIdMap,
         ref int pivotIndex,
         XNamespace workbookNs,
         XNamespace relNs,
@@ -302,7 +302,7 @@ internal static partial class XlsxPivotTableWriter
         IReadOnlyDictionary<string, int> calculatedFieldIndexes,
         XNamespace workbookNs,
         string cacheRelId,
-        IReadOnlyDictionary<int, int> numberFormatIdMap)
+        PivotNumberFormatIdMap numberFormatIdMap)
     {
         return new XDocument(new XElement(
             workbookNs + "pivotTableDefinition",
@@ -736,7 +736,7 @@ internal static partial class XlsxPivotTableWriter
         IReadOnlyList<PivotDataFieldModel> fields,
         IReadOnlyDictionary<string, int> calculatedFieldIndexes,
         XNamespace workbookNs,
-        IReadOnlyDictionary<int, int> numberFormatIdMap) =>
+        PivotNumberFormatIdMap numberFormatIdMap) =>
         fields.Count == 0
             ? null
             : new XElement(
@@ -756,14 +756,15 @@ internal static partial class XlsxPivotTableWriter
 
     private static XAttribute? ToPivotNumberFormatAttribute(
         PivotDataFieldModel field,
-        IReadOnlyDictionary<int, int> numberFormatIdMap)
+        PivotNumberFormatIdMap numberFormatIdMap)
     {
         if (field.NumberFormatId is not { } numberFormatId)
             return null;
 
-        var mappedId = numberFormatIdMap.TryGetValue(numberFormatId, out var remapped)
-            ? remapped
-            : numberFormatId;
+        // R118-io-numfmt-pivot-sentinel-collision: resolve by (id, code) rather than id alone -- two data
+        // fields can share the same hardcoded sentinel id (see PivotValueFieldPlanner) with different
+        // custom format text, and a plain id-only lookup cannot tell them apart.
+        var mappedId = numberFormatIdMap.ResolveDataFieldNumberFormatId(numberFormatId, field.NumberFormatCode);
         return new XAttribute("numFmtId", mappedId.ToString(CultureInfo.InvariantCulture));
     }
 

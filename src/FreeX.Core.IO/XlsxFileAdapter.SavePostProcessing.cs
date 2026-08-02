@@ -337,7 +337,7 @@ public sealed partial class XlsxFileAdapter
             XlsxStructuredTableStyleMetadataWriter.Save(packageStream, workbook);
         }
 
-        IReadOnlyDictionary<int, int> numberFormatIdMap = new Dictionary<int, int>();
+        PivotNumberFormatIdMap numberFormatIdMap = PivotNumberFormatIdMap.Empty;
         if (workbook.NumberFormatCatalog.Count > 0 ||
             featurePlan.HasPivotCustomNumberFormats)
         {
@@ -451,6 +451,20 @@ public sealed partial class XlsxFileAdapter
         {
             packageStream.Position = 0;
             XlsxSourceDrawingGeometryRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
+        }
+
+        // R118-io-drawing-zorder-1: Bring Forward/Send Backward/Selection Pane commands only ever
+        // mutate Sheet.DrawingObjectZOrder, never IsSourceLoaded. XlsxWorksheetDrawingObjectWriter's own
+        // z-order-aware anchor loop and XlsxWorksheetDrawingPartMerger's own reorder pass both require
+        // the WRITER to have touched the sheet at all; a sheet where every object is still source-loaded
+        // (the ordinary result of a plain reorder with no other edit) never reaches either -- its ENTIRE
+        // drawing part is instead carried forward untouched by the generic unknown-part passthrough. Must
+        // run after PreserveSourcePackageParts (every sheet's drawing part is at its final path by then,
+        // whichever mechanism produced it) and is a no-op when no sheet has an explicit z-order recorded.
+        if (featurePlan.HasExplicitDrawingZOrder)
+        {
+            packageStream.Position = 0;
+            XlsxWorksheetDrawingZOrderRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
         // P8 (R44-io-pivot-filter-page-3-1): on this source-package path, XlsxPivotTableWriter.Save --
@@ -845,7 +859,7 @@ public sealed partial class XlsxFileAdapter
     private static void RewritePivotTableLayoutState(
         Stream packageStream,
         Workbook workbook,
-        IReadOnlyDictionary<int, int> numberFormatIdMap)
+        PivotNumberFormatIdMap numberFormatIdMap)
     {
         XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
@@ -1055,7 +1069,7 @@ public sealed partial class XlsxFileAdapter
         XElement root,
         PivotTableModel pivot,
         XNamespace workbookNs,
-        IReadOnlyDictionary<int, int> numberFormatIdMap)
+        PivotNumberFormatIdMap numberFormatIdMap)
     {
         var dataFieldsElement = root.Element(workbookNs + "dataFields");
         if (dataFieldsElement is null || pivot.DataFields.Count == 0)
@@ -1081,7 +1095,10 @@ public sealed partial class XlsxFileAdapter
             string? desiredNumFmtId = null;
             if (model.NumberFormatId is { } numberFormatId)
             {
-                var mappedId = numberFormatIdMap.TryGetValue(numberFormatId, out var remapped) ? remapped : numberFormatId;
+                // R118-io-numfmt-pivot-sentinel-collision: resolve by (id, code), not id alone -- see
+                // XlsxPivotTableWriter.ToPivotNumberFormatAttribute for why a plain id lookup silently
+                // collapses two differently-formatted data fields onto the same final numFmtId.
+                var mappedId = numberFormatIdMap.ResolveDataFieldNumberFormatId(numberFormatId, model.NumberFormatCode);
                 desiredNumFmtId = mappedId.ToString(CultureInfo.InvariantCulture);
             }
 
@@ -2073,6 +2090,16 @@ public sealed partial class XlsxFileAdapter
         /// resize/move of a source-loaded drawing object from being discarded on save.
         /// </summary>
         public bool HasSourceLoadedDrawingObjects;
+        /// <summary>
+        /// True when any sheet has an explicit <see cref="Sheet.DrawingObjectZOrder"/> recorded (i.e. a
+        /// Bring Forward/Send Backward/Selection Pane reorder command has run on it at least once). Gates
+        /// <see cref="XlsxWorksheetDrawingZOrderRewriter"/> (R118-io-drawing-zorder-1), which re-applies
+        /// that z-order to the sheet's FINAL drawing part -- needed because a sheet where every object is
+        /// still source-loaded never reaches <see cref="XlsxWorksheetDrawingObjectWriter"/> or
+        /// <see cref="XlsxWorksheetDrawingPartMerger"/>'s own z-order handling at all; its drawing part is
+        /// instead carried forward untouched by the generic unknown-part passthrough.
+        /// </summary>
+        public bool HasExplicitDrawingZOrder;
         public bool HasStructuredTables;
         public bool HasPivotTables;
         public bool HasPivotCustomNumberFormats;
@@ -2151,6 +2178,7 @@ public sealed partial class XlsxFileAdapter
             HasLiveAutoFilter |= !string.IsNullOrWhiteSpace(
                 XlsxWorksheetAutoFilterXmlMapper.GetEffectiveReference(sheet.AutoFilter));
             HasSourceLoadedDrawingObjects |= XlsxSourceDrawingGeometryRewriter.HasSourceLoadedDrawingObjects(sheet);
+            HasExplicitDrawingZOrder |= XlsxWorksheetDrawingZOrderRewriter.HasExplicitDrawingZOrder(sheet);
             HasStructuredTables |= sheet.StructuredTables.Count > 0;
             HasPivotTables |= sheet.PivotTables.Count > 0;
             if (!HasPivotCustomNumberFormats)

@@ -54,13 +54,31 @@ public sealed class PrintPreviewPaginationContext
         Sheet sheet,
         ITextMeasurer textMeasurer,
         out PrintPreviewPaginationContext context,
-        string workbookDirectory = "")
+        string workbookDirectory = "",
+        bool ignorePrintArea = false)
     {
         ArgumentNullException.ThrowIfNull(workbook);
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(textMeasurer);
 
-        if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out var printRanges))
+        IReadOnlyList<GridRange> printRanges;
+        if (ignorePrintArea)
+        {
+            // Mirrors WorksheetPrintRenderPlanner.ResolvePrintRanges's ignorePrintArea branch: fall
+            // back straight to the used range instead of the sheet's configured print area(s), the
+            // same "Ignore print area" semantic the real print/PDF export honors
+            // (WorksheetPrintRenderPlanner.TryBuild). An empty sheet still means "nothing to
+            // preview" here (unlike the export renderer's blank-page fallback), matching this
+            // context's existing convention below.
+            if (sheet.GetUsedRange() is not { } usedRange)
+            {
+                context = null!;
+                return false;
+            }
+
+            printRanges = [usedRange];
+        }
+        else if (!PageBreakPreviewInstructionBuilder.TryResolvePrintRanges(sheet, out printRanges))
         {
             context = null!;
             return false;
