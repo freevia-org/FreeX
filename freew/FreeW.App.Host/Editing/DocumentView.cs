@@ -10900,6 +10900,7 @@ public sealed class DocumentView : RichTextBox
         {
             wpf.FontSize = size * PxPerPoint;
         }
+        ApplyBaselinePositionPresentation(wpf, fmt);
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         var decorationPlan = RunDecorationVisualPlanner.Build(fmt, PxPerPoint);
@@ -12087,6 +12088,7 @@ public sealed class DocumentView : RichTextBox
             wpf.FontFamily = new FontFamily(family);
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
+        ApplyBaselinePositionPresentation(wpf, fmt);
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = run.FieldKind + " field";
@@ -13892,6 +13894,18 @@ public sealed class DocumentView : RichTextBox
         };
         RenderChartScene(canvas, scene);
         return canvas;
+    }
+
+    private static void ApplyBaselinePositionPresentation(WpfRun run, RunFormatting formatting)
+    {
+        var offsetDip = RunBaselinePositionPlanner.ResolveOffsetDip(formatting, PxPerPoint);
+        if (Math.Abs(offsetDip) < 0.001)
+            return;
+
+        run.TextEffects.Add(new TextEffect
+        {
+            Transform = new TranslateTransform(0, offsetDip)
+        });
     }
 
     private static void RenderChartScene(Canvas canvas, ChartScene scene)

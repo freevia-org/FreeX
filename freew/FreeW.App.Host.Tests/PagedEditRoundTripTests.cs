@@ -182,6 +182,36 @@ public sealed class PagedEditRoundTripTests
         }
     }
 
+    [StaTheory]
+    [InlineData(3.0, -4.0)]
+    [InlineData(-2.25, 3.0)]
+    public void RunBaselinePosition_UsesAVisualTransformAndSurvivesRoundTrip(
+        double positionPt,
+        double expectedOffsetDip)
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Positioned", new RunFormatting { PositionPt = positionPt }));
+        doc.Blocks.Add(paragraph);
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+        var rendered = editor.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(block => block.Inlines.OfType<System.Windows.Documents.Run>())
+            .Single(run => run.Text == "Positioned");
+
+        rendered.TextEffects.Should().ContainSingle();
+        var translation = rendered.TextEffects[0].Transform.Should().BeOfType<TranslateTransform>().Which;
+        translation.X.Should().Be(0);
+        translation.Y.Should().BeApproximately(expectedOffsetDip, 0.001);
+
+        editor.CommitToModel();
+        doc.Blocks.OfType<Paragraph>().Single().Runs.Single().Formatting.PositionPt
+            .Should().BeApproximately(positionPt, 0.001);
+    }
+
     [StaFact]
     public void MultiBlock_BlockCountIdentical_AfterRoundTrip()
     {

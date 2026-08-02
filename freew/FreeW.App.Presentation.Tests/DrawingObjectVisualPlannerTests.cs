@@ -5,6 +5,33 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class DrawingObjectVisualPlannerTests
 {
     [Fact]
+    public void TextLayout_BaselinePositionMovesGlyphAndCaretWithoutChangingAdvance()
+    {
+        var formatting = new RunFormatting { PositionPt = 3 };
+        var plan = new DrawingObjectTextPlan("Raised", ShapeTextDirection.Horizontal)
+        {
+            Paragraphs =
+            [
+                new DrawingObjectTextParagraphPlan(
+                    TextAlignment.Left,
+                    [new DrawingObjectTextRunPlan("Raised", formatting, 0, 0)])
+            ]
+        };
+
+        var layout = DrawingObjectTextLayoutPlanner.LayoutPlan(
+            plan,
+            200,
+            80,
+            (text, _) => text.Length * 10,
+            _ => 20);
+
+        layout.Glyphs[0].Y.Should().Be(DrawingObjectTextLayoutPlanner.TextInsetDip - 4);
+        layout.CaretStops[0].Y.Should().Be(DrawingObjectTextLayoutPlanner.TextInsetDip - 4);
+        layout.Glyphs[1].X.Should().Be(layout.Glyphs[0].X + 10);
+        layout.Glyphs[0].Height.Should().Be(20);
+    }
+
+    [Fact]
     public void ShapePlan_RecordsGeometryFillOutlineTextEffectsAndTransform()
     {
         var shape = Shape.TextBoxWith("Planner text", widthPt: 150, heightPt: 72, fillColorHex: "#E2F0D9");
