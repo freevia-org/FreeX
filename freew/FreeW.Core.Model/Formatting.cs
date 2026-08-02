@@ -218,6 +218,13 @@ public sealed record RunFormatting
     /// </summary>
     public bool Hidden { get; init; }
 
+    /// <summary>
+    /// Whether the run is hidden when the document is displayed as a web page
+    /// (<c>w:rPr/w:webHidden</c>). Defaults to false. Style and document-default inheritance uses the
+    /// same logical-OR semantics as the other non-nullable run toggles.
+    /// </summary>
+    public bool WebHidden { get; init; }
+
     public string? FontFamily { get; init; }
     public double? FontSizePt { get; init; }
     public string? ColorHex { get; init; }
