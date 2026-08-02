@@ -165,6 +165,8 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.RawXml.Should().Contain("sldId=\"257\"");
         zoom.PreservedObject.RawXml.Should().Contain("zmPr");
         zoom.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+        zoom.PreservedObject.ZoomProperties.Should()
+            .Be(new ZoomObjectProperties(true, "preview", null, true));
         zoom.PreservedObject.RawXml.Should().Contain("blipFill");
         zoom.PreservedObject.RawXml.Should().Contain("spPr");
     }
@@ -193,6 +195,8 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.RawXml.Should().Contain("sectionId=\"{SECTION-TARGET}\"");
         zoom.PreservedObject.RawXml.Should().Contain("zmPr");
         zoom.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+        zoom.PreservedObject.ZoomProperties.Should()
+            .Be(new ZoomObjectProperties(true, "preview", null, true));
         zoom.PreservedObject.RawXml.Should().Contain("blipFill");
         zoom.PreservedObject.RawXml.Should().Contain("spPr");
         roundTripped.Sections.Should().ContainSingle(item => item.Id == section.Id);
@@ -235,6 +239,8 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom.PreservedObject.RawXml.Should().Contain("summaryZmObj");
         zoom.PreservedObject.Parts.Should().HaveCount(3);
         zoom.PreservedObject.RawXml.Should().Contain("embed=");
+        zoom.PreservedObject.ZoomProperties.Should()
+            .Be(new ZoomObjectProperties(true, "preview", null, true));
         zoom.PreservedObject.WasAlternateContent.Should().BeTrue();
         zoom.PreservedObject.McRequiresToken.Should().Be("p14");
         zoom.PreservedObject.AlternateContentFallbackXml.Should().Contain("<p:sp");

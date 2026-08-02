@@ -652,6 +652,12 @@
   <data name="Ribbon_Command_InsertSummaryZoom_KeyTip" xml:space="preserve">
     <value>SM</value>
   </data>
+  <data name="Ribbon_Command_FormatZoom_Label" xml:space="preserve">
+    <value>Zoom Format</value>
+  </data>
+  <data name="Ribbon_Command_FormatZoom_KeyTip" xml:space="preserve">
+    <value>ZF</value>
+  </data>
   <data name="Ribbon_Command_RemoveLink_Label" xml:space="preserve">
     <value>Remove Link</value>
   </data>
