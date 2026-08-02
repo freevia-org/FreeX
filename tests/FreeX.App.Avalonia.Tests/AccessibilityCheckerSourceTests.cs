@@ -49,6 +49,24 @@ public sealed class AccessibilityCheckerSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerParityDialogAsync()),");
     }
 
+    [Fact]
+    public void AccessibilityCheckerDialog_UsesSharedWpfFootprintAndAvaloniaChrome()
+    {
+        var avaloniaSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.AccessibilityChecker.cs"));
+        var wpfSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "AccessibilityCheckerDialog.cs"));
+        var captureSource = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "ParityCapture.cs"));
+
+        avaloniaSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog);");
+        avaloniaSource.Should().Contain("AvaloniaCompactDialogChrome.WindowsStyle");
+        avaloniaSource.Should().Contain("AccessibilityCheckerDialogMetrics.ResultsTreeHeight");
+        avaloniaSource.Should().Contain("Class(\":selected\")");
+        avaloniaSource.Should().Contain("AccessibilityCheckerDialogMetrics.ActionButtonWidth");
+        wpfSource.Should().Contain("Width = AccessibilityCheckerDialogMetrics.Width;");
+        wpfSource.Should().Contain("Height = AccessibilityCheckerDialogMetrics.Height;");
+        captureSource.Should().Contain("AccessibilityCheckerDialogMetrics.ButtonDividerTop");
+        captureSource.Should().Contain("AccessibilityCheckerDialogMetrics.ActionButtonSpacing");
+    }
+
     private static string RepoFile(params string[] parts)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

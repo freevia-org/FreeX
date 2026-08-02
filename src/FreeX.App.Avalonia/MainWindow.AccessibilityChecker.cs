@@ -2,12 +2,14 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using FreeX.App.Presentation.Accessibility;
 using FreeX.Core.Commands;
+using Free.Shared.Shell.Avalonia;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
 namespace FreeX.App.Avalonia;
@@ -39,28 +41,35 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            Width = 360,
-            Height = 200,
+            Width = AccessibilityCheckerDialogMetrics.Width,
+            Height = AccessibilityCheckerDialogMetrics.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = true,
         };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog);
         AutomationProperties.SetAutomationId(dialog, "AccessibilityCheckerDialog");
 
         var titleBlock = new TextBlock
         {
             Text = plan.Title,
-            FontSize = 16,
+            FontSize = AccessibilityCheckerDialogMetrics.TitleFontSize,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 8),
         };
 
-        var messageBlock = new TextBlock
+        var messageBlock = new TextBox
         {
             Text = plan.CleanMessage,
+            IsReadOnly = true,
+            AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 16),
         };
+        messageBlock.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
         ApplyAutomation(messageBlock, plan.ResultAutomation);
 
         var statusBlock = new TextBlock
@@ -72,10 +81,14 @@ public sealed partial class MainWindow
 
         var closeButton = new Button
         {
-            MinWidth = 76,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
         };
         ApplyAction(closeButton, plan.CloseAction);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            closeButton,
+            AvaloniaCompactDialogChrome.WindowsStyle,
+            AccessibilityCheckerDialogMetrics.ActionButtonWidth,
+            isDefault: true);
         closeButton.Click += (_, _) => dialog.Close();
 
         dialog.KeyDown += (_, e) =>
@@ -87,19 +100,17 @@ public sealed partial class MainWindow
             }
         };
 
-        dialog.Content = new StackPanel
-        {
-            Margin = new Thickness(16),
-            Children =
-            {
-                titleBlock,
-                messageBlock,
-                statusBlock,
-                closeButton,
-            },
-        };
+        var root = new DockPanel { Margin = new Thickness(AccessibilityCheckerDialogMetrics.ContentMargin) };
+        DockPanel.SetDock(titleBlock, Dock.Top);
+        DockPanel.SetDock(closeButton, Dock.Bottom);
+        DockPanel.SetDock(statusBlock, Dock.Bottom);
+        root.Children.Add(titleBlock);
+        root.Children.Add(closeButton);
+        root.Children.Add(statusBlock);
+        root.Children.Add(messageBlock);
+        dialog.Content = root;
 
-        dialog.Opened += (_, _) => closeButton.Focus();
+        dialog.Opened += (_, _) => messageBlock.Focus();
 
         await dialog.ShowDialog(this);
     }
@@ -109,25 +120,27 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = plan.Title,
-            Width = 360,
-            Height = 520,
+            Width = AccessibilityCheckerDialogMetrics.Width,
+            Height = AccessibilityCheckerDialogMetrics.Height,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
             CanResize = true,
         };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog);
         AutomationProperties.SetAutomationId(dialog, "AccessibilityCheckerDialog");
 
         var resultsTree = new TreeView
         {
             Margin = new Thickness(0),
             BorderThickness = new Thickness(0),
-            FontSize = 12,
+            FontSize = AccessibilityCheckerDialogMetrics.BodyFontSize,
+            Background = Brushes.White,
         };
         resultsTree.Styles.Add(new Style(s => s.OfType<TreeViewItem>())
         {
             Setters =
             {
-                new Setter(TreeViewItem.MinHeightProperty, 18.0),
+                new Setter(TreeViewItem.MinHeightProperty, 20.0),
                 new Setter(TreeViewItem.PaddingProperty, new Thickness(2, 0)),
             },
         });
@@ -136,15 +149,28 @@ public sealed partial class MainWindow
         {
             Setters =
             {
-                new Setter(Layoutable.MinHeightProperty, 18.0),
+                new Setter(Layoutable.MinHeightProperty, 20.0),
                 new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.MarginProperty, new Thickness(0)),
                 new Setter(global::Avalonia.Controls.Presenters.ContentPresenter.PaddingProperty, new Thickness(2, 0)),
+            },
+        });
+        resultsTree.Styles.Add(new Style(s => s.OfType<TreeViewItem>().Class(":selected"))
+        {
+            Setters =
+            {
+                new Setter(TemplatedControl.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xE6, 0xF0, 0xFA))),
+                new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
             },
         });
         ApplyAutomation(resultsTree, plan.IssueListAutomation);
 
         var resultsBorder = new Border
         {
+            Height = AccessibilityCheckerDialogMetrics.ResultsTreeHeight,
+            MinHeight = AccessibilityCheckerDialogMetrics.ResultsTreeHeight,
+            MaxHeight = AccessibilityCheckerDialogMetrics.ResultsTreeHeight,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xAB, 0xAB, 0xAB)),
             BorderThickness = new Thickness(1),
             Child = resultsTree,
@@ -215,15 +241,20 @@ public sealed partial class MainWindow
 
         var goToButton = new Button
         {
-            MinWidth = 76,
-            Margin = new Thickness(0, 0, 8, 0),
         };
         ApplyAction(goToButton, plan.GoToAction);
 
-        var closeButton = new Button { MinWidth = 76 };
+        var closeButton = new Button();
         ApplyAction(closeButton, plan.CloseAction);
-        ApplyDialogButtonChrome(goToButton, 84, isDefault: true);
-        ApplyDialogButtonChrome(closeButton, 84);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            goToButton,
+            AvaloniaCompactDialogChrome.WindowsStyle,
+            AccessibilityCheckerDialogMetrics.ActionButtonWidth,
+            isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            closeButton,
+            AvaloniaCompactDialogChrome.WindowsStyle,
+            AccessibilityCheckerDialogMetrics.ActionButtonWidth);
 
         AccessibilityIssue? selectedIssue = null;
 
@@ -290,7 +321,7 @@ public sealed partial class MainWindow
         var titleBlock = new TextBlock
         {
             Text = plan.Title,
-            FontSize = 16,
+            FontSize = AccessibilityCheckerDialogMetrics.TitleFontSize,
             FontWeight = FontWeight.SemiBold,
             Margin = new Thickness(0, 0, 0, 8),
         };
@@ -317,7 +348,7 @@ public sealed partial class MainWindow
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
+            Spacing = AccessibilityCheckerDialogMetrics.ActionButtonSpacing,
             Children =
             {
                 goToButton,
@@ -325,16 +356,28 @@ public sealed partial class MainWindow
             },
         };
 
+        var buttonBar = new Border
+        {
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xDE)),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 15, 0, 4),
+            Child = buttonRow,
+        };
+
         var innerPanel = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(titleBlock, Dock.Top);
-        DockPanel.SetDock(buttonRow, Dock.Bottom);
+        DockPanel.SetDock(buttonBar, Dock.Bottom);
         DockPanel.SetDock(statusBlock, Dock.Bottom);
         innerPanel.Children.Add(titleBlock);
-        innerPanel.Children.Add(buttonRow);
+        innerPanel.Children.Add(buttonBar);
         innerPanel.Children.Add(statusBlock);
         innerPanel.Children.Add(bodyGrid);
 
-        dialog.Content = new Border { Padding = new Thickness(16), Child = innerPanel };
+        dialog.Content = new Border
+        {
+            Padding = new Thickness(AccessibilityCheckerDialogMetrics.ContentMargin),
+            Child = innerPanel,
+        };
 
         dialog.Opened += (_, _) =>
         {

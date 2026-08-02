@@ -34,8 +34,8 @@ public sealed class AccessibilityCheckerDialog : Window
         _plan = AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get);
 
         Title = _plan.Title;
-        Width = 360;
-        Height = 520;
+        Width = AccessibilityCheckerDialogMetrics.Width;
+        Height = AccessibilityCheckerDialogMetrics.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
@@ -59,7 +59,7 @@ public sealed class AccessibilityCheckerDialog : Window
         var title = new TextBlock
         {
             Text = _plan.Title,
-            FontSize = 16,
+            FontSize = AccessibilityCheckerDialogMetrics.TitleFontSize,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8),
         };
