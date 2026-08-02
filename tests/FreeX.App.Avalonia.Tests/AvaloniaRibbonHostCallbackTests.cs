@@ -489,6 +489,37 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void PageLayoutScaleCombos_ExposeLiveStateWhenProvided()
+    {
+        var states = new Dictionary<string, Func<RibbonCommandState>>
+        {
+            ["pageLayout.width"] = () => new RibbonCommandState(Value: "4 pages"),
+            ["pageLayout.height"] = () => new RibbonCommandState(Value: "Automatic"),
+            ["pageLayout.scale"] = () => new RibbonCommandState(Value: "125%"),
+        };
+        var registry = AvaloniaRibbonComposition.BuildRegistry(
+            () => null,
+            _ => { },
+            new AvaloniaRibbonHostCallbacks
+            {
+                SetPageLayoutScaleWidth = _ => { },
+                SetPageLayoutScaleHeight = _ => { },
+                SetPageLayoutScalePercent = _ => { },
+                ExtraCommandStates = states,
+            });
+
+        AssertStateValue(registry, "pageLayout.width", "4 pages");
+        AssertStateValue(registry, "pageLayout.height", "Automatic");
+        AssertStateValue(registry, "pageLayout.scale", "125%");
+
+        static void AssertStateValue(IRibbonCommandRegistry registry, string commandId, string expected)
+        {
+            Assert.True(registry.TryGet(Canonical(commandId), out var command));
+            Assert.Equal(expected, Assert.IsAssignableFrom<IRibbonStatefulCommand>(command).GetState().Value);
+        }
+    }
+
+    [Fact]
     public void DrawCommands_DefaultToWindowsStaticDrawEnablement()
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });

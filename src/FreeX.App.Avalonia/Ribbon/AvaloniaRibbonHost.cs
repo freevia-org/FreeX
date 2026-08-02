@@ -440,6 +440,23 @@ internal sealed class StatefulRelayRibbonCommand : IRibbonStatefulCommand
     public RibbonCommandState GetState() => _getState() ?? RibbonCommandState.Default;
 }
 
+/// <summary>Value-bearing host callback with live state for editable combo synchronization.</summary>
+internal sealed class StatefulValueRibbonCommand : IRibbonStatefulCommand
+{
+    private readonly Action<string?> _execute;
+    private readonly Func<RibbonCommandState> _getState;
+
+    public StatefulValueRibbonCommand(Action<string?> execute, Func<RibbonCommandState> getState)
+    {
+        _execute = execute ?? throw new ArgumentNullException(nameof(execute));
+        _getState = getState ?? throw new ArgumentNullException(nameof(getState));
+    }
+
+    public void Execute(RibbonCommandContext context) => _execute(context.SelectedValue);
+
+    public RibbonCommandState GetState() => _getState() ?? RibbonCommandState.Default;
+}
+
 /// <summary>A disabled placeholder for shared ribbon commands that are intentionally unavailable.</summary>
 internal sealed class DisabledNoOpRibbonCommand : IRibbonStatefulCommand
 {
@@ -675,11 +692,23 @@ internal static class AvaloniaRibbonComposition
         // Page Layout scale controls carry a selected value. Register these after the generic action map
         // so the value-aware route wins over the Page Setup dialog fallback for the same command ids.
         if (callbacks.SetPageLayoutScaleWidth is { } setScaleWidth)
-            Register(registry, "pageLayout.width", new ValueRibbonCommand(setScaleWidth));
+            Register(registry, "pageLayout.width", CreateStatefulValueRelayCommand("pageLayout.width", setScaleWidth));
         if (callbacks.SetPageLayoutScaleHeight is { } setScaleHeight)
-            Register(registry, "pageLayout.height", new ValueRibbonCommand(setScaleHeight));
+            Register(registry, "pageLayout.height", CreateStatefulValueRelayCommand("pageLayout.height", setScaleHeight));
         if (callbacks.SetPageLayoutScalePercent is { } setScalePercent)
-            Register(registry, "pageLayout.scale", new ValueRibbonCommand(setScalePercent));
+            Register(registry, "pageLayout.scale", CreateStatefulValueRelayCommand("pageLayout.scale", setScalePercent));
+
+        IRibbonCommand CreateStatefulValueRelayCommand(string avaloniaId, Action<string?> action)
+        {
+            var canonicalId = AvaloniaCommandIdAdapter.ToCanonical(avaloniaId);
+            if (callbacks.ExtraCommandStates?.TryGetValue(avaloniaId, out var state) == true ||
+                callbacks.ExtraCommandStates?.TryGetValue(canonicalId, out state) == true)
+            {
+                return new StatefulValueRibbonCommand(action, state);
+            }
+
+            return new ValueRibbonCommand(action);
+        }
     }
 
     internal static string GetShapeCommandId(DrawingShapeKind kind) => $"insert.shape.{kind}";

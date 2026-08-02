@@ -1932,6 +1932,24 @@ public static class AvaloniaRibbonRenderer
 
             e.Handled = true;
         };
+        box.LostFocus += (_, _) =>
+        {
+            if (!ready || executionState.IsSynchronizing)
+                return;
+
+            var value = ResolveComboValue(box);
+            if (executionState.HasPendingSelectionCommit
+                && string.Equals(executionState.PendingSelectionValue, value, StringComparison.Ordinal))
+            {
+                // SelectionChanged already committed this value. WPF does not execute it a second
+                // time merely because the editable combo then loses keyboard focus.
+                ClearPendingComboSelection(executionState);
+                return;
+            }
+
+            ClearPendingComboSelection(executionState);
+            ExecuteWithValue(combo.CommandId, registry, value, afterExecute);
+        };
         ready = true;
 
         ApplyEnablement(box, combo, registry, palette);

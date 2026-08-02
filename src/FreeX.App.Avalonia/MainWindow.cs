@@ -1907,6 +1907,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     ["view.headings"] = () => new RibbonCommandState(IsChecked: _session.IsShowingHeadings),
                     ["Ruler"] = () => new RibbonCommandState(IsChecked: _session.IsShowingRulers),
                     ["view.formulaBar"] = () => new RibbonCommandState(IsChecked: !_isFormulaBarHidden),
+                    ["pageLayout.width"] = () => new RibbonCommandState(
+                        Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesWide)),
+                    ["pageLayout.height"] = () => new RibbonCommandState(
+                        Value: PageLayoutInputParser.FormatScalePages(_session.ActiveSheet.ScaleToFit.FitToPagesTall)),
+                    ["pageLayout.scale"] = () => new RibbonCommandState(
+                        Value: PageLayoutInputParser.FormatScalePercent(_session.ActiveSheet.ScaleToFit.ScalePercent)),
                     ["pictureFormat.crop"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.CropPicture),
                     ["shapeFormat.shapeGradient"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeGradient),
                     ["shapeFormat.shapeEffects"] = () => GetDrawingObjectContextualRibbonCommandState(DrawingObjectContextualRibbonCommand.ShapeEffects),

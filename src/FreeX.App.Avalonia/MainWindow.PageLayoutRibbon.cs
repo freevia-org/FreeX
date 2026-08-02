@@ -27,7 +27,12 @@ public partial class MainWindow
     private void ApplyPageLayoutScaleCommit(PageLayoutScaleCommitPlan plan)
     {
         if (!plan.ShouldApply)
+        {
+            // WPF restores the last valid value when arbitrary text cannot be parsed. The live
+            // stateful scale commands feed the same value back into the editable combo controls.
+            _refreshRibbonToggleStates?.Invoke();
             return;
+        }
 
         var commands = _session.GetCurrentGroupedEditSheetIds()
             .Select(sheetId => PageLayoutRibbonCommandPlanner.BuildScaleToFitCommand(sheetId, plan.ScaleToFit))
@@ -39,6 +44,7 @@ public partial class MainWindow
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Scale to fit failed.");
+            _refreshRibbonToggleStates?.Invoke();
             return;
         }
 
