@@ -45,6 +45,58 @@ public sealed class ZoomNavigationServiceTests
     }
 
     [Fact]
+    public void Parses_positive_zoom_transition_duration_in_milliseconds()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { NumericId = 256 });
+        var zoom = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSlideNumericId = 256,
+            ZoomProperties = new ZoomObjectProperties(TransitionDuration: "1200"),
+        };
+
+        ZoomNavigationService.TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            null,
+            null,
+            out _,
+            out _,
+            out var transitionDurationMs).Should().BeTrue();
+
+        transitionDurationMs.Should().Be(1200);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("not-a-duration")]
+    public void Ignores_invalid_zoom_transition_duration(string? value)
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { NumericId = 256 });
+        var zoom = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSlideNumericId = 256,
+            ZoomProperties = new ZoomObjectProperties(TransitionDuration: value),
+        };
+
+        ZoomNavigationService.TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            null,
+            null,
+            out _,
+            out _,
+            out var transitionDurationMs).Should().BeTrue();
+
+        transitionDurationMs.Should().BeNull();
+    }
+
+    [Fact]
     public void Preserves_explicit_return_to_parent_false()
     {
         var presentation = new Presentation();

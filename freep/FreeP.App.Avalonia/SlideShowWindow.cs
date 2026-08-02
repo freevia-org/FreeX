@@ -910,11 +910,11 @@ public sealed class SlideShowWindow : Window
         Close();
     }
 
-    private void NavigateToSlide(Slide slide, int index, bool animated)
+    private void NavigateToSlide(Slide slide, int index, bool animated, int? zoomTransitionDurationMs = null)
     {
         _ = slide;
         _ = index;
-        DisplayCurrentSlide(animated);
+        DisplayCurrentSlide(animated, zoomTransitionDurationMs);
     }
 
     private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
@@ -933,7 +933,11 @@ public sealed class SlideShowWindow : Window
                 break;
             case SlideShowHostCommandKind.NavigateToSlide when command.Slide is not null:
                 MovePresenterTimingToSlide(command.SlideIndex, now);
-                NavigateToSlide(command.Slide, command.SlideIndex, command.AnimateSlide);
+                NavigateToSlide(
+                    command.Slide,
+                    command.SlideIndex,
+                    command.AnimateSlide,
+                    command.TransitionDurationMs);
                 break;
         }
     }
@@ -945,9 +949,13 @@ public sealed class SlideShowWindow : Window
 
     // ── Slide display + transitions ───────────────────────────────────────────────
 
-    private void DisplayCurrentSlide(bool animated)
+    private void DisplayCurrentSlide(bool animated, int? zoomTransitionDurationMs = null)
     {
-        var plan = SlideShowHostPlanner.BuildDisplayPlan(_presentation, _controller, animated);
+        var plan = SlideShowHostPlanner.BuildDisplayPlan(
+            _presentation,
+            _controller,
+            animated,
+            zoomTransitionDurationMs);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
         RefreshInkOverlay();
