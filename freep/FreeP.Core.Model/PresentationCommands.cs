@@ -824,8 +824,10 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
     private readonly byte[] _imageBytes;
     private readonly string _contentType;
     private readonly string? _summarySectionId;
+    private readonly bool _useCoverImage;
     private string? _oldRawXml;
     private ZoomObjectProperties? _oldProperties;
+    private ImagePart? _oldPicture;
     private Dictionary<string, byte[]>? _oldParts;
     private Dictionary<string, string>? _oldPartContentTypes;
     private Dictionary<string, (string RelType, string TargetPath)>? _oldSlideRels;
@@ -835,7 +837,8 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         uint shapeId,
         byte[] imageBytes,
         string contentType,
-        string? summarySectionId = null)
+        string? summarySectionId = null,
+        bool useCoverImage = true)
     {
         _slideIndex = slideIndex;
         _shapeId = shapeId;
@@ -846,9 +849,12 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         _summarySectionId = string.IsNullOrWhiteSpace(summarySectionId)
             ? null
             : summarySectionId.Trim();
+        _useCoverImage = useCoverImage;
     }
 
-    public string Label => "Set Zoom Cover Image";
+    public string Label => _useCoverImage
+        ? "Set Zoom Cover Image"
+        : "Restore Zoom Preview";
 
     public bool HasEffect(Presentation presentation)
     {
@@ -856,7 +862,10 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
             || !TryParseZoomProperties(info.RawXml, _summarySectionId, out _, out var properties, out _))
             return false;
 
-        return !TryGetCurrentImage(info, properties, out var current)
+        var desiredImageType = _useCoverImage ? "cover" : "preview";
+        var currentImageType = properties.Attribute("imageType")?.Value;
+        return !string.Equals(currentImageType, desiredImageType, StringComparison.OrdinalIgnoreCase)
+            || !TryGetCurrentImage(info, properties, out var current)
             || current is null
             || !current.SequenceEqual(_imageBytes);
     }
@@ -869,6 +878,13 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
 
         _oldRawXml = info.RawXml;
         _oldProperties = info.ZoomProperties;
+        _oldPicture = shape.Picture is null
+            ? null
+            : new ImagePart
+            {
+                Bytes = shape.Picture.Bytes.ToArray(),
+                ContentType = shape.Picture.ContentType,
+            };
         _oldParts = CloneBytes(info.Parts);
         _oldPartContentTypes = new Dictionary<string, string>(info.PartContentTypes, StringComparer.OrdinalIgnoreCase);
         _oldSlideRels = new Dictionary<string, (string RelType, string TargetPath)>(info.SlideRels, StringComparer.Ordinal);
@@ -891,10 +907,21 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
             info.SlideRels[relId] = (ImageRelationshipType, mediaPath);
         info.Parts[mediaPath] = _imageBytes.ToArray();
         info.PartContentTypes[mediaPath] = _contentType;
-        properties.SetAttributeValue("imageType", "cover");
+        properties.SetAttributeValue("imageType", _useCoverImage ? "cover" : "preview");
         if (_summarySectionId is null)
-            info.ZoomProperties = (info.ZoomProperties ?? new ZoomObjectProperties()) with { ImageType = "cover" };
+            info.ZoomProperties = (info.ZoomProperties ?? new ZoomObjectProperties()) with
+            {
+                ImageType = _useCoverImage ? "cover" : "preview",
+            };
         info.RawXml = document.Root!.ToString(SaveOptions.DisableFormatting);
+        if (_summarySectionId is null)
+        {
+            shape.Picture = new ImagePart
+            {
+                Bytes = _imageBytes.ToArray(),
+                ContentType = _contentType,
+            };
+        }
     }
 
     public void Revert(Presentation presentation)
@@ -908,6 +935,13 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
 
         info.RawXml = _oldRawXml;
         info.ZoomProperties = _oldProperties;
+        shape.Picture = _oldPicture is null
+            ? null
+            : new ImagePart
+            {
+                Bytes = _oldPicture.Bytes.ToArray(),
+                ContentType = _oldPicture.ContentType,
+            };
         Restore(info.Parts, _oldParts);
         Restore(info.PartContentTypes, _oldPartContentTypes);
         Restore(info.SlideRels, _oldSlideRels);

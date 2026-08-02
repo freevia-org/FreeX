@@ -739,6 +739,21 @@ public class RibbonEditorCompleteness5BTests
     }
 
     [Fact]
+    public void Cmd_ZoomResetPreview_InvokesHostCallbackWhenProvided()
+    {
+        var (ed, _) = MakeSession();
+        var invoked = false;
+        var reg = FreePRibbonCommands.Build(
+            new RibbonStateStore(),
+            ed,
+            onResetZoomCoverImage: () => invoked = true);
+
+        Exec(reg, FreeP.App.Compositor.ZoomCoverImagePlanner.ResetCommandId);
+
+        Assert.True(invoked);
+    }
+
+    [Fact]
     public void Cmd_ViewShow_TogglesSharedViewStateThroughHostCallback()
     {
         var (ed, _) = MakeSession();

@@ -664,6 +664,12 @@
   <data name="Ribbon_Command_SetZoomCoverImage_KeyTip" xml:space="preserve">
     <value>ZI</value>
   </data>
+  <data name="Ribbon_Command_ResetZoomCoverImage_Label" xml:space="preserve">
+    <value>Restore Zoom Preview</value>
+  </data>
+  <data name="Ribbon_Command_ResetZoomCoverImage_KeyTip" xml:space="preserve">
+    <value>ZP</value>
+  </data>
   <data name="Ribbon_Command_RemoveLink_Label" xml:space="preserve">
     <value>Remove Link</value>
   </data>
