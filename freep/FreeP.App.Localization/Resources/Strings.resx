@@ -1822,6 +1822,12 @@
   <data name="Ribbon_Command_SmartArtPictureGrid_KeyTip" xml:space="preserve">
     <value>G</value>
   </data>
+  <data name="Ribbon_Command_SmartArtPictureAccentProcess_Label" xml:space="preserve">
+    <value>Picture Accent Process</value>
+  </data>
+  <data name="Ribbon_Command_SmartArtPictureAccentProcess_KeyTip" xml:space="preserve">
+    <value>PAP</value>
+  </data>
   <data name="Ribbon_Command_SmartArtLabeledHierarchy_Label" xml:space="preserve">
     <value>Labeled Hierarchy</value>
   </data>

@@ -82,6 +82,7 @@ public enum SmartArtLayoutPreset
     CircleArrowProcess,
     FunnelProcess,
     VerticalProcess,
+    PictureAccentProcess,
     VerticalBoxList,
     VerticalBlockList,
     VerticalChevronList,
@@ -230,6 +231,7 @@ public static class SmartArtAuthoringPlanner
     public const string CircleArrowProcessLayoutCommandId = "freep.smartart.layout.circle-arrow-process";
     public const string FunnelProcessLayoutCommandId = "freep.smartart.layout.funnel-process";
     public const string VerticalProcessLayoutCommandId = "freep.smartart.layout.vertical-process";
+    public const string PictureAccentProcessLayoutCommandId = "freep.smartart.layout.picture-accent-process";
     public const string VerticalBoxListLayoutCommandId = "freep.smartart.layout.vertical-box-list";
     public const string VerticalBlockListLayoutCommandId = "freep.smartart.layout.vertical-block-list";
     public const string VerticalChevronListLayoutCommandId = "freep.smartart.layout.vertical-chevron-list";
@@ -532,6 +534,7 @@ public static class SmartArtAuthoringPlanner
             return NotAppliedLayout("No SmartArt graphic is available.");
 
         var pictureLayout = preset is (
+            SmartArtLayoutPreset.PictureAccentProcess or
             SmartArtLayoutPreset.PictureCaptionList or
             SmartArtLayoutPreset.PictureAccentList or
             SmartArtLayoutPreset.PictureStack or
@@ -604,6 +607,8 @@ public static class SmartArtAuthoringPlanner
                 ("urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalProcess =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess", SmartArtFamily.Process),
+            SmartArtLayoutPreset.PictureAccentProcess =>
+                ("urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentProcess", SmartArtFamily.Process),
             SmartArtLayoutPreset.VerticalBoxList =>
                 ("urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList", SmartArtFamily.List),
             SmartArtLayoutPreset.VerticalBlockList =>

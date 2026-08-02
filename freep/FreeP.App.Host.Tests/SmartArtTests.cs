@@ -55,6 +55,7 @@ public sealed class SmartArtTests : IDisposable
     /// </summary>
     private string MakeSmartArtPptx(
         string[] nodeTexts,
+        bool pictureAccentProcess = false,
         bool pictureCaptionList = false,
         bool pictureAccentList = false,
         bool pictureStack = false,
@@ -95,7 +96,7 @@ public sealed class SmartArtTests : IDisposable
         {
             var text = nodeTexts[nodeIndex];
             int idx = shapeIdx++;
-            if ((pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid)
+            if ((pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid)
                 && includeNodeImage
                 && (pictureNodeIndexes is null || pictureNodeIndexes.Contains(nodeIndex)))
             {
@@ -147,7 +148,7 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(dspNs + "spTree", fallbackEls)));
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
+        var dataXml = pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
             ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(dgmNs + "dataModel",
                     new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
@@ -168,9 +169,11 @@ public sealed class SmartArtTests : IDisposable
         var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dgmNs + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
-                pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
+                pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
                     ? new XAttribute("uniqueId", pictureGrid
                         ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid"
+                        : pictureAccentProcess
+                            ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentProcess"
                         : continuousPictureList
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/continuousPictureList"
                         : pictureStrips
@@ -1077,6 +1080,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.CircleArrowProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.FunnelProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalProcess, SmartArtFamily.Process)]
+    [InlineData(SmartArtLayoutPreset.PictureAccentProcess, SmartArtFamily.Process)]
     [InlineData(SmartArtLayoutPreset.VerticalBoxList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalArrowList, SmartArtFamily.List)]
@@ -1132,6 +1136,7 @@ public sealed class SmartArtTests : IDisposable
     {
         var sourcePath = MakeSmartArtPptx(
             ["One", "Two"],
+            pictureAccentProcess: preset == SmartArtLayoutPreset.PictureAccentProcess,
             pictureCaptionList: preset == SmartArtLayoutPreset.PictureCaptionList,
             pictureAccentList: preset == SmartArtLayoutPreset.PictureAccentList,
             pictureStack: preset == SmartArtLayoutPreset.PictureStack,
@@ -1139,7 +1144,7 @@ public sealed class SmartArtTests : IDisposable
             pictureStrips: preset == SmartArtLayoutPreset.PictureStrips,
             continuousPictureList: preset == SmartArtLayoutPreset.ContinuousPictureList,
             pictureGrid: preset == SmartArtLayoutPreset.PictureGrid,
-            includeNodeImage: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid));
+            includeNodeImage: preset is (SmartArtLayoutPreset.PictureAccentProcess or SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid));
         var savedPath = Path.Combine(_tempDir, $"smartart-layout-{preset}.pptx");
         var presentation = PptxPackageReader.Read(sourcePath);
         var smartArt = presentation.Slides[0].Shapes

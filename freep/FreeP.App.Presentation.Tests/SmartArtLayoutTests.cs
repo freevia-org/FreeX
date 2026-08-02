@@ -620,6 +620,32 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void PictureAccentProcess_WithAndWithoutPictures_UsesSharedRailAndAccentBlocks()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Plan", "Build", "Share");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentProcess";
+        data.Nodes[0].Picture = new ImagePart { Bytes = Minimal1x1Png(), ContentType = "image/png" };
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Where(shape => shape.Kind == SlideShapeKind.Picture).Should().ContainSingle();
+        shapes.Where(shape => shape.Name.StartsWith("SmartArt_PicturePlaceholder_", StringComparison.Ordinal))
+            .Should().HaveCount(2, "missing node media remains an editable Add picture slot");
+        shapes.Where(shape => shape.Kind == SlideShapeKind.AutoShape
+                              && shape.AutoShapeKind == DrawingShapeKind.Rectangle
+                              && shape.Name.StartsWith("SmartArt_Box_", StringComparison.Ordinal))
+            .Should().HaveCount(3, "each process node gets one shared accent block");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "the process rail connects adjacent picture stages");
+        shapes.Where(shape => shape.Kind == SlideShapeKind.AutoShape
+                              && shape.AutoShapeKind == DrawingShapeKind.Rectangle
+                              && shape.Name.StartsWith("SmartArt_Box_", StringComparison.Ordinal))
+            .Select(shape => shape.PlainText)
+            .Should().Equal("Plan", "Build", "Share");
+    }
+
+    [Fact]
     public void Cycle_FiveNodes_ProducesFiveBoxesPlusFiveConnectors()
     {
         var data = MakeData(SmartArtFamily.Cycle, "A", "B", "C", "D", "E");

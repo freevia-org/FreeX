@@ -288,7 +288,7 @@ public sealed class SlideObjectInsertionPlannerTests
             var added = SlideObjectInsertionPlanner.ApplyCommand(
                 editor,
                 commandId,
-                smartArtPicturePayload: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid)
+                smartArtPicturePayload: preset is (SmartArtLayoutPreset.PictureAccentProcess or SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid)
                     ? SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
                         [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")])
                     : null);
@@ -463,7 +463,7 @@ public sealed class SlideObjectInsertionPlannerTests
             SlideObjectInsertionPlanner.ApplyCommand(
                 editor,
                 commandId,
-                smartArtPicturePayload: preset is (SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid)
+                smartArtPicturePayload: preset is (SmartArtLayoutPreset.PictureAccentProcess or SmartArtLayoutPreset.PictureCaptionList or SmartArtLayoutPreset.PictureAccentList or SmartArtLayoutPreset.PictureStack or SmartArtLayoutPreset.PictureLineup or SmartArtLayoutPreset.PictureStrips or SmartArtLayoutPreset.ContinuousPictureList or SmartArtLayoutPreset.PictureGrid)
                     ? SlideObjectInsertionPlanner.CreateSmartArtPicturePayload(
                         [SlideObjectInsertionPlanner.CreatePicturePayload([1, 2, 3], "sample.png")])
                     : null).Should().NotBeNull(preset.ToString());

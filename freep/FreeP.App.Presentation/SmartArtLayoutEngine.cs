@@ -141,6 +141,9 @@ public static class SmartArtLayoutEngine
         if (IsVerticalProcessLayout(data.LayoutUniqueId))
             return LayoutVerticalProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsPictureAccentProcessLayout(data.LayoutUniqueId))
+            return LayoutPictureAccentProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsVerticalChevronListLayout(data.LayoutUniqueId))
             return LayoutVerticalChevronList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1796,6 +1799,81 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Picture Accent Process layout: a shared horizontal process rail with one
+    /// picture slot and one accented process block per node. The picture payload
+    /// stays on the model node, so WPF and Avalonia receive the same picture or
+    /// Add picture placeholder shape without host-local SmartArt policy.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutPictureAccentProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count == 0)
+            return [];
+
+        long padX = (long)(fcx * OuterPaddingFrac);
+        long padY = (long)(fcy * OuterPaddingFrac);
+        long gapX = Math.Max((long)(fcx * 0.025), 1L);
+        long gapY = Math.Max((long)(fcy * 0.025), 1L);
+        long cellW = Math.Max(
+            (fcx - 2 * padX - Math.Max(nodes.Count - 1, 0) * gapX) / nodes.Count,
+            1L);
+        long pictureSize = Math.Max(
+            Math.Min((long)(cellW * 0.72), (long)(fcy * 0.34)),
+            1L);
+        long pictureY = fy + padY;
+        long blockY = pictureY + pictureSize + gapY;
+        long blockH = Math.Max(fy + fcy - padY - blockY, 1L);
+        long firstX = fx + padX;
+        long railY = pictureY + pictureSize / 2;
+
+        var shapes = new List<SlideShape>(nodes.Count * 3);
+        uint idCounter = 600;
+
+        for (int index = 0; index < nodes.Count - 1; index++)
+        {
+            long fromX = firstX + index * (cellW + gapX) + cellW / 2;
+            long toX = firstX + (index + 1) * (cellW + gapX) + cellW / 2;
+            shapes.Add(MakeConnector(idCounter++, fromX, railY, toX, railY, stylePlan.Connector));
+        }
+
+        for (int index = 0; index < nodes.Count; index++)
+        {
+            var node = nodes[index];
+            var style = stylePlan.GetNodeStyle(index, node.Level, SmartArtFamily.Process);
+            long x = firstX + index * (cellW + gapX);
+
+            shapes.Add(node.Picture is { Bytes.Length: > 0 }
+                ? new SlideShape
+                {
+                    Id = idCounter++,
+                    Name = $"SmartArt_PictureAccentProcessPicture_{index + 1}",
+                    Kind = SlideShapeKind.Picture,
+                    OffsetXEmu = x,
+                    OffsetYEmu = pictureY,
+                    ExtentCxEmu = cellW,
+                    ExtentCyEmu = pictureSize,
+                    Picture = node.Picture,
+                }
+                : MakePicturePlaceholder(idCounter++, x, pictureY, cellW, pictureSize, style));
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                node.Text,
+                style,
+                x,
+                blockY,
+                cellW,
+                blockH,
+                NodeFontSizePt,
+                DrawingShapeKind.Rectangle));
+        }
+
+        return shapes;
+    }
+
     private static SlideShape MakePicturePlaceholder(
         uint id,
         long x,
@@ -3433,6 +3511,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "picturegrid", StringComparison.Ordinal);
+    }
+
+    private static bool IsPictureAccentProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "pictureaccentprocess", StringComparison.Ordinal);
     }
 
     private static bool IsAlternatingProcessLayout(string uniqueId)
