@@ -195,6 +195,35 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         return false;
     }
 
+    internal IReadOnlyList<AvaloniaInlineOleHostRequest> GetInlineOleHits()
+    {
+        EnsureLayouts();
+        var hits = new List<AvaloniaInlineOleHostRequest>();
+        foreach (var paragraph in _layouts)
+        {
+            foreach (var ole in paragraph.InlineOleObjects)
+            {
+                var run = paragraph.Paragraph.Runs.FirstOrDefault(candidate =>
+                    candidate.Start == ole.Start
+                    && candidate.InlineOleObject is not null);
+                if (run?.InlineOleObject is not { } inlineObject)
+                    continue;
+
+                var inlineRect = paragraph.Layout.HitTestTextPosition(ole.Start);
+                hits.Add(new AvaloniaInlineOleHostRequest(
+                    paragraph.Paragraph.GlobalStart + ole.Start,
+                    inlineObject,
+                    new Rect(
+                        paragraph.Origin.X + inlineRect.X - _scrollOffsetX,
+                        paragraph.Origin.Y + inlineRect.Y - _scrollOffsetY,
+                        ole.WidthDip,
+                        ole.HeightDip)));
+            }
+        }
+
+        return hits;
+    }
+
     internal bool TryFindInlineTableCell(
         InlineTableCellHit source,
         int rowIndex,
@@ -1287,7 +1316,6 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         int Start,
         double WidthDip,
         double HeightDip);
-
     private sealed record InlineTableLayout(
         int Start,
         InlineTableInfo Info,
@@ -1303,3 +1331,13 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
         Rect Bounds,
         int SourceCellIndex);
 }
+
+/// <summary>
+/// Measured inline OLE placement supplied to a host-specific in-place editor.
+/// The request is deliberately renderer-neutral so headless and non-Windows Avalonia
+/// builds retain the replacement glyph path when no native host is available.
+/// </summary>
+public sealed record AvaloniaInlineOleHostRequest(
+    int LogicalPosition,
+    InlineOleObjectInfo InlineObject,
+    Rect Bounds);

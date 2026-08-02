@@ -2163,7 +2163,15 @@ public sealed partial class MainWindow : Window
         ApplyPresentationViewShowState(_viewShowState);
 
         // Text editor: double-click a shape to edit its text.
-        _textEditor = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
+        _textEditor = new AvaloniaInCanvasTextEditor(
+            _slideCanvas,
+            Editor,
+            textOverlay,
+#if FREEP_WINDOWS_CAPTURE
+            AvaloniaOleInPlaceHost.TryCreate);
+#else
+            null);
+#endif
         WireTableContextMenu();
     }
 
@@ -2198,7 +2206,15 @@ public sealed partial class MainWindow : Window
             _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
             _slideCanvas.AttachGestureHandler(_gestureHandler);
             ApplyPresentationViewShowState(_viewShowState);
-            _textEditor     = new AvaloniaInCanvasTextEditor(_slideCanvas, Editor, textOverlay);
+            _textEditor = new AvaloniaInCanvasTextEditor(
+                _slideCanvas,
+                Editor,
+                textOverlay,
+#if FREEP_WINDOWS_CAPTURE
+                AvaloniaOleInPlaceHost.TryCreate);
+#else
+                null);
+#endif
             WireTableContextMenu();
         }
     }
