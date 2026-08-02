@@ -5087,7 +5087,7 @@ public sealed class DocumentView : Control
             flipH,
             flipV);
 
-    private PdfImage? BuildPdfImage(
+    private PdfDrawOp? BuildPdfImage(
         Rect sourceRect,
         InlineImage image,
         AvaloniaRenderedImage? rendered,
@@ -5129,20 +5129,31 @@ public sealed class DocumentView : Control
 
         var yPt = pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint);
         var xPt = (sourceRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
-        return new PdfImage(
+        var pdfImage = new PdfImage(
             xPt,
             yPt,
             sourceRect.Width / PxPerPoint,
             sourceRect.Height / PxPerPoint,
             imageBytes,
             contentType,
-            RotationDegrees: image.RotationAngle,
+            RotationDegrees: image.FlipH || image.FlipV ? 0 : image.RotationAngle,
             Opacity: opacity,
             SourceCrop: new PdfImageSourceCrop(
                 image.CropLeft,
                 image.CropTop,
                 image.CropRight,
                 image.CropBottom));
+
+        if (!image.FlipH && !image.FlipV)
+            return pdfImage;
+
+        return new PdfRotationGroup(
+            xPt + pdfImage.Width / 2.0,
+            yPt + pdfImage.Height / 2.0,
+            image.RotationAngle,
+            [pdfImage],
+            image.FlipH,
+            image.FlipV);
     }
 
     private IReadOnlyList<PdfDrawOp> BuildPdfGroupOps(
