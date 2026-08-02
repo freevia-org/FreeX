@@ -5129,6 +5129,7 @@ public sealed class DocumentView : Control
 
         var yPt = pageHeightPt - ((sourceRect.Bottom - pageTopDip) / PxPerPoint);
         var xPt = (sourceRect.Left - _contentLeft) / PxPerPoint + _doc.Page.MarginLeftPt;
+        var needsTransformGroup = image.FlipH || image.FlipV || image.HasBorder;
         var pdfImage = new PdfImage(
             xPt,
             yPt,
@@ -5136,7 +5137,7 @@ public sealed class DocumentView : Control
             sourceRect.Height / PxPerPoint,
             imageBytes,
             contentType,
-            RotationDegrees: image.FlipH || image.FlipV ? 0 : image.RotationAngle,
+            RotationDegrees: needsTransformGroup ? 0 : image.RotationAngle,
             Opacity: opacity,
             SourceCrop: new PdfImageSourceCrop(
                 image.CropLeft,
@@ -5144,17 +5145,42 @@ public sealed class DocumentView : Control
                 image.CropRight,
                 image.CropBottom));
 
-        if (!image.FlipH && !image.FlipV)
+        if (!needsTransformGroup)
             return pdfImage;
+
+        var imageOps = new List<PdfDrawOp> { pdfImage };
+        if (image.HasBorder)
+        {
+            imageOps.Add(new PdfStrokeRect(
+                pdfImage.X,
+                pdfImage.Y,
+                pdfImage.Width,
+                pdfImage.Height,
+                ParseColor(image.BorderColorHex),
+                Math.Max(image.BorderWidthPt, 0.75),
+                BuildPdfPictureDash(image.BorderDash)));
+        }
 
         return new PdfRotationGroup(
             xPt + pdfImage.Width / 2.0,
             yPt + pdfImage.Height / 2.0,
             image.RotationAngle,
-            [pdfImage],
+            imageOps,
             image.FlipH,
             image.FlipV);
     }
+
+    private static PdfDashPattern? BuildPdfPictureDash(string? dashStyle) =>
+        dashStyle?.Trim().ToLowerInvariant() switch
+        {
+            "dash" or "sysdash" => new PdfDashPattern([4, 3]),
+            "dot" or "sysdot" => new PdfDashPattern([1, 2]),
+            "dashdot" or "sysdashdot" => new PdfDashPattern([4, 2, 1, 2]),
+            "lgdash" => new PdfDashPattern([8, 3]),
+            "lgdashdot" => new PdfDashPattern([8, 2, 1, 2]),
+            "lgdashdotdot" => new PdfDashPattern([8, 2, 1, 2, 1, 2]),
+            _ => null,
+        };
 
     private IReadOnlyList<PdfDrawOp> BuildPdfGroupOps(
         FreeW.Core.Model.DrawingGroup group,
