@@ -54,8 +54,8 @@ public static class WorkbookViewportScrollPlanner
         var wholeNotches = Math.Truncate(delta / unitsPerNotch);
         if (wholeNotches > int.MaxValue)
             return int.MaxValue;
-        if (wholeNotches < int.MinValue)
-            return int.MinValue;
+        if (wholeNotches < -int.MaxValue)
+            return -int.MaxValue;
 
         var notches = (int)wholeNotches;
         return notches != 0 ? notches : Math.Sign(delta);

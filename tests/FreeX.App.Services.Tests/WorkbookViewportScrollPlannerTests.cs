@@ -17,6 +17,15 @@ public sealed class WorkbookViewportScrollPlannerTests
     }
 
     [Fact]
+    public void NormalizePointerWheelNotches_SaturatesSymmetricallyForSafeDirectionInversion()
+    {
+        WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(double.MaxValue)
+            .Should().Be(int.MaxValue);
+        WorkbookViewportScrollPlanner.NormalizePointerWheelNotches(-double.MaxValue)
+            .Should().Be(-int.MaxValue);
+    }
+
+    [Fact]
     public void CalculateViewportOrigin_DoesNotScrollToFrozenPaneBoundary()
     {
         var sheet = new Sheet(SheetId.New(), "Sheet1") { FrozenRows = 1, FrozenCols = 2 };
