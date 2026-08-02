@@ -6872,11 +6872,14 @@ internal static class FreeWRibbonCommands
         DocumentView editor,
         MailMergeSession session,
         Func<Window?, MailMergeCheckForErrorsMode?>? ask = null,
-        Action<Window?, string>? showInfo = null) : IRibbonCommand
+        Action<Window?, string>? showInfo = null,
+        Action<RibbonCommandContext>? completeMerge = null) : IRibbonCommand
     {
         private readonly Func<Window?, MailMergeCheckForErrorsMode?> _ask = ask ?? MailMergeCheckForErrorsDialog.Ask;
         private readonly Action<Window?, string> _showInfo = showInfo ??
             ((owner, message) => DialogMessageHelper.ShowInfo(owner, message, "Mail Merge"));
+        private readonly Action<RibbonCommandContext> _completeMerge = completeMerge ??
+            (context => new FinishMergeCommand(editor, session).Execute(context));
 
         public void Execute(RibbonCommandContext context)
         {
@@ -6890,7 +6893,14 @@ internal static class FreeWRibbonCommands
             if (_ask(owner) is not { } selected)
                 return;
 
-            _showInfo(owner, $"Mail merge error check selected: {selected}.");
+            if (!session.IsPreviewing)
+                editor.CommitToModel();
+            var template = session.IsPreviewing ? session.Template! : editor.Model;
+            var rows = session.Data.Rows.Select(row => session.AugmentRow(row)).ToList();
+            var result = MailMergeCheckForErrorsPlanner.Check(template, rows, selected);
+            _showInfo(owner, result.Message);
+            if (result.ShouldCompleteMerge)
+                _completeMerge(context);
             editor.Focus();
         }
     }

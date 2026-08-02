@@ -504,6 +504,26 @@ internal sealed class MailMergeEngine
     }
 
     /// <summary>
+    /// Simulate every selected recipient against the current merge template. Complete modes load the
+    /// merged document only when their Word-compatible pause policy permits it.
+    /// </summary>
+    public MailMergeErrorCheckResult? CheckForErrors(MailMergeCheckForErrorsMode mode)
+    {
+        if (Session.Data is not { Count: > 0 } data)
+        {
+            ShowInfo("Select recipients first (Mailings > Select Recipients), then check for errors.");
+            return null;
+        }
+
+        var template = Session.IsPreviewing ? Session.Template! : _editor.Document;
+        var rows = data.Rows.Select(row => Session.AugmentRow(row)).ToList();
+        var result = MailMergeCheckForErrorsPlanner.Check(template, rows, mode);
+        if (result.ShouldCompleteMerge)
+            FinishMerge();
+        return result;
+    }
+
+    /// <summary>
     /// Mailings &gt; Send E-mail Messages. Builds and validates an e-mail merge delivery plan only; no
     /// messages are sent and no external mail client is required.
     /// </summary>

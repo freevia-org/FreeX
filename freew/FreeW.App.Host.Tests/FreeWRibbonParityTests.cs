@@ -1241,10 +1241,12 @@ public sealed class FreeWRibbonParityTests
             editor,
             session,
             ask: _ => MailMergeCheckForErrorsMode.CompleteAndPause,
-            showInfo: (_, message) => messages.Add(message));
+            showInfo: (_, message) => messages.Add(message),
+            completeMerge: _ => messages.Add("completed"));
         checkErrors.Execute(RibbonCommandContext.Empty);
 
-        messages.Should().Contain("Mail merge error check selected: CompleteAndPause.");
+        messages.Should().Contain("Checked 2 recipient(s). No mail merge errors were found.");
+        messages.Should().Contain("completed");
     }
 
     [StaFact]

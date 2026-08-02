@@ -324,6 +324,33 @@ public sealed class MailingsTabTests
     }
 
     [Fact]
+    public void CheckForErrors_PausesOnMissingFieldAndCompletesCleanMerge()
+    {
+        var missingView = ViewWith(new Paragraph(
+            $"Dear {MailMerge.FieldOpen}Missing{MailMerge.FieldClose}"));
+        var missingEngine = new MailMergeEngine(missingView, Callbacks());
+        missingEngine.LoadRecipientsCsv(SampleCsv);
+
+        var paused = missingEngine.CheckForErrors(MailMergeCheckForErrorsMode.CompleteAndPause);
+
+        paused!.HasErrors.Should().BeTrue();
+        paused.ShouldCompleteMerge.Should().BeFalse();
+        PlainText(missingView.Document).Should().Contain("Missing");
+
+        var cleanView = ViewWith(new Paragraph(
+            $"Dear {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}"));
+        var cleanEngine = new MailMergeEngine(cleanView, Callbacks());
+        cleanEngine.LoadRecipientsCsv(SampleCsv);
+
+        var completed = cleanEngine.CheckForErrors(MailMergeCheckForErrorsMode.CompleteAndPause);
+
+        completed!.HasErrors.Should().BeFalse();
+        completed.ShouldCompleteMerge.Should().BeTrue();
+        PlainText(cleanView.Document).Should().Contain("Dear Ada");
+        PlainText(cleanView.Document).Should().Contain("Dear Grace");
+    }
+
+    [Fact]
     public void PlanEmailMerge_records_delivery_intent_without_sending_or_mutating_document()
     {
         var info = new List<string>();

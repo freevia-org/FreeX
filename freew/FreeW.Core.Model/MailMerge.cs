@@ -110,6 +110,35 @@ public readonly record struct MergeRuleResult(
 public static class MergeRuleEvaluator
 {
     /// <summary>
+    /// Returns the recipient field referenced by a valid conditional rule. Rules without a recipient-field
+    /// operand (Set, Ref, Fill-in, Ask, and Merge Sequence #) return false.
+    /// </summary>
+    public static bool TryGetReferencedFieldName(string instruction, out string fieldName)
+    {
+        ArgumentNullException.ThrowIfNull(instruction);
+        var span = instruction.AsSpan().Trim();
+        MergeCondition? condition = null;
+        if (TryParsePrefix(span, "If ", out var afterIf)
+            && TryParseConditionAndBranches(afterIf, out var ifCondition, out _, out _))
+        {
+            condition = ifCondition;
+        }
+        else if (TryParsePrefix(span, "Skip Record If ", out var afterSkip)
+                 && TryParseCondition(afterSkip, out var skipCondition))
+        {
+            condition = skipCondition;
+        }
+        else if (TryParsePrefix(span, "Next Record If ", out var afterNext)
+                 && TryParseCondition(afterNext, out var nextCondition))
+        {
+            condition = nextCondition;
+        }
+
+        fieldName = condition?.FieldName ?? string.Empty;
+        return fieldName.Length > 0;
+    }
+
+    /// <summary>
     /// Evaluate a single field-instruction string (the text <em>between</em> the guillemets) against
     /// <paramref name="row"/> and <paramref name="state"/>. Returns a <see cref="MergeRuleResult"/>
     /// describing the text to emit and any control effects (skip/advance). Returns

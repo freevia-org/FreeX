@@ -2145,7 +2145,9 @@ public sealed partial class MainWindow : Window
         if (mode is not { } selected)
             return;
 
-        await FreeWInfoDialog.ShowAsync(this, $"Mail merge error check selected: {selected}.");
+        var result = _mailMerge.CheckForErrors(selected);
+        if (result is not null)
+            await FreeWInfoDialog.ShowAsync(this, result.Message);
         _editor.Focus();
     }
 
