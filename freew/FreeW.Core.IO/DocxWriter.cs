@@ -9223,8 +9223,22 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
             rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
         }
+        if (f.CharacterShadingHex is not { Length: > 0 }
+            && f.HighlightColorHex is { Length: > 0 } highlightToken
+            && HexToHighlightToken(highlightToken) is { } namedHighlight)
+            rPr.Add(new XElement(W + "highlight", new XAttribute(W + "val", namedHighlight)));
         if (f.Underline)
             rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
+        if (f.CharacterShadingHex is { Length: > 0 } charShading)
+            rPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", ShadingPatterns.ToToken(f.CharacterShadingPattern)),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", charShading.TrimStart('#'))));
+        else if (f.HighlightColorHex is { Length: > 0 } highlight)
+            rPr.Add(new XElement(W + "shd",
+                new XAttribute(W + "val", "clear"),
+                new XAttribute(W + "color", "auto"),
+                new XAttribute(W + "fill", highlight.TrimStart('#'))));
         if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
             rPr.Add(new XElement(W + "vertAlign",
                 new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));

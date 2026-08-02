@@ -262,4 +262,61 @@ public class DocDefaultsRoundTripTests
         reopened.DefaultRun.NumberSpacing.Should().Be(NumberSpacing.Tabular);
         reopened.DefaultRun.StylisticSet.Should().Be(7);
     }
+
+    [Fact]
+    public void DocDefaults_NamedHighlight_RoundTripsWithCanonicalHighlightAndShadingFallback()
+    {
+        var doc = Read("<w:rPr><w:highlight w:val=\"yellow\"/></w:rPr>");
+
+        doc.DefaultRun.HighlightColorHex.Should().Be("#FFFF00");
+        doc.DefaultRun.CharacterShadingHex.Should().BeNull();
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "rFonts", "sz", "szCs", "highlight", "shd");
+        rPr.Element(W + "highlight")!.Attribute(W + "val")!.Value.Should().Be("yellow");
+        rPr.Element(W + "shd")!.Attribute(W + "fill")!.Value.Should().Be("FFFF00");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.HighlightColorHex.Should().Be("#FFFF00");
+        reopened.DefaultRun.CharacterShadingHex.Should().BeNull();
+    }
+
+    [Fact]
+    public void DocDefaults_PatternedCharacterShading_RoundTripsWithoutBecomingHighlight()
+    {
+        var doc = Read("<w:rPr><w:shd w:val=\"pct25\" w:color=\"auto\" w:fill=\"ABCDEF\"/></w:rPr>");
+
+        doc.DefaultRun.HighlightColorHex.Should().BeNull();
+        doc.DefaultRun.CharacterShadingHex.Should().Be("#ABCDEF");
+        doc.DefaultRun.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
+
+        var stylesXml = WriteStylesXml(doc);
+        var rPr = stylesXml.Root!
+            .Element(W + "docDefaults")!
+            .Element(W + "rPrDefault")!
+            .Element(W + "rPr")!;
+
+        rPr.Elements().Select(element => element.Name.LocalName).Should().Equal(
+            "rFonts", "sz", "szCs", "shd");
+        rPr.Element(W + "highlight").Should().BeNull();
+        rPr.Element(W + "shd")!.Attribute(W + "val")!.Value.Should().Be("pct25");
+        rPr.Element(W + "shd")!.Attribute(W + "fill")!.Value.Should().Be("ABCDEF");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        var reopened = DocxReader.Read(stream);
+        reopened.DefaultRun.HighlightColorHex.Should().BeNull();
+        reopened.DefaultRun.CharacterShadingHex.Should().Be("#ABCDEF");
+        reopened.DefaultRun.CharacterShadingPattern.Should().Be(ShadingPattern.Pct25);
+    }
 }
