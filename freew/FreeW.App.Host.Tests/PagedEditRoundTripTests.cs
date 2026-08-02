@@ -213,6 +213,39 @@ public sealed class PagedEditRoundTripTests
     }
 
     [StaFact]
+    public void RunOpenTypeNumeralsAndStylisticSet_AreAppliedAndSurviveRoundTrip()
+    {
+        var formatting = new RunFormatting
+        {
+            NumberForm = NumberForm.OldStyle,
+            NumberSpacing = NumberSpacing.Tabular,
+            StylisticSet = 4,
+        };
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("1234", formatting));
+        doc.Blocks.Add(paragraph);
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+        var rendered = editor.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(block => block.Inlines.OfType<System.Windows.Documents.Run>())
+            .Single(run => run.Text == "1234");
+
+        System.Windows.Documents.Typography.GetNumeralStyle(rendered).Should().Be(FontNumeralStyle.OldStyle);
+        System.Windows.Documents.Typography.GetNumeralAlignment(rendered).Should().Be(FontNumeralAlignment.Tabular);
+        System.Windows.Documents.Typography.GetStylisticSet4(rendered).Should().BeTrue();
+
+        editor.CommitToModel();
+        var committed = doc.Blocks.OfType<Paragraph>().Single().Runs.Single().Formatting;
+        committed.NumberForm.Should().Be(NumberForm.OldStyle);
+        committed.NumberSpacing.Should().Be(NumberSpacing.Tabular);
+        committed.StylisticSet.Should().Be(4);
+    }
+
+    [StaFact]
     public void MultiBlock_BlockCountIdentical_AfterRoundTrip()
     {
         var doc = TextDocument.CreateEmpty();

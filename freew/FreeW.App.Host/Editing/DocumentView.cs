@@ -6653,7 +6653,7 @@ public sealed class DocumentView : RichTextBox
             text,
             layoutWidth,
             layoutHeight,
-            (value, formatting) => MeasureFloatingShapeText(value, formatting).WidthIncludingTrailingWhitespace,
+            (value, formatting) => MeasureFloatingShapeText(value, formatting).Width,
             formatting => MeasureFloatingShapeText("Ag", formatting).Height);
 
         var canvas = new Canvas
@@ -6689,6 +6689,7 @@ public sealed class DocumentView : RichTextBox
             AddStrikethroughDecorations(decorations, formatting);
             if (decorations.Count > 0)
                 glyphText.TextDecorations = decorations;
+            ApplyOpenTypeTypography(glyphText, formatting);
             Canvas.SetLeft(glyphText, glyph.X);
             Canvas.SetTop(glyphText, glyph.Y);
             canvas.Children.Add(glyphText);
@@ -6704,7 +6705,7 @@ public sealed class DocumentView : RichTextBox
         return canvas;
     }
 
-    private static FormattedText MeasureFloatingShapeText(string value, RunFormatting formatting)
+    private static System.Windows.Size MeasureFloatingShapeText(string value, RunFormatting formatting)
     {
         var typeface = new Typeface(
             formatting.FontFamily is { Length: > 0 } family ? new FontFamily(family) : new FontFamily("Segoe UI"),
@@ -6714,7 +6715,7 @@ public sealed class DocumentView : RichTextBox
         var brush = TryParseColor(formatting.ColorHex, out var color)
             ? new SolidColorBrush(color)
             : Brushes.Black;
-        return new FormattedText(
+        var formatted = new FormattedText(
             value,
             System.Globalization.CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
@@ -6722,6 +6723,22 @@ public sealed class DocumentView : RichTextBox
             (formatting.FontSizePt ?? 9) * PxPerPoint,
             brush,
             1.0);
+        if (!RunOpenTypeFeaturePlanner.Build(formatting).HasFeatures)
+            return new System.Windows.Size(formatted.WidthIncludingTrailingWhitespace, formatted.Height);
+
+        var textBlock = new TextBlock
+        {
+            Text = value,
+            FontFamily = formatting.FontFamily is { Length: > 0 } featureFamily
+                ? new FontFamily(featureFamily)
+                : new FontFamily("Segoe UI"),
+            FontSize = (formatting.FontSizePt ?? 9) * PxPerPoint,
+            FontWeight = formatting.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = formatting.Italic ? FontStyles.Italic : FontStyles.Normal,
+        };
+        ApplyOpenTypeTypography(textBlock, formatting);
+        textBlock.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+        return textBlock.DesiredSize;
     }
 
     private FrameworkElement BuildDrawingWordArtVisual(DrawingObjectVisualPlan plan)
@@ -10942,6 +10959,7 @@ public sealed class DocumentView : RichTextBox
             Typography.SetCapitals(wpf, FontCapitals.AllSmallCaps);
         else if (fmt.SmallCaps)
             Typography.SetCapitals(wpf, FontCapitals.SmallCaps);
+        ApplyOpenTypeTypography(wpf, fmt);
 
         var decorations = wpf.TextDecorations is { } existingDecorations
             ? new TextDecorationCollection(existingDecorations)
@@ -12089,6 +12107,7 @@ public sealed class DocumentView : RichTextBox
         if (fmt.FontSizePt is { } size)
             wpf.FontSize = size * PxPerPoint;
         ApplyBaselinePositionPresentation(wpf, fmt);
+        ApplyOpenTypeTypography(wpf, fmt);
         if (TryParseColor(fmt.ColorHex, out var color))
             wpf.Foreground = new SolidColorBrush(color);
         wpf.ToolTip = run.FieldKind + " field";
@@ -13906,6 +13925,52 @@ public sealed class DocumentView : RichTextBox
         {
             Transform = new TranslateTransform(0, offsetDip)
         });
+    }
+
+    private static void ApplyOpenTypeTypography(DependencyObject target, RunFormatting formatting)
+    {
+        var plan = RunOpenTypeFeaturePlanner.Build(formatting);
+        if (plan.NumberForm is { } numberForm)
+        {
+            Typography.SetNumeralStyle(target, numberForm == FreeW.Core.Model.NumberForm.OldStyle
+                ? FontNumeralStyle.OldStyle
+                : FontNumeralStyle.Lining);
+        }
+        if (plan.NumberSpacing is { } numberSpacing)
+        {
+            Typography.SetNumeralAlignment(target, numberSpacing == FreeW.Core.Model.NumberSpacing.Tabular
+                ? FontNumeralAlignment.Tabular
+                : FontNumeralAlignment.Proportional);
+        }
+        if (plan.StylisticSet is { } stylisticSet)
+            SetStylisticSet(target, stylisticSet);
+    }
+
+    private static void SetStylisticSet(DependencyObject target, int stylisticSet)
+    {
+        switch (stylisticSet)
+        {
+            case 1: Typography.SetStylisticSet1(target, true); break;
+            case 2: Typography.SetStylisticSet2(target, true); break;
+            case 3: Typography.SetStylisticSet3(target, true); break;
+            case 4: Typography.SetStylisticSet4(target, true); break;
+            case 5: Typography.SetStylisticSet5(target, true); break;
+            case 6: Typography.SetStylisticSet6(target, true); break;
+            case 7: Typography.SetStylisticSet7(target, true); break;
+            case 8: Typography.SetStylisticSet8(target, true); break;
+            case 9: Typography.SetStylisticSet9(target, true); break;
+            case 10: Typography.SetStylisticSet10(target, true); break;
+            case 11: Typography.SetStylisticSet11(target, true); break;
+            case 12: Typography.SetStylisticSet12(target, true); break;
+            case 13: Typography.SetStylisticSet13(target, true); break;
+            case 14: Typography.SetStylisticSet14(target, true); break;
+            case 15: Typography.SetStylisticSet15(target, true); break;
+            case 16: Typography.SetStylisticSet16(target, true); break;
+            case 17: Typography.SetStylisticSet17(target, true); break;
+            case 18: Typography.SetStylisticSet18(target, true); break;
+            case 19: Typography.SetStylisticSet19(target, true); break;
+            case 20: Typography.SetStylisticSet20(target, true); break;
+        }
     }
 
     private static void RenderChartScene(Canvas canvas, ChartScene scene)
