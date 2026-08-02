@@ -92,6 +92,8 @@ public sealed record SlideShowPresenterState(
     SlideShowPresenterDisplayIntent DisplayIntent,
     SlideShowPresenterToolPlan ToolPlan);
 
+public sealed record SlideShowHiddenSlideTarget(Slide Slide, int SourceSlideIndex);
+
 public sealed record SlideShowHostCommand
 {
     private SlideShowHostCommand(
@@ -233,6 +235,31 @@ public static class SlideShowHostPlanner
 {
     public const double EmusPerDip = DrawingMlCoordinateUnits.EmuPerPixel;
     public const string NoSlidesStatusText = "No slides";
+
+    public static SlideShowHiddenSlideTarget? FindNextHiddenSlide(
+        Presentation presentation,
+        SlideShowPlaybackRoute playbackRoute,
+        int currentSourceSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+        ArgumentNullException.ThrowIfNull(playbackRoute);
+
+        var routeSources = playbackRoute.CustomShowName is null
+            ? null
+            : playbackRoute.SourceSlideIndices.ToHashSet();
+        var firstCandidate = Math.Max(-1, currentSourceSlideIndex) + 1;
+        for (var sourceIndex = firstCandidate; sourceIndex < presentation.Slides.Count; sourceIndex++)
+        {
+            if (routeSources is not null && !routeSources.Contains(sourceIndex))
+                continue;
+
+            var slide = presentation.Slides[sourceIndex];
+            if (slide.IsHidden)
+                return new SlideShowHiddenSlideTarget(slide, sourceIndex);
+        }
+
+        return null;
+    }
 
     public static SlideShowHostIntent IntentFromKeyName(string? keyName) =>
         keyName?.Trim() switch

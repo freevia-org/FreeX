@@ -50,4 +50,15 @@ public sealed class SlideShowScreenModeTests
         window.Controller.CurrentSlideIndex.Should().Be(1);
         window.Controller.CurrentSlide!.Title.Should().Be("Slide 3");
     }
+
+    [StaFact]
+    public void WpfHost_CanRevealNextHiddenSlideWithoutChangingPlaybackIndex()
+    {
+        var presentation = MakePresentation(3);
+        presentation.Slides[1].IsHidden = true;
+        var window = new SlideShowWindow(presentation, startIndex: 0);
+
+        window.ExecuteHiddenSlideReveal()!.Title.Should().Be("Slide 2");
+        window.Controller.CurrentSlideIndex.Should().Be(0);
+    }
 }

@@ -88,6 +88,8 @@ public sealed class SlideShowWindow : Window
     private readonly Rectangle _screenModeOverlay;
     private SlideShowScreenMode _screenMode;
     private string _slideNumberBuffer = string.Empty;
+    private Slide? _revealedHiddenSlide;
+    private int _revealedHiddenSlideSourceIndex = -1;
 
     // Manages MediaElement lifecycle for the current slide's media shapes.
     private readonly SlideShowMediaController _mediaController;
@@ -308,6 +310,30 @@ public sealed class SlideShowWindow : Window
             _playbackRoute.SourceSlideIndices));
     }
 
+    public Slide? ExecuteHiddenSlideReveal()
+    {
+        if (_controller.CurrentSlideIndex < 0 ||
+            _controller.CurrentSlideIndex >= _playbackRoute.SourceSlideIndices.Count)
+        {
+            return null;
+        }
+
+        var currentSourceIndex = _revealedHiddenSlideSourceIndex >= 0
+            ? _revealedHiddenSlideSourceIndex
+            : _playbackRoute.SourceSlideIndices[_controller.CurrentSlideIndex];
+        var target = SlideShowHostPlanner.FindNextHiddenSlide(
+            _presentation,
+            _playbackRoute,
+            currentSourceIndex);
+        if (target is null)
+            return null;
+
+        _revealedHiddenSlide = target.Slide;
+        _revealedHiddenSlideSourceIndex = target.SourceSlideIndex;
+        DisplayCurrentSlide(animated: false);
+        return _revealedHiddenSlide;
+    }
+
     /// <summary>The underlying state machine (for test assertions).</summary>
     public SlideShowController Controller => _controller;
 
@@ -520,6 +546,13 @@ public sealed class SlideShowWindow : Window
             return;
         }
 
+        if (e.Key == Key.H)
+        {
+            ExecuteHiddenSlideReveal();
+            e.Handled = true;
+            return;
+        }
+
         if (TryHandleSlideNumberKey(e.Key.ToString()))
         {
             e.Handled = true;
@@ -575,7 +608,7 @@ public sealed class SlideShowWindow : Window
 
     private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
-        var slide = _controller.CurrentSlide;
+        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
         var clickPt = e.GetPosition(_slideCanvas);
         var inkResult = BeginPresenterInkStroke(clickPt.X, clickPt.Y);
         if (inkResult.IsHandled)
@@ -640,7 +673,7 @@ public sealed class SlideShowWindow : Window
 
     private void OnMouseMove(object sender, MouseEventArgs e)
     {
-        var slide = _controller.CurrentSlide;
+        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
         if (slide is null) { Cursor = Cursors.Arrow; return; }
         var pt = e.GetPosition(_slideCanvas);
         if (e.LeftButton == MouseButtonState.Pressed)
@@ -893,6 +926,8 @@ public sealed class SlideShowWindow : Window
 
     private void ApplyHostCommand(SlideShowHostCommand command, DateTimeOffset? nowUtc = null)
     {
+        _revealedHiddenSlide = null;
+        _revealedHiddenSlideSourceIndex = -1;
         var now = nowUtc ?? DateTimeOffset.UtcNow;
         if (command.StopAutoAdvance)
             _autoAdvanceTimer.Stop();
@@ -939,6 +974,8 @@ public sealed class SlideShowWindow : Window
             animated,
             zoomTransitionDurationMs,
             zoomShowBackground);
+        if (_revealedHiddenSlide is not null)
+            plan = plan with { Transition = null, AutoAdvanceAfterMs = null };
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
         _zoomShowBackgroundForTransition = plan.UseDestinationBackground;
@@ -946,7 +983,7 @@ public sealed class SlideShowWindow : Window
         // Ink state follows the route through the shared session controller.
         RefreshInkOverlay();
 
-        var slide = plan.Slide;
+        var slide = _revealedHiddenSlide ?? plan.Slide;
         if (slide is null) return;
 
         // Prepare animation overlay for the new slide.
@@ -959,7 +996,9 @@ public sealed class SlideShowWindow : Window
         var captionTracks = PresentationMediaTranscriptPlanner
             .BuildTranscriptPlan(_presentation)
             .Tracks
-            .Where(track => track.SlideIndex == CurrentPresentationSlideIndex)
+            .Where(track => track.SlideIndex == (_revealedHiddenSlideSourceIndex >= 0
+                ? _revealedHiddenSlideSourceIndex
+                : CurrentPresentationSlideIndex))
             .ToArray();
         _mediaController.EnterSlide(
             slide,
@@ -988,7 +1027,7 @@ public sealed class SlideShowWindow : Window
 
     private void SyncMediaOverlayLayout()
     {
-        var slide = _controller.CurrentSlide;
+        var slide = _revealedHiddenSlide ?? _controller.CurrentSlide;
         if (slide is null)
             return;
 
