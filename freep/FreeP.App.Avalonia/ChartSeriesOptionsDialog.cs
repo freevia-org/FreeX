@@ -19,6 +19,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private readonly ComboBox _seriesChartTypeCombo;
     private readonly CheckBox _smoothLineCheck;
     private readonly CheckBox _secondaryAxisCheck;
+    private readonly CheckBox _invertIfNegativeCheck;
     private readonly TextBox _lineWidthBox;
     private readonly TextBox _lineColorBox;
     private readonly ComboBox _lineDashCombo;
@@ -88,6 +89,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
         };
         _smoothLineCheck = new CheckBox { Content = surface.SmoothLineLabel };
         _secondaryAxisCheck = new CheckBox { Content = surface.SecondaryAxisLabel };
+        _invertIfNegativeCheck = new CheckBox { Content = surface.InvertIfNegativeLabel };
         _seriesChartTypeCombo = new ComboBox
         {
             ItemsSource = ChartSeriesOptionsPlanner.SeriesChartTypeOptions.Select(option => option.Label).ToArray(),
@@ -166,6 +168,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 MakeRow(surface.SeriesChartTypeLabel, _seriesChartTypeCombo),
                 _smoothLineCheck,
                 _secondaryAxisCheck,
+                _invertIfNegativeCheck,
                 MakeRow(surface.LineWidthLabel, _lineWidthBox),
                 MakeRow(surface.LineColorLabel, _lineColorBox),
                 MakeRow(surface.LineDashLabel, _lineDashCombo),
@@ -263,11 +266,14 @@ internal sealed class ChartSeriesOptionsDialog : Window
         double? trendlineBackward = null,
         bool trendlineEquation = false,
         bool trendlineRSquared = false,
-        ChartType? overrideChartType = null)
+        ChartType? overrideChartType = null,
+        bool? invertIfNegative = null)
     {
         _seriesCombo.SelectedIndex = seriesIndex;
         _smoothLineCheck.IsChecked = smoothLine;
         _secondaryAxisCheck.IsChecked = onSecondaryAxis;
+        if (invertIfNegative.HasValue)
+            _invertIfNegativeCheck.IsChecked = invertIfNegative.Value;
         _seriesChartTypeCombo.SelectedIndex = FindSeriesChartTypeIndex(overrideChartType);
         _lineWidthBox.Text = Format(lineWidthPt);
         _lineColorBox.Text = lineColor ?? string.Empty;
@@ -319,6 +325,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
     {
         _smoothLineCheck.IsChecked = _planner.SmoothLine;
         _secondaryAxisCheck.IsChecked = _planner.OnSecondaryAxis;
+        _invertIfNegativeCheck.IsChecked = _planner.InvertIfNegative == true;
         _seriesChartTypeCombo.SelectedIndex = FindSeriesChartTypeIndex(_planner.OverrideChartType);
         _lineWidthBox.Text = Format(_planner.LineWidthPt);
         _lineColorBox.Text = _planner.LineColorText;
@@ -362,6 +369,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
     {
         _planner.SetSmoothLine(_smoothLineCheck.IsChecked == true);
         _planner.SetOnSecondaryAxis(_secondaryAxisCheck.IsChecked == true);
+        _planner.SetInvertIfNegative(_invertIfNegativeCheck.IsChecked == true);
         if (_seriesChartTypeCombo.SelectedIndex >= 0 &&
             _seriesChartTypeCombo.SelectedIndex < ChartSeriesOptionsPlanner.SeriesChartTypeOptions.Count)
             _planner.SetOverrideChartType(ChartSeriesOptionsPlanner.SeriesChartTypeOptions[_seriesChartTypeCombo.SelectedIndex].Value);

@@ -7714,7 +7714,8 @@ public sealed class MainWindowHeadlessTests
             "Aptos", 9, true, false, "#2F5496", showBubbleSize: true, errorBars: true,
             trendline: true, trendlineType: ChartTrendlineType.Polynomial, trendlineOrder: 3,
             trendlineForward: 1.5, trendlineBackward: 0.5,
-            trendlineEquation: true, trendlineRSquared: true, overrideChartType: ChartType.LineMarkers);
+            trendlineEquation: true, trendlineRSquared: true, overrideChartType: ChartType.LineMarkers,
+            invertIfNegative: true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -7724,6 +7725,7 @@ public sealed class MainWindowHeadlessTests
         options!.SeriesIndex.Should().Be(0);
         options.SmoothLine.Should().BeTrue();
         options.OnSecondaryAxis.Should().BeTrue();
+        options.InvertIfNegative.Should().BeTrue();
         options.OverrideChartType.Should().Be(ChartType.LineMarkers);
         options.LineWidthPt.Should().Be(2.25);
         options.MarkerSymbol.Should().Be(ChartMarkerSymbol.Diamond);

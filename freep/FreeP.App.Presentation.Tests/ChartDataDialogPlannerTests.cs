@@ -605,6 +605,7 @@ public sealed class ChartDataDialogPlannerTests
         chart.Series[1].Name = "Margin";
         chart.Series[1].SmoothLine = true;
         chart.Series[1].OnSecondaryAxis = true;
+        chart.Series[1].InvertIfNegative = true;
         chart.Series[1].LineStyle = new ChartLineStyle { WidthPt = 1.5 };
         chart.Series[1].MarkerStyle = new ChartMarkerStyle
         {
@@ -616,6 +617,7 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetSeriesIndex(1);
         planner.SetSmoothLine(false);
         planner.SetOnSecondaryAxis(false);
+        planner.SetInvertIfNegative(false);
         planner.SetOverrideChartType(ChartType.LineMarkers);
         planner.SetLineWidth(2.25);
         planner.SetLineColor("#1F4E79");
@@ -641,6 +643,7 @@ public sealed class ChartDataDialogPlannerTests
         options.SeriesIndex.Should().Be(1);
         options.SmoothLine.Should().BeFalse();
         options.OnSecondaryAxis.Should().BeFalse();
+        options.InvertIfNegative.Should().BeFalse();
         options.OverrideChartType.Should().Be(ChartType.LineMarkers);
         options.LineWidthPt.Should().Be(2.25);
         options.LineColor!.Resolved.Should().Be(SrgbColor.FromRgb(0x1F4E79));

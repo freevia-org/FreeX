@@ -21,6 +21,7 @@ public sealed record ChartSeriesOptionsSurfacePlan(
     string SeriesChartTypeLabel,
     string SmoothLineLabel,
     string SecondaryAxisLabel,
+    string InvertIfNegativeLabel,
     string LineWidthLabel,
     string LineColorLabel,
     string LineDashLabel,
@@ -59,6 +60,7 @@ public sealed class ChartSeriesOptionsPlanner
     public const string SeriesChartTypeLabel = "Series chart type";
     public const string SmoothLineLabel = "Smooth line";
     public const string SecondaryAxisLabel = "Plot on secondary axis";
+    public const string InvertIfNegativeLabel = "Invert negative values";
     public const string LineWidthLabel = "Line width (pt)";
     public const string LineColorLabel = "Line color (#RRGGBB)";
     public const string LineDashLabel = "Line dash";
@@ -168,6 +170,7 @@ public sealed class ChartSeriesOptionsPlanner
     private int _seriesIndex;
     private bool _smoothLine;
     private bool _onSecondaryAxis;
+    private bool? _invertIfNegative;
     private ChartType? _overrideChartType;
     private double? _lineWidthPt;
     private ThemeAwareColor? _lineColor;
@@ -222,6 +225,7 @@ public sealed class ChartSeriesOptionsPlanner
             SeriesChartTypeLabel,
             SmoothLineLabel,
             SecondaryAxisLabel,
+            InvertIfNegativeLabel,
             LineWidthLabel,
             LineColorLabel,
             LineDashLabel,
@@ -263,6 +267,7 @@ public sealed class ChartSeriesOptionsPlanner
         : string.Empty;
     public bool SmoothLine => _smoothLine;
     public bool OnSecondaryAxis => _onSecondaryAxis;
+    public bool? InvertIfNegative => _invertIfNegative;
     public ChartType? OverrideChartType => _overrideChartType;
     public double? LineWidthPt => _lineWidthPt;
     public string LineColorText => FormatColor(_lineColor);
@@ -308,6 +313,7 @@ public sealed class ChartSeriesOptionsPlanner
             _seriesIndex = 0;
             _smoothLine = false;
             _onSecondaryAxis = false;
+            _invertIfNegative = null;
             _overrideChartType = null;
             _lineWidthPt = null;
             _lineColor = null;
@@ -353,6 +359,7 @@ public sealed class ChartSeriesOptionsPlanner
         var series = _chart.Series[_seriesIndex];
         _smoothLine = series.SmoothLine ?? false;
         _onSecondaryAxis = series.OnSecondaryAxis;
+        _invertIfNegative = series.InvertIfNegative;
         _overrideChartType = series.OverrideChartType;
         _lineWidthPt = series.LineStyle?.WidthPt;
         _lineColor = series.LineStyle?.Color;
@@ -399,6 +406,7 @@ public sealed class ChartSeriesOptionsPlanner
 
     public void SetSmoothLine(bool value) => _smoothLine = value;
     public void SetOnSecondaryAxis(bool value) => _onSecondaryAxis = value;
+    public void SetInvertIfNegative(bool? value) => _invertIfNegative = value;
     public void SetOverrideChartType(ChartType? value) => _overrideChartType = value switch
     {
         null or ChartType.Line or ChartType.LineMarkers => value,
@@ -505,7 +513,8 @@ public sealed class ChartSeriesOptionsPlanner
                 DisplayRSquared = _trendlineRSquared,
             }
             : null,
-        OverrideChartType: _overrideChartType);
+        OverrideChartType: _overrideChartType,
+        InvertIfNegative: _invertIfNegative);
 
     private static string FormatColor(ThemeAwareColor? color) =>
         color is null ? string.Empty : color.Resolved.ToString();
