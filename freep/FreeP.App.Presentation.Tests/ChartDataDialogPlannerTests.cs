@@ -876,6 +876,8 @@ public sealed class ChartDataDialogPlannerTests
         planner.SetOfPieSplitPosition(2);
         planner.SetOfPieSecondPieSizePercent(75);
         planner.SetOfPieCustomPointIndices(new[] { 0, 2, 2, -1, 99 });
+        planner.SetOfPieGapWidthPercent(120);
+        planner.SetOfPieSeriesLines(true);
 
         var options = planner.BuildCommitPlan();
         options.FirstSliceAngleDegrees.Should().Be(chart.FirstSliceAngleDegrees);
@@ -885,6 +887,8 @@ public sealed class ChartDataDialogPlannerTests
         options.OfPieSplitPosition.Should().Be(2);
         options.OfPieSecondPieSizePercent.Should().Be(75);
         options.OfPieCustomPointIndices.Should().Equal(0, 2);
+        options.OfPieGapWidthPercent.Should().Be(120);
+        options.OfPieSeriesLines.Should().BeTrue();
         chart.OfPieType.Should().Be(OfPieType.Pie);
         chart.OfPieSplitType.Should().Be(OfPieSplitType.Auto);
         chart.OfPieCustomPointIndices.Should().BeEmpty();

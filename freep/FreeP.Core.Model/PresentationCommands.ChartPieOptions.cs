@@ -48,7 +48,9 @@ public sealed class SetChartPieOptionsCommand : IPresentationCommand
         chart.ChartType == ChartType.OfPie ? chart.OfPieSplitType : null,
         chart.ChartType == ChartType.OfPie ? chart.OfPieSplitPosition : null,
         chart.ChartType == ChartType.OfPie ? chart.OfPieSecondPieSizePercent : null,
-        chart.ChartType == ChartType.OfPie ? chart.OfPieCustomPointIndices.ToArray() : null);
+        chart.ChartType == ChartType.OfPie ? chart.OfPieCustomPointIndices.ToArray() : null,
+        chart.ChartType == ChartType.OfPie ? chart.BarGapWidthPercent : null,
+        chart.ChartType == ChartType.OfPie ? chart.OfPieSeriesLinesSpecified : null);
 
     private static void ApplyOptions(ChartShape chart, ChartPieOptions options)
     {
@@ -69,5 +71,9 @@ public sealed class SetChartPieOptionsCommand : IPresentationCommand
             .Where(index => index >= 0)
             .Distinct()
             .ToList() ?? [];
+        chart.BarGapWidthPercent = options.OfPieGapWidthPercent is { } gapWidth
+            ? Math.Clamp(gapWidth, 0, 500)
+            : null;
+        chart.OfPieSeriesLinesSpecified = options.OfPieSeriesLines == true;
     }
 }

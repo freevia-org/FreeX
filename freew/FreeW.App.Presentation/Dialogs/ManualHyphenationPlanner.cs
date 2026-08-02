@@ -78,13 +78,111 @@ public static class ManualHyphenationPlanner
     {
         ArgumentNullException.ThrowIfNull(document);
         var entries = new List<(string, IReadOnlyList<(int, ManualHyphenationEdit)>)>();
-        foreach (var paragraph in BodyParagraphs(document.Blocks))
+        foreach (var paragraph in ReviewParagraphs(document))
         {
             if (paragraph.Formatting.SuppressAutoHyphens)
                 continue;
             AddParagraphCandidates(paragraph, document.Page.DoNotHyphenateCaps, entries);
         }
         return new ManualHyphenationSession(entries);
+    }
+
+    private static IEnumerable<Paragraph> ReviewParagraphs(TextDocument document)
+    {
+        var seenParagraphs = new HashSet<Paragraph>(ReferenceEqualityComparer.Instance);
+        var seenGroups = new HashSet<DrawingGroup>(ReferenceEqualityComparer.Instance);
+        foreach (var paragraph in BodyParagraphs(document.Blocks))
+            foreach (var nested in ParagraphTree(paragraph, seenParagraphs, seenGroups))
+                yield return nested;
+
+        foreach (var section in document.Sections)
+        {
+            foreach (var content in HeaderFooterStories(section.HeadersFooters))
+            {
+                if (content is null)
+                    continue;
+                foreach (var paragraph in content.Paragraphs)
+                    foreach (var nested in ParagraphTree(paragraph, seenParagraphs, seenGroups))
+                        yield return nested;
+            }
+        }
+
+        foreach (var paragraph in document.Footnotes
+                     .Where(note => note.Key > 0)
+                     .OrderBy(note => note.Key)
+                     .SelectMany(note => note.Value.Content))
+        {
+            foreach (var nested in ParagraphTree(paragraph, seenParagraphs, seenGroups))
+                yield return nested;
+        }
+
+        foreach (var paragraph in document.Endnotes
+                     .Where(note => note.Key > 0)
+                     .OrderBy(note => note.Key)
+                     .SelectMany(note => note.Value.Content))
+        {
+            foreach (var nested in ParagraphTree(paragraph, seenParagraphs, seenGroups))
+                yield return nested;
+        }
+    }
+
+    private static IEnumerable<Paragraph> ParagraphTree(
+        Paragraph paragraph,
+        ISet<Paragraph> seenParagraphs,
+        ISet<DrawingGroup> seenGroups)
+    {
+        if (!seenParagraphs.Add(paragraph))
+            yield break;
+
+        yield return paragraph;
+        foreach (var run in paragraph.Runs)
+        {
+            if (run.Shape is { } shape)
+                foreach (var nested in ShapeParagraphs(shape, seenParagraphs, seenGroups))
+                    yield return nested;
+            if (run.DrawingGroup is { } group)
+                foreach (var nested in GroupParagraphs(group, seenParagraphs, seenGroups))
+                    yield return nested;
+        }
+    }
+
+    private static IEnumerable<Paragraph> ShapeParagraphs(
+        Shape shape,
+        ISet<Paragraph> seenParagraphs,
+        ISet<DrawingGroup> seenGroups)
+    {
+        foreach (var paragraph in shape.TextParagraphs)
+            foreach (var nested in ParagraphTree(paragraph, seenParagraphs, seenGroups))
+                yield return nested;
+    }
+
+    private static IEnumerable<Paragraph> GroupParagraphs(
+        DrawingGroup group,
+        ISet<Paragraph> seenParagraphs,
+        ISet<DrawingGroup> seenGroups)
+    {
+        if (!seenGroups.Add(group))
+            yield break;
+
+        foreach (var child in group.Children)
+        {
+            if (child is Shape shape)
+                foreach (var nested in ShapeParagraphs(shape, seenParagraphs, seenGroups))
+                    yield return nested;
+            else if (child is DrawingGroup nestedGroup)
+                foreach (var nested in GroupParagraphs(nestedGroup, seenParagraphs, seenGroups))
+                    yield return nested;
+        }
+    }
+
+    private static IEnumerable<HeaderFooter?> HeaderFooterStories(SectionHeadersFooters stories)
+    {
+        yield return stories.Header;
+        yield return stories.Footer;
+        yield return stories.EvenHeader;
+        yield return stories.EvenFooter;
+        yield return stories.FirstHeader;
+        yield return stories.FirstFooter;
     }
 
     private static IEnumerable<Paragraph> BodyParagraphs(IEnumerable<Block> blocks)
@@ -112,7 +210,10 @@ public static class ManualHyphenationPlanner
         bool doNotHyphenateCaps,
         ICollection<(string, IReadOnlyList<(int, ManualHyphenationEdit)>)> entries)
     {
-        var runs = paragraph.Runs.Where(run => run.Text.Length > 0).ToList();
+        // Shape owner runs mirror the text-box plain text for compatibility. Review the authoritative
+        // Shape.TextParagraphs story instead, otherwise the same visible word is offered twice and an
+        // accepted edit mutates only the fallback anchor text.
+        var runs = paragraph.Runs.Where(run => run.Text.Length > 0 && run.Shape is null).ToList();
         var text = string.Concat(runs.Select(run => run.Text));
         for (var tokenStart = 0; tokenStart < text.Length;)
         {

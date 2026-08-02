@@ -14,6 +14,67 @@ public sealed class LinkedDrawingPictureRoundTripTests
     private const string LinkedTarget = "file:///C:/Word%20Assets/linked-photo.png";
 
     [Fact]
+    public void LinkedOnlyDrawingPicture_ReadFromPathLoadsLocalPreviewWithoutEmbeddingItOnSave()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "FreeW.LinkedDrawingPictureTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var preview = PngBytes();
+            File.WriteAllBytes(Path.Combine(directory, "linked-photo.png"), preview);
+            var documentPath = Path.Combine(directory, "linked.docx");
+            File.WriteAllBytes(documentPath, BuildSourcePackage(
+                includeEmbeddedPreview: false,
+                linkedTarget: "linked-photo.png"));
+
+            var loaded = DocxReader.Read(documentPath);
+            var image = SingleBodyImage(loaded);
+
+            image.Bytes.Should().BeEmpty();
+            image.ResolvedLinkedImageBytes.Should().Equal(preview);
+            image.DisplayBytes.Should().Equal(preview);
+
+            var saved = WriteBytes(loaded);
+            using var zip = new ZipArchive(new MemoryStream(saved), ZipArchiveMode.Read);
+            zip.Entries.Should().NotContain(entry => entry.FullName.StartsWith("word/media/", StringComparison.Ordinal));
+            var linkId = LoadXml(zip, "word/document.xml").Descendants(A + "blip").Single()
+                .Attribute(R + "link")!.Value;
+            var relationship = LoadXml(zip, "word/_rels/document.xml.rels").Root!
+                .Elements(Rel + "Relationship").Single(element => element.Attribute("Id")?.Value == linkId);
+            relationship.Attribute("Target")!.Value.Should().Be("linked-photo.png");
+            relationship.Attribute("TargetMode")!.Value.Should().Be("External");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void LinkedOnlyDrawingPicture_ReadFromPathDoesNotFetchRemotePreview()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "FreeW.LinkedDrawingPictureTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var documentPath = Path.Combine(directory, "remote-linked.docx");
+            File.WriteAllBytes(documentPath, BuildSourcePackage(
+                includeEmbeddedPreview: false,
+                linkedTarget: "https://example.invalid/linked-photo.png"));
+
+            var image = SingleBodyImage(DocxReader.Read(documentPath));
+
+            image.Bytes.Should().BeEmpty();
+            image.ResolvedLinkedImageBytes.Should().BeNull();
+            image.LinkedImageTarget.Should().Be("https://example.invalid/linked-photo.png");
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public void LinkedOnlyDrawingPicture_PreservesExternalRelationshipAndReopenedModel()
     {
         var source = BuildSourcePackage(includeEmbeddedPreview: false);
@@ -180,7 +241,7 @@ public sealed class LinkedDrawingPictureRoundTripTests
         relationship.Attribute("TargetMode")?.Value.Should().Be("External");
     }
 
-    private static byte[] BuildSourcePackage(bool includeEmbeddedPreview)
+    private static byte[] BuildSourcePackage(bool includeEmbeddedPreview, string linkedTarget = LinkedTarget)
     {
         const string wp = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
         const string pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
@@ -204,7 +265,7 @@ public sealed class LinkedDrawingPictureRoundTripTests
         var relationshipsXml = $"""
             <Relationships xmlns="{Rel}">
               {embeddedRelationship}
-              <Relationship Id="rIdLinked" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="{LinkedTarget}" TargetMode="External"/>
+              <Relationship Id="rIdLinked" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="{linkedTarget}" TargetMode="External"/>
             </Relationships>
             """;
 

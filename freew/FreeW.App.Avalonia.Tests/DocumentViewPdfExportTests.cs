@@ -2014,6 +2014,28 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesResolvedLinkedPreviewWithoutEmbeddingItInTheModel() =>
+        Session.Dispatch(() =>
+        {
+            var preview = SolidPng(SKColors.Red);
+            var image = new InlineImage([], 72, 36)
+            {
+                LinkedImageTarget = "linked.png",
+                ResolvedLinkedImageBytes = preview
+            };
+            var document = TextDocument.CreateEmpty();
+            document.Paragraphs.Single().Runs.Add(Run.FromImage(image));
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var imageOp = view.BuildPdfContent().Pages.SelectMany(page => page.Ops)
+                .OfType<PdfImage>().Single();
+
+            imageOp.ImageBytes.Should().BeSameAs(preview);
+            image.Bytes.Should().BeEmpty();
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_IncludesLaidOutInlineImageWithSharedCropOpacityRotationAndOrdering() =>
         Session.Dispatch(() =>
         {

@@ -82,6 +82,97 @@ public class ManualHyphenationPlannerTests
         second.Text.Should().Be("bit");
     }
 
+    [Fact]
+    public void Session_ReviewsDistinctSectionHeaderFooterStoriesAfterTheBody()
+    {
+        var document = new TextDocument();
+        var firstSectionHeader = new HeaderFooter("characterization");
+        document.Blocks.Add(new Paragraph("the")
+        {
+            SectionBreak = new Section(new PageSettings())
+            {
+                HeadersFooters = new SectionHeadersFooters
+                {
+                    Header = firstSectionHeader,
+                    EvenHeader = firstSectionHeader
+                }
+            }
+        });
+        document.Header = new HeaderFooter("rabbit");
+        document.FirstFooter = new HeaderFooter("hyphenation");
+
+        var session = ManualHyphenationPlanner.CreateSession(document);
+
+        session.CandidateCount.Should().Be(3);
+        session.Current!.Word.Should().Be("characterization");
+        session.Accept(session.Current.Options[0].BreakPoint);
+        session.Current!.Word.Should().Be("rabbit");
+        session.Skip();
+        session.Current!.Word.Should().Be("hyphenation");
+        session.Skip();
+
+        new ApplyManualHyphenationCommand(session.Edits).Apply(new Context(document));
+        firstSectionHeader.PlainText.Should().Contain(Hyphenator.SoftHyphen.ToString());
+        document.Header.PlainText.Should().Be("rabbit");
+        document.FirstFooter.PlainText.Should().Be("hyphenation");
+    }
+
+    [Fact]
+    public void Session_ReviewsFootnotesAndEndnotesInStableStoryOrder()
+    {
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("the"));
+        document.Footnotes[2] = new Footnote(2, "rabbit");
+        document.Footnotes[1] = new Footnote(1, "characterization");
+        document.Footnotes[-1] = new Footnote(-1, "hyphenation");
+        document.Endnotes[1] = new Endnote(1, "hyphenation");
+
+        var session = ManualHyphenationPlanner.CreateSession(document);
+
+        session.CandidateCount.Should().Be(3);
+        session.Current!.Word.Should().Be("characterization");
+        session.Accept(session.Current.Options[0].BreakPoint);
+        session.Current!.Word.Should().Be("rabbit");
+        session.Skip();
+        session.Current!.Word.Should().Be("hyphenation");
+        session.Skip();
+
+        new ApplyManualHyphenationCommand(session.Edits).Apply(new Context(document));
+        document.Footnotes[1].PlainText.Should().Contain(Hyphenator.SoftHyphen.ToString());
+        document.Footnotes[2].PlainText.Should().Be("rabbit");
+        document.Footnotes[-1].PlainText.Should().Be("hyphenation");
+        document.Endnotes[1].PlainText.Should().Be("hyphenation");
+    }
+
+    [Fact]
+    public void Session_ReviewsTextInsideShapesAndNestedDrawingGroups()
+    {
+        var document = new TextDocument();
+        var body = new Paragraph();
+        var inlineShape = Shape.TextBoxWith("rabbit", 120, 40);
+        body.Runs.Add(Run.FromShape(inlineShape));
+        var nestedTextBox = Shape.TextBoxWith("hyphenation", 120, 40);
+        var nestedGroup = new DrawingGroup();
+        nestedGroup.Children.Add(nestedTextBox);
+        var group = new DrawingGroup();
+        group.Children.Add(nestedGroup);
+        group.Children.Add(inlineShape);
+        body.Runs.Add(Run.FromDrawingGroup(group));
+        document.Blocks.Add(body);
+
+        var session = ManualHyphenationPlanner.CreateSession(document);
+
+        session.CandidateCount.Should().Be(2);
+        session.Current!.Word.Should().Be("rabbit");
+        session.Skip();
+        session.Current!.Word.Should().Be("hyphenation");
+        session.Accept(session.Current.Options[0].BreakPoint);
+
+        new ApplyManualHyphenationCommand(session.Edits).Apply(new Context(document));
+        inlineShape.TextParagraphs.Single().PlainText.Should().Be("rabbit");
+        nestedTextBox.TextParagraphs.Single().PlainText.Should().Contain(Hyphenator.SoftHyphen.ToString());
+    }
+
     private sealed class Context(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document { get; } = document;

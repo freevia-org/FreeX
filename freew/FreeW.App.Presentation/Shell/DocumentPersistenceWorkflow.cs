@@ -96,6 +96,7 @@ public sealed class DocumentPersistenceWorkflow
 
         using var stream = File.OpenRead(path);
         var document = adapter.Load(stream);
+        LinkedImagePreviewResolver.ResolveLocalPreviews(document, path);
         var savedPath = format?.OpensAsTemplate == true ? null : path;
         return new DocumentOpenResult(document, savedPath, format?.OpensAsTemplate == true, adapter, format);
     }
@@ -105,7 +106,9 @@ public sealed class DocumentPersistenceWorkflow
         ArgumentException.ThrowIfNullOrWhiteSpace(snapshotPath);
 
         using var stream = File.OpenRead(snapshotPath);
-        return new DocumentSnapshotOpenResult(DocxReader.Read(stream), originalPath);
+        var document = DocxReader.Read(stream);
+        LinkedImagePreviewResolver.ResolveLocalPreviews(document, originalPath ?? snapshotPath);
+        return new DocumentSnapshotOpenResult(document, originalPath);
     }
 
     public DocumentImportResult ImportPdfText(string path)

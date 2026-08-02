@@ -1055,10 +1055,21 @@ public sealed class SlideCanvas : FrameworkElement
             chartOp.PlotAreaFill,
             chartOp.PlotAreaOutline);
 
-        dc.DrawRectangle(
-            scene.ChartAreaFill is { } chartFill ? ToBrush(chartFill) : FreezeBrush(new SolidColorBrush(Colors.White)),
-            scene.ChartAreaOutline is { } chartOutline ? ToPen(chartOutline) : null,
-            new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
+        var chartRect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        var chartBrush = scene.ChartAreaFill is { } chartFill
+            ? ToBrush(chartFill)
+            : FreezeBrush(new SolidColorBrush(Colors.White));
+        var chartPen = scene.ChartAreaOutline is { } chartOutline ? ToPen(chartOutline) : null;
+        if (scene.RoundedCorners)
+        {
+            var radius = Math.Min(ChartRenderPlanner.RoundedChartCornerRadius,
+                Math.Min(chartRect.Width, chartRect.Height) / 2.0);
+            dc.DrawRoundedRectangle(chartBrush, chartPen, chartRect, radius, radius);
+        }
+        else
+        {
+            dc.DrawRectangle(chartBrush, chartPen, chartRect);
+        }
 
         if (scene.PlotAreaFill is { } plotFill)
             dc.DrawRectangle(ToBrush(plotFill), scene.PlotAreaOutline is { } plotOutline ? ToPen(plotOutline) : null, ToRect(scene.Frame.Plot));
@@ -1544,6 +1555,9 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderPieChart(DrawingContext dc, ChartScenePlan scene)
     {
+        foreach (var seriesLine in scene.OfPieSeriesLines)
+            dc.DrawLine(ToPen(seriesLine.Stroke), ToPoint(seriesLine.Start), ToPoint(seriesLine.End));
+
         foreach (var primitive in scene.PieSlices.Concat(scene.OfPieSecondarySlices))
         {
             var fill = primitive.Fill!.Value;

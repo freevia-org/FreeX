@@ -7518,7 +7518,7 @@ public sealed class DocumentView : RichTextBox
 
     private static bool IsSerializedGroupPlaceholder(object child) => child switch
     {
-        InlineImage { Bytes.Length: 0 } => true,
+        InlineImage image when image.DisplayBytes.Length == 0 => true,
         Chart { Categories.Count: 0, Series.Count: 0 } => true,
         SmartArt { Nodes.Count: 0 } => true,
         _ => false
@@ -12871,9 +12871,9 @@ public sealed class DocumentView : RichTextBox
     /// (<see cref="TryDecodeMetafile"/>); everything else goes through WPF's WIC decoder. A null result
     /// signals <see cref="BuildImageRun"/> to render a placeholder in the image's place.
     /// </summary>
-    private static ImageSource? DecodeImage(InlineImage image)
+    internal static ImageSource? DecodeImage(InlineImage image)
     {
-        var bytes = image.Bytes;
+        var bytes = image.DisplayBytes;
         if (bytes is null || bytes.Length == 0)
             return null;
 

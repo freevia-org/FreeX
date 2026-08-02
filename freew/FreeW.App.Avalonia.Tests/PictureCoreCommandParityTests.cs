@@ -463,6 +463,27 @@ public sealed class PictureCoreCommandParityTests
     }
 
     [Fact]
+    public async Task DecodeBitmap_UsesResolvedLinkedPreviewWhenEmbeddedBytesAreAbsent()
+    {
+        await Session.Dispatch(() =>
+        {
+            var image = new InlineImage([], 24, 24)
+            {
+                LinkedImageTarget = "linked.png",
+                ResolvedLinkedImageBytes = OnePixelPng()
+            };
+            var view = new DocumentView();
+            view.LoadDocument(TextDocument.CreateEmpty());
+
+            var decoded = view.DecodeBitmap(image);
+
+            decoded.Should().NotBeNull();
+            decoded!.PixelSize.Should().Be(new PixelSize(1, 1));
+            image.Bytes.Should().BeEmpty();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ImportedShadowAlpha_ControlsExpandedHaloAndPresetFallback()
     {
         await Session.Dispatch(() =>

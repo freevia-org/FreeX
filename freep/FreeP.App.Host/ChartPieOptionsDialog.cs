@@ -18,6 +18,8 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox? _ofPieSplitPositionBox;
     private readonly TextBox? _ofPieSizeBox;
     private readonly TextBox? _ofPieCustomPointsBox;
+    private readonly TextBox? _ofPieGapWidthBox;
+    private readonly CheckBox? _ofPieSeriesLinesCheck;
 
     public ChartPieOptionsDialog(EditingSession editor)
     {
@@ -54,6 +56,8 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             _ofPieSplitPositionBox = new TextBox { Text = (_planner.OfPieSplitPosition ?? 0).ToString(CultureInfo.CurrentCulture), MinWidth = 150 };
             _ofPieSizeBox = new TextBox { Text = _planner.OfPieSecondPieSizePercent.ToString(CultureInfo.CurrentCulture), MinWidth = 150 };
             _ofPieCustomPointsBox = new TextBox { Text = string.Join(",", _planner.OfPieCustomPointIndices), MinWidth = 150 };
+            _ofPieGapWidthBox = new TextBox { Text = _planner.OfPieGapWidthPercent?.ToString(CultureInfo.CurrentCulture) ?? string.Empty, MinWidth = 150 };
+            _ofPieSeriesLinesCheck = new CheckBox { IsChecked = _planner.OfPieSeriesLines, MinWidth = 150 };
         }
 
         var buttons = new StackPanel
@@ -79,6 +83,8 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             content.Children.Add(MakeRow(surface.OfPieSplitPositionLabel, _ofPieSplitPositionBox!));
             content.Children.Add(MakeRow(surface.OfPieSecondPieSizeLabel, _ofPieSizeBox!));
             content.Children.Add(MakeRow(surface.OfPieCustomPointIndicesLabel, _ofPieCustomPointsBox!));
+            content.Children.Add(MakeRow(surface.OfPieGapWidthLabel, _ofPieGapWidthBox!));
+            content.Children.Add(MakeRow(surface.OfPieSeriesLinesLabel, _ofPieSeriesLinesCheck!));
         }
         content.Children.Add(new TextBlock { Text = surface.Hint, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 8), Opacity = 0.7 });
         content.Children.Add(buttons);
@@ -97,7 +103,7 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _holeBox.Text = doughnutHolePercent.ToString(CultureInfo.CurrentCulture);
     }
 
-    internal void SetOfPieOptionsForTests(OfPieType type, OfPieSplitType splitType, double? splitPosition, int secondPieSizePercent, string customPointIndices)
+    internal void SetOfPieOptionsForTests(OfPieType type, OfPieSplitType splitType, double? splitPosition, int secondPieSizePercent, string customPointIndices, int? gapWidthPercent = null, bool seriesLines = false)
     {
         if (_ofPieTypeCombo is null)
             throw new InvalidOperationException("The selected chart is not an OfPie chart.");
@@ -106,6 +112,8 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _ofPieSplitPositionBox!.Text = (splitPosition ?? 0).ToString(CultureInfo.CurrentCulture);
         _ofPieSizeBox!.Text = secondPieSizePercent.ToString(CultureInfo.CurrentCulture);
         _ofPieCustomPointsBox!.Text = customPointIndices;
+        _ofPieGapWidthBox!.Text = (gapWidthPercent?.ToString(CultureInfo.CurrentCulture)) ?? string.Empty;
+        _ofPieSeriesLinesCheck!.IsChecked = seriesLines;
     }
 
     private void OnOk()
@@ -133,6 +141,8 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _planner.SetOfPieSplitPosition(ParseOptionalDouble(_ofPieSplitPositionBox!.Text));
         _planner.SetOfPieSecondPieSizePercent(ParseOfPieSize(_ofPieSizeBox!.Text));
         _planner.SetOfPieCustomPointIndices(ParsePointIndices(_ofPieCustomPointsBox!.Text));
+        _planner.SetOfPieGapWidthPercent(ParseOptionalInt(_ofPieGapWidthBox!.Text, 0, 500, "Secondary plot gap width"));
+        _planner.SetOfPieSeriesLines(_ofPieSeriesLinesCheck!.IsChecked == true);
     }
 
     private static int ParseAngle(string? text)
@@ -163,6 +173,15 @@ public sealed class ChartPieOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value is >= 5 and <= 200)
             return value;
         throw new FormatException("Secondary plot size must be a whole number from 5 to 200.");
+    }
+
+    private static int? ParseOptionalInt(string? text, int min, int max, string label)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+        if (int.TryParse(text, NumberStyles.Integer, CultureInfo.CurrentCulture, out var value) && value >= min && value <= max)
+            return value;
+        throw new FormatException($"{label} must be a whole number from {min} to {max}, or blank.");
     }
 
     private static IReadOnlyList<int> ParsePointIndices(string? text)

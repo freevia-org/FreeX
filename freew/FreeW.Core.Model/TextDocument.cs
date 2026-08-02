@@ -171,9 +171,19 @@ public sealed class InlineImage(byte[] bytes, double widthPt, double heightPt, I
     /// Exact external target of a linked DrawingML picture (<c>a:blip/@r:link</c>), or null for an
     /// ordinary embedded picture. Word may author a link by itself or alongside an embedded preview;
     /// <see cref="Bytes"/> carries that preview when present. The DOCX reader/writer preserves the target
-    /// verbatim and never resolves or fetches it.
+    /// verbatim; path-aware open workflows may resolve a local runtime preview without serializing it.
     /// </summary>
     public string? LinkedImageTarget { get; set; }
+
+    /// <summary>
+    /// Runtime-only bytes resolved from a local <see cref="LinkedImageTarget"/> when the document's source
+    /// path is known. The DOCX writer deliberately ignores this buffer, so displaying a link-only picture
+    /// never turns it into an embedded preview on save.
+    /// </summary>
+    public byte[]? ResolvedLinkedImageBytes { get; set; }
+
+    /// <summary>Embedded bytes when present; otherwise the runtime-only resolved linked preview.</summary>
+    public byte[] DisplayBytes => Bytes.Length > 0 ? Bytes : ResolvedLinkedImageBytes ?? [];
 
     /// <summary>
     /// Creates an independent image model carrying the same source bytes and every placement, crop,

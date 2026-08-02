@@ -7604,7 +7604,7 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Select(chartShape.Id);
 
             var dialog = new ChartPieOptionsDialog(window.Editor);
-            dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2");
+            dialog.SetOfPieOptionsForTests(OfPieType.Bar, OfPieSplitType.Custom, 2, 75, "1, 2", 120, true);
             options = dialog.BuildCommitPlanForTests();
             dialog.Close();
         });
@@ -7615,6 +7615,8 @@ public sealed class MainWindowHeadlessTests
         options.OfPieSplitPosition.Should().Be(2);
         options.OfPieSecondPieSizePercent.Should().Be(75);
         options.OfPieCustomPointIndices.Should().Equal(1, 2);
+        options.OfPieGapWidthPercent.Should().Be(120);
+        options.OfPieSeriesLines.Should().BeTrue();
     }
 
     [Fact]
