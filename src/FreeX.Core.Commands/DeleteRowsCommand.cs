@@ -234,7 +234,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
         _cfFormulaSnapshot.Clear();
         _cfThresholdSnapshot.Clear();
         _dvFormulaSnapshot.Clear();
-        RowColumnShiftHelpers.RewriteRuleFormulas(sheet, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, new DeleteRowsOp(sheet.Name, _startRow, _count, deletedTableNames), _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
         // R92-commands-undo-structural-format-5-1: mirror InsertRowsCommand's RebandTable call
         // (R90-io-table-style-banding-5-3) on the delete side. MoveCellsForDelete above relocates
@@ -386,7 +386,7 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
 
         RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         RowColumnShiftHelpers.RestoreNamedFormulas(ctx.Workbook, _namedFormulaSnapshot, _scopedNamedFormulaSnapshot);
-        RowColumnShiftHelpers.RestoreRuleFormulas(sheet, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+        RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
 
         // R20-array-dynamic-spill-1: mirror MoveCellsForDelete's spill-relocation fix for undo —
         // capture any live spill rooted at the shifted-down address before clearing it back.

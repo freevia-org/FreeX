@@ -160,7 +160,15 @@ internal static partial class XlsxPivotTableReader
             .ToList();
     }
 
-    private static List<PivotCalculatedItemModel> ReadPivotCalculatedItems(XElement? calculatedItemsElement, XNamespace workbookNs)
+    // R116-io-pivot-calcitem-part: reads a <calculatedItems> element regardless of which part it came
+    // from -- the corrected pivotCacheDefinitionN.xml location (XlsxPivotCacheReader.Load), OR the
+    // pre-R116 pivotTableDefinitionN.xml location kept ONLY as a backward-compat fallback so a file this
+    // codebase itself saved before this fix still round-trips its calculated items in FreeX (real Excel
+    // already silently repairs/drops that schema-invalid placement on open, so no external file is lost
+    // by no longer looking there once the cache-part list is present). A calculatedItem's display Name
+    // has no real-schema attribute home (see ToPivotCacheCalculatedItemsXml); prefer the legacy "name"
+    // attribute the old (buggy) writer emitted, falling back to the new per-item extLst FreeX now writes.
+    internal static List<PivotCalculatedItemModel> ReadPivotCalculatedItems(XElement? calculatedItemsElement, XNamespace workbookNs)
     {
         if (calculatedItemsElement is null)
             return [];
@@ -169,7 +177,9 @@ internal static partial class XlsxPivotTableReader
             .Elements(workbookNs + "calculatedItem")
             .Select(item => new PivotCalculatedItemModel(
                 XlsxXmlAttributeReader.ReadIntAttribute(item, "field") ?? -1,
-                item.Attribute("name")?.Value ?? "",
+                item.Attribute("name")?.Value
+                    ?? XlsxPivotExtensionReader.ReadElement(item, workbookNs, "calculatedItemProps")?.Attribute("name")?.Value
+                    ?? "",
                 item.Attribute("formula")?.Value ?? ""))
             .Where(item => item.SourceFieldIndex >= 0 && !string.IsNullOrWhiteSpace(item.Name))
             .ToList();

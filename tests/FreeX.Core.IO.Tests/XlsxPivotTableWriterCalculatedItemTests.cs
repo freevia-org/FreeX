@@ -10,6 +10,12 @@ namespace FreeX.Core.IO.Tests;
 /// R26-io-pivot-deep-3: CT_CalculatedItem requires a pivotArea child (minOccurs="1") identifying
 /// the target field. XlsxPivotTableWriter previously emitted a childless calculatedItem element,
 /// which is structurally invalid OOXML that real Excel repairs/drops on open.
+///
+/// R116-io-pivot-calcitem-part: calculatedItems is a child of CT_PivotCacheDefinition (ECMA-376
+/// 18.10.1.3, confirmed via reflection: DocumentFormat.OpenXml.Spreadsheet.PivotCacheDefinition has a
+/// CalculatedItems property, PivotTableDefinition does not), so it now lives in the shared
+/// pivotCacheDefinitionN.xml part rather than pivotTableN.xml -- see
+/// R116_PivotCalculatedItemCachePartLocationTests for the location fix itself.
 /// </summary>
 public class XlsxPivotTableWriterCalculatedItemTests
 {
@@ -65,10 +71,12 @@ public class XlsxPivotTableWriterCalculatedItemTests
         saved.Position = 0;
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
-        var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+        // R116-io-pivot-calcitem-part: calculatedItems belongs on the shared pivotCacheDefinition part,
+        // not pivotTableN.xml.
+        var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!);
 
         XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var calculatedItem = pivotXml.Root!
+        var calculatedItem = cacheXml.Root!
             .Element(ns + "calculatedItems")!
             .Elements(ns + "calculatedItem")
             .Should().ContainSingle().Subject;
@@ -85,6 +93,11 @@ public class XlsxPivotTableWriterCalculatedItemTests
             .Elements(ns + "reference")
             .Should().ContainSingle().Subject;
         reference.Attribute("field")!.Value.Should().Be("0");
+
+        // The pivotTableDefinition part must NOT carry the (schema-invalid) element at all.
+        var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+        pivotXml.Root!.Element(ns + "calculatedItems").Should().BeNull(
+            "CT_pivotTableDefinition has no calculatedItems child -- real Excel repairs/drops it there");
     }
 
     [Fact]
@@ -100,8 +113,10 @@ public class XlsxPivotTableWriterCalculatedItemTests
 
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true);
         var pivotXml = LoadPackageXml(archive.GetEntry("xl/pivotTables/pivotTable1.xml")!);
+        var cacheXml = LoadPackageXml(archive.GetEntry("xl/pivotCache/pivotCacheDefinition1.xml")!);
 
         XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
         pivotXml.Root!.Element(ns + "calculatedItems").Should().BeNull();
+        cacheXml.Root!.Element(ns + "calculatedItems").Should().BeNull();
     }
 }

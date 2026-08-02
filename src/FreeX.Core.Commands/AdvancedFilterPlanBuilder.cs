@@ -183,20 +183,29 @@ internal static class AdvancedFilterPlanBuilder
             ComputedCriteriaEvaluator.Evaluate(FormulaSheet, FormulaText, AnchorRow, FormulaCol, row, workbook: null);
     }
 
-    private static IFilterCriterion CreateCriterion(string criteriaText)
+    // R116-commands-advancedfilter-criteria-engine-1: a plain (non-computed) Advanced Filter
+    // column criterion must be compiled by the SAME criteria engine COUNTIF/SUMIF/*IFS/DSUM all
+    // share (BuiltInFunctions.CompileCriteria, textPrefixMatch: true so a bare unquoted text
+    // criterion means "begins with", matching DSUM's own DbRowMatchesCriteriaRow) -- NOT
+    // FilterInputParser/FilterCriterionInputParser, which is a mini-language built for the
+    // AutoFilter custom-filter dialog's free-text box (its own "contains:"/"begins:"/"date>="
+    // prefixes are not Excel syntax at all, and its operator-prefix branches only ever accept a
+    // numeric right-hand side, silently rejecting "<>France", a bare "<>", or ">Denver"). Using
+    // that parser here made every such text-valued operator criterion fall through to this
+    // method's old generic tail, which had no operator awareness left and matched it as a
+    // literal "begins with the operator characters themselves" prefix -- excluding every row.
+    // CompileCriteria's TrySplitCriteriaComparison/MatchesTextComparison already implement
+    // Excel's real Advanced Filter semantics: "<>text" (not-equal), bare "<>" (non-blank, mirrors
+    // Excel's own "field is not blank" convention), and ">text"/"<=text" (lexicographic text
+    // ordering), in addition to numeric/date/bool/wildcard criteria.
+    private static IFilterCriterion CreateCriterion(string criteriaText) =>
+        new CriteriaMatcherFilterCriterion(BuiltInFunctions.CompileCriteria(new TextValue(criteriaText), textPrefixMatch: true));
+
+    /// <summary>Adapts the shared <see cref="BuiltInFunctions.CriteriaMatcher"/> engine to the
+    /// Advanced Filter plan's own <see cref="IFilterCriterion"/> interface.</summary>
+    private sealed class CriteriaMatcherFilterCriterion(BuiltInFunctions.CriteriaMatcher Matcher) : IFilterCriterion
     {
-        if (FilterInputParser.TryParseCriterion(criteriaText, out var parsed, out _))
-            return parsed!;
-        if (criteriaText.StartsWith('='))
-            return new TextEqualsFilterCriterion(criteriaText[1..]);
-        // Excel semantics: plain (unquoted) text in an Advanced Filter criteria cell means
-        // "begins with", not exact match. Exact match requires the ="text" form (handled above).
-        // But once the text contains a wildcard (? * ~), Excel matches the wildcard pattern
-        // against the whole cell value instead of treating it as a begins-with prefix, e.g.
-        // "Sm?th" matches "Smith"/"Smyth" but not "Smithsonian".
-        return FilterWildcard.ContainsWildcardCharacter(criteriaText)
-            ? new TextEqualsFilterCriterion(criteriaText)
-            : new TextBeginsWithFilterCriterion(criteriaText);
+        public bool Matches(ScalarValue value) => Matcher.Matches(value);
     }
 
     private sealed class UniqueRowSet

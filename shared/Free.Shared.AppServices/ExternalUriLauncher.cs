@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 
 namespace Free.Shared.AppServices;
 
@@ -81,16 +82,54 @@ public static class ExternalUriLauncher
 
         var normalizedTarget = target.Trim();
         if (!Uri.TryCreate(normalizedTarget, UriKind.Absolute, out var candidate) ||
-            !AllowedSchemes.Contains(candidate.Scheme) ||
-            candidate.Scheme.Equals("file", StringComparison.OrdinalIgnoreCase) &&
+            !AllowedSchemes.Contains(candidate.Scheme))
+        {
+            return false;
+        }
+
+        if (candidate.Scheme.Equals("file", StringComparison.OrdinalIgnoreCase) &&
             (!candidate.IsFile ||
              !string.IsNullOrWhiteSpace(candidate.Host) &&
-             !candidate.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)))
+             !candidate.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+             !IsWellFormedLocalPath(candidate.LocalPath)))
         {
             return false;
         }
 
         uri = candidate;
         return true;
+    }
+
+    /// <summary>
+    /// A file:// URI's decoded LocalPath can be syntactically valid Uri text (e.g. absurdly long
+    /// enough to trip PathTooLongException) while still being a path Path.GetFullPath refuses to
+    /// normalize. Re-validate it the same way HyperlinkNavigationPlanner.TryNormalizeExplicitLocalPath
+    /// does before ever handing a file:// URI to a live shell-execute launcher, so a normalization
+    /// mismatch between the two can never let a local-file target slip past the "local files are
+    /// never shell-executed" guard: whatever shape makes the planner reclassify a hyperlink as
+    /// External instead of LocalFile must also be rejected here, or the External branch in both
+    /// shells hands it straight to Process.Start/ShellExecute.
+    /// </summary>
+    private static bool IsWellFormedLocalPath(string localPath)
+    {
+        if (string.IsNullOrWhiteSpace(localPath) || localPath.Contains('\0', StringComparison.Ordinal))
+            return false;
+
+        try
+        {
+            return !string.IsNullOrWhiteSpace(Path.GetFullPath(localPath));
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+        catch (PathTooLongException)
+        {
+            return false;
+        }
     }
 }

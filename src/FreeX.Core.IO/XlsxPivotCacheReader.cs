@@ -79,6 +79,12 @@ internal static class XlsxPivotCacheReader
                     : null
             };
 
+            // R116-io-pivot-calcitem-part: calculatedItems is a real child of CT_PivotCacheDefinition
+            // (ECMA-376 18.10.1.3), not CT_pivotTableDefinition -- read it from this cache's own root
+            // element so every pivot table built on this cache sees the same calculated items, matching
+            // real Excel and the corrected write side (XlsxPivotTableWriter.Cache.cs).
+            cache.CalculatedItems.AddRange(XlsxPivotTableReader.ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs));
+
             foreach (var field in root
                          .Element(workbookNs + "cacheFields")?
                          .Elements(workbookNs + "cacheField") ?? [])

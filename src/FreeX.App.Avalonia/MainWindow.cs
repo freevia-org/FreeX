@@ -1221,6 +1221,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private bool _isApplyingFormulaBoxText;
     private bool _isOpening;
     private bool _isSaving;
+    // Write-time snapshot of the file this session was opened from
+    // (WorkbookOpenResult.SourceLastWriteTimeUtc, set in OpenWorkbookFromTargetAsync and reset to
+    // null by ReplaceSession for every new/opened document). Threaded into
+    // WorkbookSaveService.SaveAsync's expectedLastWriteTimeUtc parameter so a concurrent second
+    // writer (another FreeX/Excel instance, a colleague on a shared drive) is detected before Save
+    // silently overwrites their changes -- mirrors the WPF host's field of the same name in
+    // MainWindow.xaml.cs (R116-avalonia-external-modification-detection). Refreshed to the file's
+    // new on-disk write time after every successful save to this path so the save's own write is
+    // never mistaken for an external modification next time.
+    private DateTime? _currentFileSourceLastWriteTimeUtc;
     // Set after opening a workbook whose FileSharing.ReadOnlyRecommended/ReservationPassword
     // prompted the user and they accepted opening it read-only -- see
     // ApplyReadOnlyRecommendedPromptIfNeeded (R75-services-protection-security-4-2).
@@ -28554,6 +28564,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             ReplaceSession(_sessionFactory.CreateOpened(target, result, viewportHeight, viewportWidth, includeObjects: true));
             RefreshViewportSizeForZoom();
             RecordRecentWorkbook(target.Path, target.FileAccessIdentity);
+            // Capture the write-time snapshot this workbook was opened from so a later Save to the
+            // SAME path can detect a concurrent second writer (see _currentFileSourceLastWriteTimeUtc)
+            // -- mirrors the WPF host's equivalent capture in MainWindow.Backstage.cs
+            // (R116-avalonia-external-modification-detection). ReplaceSession above already reset
+            // this to null; only a successful open of a real file (SourceLastWriteTimeUtc non-null)
+            // re-arms the check. Deliberately placed AFTER the ReplaceSession/RefreshViewportSizeForZoom/
+            // RecordRecentWorkbook trio, which AvaloniaShellSourceTests pins as one contiguous block:
+            // nothing in that trio touches this field, so the capture is equivalent here and the
+            // existing open-sequence contract stays intact rather than being loosened to fit.
+            _currentFileSourceLastWriteTimeUtc = result.SourceLastWriteTimeUtc;
             ClearSelectedDrawingObject();
             RefreshShell(_session.StartupStatus);
             _session.DataValidationPromptResolver = ResolveDataValidationPrompt;
@@ -29393,6 +29413,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return true;
         }
 
+        // This save targets the same path the session was opened from -- only then does the
+        // captured write-time snapshot mean anything (a Save-As to a different path is never a
+        // clobber of the original file).
+        var targetPath = target.Path;
+        var savingOverOpenedPath = PlatformPathIdentityComparer.Current.Equals(_session.CurrentFilePath, targetPath);
+
+        // Detect a concurrent second writer before doing any work: if this save targets the same
+        // path this session loaded from, and the on-disk write time no longer matches what was
+        // captured at open, someone else (another FreeX/Excel instance, a colleague on a shared
+        // drive) has changed the file since -- writing over it here would silently discard their
+        // changes. Ask before clobbering, matching Excel's own behavior for this scenario and the
+        // WPF host's equivalent check in MainWindow.Backstage.cs
+        // (R116-avalonia-external-modification-detection).
+        if (savingOverOpenedPath &&
+            _currentFileSourceLastWriteTimeUtc is { } expectedWriteTimeUtc &&
+            File.Exists(targetPath) &&
+            File.GetLastWriteTimeUtc(targetPath) != expectedWriteTimeUtc &&
+            ResolveExternallyModifiedFileOverwriteConfirm(targetPath) != UserMessageResult.Yes)
+        {
+            return false;
+        }
+
         // Capture the dirty generation before the first await so mid-save edits are detectable.
         var generationAtSaveStart = _session.DirtyGeneration;
         _isSaving = true;
@@ -29411,18 +29453,42 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 });
 
             fileAccessIdentity ??= await _workbookFileAccessService.CreateIdentityAsync(
-                target.Path,
+                targetPath,
                 existingIdentity: _session.CurrentFileAccessIdentity);
             using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
-            var saveWarnings = await _saveService.SaveAsync(target.Path, target.Adapter, _session.Workbook, progress);
-            _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, target.Path, fileAccessIdentity);
+            var saveWarnings = await _saveService.SaveAsync(
+                targetPath,
+                target.Adapter,
+                _session.Workbook,
+                progress,
+                CancellationToken.None,
+                savingOverOpenedPath ? _currentFileSourceLastWriteTimeUtc : null);
+            _session.TryMarkSavedIfNoEditsArrived(generationAtSaveStart, targetPath, fileAccessIdentity);
+            // The save just wrote targetPath -- refresh the "known good" write-time snapshot to the
+            // file's new on-disk timestamp so the very next save doesn't mistake THIS save's own
+            // write for an external modification (mirrors the WPF host's equivalent refresh).
+            _currentFileSourceLastWriteTimeUtc = File.Exists(targetPath)
+                ? File.GetLastWriteTimeUtc(targetPath)
+                : null;
             // A clean save means there is nothing left to recover from — delete the crash-recovery
             // snapshot immediately rather than waiting for window close (mirrors WPF's
             // NotifyAutosaveSaved, called from the same save-completion point).
             _autosaveCoordinator?.NotifyAutosaveSaved();
-            RecordRecentWorkbook(target.Path, fileAccessIdentity);
-            RefreshShell(FormatSaveCompletionStatus(target.Path, saveWarnings));
+            RecordRecentWorkbook(targetPath, fileAccessIdentity);
+            RefreshShell(FormatSaveCompletionStatus(targetPath, saveWarnings));
             return true;
+        }
+        catch (WorkbookExternallyModifiedException)
+        {
+            // Belt-and-suspenders: the proactive check above already covers the common case, but
+            // the file could still have changed in the (check-then-act) gap between that check and
+            // WorkbookSaveService actually writing. Surface the same warning rather than silently
+            // failing or letting a shell-crashing exception type escape (mirrors the WPF host's
+            // equivalent catch in MainWindow.Backstage.cs).
+            ShowSaveIssue(UiText.Format(
+                "MainWindowMessage_ExternallyModifiedFileBody",
+                Path.GetFileName(targetPath)));
+            return false;
         }
         catch (Exception ex)
         {
@@ -29435,6 +29501,116 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UpdateSaveButton();
         }
     }
+
+    /// <summary>Test-only override for <see cref="ResolveExternallyModifiedFileOverwriteConfirm"/> --
+    /// lets tests answer the confirm-overwrite prompt deterministically without a real modal dialog.
+    /// Not used by production code paths.</summary>
+    internal Func<string, UserMessageResult>? ExternallyModifiedFileOverwriteConfirmOverrideForTest;
+
+    private UserMessageResult ResolveExternallyModifiedFileOverwriteConfirm(string path) =>
+        ExternallyModifiedFileOverwriteConfirmOverrideForTest?.Invoke(path)
+            ?? ShowExternallyModifiedFileOverwriteConfirmDialog(path);
+
+    /// <summary>
+    /// Owned modal Yes/No prompt shown when Save is about to overwrite a file that changed on disk
+    /// since this session opened it -- mirrors <see cref="ShowReadOnlyRecommendedPromptDialog"/>'s
+    /// non-modal-dispatcher-pump technique (Avalonia has no synchronous nested-pump equivalent to
+    /// WPF's blocking <c>MessageBox.Show</c>) and the WPF host's
+    /// <c>ConfirmExternallyModifiedFileOverwrite</c> (R116-avalonia-external-modification-detection).
+    /// </summary>
+    private UserMessageResult ShowExternallyModifiedFileOverwriteConfirmDialog(string path)
+    {
+        var dialog = new Window
+        {
+            Title = UiText.Get("MainWindowMessage_ExternallyModifiedFileTitle"),
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            MinHeight = 150,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ShowInTaskbar = false,
+        };
+
+        var messageText = new TextBlock
+        {
+            Text = UiText.Format("MainWindowMessage_ExternallyModifiedFileBody", Path.GetFileName(path)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(16, 16, 16, 20),
+        };
+
+        var decision = UserMessageResult.No;
+        var done = false;
+        void Finish(UserMessageResult value)
+        {
+            decision = value;
+            done = true;
+            dialog.Close();
+        }
+
+        Button MakeButton(string content, UserMessageResult value, bool isDefault, bool isCancel)
+        {
+            var button = new Button
+            {
+                Content = content,
+                MinWidth = 82,
+                IsDefault = isDefault,
+                IsCancel = isCancel,
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+            button.Click += (_, _) => Finish(value);
+            return button;
+        }
+
+        var buttonRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Margin = new Thickness(16, 0, 16, 16),
+        };
+
+        var defaultButton = MakeButton("Yes", UserMessageResult.Yes, isDefault: true, isCancel: false);
+        buttonRow.Children.Add(defaultButton);
+        buttonRow.Children.Add(MakeButton("No", UserMessageResult.No, isDefault: false, isCancel: true));
+
+        dialog.Content = new StackPanel { Children = { messageText, buttonRow } };
+        dialog.Opened += (_, _) => defaultButton.Focus();
+        dialog.Closed += (_, _) => done = true;
+
+        var wasEnabled = IsEnabled;
+        IsEnabled = false;
+        try
+        {
+            dialog.Show(this);
+            while (!done)
+            {
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                if (!done)
+                    System.Threading.Thread.Sleep(1);
+            }
+        }
+        finally
+        {
+            IsEnabled = wasEnabled;
+        }
+
+        return decision;
+    }
+
+    /// <summary>Test-only seam for <see cref="_currentFileSourceLastWriteTimeUtc"/> (see its
+    /// declaration) -- not used by production code paths.</summary>
+    internal DateTime? CurrentFileSourceLastWriteTimeUtcForTest => _currentFileSourceLastWriteTimeUtc;
+
+    /// <summary>Test-only seam driving <see cref="OpenWorkbookFromTargetAsync"/> directly (mirrors
+    /// <see cref="ApplyReadOnlyRecommendedPromptIfNeededForTest"/>'s convention) -- lets a test open a
+    /// REAL file through the real production open path without going through the OS file picker.
+    /// Not used by production code paths.</summary>
+    internal Task OpenWorkbookFromTargetAsyncForTest(WorkbookOpenTarget target) =>
+        OpenWorkbookFromTargetAsync(target);
+
+    /// <summary>Test-only seam driving <see cref="SaveWorkbookToTargetAsync"/> directly. Not used by
+    /// production code paths.</summary>
+    internal Task<bool> SaveWorkbookToTargetAsyncForTest(FileSaveTarget target) =>
+        SaveWorkbookToTargetAsync(target);
 
     private void ShowSaveIssue(string message)
     {

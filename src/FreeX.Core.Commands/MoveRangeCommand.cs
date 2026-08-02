@@ -353,7 +353,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
             _cfFormulaSnapshot = [];
             _cfThresholdSnapshot = [];
             _dvFormulaSnapshot = [];
-            RowColumnShiftHelpers.RewriteRuleFormulas(sourceSheet, moveOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
+            RowColumnShiftHelpers.RewriteRuleFormulas(ctx.Workbook, moveOp, _cfFormulaSnapshot, _cfThresholdSnapshot, _dvFormulaSnapshot);
             _chartVerbatimSnapshot = RowColumnShiftHelpers.CaptureChartVerbatimFormulas(ctx.Workbook);
             RowColumnShiftHelpers.RewriteChartVerbatimFormulas(ctx.Workbook, moveOp);
         }
@@ -447,7 +447,7 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
         if (_formulaSnapshot is not null)
             RowColumnShiftHelpers.RestoreFormulas(ctx.Workbook, _formulaSnapshot);
         if (_cfFormulaSnapshot is not null || _cfThresholdSnapshot is not null || _dvFormulaSnapshot is not null)
-            RowColumnShiftHelpers.RestoreRuleFormulas(sourceSheet, _cfFormulaSnapshot ?? [], _cfThresholdSnapshot ?? [], _dvFormulaSnapshot ?? []);
+            RowColumnShiftHelpers.RestoreRuleFormulas(ctx.Workbook, _cfFormulaSnapshot ?? [], _cfThresholdSnapshot ?? [], _dvFormulaSnapshot ?? []);
         RowColumnShiftHelpers.RestoreChartVerbatimFormulas(ctx.Workbook, _chartVerbatimSnapshot);
         RowColumnShiftHelpers.RestoreChartDataRanges(ctx.Workbook, _chartDataRangeSnapshot);
         RestoreSparklineDataRanges(_sparklineDataRangeSnapshot);

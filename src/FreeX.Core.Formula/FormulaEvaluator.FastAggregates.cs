@@ -233,9 +233,16 @@ public sealed partial class FormulaEvaluator
             }
         }
 
-        return count == 0
-            ? ErrorValue.DivByZero
-            : double.IsFinite(total / count) ? NumberValueFor(total / count) : ErrorValue.Num;
+        if (count == 0) return ErrorValue.DivByZero;
+
+        // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary
+        // arithmetic result (FormulaEvaluator.Operators.cs / RoundTo15SignificantDigits), the
+        // same way the range-only SUM fast path above does, so this range-only AVERAGE fast path
+        // stays consistent with both EvaluateFastRangeOnlySum and the general BuiltInFunctions
+        // Average() path.
+        double roundedTotal = RoundTo15SignificantDigits(total);
+        double quotient = roundedTotal / count;
+        return double.IsFinite(quotient) ? NumberValueFor(RoundTo15SignificantDigits(quotient)) : ErrorValue.Num;
     }
 
     private static ScalarValue EvaluateFastRangeOnlyMinMax(
@@ -465,7 +472,12 @@ public sealed partial class FormulaEvaluator
         if (count == 0 || (sample && count < 2))
             return ErrorValue.DivByZero;
 
-        var variance = m2 / (sample ? count - 1 : count);
+        // Match the 15-significant-digit rounding applied after every +,-,*,/,^ binary
+        // arithmetic result (FormulaEvaluator.Operators.cs / RoundTo15SignificantDigits), the
+        // same way EvaluateFastRangeOnlySum/EvaluateFastRangeOnlyAverage above do, so this
+        // range-only STDEV/VAR fast path stays consistent with the general BuiltInFunctions
+        // Stdev()/VarS()/VarP() path.
+        var variance = RoundTo15SignificantDigits(m2 / (sample ? count - 1 : count));
         var result = squareRoot ? Math.Sqrt(variance) : variance;
         return double.IsFinite(result) ? NumberValueFor(result) : ErrorValue.Num;
     }

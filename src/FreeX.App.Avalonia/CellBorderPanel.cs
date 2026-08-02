@@ -1,3 +1,4 @@
+using System;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
@@ -51,6 +52,7 @@ internal sealed class CellBorderPanel : Panel
     private readonly CellBorderNeighborEdges _neighbors;
     private readonly double _zoomFactor;
     private Size _lastArrange = new(-1, -1);
+    private TopLevel? _subscribedTopLevel;
 
     public CellBorderPanel(CellStyle style, CellBorderNeighborEdges neighbors = default, double zoomFactor = 1.0)
     {
@@ -78,6 +80,45 @@ internal sealed class CellBorderPanel : Panel
             child.Arrange(new Rect(finalSize));
 
         return finalSize;
+    }
+
+    // ── DPI-change invalidation ──────────────────────────────────────────────────────────────────
+    //
+    // Build()/AddEdge() bake the *current* RenderScaling into pixel-snapped stroke thickness and
+    // position (see GetRenderScaling()/GetDisplayThickness() below), but ArrangeOverride only
+    // rebuilds when the panel's own finalSize changes. Dragging the host window to a differently-
+    // scaled monitor changes RenderScaling without necessarily changing this panel's arranged size,
+    // so without this subscription the stale, previously-snapped geometry would be left in place
+    // (unlike WPF, which re-invokes OnRender — and therefore re-queries the DPI — automatically on
+    // a per-monitor DPI change). Subscribing to the hosting TopLevel's ScalingChanged and forcing a
+    // fresh arrange pass restores that parity.
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+
+        _subscribedTopLevel = TopLevel.GetTopLevel(this);
+        if (_subscribedTopLevel is not null)
+            _subscribedTopLevel.ScalingChanged += OnHostScalingChanged;
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (_subscribedTopLevel is not null)
+        {
+            _subscribedTopLevel.ScalingChanged -= OnHostScalingChanged;
+            _subscribedTopLevel = null;
+        }
+
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnHostScalingChanged(object? sender, EventArgs e)
+    {
+        // Reset the arrange-gate sentinel so the next arrange pass rebuilds the border lines even
+        // though finalSize itself hasn't changed, then force that pass to happen.
+        _lastArrange = new Size(-1, -1);
+        InvalidateArrange();
     }
 
     // ── Line construction ────────────────────────────────────────────────────────────────────────

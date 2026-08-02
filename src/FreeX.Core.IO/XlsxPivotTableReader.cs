@@ -354,7 +354,14 @@ internal static partial class XlsxPivotTableReader
             ReadPivotPageFields(root.Element(workbookNs + "pageFields"), pivotCache, workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
             ReadPivotDataFields(root.Element(workbookNs + "dataFields"), workbookNs, calculatedFields, calculatedFieldNamesByIndex, numberFormatCatalog),
             calculatedFields,
-            ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
+            // R116-io-pivot-calcitem-part: calculatedItems now lives on the shared pivotCacheDefinition
+            // part (XlsxPivotCacheReader populates pivotCache.CalculatedItems from it), not this
+            // pivotTableDefinition part. Fall back to reading this root's own <calculatedItems> only for
+            // a file this codebase saved before that fix, so a FreeX round trip of an already-saved file
+            // does not silently lose the item the moment the reader stops looking in the old spot.
+            pivotCache is { CalculatedItems.Count: > 0 }
+                ? [.. pivotCache.CalculatedItems]
+                : ReadPivotCalculatedItems(root.Element(workbookNs + "calculatedItems"), workbookNs),
             valueFilters,
             labelFilters,
             sorts);
