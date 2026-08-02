@@ -3676,6 +3676,22 @@ public sealed class TextDocument
     public bool DoNotAutoCompressPictures { get; set; }
 
     /// <summary>
+    /// Whether common system fonts should be included when fonts are embedded for this document.
+    /// Maps to <c>w:settings/w:embedSystemFonts</c>. False is Word's default and is omitted from newly
+    /// authored packages. The setting has no effect unless font embedding is enabled, but remains a
+    /// meaningful save policy when no font parts are currently present.
+    /// </summary>
+    public bool EmbedSystemFonts { get; set; }
+
+    /// <summary>
+    /// Whether consuming applications should embed only the font characters used by this document when saving.
+    /// Maps to <c>w:settings/w:saveSubsetFonts</c>. False is Word's default and is omitted from newly authored
+    /// packages; true remains meaningful without current font parts because it governs later embedding saves.
+    /// FreeW preserves embedded font bytes verbatim and does not manufacture a subset itself.
+    /// </summary>
+    public bool SaveSubsetFonts { get; set; }
+
+    /// <summary>
     /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
     /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
     /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);

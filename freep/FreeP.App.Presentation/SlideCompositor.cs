@@ -1,6 +1,7 @@
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 using PresentationModel = FreeP.Core.Model.Presentation;
+using System.Xml.Linq;
 
 namespace FreeP.App.Compositor;
 
@@ -527,6 +528,183 @@ public static class SlideCompositor
         }
     }
 
+    private static bool TryComposeSummaryZoomPreviews(
+        SlideShape shape,
+        LayoutRect boundsDip,
+        double rotationDeg,
+        List<DrawOp> ops)
+    {
+        var info = shape.PreservedObject;
+        if (info is null || string.IsNullOrWhiteSpace(info.RawXml))
+            return false;
+
+        XElement raw;
+        try
+        {
+            raw = XElement.Parse(info.RawXml);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
+        }
+
+        var objects = raw.Descendants()
+            .Where(element => string.Equals(element.Name.LocalName, "summaryZmObj",
+                StringComparison.OrdinalIgnoreCase))
+            .Take(info.SummaryZoomTargets.Count)
+            .ToArray();
+        if (objects.Length == 0)
+            return false;
+
+        var tileOps = new List<DrawOp>();
+        var composed = false;
+        for (var index = 0; index < info.SummaryZoomTargets.Count && index < objects.Length; index++)
+        {
+            var target = info.SummaryZoomTargets[index];
+            var tileBounds = new LayoutRect(
+                boundsDip.X + boundsDip.Width * target.OffsetFactorX / 100000d,
+                boundsDip.Y + boundsDip.Height * target.OffsetFactorY / 100000d,
+                boundsDip.Width * target.ScaleFactorX / 100000d,
+                boundsDip.Height * target.ScaleFactorY / 100000d);
+
+            var properties = objects[index].Descendants()
+                .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
+                    StringComparison.OrdinalIgnoreCase));
+            var crop = ResolveZoomCrop(properties, info.ZoomProperties);
+            var relId = properties?.Descendants()
+                .SelectMany(element => element.Attributes())
+                .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
+                    StringComparison.OrdinalIgnoreCase))?.Value;
+            if (string.IsNullOrWhiteSpace(relId)
+                || !info.SlideRels.TryGetValue(relId, out var relation)
+                || !info.Parts.TryGetValue(relation.TargetPath, out var bytes)
+                || bytes.Length == 0)
+            {
+                AddSummaryZoomPlaceholder(shape.Id, tileBounds, rotationDeg, tileOps);
+                continue;
+            }
+
+            tileOps.Add(new DrawOp.Picture
+            {
+                ShapeId = shape.Id,
+                Bytes = bytes,
+                ContentType = info.PartContentTypes.TryGetValue(relation.TargetPath, out var contentType)
+                    ? contentType
+                    : "image/png",
+                DestDip = tileBounds,
+                RotationDeg = rotationDeg,
+                CropLeft = crop.Left,
+                CropTop = crop.Top,
+                CropRight = crop.Right,
+                CropBottom = crop.Bottom,
+                Outline = ResolvedOutline.None.Instance,
+            });
+            composed = true;
+        }
+
+        if (composed)
+            ops.AddRange(tileOps);
+
+        return composed;
+    }
+
+    private static bool TryComposeSingleZoomPreview(
+        SlideShape shape,
+        LayoutRect boundsDip,
+        double rotationDeg,
+        List<DrawOp> ops)
+    {
+        var info = shape.PreservedObject;
+        if (info is null || string.IsNullOrWhiteSpace(info.RawXml))
+            return false;
+
+        XElement raw;
+        try
+        {
+            raw = XElement.Parse(info.RawXml);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            return false;
+        }
+
+        var properties = raw.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
+                StringComparison.OrdinalIgnoreCase));
+        var crop = ResolveZoomCrop(properties, info.ZoomProperties);
+        var relId = properties?.Descendants()
+            .SelectMany(element => element.Attributes())
+            .FirstOrDefault(attribute => string.Equals(attribute.Name.LocalName, "embed",
+                StringComparison.OrdinalIgnoreCase))?.Value;
+        if (string.IsNullOrWhiteSpace(relId)
+            || !info.SlideRels.TryGetValue(relId, out var relation)
+            || !info.Parts.TryGetValue(relation.TargetPath, out var bytes)
+            || bytes.Length == 0)
+        {
+            return false;
+        }
+
+        ops.Add(new DrawOp.Picture
+        {
+            ShapeId = shape.Id,
+            Bytes = bytes,
+            ContentType = info.PartContentTypes.TryGetValue(relation.TargetPath, out var contentType)
+                ? contentType
+                : "image/png",
+            DestDip = boundsDip,
+            RotationDeg = rotationDeg,
+            CropLeft = crop.Left,
+            CropTop = crop.Top,
+            CropRight = crop.Right,
+            CropBottom = crop.Bottom,
+            Outline = ResolvedOutline.None.Instance,
+        });
+        return true;
+    }
+
+    private static (double Left, double Top, double Right, double Bottom) ResolveZoomCrop(
+        XElement? properties,
+        ZoomObjectProperties? fallback)
+    {
+        var sourceRect = properties?.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "srcRect",
+                StringComparison.OrdinalIgnoreCase));
+
+        return (
+            NormalizeZoomCrop(ReadCropValue(sourceRect, "l", fallback?.CropLeft)),
+            NormalizeZoomCrop(ReadCropValue(sourceRect, "t", fallback?.CropTop)),
+            NormalizeZoomCrop(ReadCropValue(sourceRect, "r", fallback?.CropRight)),
+            NormalizeZoomCrop(ReadCropValue(sourceRect, "b", fallback?.CropBottom)));
+    }
+
+    private static int? ReadCropValue(XElement? sourceRect, string attributeName, int? fallback)
+    {
+        var text = sourceRect?.Attribute(attributeName)?.Value;
+        return int.TryParse(text, out var value) ? value : fallback;
+    }
+
+    private static double NormalizeZoomCrop(int? value) =>
+        value.HasValue
+            ? Math.Clamp(value.Value / 100000d, 0, 1)
+            : 0;
+
+    private static void AddSummaryZoomPlaceholder(
+        uint shapeId,
+        LayoutRect boundsDip,
+        double rotationDeg,
+        List<DrawOp> ops)
+    {
+        ops.Add(new DrawOp.Shape
+        {
+            ShapeId = shapeId,
+            Geometry = ShapeGeometryBuilder.Build(DrawingShapeKind.Rectangle, boundsDip),
+            Fill = new ResolvedFill.Solid(new SrgbColor(0xCC, 0xCC, 0xCC)),
+            Outline = ResolvedOutline.None.Instance,
+            BoundsDip = boundsDip,
+            RotationDeg = rotationDeg,
+        });
+    }
+
     // ─── Preserved modern objects (Wave 25A: zoom / ink / 3D / unknown) ─────────────────────
 
     /// <summary>
@@ -544,6 +722,20 @@ public static class SlideCompositor
     {
         var anchor    = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
+
+        if (shape.Kind == SlideShapeKind.Zoom
+            && shape.PreservedObject?.SummaryZoomTargets.Count > 0
+            && TryComposeSummaryZoomPreviews(shape, boundsDip, anchor.RotationDeg, ops))
+        {
+            return;
+        }
+
+        if (shape.Kind == SlideShapeKind.Zoom
+            && shape.PreservedObject?.SummaryZoomTargets.Count == 0
+            && TryComposeSingleZoomPreview(shape, boundsDip, anchor.RotationDeg, ops))
+        {
+            return;
+        }
 
         if (shape.Picture is { Bytes.Length: > 0 } pic)
         {

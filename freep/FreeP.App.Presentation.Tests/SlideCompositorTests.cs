@@ -211,6 +211,136 @@ public sealed class SlideCompositorTests
         bg.BoundsDip.Height.Should().BeApproximately(p.SlideSizeCyEmu / 9525.0, 0.1);
     }
 
+    [Fact]
+    public void Compose_SummaryZoom_UsesAttachedPreviewTilesAndNativeLayout()
+    {
+        var presentation = new PresentationModel();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Id = "slide-1" });
+        presentation.Slides.Add(new Slide { Id = "slide-2" });
+        presentation.Sections.Add(new PresentationSection { Id = "section-1", Name = "One", SlideIds = { "slide-1" } });
+        presentation.Sections.Add(new PresentationSection { Id = "section-2", Name = "Two", SlideIds = { "slide-2" } });
+
+        var summaryZoom = SummaryZoomInsertionPlanner.CreateShape(
+            presentation,
+            new[] { "section-1", "section-2" });
+        presentation.Slides[0].Shapes.Add(summaryZoom);
+
+        var firstPreview = new byte[] { 1, 2, 3 };
+        var secondPreview = new byte[] { 4, 5, 6 };
+        SummaryZoomPreviewPlanner.AttachPreviewImages(
+            presentation,
+            summaryZoom,
+            slideIndex => slideIndex == 0 ? firstPreview : secondPreview)
+            .Should().Be(2);
+        var summarySession = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        summarySession.SetZoomObjectProperties(
+            summaryZoom.Id,
+            new ZoomObjectProperties(
+                ImageType: "preview",
+                CropLeft: 15000,
+                CropTop: 5000,
+                CropRight: 25000,
+                CropBottom: 10000)).Should().BeTrue();
+        var allOps = SlideCompositor.Compose(presentation, presentation.Slides[0]);
+        var pictures = allOps
+            .OfType<DrawOp.Picture>()
+            .ToArray();
+
+        pictures.Should().HaveCount(2);
+        pictures.Select(picture => picture.Bytes).Should().ContainInOrder(firstPreview, secondPreview);
+        pictures.Should().AllSatisfy(picture =>
+        {
+            picture.CropLeft.Should().BeApproximately(0.15, 0.00001);
+            picture.CropTop.Should().BeApproximately(0.05, 0.00001);
+            picture.CropRight.Should().BeApproximately(0.25, 0.00001);
+            picture.CropBottom.Should().BeApproximately(0.1, 0.00001);
+        });
+
+        var fullBounds = new LayoutRect(
+            summaryZoom.OffsetXEmu / 9525d,
+            summaryZoom.OffsetYEmu / 9525d,
+            summaryZoom.ExtentCxEmu / 9525d,
+            summaryZoom.ExtentCyEmu / 9525d);
+        pictures[0].DestDip.Should().Be(new LayoutRect(
+            fullBounds.X,
+            fullBounds.Y,
+            fullBounds.Width / 2,
+            fullBounds.Height));
+        pictures[1].DestDip.Should().Be(new LayoutRect(
+            fullBounds.X + fullBounds.Width / 2,
+            fullBounds.Y,
+            fullBounds.Width / 2,
+            fullBounds.Height));
+    }
+
+    [Fact]
+    public void Compose_SlideAndSectionZoom_UsesAttachedSingleTargetPreviews()
+    {
+        var presentation = new PresentationModel();
+        presentation.Slides.Clear();
+        presentation.Slides.Add(new Slide { Id = "slide-1" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target" });
+        presentation.Sections.Add(new PresentationSection
+        {
+            Id = "section-target",
+            Name = "Target section",
+            SlideIds = { "slide-2" }
+        });
+
+        var slideZoom = SlideZoomInsertionPlanner.CreateShape(
+            presentation,
+            currentSlideIndex: 0,
+            targetSlideId: "slide-2");
+        var sectionZoom = SectionZoomInsertionPlanner.CreateShape(
+            presentation,
+            "section-target");
+        presentation.Slides[0].Shapes.Add(slideZoom);
+        presentation.Slides[0].Shapes.Add(sectionZoom);
+
+        var preview = new byte[] { 7, 8, 9 };
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation,
+            slideZoom,
+            targetSlideIndex: 1,
+            _ => preview).Should().BeTrue();
+        SummaryZoomPreviewPlanner.AttachPreviewImage(
+            presentation,
+            sectionZoom,
+            targetSlideIndex: 1,
+            _ => preview).Should().BeTrue();
+        var session = new EditingSession(
+            presentation,
+            new PresentationCommandBus(presentation));
+        session.SetZoomObjectProperties(
+            slideZoom.Id,
+            new ZoomObjectProperties(
+                ImageType: "preview",
+                CropLeft: 20000,
+                CropTop: 10000,
+                CropRight: 30000,
+                CropBottom: 5000)).Should().BeTrue();
+
+        var pictures = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Picture>()
+            .ToArray();
+
+        pictures.Should().HaveCount(2);
+        pictures.Should().AllSatisfy(picture =>
+        {
+            picture.Bytes.Should().BeEquivalentTo(preview);
+            picture.DestDip.Width.Should().BeGreaterThan(0);
+            picture.DestDip.Height.Should().BeGreaterThan(0);
+        });
+        pictures[0].CropLeft.Should().BeApproximately(0.2, 0.00001);
+        pictures[0].CropTop.Should().BeApproximately(0.1, 0.00001);
+        pictures[0].CropRight.Should().BeApproximately(0.3, 0.00001);
+        pictures[0].CropBottom.Should().BeApproximately(0.05, 0.00001);
+        pictures[1].HasCrop.Should().BeFalse();
+    }
+
     private static TextBody BodyWithText(string text)
     {
         var body = new TextBody();

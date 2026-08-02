@@ -586,6 +586,8 @@ public static class DocumentCompare
         target.DefaultRun = source.DefaultRun;
         target.DefaultParagraph = source.DefaultParagraph;
         target.DoNotAutoCompressPictures = source.DoNotAutoCompressPictures;
+        target.EmbedSystemFonts = source.EmbedSystemFonts;
+        target.SaveSubsetFonts = source.SaveSubsetFonts;
         foreach (var (id, style) in source.Styles)
             target.Styles[id] = style;
 
