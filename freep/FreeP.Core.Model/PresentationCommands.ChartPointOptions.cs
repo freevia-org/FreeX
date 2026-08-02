@@ -46,6 +46,8 @@ public sealed class SetChartPointOptionsCommand : IPresentationCommand
         style.ExplosionPercent = _newOptions.ExplosionPercent.HasValue
             ? Math.Clamp(_newOptions.ExplosionPercent.Value, 0, 100)
             : null;
+        if (style.DataLabels is not null)
+            style.DataLabels.ShowLeaderLines = _newOptions.ShowLeaderLines ?? style.DataLabels.ShowLeaderLines;
 
         var symbol = _newOptions.MarkerSymbol;
         if (symbol is not null || _newOptions.MarkerSizePt is not null)
