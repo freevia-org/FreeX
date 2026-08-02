@@ -3611,6 +3611,13 @@ public sealed class TextDocument
     public bool TrackRevisions { get; set; }
 
     /// <summary>
+    /// Whether formatting-only changes should be excluded from tracked revisions. Maps to
+    /// <c>w:settings/w:doNotTrackFormatting</c>. False is Word's default and is omitted from newly
+    /// authored packages; this option is meaningful when <see cref="TrackRevisions"/> is enabled.
+    /// </summary>
+    public bool DoNotTrackFormatting { get; set; }
+
+    /// <summary>
     /// Word's "Mark as Final" flag. When true the document is advisory read-only: editors should open it
     /// non-editable and show a "Marked as Final" banner ("Edit Anyway" clears it). Persisted following the
     /// Word convention as the <c>_MarkAsFinal</c> boolean custom document property (docProps/custom.xml);
