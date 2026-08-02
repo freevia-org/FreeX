@@ -462,6 +462,82 @@ public sealed class DocumentViewTrackEditTests
         background.Color.Should().Be(System.Windows.Media.Color.FromRgb(0xFF, 0xFF, 0x00));
     }
 
+    [StaFact]
+    public void FontDialogFormatting_SelectedRangeAppliesCompleteTrackedSnapshotAndUndoRedo()
+    {
+        var view = BuildView("Hello world");
+        view.CommitToModel();
+        var baseline = ((Paragraph)view.Model.Blocks[0]).Runs.Single().Formatting;
+        var target = baseline with
+        {
+            FontFamily = "Arial",
+            FontSizePt = 16,
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            ColorHex = "#0070C0",
+            CharacterSpacingPt = 1.25,
+            KerningMinSizePt = 12,
+            PositionPt = 1.5,
+            Ligatures = LigatureMode.StandardContextual,
+            StylisticSet = 4,
+            NumberForm = NumberForm.OldStyle,
+            NumberSpacing = NumberSpacing.Tabular,
+        };
+        view.RevisionAuthor = "Font Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+
+        view.ApplyFontFormatting(target);
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Single(run => run.Text == "Hello ").Formatting.Should().Be(baseline);
+        var formatted = paragraph.Runs.Single(run => run.Text == "world");
+        formatted.Formatting.Should().Be(target);
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Font Reviewer");
+        formatted.FormatRevision.PreviousFormatting.Should().Be(baseline);
+        var rendered = RenderedRun(view, "world");
+        rendered.FontFamily.Source.Should().Be("Arial");
+        rendered.FontSize.Should().BeApproximately(16 * 96.0 / 72.0, 0.001);
+        rendered.FontWeight.Should().Be(System.Windows.FontWeights.Bold);
+
+        view.Undo();
+        paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].Formatting.Should().Be(baseline);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world")
+            .Formatting.Should().Be(target);
+    }
+
+    [StaFact]
+    public void FontDialogFormatting_CollapsedCaretKeepsVisiblePendingFormatWithoutRewritingParagraph()
+    {
+        var view = BuildView("Hello");
+        view.CommitToModel();
+        var baseline = ((Paragraph)view.Model.Blocks[0]).Runs.Single().Formatting;
+        var target = baseline with
+        {
+            FontFamily = "Arial",
+            FontSizePt = 16,
+            Bold = true,
+            CharacterSpacingPt = 1.25,
+        };
+        view.MoveCaretToBlockForTest(0, 5);
+
+        view.ApplyFontFormatting(target);
+
+        view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.FontFamilyProperty)
+            .Should().Be(new System.Windows.Media.FontFamily("Arial"));
+        view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.FontSizeProperty)
+            .Should().Be(16 * 96.0 / 72.0);
+        view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.FontWeightProperty)
+            .Should().Be(System.Windows.FontWeights.Bold);
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single().Formatting.Should().Be(baseline);
+    }
+
     private static WpfRun RenderedRun(DocumentView view, string text) =>
         view.Document.Blocks.OfType<WpfParagraph>()
             .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())
