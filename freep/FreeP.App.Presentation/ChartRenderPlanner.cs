@@ -2939,6 +2939,8 @@ public static partial class ChartRenderPlanner
     {
         if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike || chart.Categories.Count == 0)
             return Array.Empty<ChartTextPlan>();
+        if (chart.CategoryAxis.TickLabelPosition == ChartTickLabelPosition.None)
+            return Array.Empty<ChartTextPlan>();
         if (ShouldPlanDataTable(chart, frame))
             return Array.Empty<ChartTextPlan>();
         if (chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
@@ -2948,6 +2950,7 @@ public static partial class ChartRenderPlanner
 
         var labels = new List<ChartTextPlan>(chart.Categories.Count);
         var plot = frame.Plot;
+        bool highPosition = chart.CategoryAxis.TickLabelPosition == ChartTickLabelPosition.High;
         if (frame.IsBar)
         {
             int categoryCount = chart.Categories.Count;
@@ -2959,16 +2962,22 @@ public static partial class ChartRenderPlanner
                     : categoryCount - 1 - categoryIndex;
                 double y = plot.Y + renderRow * categoryStep;
                 double labelGap = ResolveCategoryAxisLabelGap(chart);
+                double labelWidth = ResolveBarCategoryLabelWidth(chart) - labelGap;
+                double labelX = highPosition
+                    ? plot.Right + labelGap
+                    : plot.X - ResolveBarCategoryLabelWidth(chart);
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
                     new ChartPlanRect(
-                        plot.X - ResolveBarCategoryLabelWidth(chart),
+                        labelX,
                         y,
-                        ResolveBarCategoryLabelWidth(chart) - labelGap,
+                        labelWidth,
                         categoryStep),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
-                    Alignment: ChartPlanTextAlignment.Right,
+                    Alignment: highPosition
+                        ? ChartPlanTextAlignment.Left
+                        : ChartPlanTextAlignment.Right,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
             }
         }
@@ -2978,6 +2987,10 @@ public static partial class ChartRenderPlanner
             double labelOffset = UsesImportedTextMetrics(chart)
                 ? ImportedCartesianCategoryLabelOffset
                 : ResolveCategoryAxisLabelGap(chart);
+            double labelHeight = ResolveCategoryLabelHeight(chart);
+            double labelTop = highPosition
+                ? plot.Y - labelHeight - labelOffset
+                : plot.Bottom + labelOffset;
             for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
             {
                 int renderCategoryIndex = ResolveCategoryRenderIndex(
@@ -2985,7 +2998,7 @@ public static partial class ChartRenderPlanner
                 double x = plot.X + renderCategoryIndex * categoryStep;
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
-                    new ChartPlanRect(x, plot.Bottom + labelOffset, categoryStep, ResolveCategoryLabelHeight(chart)),
+                    new ChartPlanRect(x, labelTop, categoryStep, labelHeight),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Center,
@@ -3070,6 +3083,8 @@ public static partial class ChartRenderPlanner
     {
         if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike)
             return Array.Empty<ChartTextPlan>();
+        if (chart.ValueAxis.TickLabelPosition == ChartTickLabelPosition.None)
+            return Array.Empty<ChartTextPlan>();
 
         var (minValue, maxValue, majorUnit) = ComputePrimaryValueAxisRange(chart);
         double steps = (maxValue - minValue) / majorUnit;
@@ -3079,6 +3094,7 @@ public static partial class ChartRenderPlanner
         int tickCount = (int)Math.Round(steps);
         var labels = new List<ChartTextPlan>(tickCount + 1);
         var plot = frame.Plot;
+        bool highPosition = chart.ValueAxis.TickLabelPosition == ChartTickLabelPosition.High;
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
         {
             double value = minValue + majorUnit * tickIndex;
@@ -3092,7 +3108,9 @@ public static partial class ChartRenderPlanner
                     FormatChartAxisLabelValue(chart, value, chart.ValueAxis),
                     new ChartPlanRect(
                         x - ResolveAxisLabelWidth(chart) / 2,
-                        ResolveValueAxisCrossingCoordinate(chart, frame) + 2,
+                        highPosition
+                            ? plot.Y - ResolveCategoryLabelHeight(chart) - 2
+                            : ResolveValueAxisCrossingCoordinate(chart, frame) + 2,
                         ResolveAxisLabelWidth(chart),
                         ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
@@ -3122,12 +3140,18 @@ public static partial class ChartRenderPlanner
                 double labelRight = UsesImportedThreeDColumnDefaults(chart)
                     ? plot.X + 21.0 - 4.0
                     : ResolveValueAxisCrossingCoordinate(chart, frame) - rightGap;
+                bool placeOnHighSide = highPosition && !UsesImportedThreeDColumnDefaults(chart);
+                double labelLeft = placeOnHighSide
+                    ? plot.Right + GridlinePad
+                    : labelRight - labelWidth;
                 labels.Add(new ChartTextPlan(
                     FormatChartAxisLabelValue(chart, value, chart.ValueAxis),
-                    new ChartPlanRect(labelRight - labelWidth, y - verticalOffset, labelWidth, ResolveCategoryLabelHeight(chart)),
+                    new ChartPlanRect(labelLeft, y - verticalOffset, labelWidth, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
-                    Alignment: ChartPlanTextAlignment.Right,
+                    Alignment: placeOnHighSide
+                        ? ChartPlanTextAlignment.Left
+                        : ChartPlanTextAlignment.Right,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.ValueAxis)));
             }
         }
@@ -3612,13 +3636,19 @@ public static partial class ChartRenderPlanner
         var labels = new List<ChartTextPlan>(tickCount + 1);
         var ticks = new List<ChartGridLinePlan>(tickCount + 1);
         double secondaryAxisX = ResolveSecondaryValueAxisCrossingCoordinate(chart, frame);
-        double labelX = secondaryAxisX + AxisMajorTickLength + GridlinePad +
-            (UsesImportedTextMetrics(chart) ? 8.0 : 0.0) +
-            (UsesImportedComboDefaults(chart) ? ImportedComboSecondaryLabelCompensation : 0.0);
+        ChartTickLabelPosition labelPosition = chart.SecondaryValueAxis.TickLabelPosition ?? ChartTickLabelPosition.NextTo;
+        bool highPosition = labelPosition == ChartTickLabelPosition.High;
+        bool lowPosition = labelPosition == ChartTickLabelPosition.Low;
+        bool placeOnLowSide = lowPosition && !highPosition;
         double labelWidth = Math.Max(
             1,
             (UsesImportedTextMetrics(chart) ? 72.0 : AxisLabelWidth) -
             AxisMajorTickLength - GridlinePad);
+        double labelX = placeOnLowSide
+            ? plot.X - labelWidth - AxisMajorTickLength - GridlinePad
+            : (highPosition ? plot.Right : secondaryAxisX) + AxisMajorTickLength + GridlinePad +
+            (UsesImportedTextMetrics(chart) ? 8.0 : 0.0) +
+            (UsesImportedComboDefaults(chart) ? ImportedComboSecondaryLabelCompensation : 0.0);
         double labelVerticalOffset = UsesImportedTextMetrics(chart)
             ? ImportedCartesianValueLabelVerticalOffset
             : 6.0;
@@ -3632,13 +3662,18 @@ public static partial class ChartRenderPlanner
             ticks.Add(new ChartGridLinePlan(
                 new ChartPlanPoint(secondaryAxisX, y),
                 new ChartPlanPoint(secondaryAxisX + AxisMajorTickLength, y)));
-            labels.Add(new ChartTextPlan(
-                FormatChartAxisLabelValue(chart, value, chart.SecondaryValueAxis),
-                new ChartPlanRect(labelX, y - labelVerticalOffset, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
-                IsBold: false,
-                FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Left,
-                AxisLabelFormat: BuildAxisLabelFormatPlan(chart.SecondaryValueAxis)));
+            if (labelPosition != ChartTickLabelPosition.None)
+            {
+                labels.Add(new ChartTextPlan(
+                    FormatChartAxisLabelValue(chart, value, chart.SecondaryValueAxis),
+                    new ChartPlanRect(labelX, y - labelVerticalOffset, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
+                    IsBold: false,
+                    FontSize: ResolveTextFontSize(chart, 6.5),
+                    Alignment: placeOnLowSide
+                        ? ChartPlanTextAlignment.Right
+                        : ChartPlanTextAlignment.Left,
+                    AxisLabelFormat: BuildAxisLabelFormatPlan(chart.SecondaryValueAxis)));
+            }
         }
 
         if (UsesImportedComboDefaults(chart))

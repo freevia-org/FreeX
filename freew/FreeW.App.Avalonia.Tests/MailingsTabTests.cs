@@ -328,7 +328,7 @@ public sealed class MailingsTabTests
     }
 
     [Fact]
-    public void CheckForErrors_PausesOnMissingFieldAndCompletesCleanMerge()
+    public void CheckForErrors_PauseModeCompletesAfterReportingMissingFieldsAndCleanMerge()
     {
         var missingView = ViewWith(new Paragraph(
             $"Dear {MailMerge.FieldOpen}Missing{MailMerge.FieldClose}"));
@@ -338,8 +338,9 @@ public sealed class MailingsTabTests
         var paused = missingEngine.CheckForErrors(MailMergeCheckForErrorsMode.CompleteAndPause);
 
         paused!.HasErrors.Should().BeTrue();
-        paused.ShouldCompleteMerge.Should().BeFalse();
-        PlainText(missingView.Document).Should().Contain("Missing");
+        paused.ShouldCompleteMerge.Should().BeTrue();
+        paused.ShouldPauseForErrors.Should().BeTrue();
+        PlainText(missingView.Document).Should().NotContain("Missing");
 
         var cleanView = ViewWith(new Paragraph(
             $"Dear {MailMerge.FieldOpen}FirstName{MailMerge.FieldClose}"));
