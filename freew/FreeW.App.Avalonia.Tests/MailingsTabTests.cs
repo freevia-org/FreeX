@@ -281,6 +281,7 @@ public sealed class MailingsTabTests
     public void FinishMerge_produces_merged_document_with_all_records()
     {
         var view = ViewWith(new Paragraph("Dear «FirstName» «LastName»,"));
+        view.Document.Header = new HeaderFooter("Recipient «FirstName»");
         var info = new List<string>();
         var engine = new MailMergeEngine(view, Callbacks(infoSink: info));
         engine.LoadRecipientsCsv(SampleCsv);
@@ -292,6 +293,9 @@ public sealed class MailingsTabTests
         text.Should().Contain("Dear Ada Lovelace,", "record 1 is merged");
         text.Should().Contain("Dear Grace Hopper,", "record 2 is merged");
         text.Should().NotContain("«FirstName»", "all placeholders are substituted");
+        merged.Sections.Should().HaveCount(2);
+        merged.Sections[0].HeadersFooters.Header!.PlainText.Should().Be("Recipient Ada");
+        merged.Sections[1].HeadersFooters.Header!.PlainText.Should().Be("Recipient Grace");
         info.Should().ContainSingle().Which.Should().Contain("Merged 2 record(s)");
     }
 

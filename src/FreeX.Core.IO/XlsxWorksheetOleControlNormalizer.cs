@@ -7,6 +7,7 @@ internal static class XlsxWorksheetOleControlNormalizer
 {
     private static readonly XNamespace WorksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static readonly XNamespace RelNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace McNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace PackageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
 
     private const string OleObjectRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/oleObject";
@@ -143,7 +144,7 @@ internal static class XlsxWorksheetOleControlNormalizer
             }
 
             changed |= NormalizeControlsElement(controls);
-            if (!controls.Elements(WorksheetNs + "control").Any())
+            if (!EnumerateControlElements(controls).Any())
             {
                 controls.Remove();
                 changed = true;
@@ -179,19 +180,104 @@ internal static class XlsxWorksheetOleControlNormalizer
     {
         var changed = false;
         changed |= XlsxXmlNormalizationHelpers.RemoveUnknownAttributes(controls, NoAttributes, RelNs + "id");
-        changed |= XlsxXmlNormalizationHelpers.RemoveChildElementsExcept(controls, WorksheetNs + "control");
+        changed |= RemoveNonControlChildren(controls);
 
-        foreach (var control in controls.Elements(WorksheetNs + "control").ToList())
+        foreach (var control in EnumerateControlElements(controls).ToList())
         {
             changed |= NormalizeControlElement(control);
             if (!ShouldRemoveRelationshipBackedElement(control))
                 continue;
 
-            control.Remove();
+            RemoveControlElement(control);
             changed = true;
         }
 
         return changed;
+    }
+
+    /// <summary>
+    /// Prune everything under <c>&lt;controls&gt;</c> that is not a form control. Excel wraps each
+    /// individual <c>&lt;control&gt;</c> in its own <c>mc:AlternateContent</c>/<c>mc:Choice</c> (a
+    /// valid x14 forward-compatibility shape), so a plain "keep only direct <c>&lt;control&gt;</c>
+    /// children" filter would strip every control on the sheet and leave the block empty — after
+    /// which <see cref="NormalizeControls"/> deletes the whole block, silently destroying every
+    /// legacy form control on the next save. Keep any wrapper that still carries a control.
+    /// </summary>
+    private static bool RemoveNonControlChildren(XElement controls)
+    {
+        var changed = false;
+        foreach (var child in controls.Elements().ToList())
+        {
+            if (child.Name == WorksheetNs + "control")
+                continue;
+
+            if (child.Name == McNs + "AlternateContent" && EnumerateControlElements(child).Any())
+                continue;
+
+            child.Remove();
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    /// <summary>
+    /// Removes a <c>&lt;control&gt;</c> and then any now-empty
+    /// <c>mc:Choice</c>/<c>mc:Fallback</c>/<c>mc:AlternateContent</c> ancestor chain it was wrapped
+    /// in, so normalization never leaves a hollow wrapper behind. Mirrors
+    /// <c>XlsxWorksheetFormControlPreserver.RemoveControlElement</c>; the walk stops at the enclosing
+    /// <c>&lt;controls&gt;</c>, which <see cref="NormalizeControls"/> drops separately once no
+    /// controls remain.
+    /// </summary>
+    private static void RemoveControlElement(XElement control)
+    {
+        var parent = control.Parent;
+        control.Remove();
+
+        while (parent is not null &&
+               parent.Name.Namespace == McNs &&
+               parent.Name.LocalName is "Choice" or "Fallback" or "AlternateContent" &&
+               !parent.Elements().Any())
+        {
+            var grandParent = parent.Parent;
+            parent.Remove();
+            parent = grandParent;
+        }
+    }
+
+    /// <summary>
+    /// Enumerates <c>&lt;control&gt;</c> elements in document order, descending through
+    /// <c>mc:AlternateContent</c>/<c>mc:Choice</c>/<c>mc:Fallback</c> wrappers exactly like
+    /// <c>XlsxWorksheetFormControlPreserver.EnumerateControlElements</c> and
+    /// <c>XlsxFormControlMapper.EnumerateDescendantsThroughAlternateContent</c>, so the normalizer
+    /// sees the same controls the loader and preserver do. Only the first <c>mc:Choice</c> of each
+    /// AlternateContent is followed, to avoid double-visiting the equivalent Fallback markup.
+    /// </summary>
+    private static IEnumerable<XElement> EnumerateControlElements(XElement element)
+    {
+        foreach (var child in element.Elements())
+        {
+            if (child.Name == WorksheetNs + "control")
+            {
+                yield return child;
+                continue;
+            }
+
+            if (child.Name == McNs + "AlternateContent")
+            {
+                var preferred = child.Element(McNs + "Choice") ?? child.Element(McNs + "Fallback");
+                if (preferred is not null)
+                {
+                    foreach (var match in EnumerateControlElements(preferred))
+                        yield return match;
+                }
+
+                continue;
+            }
+
+            foreach (var match in EnumerateControlElements(child))
+                yield return match;
+        }
     }
 
     private static bool NormalizeOleObjectElement(XElement oleObject)
@@ -545,10 +631,13 @@ internal static class XlsxWorksheetOleControlNormalizer
         string worksheetPath,
         XDocument worksheetXml)
     {
-        var controls = worksheetXml.Root?
-            .Element(WorksheetNs + "controls")?
-            .Elements(WorksheetNs + "control")
-            .ToList();
+        // <control> is not necessarily a DIRECT child of <controls>: Excel wraps each one in its own
+        // mc:AlternateContent/mc:Choice, so descend through those wrappers (see
+        // EnumerateControlElements) rather than silently failing to rebind every control's r:id.
+        var controlsContainer = worksheetXml.Root?.Element(WorksheetNs + "controls");
+        var controls = controlsContainer is null
+            ? null
+            : EnumerateControlElements(controlsContainer).ToList();
         var relationshipsPath = XlsxPackagePath.GetRelationshipPartPath(worksheetPath);
         var relationshipsXml = archive.GetEntry(relationshipsPath) is { } relationshipsEntry
             ? XlsxPackageXmlEditor.LoadXml(relationshipsEntry)
@@ -622,7 +711,7 @@ internal static class XlsxWorksheetOleControlNormalizer
 
             if (relationship is null)
             {
-                control.Remove();
+                RemoveControlElement(control);
                 worksheetChanged = true;
                 continue;
             }
@@ -630,7 +719,7 @@ internal static class XlsxWorksheetOleControlNormalizer
             var reboundId = GetPackageRelationshipId(relationship);
             if (string.IsNullOrWhiteSpace(reboundId))
             {
-                control.Remove();
+                RemoveControlElement(control);
                 worksheetChanged = true;
                 continue;
             }
@@ -642,8 +731,7 @@ internal static class XlsxWorksheetOleControlNormalizer
             EnsureControlPropertiesContentType(archive, relationship, worksheetPath);
         }
 
-        var controlsContainer = worksheetXml.Root?.Element(WorksheetNs + "controls");
-        if (controlsContainer is not null && !controlsContainer.Elements(WorksheetNs + "control").Any())
+        if (controlsContainer is not null && !EnumerateControlElements(controlsContainer).Any())
         {
             controlsContainer.Remove();
             worksheetChanged = true;

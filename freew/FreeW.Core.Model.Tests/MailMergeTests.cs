@@ -252,20 +252,41 @@ public class MailMergeTests
     }
 
     [Fact]
-    public void CombineMergedRecords_Letters_StartsEachAdditionalRecordOnANewPage()
+    public void CombineMergedRecords_Letters_GivesEachRecordItsOwnNextPageSection()
     {
-        var docs = new[]
-        {
-            new TextDocument { Blocks = { new Paragraph("Ada") } },
-            new TextDocument { Blocks = { new Paragraph("Grace") } }
-        };
+        var ada = new TextDocument { Blocks = { new Paragraph("Ada") } };
+        ada.Page.MarginLeftPt = 72;
+        ada.Header = new HeaderFooter("Recipient Ada");
+        var grace = new TextDocument { Blocks = { new Paragraph("Grace") } };
+        grace.Page.MarginLeftPt = 90;
+        grace.Header = new HeaderFooter("Recipient Grace");
 
-        var combined = MailMerge.CombineMergedRecords(docs, MailMergeOutputMode.Letters);
+        var combined = MailMerge.CombineMergedRecords([ada, grace], MailMergeOutputMode.Letters);
 
         combined.Blocks.Should().HaveCount(2);
+        ((Paragraph)combined.Blocks[0]).SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
         ((Paragraph)combined.Blocks[0]).Formatting.PageBreakBefore.Should().BeFalse();
-        ((Paragraph)combined.Blocks[1]).Formatting.PageBreakBefore.Should().BeTrue();
+        ((Paragraph)combined.Blocks[1]).Formatting.PageBreakBefore.Should().BeFalse();
+        combined.Sections.Should().HaveCount(2);
+        combined.Sections[0].Page.MarginLeftPt.Should().Be(72);
+        combined.Sections[0].HeadersFooters.Header!.PlainText.Should().Be("Recipient Ada");
+        combined.Sections[1].Page.MarginLeftPt.Should().Be(90);
+        combined.Sections[1].HeadersFooters.Header!.PlainText.Should().Be("Recipient Grace");
         combined.PlainText.Should().Be("Ada\nGrace");
+    }
+
+    [Fact]
+    public void CombineMergedRecords_Letters_UsesDedicatedBoundaryAfterNonParagraphContent()
+    {
+        var first = new TextDocument { Blocks = { Table.Create(1, 1) } };
+        var second = new TextDocument { Blocks = { new Paragraph("Next") } };
+
+        var combined = MailMerge.CombineMergedRecords([first, second], MailMergeOutputMode.Letters);
+
+        combined.Blocks.Should().HaveCount(3);
+        combined.Blocks[1].Should().BeOfType<Paragraph>()
+            .Which.SectionBreak!.BreakKind.Should().Be(SectionBreakKind.NextPage);
+        combined.Blocks[2].Should().BeOfType<Paragraph>().Which.PlainText.Should().Be("Next");
     }
 
     [Fact]

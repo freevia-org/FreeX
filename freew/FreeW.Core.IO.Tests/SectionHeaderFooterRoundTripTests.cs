@@ -85,6 +85,25 @@ public class SectionHeaderFooterRoundTripTests
     }
 
     [Fact]
+    public void MailMergeLetters_RecordSectionsAndRecipientHeadersSurvivePackageRoundTrip()
+    {
+        var template = new TextDocument { Blocks = { new Paragraph("Dear «Name»") } };
+        template.Header = new HeaderFooter("Recipient «Name»");
+        var records = MailMerge.MergeAll(
+            template,
+            new MergeData(["Name"], [["Ada"], ["Grace"]]));
+
+        var combined = MailMerge.CombineMergedRecords(records, MailMergeOutputMode.Letters);
+        var read = RoundTrip(combined);
+
+        read.Sections.Should().HaveCount(2);
+        read.Sections[0].BreakKind.Should().Be(SectionBreakKind.NextPage);
+        read.Sections[0].HeadersFooters.Header!.PlainText.Should().Be("Recipient Ada");
+        read.Sections[1].HeadersFooters.Header!.PlainText.Should().Be("Recipient Grace");
+        read.PlainText.Should().Contain("Dear Ada").And.Contain("Dear Grace");
+    }
+
+    [Fact]
     public void TwoSections_EmitDistinctHeaderFooterPartsAndReferences()
     {
         var doc = new TextDocument();
