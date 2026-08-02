@@ -375,7 +375,7 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
-    public void SmartArtLiveCorpus_ComposesCachedProcessBackgroundAsOfficeNeutral()
+    public void SmartArtLiveCorpus_AdmitsIncreasingCircleProcessToLiveLayout()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
         var presentation = PptxPackageReader.Read(deckPath);
@@ -383,8 +383,8 @@ public sealed class PptxRepairCorpusValidityTests
             .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
             .SmartArt!;
 
-        increasingCircleProcess.Data!.IsLiveLayoutSupported.Should().BeFalse(
-            "the imported PowerPoint cache contains background-role geometry the bounded live authoring layout does not yet model");
+        increasingCircleProcess.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "the imported increasingCircleProcess layout is admitted to the shared live authoring engine");
         increasingCircleProcess.FallbackShapes.Should().NotBeEmpty();
 
         var shapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
@@ -397,7 +397,8 @@ public sealed class PptxRepairCorpusValidityTests
             .Where(fill => fill.Color == SrgbColor.FromRgb(0xCCD2D8))
             .ToArray();
 
-        backgroundEllipses.Should().HaveCount(3);
+        backgroundEllipses.Should().BeEmpty(
+            "the admitted live layout owns the increasing-circle nodes instead of replaying cached background-role ellipses");
     }
 
     [Fact]

@@ -2259,4 +2259,42 @@ public sealed class ChartDataCommandTests
         reopened.PlotAreaManualLayout!.XMode.Should().Be(ChartManualLayoutMode.Unsupported);
         reopened.PlotAreaManualLayout.RawXModeToken.Should().Be("futureMode");
     }
+
+    [Fact]
+    public void ChartAxis_PreservesUnknownDisplayTokensThroughPptxRoundTrip()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+        var axis = p.Slides[0].Shapes[0].Chart!.ValueAxis;
+        axis.RawMajorTickMarkToken = "futureMajorTick";
+        axis.RawMinorTickMarkToken = "futureMinorTick";
+        axis.RawTickLabelPositionToken = "futureLabelPosition";
+        axis.RawCrossesToken = "futureCrossing";
+        axis.RawCrossBetweenToken = "futureCrossBetween";
+        axis.RawLabelAlignmentToken = "futureAlignment";
+
+        var unchangedDialogPlan = ChartAxisOptionsPlanner.FromChart(p.Slides[0].Shapes[0].Chart!)
+            .BuildCommitPlan();
+        unchangedDialogPlan.RawMajorTickMarkToken.Should().Be("futureMajorTick");
+        unchangedDialogPlan.RawCrossesToken.Should().Be("futureCrossing");
+        bus.Execute(new SetChartAxisOptionsCommand(0, id, unchangedDialogPlan));
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        var roundTripped = reopened.ValueAxis;
+
+        roundTripped.MajorTickMark.Should().BeNull();
+        roundTripped.RawMajorTickMarkToken.Should().Be("futureMajorTick");
+        roundTripped.MinorTickMark.Should().BeNull();
+        roundTripped.RawMinorTickMarkToken.Should().Be("futureMinorTick");
+        roundTripped.TickLabelPosition.Should().BeNull();
+        roundTripped.RawTickLabelPositionToken.Should().Be("futureLabelPosition");
+        roundTripped.Crosses.Should().BeNull();
+        roundTripped.RawCrossesToken.Should().Be("futureCrossing");
+        roundTripped.CrossBetween.Should().BeNull();
+        roundTripped.RawCrossBetweenToken.Should().Be("futureCrossBetween");
+        roundTripped.LabelAlignment.Should().BeNull();
+        roundTripped.RawLabelAlignmentToken.Should().Be("futureAlignment");
+    }
 }

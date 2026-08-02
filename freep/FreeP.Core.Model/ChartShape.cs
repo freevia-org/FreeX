@@ -573,11 +573,20 @@ public sealed class ChartAxis
     /// <summary>Authored <c>c:majorTickMark/@val</c>; null means unspecified.</summary>
     public ChartTickMark? MajorTickMark { get; set; }
 
+    /// <summary>Unknown <c>c:majorTickMark/@val</c> token retained losslessly.</summary>
+    public string? RawMajorTickMarkToken { get; set; }
+
     /// <summary>Authored <c>c:minorTickMark/@val</c>; null means unspecified.</summary>
     public ChartTickMark? MinorTickMark { get; set; }
 
+    /// <summary>Unknown <c>c:minorTickMark/@val</c> token retained losslessly.</summary>
+    public string? RawMinorTickMarkToken { get; set; }
+
     /// <summary>Authored <c>c:tickLblPos/@val</c>; null means unspecified.</summary>
     public ChartTickLabelPosition? TickLabelPosition { get; set; }
+
+    /// <summary>Unknown <c>c:tickLblPos/@val</c> token retained losslessly.</summary>
+    public string? RawTickLabelPositionToken { get; set; }
 
     /// <summary>Authored category-axis label offset percentage from <c>c:lblOffset/@val</c>.</summary>
     public int? LabelOffsetPercent { get; set; }
@@ -588,14 +597,23 @@ public sealed class ChartAxis
     /// <summary>Authored value-axis category-boundary placement from <c>c:crossBetween/@val</c>.</summary>
     public ChartCrossBetween? CrossBetween { get; set; }
 
+    /// <summary>Unknown <c>c:crossBetween/@val</c> token retained losslessly.</summary>
+    public string? RawCrossBetweenToken { get; set; }
+
     /// <summary>Authored category-axis automatic crossing state from <c>c:auto/@val</c>.</summary>
     public bool? AutoCrossing { get; set; }
 
     /// <summary>Authored category-axis label alignment from <c>c:lblAlgn/@val</c>.</summary>
     public ChartLabelAlignment? LabelAlignment { get; set; }
 
+    /// <summary>Unknown <c>c:lblAlgn/@val</c> token retained losslessly.</summary>
+    public string? RawLabelAlignmentToken { get; set; }
+
     /// <summary>Authored axis crossing mode. Null preserves the writer's existing chart-role default.</summary>
     public ChartAxisCrossing? Crosses { get; set; }
+
+    /// <summary>Unknown <c>c:crosses/@val</c> token retained losslessly.</summary>
+    public string? RawCrossesToken { get; set; }
 
     /// <summary>Authored numeric axis crossing value from <c>c:crossesAt/@val</c>.</summary>
     public double? CrossesAt { get; set; }

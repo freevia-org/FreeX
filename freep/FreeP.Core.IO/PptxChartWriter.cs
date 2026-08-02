@@ -1597,22 +1597,32 @@ internal static class PptxChartWriter
 
     private static IEnumerable<XElement> BuildAxisDisplayElements(ChartAxis axis)
     {
-        if (axis.MajorTickMark is { } major)
-            yield return new XElement(C + "majorTickMark", new XAttribute("val", TickMarkValue(major)));
-        if (axis.MinorTickMark is { } minor)
-            yield return new XElement(C + "minorTickMark", new XAttribute("val", TickMarkValue(minor)));
-        if (axis.TickLabelPosition is { } position)
-            yield return new XElement(C + "tickLblPos", new XAttribute("val", TickLabelPositionValue(position)));
+        var major = axis.MajorTickMark;
+        if (major.HasValue || !string.IsNullOrWhiteSpace(axis.RawMajorTickMarkToken))
+            yield return new XElement(C + "majorTickMark", new XAttribute("val", TokenValue(
+                major, axis.RawMajorTickMarkToken, TickMarkValue)));
+        var minor = axis.MinorTickMark;
+        if (minor.HasValue || !string.IsNullOrWhiteSpace(axis.RawMinorTickMarkToken))
+            yield return new XElement(C + "minorTickMark", new XAttribute("val", TokenValue(
+                minor, axis.RawMinorTickMarkToken, TickMarkValue)));
+        var position = axis.TickLabelPosition;
+        if (position.HasValue || !string.IsNullOrWhiteSpace(axis.RawTickLabelPositionToken))
+            yield return new XElement(C + "tickLblPos", new XAttribute("val", TokenValue(
+                position, axis.RawTickLabelPositionToken, TickLabelPositionValue)));
         if (axis.LabelOffsetPercent is { } offset)
             yield return new XElement(C + "lblOffset", new XAttribute("val", Math.Clamp(offset, 0, 100)));
         if (axis.NoMultiLevelLabels is { } noMultiLevelLabels)
             yield return new XElement(C + "noMultiLvlLbl", new XAttribute("val", BoolValue(noMultiLevelLabels)));
-        if (axis.CrossBetween is { } crossBetween)
-            yield return new XElement(C + "crossBetween", new XAttribute("val", CrossBetweenValue(crossBetween)));
+        var crossBetween = axis.CrossBetween;
+        if (crossBetween.HasValue || !string.IsNullOrWhiteSpace(axis.RawCrossBetweenToken))
+            yield return new XElement(C + "crossBetween", new XAttribute("val", TokenValue(
+                crossBetween, axis.RawCrossBetweenToken, CrossBetweenValue)));
         if (axis.AutoCrossing is { } autoCrossing)
             yield return new XElement(C + "auto", new XAttribute("val", BoolValue(autoCrossing)));
-        if (axis.LabelAlignment is { } labelAlignment)
-            yield return new XElement(C + "lblAlgn", new XAttribute("val", LabelAlignmentValue(labelAlignment)));
+        var labelAlignment = axis.LabelAlignment;
+        if (labelAlignment.HasValue || !string.IsNullOrWhiteSpace(axis.RawLabelAlignmentToken))
+            yield return new XElement(C + "lblAlgn", new XAttribute("val", TokenValue(
+                labelAlignment, axis.RawLabelAlignmentToken, LabelAlignmentValue)));
     }
 
     private static XElement? BuildAxisCrossingElement(ChartAxis axis, string? fallback)
@@ -1622,11 +1632,14 @@ internal static class PptxChartWriter
 
         var crossing = axis.Crosses is { } authored
             ? AxisCrossingValue(authored)
-            : fallback;
+            : axis.RawCrossesToken ?? fallback;
         return crossing is null
             ? null
             : new XElement(C + "crosses", new XAttribute("val", crossing));
     }
+
+    private static string TokenValue<T>(T? value, string? rawToken, Func<T, string> knownValue)
+        where T : struct => rawToken ?? (value is { } known ? knownValue(known) : string.Empty);
 
     private static string TickMarkValue(ChartTickMark value) => value switch
     {

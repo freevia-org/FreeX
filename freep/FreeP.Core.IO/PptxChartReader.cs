@@ -1298,15 +1298,27 @@ internal static class PptxChartReader
         axis.Delete = axEl.Element(C + "delete")?.Attribute("val")?.Value is "1" or "true";
         axis.HasMajorGridlines = axEl.Element(C + "majorGridlines") is not null;
         axis.HasMinorGridlines = axEl.Element(C + "minorGridlines") is not null;
-        axis.MajorTickMark = ParseTickMark(axEl.Element(C + "majorTickMark"));
-        axis.MinorTickMark = ParseTickMark(axEl.Element(C + "minorTickMark"));
-        axis.TickLabelPosition = ParseTickLabelPosition(axEl.Element(C + "tickLblPos"));
+        var majorTickMark = ParseTickMark(axEl.Element(C + "majorTickMark"));
+        axis.MajorTickMark = majorTickMark.Value;
+        axis.RawMajorTickMarkToken = majorTickMark.RawToken;
+        var minorTickMark = ParseTickMark(axEl.Element(C + "minorTickMark"));
+        axis.MinorTickMark = minorTickMark.Value;
+        axis.RawMinorTickMarkToken = minorTickMark.RawToken;
+        var tickLabelPosition = ParseTickLabelPosition(axEl.Element(C + "tickLblPos"));
+        axis.TickLabelPosition = tickLabelPosition.Value;
+        axis.RawTickLabelPositionToken = tickLabelPosition.RawToken;
         axis.LabelOffsetPercent = ParseNullableInt(axEl.Element(C + "lblOffset")?.Attribute("val")?.Value);
         axis.NoMultiLevelLabels = ParseNullableBoolElement(axEl.Element(C + "noMultiLvlLbl"));
-        axis.CrossBetween = ParseCrossBetween(axEl.Element(C + "crossBetween"));
+        var crossBetween = ParseCrossBetween(axEl.Element(C + "crossBetween"));
+        axis.CrossBetween = crossBetween.Value;
+        axis.RawCrossBetweenToken = crossBetween.RawToken;
         axis.AutoCrossing = ParseNullableBoolElement(axEl.Element(C + "auto"));
-        axis.LabelAlignment = ParseLabelAlignment(axEl.Element(C + "lblAlgn"));
-        axis.Crosses = ParseAxisCrossing(axEl.Element(C + "crosses"));
+        var labelAlignment = ParseLabelAlignment(axEl.Element(C + "lblAlgn"));
+        axis.LabelAlignment = labelAlignment.Value;
+        axis.RawLabelAlignmentToken = labelAlignment.RawToken;
+        var crosses = ParseAxisCrossing(axEl.Element(C + "crosses"));
+        axis.Crosses = crosses.Value;
+        axis.RawCrossesToken = crosses.RawToken;
         axis.CrossesAt = ParseDouble(axEl.Element(C + "crossesAt")?.Attribute("val")?.Value);
         var title = axEl.Element(C + "title");
         axis.Title = ReadTitle(title);
@@ -1358,15 +1370,19 @@ internal static class PptxChartReader
         axis.MinorUnit = ParseDouble(axEl.Element(C + "minorUnit")?.Attribute("val")?.Value);
     }
 
-    private static ChartTickMark? ParseTickMark(XElement? element) =>
-        element?.Attribute("val")?.Value switch
+    private static (ChartTickMark? Value, string? RawToken) ParseTickMark(XElement? element)
+    {
+        var token = element?.Attribute("val")?.Value;
+        return token switch
         {
-            "none"  => ChartTickMark.None,
-            "cross" => ChartTickMark.Cross,
-            "in"    => ChartTickMark.In,
-            "out"   => ChartTickMark.Out,
-            _       => null
+            "none"  => (ChartTickMark.None, null),
+            "cross" => (ChartTickMark.Cross, null),
+            "in"    => (ChartTickMark.In, null),
+            "out"   => (ChartTickMark.Out, null),
+            null or "" => (null, null),
+            _ => (null, token),
         };
+    }
 
     private static ChartAxisDisplayUnit ParseDisplayUnit(string? token) => token switch
     {
@@ -1383,41 +1399,57 @@ internal static class PptxChartReader
         _ => ChartAxisDisplayUnit.Unsupported,
     };
 
-    private static ChartTickLabelPosition? ParseTickLabelPosition(XElement? element) =>
-        element?.Attribute("val")?.Value switch
+    private static (ChartTickLabelPosition? Value, string? RawToken) ParseTickLabelPosition(XElement? element)
+    {
+        var token = element?.Attribute("val")?.Value;
+        return token switch
         {
-            "none"   => ChartTickLabelPosition.None,
-            "low"    => ChartTickLabelPosition.Low,
-            "high"   => ChartTickLabelPosition.High,
-            "nextTo" => ChartTickLabelPosition.NextTo,
-            _        => null
+            "none"   => (ChartTickLabelPosition.None, null),
+            "low"    => (ChartTickLabelPosition.Low, null),
+            "high"   => (ChartTickLabelPosition.High, null),
+            "nextTo" => (ChartTickLabelPosition.NextTo, null),
+            null or "" => (null, null),
+            _ => (null, token),
         };
+    }
 
-    private static ChartCrossBetween? ParseCrossBetween(XElement? element) =>
-        element?.Attribute("val")?.Value switch
+    private static (ChartCrossBetween? Value, string? RawToken) ParseCrossBetween(XElement? element)
+    {
+        var token = element?.Attribute("val")?.Value;
+        return token switch
         {
-            "between" => ChartCrossBetween.Between,
-            "midCat"  => ChartCrossBetween.MidCat,
-            _         => null
+            "between" => (ChartCrossBetween.Between, null),
+            "midCat"  => (ChartCrossBetween.MidCat, null),
+            null or "" => (null, null),
+            _ => (null, token),
         };
+    }
 
-    private static ChartLabelAlignment? ParseLabelAlignment(XElement? element) =>
-        element?.Attribute("val")?.Value switch
+    private static (ChartLabelAlignment? Value, string? RawToken) ParseLabelAlignment(XElement? element)
+    {
+        var token = element?.Attribute("val")?.Value;
+        return token switch
         {
-            "l"   => ChartLabelAlignment.Left,
-            "ctr" => ChartLabelAlignment.Center,
-            "r"   => ChartLabelAlignment.Right,
-            _     => null
+            "l"   => (ChartLabelAlignment.Left, null),
+            "ctr" => (ChartLabelAlignment.Center, null),
+            "r"   => (ChartLabelAlignment.Right, null),
+            null or "" => (null, null),
+            _ => (null, token),
         };
+    }
 
-    private static ChartAxisCrossing? ParseAxisCrossing(XElement? element) =>
-        element?.Attribute("val")?.Value switch
+    private static (ChartAxisCrossing? Value, string? RawToken) ParseAxisCrossing(XElement? element)
+    {
+        var token = element?.Attribute("val")?.Value;
+        return token switch
         {
-            "autoZero" => ChartAxisCrossing.AutoZero,
-            "min"      => ChartAxisCrossing.Min,
-            "max"      => ChartAxisCrossing.Max,
-            _          => null
+            "autoZero" => (ChartAxisCrossing.AutoZero, null),
+            "min"      => (ChartAxisCrossing.Min, null),
+            "max"      => (ChartAxisCrossing.Max, null),
+            null or "" => (null, null),
+            _ => (null, token),
         };
+    }
 
     // ── Data-label parsing ─────────────────────────────────────────────────────
 
