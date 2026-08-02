@@ -3210,38 +3210,58 @@ public static partial class ChartRenderPlanner
         var ticks = new List<ChartGridLinePlan>(chart.Categories.Count);
         if (frame.IsBar)
         {
+            var majorTick = chart.CategoryAxis.MajorTickMark;
             int categoryCount = chart.Categories.Count;
             double categoryStep = plot.Height / Math.Max(1, categoryCount);
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
                 int renderRow = categoryCount - 1 - categoryIndex;
                 double y = plot.Y + renderRow * categoryStep + categoryStep / 2.0;
-                ticks.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(plot.X - AxisMajorTickLength, y),
-                    new ChartPlanPoint(plot.X, y)));
+                var tick = BuildAxisTickLine(
+                    y,
+                    plot.X,
+                    AxisMajorTickLength,
+                    majorTick,
+                    isHorizontal: true,
+                    outwardDirection: -1);
+                if (tick is { } tickPlan)
+                    ticks.Add(tickPlan);
             }
         }
         else
         {
+            var majorTick = chart.CategoryAxis.MajorTickMark;
             double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
             for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
             {
                 int renderCategoryIndex = ResolveCategoryRenderIndex(
                     chart.CategoryAxis, categoryIndex, chart.Categories.Count);
                 double x = plot.X + renderCategoryIndex * categoryStep + categoryStep / 2.0;
-                ticks.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(x, plot.Bottom),
-                    new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
+                var tick = BuildAxisTickLine(
+                    x,
+                    plot.Bottom,
+                    AxisMajorTickLength,
+                    majorTick,
+                    isHorizontal: false,
+                    outwardDirection: 1);
+                if (tick is { } tickPlan)
+                    ticks.Add(tickPlan);
             }
 
-            if (UsesStockLineFallback(chart))
+            if (UsesStockLineFallback(chart) && chart.CategoryAxis.MinorTickMark != ChartTickMark.None)
             {
                 for (int boundaryIndex = 0; boundaryIndex <= chart.Categories.Count; boundaryIndex++)
                 {
                     double x = plot.X + boundaryIndex * categoryStep;
-                    ticks.Add(new ChartGridLinePlan(
-                        new ChartPlanPoint(x, plot.Bottom),
-                        new ChartPlanPoint(x, plot.Bottom + AxisMinorTickLength)));
+                    var tick = BuildAxisTickLine(
+                        x,
+                        plot.Bottom,
+                        AxisMinorTickLength,
+                        chart.CategoryAxis.MinorTickMark,
+                        isHorizontal: false,
+                        outwardDirection: 1);
+                    if (tick is { } tickPlan)
+                        ticks.Add(tickPlan);
                 }
             }
         }
@@ -3270,9 +3290,15 @@ public static partial class ChartRenderPlanner
                     tickIndex / steps,
                     plot,
                     chart.ValueAxis.ReverseOrder);
-                ticks.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(x, valueAxisCrossing),
-                    new ChartPlanPoint(x, valueAxisCrossing + AxisMajorTickLength)));
+                var tick = BuildAxisTickLine(
+                    x,
+                    valueAxisCrossing,
+                    AxisMajorTickLength,
+                    chart.ValueAxis.MajorTickMark,
+                    isHorizontal: false,
+                    outwardDirection: 1);
+                if (tick is { } tickPlan)
+                    ticks.Add(tickPlan);
             }
             else
             {
@@ -3280,13 +3306,19 @@ public static partial class ChartRenderPlanner
                     tickIndex / steps,
                     plot,
                     chart.ValueAxis.ReverseOrder);
-                ticks.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(valueAxisCrossing - AxisMajorTickLength, y),
-                    new ChartPlanPoint(valueAxisCrossing, y)));
+                var tick = BuildAxisTickLine(
+                    y,
+                    valueAxisCrossing,
+                    AxisMajorTickLength,
+                    chart.ValueAxis.MajorTickMark,
+                    isHorizontal: true,
+                    outwardDirection: -1);
+                if (tick is { } tickPlan)
+                    ticks.Add(tickPlan);
             }
         }
 
-        if (UsesStockLineFallback(chart) && !frame.IsBar)
+        if (UsesStockLineFallback(chart) && !frame.IsBar && chart.ValueAxis.MinorTickMark != ChartTickMark.None)
         {
             const double stockMinorUnit = 0.4;
             int minorTickCount = (int)Math.Round((maxValue - minValue) / stockMinorUnit);
@@ -3301,9 +3333,15 @@ public static partial class ChartRenderPlanner
                     (value - minValue) / (maxValue - minValue),
                     plot,
                     chart.ValueAxis.ReverseOrder);
-                ticks.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(valueAxisCrossing - AxisMinorTickLength, y),
-                    new ChartPlanPoint(valueAxisCrossing, y)));
+                var tick = BuildAxisTickLine(
+                    y,
+                    valueAxisCrossing,
+                    AxisMinorTickLength,
+                    chart.ValueAxis.MinorTickMark,
+                    isHorizontal: true,
+                    outwardDirection: -1);
+                if (tick is { } tickPlan)
+                    ticks.Add(tickPlan);
             }
         }
 
@@ -3325,9 +3363,15 @@ public static partial class ChartRenderPlanner
                         fraction,
                         plot,
                         chart.ValueAxis.ReverseOrder);
-                    ticks.Add(new ChartGridLinePlan(
-                        new ChartPlanPoint(x, valueAxisCrossing),
-                        new ChartPlanPoint(x, valueAxisCrossing + AxisMinorTickLength)));
+                    var tick = BuildAxisTickLine(
+                        x,
+                        valueAxisCrossing,
+                        AxisMinorTickLength,
+                        chart.ValueAxis.MinorTickMark,
+                        isHorizontal: false,
+                        outwardDirection: 1);
+                    if (tick is { } tickPlan)
+                        ticks.Add(tickPlan);
                 }
                 else
                 {
@@ -3335,14 +3379,61 @@ public static partial class ChartRenderPlanner
                         fraction,
                         plot,
                         chart.ValueAxis.ReverseOrder);
-                    ticks.Add(new ChartGridLinePlan(
-                        new ChartPlanPoint(valueAxisCrossing - AxisMinorTickLength, y),
-                        new ChartPlanPoint(valueAxisCrossing, y)));
+                    var tick = BuildAxisTickLine(
+                        y,
+                        valueAxisCrossing,
+                        AxisMinorTickLength,
+                        chart.ValueAxis.MinorTickMark,
+                        isHorizontal: true,
+                        outwardDirection: -1);
+                    if (tick is { } tickPlan)
+                        ticks.Add(tickPlan);
                 }
             }
         }
 
         return ticks;
+    }
+
+    private static ChartGridLinePlan? BuildAxisTickLine(
+        double fixedCoordinate,
+        double axisCoordinate,
+        double length,
+        ChartTickMark? tickMark,
+        bool isHorizontal,
+        double outwardDirection)
+    {
+        ChartTickMark effectiveTickMark = tickMark ?? ChartTickMark.Out;
+        if (effectiveTickMark == ChartTickMark.None)
+            return null;
+
+        double outwardOffset = outwardDirection * length;
+        double inwardOffset = -outwardOffset;
+        double startOffset;
+        double endOffset;
+        if (effectiveTickMark == ChartTickMark.Cross)
+        {
+            startOffset = Math.Min(outwardOffset, inwardOffset);
+            endOffset = Math.Max(outwardOffset, inwardOffset);
+        }
+        else if (effectiveTickMark == ChartTickMark.In)
+        {
+            startOffset = Math.Min(0, inwardOffset);
+            endOffset = Math.Max(0, inwardOffset);
+        }
+        else
+        {
+            startOffset = Math.Min(0, outwardOffset);
+            endOffset = Math.Max(0, outwardOffset);
+        }
+
+        return isHorizontal
+            ? new ChartGridLinePlan(
+                new ChartPlanPoint(axisCoordinate + startOffset, fixedCoordinate),
+                new ChartPlanPoint(axisCoordinate + endOffset, fixedCoordinate))
+            : new ChartGridLinePlan(
+                new ChartPlanPoint(fixedCoordinate, axisCoordinate + startOffset),
+                new ChartPlanPoint(fixedCoordinate, axisCoordinate + endOffset));
     }
 
     private static double ResolveValueAxisCrossingCoordinate(
@@ -3659,9 +3750,15 @@ public static partial class ChartRenderPlanner
                 tickIndex / steps,
                 plot,
                 chart.SecondaryValueAxis.ReverseOrder);
-            ticks.Add(new ChartGridLinePlan(
-                new ChartPlanPoint(secondaryAxisX, y),
-                new ChartPlanPoint(secondaryAxisX + AxisMajorTickLength, y)));
+            var tick = BuildAxisTickLine(
+                y,
+                secondaryAxisX,
+                AxisMajorTickLength,
+                chart.SecondaryValueAxis.MajorTickMark,
+                isHorizontal: true,
+                outwardDirection: 1);
+            if (tick is { } tickPlan)
+                ticks.Add(tickPlan);
             if (labelPosition != ChartTickLabelPosition.None)
             {
                 labels.Add(new ChartTextPlan(
@@ -3676,7 +3773,7 @@ public static partial class ChartRenderPlanner
             }
         }
 
-        if (UsesImportedComboDefaults(chart))
+        if (UsesImportedComboDefaults(chart) && chart.SecondaryValueAxis.MinorTickMark != ChartTickMark.None)
         {
             for (int majorIndex = 0; majorIndex < tickCount; majorIndex++)
             {
@@ -3687,9 +3784,15 @@ public static partial class ChartRenderPlanner
                         (majorIndex + minorFraction) / steps,
                         plot,
                         chart.SecondaryValueAxis.ReverseOrder);
-                    ticks.Add(new ChartGridLinePlan(
-                        new ChartPlanPoint(secondaryAxisX, y),
-                        new ChartPlanPoint(secondaryAxisX + AxisMinorTickLength, y)));
+                    var tick = BuildAxisTickLine(
+                        y,
+                        secondaryAxisX,
+                        AxisMinorTickLength,
+                        chart.SecondaryValueAxis.MinorTickMark,
+                        isHorizontal: true,
+                        outwardDirection: 1);
+                    if (tick is { } tickPlan)
+                        ticks.Add(tickPlan);
                 }
             }
         }

@@ -1639,6 +1639,53 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildMajorAxisTickPrimitivePlan_HonorsAuthoredMajorTickMark()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.CategoryAxis.MajorTickMark = ChartTickMark.In;
+        chart.ValueAxis.MajorTickMark = ChartTickMark.In;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var plan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
+
+        plan.CategoryTicks[0].Start.Should().Be(new ChartPlanPoint(134, frame.Plot.Bottom - ChartRenderPlanner.AxisMajorTickLength));
+        plan.CategoryTicks[0].End.Should().Be(new ChartPlanPoint(134, frame.Plot.Bottom));
+        plan.ValueTicks[0].Start.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Bottom));
+        plan.ValueTicks[0].End.Should().Be(new ChartPlanPoint(frame.Plot.X + ChartRenderPlanner.AxisMajorTickLength, frame.Plot.Bottom));
+
+        chart.ValueAxis.MajorTickMark = ChartTickMark.Cross;
+        var cross = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame).ValueTicks[0];
+        cross.Start.Should().Be(new ChartPlanPoint(frame.Plot.X - ChartRenderPlanner.AxisMajorTickLength, frame.Plot.Bottom));
+        cross.End.Should().Be(new ChartPlanPoint(frame.Plot.X + ChartRenderPlanner.AxisMajorTickLength, frame.Plot.Bottom));
+
+        chart.ValueAxis.MajorTickMark = ChartTickMark.None;
+        ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame).ValueTicks.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildMajorAxisTickPrimitivePlan_HonorsAuthoredMinorTickMark()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 20;
+        chart.ValueAxis.MajorUnit = 10;
+        chart.ValueAxis.MinorUnit = 2;
+        chart.ValueAxis.MinorTickMark = ChartTickMark.In;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var valueTicks = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame).ValueTicks;
+
+        valueTicks.Should().HaveCount(11);
+        valueTicks[3].Start.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Bottom - frame.Plot.Height * 0.1));
+        valueTicks[3].End.Should().Be(new ChartPlanPoint(
+            frame.Plot.X + ChartRenderPlanner.AxisMinorTickLength,
+            frame.Plot.Bottom - frame.Plot.Height * 0.1));
+
+        chart.ValueAxis.MinorTickMark = ChartTickMark.None;
+        ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame).ValueTicks.Should().HaveCount(3);
+    }
+
+    [Fact]
     public void BuildMajorAxisTickPrimitivePlan_MidCatCrossingMovesValueTicksToFirstCategory()
     {
         var columnChart = MakeTwoSeriesChart(ChartType.ColumnClustered);
@@ -2040,6 +2087,23 @@ public sealed class ChartRenderPlannerTests
         var none = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
         none.Labels.Should().BeEmpty();
         none.Ticks.Should().HaveCount(6);
+    }
+
+    [Fact]
+    public void BuildSecondaryValueAxisPrimitivePlan_HonorsAuthoredMajorTickMark()
+    {
+        var chart = MakeSecondaryAxisChart();
+        chart.SecondaryValueAxis!.MajorTickMark = ChartTickMark.Cross;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var tick = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame).Ticks[0];
+
+        tick.Start.Should().Be(new ChartPlanPoint(
+            frame.Plot.Right - ChartRenderPlanner.AxisMajorTickLength,
+            frame.Plot.Bottom));
+        tick.End.Should().Be(new ChartPlanPoint(
+            frame.Plot.Right + ChartRenderPlanner.AxisMajorTickLength,
+            frame.Plot.Bottom));
     }
 
     [Fact]
