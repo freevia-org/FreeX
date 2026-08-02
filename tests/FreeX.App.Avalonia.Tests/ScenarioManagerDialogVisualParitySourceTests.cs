@@ -14,6 +14,14 @@ public sealed class ScenarioManagerDialogVisualParitySourceTests
         source.Should().Contain("Text = item.Choice.Name,");
         source.Should().Contain("public override string ToString() => Choice.Name;");
         source.Should().Contain("ScenarioManagerDialogLayout.FieldBottomMargin");
+        source.Should().Contain("ScenarioManagerDialogLayout.ScenarioListHeaderBottomMargin");
+        source.Should().Contain("ScenarioManagerDialogLayout.LockedCheckBoxBottomMargin");
+        source.Should().Contain("ScenarioManagerDialogLayout.HiddenCheckBoxBottomMargin");
+        source.Should().Contain("ScenarioManagerDialogChromeStyle");
+        source.Should().Contain("ControlHeight = 22");
+        source.Should().Contain("TextBoxHeight = 22");
+        source.Should().Contain("ButtonHeight = 22");
+        source.Should().Contain("ButtonPadding = new Thickness(8, 1)");
         source.Should().Contain("ScenarioManagerDialogLayout.CloseRowTopMargin");
         source.Should().Contain("RowDefinitions = new RowDefinitions(\"Auto,Auto,Auto,Auto,Auto,Auto\")");
         source.Should().Contain("ColumnDefinitions = new ColumnDefinitions($\"{ScenarioManagerDialogLayout.FieldLabelColumnWidth},*\")");

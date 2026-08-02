@@ -8674,7 +8674,12 @@ public sealed partial class MainWindow : Window
                     Child           = thumb,
                 };
 
-                var panel = new StackPanel();
+                var panel = new StackPanel
+                {
+                    HorizontalAlignment = plan.CenterThumbnailContent
+                        ? HorizontalAlignment.Center
+                        : HorizontalAlignment.Stretch,
+                };
                 panel.Children.Add(label);
                 panel.Children.Add(thumbnailBorder);
 

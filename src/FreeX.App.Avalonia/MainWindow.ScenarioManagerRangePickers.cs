@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeX.App.Avalonia;
 
@@ -68,7 +69,7 @@ public sealed partial class MainWindow
             MinWidth = 30,
             Margin = new Thickness(6, 0, 0, 0),
         };
-        ApplyDataToolsButtonChrome(picker, 30);
+        AvaloniaCompactDialogChrome.ApplyButton(picker, ScenarioManagerDialogChromeStyle, 30);
         AutomationProperties.SetAutomationId(picker, pickerAutomationId);
         AutomationProperties.SetName(picker, pickerAutomationName);
 

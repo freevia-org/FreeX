@@ -132,7 +132,7 @@ public sealed class LegalNoticesDialogVisualParityTests
                 scroll.Extent.Height.Should().BeGreaterThan(scroll.Viewport.Height);
                 first.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
                 first.Padding.Top.Should().Be(LegalNoticesDialogMetrics.TextPadding);
-                first.LineHeight.Should().Be(LegalNoticesDialogMetrics.TextLineHeight);
+                first.LineHeight.Should().Be(14.6);
                 scroll.GetVisualDescendants().OfType<ScrollBar>()
                     .Single(bar => bar.Orientation == Orientation.Vertical)
                     .Bounds.Width.Should().Be(18);

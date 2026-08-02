@@ -45,6 +45,7 @@ public sealed record SlidePaneThumbnailVisualPlan(
     double ThumbnailBorderThickness,
     double ItemMarginHorizontal,
     double ItemMarginVertical,
+    bool CenterThumbnailContent,
     string AccessibleName,
     string ToolTipText);
 
@@ -177,6 +178,7 @@ public static class SlidePanePlanner
     public const double DefaultThumbnailBorderThickness = 1.0;
     public const double DefaultItemMarginHorizontal = 6.0;
     public const double DefaultItemMarginVertical = 4.0;
+    public const bool DefaultCenterThumbnailContent = true;
     public const double DefaultSlideItemHeight = 4 + DefaultItemPadding + DefaultLabelHeight + 4 + DefaultThumbnailHeight + DefaultItemPadding + 4;
     public const double DefaultSectionHeaderHeight = 30.0;
     public const double DefaultDragStartThreshold = 5.0;
@@ -329,6 +331,7 @@ public static class SlidePanePlanner
             DefaultThumbnailBorderThickness,
             DefaultItemMarginHorizontal,
             DefaultItemMarginVertical,
+            DefaultCenterThumbnailContent,
             accessibleName,
             accessibleName);
     }

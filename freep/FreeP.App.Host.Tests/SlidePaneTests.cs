@@ -225,6 +225,10 @@ public sealed class SlidePaneTests
         normal.BorderThickness.Left.Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
 
         var panel = selected.Child.Should().BeOfType<StackPanel>().Subject;
+        panel.HorizontalAlignment.Should().Be(
+            SlidePanePlanner.DefaultCenterThumbnailContent
+                ? HorizontalAlignment.Center
+                : HorizontalAlignment.Stretch);
         var label = panel.Children[0].Should().BeOfType<TextBlock>().Subject;
         BrushColor(label.Foreground).Should().Be(ColorFromHex(SlidePanePlanner.DefaultLabelForegroundHex));
         label.FontSize.Should().Be(SlidePanePlanner.DefaultLabelFontSize);

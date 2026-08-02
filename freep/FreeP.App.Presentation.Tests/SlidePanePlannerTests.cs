@@ -216,6 +216,7 @@ public sealed class SlidePanePlannerTests
         plan.ItemSelectedBorderHex.Should().Be(SlidePanePlanner.DefaultItemSelectedBorderHex);
         plan.ThumbnailBorderHex.Should().Be(SlidePanePlanner.DefaultThumbnailBorderHex);
         plan.LabelForegroundHex.Should().Be(SlidePanePlanner.DefaultLabelForegroundHex);
+        plan.CenterThumbnailContent.Should().Be(SlidePanePlanner.DefaultCenterThumbnailContent);
         plan.AccessibleName.Should().Be("Slide 2: Quarterly Plan, 2 objects");
         plan.ToolTipText.Should().Be(plan.AccessibleName);
     }
