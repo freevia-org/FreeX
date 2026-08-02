@@ -38,6 +38,7 @@ $requiredIds = @(
     "visible-window-discovery",
     "smartart-outline-add-sibling",
     "smartart-outline-apply-text",
+    "smartart-outline-apply-undo-redo",
     "smartart-outline-save",
     "smartart-outline-reopen"
 )
@@ -154,7 +155,7 @@ function Assert-ManifestContract {
         throw "SmartArt physical manifest header does not satisfy the bounded contract."
     }
 
-    $expectedScope = "physical FreeP SmartArt text-pane text replacement, add-sibling, save, and reopen"
+    $expectedScope = "physical FreeP SmartArt text-pane text replacement, add-sibling, apply undo/redo, save, and reopen"
     $expectedSessionBoundary = "two fresh harness-owned FreeP processes; first saves, second reopens the copied mounted package"
     if ($Manifest.coverage.scope -ne $expectedScope -or
         $Manifest.coverage.exhaustive -ne $false -or
@@ -170,7 +171,7 @@ function Assert-ManifestContract {
 
     if ($Manifest.semanticReadback.tool -ne "xclip" -or
         $Manifest.semanticReadback.selection -ne "clipboard" -or
-        ([string]::Join("|", @($Manifest.semanticReadback.transcripts)) -ne "smartart-outline-apply-text|smartart-outline-reopen") -or
+        ([string]::Join("|", @($Manifest.semanticReadback.transcripts)) -ne "smartart-outline-apply-text|smartart-outline-apply-undo-redo|smartart-outline-reopen") -or
         ([string]::Join("|", @($Manifest.semanticReadback.packageParts)) -ne "ppt/diagrams/data1.xml|ppt/diagrams/drawing1.xml")) {
         throw "SmartArt physical manifest semantic readback contract is invalid."
     }
@@ -252,8 +253,8 @@ function Merge-Results {
         appSurface = "smartart-text-pane-outline"
         window = [ordered]@{ id = "combined-x11-owner"; title = "FreeP $fixtureName"; pattern = $fixtureName; visible = $true }
         parameters = [ordered]@{ width = $Width; height = $Height; dpi = $Dpi; fixture = $fixtureName }
-        coverage = [ordered]@{ scope = "physical FreeP SmartArt text-pane text replacement, add-sibling, save, and reopen"; exhaustive = $false }
-        semanticReadback = [ordered]@{ tool = "xclip"; selection = "clipboard"; transcripts = @("smartart-outline-apply-text", "smartart-outline-reopen"); packageParts = @("ppt/diagrams/data1.xml", "ppt/diagrams/drawing1.xml") }
+        coverage = [ordered]@{ scope = "physical FreeP SmartArt text-pane text replacement, add-sibling, apply undo/redo, save, and reopen"; exhaustive = $false }
+        semanticReadback = [ordered]@{ tool = "xclip"; selection = "clipboard"; transcripts = @("smartart-outline-apply-text", "smartart-outline-apply-undo-redo", "smartart-outline-reopen"); packageParts = @("ppt/diagrams/data1.xml", "ppt/diagrams/drawing1.xml") }
         contractValidation = [ordered]@{ status = "pending"; validator = "tools/Run-FreePSmartArtAuthoringValidation.ps1"; contractReference = "tools/LinuxInteractiveDocker/freep-smartart-authoring-validation.schema.json" }
         screenshots = $screenshots
         summary = [ordered]@{ passed = $requiredIds.Count; failed = 0; total = $requiredIds.Count }
@@ -266,7 +267,7 @@ function Merge-Results {
         $schema.properties.summary.properties.total.const -ne $requiredIds.Count -or
         $schema.properties.results.minItems -ne $requiredIds.Count -or
         $schema.properties.results.maxItems -ne $requiredIds.Count) {
-        throw "SmartArt validation schema does not describe the bounded five-row contract."
+        throw "SmartArt validation schema does not describe the bounded six-row contract."
     }
     $pendingPath = Join-Path $evidenceDirectory ".results.pending.json"
     $manifestPath = Join-Path $evidenceDirectory "results.json"

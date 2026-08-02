@@ -9091,6 +9091,8 @@ public sealed partial class MainWindow : Window
         RefreshCanvas(); // refresh canvas so shape moves/resizes are reflected immediately
         RefreshNotesPane();
         RefreshReviewWorkflowPlans();
+        if (IsSmartArtTextPaneVisible)
+            ShowSmartArtTextPane();
         RefreshVisibleAnimationPane(_selectedAnimationIndex);
         _selectionPane?.Refresh();
         RefreshPaneAccessibilityMetadata();
