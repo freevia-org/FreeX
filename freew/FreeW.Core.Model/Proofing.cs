@@ -59,7 +59,7 @@ public static class ProofingDiagnosticPlanner
                 diagnostics,
                 blockIndex,
                 paragraph,
-                document.DefaultRun.LanguageTag,
+                document,
                 customWords);
         }
 
@@ -100,10 +100,11 @@ public static class ProofingDiagnosticPlanner
         List<ProofingDiagnostic> diagnostics,
         int blockIndex,
         Paragraph paragraph,
-        string? defaultLanguageTag,
+        TextDocument document,
         HashSet<string> customWords)
     {
         var text = paragraph.PlainText;
+        var noProofOffsets = BuildNoProofOffsets(document, paragraph, text.Length);
         var i = 0;
         ProofingToken? previousToken = null;
         while (i < text.Length)
@@ -129,6 +130,12 @@ public static class ProofingDiagnosticPlanner
                 normalized,
                 LooksLikeEmailOrUrlToken(text, start, length));
 
+            if (TokenTouchesNoProof(noProofOffsets, token))
+            {
+                previousToken = null;
+                continue;
+            }
+
             if (!token.IsEmailOrUrlLike
                 && !customWords.Contains(normalized)
                 && ProofingCorrectionCatalog.Entries.Any(entry =>
@@ -138,7 +145,7 @@ public static class ProofingDiagnosticPlanner
                     diagnostics,
                     blockIndex,
                     paragraph,
-                    defaultLanguageTag,
+                    document.DefaultRun.LanguageTag,
                     token,
                     ProofingDiagnosticKind.Spelling);
             }
@@ -150,13 +157,61 @@ public static class ProofingDiagnosticPlanner
                     diagnostics,
                     blockIndex,
                     paragraph,
-                    defaultLanguageTag,
+                    document.DefaultRun.LanguageTag,
                     token,
                     ProofingDiagnosticKind.Grammar);
             }
 
             previousToken = token;
         }
+    }
+
+    private static bool[] BuildNoProofOffsets(TextDocument document, Paragraph paragraph, int textLength)
+    {
+        var offsets = new bool[textLength];
+        var styleNoProof = ResolveStyleNoProof(document, paragraph.StyleId);
+        var paragraphOffset = 0;
+        foreach (var run in paragraph.Runs)
+        {
+            var noProof = run.Formatting.NoProof || styleNoProof || document.DefaultRun.NoProof;
+            if (noProof)
+            {
+                var end = Math.Min(textLength, paragraphOffset + run.Text.Length);
+                for (var offset = paragraphOffset; offset < end; offset++)
+                    offsets[offset] = true;
+            }
+
+            paragraphOffset += run.Text.Length;
+        }
+
+        return offsets;
+    }
+
+    private static bool ResolveStyleNoProof(TextDocument document, string? styleId)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (!string.IsNullOrEmpty(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (style.Run.NoProof)
+                return true;
+            styleId = style.BasedOnStyleId;
+        }
+
+        return false;
+    }
+
+    private static bool TokenTouchesNoProof(bool[] noProofOffsets, ProofingToken token)
+    {
+        var end = Math.Min(noProofOffsets.Length, token.End);
+        for (var offset = token.Start; offset < end; offset++)
+        {
+            if (noProofOffsets[offset])
+                return true;
+        }
+
+        return false;
     }
 
     private static void AddDiagnostic(

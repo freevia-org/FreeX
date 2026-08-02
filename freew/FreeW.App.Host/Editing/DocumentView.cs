@@ -11052,6 +11052,9 @@ public sealed class DocumentView : RichTextBox
 
     private static Inline HideTextInlineWhenNeeded(Inline inline, RunFormatting formatting)
     {
+        if (formatting.NoProof)
+            inline.Language = System.Windows.Markup.XmlLanguage.GetLanguage("zxx");
+
         if (!IsTextHiddenInCurrentView(formatting))
             return inline;
 
@@ -17077,6 +17080,7 @@ public sealed class DocumentView : RichTextBox
             Strikethrough = r.Strikethrough || style.Strikethrough || d.Strikethrough,
             Hidden = r.Hidden || style.Hidden || d.Hidden,
             WebHidden = r.WebHidden || style.WebHidden || d.WebHidden,
+            NoProof = r.NoProof || StyleRunNoProof(paragraph, document) || d.NoProof,
             SmallCaps = r.SmallCaps || style.SmallCaps || d.SmallCaps,
             AllCaps = r.AllCaps || style.AllCaps || d.AllCaps,
             Rtl = r.Rtl || style.Rtl || d.Rtl,
@@ -17195,6 +17199,22 @@ public sealed class DocumentView : RichTextBox
         paragraph.StyleId is { } id && document.Styles.TryGetValue(id, out var style)
             ? style.Run
             : RunFormatting.Default;
+
+    private static bool StyleRunNoProof(ModelParagraph paragraph, TextDocument document)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var styleId = paragraph.StyleId;
+        while (!string.IsNullOrEmpty(styleId)
+            && seen.Add(styleId)
+            && document.Styles.TryGetValue(styleId, out var style))
+        {
+            if (style.Run.NoProof)
+                return true;
+            styleId = style.BasedOnStyleId;
+        }
+
+        return false;
+    }
 
     private static WpfTextAlignment ToWpfAlignment(ModelTextAlignment alignment) => alignment switch
     {

@@ -225,6 +225,13 @@ public sealed record RunFormatting
     /// </summary>
     public bool WebHidden { get; init; }
 
+    /// <summary>
+    /// Whether spelling and grammar proofing is disabled for the run (<c>w:rPr/w:noProof</c>).
+    /// Defaults to false. Style and document-default inheritance uses the same logical-OR semantics
+    /// as the other non-nullable run toggles.
+    /// </summary>
+    public bool NoProof { get; init; }
+
     public string? FontFamily { get; init; }
     public double? FontSizePt { get; init; }
     public string? ColorHex { get; init; }

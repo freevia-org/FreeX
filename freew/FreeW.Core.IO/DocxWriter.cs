@@ -7520,7 +7520,7 @@ public static class DocxWriter
     {
         // Children MUST follow the CT_RPr (EG_RPrBase) schema sequence, otherwise Word's strict
         // validator rejects the run. The relevant slots, in order, are:
-        //   rFonts, b, i, caps, smallCaps, strike, vanish, webHidden, color, spacing, kern, position, sz,
+        //   rFonts, b, i, caps, smallCaps, strike, noProof, vanish, webHidden, color, spacing, kern, position, sz,
         //   szCs, u, shd,
         //   vertAlign, <w14 extension region>.
         // The advanced-typography elements added for Z1 occupy these slots:
@@ -7543,6 +7543,8 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "smallCaps"));
         if (f.Strikethrough)
             rPr.Add(new XElement(W + "strike"));
+        if (f.NoProof)
+            rPr.Add(new XElement(W + "noProof"));
         if (f.Hidden)
             rPr.Add(new XElement(W + "vanish"));
         if (f.WebHidden)
@@ -9191,6 +9193,8 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "b"));
         if (f.Italic)
             rPr.Add(new XElement(W + "i"));
+        if (f.NoProof)
+            rPr.Add(new XElement(W + "noProof"));
         if (f.Hidden)
             rPr.Add(new XElement(W + "vanish"));
         if (f.WebHidden)

@@ -148,6 +148,58 @@ public sealed class ProofingDiagnosticPlannerTests
     }
 
     [Fact]
+    public void Build_suppresses_no_proof_run_and_keeps_adjacent_typo_diagnostic()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("teh", RunFormatting.Default with { NoProof = true }));
+        paragraph.Runs.Add(new Run(" teh"));
+        doc.Blocks.Add(paragraph);
+
+        var diagnostic = ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true)
+            .Should().ContainSingle().Which;
+
+        diagnostic.Word.Should().Be("teh");
+        diagnostic.RunIndex.Should().Be(1);
+        diagnostic.ParagraphOffset.Should().Be(4);
+    }
+
+    [Fact]
+    public void Build_treats_no_proof_run_as_grammar_boundary()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("the ", RunFormatting.Default with { NoProof = true }));
+        paragraph.Runs.Add(new Run("the answer"));
+        doc.Blocks.Add(paragraph);
+
+        ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true).Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void Build_honors_no_proof_from_document_default_or_style(bool defaultNoProof, bool styleNoProof)
+    {
+        var doc = DocumentWithRun(new Run("teh"));
+        doc.DefaultRun = doc.DefaultRun with { NoProof = defaultNoProof };
+        if (styleNoProof)
+        {
+            doc.Styles["NoProofStyle"] = new DocumentStyle
+            {
+                Id = "NoProofStyle",
+                Name = "No proof style",
+                Run = RunFormatting.Default with { NoProof = true },
+            };
+            ((Paragraph)doc.Blocks[0]).StyleId = "NoProofStyle";
+        }
+
+        ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true).Should().BeEmpty();
+    }
+
+    [Fact]
     public void Build_avoids_repeated_word_false_positive_across_punctuation_url_and_email_boundaries()
     {
         var doc = DocumentWithRun(new Run("the, the. the www.the the mail the@example.com the"));

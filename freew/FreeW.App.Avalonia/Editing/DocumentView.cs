@@ -21563,6 +21563,7 @@ public sealed class DocumentView : Control
         Strikethrough = baseRun.Strikethrough || styleRun.Strikethrough,
         Hidden        = baseRun.Hidden || styleRun.Hidden,
         WebHidden     = baseRun.WebHidden || styleRun.WebHidden,
+        NoProof       = baseRun.NoProof || styleRun.NoProof,
         SmallCaps     = baseRun.SmallCaps || styleRun.SmallCaps,
         AllCaps       = baseRun.AllCaps || styleRun.AllCaps,
         FontFamily    = styleRun.FontFamily ?? baseRun.FontFamily,
@@ -23181,6 +23182,7 @@ public sealed class DocumentView : Control
         Strikethrough = baseRun.Strikethrough || over.Strikethrough,
         Hidden = baseRun.Hidden || over.Hidden,
         WebHidden = baseRun.WebHidden || over.WebHidden,
+        NoProof = baseRun.NoProof || over.NoProof,
         SmallCaps = baseRun.SmallCaps || over.SmallCaps,
         AllCaps = baseRun.AllCaps || over.AllCaps,
     };
