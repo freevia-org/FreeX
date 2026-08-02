@@ -2226,4 +2226,37 @@ public sealed class ChartDataCommandTests
         chart.PlotAreaManualLayout.X.Should().Be(0.1);
         chart.PlotAreaManualLayout.Height.Should().Be(0.7);
     }
+
+    [Fact]
+    public void SetChartLayoutOptions_PreservesUnknownManualLayoutModeTokens()
+    {
+        var (p, bus, id) = MakeChartPresentation();
+
+        bus.Execute(new SetChartLayoutOptionsCommand(
+            0,
+            id,
+            new ChartLayoutOptions(
+                ChartLayoutTarget.PlotArea,
+                "inner",
+                ChartManualLayoutMode.Unsupported,
+                ChartManualLayoutMode.Factor,
+                ChartManualLayoutMode.Factor,
+                ChartManualLayoutMode.Factor,
+                0.1,
+                0.2,
+                0.7,
+                0.6,
+                RawXModeToken: "futureMode")));
+
+        var layout = p.Slides[0].Shapes[0].Chart!.PlotAreaManualLayout!;
+        layout.XMode.Should().Be(ChartManualLayoutMode.Unsupported);
+        layout.RawXModeToken.Should().Be("futureMode");
+
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(p, stream);
+        stream.Position = 0;
+        var reopened = PptxPackageReader.Read(stream).Slides[0].Shapes[0].Chart!;
+        reopened.PlotAreaManualLayout!.XMode.Should().Be(ChartManualLayoutMode.Unsupported);
+        reopened.PlotAreaManualLayout.RawXModeToken.Should().Be("futureMode");
+    }
 }

@@ -54,6 +54,7 @@ public sealed class ChartLayoutOptionsPlanner
     [
         new(ChartManualLayoutMode.Factor, "Factor"),
         new(ChartManualLayoutMode.Edge, "Edge"),
+        new(ChartManualLayoutMode.Unsupported, "Preserve unknown source mode"),
     ];
 
     public static IReadOnlyList<ChartLayoutTargetSemanticOption> LayoutTargetOptionsFor(string? currentValue)
@@ -81,6 +82,10 @@ public sealed class ChartLayoutOptionsPlanner
     private ChartManualLayoutMode _yMode;
     private ChartManualLayoutMode _widthMode;
     private ChartManualLayoutMode _heightMode;
+    private string? _rawXModeToken;
+    private string? _rawYModeToken;
+    private string? _rawWidthModeToken;
+    private string? _rawHeightModeToken;
     private double? _x;
     private double? _y;
     private double? _width;
@@ -125,6 +130,10 @@ public sealed class ChartLayoutOptionsPlanner
         _yMode = NormalizeMode(layout?.YMode);
         _widthMode = NormalizeMode(layout?.WidthMode);
         _heightMode = NormalizeMode(layout?.HeightMode);
+        _rawXModeToken = layout?.RawXModeToken;
+        _rawYModeToken = layout?.RawYModeToken;
+        _rawWidthModeToken = layout?.RawWidthModeToken;
+        _rawHeightModeToken = layout?.RawHeightModeToken;
         _x = layout?.X;
         _y = layout?.Y;
         _width = layout?.Width;
@@ -132,10 +141,10 @@ public sealed class ChartLayoutOptionsPlanner
     }
 
     public void SetLayoutTarget(string? value) => _layoutTarget = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-    public void SetXMode(ChartManualLayoutMode value) => _xMode = NormalizeMode(value);
-    public void SetYMode(ChartManualLayoutMode value) => _yMode = NormalizeMode(value);
-    public void SetWidthMode(ChartManualLayoutMode value) => _widthMode = NormalizeMode(value);
-    public void SetHeightMode(ChartManualLayoutMode value) => _heightMode = NormalizeMode(value);
+    public void SetXMode(ChartManualLayoutMode value) => SetMode(value, ref _xMode, ref _rawXModeToken);
+    public void SetYMode(ChartManualLayoutMode value) => SetMode(value, ref _yMode, ref _rawYModeToken);
+    public void SetWidthMode(ChartManualLayoutMode value) => SetMode(value, ref _widthMode, ref _rawWidthModeToken);
+    public void SetHeightMode(ChartManualLayoutMode value) => SetMode(value, ref _heightMode, ref _rawHeightModeToken);
     public void SetX(double? value) => _x = value;
     public void SetY(double? value) => _y = value;
     public void SetWidth(double? value) => _width = value;
@@ -143,8 +152,21 @@ public sealed class ChartLayoutOptionsPlanner
 
     public ChartLayoutOptions BuildCommitPlan() => new(
         _target, _layoutTarget, _xMode, _yMode, _widthMode, _heightMode,
-        _x, _y, _width, _height);
+        _x, _y, _width, _height,
+        _rawXModeToken, _rawYModeToken, _rawWidthModeToken, _rawHeightModeToken);
 
     private static ChartManualLayoutMode NormalizeMode(ChartManualLayoutMode? mode) =>
-        mode is ChartManualLayoutMode.Edge ? ChartManualLayoutMode.Edge : ChartManualLayoutMode.Factor;
+        mode is ChartManualLayoutMode.Edge or ChartManualLayoutMode.Unsupported
+            ? mode.Value
+            : ChartManualLayoutMode.Factor;
+
+    private static void SetMode(
+        ChartManualLayoutMode value,
+        ref ChartManualLayoutMode mode,
+        ref string? rawToken)
+    {
+        mode = NormalizeMode(value);
+        if (mode != ChartManualLayoutMode.Unsupported)
+            rawToken = null;
+    }
 }
