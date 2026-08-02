@@ -1087,10 +1087,19 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// unchecked (☐) glyph matching <paramref name="checked"/>, and the control records the state.
     /// Serialises as a w:sdt with a checkbox w:sdtPr wrapping the glyph run.
     /// </summary>
-    public static Run CheckBoxControl(bool @checked, string? tag = null, string? alias = null) =>
+    public static Run CheckBoxControl(
+        bool @checked,
+        string? tag = null,
+        string? alias = null,
+        ContentControlCheckBoxMetadata? checkBoxMetadata = null) =>
         new(@checked ? ContentControl.CheckedGlyph : ContentControl.UncheckedGlyph)
         {
-            Control = new ContentControl(ContentControlKind.CheckBox, tag, alias, @checked)
+            Control = new ContentControl(
+                ContentControlKind.CheckBox,
+                tag,
+                alias,
+                @checked,
+                CheckBoxMetadata: checkBoxMetadata)
         };
 
     /// <summary>
@@ -1349,12 +1358,28 @@ public sealed record ContentControlDateMetadata(
     string? StoreMappedDataAs = null);
 
 /// <summary>
+/// One optional Word checkbox-state symbol from w14:checkedState or w14:uncheckedState. Null fields
+/// preserve absent attributes; non-null strings retain the authored glyph codepoint and font tokens.
+/// </summary>
+public sealed record ContentControlCheckBoxStateMetadata(
+    string? GlyphCodePoint = null,
+    string? Font = null);
+
+/// <summary>
+/// Optional Word checkbox symbol metadata. A null state represents an absent OOXML state element.
+/// </summary>
+public sealed record ContentControlCheckBoxMetadata(
+    ContentControlCheckBoxStateMetadata? CheckedState = null,
+    ContentControlCheckBoxStateMetadata? UncheckedState = null);
+
+/// <summary>
 /// An immutable content-control (structured document tag / w:sdt) mark carried by a <see cref="Run"/>.
 /// Records the control <see cref="Kind"/>, an optional <see cref="Tag"/> (w:tag) and <see cref="Alias"/>
 /// (w:alias), and the kind-specific extras: <see cref="Checked"/> (checkbox state), <see cref="DateFormat"/>
 /// (a date picker's w:dateFormat string), <see cref="DateMetadata"/> (the remaining w:date metadata), and
 /// <see cref="ListItems"/> (the w:listItem choices of a drop-down list or combo box), and
-/// <see cref="ListLastValue"/> (the optional w:lastValue on the list owner), and
+/// <see cref="ListLastValue"/> (the optional w:lastValue on the list owner),
+/// <see cref="CheckBoxMetadata"/> (optional w14 checkbox-state glyph/font metadata), and
 /// <see cref="PlainTextMultiLine"/> (the optional w:text/@w:multiLine state). Document-part lists
 /// and building-block gallery controls additionally retain <see cref="DocPartGallery"/>,
 /// <see cref="DocPartCategory"/>, and <see cref="DocPartUnique"/>.
@@ -1376,7 +1401,8 @@ public sealed record ContentControl(
     bool DocPartUnique = false,
     ContentControlDateMetadata? DateMetadata = null,
     string? ListLastValue = null,
-    bool? PlainTextMultiLine = null)
+    bool? PlainTextMultiLine = null,
+    ContentControlCheckBoxMetadata? CheckBoxMetadata = null)
 {
     /// <summary>The glyph used in a checkbox run's text when the box is checked (☒, U+2612).</summary>
     public const string CheckedGlyph = "☒";
