@@ -17153,7 +17153,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetName(borderPresetBox, "Border preset");
         AutomationProperties.SetAutomationId(borderPresetBox, "FormatCellsBorderPresetBox");
         ApplyDialogComboBoxChrome(borderPresetBox);
-        // Windows renders the line style as a scrollable LIST of line samples, not a combo.
+        // Windows renders the line style as a scrollable textual list, not a combo.
         // Keep the FormatCellsBorderStyleBox automation id + the FormatCellsNullableChoice
         // SelectedItem contract so Accept()/SelectedBorderLineStyle() are unchanged.
         var borderStyleBox = CreateFormatCellsBorderStyleListBox(
@@ -17161,6 +17161,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             BorderStyle.Thin);
         var borderColorBox = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreBorderColors"));
         borderColorBox.ConfigureCompactPickButton();
+        borderColorBox.BorderBrush = Brush(112, 112, 112);
+        borderColorBox.CornerRadius = new CornerRadius(0);
         AutomationProperties.SetName(borderColorBox, "Border color");
         AutomationProperties.SetAutomationId(borderColorBox, "FormatCellsBorderColorBox");
 
@@ -17176,6 +17178,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
             AutomationProperties.SetAutomationId(box, automationId);
             ApplyDialogTextBoxChrome(box);
+            box.BorderBrush = Brush(171, 173, 179);
             picker.SelectionChanged += (_, _) =>
             {
                 if (picker.SelectedColor is { } color)
@@ -17190,6 +17193,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         var borderColorTextBox = CreateBorderColorTextBox(borderColorBox, "FormatCellsBorderColorTextBox");
+        borderColorTextBox.Width = 118;
 
         // Per-side border controls mirror WPF: each edge is a toggle honoring the selected line
         // style + color, composed alongside the whole-cell preset buttons (None/Outline/Inside).
@@ -17224,6 +17228,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             };
             AutomationProperties.SetAutomationId(box, automationId);
             ApplyDialogComboBoxChrome(box);
+            box.Background = Brush(240, 240, 240);
+            box.BorderBrush = Brush(171, 173, 179);
             return box;
         }
         var borderTopStyleBox = CreateBorderEdgeStyleBox("FormatCellsBorderTopStyleBox");
@@ -17235,6 +17241,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             var box = CreateFormatCellsColorPicker(UiText.Get("FormatCells_NoChange"), includeClear: false, UiText.Get("FormatCells_MoreBorderColors"));
             box.ConfigureCompactPickButton();
+            box.BorderBrush = Brush(112, 112, 112);
+            box.CornerRadius = new CornerRadius(0);
             AutomationProperties.SetAutomationId(box, automationId);
             return box;
         }
@@ -17255,7 +17263,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Width = 96,
             Height = 64,
             Background = Brushes.White,
-            BorderBrush = Brushes.Gray,
+            BorderBrush = Brush(112, 112, 112),
             BorderThickness = new Thickness(1),
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
         };
@@ -17535,6 +17543,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetAutomationId(okButton, "FormatCellsOkButton");
         ApplyDialogButtonChrome(okButton, width: 74, isDefault: true);
+        okButton.Background = Brush(221, 221, 221);
+        okButton.BorderBrush = Brush(112, 112, 112);
+        okButton.CornerRadius = new CornerRadius(0);
 
         var cancelButton = new Button
         {
@@ -17545,6 +17556,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetAutomationId(cancelButton, "FormatCellsCancelButton");
         ApplyDialogButtonChrome(cancelButton, width: 74);
+        cancelButton.Background = Brush(221, 221, 221);
+        cancelButton.BorderBrush = Brush(112, 112, 112);
+        cancelButton.CornerRadius = new CornerRadius(0);
 
         var errorText = new TextBlock
         {
@@ -17832,6 +17846,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             presetButton.HorizontalAlignment = AvaloniaHorizontalAlignment.Left;
             presetButton.Width = 110;
             presetButton.Height = 28;
+            presetButton.MinHeight = 28;
+            presetButton.MaxHeight = 28;
+            presetButton.Background = Brush(221, 221, 221);
+            presetButton.BorderBrush = Brush(112, 112, 112);
+            presetButton.CornerRadius = new CornerRadius(0);
         }
         var borderPresetsGroup = CreateFormatCellsBorderGroup(
             UiText.Get("FormatCells_Presets"),
@@ -17840,6 +17859,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Spacing = 6,
                 Children = { borderNoneButton, borderOutlineButton, borderInsideButton },
             });
+        borderPresetsGroup.Margin = new Thickness(1, 0, 11, 0);
 
         // MIDDLE: Line group — scrollable line-sample list + color picker.
         Control CreateBorderPalette(FormatCellsColorPicker picker)
@@ -17894,18 +17914,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.Get("FormatCells_Line"),
             new StackPanel
             {
-                Spacing = 4,
+                Spacing = 0,
                 Children =
                 {
-                    new TextBlock { Text = StripDisplayMnemonic(UiText.Get("FormatCells_Style")) },
+                    new TextBlock
+                    {
+                        Text = StripDisplayMnemonic(UiText.Get("FormatCells_Style")),
+                        Margin = new Thickness(0, 0, 0, 2),
+                    },
                     borderStyleBox,
                     new TextBlock
                     {
                         Text = StripDisplayMnemonic(UiText.Get("FormatCells_Color")),
-                        Margin = new Thickness(0, 4, 0, 0),
+                        Margin = new Thickness(0, 8, 0, 2),
                     },
                     borderLineColorRow,
-                    CreateBorderPalette(borderColorBox),
+                    new Border
+                    {
+                        Margin = new Thickness(0, 6, 0, 0),
+                        Child = CreateBorderPalette(borderColorBox),
+                    },
                     new Border
                     {
                         Height = 20,
@@ -17919,6 +17947,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             });
         borderStyleBox.Width = 178;
         borderStyleBox.Height = 124;
+        borderLineGroup.Margin = new Thickness(1, 0, 11, 0);
 
         // RIGHT: Border group — interactive diagram. Edge toggles surround a central
         // white "Text" preview box (Top above, Bottom below, Left/Right at the sides),
@@ -17934,6 +17963,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Width = 244,
             Height = 164,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Center,
             ColumnDefinitions = new ColumnDefinitions("50,144,50"),
             RowDefinitions = new RowDefinitions("32,100,32"),
         };
@@ -17966,11 +17996,28 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             toggle.Width = 144;
             toggle.Height = 32;
+            toggle.MinHeight = 32;
+            toggle.MaxHeight = 32;
+            toggle.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+            toggle.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
         }
         foreach (var toggle in new[] { borderLeftToggle, borderRightToggle })
         {
             toggle.Width = 50;
             toggle.Height = 100;
+            toggle.MinWidth = 50;
+            toggle.MaxWidth = 50;
+            toggle.MinHeight = 100;
+            toggle.MaxHeight = 100;
+            toggle.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+            toggle.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
+        }
+        foreach (var toggle in new[] { borderTopToggle, borderBottomToggle, borderLeftToggle, borderRightToggle })
+        {
+            toggle.Background = Brush(221, 221, 221);
+            toggle.BorderBrush = Brush(112, 112, 112);
+            toggle.BorderThickness = new Thickness(1);
+            toggle.CornerRadius = new CornerRadius(0);
         }
 
         var borderGroup = CreateFormatCellsBorderGroup(
@@ -17984,37 +18031,26 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 },
             });
 
-        var borderGroupsRow = new StackPanel
-        {
-            Width = 580,
-            Children =
-            {
-                new AvaloniaGrid
-                {
-                    Width = 580,
-                    ColumnDefinitions = new ColumnDefinitions("122,195,244"),
-                    Children = { borderPresetsGroup, borderLineGroup, borderGroup },
-                },
-            },
-        };
-        AvaloniaGrid.SetColumn(borderPresetsGroup, 0);
-        AvaloniaGrid.SetColumn(borderLineGroup, 1);
-        AvaloniaGrid.SetColumn(borderGroup, 2);
-
         // "Individual border details": four labeled rows (Top / Right / Bottom / Left), each with a
         // per-edge Style dropdown and a per-edge Color (R,G,B) picker — matching Excel's grid. The
         // legacy preset combo is preserved above the grid as "Preset" so the borderPresetBox wiring
         // (read in Accept as borderChoice) is unchanged.
         var borderDetailsGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("73,170,220"),
+            ColumnDefinitions = new ColumnDefinitions("80,*,*"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
-            ColumnSpacing = 8,
-            RowSpacing = 6,
+            ColumnSpacing = 0,
+            RowSpacing = 0,
         };
         void AddDetailHeader(string text, int column)
         {
-            var header = new TextBlock { Text = text, FontWeight = FontWeight.SemiBold };
+            var header = new TextBlock
+            {
+                Text = text,
+                Margin = column == 1
+                    ? new Thickness(0, 0, 8, 4)
+                    : new Thickness(0, 0, 0, 4),
+            };
             AvaloniaGrid.SetRow(header, 0);
             AvaloniaGrid.SetColumn(header, column);
             borderDetailsGrid.Children.Add(header);
@@ -18027,8 +18063,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 Text = StripDisplayMnemonic(UiText.Get(labelKey)) + ":",
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                Margin = row < 4 ? new Thickness(0, 0, 8, 6) : new Thickness(0, 0, 8, 0),
             };
-            styleBox.Width = 170;
+            styleBox.Width = double.NaN;
+            styleBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+            styleBox.Margin = row < 4 ? new Thickness(2, 0, 8, 6) : new Thickness(2, 0, 8, 0);
             AvaloniaGrid.SetRow(label, row);
             AvaloniaGrid.SetColumn(label, 0);
             borderDetailsGrid.Children.Add(label);
@@ -18039,6 +18078,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 6,
+                Margin = row < 4 ? new Thickness(0, 0, 0, 6) : new Thickness(0),
                 Children = { colorTextBox, colorPicker },
             };
             AvaloniaGrid.SetRow(colorRow, row);
@@ -18056,35 +18096,42 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var borderDetailsExpander = new Expander
         {
-            Margin = new Thickness(124, 4, 0, 0),
+            Margin = new Thickness(4, 14, 0, 0),
             Header = StripDisplayMnemonic(UiText.Get("FormatCells_IndividualBorderDetails")),
             IsExpanded = true,
             Content = new Border
             {
-                Margin = new Thickness(0, 8, 0, 0),
+                Margin = new Thickness(-3, 8, 0, 0),
                 Child = borderDetailsGrid,
             },
         };
         AutomationProperties.SetAutomationId(borderDetailsExpander, "FormatCellsBorderDetailsExpander");
         AvaloniaCompactDialogChrome.ApplyWpfExpander(borderDetailsExpander);
 
+        var borderTabLayout = new AvaloniaGrid
+        {
+            Margin = new Thickness(8),
+            ColumnDefinitions = new ColumnDefinitions("122,190,*"),
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            Children =
+            {
+                borderPresetsGroup,
+                borderLineGroup,
+                borderGroup,
+                borderDetailsExpander,
+            },
+        };
+        AvaloniaGrid.SetRowSpan(borderPresetsGroup, 2);
+        AvaloniaGrid.SetColumn(borderLineGroup, 1);
+        AvaloniaGrid.SetColumn(borderGroup, 2);
+        AvaloniaGrid.SetRow(borderDetailsExpander, 1);
+        AvaloniaGrid.SetColumn(borderDetailsExpander, 1);
+        AvaloniaGrid.SetColumnSpan(borderDetailsExpander, 2);
+
         var borderTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabBorder"),
             "FormatCellsBorderTab",
-            new StackPanel
-            {
-                Spacing = 12,
-                Width = 580,
-                // Small left inset so the bare "Individual border details" label aligns with the
-                // group-box content above it and does not clip against the dialog edge.
-                Margin = new Thickness(0),
-                Children =
-                {
-                    borderGroupsRow,
-                    borderDetailsExpander,
-                    new Border { Height = 2 },
-                },
-            });
+            borderTabLayout);
         var protectionTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabProtection"),
             "FormatCellsProtectionTab",
@@ -18148,7 +18195,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
         var root = new AvaloniaGrid
         {
-            Margin = new Thickness(10, 10, 26, 48),
+            Margin = new Thickness(10, 10, 24, 48),
             RowDefinitions = new RowDefinitions("*,Auto,Auto"),
             RowSpacing = 0,
             Children =
@@ -18362,8 +18409,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     ];
 
     // The Windows Format Cells "Line" group renders the available border styles as a
-    // scrollable LIST where each row is drawn as a horizontal LINE SAMPLE rather than a
-    // text combo. This builds that ListBox; the SelectedItem stays a
+    // scrollable textual list. The SelectedItem stays a
     // FormatCellsNullableChoice<BorderStyle> so the existing Accept()/SelectedBorderLineStyle()
     // reads are unchanged.  All 14 BorderStyle values (plus the "None" sentinel) are listed so
     // that opening FormatCells on a cell whose edge carries Hair / MediumDashed / DashDot / etc.
@@ -18404,79 +18450,48 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = choices,
             SelectedItem = selected ?? choices[1],
-            Width = 180,
-            Height = 140,
+            Width = 178,
+            Height = 124,
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         };
         listBox.ItemTemplate = new FuncDataTemplate<FormatCellsNullableChoice<BorderStyle>>((choice, _) =>
-            CreateFormatCellsBorderStyleSample(choice), supportsRecycling: true);
-        AutomationProperties.SetName(listBox, "Border line style");
-        AutomationProperties.SetAutomationId(listBox, automationId);
-        return listBox;
-    }
-
-    private static Control CreateFormatCellsBorderStyleSample(FormatCellsNullableChoice<BorderStyle> choice)
-    {
-        if (choice.Value is not { } style)
-        {
-            return new TextBlock
+            new TextBlock
             {
                 Text = choice.Label,
                 VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                Height = 18,
-            };
-        }
-
-        var thickness = FormatCellsBorderPreviewThickness(style);
-        var line = new Border
-        {
-            Height = thickness <= 0 ? 1 : thickness,
-            Width = 150,
-            Background = Brushes.Black,
-            VerticalAlignment = AvaloniaVerticalAlignment.Center,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-        };
-        // Approximate dashed/dotted/double with a layered visual so the row reads as a
-        // distinct style (the actual applied style still comes from choice.Value).
-        if (style is BorderStyle.Dashed or BorderStyle.Dotted)
-        {
-            var dashLine = new global::Avalonia.Controls.Shapes.Line
+            }, supportsRecycling: true);
+        AvaloniaCompactDialogChrome.ApplyListBox(
+            listBox,
+            AvaloniaCompactDialogChrome.WindowsStyle with
             {
-                StartPoint = new Point(0, 9),
-                EndPoint = new Point(150, 9),
-                Stroke = Brushes.Black,
-                StrokeThickness = 1,
-                StrokeDashArray = new AvaloniaList<double>(
-                    style == BorderStyle.Dotted ? new double[] { 1, 2 } : new double[] { 4, 3 }),
-                VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            };
-            return new Panel { Height = 18, Children = { dashLine } };
-        }
-        if (style == BorderStyle.Double)
+                ListBoxItemPadding = new Thickness(4, 0),
+                ListBoxItemMinHeight = 20,
+            });
+        var selectedItemBackground = Brush(246, 246, 246);
+        foreach (var selector in new[] { ":selected", ":selected:focus" })
         {
-            return new StackPanel
+            listBox.Styles.Add(new Style(x => x.OfType<ListBoxItem>().Class(selector))
             {
-                Height = 18,
-                VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                Spacing = 2,
-                Children =
+                Setters =
                 {
-                    new Border { Height = 1, Width = 150, Background = Brushes.Black, HorizontalAlignment = AvaloniaHorizontalAlignment.Left },
-                    new Border { Height = 1, Width = 150, Background = Brushes.Black, HorizontalAlignment = AvaloniaHorizontalAlignment.Left },
+                    new Setter(TemplatedControl.BackgroundProperty, selectedItemBackground),
+                    new Setter(TemplatedControl.ForegroundProperty, Brushes.Black),
+                    new Setter(TemplatedControl.BorderBrushProperty, Brushes.Transparent),
+                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
                 },
-            };
+            });
         }
-
-        return new Panel { Height = 18, Children = { line } };
+        AutomationProperties.SetName(listBox, "Border line style");
+        AutomationProperties.SetAutomationId(listBox, automationId);
+        return listBox;
     }
 
     // WPF keeps these three sections visually open: a bold label above compact content.
     private static Control CreateFormatCellsBorderGroup(string header, Control content) =>
         new StackPanel
         {
-            Spacing = 4,
+            Spacing = 0,
             VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children =
             {
@@ -18484,6 +18499,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 {
                     Text = StripDisplayMnemonic(header),
                     FontWeight = FontWeight.SemiBold,
+                    Margin = new Thickness(0, 4, 0, 4),
                 },
                 content,
             },

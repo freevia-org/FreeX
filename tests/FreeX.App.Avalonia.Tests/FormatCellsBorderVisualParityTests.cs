@@ -11,6 +11,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FreeX.App.Avalonia;
 using FluentAssertions;
+using FluentAssertions.Execution;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -34,6 +35,12 @@ public sealed class FormatCellsBorderVisualParityTests
         source.Should().Contain("IsExpanded = true");
         source.Should().Contain("Margin = new Thickness(0, 8, 0, 0)");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyWpfExpander(borderDetailsExpander)");
+        source.Should().Contain("Margin = new Thickness(8)");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,190,*\")");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"80,*,*\")");
+        source.Should().Contain("ListBoxItemMinHeight = 20");
+        source.Should().Contain("new Setter(TemplatedControl.BackgroundProperty, selectedItemBackground)");
+        source.Should().NotContain("CreateFormatCellsBorderStyleSample");
         source.Should().Contain("dialog.MinHeight = targetHeight");
         source.Should().Contain("internal void ResizeClient(Size size) => ClientSize = size");
         source.Should().Contain("dialog.ResizeClient(targetSize)");
@@ -105,8 +112,70 @@ public sealed class FormatCellsBorderVisualParityTests
                         AssertFullyInside(viewport, automationId);
                     }
 
+                    var noneButton = FindControl<Button>(viewport, "FormatCellsBorderPresetNoneButton");
+                    var outlineButton = FindControl<Button>(viewport, "FormatCellsBorderPresetOutlineButton");
+                    var insideButton = FindControl<Button>(viewport, "FormatCellsBorderPresetInsideButton");
+                    var styleList = FindControl<ListBox>(viewport, "FormatCellsBorderStyleBox");
+                    var preview = FindControl<Border>(viewport, "FormatCellsBorderPreview");
+                    var topToggle = FindControl<ToggleButton>(viewport, "FormatCellsBorderTopToggle");
+                    var rightToggle = FindControl<ToggleButton>(viewport, "FormatCellsBorderRightToggle");
+                    var bottomToggle = FindControl<ToggleButton>(viewport, "FormatCellsBorderBottomToggle");
+                    var leftToggle = FindControl<ToggleButton>(viewport, "FormatCellsBorderLeftToggle");
+
+                    using (new AssertionScope())
+                    {
+                        foreach (var preset in new[] { noneButton, outlineButton, insideButton })
+                        {
+                            preset.Bounds.Width.Should().Be(110);
+                            preset.Bounds.Height.Should().Be(28);
+                        }
+                        VerticalOrigin(outlineButton, viewport).Should().BeApproximately(VerticalOrigin(noneButton, viewport) + 34, 0.01);
+                        VerticalOrigin(insideButton, viewport).Should().BeApproximately(VerticalOrigin(outlineButton, viewport) + 34, 0.01);
+
+                        styleList.Bounds.Width.Should().Be(178);
+                        styleList.Bounds.Height.Should().Be(124);
+                        HorizontalOrigin(styleList, viewport).Should().BeApproximately(HorizontalOrigin(noneButton, viewport) + 122, 2);
+                        styleList.GetVisualDescendants().OfType<ListBoxItem>().Take(6)
+                            .Select(item => item.Content?.ToString())
+                            .Should().Equal("None", "Thin", "Medium", "Thick", "Dashed", "Dotted");
+
+                        topToggle.Bounds.Size.Should().Be(new Size(144, 32));
+                        bottomToggle.Bounds.Size.Should().Be(new Size(144, 32));
+                        leftToggle.Bounds.Size.Should().Be(new Size(50, 100));
+                        rightToggle.Bounds.Size.Should().Be(new Size(50, 100));
+                        preview.Bounds.Size.Should().Be(new Size(144, 100));
+                        HorizontalOrigin(topToggle, viewport).Should().BeApproximately(HorizontalOrigin(preview, viewport), 0.01);
+                        (VerticalOrigin(topToggle, viewport) + 32).Should().BeApproximately(VerticalOrigin(preview, viewport), 0.01);
+                        (HorizontalOrigin(leftToggle, viewport) + 50).Should().BeApproximately(HorizontalOrigin(preview, viewport), 0.01);
+                        (HorizontalOrigin(preview, viewport) + 144).Should().BeApproximately(HorizontalOrigin(rightToggle, viewport), 0.01);
+                        VerticalOrigin(bottomToggle, viewport).Should().BeApproximately(VerticalOrigin(preview, viewport) + 100, 0.01);
+
+                        var styleBoxes = new[] { "Top", "Right", "Bottom", "Left" }
+                            .Select(edge => FindControl<ComboBox>(viewport, $"FormatCellsBorder{edge}StyleBox"))
+                            .ToArray();
+                        var colorBoxes = new[] { "Top", "Right", "Bottom", "Left" }
+                            .Select(edge => FindControl<TextBox>(viewport, $"FormatCellsBorder{edge}ColorTextBox"))
+                            .ToArray();
+                        styleBoxes.Select(box => HorizontalOrigin(box, viewport)).Distinct().Should().ContainSingle();
+                        colorBoxes.Select(box => HorizontalOrigin(box, viewport)).Distinct().Should().ContainSingle();
+                        colorBoxes.Should().AllSatisfy(box => box.Bounds.Width.Should().Be(120));
+                        for (var row = 1; row < styleBoxes.Length; row++)
+                        {
+                            VerticalOrigin(styleBoxes[row], viewport).Should()
+                                .BeApproximately(VerticalOrigin(styleBoxes[row - 1], viewport) + 30, 0.01);
+                        }
+                    }
+
                     AssertFullyInside(probe.Dialog, "FormatCellsOkButton");
                     AssertFullyInside(probe.Dialog, "FormatCellsCancelButton");
+                    var okButton = FindControl<Button>(probe.Dialog, "FormatCellsOkButton");
+                    var cancelButton = FindControl<Button>(probe.Dialog, "FormatCellsCancelButton");
+                    okButton.Bounds.Size.Should().Be(new Size(74, 24));
+                    cancelButton.Bounds.Size.Should().Be(new Size(74, 24));
+                    HorizontalOrigin(cancelButton, probe.Dialog).Should()
+                        .BeApproximately(HorizontalOrigin(okButton, probe.Dialog) + 82, 0.01);
+                    VerticalOrigin(cancelButton, probe.Dialog).Should()
+                        .BeApproximately(VerticalOrigin(okButton, probe.Dialog), 0.01);
                     probe.CancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 });
 
@@ -174,11 +243,8 @@ public sealed class FormatCellsBorderVisualParityTests
 
     private static void AssertFullyInside(Control root, string automationId)
     {
-        var control = root.GetVisualDescendants()
-            .OfType<Control>()
-            .FirstOrDefault(candidate => AutomationProperties.GetAutomationId(candidate) == automationId);
-        control.Should().NotBeNull($"{automationId} must be present in the rendered visual tree");
-        control!.Bounds.Width.Should().BeGreaterThan(0);
+        var control = FindControl<Control>(root, automationId);
+        control.Bounds.Width.Should().BeGreaterThan(0);
         control.Bounds.Height.Should().BeGreaterThan(0);
 
         var origin = control.TranslatePoint(default, root);
@@ -188,4 +254,20 @@ public sealed class FormatCellsBorderVisualParityTests
         (origin.Value.X + control.Bounds.Width).Should().BeLessThanOrEqualTo(root.Bounds.Width + 0.01);
         (origin.Value.Y + control.Bounds.Height).Should().BeLessThanOrEqualTo(root.Bounds.Height + 0.01);
     }
+
+    private static T FindControl<T>(Control root, string automationId)
+        where T : Control
+    {
+        var control = root.GetVisualDescendants()
+            .OfType<T>()
+            .FirstOrDefault(candidate => AutomationProperties.GetAutomationId(candidate) == automationId);
+        control.Should().NotBeNull($"{automationId} must be present in the rendered visual tree");
+        return control!;
+    }
+
+    private static double HorizontalOrigin(Control control, Visual root) =>
+        control.TranslatePoint(default, root)!.Value.X;
+
+    private static double VerticalOrigin(Control control, Visual root) =>
+        control.TranslatePoint(default, root)!.Value.Y;
 }

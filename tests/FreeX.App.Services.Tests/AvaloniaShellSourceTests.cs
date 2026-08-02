@@ -4556,8 +4556,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("\"FormatCellsBorderPresetNoneButton\"");
         source.Should().Contain("\"FormatCellsBorderPresetOutlineButton\"");
         source.Should().Contain("\"FormatCellsBorderPresetInsideButton\"");
-        // Border tab rebuilt to match Windows: the line style is a scrollable list of line
-        // samples (keeps the FormatCellsBorderStyleBox automation id), the preset buttons,
+        // Border tab rebuilt to match Windows: the line style is a scrollable textual list
+        // (keeps the FormatCellsBorderStyleBox automation id), the preset buttons,
         // toggles and preview are arranged into Presets / Line / Border groups, plus an
         // "Individual border details" section. Verify the rebuilt structure is present.
         source.Should().Contain("CreateFormatCellsBorderStyleListBox(");
@@ -4569,8 +4569,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ConfigureCompactPickButton();");
         source.Should().Contain("FormatCellsBorderColorTextBox");
         source.Should().Contain("CreateBorderPalette(borderColorBox)");
-        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,195,244\")");
-        source.Should().Contain("new Border { Height = 2 }");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"122,190,*\")");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"80,*,*\")");
         source.Should().Contain("ShowFormatCellsError(message)");
         normalizedSource.Should().Contain(
             "ItemsSource = new[]\n" +
