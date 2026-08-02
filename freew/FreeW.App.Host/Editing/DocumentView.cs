@@ -9909,8 +9909,6 @@ public sealed class DocumentView : RichTextBox
         TextDocument document)
     {
         if (table.AutoFit != AutoFitMode.Contents
-            || table.PreferredWidthPt is not null
-            || table.ColumnWidthsPt.Count != 0
             || table.ColumnCount == 0
             || table.Rows.SelectMany(row => row.Cells).Any(cell =>
                 cell.GridSpan != 1 || cell.TextDirection != CellTextDirection.Horizontal))
@@ -9942,8 +9940,19 @@ public sealed class DocumentView : RichTextBox
                 metrics.ContentWidthDip,
                 usePageColumns: true).WidthDip
             : metrics.ContentWidthDip;
+        var targetWidth = table.PreferredWidthPt is > 0
+            ? Math.Min(availableWidth, table.PreferredWidthPt.Value * PxPerPoint)
+            : table.ColumnWidthsPt.Count == table.ColumnCount
+                ? Math.Min(availableWidth, table.ColumnWidthsPt.Where(width => width > 0).Sum() * PxPerPoint)
+                : 0;
         var totalWidth = widths.Sum();
-        if (totalWidth > availableWidth && totalWidth > 0)
+        if (targetWidth > 0 && totalWidth > 0)
+        {
+            var scale = targetWidth / totalWidth;
+            for (var i = 0; i < widths.Length; i++)
+                widths[i] *= scale;
+        }
+        else if (totalWidth > availableWidth && totalWidth > 0)
         {
             var scale = availableWidth / totalWidth;
             for (var i = 0; i < widths.Length; i++)
