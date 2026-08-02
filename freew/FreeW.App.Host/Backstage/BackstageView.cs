@@ -308,7 +308,84 @@ internal sealed class BackstageView : UserControl
             _backstage.HideThen(_actions.Open),
             _backstage.ShowPane("Open"));
 
-        return Panes.BuildActionPane(ToActionPaneSpec(surface));
+        var metrics = surface.VisualMetrics;
+        var panel = new StackPanel
+        {
+            MaxWidth = metrics.PaneMaxWidth,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = surface.Title,
+            FontSize = metrics.HeadingFontSize,
+            FontWeight = FontWeights.Light,
+            Foreground = Kit.Heading,
+            Margin = ToThickness(metrics.HeadingBottomMargin)
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = surface.Description,
+            Foreground = Kit.Muted,
+            FontSize = metrics.DescriptionFontSize,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = ToThickness(metrics.DescriptionBottomMargin)
+        });
+
+        foreach (var group in surface.Groups)
+        {
+            panel.Children.Add(new TextBlock
+            {
+                Text = group.Heading,
+                FontSize = metrics.SectionHeaderFontSize,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = Kit.Heading,
+                Margin = ToThickness(metrics.SectionHeaderMargin)
+            });
+            foreach (var action in group.Actions)
+                panel.Children.Add(HomeActionRow(action, metrics));
+        }
+
+        return Kit.Scroll(panel);
+    }
+
+    private UIElement HomeActionRow(BackstageActionRow action, BackstageHomePaneVisualMetrics metrics)
+    {
+        var button = new Button
+        {
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            FocusVisualStyle = null,
+            Margin = ToThickness(metrics.ActionRowMargin)
+        };
+        button.SetCurrentValue(System.Windows.Automation.AutomationProperties.AutomationIdProperty,
+            $"BackstageAction_{action.Label.Replace(' ', '_')}");
+        button.SetCurrentValue(System.Windows.Automation.AutomationProperties.NameProperty, action.Label);
+        button.Click += (_, _) => action.Invoke();
+
+        var content = new StackPanel();
+        content.Children.Add(new TextBlock
+        {
+            Text = action.Label,
+            Foreground = Kit.Link,
+            FontSize = metrics.ActionFontSize
+        });
+        if (!string.IsNullOrWhiteSpace(action.Description))
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = action.Description,
+                Foreground = Kit.Muted,
+                FontSize = metrics.DescriptionTextFontSize,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = ToThickness(metrics.ActionDescriptionMargin)
+            });
+        }
+
+        button.Content = content;
+        return button;
     }
 
     private UIElement BuildSaveAsPane()

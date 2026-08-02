@@ -183,6 +183,53 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public async Task BackstageView_Home_consumes_shared_surface_order_and_metrics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks() with
+            {
+                GetRecentEntries = () =>
+                [
+                    new RecentFileEntry { Path = @"C:\Docs\Budget.docx" },
+                    new RecentFileEntry { Path = @"C:\Docs\Plan.rtf", IsPinned = true },
+                ],
+            });
+
+            view.TryActivateEntry("Home").Should().BeTrue();
+
+            var buttons = view.GetLogicalDescendants()
+                .OfType<Button>()
+                .Where(button => (AutomationProperties.GetAutomationId(button) ?? string.Empty)
+                    .StartsWith("BackstageAction_", StringComparison.Ordinal))
+                .ToArray();
+
+            buttons.Select(button => ((StackPanel)button.Content!).Children.OfType<TextBlock>().First().Text)
+                .Should().Equal("Blank document", "Budget.docx", "Plan.rtf", "Browse", "Open More Documents");
+            buttons.Select(AutomationProperties.GetName)
+                .Should().Equal("Blank document", "Budget.docx", "Plan.rtf", "Browse", "Open More Documents");
+
+            var metrics = BackstagePaneSurfacePlanner.HomePaneVisualMetrics;
+            buttons.Should().OnlyContain(button => button.Margin == new Thickness(
+                metrics.ActionRowMargin.Left,
+                metrics.ActionRowMargin.Top,
+                metrics.ActionRowMargin.Right,
+                metrics.ActionRowMargin.Bottom));
+            buttons.Should().OnlyContain(button => ((StackPanel)button.Content!).Children.OfType<TextBlock>().First().FontSize
+                == metrics.ActionFontSize);
+
+            var heading = view.GetLogicalDescendants().OfType<TextBlock>()
+                .Single(block => block.Text == "Home" && block.FontSize == metrics.HeadingFontSize);
+            heading.FontSize.Should().Be(metrics.HeadingFontSize);
+            heading.Margin.Should().Be(new Thickness(
+                metrics.HeadingBottomMargin.Left,
+                metrics.HeadingBottomMargin.Top,
+                metrics.HeadingBottomMargin.Right,
+                metrics.HeadingBottomMargin.Bottom));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task BackstageView_Open_matches_WPF_tab_labels_and_selected_content()
     {
         await Session.Dispatch(() =>
@@ -423,6 +470,8 @@ public class BackstageViewTests
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
         source.Should().Contain("using Free.Shared.Shell.Avalonia;");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
+        source.Should().Contain("surface.VisualMetrics");
+        source.Should().Contain("AutomationProperties.SetName(button, action.Label)");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");

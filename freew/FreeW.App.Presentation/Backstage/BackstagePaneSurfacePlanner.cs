@@ -9,6 +9,20 @@ namespace FreeW.App.Presentation.Backstage;
 
 public static class BackstagePaneSurfacePlanner
 {
+    public static BackstageHomePaneVisualMetrics HomePaneVisualMetrics { get; } =
+        new(
+            PaneMaxWidth: 720,
+            HeadingFontSize: 26,
+            HeadingBottomMargin: new(0, 0, 0, 18),
+            DescriptionFontSize: 12,
+            DescriptionBottomMargin: new(0, 0, 0, 16),
+            SectionHeaderFontSize: 15,
+            SectionHeaderMargin: new(0, 16, 0, 6),
+            ActionFontSize: 14,
+            DescriptionTextFontSize: 11,
+            ActionRowMargin: new(0, 0, 0, 10),
+            ActionDescriptionMargin: new(0, 2, 0, 0));
+
     public static BackstageOpenPaneVisualMetrics OpenPaneVisualMetrics { get; } =
         new(
             HeadingBottomMargin: new(0, 0, 0, 18),
@@ -112,16 +126,17 @@ public static class BackstagePaneSurfacePlanner
                 openOptions));
     }
 
-    public static BackstageActionPaneSurfaceSpec BuildHomePane(
+    public static BackstageHomePaneSurfaceSpec BuildHomePane(
         IEnumerable<RecentFileEntry> recentEntries,
         Action newDocument,
         Action<string> openRecent,
         Action browse,
         Action openMore)
     {
-        return new BackstageActionPaneSurfaceSpec(
+        return new BackstageHomePaneSurfaceSpec(
             BackstageViewTextResources.Home.Title,
             BackstageViewTextResources.Home.Description,
+            HomePaneVisualMetrics,
             BackstageHomePanePlanner.Build(recentEntries, newDocument, openRecent, browse, openMore));
     }
 
@@ -305,6 +320,12 @@ public sealed record BackstageActionPaneSurfaceSpec(
     string Description,
     IReadOnlyList<BackstageActionGroup> Groups);
 
+public sealed record BackstageHomePaneSurfaceSpec(
+    string Title,
+    string Description,
+    BackstageHomePaneVisualMetrics VisualMetrics,
+    IReadOnlyList<BackstageActionGroup> Groups);
+
 public sealed record BackstagePrintPaneSurfaceSpec(
     string Title,
     string Description,
@@ -369,6 +390,19 @@ public readonly record struct BackstageOpenPaneVisualMetrics(
     double DescriptionFontSize,
     BackstageThickness ActionRowMargin,
     BackstageThickness DescriptionMargin);
+
+public readonly record struct BackstageHomePaneVisualMetrics(
+    double PaneMaxWidth,
+    double HeadingFontSize,
+    BackstageThickness HeadingBottomMargin,
+    double DescriptionFontSize,
+    BackstageThickness DescriptionBottomMargin,
+    double SectionHeaderFontSize,
+    BackstageThickness SectionHeaderMargin,
+    double ActionFontSize,
+    double DescriptionTextFontSize,
+    BackstageThickness ActionRowMargin,
+    BackstageThickness ActionDescriptionMargin);
 
 public readonly record struct BackstageThickness(double Left, double Top, double Right, double Bottom)
 {
