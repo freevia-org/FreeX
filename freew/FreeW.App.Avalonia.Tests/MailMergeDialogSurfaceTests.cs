@@ -77,6 +77,14 @@ public sealed class MailMergeDialogSurfaceTests
             "Select recipients first (Mailings > Select Recipients), then Finish & Merge.");
     }
 
+    [Fact]
+    public void MailingsCommandHost_DelegatesLabelsToThePopulatingEnginePath()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("_mailMerge?.ApplyLabels(labels);");
+    }
+
     private static string RepositoryFile(params string[] relativeParts)
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
