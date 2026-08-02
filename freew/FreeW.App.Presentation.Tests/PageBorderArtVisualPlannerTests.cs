@@ -118,6 +118,11 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtPoint(56, 34));
         plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
             polygon.Red == 0xFF && polygon.Green == 0xFF && polygon.Blue == 0xFF);
+        plan.Polygons[2].Points.Skip(2).Take(4).Should().Equal(
+            new PageBorderArtPoint(56, 36),
+            new PageBorderArtPoint(60, 41),
+            new PageBorderArtPoint(60, 47),
+            new PageBorderArtPoint(57, 53));
         plan.Polygons[3].Points[0].Should().Be(new PageBorderArtPoint(41.5, 36.36));
         plan.Polygons[207].Points[0].Should().Be(new PageBorderArtPoint(38, 1016));
     }
