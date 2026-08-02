@@ -1360,7 +1360,8 @@ public static class MailMerge
         {
             DefaultRun = template.DefaultRun,
             DefaultParagraph = template.DefaultParagraph,
-            DoNotAutoCompressPictures = template.DoNotAutoCompressPictures
+            DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
+            SaveSubsetFonts = template.SaveSubsetFonts
         };
 
         foreach (var (id, style) in template.Styles)
@@ -1459,7 +1460,8 @@ public static class MailMerge
         {
             DefaultRun = template.DefaultRun,
             DefaultParagraph = template.DefaultParagraph,
-            DoNotAutoCompressPictures = template.DoNotAutoCompressPictures
+            DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
+            SaveSubsetFonts = template.SaveSubsetFonts
         };
 
         foreach (var (id, style) in template.Styles)

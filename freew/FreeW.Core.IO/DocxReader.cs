@@ -185,6 +185,7 @@ public static class DocxReader
     /// <see cref="TextDocument.HideGrammaticalErrors"/>,
     /// the template-style refresh toggle into
     /// <see cref="TextDocument.AutomaticallyUpdateStylesFromTemplate"/>,
+    /// the font-subsetting save policy into <see cref="TextDocument.SaveSubsetFonts"/>,
     /// and the w:autoHyphenation toggle into
     /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
@@ -237,6 +238,10 @@ public static class DocxReader
         // Preserve Word's w:removePersonalInformation package instruction. Metadata removal itself remains
         // the responsibility of the consuming application when it saves.
         document.RemovePersonalInformation = ReadToggle(root, "removePersonalInformation");
+
+        // Save only the font characters used by this document (w:saveSubsetFonts). The policy is independent
+        // of whether the current package carries embedded font parts and does not transform their stored bytes.
+        document.SaveSubsetFonts = ReadToggle(root, "saveSubsetFonts");
 
         // Hide spelling errors (w:hideSpellingErrors): controls document-level proofing indicators without
         // removing proofing metadata. Absent or explicitly off is Word's default.
