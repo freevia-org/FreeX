@@ -390,6 +390,78 @@ public sealed class DocumentViewTrackEditTests
             run.Formatting == RunFormatting.Default);
     }
 
+    [StaFact]
+    public void RibbonTextColor_SelectedRangeTracksOnlyExactCharactersAndUndoRestoresColor()
+    {
+        var view = BuildView("Hello world");
+        view.RevisionAuthor = "Color Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.font-color"), out var command).Should().BeTrue();
+
+        command!.Execute(new RibbonCommandContext(
+            new Dictionary<string, object?> { ["value"] = "#C00000" }));
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Single(run => run.Text == "Hello ").Formatting.ColorHex.Should().Be("#000000");
+        var formatted = paragraph.Runs.Single(run => run.Text == "world");
+        formatted.Formatting.ColorHex.Should().Be("#C00000");
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Color Reviewer");
+        formatted.FormatRevision.PreviousFormatting.ColorHex.Should().Be("#000000");
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.ColorHex == "#000000" && run.FormatRevision == null);
+    }
+
+    [StaFact]
+    public void HighlightClear_SelectedRangeTracksOnlyExactCharactersAndUndoRestoresHighlight()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Hello world", new RunFormatting { HighlightColorHex = "#FFFF00" }));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.CommitToModel();
+        var baseline = ((Paragraph)view.Model.Blocks[0]).Runs.Single().Formatting;
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 0, 0, 5);
+
+        view.SetHighlightColor(null);
+
+        paragraph = (Paragraph)view.Model.Blocks[0];
+        var cleared = paragraph.Runs.Single(run => run.Text == "Hello");
+        cleared.Formatting.HighlightColorHex.Should().BeNull();
+        cleared.FormatRevision.Should().NotBeNull();
+        cleared.FormatRevision!.PreviousFormatting.Should().Be(baseline);
+        paragraph.Runs.Single(run => run.Text == " world").Formatting.HighlightColorHex.Should().Be("#FFFF00");
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting == baseline && run.FormatRevision == null);
+    }
+
+    [StaFact]
+    public void TextColorAndHighlight_CollapsedCaretKeepNativePendingColors()
+    {
+        var view = BuildView("Hello");
+        view.MoveCaretToBlockForTest(0, 5);
+
+        view.SetTextColor("#C00000");
+        view.SetHighlightColor("#FFFF00");
+
+        var foreground = view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.ForegroundProperty)
+            .Should().BeOfType<System.Windows.Media.SolidColorBrush>().Subject;
+        foreground.Color.Should().Be(System.Windows.Media.Color.FromRgb(0xC0, 0x00, 0x00));
+        var background = view.Selection.GetPropertyValue(System.Windows.Documents.TextElement.BackgroundProperty)
+            .Should().BeOfType<System.Windows.Media.SolidColorBrush>().Subject;
+        background.Color.Should().Be(System.Windows.Media.Color.FromRgb(0xFF, 0xFF, 0x00));
+    }
+
     private static WpfRun RenderedRun(DocumentView view, string text) =>
         view.Document.Blocks.OfType<WpfParagraph>()
             .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())
