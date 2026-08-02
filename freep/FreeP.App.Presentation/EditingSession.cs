@@ -787,6 +787,17 @@ public sealed class EditingSession
         return shape;
     }
 
+    /// <summary>Inserts a native multi-target PowerPoint Summary Zoom.</summary>
+    public SlideShape InsertSummaryZoom(IEnumerable<string> targetSectionIds)
+    {
+        if (CurrentSlide is null)
+            throw new InvalidOperationException("A current slide is required to insert a Summary Zoom.");
+
+        var shape = SummaryZoomInsertionPlanner.CreateShape(Presentation, targetSectionIds);
+        AddShape(shape);
+        return shape;
+    }
+
     /// <summary>Deletes all currently selected shapes.</summary>
     public void DeleteSelected()
     {

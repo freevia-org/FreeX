@@ -744,6 +744,7 @@ public static class SlideCloner
             copy.SlideRels[kv.Key] = kv.Value;
         foreach (var kv in src.McRequiresNsUris)
             copy.McRequiresNsUris[kv.Key] = kv.Value;
+        copy.SummaryZoomTargets.AddRange(src.SummaryZoomTargets);
         return copy;
     }
 }

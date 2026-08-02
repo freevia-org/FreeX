@@ -577,6 +577,8 @@ public static class SlideShowHostPlanner
                 ZoomNavigationService.TryGetTargetSlideIndex(
                     presentation,
                     shape.PreservedObject,
+                    RelativeShapeX(shape, slidePoint),
+                    RelativeShapeY(shape, slidePoint),
                     out targetSlideIndex))
             {
                 return true;
@@ -608,6 +610,8 @@ public static class SlideShowHostPlanner
                 ZoomNavigationService.TryGetTargetSlideIndex(
                     presentation,
                     shape.PreservedObject,
+                    RelativeShapeX(shape, slidePoint),
+                    RelativeShapeY(shape, slidePoint),
                     out targetSlideIndex))
             {
                 return true;
@@ -742,5 +746,17 @@ public static class SlideShowHostPlanner
             && slidePoint.X <= shapeX + shapeWidth
             && slidePoint.Y >= shapeY
             && slidePoint.Y <= shapeY + shapeHeight;
+    }
+
+    private static double RelativeShapeX(SlideShape shape, SlideShowPoint point)
+    {
+        var width = shape.ExtentCxEmu / EmusPerDip;
+        return width <= 0 ? 0 : (point.X - shape.OffsetXEmu / EmusPerDip) / width;
+    }
+
+    private static double RelativeShapeY(SlideShape shape, SlideShowPoint point)
+    {
+        var height = shape.ExtentCyEmu / EmusPerDip;
+        return height <= 0 ? 0 : (point.Y - shape.OffsetYEmu / EmusPerDip) / height;
     }
 }

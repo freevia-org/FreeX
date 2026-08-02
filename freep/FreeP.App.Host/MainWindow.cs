@@ -486,6 +486,7 @@ public sealed partial class MainWindow : Window
             onInsertLink:       () => OpenHyperlinkDialog(),
             onInsertSlideZoom:  () => OpenSlideZoomDialog(),
             onInsertSectionZoom: () => OpenSectionZoomDialog(),
+            onInsertSummaryZoom: () => OpenSummaryZoomDialog(),
             // Wave 12B: Find & Replace dialogs.
             onFind:             () => OpenFindDialog(),
             onFindReplace:      () => OpenFindReplaceDialog(),
@@ -4802,6 +4803,21 @@ public sealed partial class MainWindow : Window
             dialog.Owner = this;
         if (dialog.ShowDialog() == true && dialog.SelectedTargetSectionId is { Length: > 0 } targetSectionId)
             Editor.InsertSectionZoom(targetSectionId);
+    }
+
+    internal void OpenSummaryZoomDialog()
+    {
+        var options = SummaryZoomInsertionPlanner.BuildTargetOptions(
+            Editor.Presentation,
+            Editor.CurrentSlideIndex);
+        if (options.Count < 2)
+            return;
+
+        var dialog = new SummaryZoomDialog(options);
+        if (IsVisible)
+            dialog.Owner = this;
+        if (dialog.ShowDialog() == true)
+            Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
     }
 
     // ── Find & Replace dialog (Wave 12B) ──────────────────────────────────────────
