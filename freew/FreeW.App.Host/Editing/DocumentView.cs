@@ -913,6 +913,7 @@ public sealed class DocumentView : RichTextBox
     public void LoadModel(TextDocument document)
     {
         _model = document;
+        _trackChangesEnabled = document.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
         Render();
     }
 
@@ -5114,7 +5115,7 @@ public sealed class DocumentView : RichTextBox
         IsReadOnly = policy.IsBodyEditingLocked;
 
         if (policy.ShouldForceTrackChanges)
-            TrackChangesEnabled = true;
+            _trackChangesEnabled = true;
 
         // A protected / final document gets a distinct amber frame so the locked state is visible. An
         // unprotected document keeps whatever frame ApplyPageChrome set (page border or default grey).
@@ -15594,7 +15595,21 @@ public sealed class DocumentView : RichTextBox
     /// as tracked insertions/deletions through the shared revision edit planner; selection-marking and
     /// accept/reject operate regardless of this flag.
     /// </summary>
-    public bool TrackChangesEnabled { get; set; }
+    private bool _trackChangesEnabled;
+
+    public bool TrackChangesEnabled
+    {
+        get => _trackChangesEnabled;
+        set
+        {
+            if (_trackChangesEnabled == value)
+                return;
+
+            _trackChangesEnabled = value;
+            _model.TrackRevisions = value;
+            OnTextChanged(new TextChangedEventArgs(TextBoxBase.TextChangedEvent, UndoAction.None));
+        }
+    }
 
     /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
     public string RevisionAuthor { get; set; } = "FreeW User";
