@@ -4850,8 +4850,29 @@ public sealed partial class MainWindow : Window
 
     internal void OpenZoomCoverImagePicker()
     {
-        if (Editor.SelectedShapeIds.Count != 1)
+        var selectedShapeId = GetSingleSelectedShapeId();
+        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
             return;
+
+        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
+        if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
+            return;
+
+        string? summarySectionId = null;
+        if (info.SummaryZoomTargets.Count > 0)
+        {
+            var targetOptions = info.SummaryZoomTargets
+                .Select(target => (target.SectionId, string.IsNullOrWhiteSpace(target.Title)
+                    ? target.SectionId
+                    : target.Title))
+                .ToArray();
+            var targetDialog = new SummaryZoomCoverImageTargetDialog(targetOptions);
+            if (IsVisible)
+                targetDialog.Owner = this;
+            if (targetDialog.ShowDialog() != true)
+                return;
+            summarySectionId = targetDialog.SelectedTargetSectionId;
+        }
 
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
@@ -4866,7 +4887,11 @@ public sealed partial class MainWindow : Window
         {
             var bytes = System.IO.File.ReadAllBytes(dialog.FileName);
             var contentType = SlideObjectInsertionPlanner.InferPictureContentType(dialog.FileName);
-            if (Editor.SetSelectedZoomCoverImage(bytes, contentType))
+            var applied = summarySectionId is null
+                ? Editor.SetSelectedZoomCoverImage(bytes, contentType)
+                : Editor.SetSummaryZoomTileCoverImage(
+                    shape.Id, summarySectionId, bytes, contentType);
+            if (applied)
             {
                 _file.MarkDirty();
                 RefreshCanvas();

@@ -297,6 +297,53 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         slideXml.Should().Contain("roundRect");
     }
 
+    [Fact]
+    public void AuthoredSummaryZoom_CoverImageTargetsSingleTileAndReopens()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "slide-1", Title = "Source" });
+        presentation.Slides.Add(new Slide { Id = "slide-2", Title = "Target 1" });
+        presentation.Slides.Add(new Slide { Id = "slide-3", Title = "Target 2" });
+        foreach (var (id, name, slideId) in new[]
+                 {
+                     ("{SECTION-ONE}", "One", "slide-2"),
+                     ("{SECTION-TWO}", "Two", "slide-3"),
+                 })
+        {
+            var section = new PresentationSection { Id = id, Name = name };
+            section.SlideIds.Add(slideId);
+            presentation.Sections.Add(section);
+        }
+
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var inserted = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}" });
+        var firstImage = new byte[] { 7, 8, 9 };
+        var secondImage = new byte[] { 10, 11, 12 };
+        session.SetSummaryZoomTileCoverImage(
+            inserted.Id, "{SECTION-ONE}", firstImage, "image/png").Should().BeTrue();
+        session.SetSummaryZoomTileCoverImage(
+            inserted.Id, "{SECTION-TWO}", secondImage, "image/jpeg").Should().BeTrue();
+
+        var roundTripped = PptxPackageReader.Read(WritePptxToMemory(presentation));
+        var zoom = roundTripped.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
+        var root = XElement.Parse(zoom.PreservedObject!.RawXml);
+        var tiles = root.Descendants().Where(element => element.Name.LocalName == "summaryZmObj").ToArray();
+
+        var firstTile = tiles.Single(tile => tile.Attribute("sectionId")?.Value == "{SECTION-ONE}");
+        firstTile.Descendants().Any(element =>
+            element.Name.LocalName == "zmPr"
+            && element.Attribute("imageType")?.Value == "cover").Should().BeTrue();
+        var secondTile = tiles.Single(tile => tile.Attribute("sectionId")?.Value == "{SECTION-TWO}");
+        secondTile.Descendants().Any(element =>
+            element.Name.LocalName == "zmPr"
+            && element.Attribute("imageType")?.Value == "cover").Should().BeTrue();
+        zoom.PreservedObject.Parts.Values.Should().Contain(bytes => bytes.SequenceEqual(firstImage));
+        zoom.PreservedObject.Parts.Values.Should().Contain(bytes => bytes.SequenceEqual(secondImage));
+        zoom.PreservedObject.SlideRels.Values.Should().HaveCount(2);
+        zoom.PreservedObject.SlideRels.Values.Should().OnlyContain(rel =>
+            rel.RelType.EndsWith("/image", StringComparison.OrdinalIgnoreCase));
+    }
+
     // ── Ink contentPart round-trip ────────────────────────────────────────────
 
     [Fact]
