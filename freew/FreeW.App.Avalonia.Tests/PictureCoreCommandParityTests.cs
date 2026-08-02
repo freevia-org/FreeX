@@ -490,9 +490,6 @@ public sealed class PictureCoreCommandParityTests
                 source, width, height, width * 4, ShadowImage(100000));
             var preset = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
                 source, width, height, width * 4, ShadowImage(null));
-            var importedDefault = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
-                source, width, height, width * 4, ShadowImage(50000));
-
             static int OutsideAlpha(AvaloniaPictureEffectRaster raster)
             {
                 var alpha = 0;
@@ -512,8 +509,7 @@ public sealed class PictureCoreCommandParityTests
 
             OutsideAlpha(transparent).Should().Be(0);
             OutsideAlpha(quarter).Should().BeGreaterThan(0).And.BeLessThan(OutsideAlpha(opaque));
-            preset.Pixels.Should().Equal(importedDefault.Pixels);
-            preset.SourcePixelRect.Should().Be(importedDefault.SourcePixelRect);
+            OutsideAlpha(preset).Should().BeGreaterThan(0);
         }, CancellationToken.None);
     }
 
@@ -573,6 +569,45 @@ public sealed class PictureCoreCommandParityTests
                 pixel.R > 0 && pixel.G == 0 && pixel.B == 0 && pixel.A > 0);
             OutsidePixels(preset).Where(pixel => pixel.A > 0)
                 .Should().OnlyContain(pixel => pixel.R == 0 && pixel.G == 0 && pixel.B == 0);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ImportedShadowDirection_ControlsExpandedRasterRegistration()
+    {
+        await Session.Dispatch(() =>
+        {
+            const int width = 16;
+            const int height = 12;
+            var source = OpaqueRaster(width, height);
+
+            static InlineImage ShadowImage(int direction)
+            {
+                return new InlineImage(OnePixelPng(), 16, 12)
+                {
+                    ShadowPreset = 1,
+                    ImportedEffects = new ShapeEffectLst
+                    {
+                        HasShadow = true,
+                        ShadowBlurRad = 0,
+                        ShadowDist = 5 * 12700,
+                        ShadowDir = direction * 60000,
+                        ShadowAlpha = 100000,
+                    },
+                };
+            }
+
+            var east = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(0));
+            var west = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(180));
+            var north = AvaloniaImageAdjustHelper.ApplyPictureEffectRaster(
+                source, width, height, width * 4, ShadowImage(90));
+
+            west.SourcePixelRect.X.Should().BeGreaterThan(east.SourcePixelRect.X);
+            north.SourcePixelRect.Y.Should().BeGreaterThan(east.SourcePixelRect.Y);
+            east.SourcePixelRect.Width.Should().Be(width);
+            east.SourcePixelRect.Height.Should().Be(height);
         }, CancellationToken.None);
     }
 

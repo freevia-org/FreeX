@@ -6,6 +6,51 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class PictureEffectVisualPlannerTests
 {
     [Fact]
+    public void ImportedShadow_BuildsExactDrawingMlGeometry()
+    {
+        var image = new InlineImage([], 1, 1)
+        {
+            ShadowPreset = 2,
+            ImportedEffects = new ShapeEffectLst
+            {
+                HasShadow = true,
+                ShadowBlurRad = 76200,
+                ShadowDist = 63500,
+                ShadowDir = 5400000,
+                ShadowAlpha = 25000,
+                ShadowColorHex = "102030",
+            },
+        };
+
+        var plan = PictureEffectVisualPlanner.BuildShadowPlan(image);
+
+        plan.BlurPoints.Should().Be(6);
+        plan.DistancePoints.Should().Be(5);
+        plan.DirectionDegrees.Should().Be(90);
+        plan.OffsetXPoints.Should().BeApproximately(0, 0.000001);
+        plan.OffsetYPoints.Should().Be(-5);
+        plan.Opacity.Should().Be(0.25);
+        plan.ColorHex.Should().Be("102030");
+    }
+
+    [Fact]
+    public void PresetShadowPlan_PreservesExistingHostGeometry()
+    {
+        var plan = PictureEffectVisualPlanner.BuildShadowPlan(new InlineImage([], 1, 1)
+        {
+            ShadowPreset = 2,
+        });
+
+        plan.BlurPoints.Should().Be(6);
+        plan.DistancePoints.Should().Be(5);
+        plan.DirectionDegrees.Should().Be(315);
+        plan.OffsetXPoints.Should().Be(5);
+        plan.OffsetYPoints.Should().Be(5);
+        plan.Opacity.Should().Be(0.55);
+        plan.ColorHex.Should().Be("000000");
+    }
+
+    [Fact]
     public void ImportedShadow_UsesAuthoredColor()
     {
         var image = new InlineImage([], 1, 1)
