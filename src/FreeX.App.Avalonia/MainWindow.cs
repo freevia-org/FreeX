@@ -2028,6 +2028,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var pivotFieldPane = BuildPivotFieldPaneChrome();
         DockPanel.SetDock(pivotFieldPane, Dock.Right);
         workArea.Children.Add(pivotFieldPane);
+        var slicerTimelinePane = BuildSlicerTimelinePaneChrome();
+        DockPanel.SetDock(slicerTimelinePane, Dock.Right);
+        workArea.Children.Add(slicerTimelinePane);
 
         workArea.Children.Add(BuildWorksheetViewportChrome());
 
@@ -4363,6 +4366,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         Title = FormatWindowWorkbookTitle();
         UpdateViewportScrollBars();
         RefreshPivotFieldPane();
+        RefreshSlicerTimelinePane();
         RefreshPivotContextualTab();
         UpdateSaveButton();
         _refreshRibbonToggleStates?.Invoke();
@@ -26958,6 +26962,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
         }
 
+        if (TryHandleSlicerTimelinePaneKey(e))
+            return;
+
         if (IsShellFocusCycleKey(e))
         {
             e.Handled = true;
@@ -27489,7 +27496,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private bool IsShellFocusTargetAvailable(ShellFocusTarget target) =>
         target != ShellFocusTarget.TaskPane ||
-        _pivotFieldPaneHost.IsVisible;
+        _pivotFieldPaneHost.IsVisible ||
+        _slicerTimelinePaneHost.IsVisible;
 
     private ShellFocusTarget GetCurrentShellFocusTarget()
     {
@@ -27503,6 +27511,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return ShellFocusTarget.StatusBar;
 
         if (IsPivotFieldPaneFocused())
+            return ShellFocusTarget.TaskPane;
+
+        if (IsSlicerTimelinePaneFocused())
             return ShellFocusTarget.TaskPane;
 
         if (IsAnyToolbarControlFocused())
@@ -27524,7 +27535,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private bool FocusVisibleTaskPane() =>
         (_pivotFieldPaneSearchBox is { } searchBox && FocusControl(searchBox)) ||
-        FocusControl(_pivotFieldPaneHost);
+        FocusControl(_pivotFieldPaneHost) ||
+        FocusSlicerTimelinePane();
 
     private bool IsPivotFieldPaneFocused() =>
         _pivotFieldPaneHost.IsFocused ||

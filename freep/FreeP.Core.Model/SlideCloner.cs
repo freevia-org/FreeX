@@ -406,6 +406,7 @@ public static class SlideCloner
             Fill          = style.Fill,
             StrokeColor   = style.StrokeColor,
             StrokeWidthPt = style.StrokeWidthPt,
+            ExplosionPercent = style.ExplosionPercent,
             Marker        = CloneChartMarkerStyle(style.Marker),
         };
 

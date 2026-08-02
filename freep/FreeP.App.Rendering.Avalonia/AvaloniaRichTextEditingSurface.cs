@@ -252,35 +252,24 @@ internal sealed class AvaloniaRichTextEditingSurface : Control
                 if (!MatchesInlineTable(paragraph, table, source))
                     continue;
 
-                var grid = AvaloniaInlineTableGridLayout.Create(
-                    table.Info.Table,
-                    new Point(
-                        paragraph.Origin.X + paragraph.Layout.HitTestTextPosition(table.Start).X,
-                        paragraph.Origin.Y + paragraph.Layout.HitTestTextPosition(table.Start).Y),
-                    table.AvailableWidthDip);
-                int currentIndex = -1;
-                for (int index = 0; index < grid.Cells.Count; index++)
-                {
-                    var cell = grid.Cells[index];
-                    if (cell.RowIndex == source.RowIndex
-                        && cell.ColumnIndex == source.ColumnIndex)
-                    {
-                        currentIndex = index;
-                        break;
-                    }
-                }
-                if (currentIndex < 0 || currentIndex >= grid.Cells.Count)
+                var logicalGrid = InlineTableLogicalGridPlan.Create(table.Info.Table);
+                var current = logicalGrid.ResolveCell(
+                    source.RowIndex,
+                    source.ColumnIndex);
+                if (current is null
+                    || !logicalGrid.TryGetAdjacent(current, backwards, out var target))
                     continue;
 
-                int step = backwards ? -1 : 1;
-                for (int index = currentIndex + step;
-                     index >= 0 && index < grid.Cells.Count;
-                     index += step)
+                var tableOrigin = new Point(
+                    paragraph.Origin.X + paragraph.Layout.HitTestTextPosition(table.Start).X,
+                    paragraph.Origin.Y + paragraph.Layout.HitTestTextPosition(table.Start).Y);
+                var grid = AvaloniaInlineTableGridLayout.Create(
+                    table.Info.Table,
+                    tableOrigin,
+                    table.AvailableWidthDip);
+                if (grid.GetCell(target.RowIndex, target.ColumnIndex) is { } cell
+                    && cell.Cell?.TextBody is not null)
                 {
-                    var cell = grid.Cells[index];
-                    if (cell.Cell?.TextBody is null)
-                        continue;
-
                     hit = new InlineTableCellHit(
                         source.LogicalPosition,
                         table.Info,

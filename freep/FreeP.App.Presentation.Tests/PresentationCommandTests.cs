@@ -1434,6 +1434,23 @@ public sealed class PresentationCommandTests
     }
 
     [Fact]
+    public void SlideCloner_CloneShape_PreservesPiePointExplosion()
+    {
+        var shape = MakeChart(1, protectedObject: false);
+        shape.Chart!.ChartType = ChartType.Pie;
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 2, 3 });
+        series.PointStyles[1] = new ChartPointStyle { ExplosionPercent = 40 };
+        shape.Chart.Series.Add(series);
+
+        var clone = SlideCloner.CloneShape(shape);
+
+        clone.Chart!.Series[0].PointStyles[1].ExplosionPercent.Should().Be(40);
+        clone.Chart.Series[0].PointStyles[1].ExplosionPercent = 10;
+        shape.Chart.Series[0].PointStyles[1].ExplosionPercent.Should().Be(40);
+    }
+
+    [Fact]
     public void SlideCloner_CloneShape_ClonesMediaAndCaptionTracks()
     {
         var shape = MakeShape(1);

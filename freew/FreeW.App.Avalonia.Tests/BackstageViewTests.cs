@@ -648,6 +648,60 @@ public class BackstageViewTests
     }
 
     [Fact]
+    public async Task Export_pane_preserves_shared_WPF_authority_button_order_and_geometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks() with { ExportXps = () => { } });
+            view.TryActivateEntry("Export").Should().BeTrue();
+
+            var buttons = view.GetLogicalDescendants()
+                .OfType<Button>()
+                .Where(button => (AutomationProperties.GetAutomationId(button) ?? string.Empty)
+                    .StartsWith("BackstageAction_", StringComparison.Ordinal))
+                .ToArray();
+
+            buttons.Select(button => button.Content).Should().Equal(
+                "Create PDF or XPS",
+                "Export to XPS",
+                "Word Document (*.docx)",
+                "Strict Open XML Document (*.docx)",
+                "Word Macro-Enabled Document (*.docm)",
+                "Word Template (*.dotx)",
+                "Word Macro-Enabled Template (*.dotm)",
+                "Word XML Document (*.xml)",
+                "Word 2003 XML Document (*.xml)",
+                "Web Page, Filtered (*.htm, *.html)",
+                "Web Page (*.htm, *.html)",
+                "Single File Web Page (*.mht, *.mhtml)",
+                "OpenDocument Text (*.odt)",
+                "OpenDocument Text Template (*.ott)",
+                "Rich Text Format (*.rtf)",
+                "Plain Text (*.txt, *.text)",
+                "Log File (*.log)",
+                "Word 97-2003 Document (*.doc)",
+                "Word 97-2003 Template (*.dot)");
+
+            var metrics = BackstageExportPanePlanner.VisualMetrics;
+            var pdf = buttons[0];
+            pdf.FontSize.Should().Be(metrics.ActionFontSize);
+            pdf.Parent.Should().BeOfType<StackPanel>();
+            ((StackPanel)pdf.Parent!).Margin.Should().Be(new Thickness(
+                metrics.ActionRowMargin.Left,
+                metrics.ActionRowMargin.Top,
+                metrics.ActionRowMargin.Right,
+                metrics.ActionRowMargin.Bottom));
+            ((StackPanel)pdf.Parent!).Children.OfType<TextBlock>()
+                .Single(block => (block.Text ?? string.Empty).Contains("Export-only fixed-layout PDF copy", StringComparison.Ordinal))
+                .Margin.Should().Be(new Thickness(
+                    metrics.ActionDescriptionMargin.Left,
+                    metrics.ActionDescriptionMargin.Top,
+                    metrics.ActionDescriptionMargin.Right,
+                    metrics.ActionDescriptionMargin.Bottom));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task PrintPreviewDialog_Escape_closes_the_real_window()
     {
         await Session.Dispatch(() =>

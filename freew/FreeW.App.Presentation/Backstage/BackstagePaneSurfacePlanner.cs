@@ -258,28 +258,11 @@ public static class BackstagePaneSurfacePlanner
         text ??= BackstageExportPaneSurfaceText.FreeW;
         var fixedLayoutCapabilities = DocumentFormatCapabilityPlanner
             .BuildFixedLayoutExportRows(DocumentFormatCapabilityPlanner.BuildFixedLayoutExportFormats(exportXps is not null));
-        var pdfCapability = fixedLayoutCapabilities.Single(row =>
-            string.Equals(row.PrimaryExtension, ".pdf", StringComparison.OrdinalIgnoreCase));
-
-        var fixedLayoutRows = new List<BackstageActionRow>
-        {
-            new(
-                exportXps is null ? text.PdfOnlyActionLabel : text.PdfActionLabel,
-                pdfCapability.Description,
-                exportPdf),
-        };
-
-        if (exportXps is not null &&
-            !string.IsNullOrWhiteSpace(text.XpsActionLabel) &&
-            !string.IsNullOrWhiteSpace(text.XpsActionDescription))
-        {
-            var xpsCapability = fixedLayoutCapabilities.Single(row =>
-                string.Equals(row.PrimaryExtension, ".xps", StringComparison.OrdinalIgnoreCase));
-            fixedLayoutRows.Add(new BackstageActionRow(
-                text.XpsActionLabel,
-                xpsCapability.Description,
-                exportXps));
-        }
+        var fixedLayoutRows = BackstageExportPanePlanner.BuildFixedLayoutActions(
+            fixedLayoutCapabilities,
+            exportPdf,
+            exportXps,
+            text);
 
         return new BackstageActionPaneSurfaceSpec(
             text.Title,

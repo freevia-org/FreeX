@@ -100,6 +100,8 @@ public sealed class FreeXWave72PivotTableDoubleClickTests
         runner.Should().Contain("\"pivot-table-details-double-click\"");
         runner.Should().Contain("\"pivot-table-details-double-click-physical\"");
         runner.Should().Contain("FreeX_wave50_pivot_fields.xlsx");
+        runner.Should().Contain(
+            "$PhysicalProbeSelector -in @(\"pivot-field-list\", \"pivot-table-details-double-click\")");
         probe.Should().Contain("probe_pivot_table_details_double_click()");
         probe.Should().Contain("xdotool click --repeat 2 --delay 180 1");
         probe.Should().Contain("pivot_detail_package_signature");

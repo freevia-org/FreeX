@@ -570,7 +570,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
             out var next))
             return BeginInlineTableCellEdit(next);
 
-        return backwards ? false : AppendInlineTableRow(current);
+        return backwards || AppendInlineTableRow(current);
     }
 
     private bool AppendInlineTableRow(
@@ -578,11 +578,7 @@ internal sealed class AvaloniaRichTextEditor : Grid
     {
         CommitInlineTableCellEdit(focusParent: false);
         var table = current.Table.Table;
-        int columnCount = Math.Max(1, table.ColumnWidthsEmu.Count);
-        long rowHeight = table.Rows.LastOrDefault()?.HeightEmu ?? 0;
-        var row = new TableRow { HeightEmu = rowHeight };
-        for (int column = 0; column < columnCount; column++)
-            row.Cells.Add(new TableCell { TextBody = new TextBody() });
+        var row = InlineTableLogicalGridPlan.CreateAppendRow(table);
 
         var pending = _pendingInlineTableRows.FirstOrDefault(item =>
             item.LogicalPosition == current.LogicalPosition);

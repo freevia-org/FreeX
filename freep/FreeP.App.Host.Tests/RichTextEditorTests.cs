@@ -335,6 +335,79 @@ public sealed class RichTextEditorTests
     }
 
     [StaFact]
+    public void WpfInlineTableEditor_SkipsMergedCellsAndCommitsCompactSourceCell()
+    {
+        TextBody Body(string text) => new()
+        {
+            Paragraphs =
+            {
+                new ModelParagraph { Runs = { new ModelRun { Text = text } } },
+            },
+        };
+
+        var table = new TableShape();
+        table.ColumnWidthsEmu.AddRange([457200, 457200, 457200]);
+        table.Rows.Add(new ModelTableRow
+        {
+            Cells =
+            {
+                new ModelTableCell { GridSpan = 2, RowSpan = 2, TextBody = Body("Anchor") },
+                new ModelTableCell { HMerge = true },
+                new ModelTableCell { TextBody = Body("Top right") },
+            },
+        });
+        table.Rows.Add(new ModelTableRow
+        {
+            Cells =
+            {
+                new ModelTableCell { VMerge = true },
+                new ModelTableCell { VMerge = true },
+                new ModelTableCell { TextBody = Body("Bottom right") },
+            },
+        });
+        var info = new InlineTableInfo { Table = table };
+        var body = new TextBody
+        {
+            Paragraphs =
+            {
+                new ModelParagraph
+                {
+                    Runs = { new ModelRun { Text = "\uFFFC", InlineTable = info } },
+                },
+            },
+        };
+
+        var document = TextBodyFlowDocumentConverter.ToFlowDocument(body);
+        var grid = document.Blocks.OfType<WpfParagraph>().Single().Inlines
+            .OfType<InlineUIContainer>().Single().Child.Should().BeOfType<Grid>().Subject;
+        var cells = grid.Children.OfType<TextBox>().ToList();
+
+        cells.Should().HaveCount(3);
+        cells.Select(cell => (Grid.GetRow(cell), Grid.GetColumn(cell)))
+            .Should().Equal((0, 0), (0, 2), (1, 2));
+
+        cells[2].Text = "Edited bottom right";
+        var restored = TextBodyFlowDocumentConverter.FromFlowDocument(document, body);
+        InCanvasTextEditPlanner.ExtractPlainText(
+                restored.Paragraphs.Single().Runs.Single().InlineTable!.Table.Rows[0].Cells[2].TextBody)
+            .Should().Be("Top right");
+        InCanvasTextEditPlanner.ExtractPlainText(
+                restored.Paragraphs.Single().Runs.Single().InlineTable!.Table.Rows[1].Cells[2].TextBody)
+            .Should().Be("Edited bottom right");
+
+        var editorInfo = grid.Tag.Should().BeOfType<InlineTableInfo>().Subject;
+        TextBodyFlowDocumentConverter.TryNavigateInlineTableCell(
+            grid, editorInfo, cells[2], backwards: true).Should().BeTrue();
+        TextBodyFlowDocumentConverter.TryNavigateInlineTableCell(
+            grid, editorInfo, cells[0], backwards: true).Should().BeTrue();
+        TextBodyFlowDocumentConverter.TryNavigateInlineTableCell(
+            grid, editorInfo, cells[2], backwards: false).Should().BeTrue();
+        editorInfo.Table.Rows.Should().HaveCount(3);
+        grid.Children.OfType<TextBox>().Should().HaveCount(6);
+        grid.Children.OfType<TextBox>().Last().Text.Should().BeEmpty();
+    }
+
+    [StaFact]
     public void WpfSplitFirstParagraph_UsesTextLineageForFollowingMetadata()
     {
         var original = DistinctParagraphBody();
