@@ -544,6 +544,12 @@
   <data name="Ribbon_Command_InsertChartWaterfall_KeyTip" xml:space="preserve">
     <value>WF</value>
   </data>
+  <data name="Ribbon_Command_InsertChartCombo_Label" xml:space="preserve">
+    <value>Combo</value>
+  </data>
+  <data name="Ribbon_Command_InsertChartCombo_KeyTip" xml:space="preserve">
+    <value>CO</value>
+  </data>
   <data name="Ribbon_Command_ChartEditData_Label" xml:space="preserve">
     <value>Edit Data</value>
   </data>

@@ -2704,8 +2704,15 @@ public sealed partial class MainWindow : Window
                 if (LastSmartArtTextPaneApplyResult is not { Applied: true })
                     return false;
 
-                CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
-                return true;
+                if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape))
+                    return true;
+
+                LastSmartArtTextPaneApplyResult = LastSmartArtTextPaneApplyResult with
+                {
+                    Applied = false,
+                    Message = "SmartArt native data or drawing cache refresh failed."
+                };
+                return false;
             });
         }
 
@@ -2905,8 +2912,15 @@ public sealed partial class MainWindow : Window
             if (result is not { Applied: true })
                 return false;
 
-            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
-            return true;
+            if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape, allowCachedPackageEdit: true))
+                return true;
+
+            result = result with
+            {
+                Applied = false,
+                Message = "SmartArt native data or drawing cache refresh failed."
+            };
+            return false;
         });
 
         if (result is { Applied: true })
@@ -2932,8 +2946,15 @@ public sealed partial class MainWindow : Window
             if (result is not { Applied: true })
                 return false;
 
-            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
-            return true;
+            if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape, allowCachedPackageEdit: true))
+                return true;
+
+            result = result with
+            {
+                Applied = false,
+                Message = "SmartArt native data or drawing cache refresh failed."
+            };
+            return false;
         });
 
         if (result is { Applied: true })
@@ -2966,8 +2987,15 @@ public sealed partial class MainWindow : Window
             if (LastSmartArtColorApplyResult is not { Applied: true })
                 return false;
 
-            CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
-            return true;
+            if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape, allowCachedPackageEdit: true))
+                return true;
+
+            LastSmartArtColorApplyResult = LastSmartArtColorApplyResult with
+            {
+                Applied = false,
+                Message = "SmartArt native data or drawing cache refresh failed."
+            };
+            return false;
         });
 
         if (LastSmartArtColorApplyResult is { Applied: true })
@@ -3121,8 +3149,15 @@ public sealed partial class MainWindow : Window
                     return false;
 
                 _selectedSmartArtTextPaneModelId = LastSmartArtTextPaneEditResult.SelectedModelId;
-                CommitSmartArtTextPaneMutation(smartArt, smartArtShape);
-                return true;
+                if (CommitSmartArtTextPaneMutation(smartArt, smartArtShape))
+                    return true;
+
+                LastSmartArtTextPaneEditResult = LastSmartArtTextPaneEditResult with
+                {
+                    Applied = false,
+                    Message = "SmartArt native data or drawing cache refresh failed."
+                };
+                return false;
             });
         }
 
@@ -3137,9 +3172,18 @@ public sealed partial class MainWindow : Window
         return LastSmartArtTextPaneEditResult;
     }
 
-    private void CommitSmartArtTextPaneMutation(SmartArtShape smartArt, SlideShape smartArtShape)
+    private bool CommitSmartArtTextPaneMutation(
+        SmartArtShape smartArt,
+        SlideShape smartArtShape,
+        bool allowCachedPackageEdit = false)
     {
+        if (smartArt.Data is null)
+            return allowCachedPackageEdit;
+
         LastSmartArtDataPartRewriteResult = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+        if (LastSmartArtDataPartRewriteResult is not { Applied: true })
+            return false;
+
         LastSmartArtDrawingCacheRegenerationResult = SmartArtEditingPlanner.RegenerateDrawingCache(
             smartArt,
             smartArtShape.OffsetXEmu,
@@ -3148,6 +3192,7 @@ public sealed partial class MainWindow : Window
             smartArtShape.ExtentCyEmu,
             ResolveCurrentSlideTheme(),
             Editor.CurrentSlide?.ColorMapOverride);
+        return LastSmartArtDrawingCacheRegenerationResult is { Applied: true };
     }
 
     private SlideShape? GetSelectedSmartArtShape()

@@ -241,6 +241,8 @@ public sealed class LocTests
             "Ribbon_Command_InsertChartFunnel_KeyTip",
             "Ribbon_Command_InsertChartWaterfall_Label",
             "Ribbon_Command_InsertChartWaterfall_KeyTip",
+            "Ribbon_Command_InsertChartCombo_Label",
+            "Ribbon_Command_InsertChartCombo_KeyTip",
             "Ribbon_Command_ChartEditData_Label",
             "Ribbon_Command_ChartEditData_KeyTip",
             "Ribbon_Group_Links_Label",

@@ -535,6 +535,9 @@ public static class FreePRibbon
             group.Medium(SlideObjectInsertionPlanner.ChartWaterfallCommandId,
                 FreePRibbonText.InsertChartWaterfallLabel, RibbonCommandIconKind.ChartColumn,
                 FreePRibbonText.InsertChartWaterfallKeyTip);
+            group.Medium(SlideObjectInsertionPlanner.ChartComboCommandId,
+                FreePRibbonText.InsertChartComboLabel, RibbonCommandIconKind.ChartColumn,
+                FreePRibbonText.InsertChartComboKeyTip);
             group.Dropdown(
                 ChartDataDialogPlanner.ChangeChartTypeCommandId,
                 FreePRibbonText.ChartChangeTypeLabel,
