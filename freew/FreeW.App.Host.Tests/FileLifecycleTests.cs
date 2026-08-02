@@ -133,6 +133,30 @@ public sealed class FileLifecycleTests : IDisposable
         Assert.Equal("Opened", file.DisplayName);
     }
 
+    [StaTheory]
+    [InlineData(true, "Ada Lovelace")]
+    [InlineData(false, "stale author")]
+    public void OpenPath_HonorsUpdateFieldsSettingAndRemainsClean(bool updateFields, string expectedText)
+    {
+        var (_, editor, file, _, _) = CreateHarness();
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.UpdateFieldsOnOpen = updateFields;
+        document.Properties.Author = "Ada Lovelace";
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("stale author") { FieldKind = RunFieldKind.Author });
+        document.Blocks.Add(paragraph);
+        var path = Path.Combine(_tempDir, $"UpdateFields-{updateFields}.docx");
+        DocxWriter.Write(document, path);
+
+        var opened = file.OpenPath(path);
+
+        Assert.True(opened);
+        Assert.Equal(expectedText, editor.Model.PlainText.Trim());
+        Assert.False(file.IsDirty);
+        Assert.Equal(path, file.CurrentPath);
+    }
+
     [StaFact]
     public void ImportPdfTextPath_LoadsAsUntitledDirtyDocument()
     {
