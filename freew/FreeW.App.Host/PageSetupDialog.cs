@@ -41,6 +41,7 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         double MarginLeftPt,
         double MarginRightPt,
         double GutterPt,
+        bool GutterAtTop,
         bool Landscape,
         bool MirrorMargins,
         double WidthPt,
@@ -58,6 +59,7 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _left;
     private readonly TextBox _right;
     private readonly TextBox _gutter;
+    private readonly ComboBox _gutterPosition;
     private readonly ComboBox _orientation;
     private readonly ComboBox _multiplePages;
     private readonly ComboBox _applyTo;
@@ -110,6 +112,7 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _left = NumberBox(state.MarginLeftText);
         _right = NumberBox(state.MarginRightText);
         _gutter = NumberBox(state.GutterText);
+        _gutterPosition = Combo(PageSetupDialogPlanner.GutterPositionNames.ToArray(), state.GutterPositionIndex);
         _orientation = Combo(PageSetupDialogPlanner.OrientationNames.ToArray(), state.OrientationIndex);
         _multiplePages = Combo(PageSetupDialogPlanner.MultiplePagesNames.ToArray(), state.MultiplePagesIndex);
         _applyTo = Combo(PageSetupDialogPlanner.ApplyToNames.ToArray(), 0);
@@ -149,14 +152,15 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private UIElement BuildMarginsTab()
     {
-        var grid = TwoColumnGrid(7);
+        var grid = TwoColumnGrid(8);
         AddRow(grid, 0, "Top (pt):", _top);
         AddRow(grid, 1, "Bottom (pt):", _bottom);
         AddRow(grid, 2, "Left (pt):", _left);
         AddRow(grid, 3, "Right (pt):", _right);
         AddRow(grid, 4, "Gutter (pt):", _gutter);
-        AddRow(grid, 5, "Orientation:", _orientation);
-        AddRow(grid, 6, "Multiple pages:", _multiplePages);
+        AddRow(grid, 5, PageSetupDialogPlanner.GutterPositionLabel, _gutterPosition);
+        AddRow(grid, 6, "Orientation:", _orientation);
+        AddRow(grid, 7, "Multiple pages:", _multiplePages);
         // "Apply to" is shown on every tab in Word; here it lives at the foot of the Margins tab.
         var applyGrid = TwoColumnGrid(1);
         AddRow(applyGrid, 0, "Apply to:", _applyTo);
@@ -297,7 +301,8 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             VerticalAlignmentIndex: _vAlign.SelectedIndex,
             UseSelectedPaperPreset: false,
             GeometryMode: PageSetupGeometryMode.PortraitInputSwappedWhenLandscape,
-            ValidationProfile: PageSetupValidationProfile.UnifiedDialog);
+            ValidationProfile: PageSetupValidationProfile.UnifiedDialog,
+            GutterPositionIndex: _gutterPosition.SelectedIndex);
 
         if (!PageSetupDialogPlanner.TryBuildResult(
                 input,
@@ -323,6 +328,7 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         MarginLeftPt: result.MarginLeftPt,
         MarginRightPt: result.MarginRightPt,
         GutterPt: result.GutterPt,
+        GutterAtTop: result.GutterAtTop,
         Landscape: result.Landscape,
         MirrorMargins: result.MirrorMargins,
         WidthPt: result.WidthPt,
@@ -340,6 +346,7 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         MarginLeftPt: result.MarginLeftPt,
         MarginRightPt: result.MarginRightPt,
         GutterPt: result.GutterPt,
+        GutterAtTop: result.GutterAtTop,
         Landscape: result.Landscape,
         MirrorMargins: result.MirrorMargins,
         WidthPt: result.WidthPt,
