@@ -3815,9 +3815,9 @@ public static class DocxReader
         if (tblW?.Attribute(W + "type")?.Value == "dxa")
             table.PreferredWidthPt = DxaToPoints(tblW.Attribute(W + "w")?.Value);
 
-        // Word uses auto-fit when tblLayout is absent. FreeW's model default is fixed, so preserve
-        // the explicit OOXML mode when present and retain the historical fixed default otherwise.
-        if (string.Equals(tblPr?.Element(W + "tblLayout")?.Attribute(W + "type")?.Value, "autofit", StringComparison.OrdinalIgnoreCase))
+        // Word uses auto-fit when tblLayout is absent. Only an explicit fixed payload disables it.
+        var tableLayoutType = tblPr?.Element(W + "tblLayout")?.Attribute(W + "type")?.Value;
+        if (!string.Equals(tableLayoutType, "fixed", StringComparison.OrdinalIgnoreCase))
             table.AutoFit = AutoFitMode.Contents;
 
         // Table alignment (w:jc); absent → Left.

@@ -1050,6 +1050,27 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_OmittedLayout_UsesWordDefaultContentAutoFit()
+    {
+        var result = ReadHandAuthoredDocx(
+            """
+            <w:tbl>
+              <w:tblPr><w:tblW w:w="4600" w:type="dxa"/></w:tblPr>
+              <w:tblGrid><w:gridCol w:w="2300"/><w:gridCol w:w="2300"/></w:tblGrid>
+              <w:tr>
+                <w:tc><w:p><w:r><w:t>short</w:t></w:r></w:p></w:tc>
+                <w:tc><w:p><w:r><w:t>longer content</w:t></w:r></w:p></w:tc>
+              </w:tr>
+            </w:tbl>
+            """);
+
+        var table = result.Blocks.OfType<Table>().Single();
+        table.AutoFit.Should().Be(AutoFitMode.Contents);
+        table.PreferredWidthPt.Should().Be(230);
+        table.ColumnWidthsPt.Should().Equal(115, 115);
+    }
+
+    [Fact]
     public void Table_WithoutShadingOrWidths_StillRoundTrips()
     {
         var doc = new TextDocument();
