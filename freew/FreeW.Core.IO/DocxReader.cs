@@ -2093,6 +2093,7 @@ public static class DocxReader
         Underline = direct.Underline || inherited.Underline,
         Strikethrough = direct.Strikethrough || inherited.Strikethrough,
         Hidden = direct.Hidden || inherited.Hidden,
+        WebHidden = direct.WebHidden || inherited.WebHidden,
         SmallCaps = direct.SmallCaps || inherited.SmallCaps,
         AllCaps = direct.AllCaps || inherited.AllCaps,
         Rtl = direct.Rtl || inherited.Rtl,
@@ -6646,6 +6647,7 @@ public static class DocxReader
             Underline = underline is not null && (underline.Attribute(W + "val")?.Value ?? "single") != "none",
             Strikethrough = ReadToggle(rPr, "strike"),
             Hidden = ReadToggle(rPr, "vanish"),
+            WebHidden = ReadToggle(rPr, "webHidden"),
             SmallCaps = ReadToggle(rPr, "smallCaps"),
             AllCaps = ReadToggle(rPr, "caps"),
             Rtl = ReadToggle(rPr, "rtl"),
@@ -7037,6 +7039,7 @@ public static class DocxReader
                 Bold = defaultRun.Bold,
                 Italic = defaultRun.Italic,
                 Hidden = defaultRun.Hidden || document.DefaultRun.Hidden,
+                WebHidden = defaultRun.WebHidden || document.DefaultRun.WebHidden,
             };
         }
 
