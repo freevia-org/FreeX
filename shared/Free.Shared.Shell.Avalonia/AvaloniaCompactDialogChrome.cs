@@ -312,6 +312,12 @@ public static class AvaloniaCompactDialogChrome
     /// <summary>Matches the WPF Legal Notices button's neutral default-state border.</summary>
     public static void ApplyLegalNoticesDefaultButtonChrome(Button button)
     {
+        ApplyNeutralDefaultButtonChrome(button);
+    }
+
+    /// <summary>Matches the WPF neutral resting border for a default action button.</summary>
+    public static void ApplyNeutralDefaultButtonChrome(Button button)
+    {
         ArgumentNullException.ThrowIfNull(button);
 
         button.BorderBrush = ButtonBorderBrush;

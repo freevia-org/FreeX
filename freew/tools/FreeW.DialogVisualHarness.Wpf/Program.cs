@@ -38,7 +38,9 @@ static int Main(string[] args)
     File.WriteAllText(Path.Combine(output, "wpf_dialog_capture_manifest.json"), JsonSerializer.Serialize(manifest, JsonOptions()));
     Console.WriteLine($"wpf scenarios: {captures.Count}; captured: {captures.Count(c => c.Status == "captured")}; unsupported: {captures.Count(c => c.Status != "captured")}");
     application.Shutdown();
-    return 0;
+    return captures.All(c => c.Status == "captured"
+        && c.FullPixelContent?.PassesContentGate == true
+        && c.TargetPixelContent?.PassesContentGate == true) ? 0 : 2;
 }
 
 static bool TryCapture(Scenario scenario, string output, out Capture capture)
@@ -69,6 +71,12 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
         Directory.CreateDirectory(Path.GetDirectoryName(cropPath)!);
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(dialog);
+        var content = ReadContent(bitmap, width, height);
+        if (!content.PassesContentGate)
+        {
+            Console.Error.WriteLine($"wpf {scenario.Id}: invalid rendered content: {content.Failure}");
+            return false;
+        }
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = new MemoryStream();
@@ -78,7 +86,7 @@ static bool TryCapture(Scenario scenario, string output, out Capture capture)
         File.WriteAllBytes(cropPath, png);
         var dpi = VisualTreeHelper.GetDpi(dialog);
         var semantics = ReadSemantics(dialog);
-        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF dialog rendered through RenderTargetBitmap.", Relative(output, cropPath));
+        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF dialog rendered through RenderTargetBitmap; full and target images passed pixel-content validation.", Relative(output, cropPath), content, content);
         return true;
     }
     catch (Exception ex)
@@ -136,6 +144,12 @@ static bool CaptureRenderedWindow(Scenario scenario, string output, Window dialo
         Directory.CreateDirectory(Path.GetDirectoryName(cropPath)!);
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(dialog);
+        var content = ReadContent(bitmap, width, height);
+        if (!content.PassesContentGate)
+        {
+            Console.Error.WriteLine($"wpf {scenario.Id}: invalid rendered content: {content.Failure}");
+            return false;
+        }
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
         using var stream = new MemoryStream();
@@ -146,7 +160,7 @@ static bool CaptureRenderedWindow(Scenario scenario, string output, Window dialo
         File.WriteAllBytes(cropPath, png);
         var dpi = VisualTreeHelper.GetDpi(dialog);
         var semantics = ReadSemantics(dialog);
-        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF static-prompt dialog captured before its cancel path returned.", Relative(output, cropPath));
+        capture = new Capture(scenario.Id, "wpf", scenario.RouteId, scenario.State, "captured", Relative(output, path), width, height, width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, new Rect(0, 0, width, height), semantics, null, "Real app-owned WPF static-prompt dialog captured before its cancel path returned; full and target images passed pixel-content validation.", Relative(output, cropPath), content, content);
         return true;
     }
     catch (Exception ex)
@@ -156,9 +170,24 @@ static bool CaptureRenderedWindow(Scenario scenario, string output, Window dialo
     }
 }
 
+static PixelContent ReadContent(RenderTargetBitmap bitmap, int width, int height)
+{
+    var pixels = new byte[checked(width * height * 4)];
+    bitmap.CopyPixels(pixels, width * 4, 0);
+    return PixelContentMetrics.Compute(pixels, width, height);
+}
+
 static void Populate(Window dialog, Scenario scenario)
 {
     var state = scenario.State;
+    if (scenario.RouteId == "manual-hyphenation")
+    {
+        var choices = FindVisualChildren<ComboBox>(dialog).FirstOrDefault();
+        if (choices is not null && state != "initial")
+            choices.SelectedIndex = Math.Max(0, choices.Items.Count - 1);
+        FocusScenarioTarget(dialog, scenario);
+        return;
+    }
     if (scenario.RouteId == "style")
     {
         var styleTextBoxes = FindVisualChildren<TextBox>(dialog).ToArray();

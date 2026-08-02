@@ -194,6 +194,28 @@ public sealed class FreePRibbonDefinitionProfileTests
     }
 
     [Fact]
+    public void Grouped_list_layout_is_exposed_by_both_host_profiles()
+    {
+        WithUiCulture("en-US", () =>
+        {
+            foreach (var definition in new[]
+                     {
+                         FreePRibbon.Build(FreePRibbonCapabilities.Wpf),
+                         FreePRibbon.Build(FreePRibbonCapabilities.Avalonia),
+                     })
+            {
+                var control = RequiredControl(
+                    definition,
+                    SmartArtAuthoringPlanner.GroupedListLayoutCommandId);
+                control.Label.Should().Be("Grouped List");
+                control.KeyTip.Should().Be("GL");
+            }
+
+            return true;
+        });
+    }
+
+    [Fact]
     public void Home_shell_ribbon_text_resolves_from_freep_localization_resources()
     {
         var text = WithUiCulture(Loc.PseudoLocalizationCultureName, () =>

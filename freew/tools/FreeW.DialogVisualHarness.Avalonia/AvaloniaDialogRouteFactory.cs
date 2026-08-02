@@ -27,6 +27,7 @@ internal static class AvaloniaDialogRouteFactory
         ["bookmark-manager"] = "BookmarkManagerDialog",
         ["borders-and-shading"] = "BordersAndShadingDialog",
         ["building-blocks-organizer"] = "BuildingBlocksOrganizerDialog",
+        ["caption"] = "CaptionDialog",
         ["cell-edit"] = "CellEditDialog",
         ["chart-axis-titles"] = "ChartAxisTitlesDialog",
         ["chart-size"] = "ChartSizeDialog",
@@ -39,6 +40,7 @@ internal static class AvaloniaDialogRouteFactory
         ["cross-reference"] = "CrossReferenceDialog",
         ["customize-theme-colors"] = "CustomizeThemeColorsDialog",
         ["customize-theme-fonts"] = "CustomizeThemeFontsDialog",
+        ["character-formatting-picker"] = "CharacterFormattingPickerDialog",
         ["date-time"] = "DateTimeDialog",
         ["document-inspector"] = "DocumentInspectorDialog",
         ["draw-table-dimension"] = "DrawTableDimensionDialog",
@@ -46,6 +48,7 @@ internal static class AvaloniaDialogRouteFactory
         ["find-replace"] = "FindReplaceDialog",
         ["font"] = "FontDialog",
         ["footnote-endnote-options"] = "FootnoteEndnoteOptionsDialog",
+        ["header-footer-text"] = "HeaderFooterTextDialog",
         ["about"] = "AboutDialog",
         ["hyperlink"] = "HyperlinkDialog",
         ["icon-picker"] = "IconPickerDialog",
@@ -61,6 +64,7 @@ internal static class AvaloniaDialogRouteFactory
         ["link-bookmark"] = "LinkBookmarkDialog",
         ["manage-sources"] = "ManageSourcesDialog",
         ["manage-styles"] = "ManageStylesDialog",
+        ["manual-hyphenation"] = "ManualHyphenationDialog",
         ["mark-citation"] = "MarkCitationDialog",
         ["multilevel-list"] = "MultilevelListDialog",
         ["note-text"] = "NoteTextDialog",
@@ -126,6 +130,10 @@ internal static class AvaloniaDialogRouteFactory
 
         if (routeId == "style")
             return CreateStyle(state);
+        if (routeId == "character-formatting-picker")
+            return CreateCharacterFormattingPicker(state);
+        if (routeId == "manual-hyphenation")
+            return CreateManualHyphenation(state);
 
         if (!DialogTypes.TryGetValue(routeId, out var typeName))
             return null;
@@ -259,6 +267,31 @@ internal static class AvaloniaDialogRouteFactory
             }
         }
         throw new InvalidOperationException($"No constructible Avalonia adapter for {typeName}: {last?.GetType().Name}: {last?.Message}", last);
+    }
+
+    private static Window CreateCharacterFormattingPicker(string state)
+    {
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.CharacterFormattingPickerDialog", true)!;
+        var methodName = state.Equals("populated", StringComparison.OrdinalIgnoreCase)
+            ? "ForTestShading"
+            : "ForTestBorder";
+        return (Window)type.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)!.Invoke(null, null)!;
+    }
+
+    private static Window CreateManualHyphenation(string state)
+    {
+        var editor = new DocumentView();
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("characterization"));
+        editor.LoadDocument(document);
+        var candidate = ManualHyphenationPlanner.CreateSession(document).Current
+            ?? throw new InvalidOperationException("The manual-hyphenation harness fixture did not produce a real candidate.");
+
+        var type = typeof(MainWindow).Assembly.GetType("FreeW.App.Avalonia.ManualHyphenationDialog", true)!;
+        var constructor = type.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(candidateConstructor => candidateConstructor.GetParameters().Length == 1);
+        return (Window)constructor.Invoke([candidate]);
     }
 
     private static Window CreateCupsPrint()

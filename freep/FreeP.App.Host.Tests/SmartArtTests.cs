@@ -65,7 +65,8 @@ public sealed class SmartArtTests : IDisposable
         bool pictureGrid = false,
         bool includeNodeImage = false,
         IReadOnlySet<int>? pictureNodeIndexes = null,
-        bool includeColors = true)
+        bool includeColors = true,
+        string? layoutUniqueId = null)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -148,7 +149,7 @@ public sealed class SmartArtTests : IDisposable
                 new XElement(dspNs + "spTree", fallbackEls)));
 
         // Build minimal diagram data XML (just a root element)
-        var dataXml = pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
+        var dataXml = layoutUniqueId is not null || pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
             ? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
                 new XElement(dgmNs + "dataModel",
                     new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
@@ -169,8 +170,8 @@ public sealed class SmartArtTests : IDisposable
         var layoutXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dgmNs + "layoutDef",
                 new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName),
-                pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
-                    ? new XAttribute("uniqueId", pictureGrid
+                layoutUniqueId is not null || pictureAccentProcess || pictureCaptionList || pictureAccentList || pictureStack || pictureLineup || pictureStrips || continuousPictureList || pictureGrid
+                    ? new XAttribute("uniqueId", layoutUniqueId ?? (pictureGrid
                         ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureGrid"
                         : pictureAccentProcess
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentProcess"
@@ -184,7 +185,7 @@ public sealed class SmartArtTests : IDisposable
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureStack"
                         : pictureAccentList
                             ? "urn:microsoft.com/office/officeart/2005/8/layout/pictureAccentList"
-                            : "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList")
+                            : "urn:microsoft.com/office/officeart/2005/8/layout/pictureCaptionList"))
                     : null));
         var qsXml      = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
         var colorsXml  = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
@@ -507,6 +508,26 @@ public sealed class SmartArtTests : IDisposable
             shape.TextBody!.Paragraphs[0].Runs[0].Color!.Resolved.Should().Be(SrgbColor.White,
                 "the cached drawing's dsp:style fontRef supplies its default text color");
         }
+    }
+
+    [Fact]
+    public void Reader_SmartArt_GroupedList_UsesImportedDrawingCacheBoundary()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Group A", "Group B"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/groupedList");
+        var presentation = PptxPackageReader.Read(pptxPath);
+
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/groupedList");
+        smartArt.Data.Family.Should().Be(SmartArtFamily.List);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "authoring can use Grouped List live geometry, but imported PowerPoint drawing caches may contain roles that geometry does not model");
+        smartArt.FallbackShapes.Should().NotBeEmpty();
     }
 
     [Fact]
@@ -1115,6 +1136,7 @@ public sealed class SmartArtTests : IDisposable
     [InlineData(SmartArtLayoutPreset.VerticalBlockList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalArrowList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.TrapezoidList, SmartArtFamily.List)]
+    [InlineData(SmartArtLayoutPreset.GroupedList, SmartArtFamily.List)]
     [InlineData(SmartArtLayoutPreset.VerticalBulletList, SmartArtFamily.Hierarchy)]
     [InlineData(SmartArtLayoutPreset.BasicCycle, SmartArtFamily.Cycle)]
     [InlineData(SmartArtLayoutPreset.MultidirectionalCycle, SmartArtFamily.Cycle)]

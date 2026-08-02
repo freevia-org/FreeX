@@ -1309,16 +1309,16 @@ internal static class ParityCapture
 
     private static BitmapSource RenderAccessibilityCheckerDialog(IReadOnlyList<AccessibilityIssue> issues)
     {
-        const int width = 360;
-        const int height = 520;
+        var width = (int)AccessibilityCheckerDialogMetrics.Width;
+        var height = (int)AccessibilityCheckerDialogMetrics.Height;
         var plan = AccessibilityCheckerDialogPlanner.Create(issues, UiText.Get);
         using var bitmap = new System.Drawing.Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
         bitmap.SetResolution(96, 96);
 
         using (var graphics = System.Drawing.Graphics.FromImage(bitmap))
-        using (var titleFont = new System.Drawing.Font("Segoe UI", 16f, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel))
-        using (var headerFont = new System.Drawing.Font("Segoe UI", 12f, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel))
-        using (var bodyFont = new System.Drawing.Font("Segoe UI", 12f, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel))
+        using (var titleFont = new System.Drawing.Font("Segoe UI", (float)AccessibilityCheckerDialogMetrics.TitleFontSize, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel))
+        using (var headerFont = new System.Drawing.Font("Segoe UI", (float)AccessibilityCheckerDialogMetrics.BodyFontSize, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Pixel))
+        using (var bodyFont = new System.Drawing.Font("Segoe UI", (float)AccessibilityCheckerDialogMetrics.BodyFontSize, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel))
         using (var textBrush = new System.Drawing.SolidBrush(System.Drawing.Color.Black))
         using (var mutedBrush = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0x4B, 0x55, 0x63)))
         using (var borderPen = new System.Drawing.Pen(System.Drawing.Color.FromArgb(0xAB, 0xAB, 0xAB)))
@@ -1333,12 +1333,17 @@ internal static class ParityCapture
             graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             stringFormat.Trimming = System.Drawing.StringTrimming.EllipsisCharacter;
 
-            graphics.DrawString(plan.Title, titleFont, textBrush, 16, 16);
-            graphics.DrawString(plan.InspectionResultsHeader, headerFont, textBrush, 16, 50);
+            graphics.DrawString(plan.Title, titleFont, textBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, (float)AccessibilityCheckerDialogMetrics.ContentMargin);
+            graphics.DrawString(plan.InspectionResultsHeader, headerFont, textBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, 50);
 
-            const float treeTop = 70;
-            const float treeHeight = 176;
-            graphics.DrawRectangle(borderPen, 16, treeTop, 328, treeHeight);
+            var treeTop = (float)AccessibilityCheckerDialogMetrics.ResultsTreeTop;
+            var treeHeight = (float)AccessibilityCheckerDialogMetrics.ResultsTreeHeight;
+            graphics.DrawRectangle(
+                borderPen,
+                (float)AccessibilityCheckerDialogMetrics.ContentMargin,
+                treeTop,
+                (float)AccessibilityCheckerDialogMetrics.ResultsTreeWidth,
+                treeHeight);
 
             var y = treeTop + 7;
             foreach (var section in plan.Sections)
@@ -1366,20 +1371,22 @@ internal static class ParityCapture
             var selectedItem = selectedGroup?.Items.FirstOrDefault();
             var selection = AccessibilityCheckerDialogPlanner.CreateSelection(selectedItem, null, plan);
 
-            y = 262;
-            graphics.DrawString(plan.AdditionalInformationHeader, headerFont, textBrush, 16, y);
+            y = (float)AccessibilityCheckerDialogMetrics.AdditionalInformationTop;
+            graphics.DrawString(plan.AdditionalInformationHeader, headerFont, textBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, y);
             y += 24;
-            graphics.DrawString(plan.WhyFixHeader, headerFont, textBrush, 16, y);
+            graphics.DrawString(plan.WhyFixHeader, headerFont, textBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, y);
             y += 18;
-            y += DrawWrappedGdiText(graphics, selection.WhyFix, bodyFont, textBrush, 16, y, 328, stringFormat) + 8;
-            graphics.DrawString(plan.HowToFixHeader, headerFont, textBrush, 16, y);
+            y += DrawWrappedGdiText(graphics, selection.WhyFix, bodyFont, textBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, y, (float)AccessibilityCheckerDialogMetrics.ResultsTreeWidth, stringFormat) + 8;
+            graphics.DrawString(plan.HowToFixHeader, headerFont, textBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, y);
             y += 18;
-            _ = DrawWrappedGdiText(graphics, selection.HowToFix, bodyFont, textBrush, 16, y, 328, stringFormat);
+            _ = DrawWrappedGdiText(graphics, selection.HowToFix, bodyFont, textBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, y, (float)AccessibilityCheckerDialogMetrics.ResultsTreeWidth, stringFormat);
 
-            _ = DrawWrappedGdiText(graphics, selection.StatusText, bodyFont, mutedBrush, 16, 426, 328, stringFormat);
-            graphics.DrawLine(lightBorderPen, 16, 458, 344, 458);
-            DrawGdiButton(graphics, new System.Drawing.RectangleF(176, 474, 76, 26), plan.GoToAction.Text, bodyFont, textBrush, buttonFill, defaultButtonPen);
-            DrawGdiButton(graphics, new System.Drawing.RectangleF(268, 474, 76, 26), plan.CloseAction.Text.Replace("_", "", StringComparison.Ordinal), bodyFont, textBrush, buttonFill, buttonPen);
+            _ = DrawWrappedGdiText(graphics, selection.StatusText, bodyFont, mutedBrush, (float)AccessibilityCheckerDialogMetrics.ContentMargin, (float)AccessibilityCheckerDialogMetrics.StatusTop, (float)AccessibilityCheckerDialogMetrics.ResultsTreeWidth, stringFormat);
+            graphics.DrawLine(lightBorderPen, (float)AccessibilityCheckerDialogMetrics.ContentMargin, (float)AccessibilityCheckerDialogMetrics.ButtonDividerTop, width - (float)AccessibilityCheckerDialogMetrics.ContentMargin, (float)AccessibilityCheckerDialogMetrics.ButtonDividerTop);
+            var closeX = width - (float)AccessibilityCheckerDialogMetrics.ContentMargin - (float)AccessibilityCheckerDialogMetrics.ActionButtonWidth;
+            var goToX = closeX - (float)AccessibilityCheckerDialogMetrics.ActionButtonSpacing - (float)AccessibilityCheckerDialogMetrics.ActionButtonWidth;
+            DrawGdiButton(graphics, new System.Drawing.RectangleF(goToX, (float)AccessibilityCheckerDialogMetrics.ActionButtonTop, (float)AccessibilityCheckerDialogMetrics.ActionButtonWidth, (float)AccessibilityCheckerDialogMetrics.ActionButtonHeight), plan.GoToAction.Text, bodyFont, textBrush, buttonFill, defaultButtonPen);
+            DrawGdiButton(graphics, new System.Drawing.RectangleF(closeX, (float)AccessibilityCheckerDialogMetrics.ActionButtonTop, (float)AccessibilityCheckerDialogMetrics.ActionButtonWidth, (float)AccessibilityCheckerDialogMetrics.ActionButtonHeight), plan.CloseAction.Text.Replace("_", "", StringComparison.Ordinal), bodyFont, textBrush, buttonFill, buttonPen);
         }
 
         using var stream = new MemoryStream();

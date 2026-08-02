@@ -265,6 +265,43 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void GroupedList_UsesSharedGroupHeadersAndLevelAwareChildColumns()
+    {
+        var first = new SmartArtNode { Text = "Plan", Level = 0 };
+        first.Children.Add(new SmartArtNode { Text = "Scope", Level = 1 });
+        first.Children.Add(new SmartArtNode { Text = "Schedule", Level = 1 });
+        var second = new SmartArtNode { Text = "Build", Level = 0 };
+        second.Children.Add(new SmartArtNode { Text = "Implement", Level = 1 });
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/groupedList"
+        };
+        data.Nodes.Add(first);
+        data.Nodes.Add(second);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        var headers = shapes!.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        var children = shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle).ToList();
+        headers.Should().HaveCount(2);
+        headers.Select(shape => shape.PlainText).Should().Equal("Plan", "Build");
+        headers.Select(shape => shape.OffsetXEmu).Should().BeInAscendingOrder();
+        children.Should().HaveCount(3);
+        children.Select(shape => shape.PlainText).Should().Equal("Scope", "Schedule", "Implement");
+        children[0].OffsetYEmu.Should().BeLessThan(children[1].OffsetYEmu);
+        children[0].OffsetXEmu.Should().Be(headers[0].OffsetXEmu);
+        children[2].OffsetXEmu.Should().Be(headers[1].OffsetXEmu);
+        children.Should().OnlyContain(shape =>
+            shape.OffsetXEmu >= FrameX &&
+            shape.OffsetYEmu >= FrameY &&
+            shape.OffsetXEmu + shape.ExtentCxEmu <= FrameX + FrameCx &&
+            shape.OffsetYEmu + shape.ExtentCyEmu <= FrameY + FrameCy);
+    }
+
+    [Fact]
     public void Process_BoxesAreLeftToRight_Increasing_X()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");

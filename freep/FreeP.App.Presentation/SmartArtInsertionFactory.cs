@@ -259,6 +259,7 @@ internal static class SmartArtInsertionFactory
             SmartArtLayoutPreset.HorizontalBulletList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBulletList", SmartArtFamily.List),
             SmartArtLayoutPreset.HorizontalBlockList => ("urn:microsoft.com/office/officeart/2005/8/layout/horizontalBlockList", SmartArtFamily.List),
             SmartArtLayoutPreset.TrapezoidList => ("urn:microsoft.com/office/officeart/2005/8/layout/trapezoidList", SmartArtFamily.List),
+            SmartArtLayoutPreset.GroupedList => ("urn:microsoft.com/office/officeart/2005/8/layout/groupedList", SmartArtFamily.List),
             SmartArtLayoutPreset.BasicCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/basicCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.MultidirectionalCycle => ("urn:microsoft.com/office/officeart/2005/8/layout/multidirectionalCycle", SmartArtFamily.Cycle),
             SmartArtLayoutPreset.Cycle2 => ("urn:microsoft.com/office/officeart/2005/8/layout/cycle2", SmartArtFamily.Cycle),

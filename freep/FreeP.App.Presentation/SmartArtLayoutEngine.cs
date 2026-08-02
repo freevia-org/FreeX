@@ -87,6 +87,9 @@ public static class SmartArtLayoutEngine
         if (IsTrapezoidListLayout(data.LayoutUniqueId))
             return LayoutTrapezoidList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsGroupedListLayout(data.LayoutUniqueId))
+            return LayoutGroupedList(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1264,6 +1267,80 @@ public static class SmartArtLayoutEngine
         }
 
         return shapes;
+    }
+
+    /// <summary>
+    /// Grouped List geometry uses a row of level-0 group headers and a stacked list of
+    /// level-1 (and deeper) entries beneath each header.  The group columns share a
+    /// common width and child row rhythm so the result remains editable and stable when
+    /// the same model is composed by WPF or Avalonia.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutGroupedList(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var groups = data.Nodes
+            .Where(node => !string.IsNullOrWhiteSpace(node.Text))
+            .ToList();
+        if (groups.Count == 0)
+            return [];
+
+        var childrenByGroup = groups
+            .Select(group => FlattenChildren(group).Where(node => !string.IsNullOrWhiteSpace(node.Text)).ToList())
+            .ToList();
+        var maxChildren = childrenByGroup.Max(children => children.Count);
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long gapX = Math.Max((long)(fcx * GapFrac), 1L);
+        long gapY = Math.Max((long)(fcy * 0.018), 1L);
+        long innerWidth = Math.Max(fcx - 2 * padX - (groups.Count - 1) * gapX, 1L);
+        long groupWidth = Math.Max(innerWidth / groups.Count, 1L);
+        long headerHeight = Math.Max((long)(fcy * 0.22), 1L);
+        long childStartY = fy + padY + headerHeight + gapY;
+        long childHeightArea = Math.Max(fcy - 2 * padY - headerHeight - gapY, 1L);
+        long childHeight = maxChildren == 0
+            ? childHeightArea
+            : Math.Max((childHeightArea - (maxChildren - 1) * gapY) / maxChildren, 1L);
+
+        var shapes = new List<SlideShape>(groups.Count + childrenByGroup.Sum(children => children.Count));
+        uint idCounter = 2250;
+        for (var groupIndex = 0; groupIndex < groups.Count; groupIndex++)
+        {
+            var group = groups[groupIndex];
+            long groupX = fx + padX + groupIndex * (groupWidth + gapX);
+            var headerStyle = stylePlan.GetNodeStyle(groupIndex, group.Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(
+                idCounter++, group.Text, headerStyle,
+                groupX, fy + padY, groupWidth, headerHeight,
+                NodeFontSizeLargePt, DrawingShapeKind.RoundedRectangle));
+
+            var children = childrenByGroup[groupIndex];
+            for (var childIndex = 0; childIndex < children.Count; childIndex++)
+            {
+                var child = children[childIndex];
+                long indent = Math.Min(Math.Max(child.Level - group.Level - 1, 0), 3) * Math.Max((long)(groupWidth * 0.06), 1L);
+                long childX = groupX + indent;
+                long childWidth = Math.Max(groupWidth - indent, 1L);
+                var childStyle = stylePlan.GetNodeStyle(groupIndex + childIndex + 1, child.Level, SmartArtFamily.List);
+                shapes.Add(MakeBulletListBox(
+                    idCounter++, child, childStyle,
+                    childX, childStartY + childIndex * (childHeight + gapY), childWidth, childHeight));
+            }
+        }
+
+        return shapes;
+
+        static IEnumerable<SmartArtNode> FlattenChildren(SmartArtNode parent)
+        {
+            foreach (var child in parent.Children)
+            {
+                yield return child;
+                foreach (var descendant in FlattenChildren(child))
+                    yield return descendant;
+            }
+        }
     }
 
     /// <summary>
@@ -3769,6 +3846,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "trapezoidlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsGroupedListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "groupedlist", StringComparison.Ordinal);
     }
 
     private static bool IsHorizontalBulletListLayout(string uniqueId)
