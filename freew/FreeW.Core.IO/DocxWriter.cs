@@ -9177,8 +9177,8 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds the <c>w:rPr</c> inside <c>w:docDefaults/w:rPrDefault</c>. Emits only the core fields that
-    /// carry meaningful document-default run formatting (font family/size, colour, language, bold/italic).
+    /// Builds the <c>w:rPr</c> inside <c>w:docDefaults/w:rPrDefault</c>. Emits the core fields that
+    /// carry meaningful document-default run formatting, in CT_RPr schema order.
     /// Returns null when the default run is indistinguishable from a no-op so that documents with no
     /// meaningful run defaults do not gain a spurious w:rPrDefault element.
     /// </summary>
@@ -9195,6 +9195,12 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "b"));
         if (f.Italic)
             rPr.Add(new XElement(W + "i"));
+        if (f.AllCaps)
+            rPr.Add(new XElement(W + "caps"));
+        if (f.SmallCaps)
+            rPr.Add(new XElement(W + "smallCaps"));
+        if (f.Strikethrough)
+            rPr.Add(new XElement(W + "strike"));
         if (f.DoubleStrikethrough)
             rPr.Add(new XElement(W + "dstrike"));
         if (f.NoProof)
@@ -9211,6 +9217,13 @@ public static class DocxWriter
             rPr.Add(new XElement(W + "sz", new XAttribute(W + "val", halfPoints)));
             rPr.Add(new XElement(W + "szCs", new XAttribute(W + "val", halfPoints)));
         }
+        if (f.Underline)
+            rPr.Add(new XElement(W + "u", new XAttribute(W + "val", "single")));
+        if (f.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript)
+            rPr.Add(new XElement(W + "vertAlign",
+                new XAttribute(W + "val", f.VerticalAlign == VerticalAlign.Superscript ? "superscript" : "subscript")));
+        if (f.Rtl)
+            rPr.Add(new XElement(W + "rtl"));
         if (f.LanguageTag is { Length: > 0 } lang)
             rPr.Add(new XElement(W + "lang",
                 new XAttribute(W + "val", lang),
