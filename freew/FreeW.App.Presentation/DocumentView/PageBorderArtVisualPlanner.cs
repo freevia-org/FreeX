@@ -74,6 +74,7 @@ public static class PageBorderArtVisualPlanner
     public const int MapleMuffinsArtId = 2;
     public const int CakeSliceArtId = 3;
     public const int CandyCornArtId = 4;
+    public const int IceCreamConesArtId = 5;
     public const int BirdsFlightArtId = 35;
     public const int PaintedEggsArtId = 66;
     public const int ShadowedSquaresArtId = 57;
@@ -268,6 +269,27 @@ public static class PageBorderArtVisualPlanner
             AddCandyCorn(polygons, right + scale, y + 9 * scale, candySize, 2);
         }
 
+        plan = new PageBorderArtFilledShapePlan([], polygons);
+        return true;
+    }
+
+    public static bool TryBuildIceCreamConesFrame(
+        int artId,
+        double modelWidthPt,
+        double frameWidthDip,
+        double frameHeightDip,
+        double edgeInsetDip,
+        out PageBorderArtFilledShapePlan plan)
+    {
+        if (artId != IceCreamConesArtId)
+        {
+            plan = new PageBorderArtFilledShapePlan([], []);
+            return false;
+        }
+
+        var polygons = new List<PageBorderArtPolygon>();
+        foreach (var placement in BuildFrame(frameWidthDip, frameHeightDip, edgeInsetDip, modelWidthPt))
+            AddIceCreamCone(polygons, placement.Xdip, placement.Ydip, placement.SizeDip);
         plan = new PageBorderArtFilledShapePlan([], polygons);
         return true;
     }
@@ -963,6 +985,29 @@ public static class PageBorderArtVisualPlanner
             (3, 4), (13, 4), (15, 10), (1, 10));
         Add(0xFF, 0xFF, 0xFF,
             (8, 1), (11, 3), (13, 5), (3, 5), (5, 3));
+    }
+
+    private static void AddIceCreamCone(
+        List<PageBorderArtPolygon> polygons,
+        double x,
+        double y,
+        double size)
+    {
+        var scale = size / 32.0;
+        PageBorderArtPoint Point(double px, double py) => new(x + px * scale, y + py * scale);
+        void Add(byte red, byte green, byte blue, params (double X, double Y)[] points) =>
+            polygons.Add(new PageBorderArtPolygon(
+                points.Select(point => Point(point.X, point.Y)).ToList(), red, green, blue));
+
+        Add(0, 0, 0, (9, 11), (23, 11), (16, 31));
+        Add(0x60, 0x40, 0x20, (11, 13), (21, 13), (16, 28));
+        Add(0, 0, 0,
+            (5, 7), (7, 4), (11, 1), (21, 1), (25, 4), (27, 7),
+            (25, 11), (22, 14), (10, 14), (7, 11));
+        Add(0xFF, 0x80, 0xFF,
+            (6, 8), (26, 8), (24, 11), (22, 13), (10, 13), (8, 11));
+        Add(0xFF, 0xFF, 0x80,
+            (7, 6), (9, 3), (13, 1), (20, 1), (24, 3), (26, 6), (24, 9), (8, 9));
     }
 
     private static void AddVineCorner(

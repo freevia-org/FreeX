@@ -136,6 +136,23 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void IceCreamCones_UsesWordCadenceAndExactSourcePalette()
+    {
+        PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(5, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(510);
+        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(41, 43));
+        plan.Polygons[1].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0x60 && polygon.Green == 0x40 && polygon.Blue == 0x20);
+        plan.Polygons[3].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xFF && polygon.Green == 0x80 && polygon.Blue == 0xFF);
+        plan.Polygons[4].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xFF && polygon.Green == 0xFF && polygon.Blue == 0x80);
+    }
+
+    [Fact]
     public void ShorebirdTracks_UsesMeasuredAlternatingFootprintCadenceAndSharedSegments()
     {
         PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(83, 3, 816, 1056, 32, out var motifs)

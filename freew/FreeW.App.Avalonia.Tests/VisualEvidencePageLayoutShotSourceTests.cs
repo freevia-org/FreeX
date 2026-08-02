@@ -285,6 +285,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildBirdsFlightFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildCandyCornFrame(");
+        source.Should().Contain("PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildVineFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildPapyrusFrame(");
         source.Should().Contain("PageBorderArtVisualPlanner.TryBuildWeavingRibbonFrame(");
@@ -295,6 +296,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("BuildPdfBatBorderOps(batMotifs, artOriginXDip, artOriginTopDip, pageHeightPt)");
         source.Should().Contain("BuildPdfFilledShapeBorderOps(eggPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
         source.Should().Contain("BuildPdfFilledShapeBorderOps(candyPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
+        source.Should().Contain("BuildPdfFilledShapeBorderOps(conePlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
         source.Should().Contain("BuildPdfFilledShapeBorderOps(vinePlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
         source.Should().Contain("BuildPdfFilledShapeBorderOps(papyrusPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
         source.Should().Contain("BuildPdfFilledShapeBorderOps(ribbonPlan, artOriginXDip, artOriginTopDip, pageHeightPt)");
