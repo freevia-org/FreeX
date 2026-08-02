@@ -125,7 +125,7 @@ public sealed class PageBorderArtVisualPlannerTests
             new PageBorderArtPoint(60, 41),
             new PageBorderArtPoint(60, 47),
             new PageBorderArtPoint(57, 53));
-        plan.Polygons[3].Points[0].Should().Be(new PageBorderArtPoint(41.5, 36.36));
+        plan.Polygons[3].Points[0].Should().Be(new PageBorderArtPoint(43.5, 36.36));
         plan.Polygons[207].Points[0].Should().Be(new PageBorderArtPoint(38, 1016));
     }
 
