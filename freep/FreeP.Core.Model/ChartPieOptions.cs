@@ -8,4 +8,6 @@ public sealed record ChartPieOptions(
     OfPieSplitType? OfPieSplitType = null,
     double? OfPieSplitPosition = null,
     int? OfPieSecondPieSizePercent = null,
-    IReadOnlyList<int>? OfPieCustomPointIndices = null);
+    IReadOnlyList<int>? OfPieCustomPointIndices = null,
+    int? OfPieGapWidthPercent = null,
+    bool? OfPieSeriesLines = null);
