@@ -208,6 +208,7 @@ public static class DocxWriter
             || document.DoNotTrackMoves
             || document.DoNotTrackFormatting
             || document.DoNotAutoCompressPictures
+            || document.SaveSubsetFonts
             || document.Page.AutoHyphenation
             || anyDifferentOddEvenPages
             || document.Page.MirrorMargins
@@ -273,7 +274,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.DoNotAutoCompressPictures, document.SaveSubsetFonts, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8255,7 +8256,8 @@ public static class DocxWriter
     /// toggle (w:displayBackgroundShape, when <paramref name="displayBackground"/> so Word paints the
     /// w:background), the automatic-hyphenation toggle (w:autoHyphenation), the different-odd/even-headers
     /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>), the embed-TrueType-fonts
-    /// toggle (w:embedTrueTypeFonts), the personal-information removal toggle
+    /// toggle (w:embedTrueTypeFonts), the embedded-font subsetting policy (w:saveSubsetFonts),
+    /// the personal-information removal toggle
     /// (w:removePersonalInformation), the page-boundary view toggle
     /// (w:doNotDisplayPageBoundaries), the proofing-indicator toggles (w:hideSpellingErrors and
     /// w:hideGrammaticalErrors), the top-gutter toggle (w:gutterAtTop), the template-style refresh toggle
@@ -8274,7 +8276,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, bool doNotAutoCompressPictures, bool saveSubsetFonts, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8310,10 +8312,12 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "removePersonalInformation"));
             if (doNotDisplayPageBoundaries)
                 fresh.Add(new XElement(W + "doNotDisplayPageBoundaries"));
-            if (embedTrueTypeFonts)
-                fresh.Add(new XElement(W + "embedTrueTypeFonts"));
             if (displayBackground)
                 fresh.Add(new XElement(W + "displayBackgroundShape"));
+            if (embedTrueTypeFonts)
+                fresh.Add(new XElement(W + "embedTrueTypeFonts"));
+            if (saveSubsetFonts)
+                fresh.Add(new XElement(W + "saveSubsetFonts"));
             // Mirror margins (w:mirrorMargins) sits after the font-embedding region and before autoHyphenation
             // in CT_Settings schema order.
             if (mirrorMargins)
@@ -8368,6 +8372,7 @@ public static class DocxWriter
         OverlaySetting(settings, "removePersonalInformation", removePersonalInformation ? new XElement(W + "removePersonalInformation") : null);
         OverlaySetting(settings, "doNotDisplayPageBoundaries", doNotDisplayPageBoundaries ? new XElement(W + "doNotDisplayPageBoundaries") : null);
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
+        OverlaySetting(settings, "saveSubsetFonts", saveSubsetFonts ? new XElement(W + "saveSubsetFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
         OverlaySetting(settings, "gutterAtTop", gutterAtTop ? new XElement(W + "gutterAtTop") : null);
