@@ -1613,6 +1613,17 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         DrawSoftwareFilledShapePlan(canvas, conePlan);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildPeopleFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var peoplePlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, peoplePlan);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildVineFrame(
             border.ArtId,
             border.WidthPt,
