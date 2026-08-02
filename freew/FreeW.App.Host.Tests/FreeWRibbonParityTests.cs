@@ -1293,6 +1293,38 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
+    public void MailingsCheckErrors_SimulationOpensEditableReportInsteadOfCompletingMerge()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(new TextDocument
+        {
+            Blocks = { new Paragraph($"Dear {MailMerge.FieldOpen}Missing{MailMerge.FieldClose}") }
+        });
+        var session = new FreeWRibbonCommands.MailMergeSession
+        {
+            Data = MergeData.FromCsv("Name\nAda")
+        };
+        var messages = new List<string>();
+        TextDocument? report = null;
+        var completed = false;
+        var command = new FreeWRibbonCommands.CheckMergeErrorsCommand(
+            editor,
+            session,
+            ask: _ => MailMergeCheckForErrorsMode.SimulateAndReport,
+            showInfo: (_, message) => messages.Add(message),
+            completeMerge: _ => completed = true,
+            openReportDocument: document => report = document);
+
+        command.Execute(RibbonCommandContext.Empty);
+
+        report.Should().NotBeNull();
+        report!.Properties.Title.Should().Be("Mail Merge Error Report");
+        report.PlainText.Should().Contain("Merge field 'Missing'");
+        messages.Should().BeEmpty();
+        completed.Should().BeFalse();
+    }
+
+    [StaFact]
     public void MailingsRulesSpecialFields_InsertSharedInstructionsThroughRegistry()
     {
         var editor = new DocumentView();

@@ -179,4 +179,25 @@ public sealed class MailMergeDialogPlannerTests
         result.ShouldCompleteMerge.Should().BeTrue();
         result.Message.Should().Be("Checked 1 recipient(s). No mail merge errors were found.");
     }
+
+    [Fact]
+    public void CheckForErrors_BuildsEditableReportDocumentWithEveryIssue()
+    {
+        var result = new MailMergeErrorCheckResult(
+            MailMergeCheckForErrorsMode.SimulateAndReport,
+            2,
+            [
+                new("Missing", "Merge field 'Missing' is not in the recipient data source."),
+                new("If Broken", "Merge rule 'If Broken' is invalid.")
+            ],
+            ShouldCompleteMerge: false);
+
+        var report = MailMergeCheckForErrorsPlanner.BuildReportDocument(result);
+
+        report.Properties.Title.Should().Be("Mail Merge Error Report");
+        report.Paragraphs.First().StyleId.Should().Be("Title");
+        report.PlainText.Should().Contain("Records checked: 2");
+        report.PlainText.Should().Contain("Error 1: Merge field 'Missing'");
+        report.PlainText.Should().Contain("Instruction: If Broken");
+    }
 }

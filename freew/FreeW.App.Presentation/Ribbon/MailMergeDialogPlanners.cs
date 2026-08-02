@@ -373,6 +373,33 @@ public static class MailMergeCheckForErrorsPlanner
         return new(mode, rows.Count, distinct, shouldComplete);
     }
 
+    public static TextDocument BuildReportDocument(MailMergeErrorCheckResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+
+        var report = TextDocument.CreateEmpty();
+        report.Blocks.Clear();
+        report.Properties.Title = "Mail Merge Error Report";
+        report.Blocks.Add(new Paragraph("Mail Merge Error Report") { StyleId = "Title" });
+        report.Blocks.Add(new Paragraph($"Records checked: {result.RecordsChecked}"));
+
+        if (!result.HasErrors)
+        {
+            report.Blocks.Add(new Paragraph("No mail merge errors were found."));
+            return report;
+        }
+
+        report.Blocks.Add(new Paragraph($"Errors found: {result.Issues.Count}") { StyleId = "Heading1" });
+        for (var index = 0; index < result.Issues.Count; index++)
+        {
+            var issue = result.Issues[index];
+            report.Blocks.Add(new Paragraph($"Error {index + 1}: {issue.Message}"));
+            report.Blocks.Add(new Paragraph($"Instruction: {issue.Instruction}"));
+        }
+
+        return report;
+    }
+
     private static void AddInstructions(string text, ICollection<string> instructions)
     {
         foreach (var instruction in MailMerge.FieldNames(text))

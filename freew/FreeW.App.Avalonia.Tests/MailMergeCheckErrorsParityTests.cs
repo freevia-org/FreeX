@@ -41,7 +41,9 @@ public sealed class MailMergeCheckErrorsParityTests
         source.Should().Contain(
             "var result = _mailMerge.CheckForErrors(selected);");
         source.Should().Contain(
-            "await FreeWInfoDialog.ShowAsync(this, result.Message);");
+            "OpenMailMergeErrorReport(MailMergeCheckForErrorsPlanner.BuildReportDocument(result));");
+        source.Should().Contain(
+            "else\n                await FreeWInfoDialog.ShowAsync(this, result.Message);");
         source.Should().NotContain(
             "_status.Text = $\"Mail merge error check selected: {selected}.\";");
     }
