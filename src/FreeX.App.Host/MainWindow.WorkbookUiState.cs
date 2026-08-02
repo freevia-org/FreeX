@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using FreeX.App.Presentation;
+using FreeX.Core.Calc;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
@@ -64,6 +65,12 @@ public partial class MainWindow
 
     private void RecalculateWorkbook()
     {
+        // R119-app-host-except-data-tables-recalc: Ctrl+Alt+F9 ("Calculate Full") always forces
+        // every Data Table's body fresh from its driver formula's current text, regardless of
+        // WorkbookCalculationMode -- see RefreshAllDataTablesBeforeForcedRecalc's doc comment.
+        // Must run before the ordinary recalc below so any body cell it rewrites gets evaluated
+        // in the very same pass, mirroring FreeX.App.Services.WorkbookCellEditService.RecalculateAll.
+        RefreshAllDataTablesBeforeForcedRecalc();
         _recalcEngine.RecalculateAllFormulas(_workbook);
         InvalidateNavigationCaches();
         // R88-app-formula-auditing-5-1: the Watch Window is a modeless, non-closed dialog whose
@@ -85,7 +92,20 @@ public partial class MainWindow
     /// </summary>
     private void RecalculateDirtyCells()
     {
-        _recalcEngine.Recalculate(_workbook, []);
+        // R119-app-host-except-data-tables-recalc: F9 ("Calculate Now") is one of the three
+        // explicit triggers (F9 / Shift+F9 / Ctrl+Alt+F9) that always force every Data Table
+        // fresh, regardless of calc mode -- see RefreshAllDataTablesBeforeForcedRecalc. Unlike
+        // RecalculateWorkbook/RebuildDependenciesAndCalculate (which call RecalculateAllFormulas --
+        // a full RebuildFormulaDependencies + evaluate-every-formula-cell pass that already
+        // rediscovers any cell RefreshAllDataTablesBeforeForcedRecalc just rewrote), this method's
+        // whole point is to NOT rebuild the graph or re-evaluate every formula cell -- so a
+        // Data Table body cell that refresh just rewrote to a brand-new Cell object (not yet
+        // registered as a dependency-graph edge, since it was never "changed" through the normal
+        // edit path) would otherwise never actually get evaluated by the dirty-cells-only
+        // Recalculate([]) call below. Feeding the refreshed addresses in as changedCells is what
+        // makes Recalculate register their dependencies and evaluate them in this same pass.
+        var refreshedDataTableCells = RefreshAllDataTablesBeforeForcedRecalc();
+        _recalcEngine.Recalculate(_workbook, refreshedDataTableCells);
         InvalidateNavigationCaches();
         // See RecalculateWorkbook above (R88-app-formula-auditing-5-1).
         _watchWindowDialog?.Refresh();
@@ -93,6 +113,10 @@ public partial class MainWindow
 
     private void RebuildDependenciesAndCalculate()
     {
+        // R119-app-host-except-data-tables-recalc: Ctrl+Alt+Shift+F9 forces every Data Table
+        // fresh too -- see RefreshAllDataTablesBeforeForcedRecalc. Must run before the recalc
+        // below for the same reason as RecalculateWorkbook.
+        RefreshAllDataTablesBeforeForcedRecalc();
         // RecalculateAllFormulas already rebuilds the dependency graph as its own first step
         // (RecalcEngine.RecalculateAllFormulas), so calling RebuildFormulaDependencies again here
         // first would redundantly clear and re-register every formula cell's dependency edges
@@ -104,11 +128,75 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>
+    /// Unconditionally re-derives every registered Data Table's body (formula TEXT, not just its
+    /// evaluated value) on every sheet in the workbook, from each table's driver formula's CURRENT
+    /// text, regardless of what changed since the last calculation and regardless of
+    /// <see cref="WorkbookCalculationMode"/>.
+    /// </summary>
+    /// <remarks>
+    /// R119-app-host-except-data-tables-recalc: r118 fixed this exact gap in the Avalonia shell's
+    /// shared <c>FreeX.App.Services.WorkbookCellEditService.RecalculateAll</c>/<c>RecalculateSheet</c>
+    /// (which the Avalonia shell's <c>WorkbookSession.RecalculateWorkbook</c>/<c>RecalculateActiveSheet</c>
+    /// call), but this WPF host never routes cell edits or recalculation through that service -- it
+    /// owns its own raw <see cref="_recalcEngine"/> and <see cref="_commandBus"/>, so the fix had to be
+    /// threaded here independently. Without this, "Automatic Except for Data Tables" mode's whole
+    /// point -- freezing a Data Table's result until the user explicitly asks for a recalculation --
+    /// meant it NEVER updated on this platform, even on an explicit F9/Shift+F9/Ctrl+Alt+F9 press,
+    /// because nothing here ever called <see cref="DataTableAutoRefreshEffects.RefreshAllTables"/>.
+    /// Reconciles with RecalculateIfAutomatic's own r119 fix below the same way
+    /// WorkbookCellEditService.RecalculateAll and RecalculateIfAutomatic agree in the Avalonia shell:
+    /// this method decides whether to REWRITE a body's frozen formula text (always, when explicitly
+    /// asked); RecalculateIfAutomatic's skipDataTableBodyCells flag decides whether to EVALUATE a body
+    /// left untouched by an ordinary automatic-mode edit. Keeping both decisions in one file (this
+    /// one) is the shared decision point the r119 wave's shared-feature rule calls for on this
+    /// platform, mirroring how WorkbookCellEditService is that single decision point on Avalonia.
+    /// </remarks>
+    private IReadOnlyList<CellAddress> RefreshAllDataTablesBeforeForcedRecalc()
+    {
+        var ctx = new WorkbookCommandContext(_workbook);
+        List<CellAddress>? affectedCells = null;
+        foreach (var sheet in _workbook.Sheets)
+        {
+            var refreshed = DataTableAutoRefreshEffects.RefreshAllTables(ctx, sheet);
+            if (refreshed.Count > 0)
+                (affectedCells ??= []).AddRange(refreshed);
+        }
+
+        return affectedCells ?? [];
+    }
+
+    /// <summary>
+    /// Sheet-scoped counterpart of <see cref="RefreshAllDataTablesBeforeForcedRecalc"/> for
+    /// Shift+F9 ("Calculate Sheet"), which only forces the active sheet's Data Tables fresh.
+    /// </summary>
+    private void RefreshDataTablesOnSheetBeforeForcedRecalc(SheetId sheetId)
+    {
+        if (_workbook.GetSheet(sheetId) is { } sheet)
+            DataTableAutoRefreshEffects.RefreshAllTables(new WorkbookCommandContext(_workbook), sheet);
+    }
+
     private void RecalculateIfAutomatic(IReadOnlyList<CellAddress> changedCells)
     {
-        if (_workbook.CalculationMode is WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables)
+        // R119-app-host-except-data-tables-recalc: r118 added the skipDataTableBodyCells gate to
+        // RecalcEngine.Recalculate and threaded it through
+        // FreeX.App.Services.WorkbookCellEditService.RecalculateIfAutomatic, but this WPF host's
+        // own choke point (every ordinary automatic-mode cell edit across the shell recalculates
+        // through here -- see the R88 comment below) kept calling Recalculate with no flag, so
+        // AutomaticExceptDataTables was never distinguished from plain Automatic here: a Data
+        // Table's body was re-evaluated on every edit exactly as in Automatic mode, defeating the
+        // whole point of selecting that option. Passing skipDataTableBodyCells: true only for
+        // AutomaticExceptDataTables is what actually implements the carve-out, mirroring
+        // WorkbookCellEditService.RecalculateIfAutomatic exactly.
+        RecalcReport? report = _workbook.CalculationMode switch
         {
-            var report = _recalcEngine.Recalculate(_workbook, changedCells);
+            WorkbookCalculationMode.Automatic => _recalcEngine.Recalculate(_workbook, changedCells),
+            WorkbookCalculationMode.AutomaticExceptDataTables =>
+                _recalcEngine.Recalculate(_workbook, changedCells, skipDataTableBodyCells: true),
+            _ => null
+        };
+        if (report is not null)
+        {
             InvalidateNavigationCaches();
             // R88-app-formula-auditing-5-1: this is the choke point every ordinary automatic-mode
             // cell edit recalculates through (TryExecuteEditCells callers invoke this after the

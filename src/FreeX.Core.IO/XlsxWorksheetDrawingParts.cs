@@ -69,7 +69,25 @@ internal sealed record XlsxPicturePackagePart(
     // cNvPr), resolved via the drawing part's own relationships. Populated for EVERY loaded picture
     // (not just ones that stay source-loaded) so DuplicateSheetDrawingCloner/PastePicturesCommand
     // have something to carry forward once IsSourceLoaded is cleared. Null = no hyperlink.
-    DrawingObjectHyperlink? Hyperlink = null);
+    DrawingObjectHyperlink? Hyperlink = null,
+    // ── R119-io-camera-linked-picture-identity fields ──────────────────────────────────────────
+    // Populated ONLY for a part built by ReadPictureSnapshotGroupParts (from an <xdr:grpSp> the
+    // writer's fx:linkedPictureSnapshot extension marks as a reconstructed CellRangeSnapshot
+    // picture -- see ToOneCellPictureSnapshotAnchor/ToPictureSnapshotGroupExtLst). Every ordinary
+    // <xdr:pic>-backed part from ReadPictureParts keeps the default PictureKind.Image/null/false/0
+    // values below, so those existing callers/constructions are unaffected.
+    /// <summary>PictureKind.CellRangeSnapshot for a reconstructed camera/linked-picture group; PictureKind.Image (default) for every ordinary embedded picture.</summary>
+    PictureKind Kind = PictureKind.Image,
+    /// <summary>The group's per-cell text/style snapshot, parsed back from its child rectangle shapes. Null for an ordinary picture.</summary>
+    IReadOnlyList<PictureCellSnapshot>? SnapshotCells = null,
+    bool IsLinkedToSourceRange = false,
+    string? LinkedSourceSheetName = null,
+    int? LinkedSourceStartRow = null,
+    int? LinkedSourceStartCol = null,
+    int? LinkedSourceEndRow = null,
+    int? LinkedSourceEndCol = null,
+    uint SnapshotSourceRowCount = 0,
+    uint SnapshotSourceColumnCount = 0);
 
 internal sealed record XlsxTextBoxPackagePart(
     string Text,
@@ -230,7 +248,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
             : null;
 
         var charts = ReadChartParts(archive, drawingPath, drawingXml, drawingRelsXml);
-        var pictures = ReadPictureParts(archive, drawingPath, drawingXml, drawingRelsXml);
+        // R119-io-camera-linked-picture-identity: a reconstructed camera/linked-picture group (see
+        // ReadPictureSnapshotGroupParts) is an <xdr:grpSp>, not an <xdr:pic>, so ReadPictureParts'
+        // Descendants(pic) walk never finds it -- it must be read as its own pass and merged in here.
+        var pictures = ReadPictureParts(archive, drawingPath, drawingXml, drawingRelsXml)
+            .Concat(ReadPictureSnapshotGroupParts(drawingXml))
+            .ToList();
         var (textBoxes, shapes) = ReadShapeParts(drawingXml, drawingRelsXml);
         return new XlsxWorksheetDrawingPackageParts(charts, pictures, textBoxes, shapes);
     }
@@ -526,6 +549,190 @@ internal static partial class XlsxWorksheetDrawingPartReader
         return pictures;
     }
 
+    /// <summary>
+    /// R119-io-camera-linked-picture-identity: recognizes an <c>&lt;xdr:grpSp&gt;</c> the writer
+    /// marked (via <c>ToPictureSnapshotGroupExtLst</c>'s <c>fx:linkedPictureSnapshot</c> extension on
+    /// its <c>&lt;xdr:nvGrpSpPr&gt;&lt;xdr:cNvPr&gt;</c>) as a reconstructed CellRangeSnapshot
+    /// picture -- a "camera" / Paste Special &gt; Linked Picture / Paste Picture object with no
+    /// rasterized bitmap, re-emitted as a background rectangle plus one rectangle+text shape per
+    /// cached cell (see <c>ToOneCellPictureSnapshotAnchor</c>) -- and reconstructs it as a SINGLE
+    /// <see cref="XlsxPicturePackagePart"/> (<see cref="PictureKind.CellRangeSnapshot"/>) instead of
+    /// letting <see cref="ReadShapeParts"/> flatten its children into independent, ungrouped
+    /// shapes. Without this, IsLinkedToSourceRange/LinkedSourceRange/LinkedSourceSheetName -- and the
+    /// picture's identity as a single object -- were permanently destroyed on every save+reload: the
+    /// group carried none of that metadata anywhere in its XML, and nothing rebuilt a PictureModel
+    /// from a loaded grpSp at all.
+    /// <para>
+    /// An ordinary, user-authored group of shapes (Excel's own "Group" command) carries no such
+    /// extension and is untouched by this method -- it is skipped and continues to flatten via
+    /// <see cref="ReadShapeParts"/> exactly as before.
+    /// </para>
+    /// </summary>
+    internal static IReadOnlyList<XlsxPicturePackagePart> ReadPictureSnapshotGroupParts(XDocument drawingXml)
+    {
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var result = new List<XlsxPicturePackagePart>();
+
+        foreach (var group in drawingXml.Descendants(spreadsheetDrawingNs + "grpSp"))
+        {
+            var marker = ReadPictureSnapshotGroupMarker(group, spreadsheetDrawingNs, drawingNs);
+            if (marker is null)
+                continue;
+
+            var (name, title, altText) = ReadNonVisualProperties(group);
+            var isDecorative = ReadNonVisualDecorative(group);
+            var groupTransform = group.Element(spreadsheetDrawingNs + "grpSpPr")?.Element(drawingNs + "xfrm");
+            var rotation = ReadDrawingRotation(groupTransform);
+            var flipHorizontal = ReadDrawingFlipHorizontal(groupTransform);
+            var flipVertical = ReadDrawingFlipVertical(groupTransform);
+            var anchor = ReadNearestAnchor(group);
+            var orderIndex = ReadNearestAnchorOrderIndex(group);
+
+            var cells = new List<PictureCellSnapshot>();
+            foreach (var sp in group.Elements(spreadsheetDrawingNs + "sp"))
+            {
+                var cell = ReadPictureSnapshotCell(sp, spreadsheetDrawingNs, drawingNs);
+                if (cell is not null)
+                    cells.Add(cell);
+            }
+
+            result.Add(new XlsxPicturePackagePart(
+                ImageBytes: [],
+                ContentType: "",
+                Name: name,
+                Title: title,
+                AltText: altText,
+                Anchor: anchor,
+                RotationDegrees: rotation,
+                FlipHorizontal: flipHorizontal,
+                FlipVertical: flipVertical,
+                CropLeft: 0,
+                CropTop: 0,
+                CropRight: 0,
+                CropBottom: 0,
+                DrawingOrderIndex: orderIndex,
+                IsDecorative: isDecorative,
+                Kind: PictureKind.CellRangeSnapshot,
+                SnapshotCells: cells,
+                IsLinkedToSourceRange: marker.Value.IsLinked,
+                LinkedSourceSheetName: marker.Value.SourceSheetName,
+                LinkedSourceStartRow: marker.Value.StartRow,
+                LinkedSourceStartCol: marker.Value.StartCol,
+                LinkedSourceEndRow: marker.Value.EndRow,
+                LinkedSourceEndCol: marker.Value.EndCol,
+                SnapshotSourceRowCount: marker.Value.SourceRowCount,
+                SnapshotSourceColumnCount: marker.Value.SourceColumnCount));
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// True when <paramref name="element"/> (an <c>&lt;xdr:sp&gt;</c>/<c>&lt;xdr:cxnSp&gt;</c>
+    /// candidate for <see cref="ReadShapeParts"/>) sits inside a group <see cref="ReadPictureSnapshotGroupParts"/>
+    /// already reconstructed whole as a single picture -- see the matching comment at its call sites.
+    /// </summary>
+    private static bool IsInsideCellRangeSnapshotGroup(XElement element, XNamespace spreadsheetDrawingNs, XNamespace drawingNs)
+    {
+        foreach (var group in element.Ancestors(spreadsheetDrawingNs + "grpSp"))
+        {
+            if (ReadPictureSnapshotGroupMarker(group, spreadsheetDrawingNs, drawingNs) is not null)
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Parses the <c>fx:linkedPictureSnapshot</c> marker (see <see cref="XlsxWorksheetDrawingObjectWriter.ToPictureSnapshotGroupExtLst"/>)
+    /// off <paramref name="group"/>'s <c>&lt;xdr:nvGrpSpPr&gt;&lt;xdr:cNvPr&gt;&lt;a:extLst&gt;</c>, or
+    /// <see langword="null"/> when <paramref name="group"/> carries no such marker (an ordinary,
+    /// user-authored group of shapes).
+    /// </summary>
+    private static (bool IsLinked, string? SourceSheetName, int? StartRow, int? StartCol, int? EndRow, int? EndCol, uint SourceRowCount, uint SourceColumnCount)?
+        ReadPictureSnapshotGroupMarker(XElement group, XNamespace spreadsheetDrawingNs, XNamespace drawingNs)
+    {
+        var cNvPr = group.Element(spreadsheetDrawingNs + "nvGrpSpPr")?.Element(spreadsheetDrawingNs + "cNvPr");
+        var marker = cNvPr?
+            .Element(drawingNs + "extLst")?
+            .Elements(drawingNs + "ext")
+            .FirstOrDefault(ext => (string?)ext.Attribute("uri") == CellRangeSnapshotGroupExtensionUri)?
+            .Elements()
+            .FirstOrDefault(child => child.Name.LocalName == "linkedPictureSnapshot");
+        if (marker is null)
+            return null;
+
+        int? ParseInt(string attributeName) =>
+            int.TryParse(marker.Attribute(attributeName)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : null;
+        uint ParseUintOrDefault(string attributeName, uint fallback) =>
+            uint.TryParse(marker.Attribute(attributeName)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : fallback;
+
+        var sourceSheet = marker.Attribute("sourceSheet")?.Value;
+        return (
+            XlsxWorksheetXmlValueParser.IsTruthy(marker.Attribute("isLinked")?.Value),
+            string.IsNullOrWhiteSpace(sourceSheet) ? null : sourceSheet,
+            ParseInt("sourceStartRow"),
+            ParseInt("sourceStartCol"),
+            ParseInt("sourceEndRow"),
+            ParseInt("sourceEndCol"),
+            ParseUintOrDefault("sourceRowCount", 1),
+            ParseUintOrDefault("sourceColCount", 1));
+    }
+
+    /// <summary>
+    /// Reconstructs one <see cref="PictureCellSnapshot"/> from a per-cell rectangle
+    /// <c>&lt;xdr:sp&gt;</c> written by <c>ToPictureSnapshotCellShape</c>. The cell's RowOffset/
+    /// ColumnOffset is recovered from the shape's own <c>cNvPr@name</c> ("Cell {row}_{col}" --
+    /// written by that same method), not recomputed from pixel geometry, so it is exact even when
+    /// the group's cellWidthEmu/cellHeightEmu division was lossy. Returns <see langword="null"/> for
+    /// the group's "Background" rectangle (drawn by <c>ToPictureSnapshotBackgroundShape</c>, not a
+    /// cell) or any shape whose name doesn't match the expected pattern.
+    /// </summary>
+    private static PictureCellSnapshot? ReadPictureSnapshotCell(XElement sp, XNamespace spreadsheetDrawingNs, XNamespace drawingNs)
+    {
+        var cellName = sp.Element(spreadsheetDrawingNs + "nvSpPr")?.Element(spreadsheetDrawingNs + "cNvPr")?.Attribute("name")?.Value;
+        if (string.IsNullOrEmpty(cellName) || !cellName.StartsWith("Cell ", StringComparison.Ordinal))
+            return null;
+
+        var offsetParts = cellName["Cell ".Length..].Split('_');
+        if (offsetParts.Length != 2 ||
+            !uint.TryParse(offsetParts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowOffset) ||
+            !uint.TryParse(offsetParts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var colOffset))
+        {
+            return null;
+        }
+
+        var spPr = sp.Element(spreadsheetDrawingNs + "spPr");
+        var fillColor = ReadDrawingSolidFillColor(spPr?.Element(drawingNs + "solidFill"), drawingNs);
+        var run = sp.Element(spreadsheetDrawingNs + "txBody")?.Element(drawingNs + "p")?.Element(drawingNs + "r");
+        var text = run?.Element(drawingNs + "t")?.Value ?? string.Empty;
+
+        CellStyle? style = null;
+        var rPr = run?.Element(drawingNs + "rPr");
+        if (fillColor is not null || rPr is not null)
+        {
+            style = new CellStyle { FillColor = fillColor };
+            if (rPr is not null)
+            {
+                if (int.TryParse(rPr.Attribute("sz")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var szHundredths) && szHundredths > 0)
+                    style.FontSize = szHundredths / 100.0;
+                style.Bold = rPr.Attribute("b")?.Value == "1";
+                style.Italic = rPr.Attribute("i")?.Value == "1";
+                style.Underline = rPr.Attribute("u")?.Value == "sng";
+                var fontColor = ReadDrawingSolidFillColor(rPr.Element(drawingNs + "solidFill"), drawingNs);
+                if (fontColor is not null)
+                    style.FontColor = fontColor.Value;
+            }
+        }
+
+        return new PictureCellSnapshot(rowOffset, colOffset, text, style);
+    }
+
     private static byte[] ReadEntryBytes(ZipArchiveEntry entry)
     {
         if (entry.Length <= int.MaxValue)
@@ -639,12 +846,25 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 if (element.Ancestors(markupCompatNs + "Fallback").Any())
                     continue;
 
+                // R119-io-camera-linked-picture-identity: a rectangle nested inside a group the
+                // writer marked as a reconstructed CellRangeSnapshot picture (see
+                // ToPictureSnapshotGroupExtLst/ReadPictureSnapshotGroupParts) is that picture's
+                // per-cell content, already consumed whole by ReadPictureSnapshotGroupParts --
+                // reading it AGAIN here would flatten it into a second, independent
+                // DrawingShapeModel/TextBoxModel and permanently destroy the picture's identity
+                // (and duplicate its content) on every load.
+                if (IsInsideCellRangeSnapshotGroup(element, spreadsheetDrawingNs, drawingNs))
+                    continue;
+
                 ReadSpElement(element, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById, textBoxes, shapes);
             }
             else if (element.Name == spreadsheetDrawingNs + "cxnSp")
             {
                 // Connectors (<xdr:cxnSp>) use the same spPr/prstGeom structure as sp.
                 if (element.Ancestors(markupCompatNs + "Fallback").Any())
+                    continue;
+
+                if (IsInsideCellRangeSnapshotGroup(element, spreadsheetDrawingNs, drawingNs))
                     continue;
 
                 ReadCxnSpElement(element, spreadsheetDrawingNs, drawingNs, relNs, hyperlinkRelsById, shapes);
@@ -1244,6 +1464,18 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// <see cref="ReadNonVisualDecorative"/> and <see cref="XlsxWorksheetDrawingObjectWriter"/>.
     /// </summary>
     internal const string DrawingMlDecorativeExtensionUri = "{C183D7F6-B498-43B3-948B-1728B52AA6E4}";
+
+    /// <summary>
+    /// R119-io-camera-linked-picture-identity: extension-list URI for the FreeX-specific
+    /// <c>fx:linkedPictureSnapshot</c> marker on a reconstructed CellRangeSnapshot picture's
+    /// <c>&lt;xdr:grpSp&gt;&lt;xdr:nvGrpSpPr&gt;&lt;xdr:cNvPr&gt;</c>, shared by
+    /// <see cref="ReadPictureSnapshotGroupMarker"/> and
+    /// <see cref="XlsxWorksheetDrawingObjectWriter.ToPictureSnapshotGroupExtLst"/>. Not a real
+    /// Microsoft/ECMA-376 extension -- just a private, FreeX-authored uri under the standard
+    /// <c>a:extLst</c>/<c>a:ext</c> extensibility point every OOXML consumer (including Excel
+    /// itself) is required to ignore-and-preserve when it doesn't recognize the uri.
+    /// </summary>
+    internal const string CellRangeSnapshotGroupExtensionUri = "{6E6ECF3A-6EFD-46C8-9E23-4E1B2E9D6DE0}";
 
     private static double ReadSourceRectangleRatio(XElement? sourceRectangle, string attributeName)
     {

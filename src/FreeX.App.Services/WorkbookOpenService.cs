@@ -61,7 +61,12 @@ public sealed class WorkbookOpenService
                     using var fileStream = OpenFileStream(path);
                     return _inspectXlsx(fileStream);
                 },
-                CreateProgressUpdate).ConfigureAwait(false);
+                CreateProgressUpdate,
+                // R119-appservices-open-cancel-eager: safe to opt in -- this only ever touches a
+                // private FileStream nothing else can reach, unlike WorkbookSaveService's Writing
+                // stage which serializes the live, possibly shared Workbook (see
+                // WorkbookProgressStageRunner.RunWorkAsync's doc comment for the full rationale).
+                observeCancellationEagerly: true).ConfigureAwait(false);
         }
 
         IReadOnlyList<string> loadWarnings = [];
@@ -105,7 +110,10 @@ public sealed class WorkbookOpenService
                 cancellationToken.ThrowIfCancellationRequested();
                 return loadedWorkbook;
             },
-            CreateProgressUpdate).ConfigureAwait(false);
+            CreateProgressUpdate,
+            // R119-appservices-open-cancel-eager: see the Inspecting stage above -- this parse only
+            // ever builds a fresh, not-yet-published Workbook over a private FileStream.
+            observeCancellationEagerly: true).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         WorkbookOpenNormalizer.ApplyTextWorkbookSheetName(workbook, extension, Path.GetFileNameWithoutExtension(path));
 
@@ -140,7 +148,11 @@ public sealed class WorkbookOpenService
                         xlsxAdapter.RebaseLoadedPackageSnapshot(workbook);
                     return true;
                 },
-                CreateProgressUpdate).ConfigureAwait(false);
+                CreateProgressUpdate,
+                // R119-appservices-open-cancel-eager: `workbook` here is the same not-yet-published
+                // instance built by the Parsing stage above -- nothing else can reach it until
+                // LoadAsync returns, so eagerly observing cancellation is safe.
+                observeCancellationEagerly: true).ConfigureAwait(false);
         }
         else
         {

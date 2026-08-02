@@ -12,6 +12,27 @@ public sealed partial class MainWindow
     private Window? _findReplaceDialog;
     private Action<bool>? _switchFindReplaceMode;
 
+    /// <summary>
+    /// Closes the modeless Find &amp; Replace dialog (<see cref="_findReplaceDialog"/>) if it is
+    /// currently open. Must be called from every workbook-replacing path (New, Open, Close
+    /// Workbook, recovery-snapshot load -- see <see cref="ReplaceSession"/>) because the dialog
+    /// captures its selection scope once at open time (<see cref="CaptureFindReplaceSelectionScopeAtOpen"/>)
+    /// and reuses it for every Find Next/Find All/Replace/Replace All click for as long as it stays
+    /// open (R119-avalonia-findreplace-stale-scope). A workbook replacement always creates fresh
+    /// <see cref="SheetId"/>s, so a scope captured against the previous workbook can never again
+    /// match any candidate in the new one -- silently returning zero matches forever instead of
+    /// crashing or corrupting data. This mirrors the WPF host's
+    /// <c>MainWindow.WorkbookUiState.CloseFindReplaceDialogIfOpen</c>, which exists for the exact
+    /// same reason. <see cref="Window.Close()"/>'s <c>Closed</c> handler (registered in
+    /// <see cref="ShowFindReplaceTabbedDialogAsync"/> via <see cref="ShowOwnedModelessWindow"/>)
+    /// nulls out <see cref="_findReplaceDialog"/> and <see cref="_switchFindReplaceMode"/>, so there
+    /// is nothing further to reset here.
+    /// </summary>
+    private void CloseFindReplaceDialogIfOpen()
+    {
+        _findReplaceDialog?.Close();
+    }
+
     private void ShowOwnedModelessWindow(
         Window dialog,
         Action focusInitialControl,

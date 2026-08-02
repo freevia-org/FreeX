@@ -7,7 +7,8 @@ using FreeX.Core.Model;
 namespace FreeX.Core.IO.Tests;
 
 /// <summary>
-/// Regression guard for round-14 review finding (bucket T16):
+/// Regression guard for round-14 review finding (bucket T16), UPDATED by round 119
+/// (R119-io-camera-linked-picture-identity):
 ///
 ///   R14-camera-linked-picture-3 - a FreeX-authored "camera" / Paste Special &gt; Linked Picture
 ///     (or Paste Picture) object is a <see cref="PictureModel"/> with
@@ -18,6 +19,21 @@ namespace FreeX.Core.IO.Tests;
 ///     IsSupportedPicture filter required ImageBytes to be present, so the object (and its
 ///     content) silently vanished on every .xlsx save instead of surviving as a real drawing
 ///     object the way Excel's own camera/linked-picture objects do.
+///
+/// R14 fixed the outright data loss by reconstructing the object as a vector
+/// <c>&lt;xdr:grpSp&gt;</c> group of rectangle/text shapes -- but that group carried no metadata
+/// identifying it as a picture at all, so FreeX's own reader (which walks every &lt;xdr:sp&gt;
+/// regardless of grpSp nesting) flattened it into independent, disconnected
+/// <see cref="DrawingShapeModel"/> objects on load, permanently destroying the picture's identity
+/// and (for the Linked Picture / Camera variant) its live link. The final assertion below used to
+/// assert exactly that flattened outcome as the accepted status quo -- per the round's
+/// "DO NOT CERTIFY A BUG" disposition rule, that was the R14 fix's own accepted-but-incomplete
+/// behavior, not correct behavior Excel agrees with (real Excel's Camera/Linked-Picture objects
+/// stay single, identifiable, live-updating pictures across any number of save/reload cycles), so
+/// R119 fixes the underlying writer/reader gap and this test's final assertion is UPDATED (not
+/// left encoding the old bug) to require the reloaded object come back as a single
+/// CellRangeSnapshot PictureModel again. See <see cref="R119_CameraLinkedPictureIdentityTests"/>
+/// for the full linked-identity round-trip coverage this file's narrower scope doesn't reach.
 /// </summary>
 public sealed class FreeXR14T16Tests
 {
@@ -64,14 +80,19 @@ public sealed class FreeXR14T16Tests
                 .Should().Contain("Snap", "the pasted range's cell content must survive the .xlsx save");
         }
 
-        // The object must also be genuinely readable back through the public API (not merely
-        // present as raw XML): FreeX's own drawing-part reader flattens shapes nested inside a
-        // group, so the reconstructed cell comes back as a rectangle shape carrying the cell text.
+        // R119-io-camera-linked-picture-identity: the object must reload as a SINGLE
+        // CellRangeSnapshot PictureModel again -- not as a flattened, disconnected DrawingShapeModel
+        // (the R14-era behavior this test used to certify as accepted). FreeX's writer now records
+        // enough metadata in the group's extLst for the reader to rebuild the picture instead of
+        // flattening its per-cell rectangles.
         stream.Position = 0;
         var reloaded = adapter.Load(stream);
         var reloadedSheet = reloaded.GetSheet("Sheet1")!;
-        reloadedSheet.DrawingShapes
-            .Should().Contain(s => s.ShapeText == "Snap",
-                "the camera picture's cell content must round-trip as visible drawing content, not vanish");
+        reloadedSheet.DrawingShapes.Should().BeEmpty(
+            "the camera picture's per-cell rectangles must no longer be flattened into independent shapes");
+        reloadedSheet.Pictures
+            .Should().ContainSingle(p => p.Kind == PictureKind.CellRangeSnapshot)
+            .Which.Cells.Should().Contain(c => c.Text == "Snap",
+                "the camera picture's cell content must round-trip as a real picture, not vanish or flatten");
     }
 }

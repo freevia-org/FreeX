@@ -69,18 +69,46 @@ public static class FormatPainterCommandFactory
             return new CompositeWorkbookCommand("Format Painter", commands);
         }
 
+        // R119-commands-format-painter-multicell-merge-leak: a merge covers cells but renders only
+        // its anchor's style -- the other covered cells keep their pre-merge StyleId internally,
+        // purely so a later Unmerge can restore it (see MergeCellsCommand.Apply). When the source
+        // selection is a multi-cell range that merely CONTAINS one or more merged regions (rather
+        // than collapsing to exactly one merge, handled above), the per-cell tiling below must not
+        // read a covered cell's own StyleId via GetSourceStyleId -- that would leak the hidden
+        // pre-merge leftover onto the target. Collect every merge fully inside sourceRange so each
+        // tiled source address can be redirected to its merge's anchor instead.
+        var sourceMerges = sourceSheet.MergedRegions.Where(sourceRange.Contains).ToList();
+
         foreach (var targetAddress in targetRange.AllCells())
         {
             var sourceAddress = new CellAddress(
                 sourceSheet.Id,
                 sourceRange.Start.Row + ((targetAddress.Row - targetRange.Start.Row) % sourceRange.RowCount),
                 sourceRange.Start.Col + ((targetAddress.Col - targetRange.Start.Col) % sourceRange.ColCount));
-            var sourceStyle = workbook.GetStyle(GetSourceStyleId(sourceSheet, sourceAddress));
+            GridRange? coveringMerge = null;
+            foreach (var merge in sourceMerges)
+            {
+                if (merge.Contains(sourceAddress))
+                {
+                    coveringMerge = merge;
+                    break;
+                }
+            }
+            var styleSourceAddress = coveringMerge?.Start ?? sourceAddress;
+            var sourceStyle = workbook.GetStyle(GetSourceStyleId(sourceSheet, styleSourceAddress));
             commands.Add(new ApplyStyleCommand(
                 targetRange.Start.Sheet,
                 new GridRange(targetAddress, targetAddress),
                 StyleDiff.FromStyle(sourceStyle)));
         }
+
+        // Recreate each contained merge's shape at every tiled repetition in the target, the same
+        // way AddTiledMerges already does for the whole-selection-is-one-merge branch above --
+        // otherwise the anchor's style would be painted onto the target's covered cells too, but
+        // with no merge joining them, leaving a block of identically-styled but unmerged cells
+        // instead of the single merged block Excel actually reproduces.
+        if (sourceMerges.Count > 0)
+            AddTiledMergesForMultiCellSource(commands, sourceMerges, sourceRange, targetRange);
 
         commands.Add(new FormatPainterDataValidationCommand(sourceSheet.Id, sourceRange, targetRange));
         // Unlike PasteCommandFactory's Paste-Special "all merging conditional formats" branch (which
@@ -142,6 +170,43 @@ public static class FormatPainterCommandFactory
                     new CellAddress(effectiveTargetRange.Start.Sheet, tileStartRow, tileStartCol),
                     new CellAddress(effectiveTargetRange.Start.Sheet, tileStartRow + mergeRowCount - 1, tileStartCol + mergeColCount - 1));
                 commands.Add(new MergeCellsCommand(effectiveTargetRange.Start.Sheet, tileRange));
+            }
+        }
+    }
+
+    // Tiles every merge that is fully contained within a multi-cell sourceRange across
+    // targetRange, one source-sized (or, at the trailing edge, source-clipped) tile at a time --
+    // the multi-cell-source counterpart of AddTiledMerges above (which only handles the whole
+    // selection collapsing to exactly one merge). Each merge's position is kept relative to
+    // sourceRange.Start so it lands at the matching offset inside every repeated tile, mirroring
+    // how the per-cell style loop above computes sourceAddress via the same modulo tiling.
+    private static void AddTiledMergesForMultiCellSource(
+        List<IWorkbookCommand> commands,
+        IReadOnlyList<GridRange> sourceMerges,
+        GridRange sourceRange,
+        GridRange targetRange)
+    {
+        for (var tileStartRow = targetRange.Start.Row; tileStartRow <= targetRange.End.Row; tileStartRow += sourceRange.RowCount)
+        {
+            for (var tileStartCol = targetRange.Start.Col; tileStartCol <= targetRange.End.Col; tileStartCol += sourceRange.ColCount)
+            {
+                foreach (var merge in sourceMerges)
+                {
+                    var targetMergeStartRow = tileStartRow + (merge.Start.Row - sourceRange.Start.Row);
+                    var targetMergeStartCol = tileStartCol + (merge.Start.Col - sourceRange.Start.Col);
+                    if (targetMergeStartRow > targetRange.End.Row || targetMergeStartCol > targetRange.End.Col)
+                        continue; // this tile's copy of the merge falls entirely past the target's trailing (clipped) edge
+
+                    var targetMergeEndRow = Math.Min(targetMergeStartRow + merge.RowCount - 1, targetRange.End.Row);
+                    var targetMergeEndCol = Math.Min(targetMergeStartCol + merge.ColCount - 1, targetRange.End.Col);
+                    if (targetMergeEndRow == targetMergeStartRow && targetMergeEndCol == targetMergeStartCol)
+                        continue; // clipped down to a single cell at the trailing edge -- nothing to merge
+
+                    var tileRange = new GridRange(
+                        new CellAddress(targetRange.Start.Sheet, targetMergeStartRow, targetMergeStartCol),
+                        new CellAddress(targetRange.Start.Sheet, targetMergeEndRow, targetMergeEndCol));
+                    commands.Add(new MergeCellsCommand(targetRange.Start.Sheet, tileRange));
+                }
             }
         }
     }

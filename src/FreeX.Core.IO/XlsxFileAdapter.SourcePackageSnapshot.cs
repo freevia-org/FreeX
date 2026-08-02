@@ -1498,7 +1498,24 @@ public sealed partial class XlsxFileAdapter
 
         private static bool PatchBlockReasonInvalidatesCalcChain(string reason) =>
             reason is "change_formula_text" or "change_formula_to_literal" or "change_formula_array_mode"
-                or "change_sheet_count" or "change_dimension_metadata" or "change_cell_count_mismatch";
+                or "change_sheet_count" or "change_dimension_metadata" or "change_cell_count_mismatch"
+                // A plain sheet reorder (no add/delete) trips one of these two reasons -- whichever
+                // per-ordinal identity check (chart-source-range baseline, then pivot-source-range
+                // baseline) runs first against the reordered sheet list; both compare workbook.Sheets[i]
+                // against a baseline captured at the SAME ordinal, so any reorder mismatches at some
+                // index before the loop ever reaches the (dead-for-reorder) per-sheet identity check
+                // below. The source calcChain.xml's <c i="N"> entries key off that same ordinal, so
+                // after a reorder they point at the wrong sheets -- same stale-'i' root cause as
+                // change_sheet_count above, just without a count change.
+                or "change_chart_source_metadata" or "change_pivot_source_metadata"
+                // Reached directly (not via reorder) when a style-only cell's bookkeeping count no
+                // longer reconciles after edits; kept conservative for the same reason as the identity
+                // checks above.
+                or "change_sheet_identity_or_style_only_cells"
+                // A brand-new formula typed into a cell that was blank (or style-only) in the loaded
+                // source falls back to full-save via this reason. The source calcChain.xml predates the
+                // new formula cell and simply omits it, so it must not survive unmodified either.
+                or "change_inserted_cell";
 
         private static bool ChangesInvalidateCalcChain(IEnumerable<XlsxCellValuePatch> changes) =>
             changes.Any(change =>

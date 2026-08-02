@@ -5,7 +5,7 @@ namespace FreeX.Core.Commands;
 /// <summary>
 /// Pastes complete cell payloads, including values/formulas and formatting.
 /// </summary>
-public sealed class PasteCellsCommand : IWorkbookCommand
+public sealed class PasteCellsCommand : IWorkbookCommand, IEstimatesMemory
 {
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, Cell Cell)> _cells;
@@ -15,7 +15,18 @@ public sealed class PasteCellsCommand : IWorkbookCommand
     private readonly IReadOnlyDictionary<CellAddress, CellPhoneticGuide>? _phoneticGuides;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
 
+    // R119-commands-undo-byte-budget-1: the undo snapshot holds a full Cell clone plus style,
+    // hyperlink/metadata, rich-text runs and phonetic guide PER PASTED CELL (see Apply below), so
+    // its footprint scales with _cells.Count, not with a flat per-command constant. Without this,
+    // CommandBus's 50 MB undo byte-budget (CommandBus.MaxUndoByteBudget) bills every paste at the
+    // 200-byte IEstimatesMemory default regardless of size, so a 100k-cell paste never trips the
+    // budget and only the 100-entry depth cap bounds the undo stack.
+    private const int BytesPerCell = 300;
+
     public string Label => _cells.Count == 1 ? "Paste Cell" : $"Paste {_cells.Count} Cells";
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min((long)_cells.Count * BytesPerCell, int.MaxValue);
 
     public PasteCellsCommand(
         SheetId sheetId,
