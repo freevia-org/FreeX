@@ -23701,13 +23701,21 @@ public sealed class DocumentView : Control
             fmt.Italic ? FontStyle.Italic : FontStyle.Normal,
             fmt.Bold ? FontWeight.Bold : FontWeight.Normal);
 
-        return new FormattedText(
+        var formatted = new FormattedText(
             text,
             CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
             typeface,
             FontSizePx(fmt),
             BrushFor(fmt.ColorHex));
+        var featurePlan = RunOpenTypeFeaturePlanner.Build(fmt);
+        if (featurePlan.AvaloniaFeatureSettings.Count > 0)
+        {
+            formatted.SetFontFeatures(new FontFeatureCollection(
+                featurePlan.AvaloniaFeatureSettings.Select(FontFeature.Parse)));
+        }
+
+        return formatted;
     }
 
     // Layout must use the same superscript/subscript scale that drawing uses. Otherwise a marker
