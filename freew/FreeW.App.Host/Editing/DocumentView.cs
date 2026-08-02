@@ -4586,22 +4586,52 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Set (or clear when <paramref name="border"/> is null) the character border on every run in the
-    /// selected paragraphs. Routes through the undo/redo bus and re-renders.
+    /// Set (or clear when <paramref name="border"/> is null) the character border on the exact selected text.
+    /// A collapsed caret retains the historical selected-paragraph behavior. Routes through the undo/redo bus
+    /// and re-renders.
     /// </summary>
-    public void SetCharacterBorder(ParagraphBorder? border) =>
-        FormatSelectedModelRuns(f => f with { CharacterBorder = border });
+    public void SetCharacterBorder(ParagraphBorder? border)
+    {
+        if (TrySetSelectedRunFormatting(
+                formatting => Equals(formatting.CharacterBorder, border),
+                formatting => formatting with { CharacterBorder = border }))
+        {
+            return;
+        }
+
+        FormatSelectedModelRuns(formatting => formatting with { CharacterBorder = border });
+    }
 
     /// <summary>
-    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on every run
-    /// in the selected paragraphs. Routes through the undo/redo bus and re-renders.
+    /// Set (or clear when <paramref name="colorHex"/> is null/empty) the character shading on the exact selected
+    /// text. A collapsed caret retains the historical selected-paragraph behavior. Routes through the undo/redo
+    /// bus and re-renders.
     /// </summary>
-    public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear) =>
-        FormatSelectedModelRuns(f => f with
+    public void SetCharacterShading(string? colorHex, ShadingPattern pattern = ShadingPattern.Clear)
+    {
+        var normalizedColor = string.IsNullOrEmpty(colorHex) ? null : colorHex;
+        var normalizedPattern = normalizedColor is null ? ShadingPattern.Clear : pattern;
+        if (TrySetSelectedRunFormatting(
+                formatting => string.Equals(
+                        formatting.CharacterShadingHex,
+                        normalizedColor,
+                        StringComparison.OrdinalIgnoreCase)
+                    && formatting.CharacterShadingPattern == normalizedPattern,
+                formatting => formatting with
+                {
+                    CharacterShadingHex = normalizedColor,
+                    CharacterShadingPattern = normalizedPattern,
+                }))
         {
-            CharacterShadingHex = string.IsNullOrEmpty(colorHex) ? null : colorHex,
-            CharacterShadingPattern = string.IsNullOrEmpty(colorHex) ? ShadingPattern.Clear : pattern,
+            return;
+        }
+
+        FormatSelectedModelRuns(formatting => formatting with
+        {
+            CharacterShadingHex = normalizedColor,
+            CharacterShadingPattern = normalizedPattern,
         });
+    }
 
     /// <summary>
     /// Set (or clear when <paramref name="languageTag"/> is null/empty) the proofing language on the
