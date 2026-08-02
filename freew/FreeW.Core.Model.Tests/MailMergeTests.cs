@@ -180,7 +180,7 @@ public class MailMergeTests
         template.FirstHeader = new HeaderFooter(
             $"{MailMerge.FieldOpen}{ifInstruction}{MailMerge.FieldClose}");
         template.EvenFooter = new HeaderFooter($"Even {MailMerge.FieldOpen}Name{MailMerge.FieldClose}");
-        template.Blocks.Add(new Paragraph("Section end")
+        var sectionParagraph = new Paragraph("Section end")
         {
             SectionBreak = new Section(new PageSettings(), SectionBreakKind.NextPage)
             {
@@ -190,7 +190,10 @@ public class MailMergeTests
                         $"Section {MailMerge.FieldOpen}Name{MailMerge.FieldClose}")
                 }
             }
-        });
+        };
+        sectionParagraph.Runs.Add(Run.FromShape(Shape.TextBoxWith(
+            $"Nested {MailMerge.FieldOpen}{ifInstruction}{MailMerge.FieldClose}", 100, 30)));
+        template.Blocks.Add(sectionParagraph);
 
         var merged = MailMerge.MergeRecordWithRules(
             template,
@@ -202,6 +205,127 @@ public class MailMergeTests
         merged.EvenFooter!.PlainText.Should().Be("Even Ada");
         ((Paragraph)merged.Blocks[0]).SectionBreak!.HeadersFooters.FirstFooter!.PlainText
             .Should().Be("Section Ada");
+        ((Paragraph)merged.Blocks[0]).Runs[1].Shape!.PlainText.Should().Be("Nested Local");
+    }
+
+    [Fact]
+    public void MergeRecord_DeepClonesRichRunPayloadsAndSubstitutesNestedText()
+    {
+        var shape = Shape.TextBoxWith("Shape «Name»", 120, 40);
+        var wordArt = new WordArt("Art «Name»");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.Nodes.Add(new SmartArtNode("Root «Name»", [new SmartArtNode("Child «Name»")]));
+        var ruby = new RubyAnnotation();
+        ruby.BaseFragments.Add(new RubyTextFragment("Ruby «Name»", RunFormatting.Default));
+        ruby.PhoneticFragments.Add(new RubyTextFragment("Guide «Name»", RunFormatting.Default));
+        var groupShape = Shape.TextBoxWith("Group shape «Name»", 80, 30);
+        var groupWordArt = new WordArt("Group art «Name»");
+        var group = new DrawingGroup();
+        group.Children.Add(groupShape);
+        group.Children.Add(groupWordArt);
+        group.ChildOffsets.Add((0, 0));
+        group.ChildOffsets.Add((82, 0));
+
+        var paragraph = new Paragraph("Dear «Name»");
+        paragraph.Runs.Add(Run.FromEquation(Equation.FromText("x+1")));
+        paragraph.Runs.Add(Run.FromShape(shape));
+        paragraph.Runs.Add(Run.FromWordArt(wordArt));
+        paragraph.Runs.Add(Run.FromSmartArt(smartArt));
+        paragraph.Runs.Add(Run.FromRuby(ruby));
+        paragraph.Runs.Add(Run.FromDrawingGroup(group));
+        var template = new TextDocument { Blocks = { paragraph } };
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["Name"] = "Ada" });
+
+        var runs = merged.Paragraphs.Single().Runs;
+        runs[0].Text.Should().Be("Dear Ada");
+        runs[1].Equation.Should().NotBeNull().And.NotBeSameAs(paragraph.Runs[1].Equation);
+        runs[2].Shape.Should().NotBeSameAs(shape);
+        runs[2].Shape!.PlainText.Should().Be("Shape Ada");
+        runs[3].WordArt.Should().NotBeSameAs(wordArt);
+        runs[3].WordArt!.Text.Should().Be("Art Ada");
+        runs[4].SmartArt.Should().NotBeSameAs(smartArt);
+        var mergedSmartArt = runs[4].SmartArt!;
+        mergedSmartArt.Nodes[0].Text.Should().Be("Root Ada");
+        mergedSmartArt.Nodes[0].Children[0].Text.Should().Be("Child Ada");
+        runs[5].Ruby.Should().NotBeSameAs(ruby);
+        var mergedRuby = runs[5].Ruby!;
+        mergedRuby.BaseText.Should().Be("Ruby Ada");
+        mergedRuby.PhoneticFragments.Single().Text.Should().Be("Guide Ada");
+        runs[6].DrawingGroup.Should().NotBeSameAs(group);
+        var mergedGroup = runs[6].DrawingGroup!;
+        ((Shape)mergedGroup.Children[0]).PlainText.Should().Be("Group shape Ada");
+        ((WordArt)mergedGroup.Children[1]).Text.Should().Be("Group art Ada");
+
+        shape.PlainText.Should().Contain("«Name»");
+        wordArt.Text.Should().Contain("«Name»");
+        smartArt.Nodes[0].Text.Should().Contain("«Name»");
+    }
+
+    [Fact]
+    public void MergeRecord_PreservesDocumentStateAndDeepClonesAnnotationStories()
+    {
+        var template = new TextDocument
+        {
+            UseWordApplicationDefaultLineSpacing = true,
+            UseWordApplicationDefaultRunFormatting = true,
+            Protection = new ProtectionSettings(ProtectionMode.ReadOnly),
+            HideSpellingErrors = true,
+            TrackRevisions = true,
+            MarkedAsFinal = true,
+            Theme = DocumentTheme.Catalog[1]
+        };
+        template.Properties.Title = "Merge template";
+        template.Properties.Author = "FreeW";
+        template.MultiLevelList.SetNumberFormat(1, ListNumberFormat.LowerLetter);
+        template.FootnoteNumbering.NumberFormat = NoteNumberFormat.LowerRoman;
+        template.FootnoteNumbering.StartAt = 3;
+        template.EndnoteNumbering.NumberRestart = NoteNumberRestart.EachSection;
+        template.Footnotes[1] = new Footnote(1, "Foot «Name»");
+        template.Endnotes[2] = new Endnote(2, "End «Name»");
+        var comment = new Comment(3, "Comment «Name»", "Reviewer", "RV")
+        {
+            Resolved = true
+        };
+        comment.Replies.Add(new Comment(4, "Reply «Name»", "Reply Author", "RA"));
+        template.Comments[3] = comment;
+        template.EmbeddedFonts.Add(new EmbeddedFont("Test Font", Regular: [1, 2, 3]));
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        paragraph.Runs.Add(Run.EndnoteReference(2));
+        paragraph.Runs.Add(Run.CommentReference(3));
+        template.Blocks.Add(paragraph);
+
+        var merged = MailMerge.MergeRecord(
+            template,
+            new Dictionary<string, string> { ["Name"] = "Ada" });
+
+        merged.Properties.Title.Should().Be("Merge template");
+        merged.Properties.Author.Should().Be("FreeW");
+        merged.UseWordApplicationDefaultLineSpacing.Should().BeTrue();
+        merged.UseWordApplicationDefaultRunFormatting.Should().BeTrue();
+        merged.Protection.Mode.Should().Be(ProtectionMode.ReadOnly);
+        merged.HideSpellingErrors.Should().BeTrue();
+        merged.TrackRevisions.Should().BeTrue();
+        merged.MarkedAsFinal.Should().BeTrue();
+        merged.Theme.Should().Be(DocumentTheme.Catalog[1]);
+        merged.MultiLevelList.GetNumberFormat(1).Should().Be(ListNumberFormat.LowerLetter);
+        merged.FootnoteNumbering.NumberFormat.Should().Be(NoteNumberFormat.LowerRoman);
+        merged.FootnoteNumbering.StartAt.Should().Be(3);
+        merged.EndnoteNumbering.NumberRestart.Should().Be(NoteNumberRestart.EachSection);
+        merged.Footnotes[1].Should().NotBeSameAs(template.Footnotes[1]);
+        merged.Footnotes[1].PlainText.Should().Be("Foot Ada");
+        merged.Endnotes[2].Should().NotBeSameAs(template.Endnotes[2]);
+        merged.Endnotes[2].PlainText.Should().Be("End Ada");
+        merged.Comments[3].Should().NotBeSameAs(comment);
+        merged.Comments[3].PlainText.Should().Be("Comment Ada");
+        merged.Comments[3].Replies.Single().PlainText.Should().Be("Reply Ada");
+        merged.EmbeddedFonts.Single().Regular.Should().Equal(1, 2, 3);
+        merged.EmbeddedFonts.Single().Regular.Should().NotBeSameAs(template.EmbeddedFonts.Single().Regular);
+        template.Footnotes[1].PlainText.Should().Contain("«Name»");
+        template.Comments[3].PlainText.Should().Contain("«Name»");
     }
 
     [Fact]
@@ -303,6 +427,30 @@ public class MailMergeTests
         combined.Blocks.Should().HaveCount(2);
         ((Paragraph)combined.Blocks[1]).Formatting.PageBreakBefore.Should().BeFalse();
         combined.PlainText.Should().Be("Ada\nGrace");
+    }
+
+    [Fact]
+    public void CombineMergedRecords_RemapsAnnotationIdsAndKeepsRecipientSpecificStories()
+    {
+        var template = new TextDocument();
+        var paragraph = new Paragraph("Dear «Name»");
+        paragraph.Runs.Add(Run.FootnoteReference(1));
+        template.Blocks.Add(paragraph);
+        template.Footnotes[1] = new Footnote(1, "Private note for «Name»");
+        var records = MailMerge.MergeAll(
+            template,
+            new MergeData(["Name"], [["Ada"], ["Grace"]]));
+
+        var combined = MailMerge.CombineMergedRecords(records, MailMergeOutputMode.Letters);
+
+        var references = combined.Paragraphs
+            .SelectMany(item => item.Runs)
+            .Where(run => run.FootnoteId is not null)
+            .ToList();
+        references.Select(run => run.FootnoteId).Should().Equal(1, 2);
+        combined.Footnotes.Keys.Should().BeEquivalentTo([1, 2]);
+        combined.Footnotes[1].PlainText.Should().Be("Private note for Ada");
+        combined.Footnotes[2].PlainText.Should().Be("Private note for Grace");
     }
 
     [Fact]

@@ -1389,16 +1389,33 @@ public static class MailMerge
         {
             DefaultRun = template.DefaultRun,
             DefaultParagraph = template.DefaultParagraph,
+            UseWordApplicationDefaultLineSpacing = template.UseWordApplicationDefaultLineSpacing,
+            UseWordApplicationDefaultRunFormatting = template.UseWordApplicationDefaultRunFormatting,
+            Protection = template.Protection,
+            DoNotDisplayPageBoundaries = template.DoNotDisplayPageBoundaries,
+            RemovePersonalInformation = template.RemovePersonalInformation,
+            HideSpellingErrors = template.HideSpellingErrors,
+            HideGrammaticalErrors = template.HideGrammaticalErrors,
+            AutomaticallyUpdateStylesFromTemplate = template.AutomaticallyUpdateStylesFromTemplate,
+            UpdateFieldsOnOpen = template.UpdateFieldsOnOpen,
+            TrackRevisions = template.TrackRevisions,
+            DoNotTrackMoves = template.DoNotTrackMoves,
+            DoNotTrackFormatting = template.DoNotTrackFormatting,
             DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
             EmbedSystemFonts = template.EmbedSystemFonts,
             SaveSubsetFonts = template.SaveSubsetFonts,
             PageBordersDoNotSurroundHeader = template.PageBordersDoNotSurroundHeader,
-            PageBordersDoNotSurroundFooter = template.PageBordersDoNotSurroundFooter
+            PageBordersDoNotSurroundFooter = template.PageBordersDoNotSurroundFooter,
+            MarkedAsFinal = template.MarkedAsFinal,
+            Theme = template.Theme,
+            BibliographyStyle = template.BibliographyStyle
         };
 
         foreach (var (id, style) in template.Styles)
             doc.Styles[id] = style;
 
+        CopyDocumentState(template, doc, block => CloneBlock(block, row));
+        doc.Preserved.CopyFrom(template.Preserved);
         CopyPageSettings(template.Page, doc.Page);
         CopySectionHeadersFooters(template.FinalSectionHeadersFooters, doc.FinalSectionHeadersFooters,
             source => CloneHeaderFooter(source, row));
@@ -1492,16 +1509,33 @@ public static class MailMerge
         {
             DefaultRun = template.DefaultRun,
             DefaultParagraph = template.DefaultParagraph,
+            UseWordApplicationDefaultLineSpacing = template.UseWordApplicationDefaultLineSpacing,
+            UseWordApplicationDefaultRunFormatting = template.UseWordApplicationDefaultRunFormatting,
+            Protection = template.Protection,
+            DoNotDisplayPageBoundaries = template.DoNotDisplayPageBoundaries,
+            RemovePersonalInformation = template.RemovePersonalInformation,
+            HideSpellingErrors = template.HideSpellingErrors,
+            HideGrammaticalErrors = template.HideGrammaticalErrors,
+            AutomaticallyUpdateStylesFromTemplate = template.AutomaticallyUpdateStylesFromTemplate,
+            UpdateFieldsOnOpen = template.UpdateFieldsOnOpen,
+            TrackRevisions = template.TrackRevisions,
+            DoNotTrackMoves = template.DoNotTrackMoves,
+            DoNotTrackFormatting = template.DoNotTrackFormatting,
             DoNotAutoCompressPictures = template.DoNotAutoCompressPictures,
             EmbedSystemFonts = template.EmbedSystemFonts,
             SaveSubsetFonts = template.SaveSubsetFonts,
             PageBordersDoNotSurroundHeader = template.PageBordersDoNotSurroundHeader,
-            PageBordersDoNotSurroundFooter = template.PageBordersDoNotSurroundFooter
+            PageBordersDoNotSurroundFooter = template.PageBordersDoNotSurroundFooter,
+            MarkedAsFinal = template.MarkedAsFinal,
+            Theme = template.Theme,
+            BibliographyStyle = template.BibliographyStyle
         };
 
         foreach (var (id, style) in template.Styles)
             doc.Styles[id] = style;
 
+        CopyDocumentState(template, doc, block => CloneBlockWithRules(block, row, state, recordIndex));
+        doc.Preserved.CopyFrom(template.Preserved);
         CopyPageSettings(template.Page, doc.Page);
         CopySectionHeadersFooters(template.FinalSectionHeadersFooters, doc.FinalSectionHeadersFooters,
             source => CloneHeaderFooterWithRules(source, row, state, recordIndex));
@@ -1593,8 +1627,8 @@ public static class MailMerge
 
     /// <summary>
     /// Combine already-merged records into a single document using the selected output mode. Letters force
-    /// a page break before each record after the first; Directory appends records continuously. The merged
-    /// record documents are consumed into the returned document.
+    /// a page break before each record after the first; Directory appends records continuously. Later records
+    /// are copied through the document merge path so annotation ids and preserved package references remain valid.
     /// </summary>
     public static TextDocument CombineMergedRecords(IReadOnlyList<TextDocument> records, MailMergeOutputMode mode)
     {
@@ -1606,12 +1640,10 @@ public static class MailMerge
         for (var d = 1; d < records.Count; d++)
         {
             var record = records[d];
-            var blocks = record.Blocks;
             if (mode == MailMergeOutputMode.Letters)
                 StartNextLetterSection(first, record);
 
-            foreach (var block in blocks)
-                first.Blocks.Add(block);
+            DocumentMerge.Merge(first, first.Blocks.Count, record);
         }
 
         return first;
@@ -1726,185 +1758,148 @@ public static class MailMerge
         }
     }
 
-    private static Block CloneBlock(Block block, IReadOnlyDictionary<string, string> row) => block switch
+    private static Block CloneBlock(Block block, IReadOnlyDictionary<string, string> row)
     {
-        Paragraph p => CloneParagraph(p, row),
-        Table t => CloneTable(t, row),
-        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName)
-        {
-            BlockContentControl = altChunk.BlockContentControl,
-            BlockCustomXml = altChunk.BlockCustomXml
-        },
-        _ => new Paragraph()
-    };
-
-    private static Paragraph CloneParagraph(Paragraph source, IReadOnlyDictionary<string, string> row)
-    {
-        var clone = new Paragraph
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            StyleId = source.StyleId,
-            DropCap = source.DropCap,
-            SectionBreak = source.SectionBreak is { } section ? CloneSection(section, row) : null,
-        };
-        clone.BookmarkNames.AddRange(source.BookmarkNames);
-        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
-        foreach (var run in source.Runs)
-            clone.Runs.Add(CloneRun(run, row));
+        var clone = DocumentMerge.CloneBlock(block);
+        TransformBlockText(clone, text => Substitute(text, row));
         return clone;
     }
 
-    private static Run CloneRun(Run source, IReadOnlyDictionary<string, string> row)
+    private static Block CloneBlockWithRules(
+        Block block,
+        IReadOnlyDictionary<string, string> row,
+        MergeState state,
+        int recordIndex)
     {
-        // Image/field/footnote/comment/control runs carry no merge text of their own; copy their text
-        // through unchanged (Substitute is a no-op when there is no placeholder) while preserving marks.
-        return new Run(Substitute(source.Text, row), source.Formatting)
-        {
-            Image = source.Image,
-            HyperlinkUrl = source.HyperlinkUrl,
-            HyperlinkAnchor = source.HyperlinkAnchor,
-            HyperlinkTooltip = source.HyperlinkTooltip,
-            SubDocument = source.SubDocument,
-            FieldKind = source.FieldKind,
-            FootnoteId = source.FootnoteId,
-            EndnoteId = source.EndnoteId,
-            CommentId = source.CommentId,
-            IsCommentReference = source.IsCommentReference,
-            IsPageBreak = source.IsPageBreak,
-            IsColumnBreak = source.IsColumnBreak,
-            Revision = source.Revision,
-            Control = source.Control,
-            Citation = source.Citation,
-            CrossReference = source.CrossReference,
-            ComplexField = source.ComplexField,
-            RevisionAuthor = source.RevisionAuthor,
-            RevisionDateXml = source.RevisionDateXml
-        };
-    }
+        var clone = DocumentMerge.CloneBlock(block);
+        TransformBlockText(clone, Resolve);
+        return clone;
 
-    private static Table CloneTable(Table source, IReadOnlyDictionary<string, string> row)
-    {
-        var clone = new Table
+        string Resolve(string text)
         {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            Borders = source.Borders
-        };
-        clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
-        foreach (var sourceRow in source.Rows)
-        {
-            var newRow = new TableRow();
-            foreach (var cell in sourceRow.Cells)
-            {
-                var newCell = new TableCell
-                {
-                    ShadingColorHex = cell.ShadingColorHex,
-                    WidthPt = cell.WidthPt,
-                    GridSpan = cell.GridSpan,
-                    VerticalMerge = cell.VerticalMerge
-                };
-                foreach (var p in cell.Paragraphs)
-                    newCell.Paragraphs.Add(CloneParagraph(p, row));
-                newRow.Cells.Add(newCell);
-            }
-            clone.Rows.Add(newRow);
+            var resolved = SubstituteSpecialWithRules(
+                text, row, state, recordIndex, out var advanceRecord, out var skipRecord);
+            state.AdvanceRecordRequested |= advanceRecord;
+            state.SkipRecordRequested |= skipRecord;
+            return resolved;
         }
-        return clone;
     }
 
-    private static Block CloneBlockWithRules(Block block, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex) => block switch
+    private static void TransformBlockText(Block block, Func<string, string> transform)
     {
-        Paragraph p => CloneParagraphWithRules(p, row, state, recordIndex),
-        Table t => CloneTableWithRules(t, row, state, recordIndex),
-        AltChunkBlock altChunk => new AltChunkBlock(altChunk.PreservedPartName)
+        switch (block)
         {
-            BlockContentControl = altChunk.BlockContentControl,
-            BlockCustomXml = altChunk.BlockCustomXml
-        },
-        _ => new Paragraph()
-    };
-
-    private static Paragraph CloneParagraphWithRules(Paragraph source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
-    {
-        var clone = new Paragraph
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            StyleId = source.StyleId,
-            DropCap = source.DropCap,
-            SectionBreak = source.SectionBreak is { } section
-                ? CloneSectionWithRules(section, row, state, recordIndex)
-                : null,
-        };
-        clone.BookmarkNames.AddRange(source.BookmarkNames);
-        clone.BookmarkBoundaries.AddRange(source.BookmarkBoundaries);
-        foreach (var run in source.Runs)
-            clone.Runs.Add(CloneRunWithRules(run, row, state, recordIndex));
-        return clone;
-    }
-
-    private static Run CloneRunWithRules(Run source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
-    {
-        var resolvedText = SubstituteSpecialWithRules(source.Text, row, state, recordIndex, out var advanceRecord, out var skipRecord);
-        state.AdvanceRecordRequested |= advanceRecord;
-        state.SkipRecordRequested |= skipRecord;
-        return new Run(resolvedText, source.Formatting)
-        {
-            Image = source.Image,
-            HyperlinkUrl = source.HyperlinkUrl,
-            HyperlinkAnchor = source.HyperlinkAnchor,
-            HyperlinkTooltip = source.HyperlinkTooltip,
-            SubDocument = source.SubDocument,
-            FieldKind = source.FieldKind,
-            FootnoteId = source.FootnoteId,
-            EndnoteId = source.EndnoteId,
-            CommentId = source.CommentId,
-            IsCommentReference = source.IsCommentReference,
-            IsPageBreak = source.IsPageBreak,
-            IsColumnBreak = source.IsColumnBreak,
-            Revision = source.Revision,
-            Control = source.Control,
-            Citation = source.Citation,
-            CrossReference = source.CrossReference,
-            ComplexField = source.ComplexField,
-            RevisionAuthor = source.RevisionAuthor,
-            RevisionDateXml = source.RevisionDateXml
-        };
-    }
-
-    private static Table CloneTableWithRules(Table source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
-    {
-        var clone = new Table
-        {
-            BlockContentControl = source.BlockContentControl,
-            BlockCustomXml = source.BlockCustomXml,
-            Formatting = source.Formatting,
-            Borders = source.Borders
-        };
-        clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
-        foreach (var sourceRow in source.Rows)
-        {
-            var newRow = new TableRow();
-            foreach (var cell in sourceRow.Cells)
-            {
-                var newCell = new TableCell
-                {
-                    ShadingColorHex = cell.ShadingColorHex,
-                    WidthPt = cell.WidthPt,
-                    GridSpan = cell.GridSpan,
-                    VerticalMerge = cell.VerticalMerge
-                };
-                foreach (var p in cell.Paragraphs)
-                    newCell.Paragraphs.Add(CloneParagraphWithRules(p, row, state, recordIndex));
-                newRow.Cells.Add(newCell);
-            }
-            clone.Rows.Add(newRow);
+            case Paragraph paragraph:
+                TransformParagraphText(paragraph, transform);
+                break;
+            case Table table:
+                foreach (var row in table.Rows)
+                    foreach (var cell in row.Cells)
+                        foreach (var paragraph in cell.Paragraphs)
+                            TransformParagraphText(paragraph, transform);
+                break;
         }
-        return clone;
+    }
+
+    private static void TransformParagraphText(Paragraph paragraph, Func<string, string> transform)
+    {
+        foreach (var run in paragraph.Runs)
+            TransformRunText(run, transform);
+
+        if (paragraph.SectionBreak is { } section)
+            TransformSectionHeadersFootersText(section.HeadersFooters, transform);
+    }
+
+    private static void TransformRunText(Run run, Func<string, string> transform)
+    {
+        if (run.Ruby is { } ruby)
+        {
+            TransformRubyFragments(ruby.BaseFragments, transform);
+            TransformRubyFragments(ruby.PhoneticFragments, transform);
+        }
+        else
+        {
+            run.Text = transform(run.Text);
+        }
+
+        if (run.Shape is { } shape)
+            TransformShapeText(shape, transform);
+        if (run.WordArt is { } wordArt)
+            wordArt.Text = transform(wordArt.Text);
+        if (run.SmartArt is { } smartArt)
+            TransformSmartArtText(smartArt, transform);
+        if (run.DrawingGroup is { } drawingGroup)
+            TransformDrawingGroupText(drawingGroup, transform);
+    }
+
+    private static void TransformRubyFragments(
+        IList<RubyTextFragment> fragments,
+        Func<string, string> transform)
+    {
+        for (var index = 0; index < fragments.Count; index++)
+            fragments[index] = fragments[index] with { Text = transform(fragments[index].Text) };
+    }
+
+    private static void TransformShapeText(Shape shape, Func<string, string> transform)
+    {
+        foreach (var paragraph in shape.TextParagraphs)
+            TransformParagraphText(paragraph, transform);
+    }
+
+    private static void TransformSmartArtText(SmartArt smartArt, Func<string, string> transform)
+    {
+        foreach (var node in smartArt.Nodes)
+            TransformSmartArtNodeText(node, transform);
+    }
+
+    private static void TransformSmartArtNodeText(SmartArtNode node, Func<string, string> transform)
+    {
+        node.Text = transform(node.Text);
+        foreach (var child in node.Children)
+            TransformSmartArtNodeText(child, transform);
+    }
+
+    private static void TransformDrawingGroupText(DrawingGroup group, Func<string, string> transform)
+    {
+        foreach (var child in group.Children)
+        {
+            switch (child)
+            {
+                case Shape shape:
+                    TransformShapeText(shape, transform);
+                    break;
+                case WordArt wordArt:
+                    wordArt.Text = transform(wordArt.Text);
+                    break;
+                case SmartArt smartArt:
+                    TransformSmartArtText(smartArt, transform);
+                    break;
+                case DrawingGroup nested:
+                    TransformDrawingGroupText(nested, transform);
+                    break;
+            }
+        }
+    }
+
+    private static void TransformSectionHeadersFootersText(
+        SectionHeadersFooters headersFooters,
+        Func<string, string> transform)
+    {
+        foreach (var headerFooter in new[]
+                 {
+                     headersFooters.Header,
+                     headersFooters.Footer,
+                     headersFooters.EvenHeader,
+                     headersFooters.EvenFooter,
+                     headersFooters.FirstHeader,
+                     headersFooters.FirstFooter
+                 })
+        {
+            if (headerFooter is null)
+                continue;
+            foreach (var paragraph in headerFooter.Paragraphs)
+                TransformParagraphText(paragraph, transform);
+        }
     }
 
     private static HeaderFooter? CloneHeaderFooterWithRules(HeaderFooter? source, IReadOnlyDictionary<string, string> row, MergeState state, int recordIndex)
@@ -1913,7 +1908,7 @@ public static class MailMerge
             return null;
         var clone = new HeaderFooter();
         foreach (var p in source.Paragraphs)
-            clone.Paragraphs.Add(CloneParagraphWithRules(p, row, state, recordIndex));
+            clone.Paragraphs.Add((Paragraph)CloneBlockWithRules(p, row, state, recordIndex));
         return clone;
     }
 
@@ -1923,27 +1918,72 @@ public static class MailMerge
             return null;
         var clone = new HeaderFooter();
         foreach (var p in source.Paragraphs)
-            clone.Paragraphs.Add(CloneParagraph(p, row));
+            clone.Paragraphs.Add((Paragraph)CloneBlock(p, row));
         return clone;
     }
 
-    private static Section CloneSection(Section source, IReadOnlyDictionary<string, string> row) =>
-        new(source.Page.Clone(), source.BreakKind)
-        {
-            HeadersFooters = CloneSectionHeadersFooters(source.HeadersFooters,
-                headerFooter => CloneHeaderFooter(headerFooter, row))
-        };
+    private static void CopyDocumentState(TextDocument source, TextDocument target, Func<Block, Block> cloneBlock)
+    {
+        target.Properties.ApplyCoreProperties(source.Properties.ToCoreProperties());
+        target.MultiLevelList.SetNumberFormats(source.MultiLevelList.NumberFormats);
+        CopyNoteNumbering(source.FootnoteNumbering, target.FootnoteNumbering);
+        CopyNoteNumbering(source.EndnoteNumbering, target.EndnoteNumbering);
 
-    private static Section CloneSectionWithRules(
-        Section source,
-        IReadOnlyDictionary<string, string> row,
-        MergeState state,
-        int recordIndex) =>
-        new(source.Page.Clone(), source.BreakKind)
+        foreach (var (id, footnote) in source.Footnotes)
         {
-            HeadersFooters = CloneSectionHeadersFooters(source.HeadersFooters,
-                headerFooter => CloneHeaderFooterWithRules(headerFooter, row, state, recordIndex))
+            var clone = new Footnote(id);
+            foreach (var paragraph in footnote.Content)
+                clone.Content.Add((Paragraph)cloneBlock(paragraph));
+            target.Footnotes[id] = clone;
+        }
+
+        foreach (var (id, endnote) in source.Endnotes)
+        {
+            var clone = new Endnote(id);
+            foreach (var paragraph in endnote.Content)
+                clone.Content.Add((Paragraph)cloneBlock(paragraph));
+            target.Endnotes[id] = clone;
+        }
+
+        foreach (var (id, comment) in source.Comments)
+            target.Comments[id] = CloneComment(comment, cloneBlock);
+
+        target.Sources.AddRange(source.Sources);
+        target.IndexEntries.AddRange(source.IndexEntries.Select(entry => new IndexEntry(entry.Term)));
+        target.Citations.AddRange(source.Citations.Select(citation =>
+            new Citation(citation.LongCitation, citation.Category, citation.ShortCitation)));
+        target.EmbeddedFonts.AddRange(source.EmbeddedFonts.Select(font => new EmbeddedFont(
+            font.Family,
+            CloneBytes(font.Regular),
+            CloneBytes(font.Bold),
+            CloneBytes(font.Italic),
+            CloneBytes(font.BoldItalic))));
+    }
+
+    private static Comment CloneComment(Comment source, Func<Block, Block> cloneBlock)
+    {
+        var clone = new Comment(source.Id)
+        {
+            Author = source.Author,
+            Initials = source.Initials,
+            DateXml = source.DateXml,
+            Resolved = source.Resolved
         };
+        foreach (var paragraph in source.Content)
+            clone.Content.Add((Paragraph)cloneBlock(paragraph));
+        foreach (var reply in source.Replies)
+            clone.Replies.Add(CloneComment(reply, cloneBlock));
+        return clone;
+    }
+
+    private static void CopyNoteNumbering(NoteNumberingOptions source, NoteNumberingOptions target)
+    {
+        target.NumberFormat = source.NumberFormat;
+        target.StartAt = source.StartAt;
+        target.NumberRestart = source.NumberRestart;
+    }
+
+    private static byte[]? CloneBytes(byte[]? bytes) => bytes is null ? null : (byte[])bytes.Clone();
 
     private static SectionHeadersFooters CloneSectionHeadersFooters(
         SectionHeadersFooters source,
