@@ -117,6 +117,33 @@ public sealed class DocumentViewTrackEditTests
         changed.Should().Be(2);
     }
 
+    [Fact]
+    public async Task CharacterFormatting_TracksActiveAuthorAndHonorsPolicy()
+    {
+        FormatRevision? trackedRevision = null;
+        var excludedRevisionCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var tracked = BuildView("Hello world");
+            tracked.RevisionAuthor = "Ada Reviewer";
+            tracked.ToggleTrackChanges();
+            tracked.SetCharacterBorder(new ParagraphBorder("#0070C0", 1));
+            trackedRevision = Para(tracked).Runs.Single().FormatRevision;
+
+            var excluded = BuildView("Hello world");
+            excluded.ToggleTrackChanges();
+            excluded.ToggleTrackFormatting();
+            excluded.SetCharacterBorder(new ParagraphBorder("#0070C0", 1));
+            excludedRevisionCount = Para(excluded).Runs.Count(run => run.FormatRevision != null);
+        });
+        if (!ran) return;
+
+        trackedRevision.Should().NotBeNull();
+        trackedRevision!.Author.Should().Be("Ada Reviewer");
+        trackedRevision.PreviousFormatting.CharacterBorder.Should().BeNull();
+        excludedRevisionCount.Should().Be(0);
+    }
+
     // ── Typing records a tracked insertion ────────────────────────────────────────
 
     [Fact]

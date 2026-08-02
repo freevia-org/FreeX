@@ -23648,6 +23648,7 @@ public sealed class DocumentView : Control
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
         public TextDocument Document => view._doc;
+        public string? RevisionAuthor => view.RevisionAuthor;
     }
 
     // ── AV-HFEDIT: header/footer slot identity + edit target ──────────────────────────────────────
