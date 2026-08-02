@@ -497,8 +497,14 @@ public static class PageBorderArtVisualPlanner
         var polygons = new List<PageBorderArtPolygon>();
         AddRibbonHorizontalStripes(polygons, inset, inset, railWidth, size, slash: true, phaseDip: size * 0.375);
         AddRibbonHorizontalStripes(polygons, inset, frameHeight - inset - size, railWidth, size, slash: true, phaseDip: 0);
-        AddRibbonVerticalStripes(polygons, inset - 1, inset, railHeight, size, slash: false);
-        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, inset, railHeight, size, slash: false);
+        const double verticalMiddleTop = 128;
+        const double verticalMiddleBottom = 928;
+        AddRibbonVerticalStripes(polygons, inset - 1, inset, verticalMiddleTop - inset, size, slash: false, phaseDip: 0);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.75);
+        AddRibbonVerticalStripes(polygons, inset - 1, verticalMiddleBottom, frameHeight - inset - verticalMiddleBottom, size, slash: false, phaseDip: 0);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, inset, verticalMiddleTop - inset, size, slash: false, phaseDip: 0);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleTop, verticalMiddleBottom - verticalMiddleTop, size, slash: false, phaseDip: size * -0.34375);
+        AddRibbonVerticalStripes(polygons, frameWidth - inset - size, verticalMiddleBottom, frameHeight - inset - verticalMiddleBottom, size, slash: false, phaseDip: 0);
         plan = new PageBorderArtFilledShapePlan(fills, polygons);
         return true;
     }
@@ -1290,10 +1296,11 @@ public static class PageBorderArtVisualPlanner
         double y,
         double height,
         double size,
-        bool slash)
+        bool slash,
+        double phaseDip)
     {
         var end = y + height;
-        for (var tileY = y; tileY < end; tileY += size)
+        for (var tileY = y + phaseDip; tileY < end; tileY += size)
         {
             var points = slash
                 ? new[]
