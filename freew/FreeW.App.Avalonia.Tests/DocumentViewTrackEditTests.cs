@@ -144,6 +144,72 @@ public sealed class DocumentViewTrackEditTests
         excludedRevisionCount.Should().Be(0);
     }
 
+    [Fact]
+    public async Task SelectedCharacterFormatting_TracksExactRangeAndRoundTripsUndoRedo()
+    {
+        string trackedText = "";
+        string? author = null;
+        bool previousBold = true;
+        bool undoCleared = false;
+        bool redoRestored = false;
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("abcdef");
+            view.RevisionAuthor = "Ada Reviewer";
+            view.ToggleTrackChanges();
+            view.SetSelectionRangePublic(0, 1, 0, 4);
+
+            view.ToggleBold();
+
+            var paragraph = Para(view);
+            var trackedRuns = paragraph.Runs.Where(run => run.FormatRevision != null).ToList();
+            trackedText = string.Concat(trackedRuns.Select(run => run.Text));
+            author = trackedRuns.Single().FormatRevision!.Author;
+            previousBold = trackedRuns.Single().FormatRevision!.PreviousFormatting.Bold;
+
+            view.Undo();
+            undoCleared = Para(view).Runs.All(run => !run.Formatting.Bold && run.FormatRevision == null);
+
+            view.Redo();
+            redoRestored = Para(view).Runs
+                .Where(run => run.FormatRevision != null)
+                .All(run => run.Formatting.Bold);
+        });
+        if (!ran) return;
+
+        trackedText.Should().Be("bcd");
+        author.Should().Be("Ada Reviewer");
+        previousBold.Should().BeFalse();
+        undoCleared.Should().BeTrue();
+        redoRestored.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task SelectedCharacterFormatting_HonorsPolicyAndIgnoresNoOp()
+    {
+        var excludedRevisionCount = -1;
+        var noOpRevisionCount = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var excluded = BuildView("abcdef");
+            excluded.ToggleTrackChanges();
+            excluded.ToggleTrackFormatting();
+            excluded.SetSelectionRangePublic(0, 1, 0, 4);
+            excluded.ToggleBold();
+            excludedRevisionCount = Para(excluded).Runs.Count(run => run.FormatRevision != null);
+
+            var noOp = BuildView("abcdef");
+            noOp.ToggleTrackChanges();
+            noOp.SetSelectionRangePublic(0, 1, 0, 4);
+            noOp.SetFontColor(null);
+            noOpRevisionCount = Para(noOp).Runs.Count(run => run.FormatRevision != null);
+        });
+        if (!ran) return;
+
+        excludedRevisionCount.Should().Be(0);
+        noOpRevisionCount.Should().Be(0);
+    }
+
     // ── Typing records a tracked insertion ────────────────────────────────────────
 
     [Fact]
