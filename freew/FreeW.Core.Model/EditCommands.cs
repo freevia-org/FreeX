@@ -122,6 +122,7 @@ public sealed class ReorderBlocksCommand(IReadOnlyList<Block> reordered) : IDocu
 public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting formatting) : IDocumentCommand
 {
     private ParagraphFormatting? _previous;
+    private ParagraphFormatRevision? _previousRevision;
 
     public string Label => "Paragraph Formatting";
 
@@ -129,13 +130,23 @@ public sealed class SetParagraphFormattingCommand(int index, ParagraphFormatting
     {
         var paragraph = ParagraphAt(context, index);
         _previous = paragraph.Formatting;
+        _previousRevision = paragraph.ParagraphFormatRevision;
         paragraph.Formatting = formatting;
+        if (TrackedFormattingRevisionFactory.ShouldTrack(context.Document)
+            && formatting != _previous
+            && paragraph.ParagraphFormatRevision is null)
+        {
+            paragraph.ParagraphFormatRevision = TrackedFormattingRevisionFactory.ForParagraph(_previous, context.RevisionAuthor);
+        }
     }
 
     public void Revert(IDocumentCommandContext context)
     {
         if (_previous is not null)
+        {
             ParagraphAt(context, index).Formatting = _previous;
+            ParagraphAt(context, index).ParagraphFormatRevision = _previousRevision;
+        }
     }
 
     private static Paragraph ParagraphAt(IDocumentCommandContext context, int index) =>
@@ -176,6 +187,7 @@ public sealed class SetParagraphStyleCommand(int index, string? styleId) : IDocu
 public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, RunFormatting formatting) : IDocumentCommand
 {
     private RunFormatting? _previous;
+    private FormatRevision? _previousRevision;
 
     public string Label => "Character Formatting";
 
@@ -183,13 +195,24 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
     {
         var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
         _previous = run.Formatting;
+        _previousRevision = run.FormatRevision;
         run.Formatting = formatting;
+        if (TrackedFormattingRevisionFactory.ShouldTrack(context.Document)
+            && formatting != _previous
+            && run.FormatRevision is null)
+        {
+            run.FormatRevision = TrackedFormattingRevisionFactory.ForRun(_previous, context.RevisionAuthor);
+        }
     }
 
     public void Revert(IDocumentCommandContext context)
     {
         if (_previous is not null)
-            ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex].Formatting = _previous;
+        {
+            var run = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs[runIndex];
+            run.Formatting = _previous;
+            run.FormatRevision = _previousRevision;
+        }
     }
 }
 
@@ -1826,6 +1849,7 @@ public sealed class ToggleObjectWrappingCommand(
 public sealed class FormatParagraphRunsCommand(int paragraphIndex, Func<RunFormatting, RunFormatting> transform) : IDocumentCommand
 {
     private RunFormatting[]? _previous;
+    private FormatRevision?[]? _previousRevisions;
 
     public string Label => "Format";
 
@@ -1833,8 +1857,19 @@ public sealed class FormatParagraphRunsCommand(int paragraphIndex, Func<RunForma
     {
         var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
         _previous = runs.Select(r => r.Formatting).ToArray();
-        foreach (var run in runs)
-            run.Formatting = transform(run.Formatting);
+        _previousRevisions = runs.Select(r => r.FormatRevision).ToArray();
+        for (var i = 0; i < runs.Count; i++)
+        {
+            var run = runs[i];
+            var formatting = transform(run.Formatting);
+            run.Formatting = formatting;
+            if (TrackedFormattingRevisionFactory.ShouldTrack(context.Document)
+                && formatting != _previous[i]
+                && run.FormatRevision is null)
+            {
+                run.FormatRevision = TrackedFormattingRevisionFactory.ForRun(_previous[i], context.RevisionAuthor);
+            }
+        }
     }
 
     public void Revert(IDocumentCommandContext context)
@@ -1843,8 +1878,31 @@ public sealed class FormatParagraphRunsCommand(int paragraphIndex, Func<RunForma
             return;
         var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
         for (var i = 0; i < runs.Count && i < _previous.Length; i++)
+        {
             runs[i].Formatting = _previous[i];
+            runs[i].FormatRevision = _previousRevisions?[i];
+        }
     }
+}
+
+internal static class TrackedFormattingRevisionFactory
+{
+    private const string DefaultAuthor = "FreeW User";
+
+    public static bool ShouldTrack(TextDocument document) =>
+        document.TrackRevisions && !document.DoNotTrackFormatting;
+
+    public static FormatRevision ForRun(RunFormatting previous, string? author) =>
+        new(previous, NormalizeAuthor(author), CurrentDateXml());
+
+    public static ParagraphFormatRevision ForParagraph(ParagraphFormatting previous, string? author) =>
+        new(previous, NormalizeAuthor(author), CurrentDateXml());
+
+    private static string NormalizeAuthor(string? author) =>
+        string.IsNullOrWhiteSpace(author) ? DefaultAuthor : author.Trim();
+
+    private static string CurrentDateXml() =>
+        DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
 }
 
 /// <summary>

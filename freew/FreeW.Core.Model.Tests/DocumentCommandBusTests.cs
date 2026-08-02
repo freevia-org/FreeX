@@ -2,15 +2,16 @@ namespace FreeW.Core.Model.Tests;
 
 public class DocumentCommandBusTests
 {
-    private sealed class Context(TextDocument document) : IDocumentCommandContext
+    private sealed class Context(TextDocument document, string? revisionAuthor = null) : IDocumentCommandContext
     {
         public TextDocument Document => document;
+        public string? RevisionAuthor => revisionAuthor;
     }
 
-    private static (TextDocument doc, DocumentCommandBus bus) New()
+    private static (TextDocument doc, DocumentCommandBus bus) New(string? revisionAuthor = null)
     {
         var doc = new TextDocument();
-        return (doc, new DocumentCommandBus(new Context(doc)));
+        return (doc, new DocumentCommandBus(new Context(doc, revisionAuthor)));
     }
 
     private sealed class ClassifiedCommand(DocumentCommandMutationKind mutationKind) : IDocumentCommand
@@ -148,6 +149,63 @@ public class DocumentCommandBusTests
 
         bus.Undo();
         p.Runs.Should().OnlyContain(r => !r.Formatting.Bold);
+    }
+
+    [Fact]
+    public void FormattingCommands_RecordAndUndoTrackedFormattingRevisions()
+    {
+        var (doc, bus) = New("Ada Reviewer");
+        doc.TrackRevisions = true;
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("x"));
+        paragraph.Runs.Add(new Run("y"));
+        doc.Blocks.Add(paragraph);
+
+        bus.Execute(new SetParagraphFormattingCommand(
+            0,
+            paragraph.Formatting with { Alignment = TextAlignment.Center }));
+        paragraph.ParagraphFormatRevision.Should().NotBeNull();
+        paragraph.ParagraphFormatRevision!.PreviousParagraphFormatting.Alignment.Should().Be(TextAlignment.Left);
+        paragraph.ParagraphFormatRevision.Author.Should().Be("Ada Reviewer");
+
+        bus.Execute(new SetRunFormattingCommand(
+            0,
+            0,
+            paragraph.Runs[0].Formatting with { Bold = true }));
+        paragraph.Runs[0].FormatRevision.Should().NotBeNull();
+        paragraph.Runs[0].FormatRevision!.PreviousFormatting.Bold.Should().BeFalse();
+
+        bus.Execute(new FormatParagraphRunsCommand(0, formatting => formatting with { Italic = true }));
+        paragraph.Runs.Should().OnlyContain(run => run.FormatRevision != null);
+        paragraph.Runs[1].FormatRevision!.PreviousFormatting.Italic.Should().BeFalse();
+
+        bus.Undo().Should().BeTrue();
+        paragraph.Runs[0].FormatRevision.Should().NotBeNull("its earlier bold revision predates the paragraph-wide command");
+        paragraph.Runs[1].FormatRevision.Should().BeNull();
+
+        bus.Undo().Should().BeTrue();
+        paragraph.Runs[0].FormatRevision.Should().BeNull();
+
+        bus.Undo().Should().BeTrue();
+        paragraph.ParagraphFormatRevision.Should().BeNull();
+    }
+
+    [Fact]
+    public void FormattingCommands_HonorDoNotTrackFormattingPolicy()
+    {
+        var (doc, bus) = New();
+        doc.TrackRevisions = true;
+        doc.DoNotTrackFormatting = true;
+        var paragraph = new Paragraph("x");
+        doc.Blocks.Add(paragraph);
+
+        bus.Execute(new SetParagraphFormattingCommand(
+            0,
+            paragraph.Formatting with { Alignment = TextAlignment.Right }));
+        bus.Execute(new FormatParagraphRunsCommand(0, formatting => formatting with { Bold = true }));
+
+        paragraph.ParagraphFormatRevision.Should().BeNull();
+        paragraph.Runs.Should().OnlyContain(run => run.FormatRevision == null);
     }
 
     [Fact]

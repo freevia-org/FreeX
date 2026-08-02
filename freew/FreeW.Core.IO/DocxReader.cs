@@ -174,8 +174,10 @@ public static class DocxReader
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
     /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
-    /// into <see cref="TextDocument.Protection"/>, the revision-tracking toggles into
-    /// <see cref="TextDocument.TrackRevisions"/> and <see cref="TextDocument.DoNotTrackFormatting"/>,
+    /// into <see cref="TextDocument.Protection"/>, the personal-information removal toggle into
+    /// <see cref="TextDocument.RemovePersonalInformation"/>, the revision-tracking toggles into
+    /// <see cref="TextDocument.TrackRevisions"/>, <see cref="TextDocument.DoNotTrackMoves"/>, and
+    /// <see cref="TextDocument.DoNotTrackFormatting"/>,
     /// and the w:autoHyphenation toggle into
     /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
@@ -216,6 +218,10 @@ public static class DocxReader
         // Mirror margins (w:mirrorMargins): an on/off toggle for double-sided printing (inside/outside margins).
         document.Page.MirrorMargins = ReadToggle(root, "mirrorMargins");
 
+        // Preserve Word's w:removePersonalInformation package instruction. Metadata removal itself remains
+        // the responsibility of the consuming application when it saves.
+        document.RemovePersonalInformation = ReadToggle(root, "removePersonalInformation");
+
         // Update fields on open (w:updateFields): absent/explicitly-off is Word's default; an empty element
         // or any valid on token asks the consuming application to recalculate fields when opening the file.
         document.UpdateFieldsOnOpen = ReadToggle(root, "updateFields");
@@ -223,6 +229,10 @@ public static class DocxReader
         // Track revisions (w:trackRevisions): controls whether subsequent edits should be recorded as
         // revisions. Existing revision content is represented separately by the document's runs/properties.
         document.TrackRevisions = ReadToggle(root, "trackRevisions");
+
+        // Do not track moves (w:doNotTrackMoves): when enabled, moved content is tracked as deletion and
+        // insertion revisions instead of move revisions. It remains independent when revision tracking is off.
+        document.DoNotTrackMoves = ReadToggle(root, "doNotTrackMoves");
 
         // Do not track formatting (w:doNotTrackFormatting): when enabled, formatting-only edits are excluded
         // from tracked revisions. It remains independent in the model even when revision tracking is off.

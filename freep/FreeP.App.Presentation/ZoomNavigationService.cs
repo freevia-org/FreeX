@@ -1,5 +1,6 @@
 using System.Xml.Linq;
 using System.Xml;
+using System.Globalization;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -16,7 +17,14 @@ public static class ZoomNavigationService
         Presentation presentation,
         PreservedObjectInfo? zoom,
         out int slideIndex)
-        => TryGetTargetSlideIndex(presentation, zoom, null, null, out slideIndex);
+        => TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            null,
+            null,
+            out slideIndex,
+            out _,
+            out _);
 
     /// <summary>
     /// Resolves a Summary Zoom target using coordinates normalized to the containing shape's
@@ -28,10 +36,53 @@ public static class ZoomNavigationService
         double? relativeX,
         double? relativeY,
         out int slideIndex)
+        => TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            relativeX,
+            relativeY,
+            out slideIndex,
+            out _,
+            out _);
+
+    /// <summary>Resolves a Zoom target and its Return to Parent behavior.</summary>
+    public static bool TryGetTargetSlideIndex(
+        Presentation presentation,
+        PreservedObjectInfo? zoom,
+        double? relativeX,
+        double? relativeY,
+        out int slideIndex,
+        out bool returnToParent)
+        => TryGetTargetSlideIndex(
+            presentation,
+            zoom,
+            relativeX,
+            relativeY,
+            out slideIndex,
+            out returnToParent,
+            out _);
+
+    /// <summary>
+    /// Resolves a Zoom target and returns the authored Return to Parent behavior.
+    /// An omitted PowerPoint returnToParent attribute uses the application default (true).
+    /// </summary>
+    public static bool TryGetTargetSlideIndex(
+        Presentation presentation,
+        PreservedObjectInfo? zoom,
+        double? relativeX,
+        double? relativeY,
+        out int slideIndex,
+        out bool returnToParent,
+        out int? transitionDurationMs)
     {
         slideIndex = -1;
+        returnToParent = false;
+        transitionDurationMs = null;
         if (presentation is null || zoom?.ObjectKind != PreservedObjectKind.Zoom)
             return false;
+
+        returnToParent = zoom.ZoomProperties?.ReturnToParent ?? true;
+        transitionDurationMs = ParseTransitionDuration(zoom.ZoomProperties?.TransitionDuration);
 
         if (zoom.SummaryZoomTargets.Count > 0)
         {
@@ -122,6 +173,17 @@ public static class ZoomNavigationService
 
     private static double DistanceSquared(double x, double y, double targetX, double targetY) =>
         Math.Pow(x - targetX, 2) + Math.Pow(y - targetY, 2);
+
+    private static int? ParseTransitionDuration(string? value)
+    {
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var durationMs)
+            || durationMs <= 0)
+        {
+            return null;
+        }
+
+        return durationMs;
+    }
 
     private static uint? ReadTargetSlideNumericId(string? rawXml)
     {

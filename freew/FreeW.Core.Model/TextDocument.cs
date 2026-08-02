@@ -3596,6 +3596,13 @@ public sealed class TextDocument
     public ProtectionSettings Protection { get; set; } = ProtectionSettings.Unprotected;
 
     /// <summary>
+    /// Whether personal information should be removed from document metadata when saving.
+    /// Maps to <c>w:settings/w:removePersonalInformation</c>. False is Word's default and is omitted from
+    /// newly authored packages. The DOCX writer applies Word's author anonymization policy when enabled.
+    /// </summary>
+    public bool RemovePersonalInformation { get; set; }
+
+    /// <summary>
     /// Whether Word should refresh fields when the document opens. Maps to
     /// <c>w:settings/w:updateFields</c>. False is Word's default and is omitted from newly authored
     /// packages; true emits the non-default setting so references, page numbers, and other fields can
@@ -3609,6 +3616,13 @@ public sealed class TextDocument
     /// packages; this setting is independent of revision content already present in the document.
     /// </summary>
     public bool TrackRevisions { get; set; }
+
+    /// <summary>
+    /// Whether moved content should be tracked as deletion/insertion revisions instead of move revisions. Maps
+    /// to <c>w:settings/w:doNotTrackMoves</c>. False is Word's default and is omitted from newly authored
+    /// packages; this option is meaningful when <see cref="TrackRevisions"/> is enabled.
+    /// </summary>
+    public bool DoNotTrackMoves { get; set; }
 
     /// <summary>
     /// Whether formatting-only changes should be excluded from tracked revisions. Maps to

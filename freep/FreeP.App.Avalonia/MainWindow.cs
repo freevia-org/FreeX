@@ -4216,8 +4216,28 @@ public sealed partial class MainWindow : Window
 
     internal async Task OpenZoomCoverImagePickerAsync()
     {
-        if (Editor.SelectedShapeIds.Count != 1)
+        var selectedShapeId = GetSingleSelectedShapeId();
+        if (selectedShapeId is null || Editor.CurrentSlide is not { } slide)
             return;
+
+        var shape = ShapeTreeLookup.Find(slide, selectedShapeId.Value);
+        if (shape?.Kind != SlideShapeKind.Zoom || shape.PreservedObject is not { } info)
+            return;
+
+        string? summarySectionId = null;
+        if (info.SummaryZoomTargets.Count > 0)
+        {
+            var targetOptions = info.SummaryZoomTargets
+                .Select(target => (target.SectionId, string.IsNullOrWhiteSpace(target.Title)
+                    ? target.SectionId
+                    : target.Title))
+                .ToArray();
+            var targetDialog = new SummaryZoomCoverImageTargetDialog(targetOptions);
+            var targetResult = await targetDialog.ShowDialog<bool?>(this);
+            if (targetResult != true)
+                return;
+            summarySectionId = targetDialog.SelectedTargetSectionId;
+        }
         if (!AvaloniaFilePickerService.CanOpen(StorageProvider))
         {
             _statusText.Text = SisterAppFileTextPlanner.FormatCommandUnavailable(
@@ -4239,7 +4259,11 @@ public sealed partial class MainWindow : Window
             using var memory = new MemoryStream();
             await source.CopyToAsync(memory);
             var contentType = SlideObjectInsertionPlanner.InferPictureContentType(file.Name);
-            if (Editor.SetSelectedZoomCoverImage(memory.ToArray(), contentType))
+            var applied = summarySectionId is null
+                ? Editor.SetSelectedZoomCoverImage(memory.ToArray(), contentType)
+                : Editor.SetSummaryZoomTileCoverImage(
+                    shape.Id, summarySectionId, memory.ToArray(), contentType);
+            if (applied)
             {
                 _fileWorkflow.MarkDirty();
                 RefreshCanvas();

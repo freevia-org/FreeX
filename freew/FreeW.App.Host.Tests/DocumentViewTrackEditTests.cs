@@ -82,6 +82,31 @@ public sealed class DocumentViewTrackEditTests
     }
 
     [StaFact]
+    public void CharacterFormatting_TracksActiveAuthorAndHonorsPolicy()
+    {
+        var tracked = BuildView("Hello world");
+        tracked.RevisionAuthor = "Ada Reviewer";
+        tracked.TrackChangesEnabled = true;
+
+        tracked.SetCharacterBorder(new ParagraphBorder("#0070C0", 1));
+        tracked.CommitToModel();
+
+        var revision = ((Paragraph)tracked.Model.Blocks[0]).Runs.Single().FormatRevision;
+        revision.Should().NotBeNull();
+        revision!.Author.Should().Be("Ada Reviewer");
+        revision.PreviousFormatting.CharacterBorder.Should().BeNull();
+
+        var excluded = BuildView("Hello world");
+        excluded.TrackChangesEnabled = true;
+        excluded.TrackFormattingEnabled = false;
+
+        excluded.SetCharacterBorder(new ParagraphBorder("#0070C0", 1));
+        excluded.CommitToModel();
+
+        ((Paragraph)excluded.Model.Blocks[0]).Runs.Should().OnlyContain(run => run.FormatRevision == null);
+    }
+
+    [StaFact]
     public void InsertText_WithTrackChangesOn_RecordsInsertedRevision()
     {
         var view = BuildView("Hello ");

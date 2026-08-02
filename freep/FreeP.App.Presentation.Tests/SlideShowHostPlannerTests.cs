@@ -740,6 +740,7 @@ public sealed class SlideShowHostPlannerTests
             {
                 ObjectKind = PreservedObjectKind.Zoom,
                 ZoomTargetSlideNumericId = 257,
+                ZoomProperties = new ZoomObjectProperties(TransitionDuration: "1200"),
             },
         };
         presentation.Slides[0].Shapes.Add(shape);
@@ -751,6 +752,8 @@ public sealed class SlideShowHostPlannerTests
 
         intent.Kind.Should().Be(SlideShowPointerClickIntentKind.Zoom);
         intent.TargetSlideIndex.Should().Be(1);
+        intent.ReturnToParent.Should().BeTrue();
+        intent.TransitionDurationMs.Should().Be(1200);
         intent.IsHandled.Should().BeTrue();
     }
 
@@ -768,6 +771,88 @@ public sealed class SlideShowHostPlannerTests
         command.Kind.Should().Be(SlideShowHostCommandKind.NavigateToSlide);
         command.SlideIndex.Should().Be(2);
         command.AnimateSlide.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanZoomNavigation_with_duration_requests_zoom_transition()
+    {
+        var presentation = MakePresentation(2);
+        var controller = new SlideShowController(presentation.Slides, startIndex: 0);
+
+        var command = SlideShowHostPlanner.PlanZoomNavigation(
+            controller,
+            presentation.Slides,
+            targetSlideIndex: 1,
+            transitionDurationMs: 1200);
+
+        command.AnimateSlide.Should().BeTrue();
+        command.TransitionDurationMs.Should().Be(1200);
+
+        var display = SlideShowHostPlanner.BuildDisplayPlan(
+            presentation,
+            controller,
+            animated: true,
+            zoomTransitionDurationMs: command.TransitionDurationMs);
+
+        display.Transition.Should().NotBeNull();
+        display.Transition!.Kind.Should().Be(TransitionKind.Zoom);
+        display.Transition.DurationMs.Should().Be(1200);
+    }
+
+    [Fact]
+    public void PlanZoomNavigation_ReturnToParent_returns_to_parent_on_next_advance()
+    {
+        var presentation = MakePresentation(3);
+        var controller = new SlideShowController(presentation.Slides, startIndex: 0);
+
+        SlideShowHostPlanner.PlanZoomNavigation(
+            controller,
+            presentation.Slides,
+            targetSlideIndex: 2,
+            returnToParent: true);
+
+        controller.CurrentSlideIndex.Should().Be(2);
+        controller.HasZoomReturnPath.Should().BeTrue();
+
+        var command = SlideShowHostPlanner.PlanAdvance(controller);
+
+        command.Kind.Should().Be(SlideShowHostCommandKind.NavigateToSlide);
+        command.SlideIndex.Should().Be(0);
+        controller.HasZoomReturnPath.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanZoomNavigation_without_return_to_parent_keeps_normal_advance()
+    {
+        var presentation = MakePresentation(3);
+        var controller = new SlideShowController(presentation.Slides, startIndex: 0);
+
+        SlideShowHostPlanner.PlanZoomNavigation(
+            controller,
+            presentation.Slides,
+            targetSlideIndex: 2,
+            returnToParent: false);
+
+        var command = SlideShowHostPlanner.PlanAdvance(controller);
+
+        command.Kind.Should().Be(SlideShowHostCommandKind.Close);
+        controller.CurrentSlideIndex.Should().Be(2);
+    }
+
+    [Fact]
+    public void PlanInternalSlideJump_clears_an_active_zoom_return_path()
+    {
+        var presentation = MakePresentation(3);
+        var controller = new SlideShowController(presentation.Slides, startIndex: 0);
+
+        controller.EnterZoomNavigation(2, returnToParent: true);
+        SlideShowHostPlanner.PlanInternalSlideJump(
+            controller,
+            presentation.Slides,
+            presentation.Slides[1].Id);
+
+        controller.CurrentSlideIndex.Should().Be(1);
+        controller.HasZoomReturnPath.Should().BeFalse();
     }
 
     [Fact]

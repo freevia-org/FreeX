@@ -21924,7 +21924,7 @@ public sealed class DocumentView : Control
             {
                 var live = ParaCells(p);
                 for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
-                    live[i] = live[i] with { Fmt = transform(live[i].Fmt) };
+                    live[i] = WithTrackedRunFormatting(live[i], transform(live[i].Fmt));
                 SetRuns(p, live);
             }));
         }
@@ -21996,7 +21996,7 @@ public sealed class DocumentView : Control
             {
                 var live = ParaCells(p);
                 for (var i = Math.Clamp(a, 0, live.Count); i < Math.Clamp(b, 0, live.Count); i++)
-                    live[i] = live[i] with { Fmt = set(live[i].Fmt, newValue) };
+                    live[i] = WithTrackedRunFormatting(live[i], set(live[i].Fmt, newValue));
                 SetRuns(p, live);
             }));
         }
@@ -23648,6 +23648,22 @@ public sealed class DocumentView : Control
     private sealed class ViewContext(DocumentView view) : IDocumentCommandContext
     {
         public TextDocument Document => view._doc;
+        public string? RevisionAuthor => view.RevisionAuthor;
+    }
+
+    private Cell WithTrackedRunFormatting(Cell cell, RunFormatting formatting)
+    {
+        if (formatting == cell.Fmt)
+            return cell;
+
+        var revision = cell.FormatRevision;
+        if (revision is null && TrackChangesEnabled && TrackFormattingEnabled)
+        {
+            var author = string.IsNullOrWhiteSpace(RevisionAuthor) ? "FreeW User" : RevisionAuthor.Trim();
+            revision = new FormatRevision(cell.Fmt, author, CurrentRevisionDateXml());
+        }
+
+        return cell with { Fmt = formatting, FormatRevision = revision };
     }
 
     // ── AV-HFEDIT: header/footer slot identity + edit target ──────────────────────────────────────

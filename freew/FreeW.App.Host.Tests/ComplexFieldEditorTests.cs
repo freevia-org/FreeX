@@ -150,7 +150,7 @@ public sealed class ComplexFieldEditorTests
     }
 
     [StaFact]
-    public void BibliographyField_HidesStaleCacheWhenGeneratedRegionIsPresent_AndRetainsItOnCommit()
+    public void BibliographyField_ShowsCachedResultWhenGeneratedRegionIsPresent_AndRetainsItOnCommit()
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -169,7 +169,7 @@ public sealed class ComplexFieldEditorTests
 
         var rendered = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
         string.Concat(rendered.Inlines.OfType<System.Windows.Documents.Run>().Select(run => run.Text))
-            .Should().Be("Bibliography field cache: ");
+            .Should().Be("Bibliography field cache: References");
 
         view.CommitToModel();
 

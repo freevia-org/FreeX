@@ -814,7 +814,7 @@ public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
     }
 }
 
-/// <summary>Replaces the native cover image on a single-target Zoom.</summary>
+/// <summary>Replaces the native cover image on a Zoom object or Summary Zoom tile.</summary>
 public sealed class SetZoomCoverImageCommand : IPresentationCommand
 {
     private const string ImageRelationshipType =
@@ -823,6 +823,7 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
     private readonly uint _shapeId;
     private readonly byte[] _imageBytes;
     private readonly string _contentType;
+    private readonly string? _summarySectionId;
     private string? _oldRawXml;
     private ZoomObjectProperties? _oldProperties;
     private Dictionary<string, byte[]>? _oldParts;
@@ -833,7 +834,8 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         int slideIndex,
         uint shapeId,
         byte[] imageBytes,
-        string contentType)
+        string contentType,
+        string? summarySectionId = null)
     {
         _slideIndex = slideIndex;
         _shapeId = shapeId;
@@ -841,26 +843,28 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
             ? imageBytes.ToArray()
             : throw new ArgumentException("The cover image cannot be empty.", nameof(imageBytes));
         _contentType = NormalizeContentType(contentType);
+        _summarySectionId = string.IsNullOrWhiteSpace(summarySectionId)
+            ? null
+            : summarySectionId.Trim();
     }
 
     public string Label => "Set Zoom Cover Image";
 
     public bool HasEffect(Presentation presentation)
     {
-        if (!TryGetSingleTargetZoom(presentation, out var shape)
-            || shape.PreservedObject is not { } info)
+        if (!TryGetZoom(presentation, out _, out var info)
+            || !TryParseZoomProperties(info.RawXml, _summarySectionId, out _, out var properties, out _))
             return false;
 
-        return !TryGetCurrentImage(info, out var current)
+        return !TryGetCurrentImage(info, properties, out var current)
             || current is null
             || !current.SequenceEqual(_imageBytes);
     }
 
     public void Apply(Presentation presentation)
     {
-        if (!TryGetSingleTargetZoom(presentation, out var shape)
-            || shape.PreservedObject is not { } info
-            || !TryParseZoomProperties(info.RawXml, out var document, out var blip))
+        if (!TryGetZoom(presentation, out var shape, out var info)
+            || !TryParseZoomProperties(info.RawXml, _summarySectionId, out var document, out var properties, out var blip))
             return;
 
         _oldRawXml = info.RawXml;
@@ -876,7 +880,7 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
             blip.SetAttributeValue(RelationshipAttribute("embed"), relId);
         }
 
-        var mediaPath = $"ppt/media/freep-zoom-cover-{shape.Id}{ExtensionFor(_contentType)}";
+        var mediaPath = BuildMediaPath(shape.Id, _summarySectionId, _contentType);
         if (info.SlideRels.TryGetValue(relId, out var oldRelation)
             && !string.Equals(oldRelation.TargetPath, mediaPath, StringComparison.OrdinalIgnoreCase))
         {
@@ -887,17 +891,15 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
             info.SlideRels[relId] = (ImageRelationshipType, mediaPath);
         info.Parts[mediaPath] = _imageBytes.ToArray();
         info.PartContentTypes[mediaPath] = _contentType;
-        info.ZoomProperties = (info.ZoomProperties ?? new ZoomObjectProperties()) with { ImageType = "cover" };
-        document.Descendants()
-            .First(element => string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase))
-            .SetAttributeValue("imageType", "cover");
+        properties.SetAttributeValue("imageType", "cover");
+        if (_summarySectionId is null)
+            info.ZoomProperties = (info.ZoomProperties ?? new ZoomObjectProperties()) with { ImageType = "cover" };
         info.RawXml = document.Root!.ToString(SaveOptions.DisableFormatting);
     }
 
     public void Revert(Presentation presentation)
     {
-        if (!TryGetSingleTargetZoom(presentation, out var shape)
-            || shape.PreservedObject is not { } info
+        if (!TryGetZoom(presentation, out var shape, out var info)
             || _oldRawXml is null
             || _oldParts is null
             || _oldPartContentTypes is null
@@ -911,15 +913,26 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         Restore(info.SlideRels, _oldSlideRels);
     }
 
-    private bool TryGetSingleTargetZoom(Presentation presentation, out SlideShape shape)
+    private bool TryGetZoom(
+        Presentation presentation,
+        out SlideShape shape,
+        out PreservedObjectInfo info)
     {
         shape = null!;
+        info = null!;
         if (_slideIndex < 0 || _slideIndex >= presentation.Slides.Count)
             return false;
 
         shape = FindShape(presentation.Slides[_slideIndex].Shapes, _shapeId)!;
-        return shape is { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom }
-            && shape.PreservedObject!.SummaryZoomTargets.Count == 0;
+        if (shape is not { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom }
+            || shape.PreservedObject is not { } preserved)
+            return false;
+
+        info = preserved;
+        return _summarySectionId is null
+            ? info.SummaryZoomTargets.Count == 0
+            : info.SummaryZoomTargets.Any(target =>
+                string.Equals(target.SectionId, _summarySectionId, StringComparison.OrdinalIgnoreCase));
     }
 
     private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
@@ -937,10 +950,13 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
 
     private static bool TryParseZoomProperties(
         string rawXml,
+        string? summarySectionId,
         out XDocument document,
+        out XElement properties,
         out XElement blip)
     {
         document = null!;
+        properties = null!;
         blip = null!;
         if (string.IsNullOrWhiteSpace(rawXml))
             return false;
@@ -948,8 +964,17 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         try { document = XDocument.Parse(rawXml, LoadOptions.PreserveWhitespace); }
         catch { return false; }
 
-        var properties = document.Descendants()
-            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase));
+        XElement? target = null;
+        if (summarySectionId is not null)
+        {
+            target = document.Descendants()
+                .FirstOrDefault(element => string.Equals(element.Name.LocalName, "summaryZmObj", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(element.Attribute("sectionId")?.Value, summarySectionId,
+                        StringComparison.OrdinalIgnoreCase));
+        }
+
+        properties = (target ?? document.Root)?.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr", StringComparison.OrdinalIgnoreCase))!;
         if (properties is null)
             return false;
 
@@ -974,11 +999,14 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         return true;
     }
 
-    private static bool TryGetCurrentImage(PreservedObjectInfo info, out byte[]? bytes)
+    private static bool TryGetCurrentImage(PreservedObjectInfo info, XElement properties, out byte[]? bytes)
     {
         bytes = null;
-        var imageRelation = info.SlideRels.Values.FirstOrDefault(relation =>
-            string.Equals(relation.RelType, ImageRelationshipType, StringComparison.OrdinalIgnoreCase));
+        var relId = properties.Descendants()
+            .SelectMany(element => element.Attributes())
+            .FirstOrDefault(attribute => attribute.Name.LocalName == "embed")?.Value;
+        if (string.IsNullOrWhiteSpace(relId) || !info.SlideRels.TryGetValue(relId, out var imageRelation))
+            return false;
         if (string.IsNullOrWhiteSpace(imageRelation.TargetPath))
             return false;
 
@@ -1013,6 +1041,21 @@ public sealed class SetZoomCoverImageCommand : IPresentationCommand
         if (string.IsNullOrWhiteSpace(normalized) || !normalized.StartsWith("image/", StringComparison.Ordinal))
             throw new ArgumentException("Zoom cover images must use an image content type.", nameof(contentType));
         return normalized;
+    }
+
+    private static string BuildMediaPath(uint shapeId, string? summarySectionId, string contentType)
+    {
+        var targetKey = summarySectionId is null
+            ? "single"
+            : new string(summarySectionId
+                .Select(character => char.IsLetterOrDigit(character) ? character : '-')
+                .ToArray())
+                .Trim('-');
+        if (targetKey.Length == 0)
+            targetKey = "tile";
+        if (targetKey.Length > 48)
+            targetKey = targetKey[..48];
+        return $"ppt/media/freep-zoom-cover-{shapeId}-{targetKey}{ExtensionFor(contentType)}";
     }
 
     private static string ExtensionFor(string contentType) => contentType switch
