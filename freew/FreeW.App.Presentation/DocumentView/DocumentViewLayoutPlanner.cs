@@ -423,7 +423,8 @@ public static class DocumentViewLayoutPlanner
         PageSettings page,
         DocumentViewLayoutKind kind,
         double availableWidthDip,
-        DocumentViewLayoutOptions? options = null)
+        DocumentViewLayoutOptions? options = null,
+        bool collapsePageBoundaries = false)
     {
         ArgumentNullException.ThrowIfNull(page);
 
@@ -434,7 +435,7 @@ public static class DocumentViewLayoutPlanner
 
         return kind switch
         {
-            DocumentViewLayoutKind.PrintLayout => BuildPrintSurfacePlan(page, width, options),
+            DocumentViewLayoutKind.PrintLayout => BuildPrintSurfacePlan(page, width, options, collapsePageBoundaries),
             DocumentViewLayoutKind.WebLayout => BuildWebSurfacePlan(width, options),
             DocumentViewLayoutKind.Draft => BuildDraftSurfacePlan(width, options),
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
@@ -2644,7 +2645,8 @@ public static class DocumentViewLayoutPlanner
     private static DocumentViewSurfacePlan BuildPrintSurfacePlan(
         PageSettings page,
         double availableWidthDip,
-        DocumentViewLayoutOptions options)
+        DocumentViewLayoutOptions options,
+        bool collapsePageBoundaries)
     {
         var pageWidthDip = Math.Max(options.MinPrintPageWidthDip, PageLayout.PointsToDip(page.WidthPt));
         var pageHeightDip = Math.Max(options.MinPrintPageHeightDip, PageLayout.PointsToDip(page.HeightPt));
@@ -2655,21 +2657,25 @@ public static class DocumentViewLayoutPlanner
         var pageLeftDip = Math.Max(options.MinHorizontalGutterDip, (availableWidthDip - pageWidthDip) / 2);
         var contentWidthDip = Math.Max(options.MinContentWidthDip, pageWidthDip - marginLeftDip - marginRightDip);
         var textAreaHeightDip = Math.Max(options.MinPrintTextAreaHeightDip, pageHeightDip - marginTopDip - marginBottomDip);
+        var displayedPageHeightDip = collapsePageBoundaries ? textAreaHeightDip : pageHeightDip;
+        var displayedMarginTopDip = collapsePageBoundaries ? 0 : marginTopDip;
+        var displayedMarginBottomDip = collapsePageBoundaries ? 0 : marginBottomDip;
+        var displayedPageGapDip = collapsePageBoundaries ? 0 : options.PageGapDip;
 
         return new DocumentViewSurfacePlan(
             DocumentViewLayoutKind.PrintLayout,
             pageWidthDip,
-            pageHeightDip,
+            displayedPageHeightDip,
             marginLeftDip,
-            marginTopDip,
+            displayedMarginTopDip,
             marginRightDip,
-            marginBottomDip,
+            displayedMarginBottomDip,
             pageLeftDip,
             pageLeftDip + marginLeftDip,
             contentWidthDip,
             textAreaHeightDip,
             options.DeskPaddingDip,
-            options.PageGapDip);
+            displayedPageGapDip);
     }
 
     private static DocumentViewSurfacePlan BuildWebSurfacePlan(
