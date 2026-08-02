@@ -167,6 +167,52 @@ public sealed class DocumentViewTrackEditTests
         ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "world").Formatting.Italic.Should().BeTrue();
     }
 
+    [StaFact]
+    public void RibbonSuperscript_SelectedRangeTracksAndUndoRestoresBaseline()
+    {
+        var view = BuildView("H2O");
+        view.RevisionAuthor = "Chem Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 1, 0, 2);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.superscript"), out var command).Should().BeTrue();
+
+        command!.Execute(RibbonCommandContext.Empty);
+
+        var formatted = ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "2");
+        formatted.Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+        formatted.FormatRevision.Should().NotBeNull();
+        formatted.FormatRevision!.Author.Should().Be("Chem Reviewer");
+        formatted.FormatRevision.PreviousFormatting.VerticalAlign.Should().Be(VerticalAlign.Baseline);
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.VerticalAlign == VerticalAlign.Baseline && run.FormatRevision == null);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).Runs.Single(run => run.Text == "2")
+            .Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+    }
+
+    [StaFact]
+    public void RibbonSmallCapsAndAllCaps_SelectedRangeStayMutuallyExclusive()
+    {
+        var view = BuildView("Caps");
+        view.SetSelectionRangeForTest(0, 0, 0, 4);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        registry.TryGet(new RibbonCommandId("freew.smallcaps"), out var smallCaps).Should().BeTrue();
+        registry.TryGet(new RibbonCommandId("freew.allcaps"), out var allCaps).Should().BeTrue();
+
+        smallCaps!.Execute(RibbonCommandContext.Empty);
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.SmallCaps && !run.Formatting.AllCaps);
+
+        view.SetSelectionRangeForTest(0, 0, 0, 4);
+        allCaps!.Execute(RibbonCommandContext.Empty);
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting.AllCaps && !run.Formatting.SmallCaps);
+    }
+
     private static WpfRun RenderedRun(DocumentView view, string text) =>
         view.Document.Blocks.OfType<WpfParagraph>()
             .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())

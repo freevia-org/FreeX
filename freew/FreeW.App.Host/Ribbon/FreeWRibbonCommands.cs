@@ -1931,6 +1931,9 @@ internal static class FreeWRibbonCommands
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            if (TryModelToggle())
+                return;
+
             var selection = editor.Selection;
             switch (effect)
             {
@@ -1950,6 +1953,32 @@ internal static class FreeWRibbonCommands
                     break;
             }
         }
+
+        private bool TryModelToggle() => effect switch
+        {
+            CharacterEffect.Superscript => editor.TryToggleSelectedRunFormatting(
+                formatting => formatting.VerticalAlign == VerticalAlign.Superscript,
+                (formatting, value) => formatting with
+                {
+                    VerticalAlign = value ? VerticalAlign.Superscript : VerticalAlign.Baseline
+                }),
+            CharacterEffect.Subscript => editor.TryToggleSelectedRunFormatting(
+                formatting => formatting.VerticalAlign == VerticalAlign.Subscript,
+                (formatting, value) => formatting with
+                {
+                    VerticalAlign = value ? VerticalAlign.Subscript : VerticalAlign.Baseline
+                }),
+            CharacterEffect.Strikethrough => editor.TryToggleSelectedRunFormatting(
+                formatting => formatting.Strikethrough,
+                (formatting, value) => formatting with { Strikethrough = value }),
+            CharacterEffect.SmallCaps => editor.TryToggleSelectedRunFormatting(
+                formatting => formatting.SmallCaps,
+                (formatting, value) => formatting with { SmallCaps = value, AllCaps = false }),
+            CharacterEffect.AllCaps => editor.TryToggleSelectedRunFormatting(
+                formatting => formatting.AllCaps,
+                (formatting, value) => formatting with { AllCaps = value, SmallCaps = false }),
+            _ => false,
+        };
 
         private static void ToggleBaseline(TextSelection selection, BaselineAlignment target)
         {
