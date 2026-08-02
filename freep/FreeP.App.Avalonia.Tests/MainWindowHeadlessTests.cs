@@ -5998,8 +5998,10 @@ public sealed class MainWindowHeadlessTests
 
             window.Editor.Undo();
             smartArt!.Data!.Nodes[0].Text.Should().Be("Plan");
+            window.SmartArtTextPaneRenderedRows.Should().Contain("n1|0|False|Plan");
             window.Editor.Redo();
             smartArt.Data.Nodes[0].Text.Should().Be("Discover");
+            window.SmartArtTextPaneRenderedRows.Should().Contain("n1|0|False|Discover");
 
             addSibling = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Enter,

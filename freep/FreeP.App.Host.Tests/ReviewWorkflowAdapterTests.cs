@@ -1828,8 +1828,10 @@ public sealed class ReviewWorkflowAdapterTests
 
             window.Editor.Undo();
             shape.SmartArt.Data!.Nodes[0].Text.Should().Be("Plan");
+            window.SmartArtTextPaneRenderedRows.Should().Contain("n1|0|False|Plan");
             window.Editor.Redo();
             shape.SmartArt.Data.Nodes[0].Text.Should().Be("Discover");
+            window.SmartArtTextPaneRenderedRows.Should().Contain("n1|0|False|Discover");
 
             var addSibling = window.ApplySmartArtTextPaneKeyboardRouteForTests(
                 SmartArtTextPaneShortcutKey.Enter,

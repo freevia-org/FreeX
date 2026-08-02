@@ -12,6 +12,47 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class BackstagePaneSurfacePlannerTests
 {
     [Fact]
+    public void HomePaneVisualMetrics_match_WPF_authority_surface_registration()
+    {
+        var metrics = BackstagePaneSurfacePlanner.HomePaneVisualMetrics;
+
+        metrics.PaneMaxWidth.Should().Be(720);
+        metrics.HeadingFontSize.Should().Be(26);
+        metrics.HeadingBottomMargin.Should().Be(new BackstageThickness(0, 0, 0, 18));
+        metrics.DescriptionFontSize.Should().Be(12);
+        metrics.DescriptionBottomMargin.Should().Be(new BackstageThickness(0, 0, 0, 16));
+        metrics.SectionHeaderFontSize.Should().Be(15);
+        metrics.SectionHeaderMargin.Should().Be(new BackstageThickness(0, 16, 0, 6));
+        metrics.ActionFontSize.Should().Be(14);
+        metrics.DescriptionTextFontSize.Should().Be(11);
+        metrics.ActionRowMargin.Should().Be(new BackstageThickness(0, 0, 0, 10));
+        metrics.ActionDescriptionMargin.Should().Be(new BackstageThickness(0, 2, 0, 0));
+    }
+
+    [Fact]
+    public void BuildHomePane_Returns_shared_order_geometry_and_live_callbacks()
+    {
+        var opened = string.Empty;
+        var surface = BackstagePaneSurfacePlanner.BuildHomePane(
+            [
+                new RecentFileEntry { Path = @"C:\Docs\Budget.docx" },
+                new RecentFileEntry { Path = @"C:\Docs\Plan.rtf", IsPinned = true },
+            ],
+            newDocument: static () => { },
+            openRecent: path => opened = path,
+            browse: static () => { },
+            openMore: static () => { });
+
+        surface.VisualMetrics.Should().Be(BackstagePaneSurfacePlanner.HomePaneVisualMetrics);
+        surface.Groups.Select(group => group.Heading).Should().Equal("New", "Recent Documents", "Open");
+        surface.Groups.SelectMany(group => group.Actions).Select(action => action.Label)
+            .Should().Equal("Blank document", "Budget.docx", "Plan.rtf", "Browse", "Open More Documents");
+
+        surface.Groups[1].Actions[1].Invoke();
+        opened.Should().Be(@"C:\Docs\Plan.rtf");
+    }
+
+    [Fact]
     public void OpenPaneVisualMetrics_match_WPF_authority_surface_registration()
     {
         var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;

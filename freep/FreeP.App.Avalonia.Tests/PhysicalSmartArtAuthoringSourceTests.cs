@@ -18,6 +18,8 @@ public sealed class PhysicalSmartArtAuthoringSourceTests
         runner.Should().Contain("FREEP_PHYSICAL_SMARTART_TEXT_PANE_SEED=1");
         runner.Should().Contain("two fresh harness-owned FreeP processes");
         runner.Should().NotContain("undo, redo");
+        runner.Should().Contain("smartart-outline-apply-undo-redo");
+        runner.Should().Contain("smartart-outline-apply-text|smartart-outline-apply-undo-redo|smartart-outline-reopen");
         runner.Should().Contain("Assert-ManifestContract");
         runner.Should().Contain("$($phaseManifest.Name)/$_");
         runner.Should().Contain("Assert-EvidenceReference");
@@ -25,6 +27,12 @@ public sealed class PhysicalSmartArtAuthoringSourceTests
         var probe = File.ReadAllText(RepoFile("tools", "LinuxInteractiveDocker", "run-freep-smartart-authoring-probe.sh"));
         probe.Should().Contain("ppt/diagrams/data1.xml");
         probe.Should().Contain("Plan|Design|New node|Build|Test|Deploy");
+        probe.Should().Contain("send_key ctrl+z");
+        probe.Should().Contain("send_key ctrl+y");
+        probe.Should().Contain("apply_y=$((Y + HEIGHT - 167))");
+        probe.Should().Contain("shell_focus_y=$((Y + 28))");
+        probe.Should().Contain("apply-undo-row-clipboard.txt");
+        probe.Should().Contain("apply-redo-row-clipboard.txt");
         probe.Should().Contain("xclip -selection clipboard -out");
     }
 

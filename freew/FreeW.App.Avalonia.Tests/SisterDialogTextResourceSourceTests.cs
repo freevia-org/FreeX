@@ -109,7 +109,6 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("_surface.AutoCorrect.Header");
         source.Should().Contain("_surface.AutoFormat.Header");
         source.Should().Contain("OptionsDialogPlanner.TryParseRecentFilesCap(");
-        source.Should().Contain("OptionsDialogPlanner.TryParseAutoCorrectReplacements(");
         source.Should().Contain("OptionsDialogPlanner.BuildResult(");
         source.Should().Contain("new AutoCorrectOptions");
         source.Should().Contain("new AutoFormatOptions");

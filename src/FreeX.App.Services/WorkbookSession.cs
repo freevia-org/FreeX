@@ -1763,6 +1763,12 @@ public sealed class WorkbookSession : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Drops independent quadrant offsets after a split divider is moved or recreated. WPF clears
+    /// these view-local offsets at the same boundary so the new split starts at its new anchor.
+    /// </summary>
+    public void ResetSplitPaneOffsets() => _splitPaneViewportOffsets.Remove(ActiveSheet.Id);
+
     public bool UpdateViewportSize(double viewportHeight, double viewportWidth)
     {
         var normalizedHeight = NormalizeViewportDimension(viewportHeight, _viewportHeight);

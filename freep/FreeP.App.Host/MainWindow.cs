@@ -579,7 +579,19 @@ public sealed partial class MainWindow : Window
         Editor  = new EditingSession(_presentation, bus);
         _selectionPane?.SetEditor(Editor);
 
-        Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); _selectionPane?.Refresh(); RefreshPaneAccessibilityMetadata(); };
+        Editor.Changed           += () =>
+        {
+            _file.MarkDirty();
+            RefreshCanvas();
+            RefreshNotesPane();
+            UpdateSlideCount();
+            UpdateTitle();
+            RefreshReviewWorkflowPlans();
+            if (IsSmartArtTextPaneVisible)
+                ShowSmartArtTextPane();
+            _selectionPane?.Refresh();
+            RefreshPaneAccessibilityMetadata();
+        };
         Editor.CurrentSlideChanged += (_, _) => { _reviewWorkflowSession.SelectedCommentIndex = null; _selectedMediaCaptionTrackIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); _selectionPane?.Refresh(); RefreshPaneAccessibilityMetadata(); };
         Editor.SelectionChanged += (_, _) =>
         {

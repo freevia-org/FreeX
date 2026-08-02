@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -62,70 +63,12 @@ public partial class GridView
 
     public static SplitDividerLayout CalculateSplitDividerLayout(ViewportModel viewport)
     {
-        double? horizontalY = null;
-        double? verticalX = null;
-
-        if (viewport.SplitPanes is { } splitPanes)
-        {
-            if (splitPanes.Row is { } splitRow)
-            {
-                var pinnedRows = splitPanes.TopRows ?? [];
-                horizontalY = pinnedRows.Count > 0
-                    ? ColHeaderHeight + SumRowHeights(pinnedRows)
-                    : FindRowMetric(viewport.RowMetrics, splitRow)?.TopOffset + ColHeaderHeight;
-            }
-
-            if (splitPanes.Column is { } splitColumn)
-            {
-                var rowHeaderWidth = CalculateRowHeaderWidth(viewport);
-                var pinnedColumns = splitPanes.LeftColumns ?? [];
-                verticalX = pinnedColumns.Count > 0
-                    ? rowHeaderWidth + SumColumnWidths(pinnedColumns)
-                    : FindColMetric(viewport.ColMetrics, splitColumn)?.LeftOffset + rowHeaderWidth;
-            }
-        }
-
-        return new SplitDividerLayout(horizontalY, verticalX);
-    }
-
-    private static double SumRowHeights(IReadOnlyList<RowMetric> rows)
-    {
-        double height = 0;
-        foreach (var row in rows)
-            height += row.Height;
-
-        return height;
-    }
-
-    private static double SumColumnWidths(IReadOnlyList<ColMetric> columns)
-    {
-        double width = 0;
-        foreach (var column in columns)
-            width += column.Width;
-
-        return width;
-    }
-
-    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row)
-    {
-        foreach (var metric in metrics)
-        {
-            if (metric.Row == row)
-                return metric;
-        }
-
-        return null;
-    }
-
-    private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint column)
-    {
-        foreach (var metric in metrics)
-        {
-            if (metric.Col == column)
-                return metric;
-        }
-
-        return null;
+        var rowHeaderWidth = CalculateRowHeaderWidth(viewport);
+        var shared = SplitPanePointerPlanner.CalculateDividerLayout(
+            viewport,
+            rowHeaderWidth,
+            ColHeaderHeight);
+        return new SplitDividerLayout(shared.HorizontalY, shared.VerticalX);
     }
 
     public static SplitPaneScrollbarChrome CalculateSplitPaneScrollbarChrome(
@@ -278,22 +221,18 @@ public partial class GridView
         double actualWidth,
         double actualHeight)
     {
-        var dividerLayout = CalculateSplitDividerLayout(viewport);
-        var onHorizontal = dividerLayout.HorizontalY is { } horizontalY &&
-            pos.X >= 0 &&
-            pos.X <= actualWidth &&
-            Math.Abs(pos.Y - horizontalY) <= SplitDividerHitZone;
-        var onVertical = dividerLayout.VerticalX is { } verticalX &&
-            pos.Y >= 0 &&
-            pos.Y <= actualHeight &&
-            Math.Abs(pos.X - verticalX) <= SplitDividerHitZone;
-
-        return (onHorizontal, onVertical) switch
+        return SplitPanePointerPlanner.HitTestDivider(
+            viewport,
+            new GridPoint(pos.X, pos.Y),
+            actualWidth,
+            actualHeight,
+            CalculateRowHeaderWidth(viewport),
+            ColHeaderHeight) switch
         {
-            (true, true) => SplitDividerHandle.Intersection,
-            (true, false) => SplitDividerHandle.Horizontal,
-            (false, true) => SplitDividerHandle.Vertical,
-            _ => SplitDividerHandle.None
+            SplitPanePointerHandle.Intersection => SplitDividerHandle.Intersection,
+            SplitPanePointerHandle.Horizontal => SplitDividerHandle.Horizontal,
+            SplitPanePointerHandle.Vertical => SplitDividerHandle.Vertical,
+            _ => SplitDividerHandle.None,
         };
     }
 
@@ -302,95 +241,25 @@ public partial class GridView
         SplitDividerHandle handle,
         Point pos)
     {
-        if (handle == SplitDividerHandle.None)
-            return null;
-
-        var splitPanes = viewport.SplitPanes;
-        if (splitPanes is null)
-            return null;
-
-        uint? row = handle is SplitDividerHandle.Horizontal or SplitDividerHandle.Intersection
-            ? FindSplitRow(splitPanes.TopRows ?? [], viewport.RowMetrics, pos.Y)
-            : null;
-        uint? column = handle is SplitDividerHandle.Vertical or SplitDividerHandle.Intersection
-            ? FindSplitColumn(splitPanes.LeftColumns ?? [], viewport.ColMetrics, pos.X, CalculateRowHeaderWidth(viewport))
-            : null;
-
-        return new SplitDividerDragTarget(row, column);
+        var target = SplitPanePointerPlanner.CalculateDividerDragTarget(
+            viewport,
+            (SplitPanePointerHandle)handle,
+            new GridPoint(pos.X, pos.Y),
+            CalculateRowHeaderWidth(viewport),
+            ColHeaderHeight);
+        return target is { } value ? new SplitDividerDragTarget(value.Row, value.Column) : null;
     }
-
-    private static uint? FindSplitRow(
-        IReadOnlyList<RowMetric> topRows,
-        IReadOnlyList<RowMetric> mainRows,
-        double y)
-    {
-        var topHeight = SumRowHeights(topRows);
-        if (y < ColHeaderHeight)
-            return null;
-
-        if (y <= ColHeaderHeight + topHeight)
-        {
-            foreach (var row in topRows)
-            {
-                var bottom = ColHeaderHeight + row.TopOffset + row.Height;
-                if (y <= bottom)
-                    return IncrementWithinLimit(row.Row, CellAddress.MaxRow);
-            }
-        }
-
-        foreach (var row in mainRows)
-        {
-            var top = ColHeaderHeight + topHeight + row.TopOffset;
-            if (y < top)
-                break;
-
-            if (y >= top && y <= top + row.Height)
-                return row.Row;
-        }
-
-        return null;
-    }
-
-    private static uint? FindSplitColumn(
-        IReadOnlyList<ColMetric> leftColumns,
-        IReadOnlyList<ColMetric> mainColumns,
-        double x,
-        double ActualRowHeaderWidth)
-    {
-        var leftWidth = SumColumnWidths(leftColumns);
-        if (x < ActualRowHeaderWidth)
-            return null;
-
-        if (x <= ActualRowHeaderWidth + leftWidth)
-        {
-            foreach (var column in leftColumns)
-            {
-                var right = ActualRowHeaderWidth + column.LeftOffset + column.Width;
-                if (x <= right)
-                    return IncrementWithinLimit(column.Col, CellAddress.MaxCol);
-            }
-        }
-
-        foreach (var column in mainColumns)
-        {
-            var left = ActualRowHeaderWidth + leftWidth + column.LeftOffset;
-            if (x < left)
-                break;
-
-            if (x >= left && x <= left + column.Width)
-                return column.Col;
-        }
-
-        return null;
-    }
-
-    private static uint IncrementWithinLimit(uint value, uint limit) =>
-        value >= limit ? limit : value + 1;
 
     public static bool CanScrollSplitPaneRegion(SplitPaneRegion region, bool horizontal) =>
-        horizontal
-            ? region is SplitPaneRegion.TopRight or SplitPaneRegion.BottomRight
-            : region is SplitPaneRegion.BottomLeft or SplitPaneRegion.BottomRight;
+        SplitPanePointerPlanner.CanScroll((SplitPanePointerRegion)region, horizontal);
+
+    // Kept as GridView-wide metric lookups for the other partials; split geometry itself lives in
+    // SplitPanePointerPlanner so the WPF and Avalonia hosts share one boundary algorithm.
+    private static RowMetric? FindRowMetric(IReadOnlyList<RowMetric> metrics, uint row) =>
+        metrics.FirstOrDefault(metric => metric.Row == row);
+
+    private static ColMetric? FindColMetric(IReadOnlyList<ColMetric> metrics, uint column) =>
+        metrics.FirstOrDefault(metric => metric.Col == column);
 
     private static CellAddress? HitTestMetrics(
         SheetId sheetId,

@@ -24,7 +24,7 @@
       "properties": {
         "tool": { "const": "xclip" },
         "selection": { "const": "clipboard" },
-        "transcripts": { "const": ["smartart-outline-apply-text", "smartart-outline-reopen"] },
+        "transcripts": { "const": ["smartart-outline-apply-text", "smartart-outline-apply-undo-redo", "smartart-outline-reopen"] },
         "packageParts": { "const": ["ppt/diagrams/data1.xml", "ppt/diagrams/drawing1.xml"] }
       }
     },
@@ -37,11 +37,11 @@
         "contractReference": { "const": "tools/LinuxInteractiveDocker/freep-smartart-authoring-validation.schema.json" }
       }
     },
-    "summary": { "type": "object", "properties": { "total": { "const": 5 } } },
+    "summary": { "type": "object", "properties": { "total": { "const": 6 } } },
     "results": {
       "type": "array",
-      "minItems": 5,
-      "maxItems": 5,
+      "minItems": 6,
+      "maxItems": 6,
       "items": {
         "type": "object",
         "required": ["id", "category", "status", "evidenceLevel", "evidence", "note"],

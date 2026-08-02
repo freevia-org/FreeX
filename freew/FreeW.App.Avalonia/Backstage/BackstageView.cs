@@ -616,17 +616,32 @@ internal sealed class BackstageView : Window
         return grid;
     }
 
-    private Control BuildActionGroupContent(string title, IReadOnlyList<BackstageActionGroup> groups, string description)
+    private Control BuildActionGroupContent(
+        string title,
+        IReadOnlyList<BackstageActionGroup> groups,
+        string description,
+        BackstageHomePaneVisualMetrics metrics)
     {
-        var content = new StackPanel { MaxWidth = 720, HorizontalAlignment = HorizontalAlignment.Left };
-        content.Children.Add(BuildPaneHeader(title, description));
+        var content = new StackPanel
+        {
+            MaxWidth = metrics.PaneMaxWidth,
+            HorizontalAlignment = HorizontalAlignment.Left
+        };
+        content.Children.Add(BuildPaneHeader(title, description, metrics));
         for (var i = 0; i < groups.Count; i++)
-            content.Children.Add(BuildActionGroup(groups[i], isLast: i == groups.Count - 1));
+            content.Children.Add(BuildActionGroup(groups[i], metrics));
         return CreateScroll(content);
     }
 
+    private Control BuildActionGroupContent(BackstageHomePaneSurfaceSpec surface) =>
+        BuildActionGroupContent(surface.Title, surface.Groups, surface.Description, surface.VisualMetrics);
+
     private Control BuildActionGroupContent(BackstageActionPaneSurfaceSpec surface) =>
-        BuildActionGroupContent(surface.Title, surface.Groups, surface.Description);
+        BuildActionGroupContent(
+            surface.Title,
+            surface.Groups,
+            surface.Description,
+            BackstagePaneSurfacePlanner.HomePaneVisualMetrics);
 
     private static Control BuildExportActionGroupContent(BackstageActionPaneSurfaceSpec surface)
     {
@@ -708,36 +723,40 @@ internal sealed class BackstageView : Window
             Margin = ToThickness(metrics.SectionHeaderMargin),
         };
 
-    private Control BuildActionGroup(BackstageActionGroup group, bool isLast)
+    private Control BuildActionGroup(BackstageActionGroup group, BackstageHomePaneVisualMetrics metrics)
     {
         var stack = new StackPanel();
-        stack.Children.Add(CreateSectionHeader(group.Heading));
+        stack.Children.Add(CreateSectionHeader(group.Heading, metrics));
 
         foreach (var action in group.Actions)
         {
-            var row = BuildActionRow(action);
+            var row = BuildActionRow(action, metrics);
             stack.Children.Add(row);
         }
 
         return stack;
     }
 
-    private static Control BuildActionRow(BackstageActionRow action)
+    private static Control BuildActionRow(BackstageActionRow action) =>
+        BuildActionRow(action, BackstagePaneSurfacePlanner.HomePaneVisualMetrics);
+
+    private static Control BuildActionRow(BackstageActionRow action, BackstageHomePaneVisualMetrics metrics)
     {
         var button = CreateLinkButton(
             action.Label,
             action.Invoke,
-            fontSize: 14,
+            fontSize: metrics.ActionFontSize,
             automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}");
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.HorizontalAlignment = HorizontalAlignment.Stretch;
-        button.Margin = new Thickness(0, 0, 0, 10);
+        button.Margin = ToThickness(metrics.ActionRowMargin);
+        AutomationProperties.SetName(button, action.Label);
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
         {
             Text = action.Label,
             Foreground = LinkBrush,
-            FontSize = 14,
+            FontSize = metrics.ActionFontSize,
         });
         if (!string.IsNullOrWhiteSpace(action.Description))
         {
@@ -745,9 +764,9 @@ internal sealed class BackstageView : Window
             {
                 Text = action.Description,
                 Foreground = SecondaryInk,
-                FontSize = 11,
+                FontSize = metrics.DescriptionTextFontSize,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 2, 0, 0),
+                Margin = ToThickness(metrics.ActionDescriptionMargin),
             });
         }
         button.Content = stack;
@@ -905,10 +924,20 @@ internal sealed class BackstageView : Window
 
     private static Color ToColor(BackstageRgb color) => Color.FromRgb(color.R, color.G, color.B);
 
-    private static Control BuildPaneHeader(string title, string description)
+    private static Control BuildPaneHeader(
+        string title,
+        string description,
+        BackstageHomePaneVisualMetrics metrics)
     {
         var panel = new StackPanel();
-        panel.Children.Add(CreateHeading(title));
+        panel.Children.Add(new TextBlock
+        {
+            Text = title,
+            FontSize = metrics.HeadingFontSize,
+            FontWeight = FontWeight.Light,
+            Foreground = PrimaryInk,
+            Margin = ToThickness(metrics.HeadingBottomMargin),
+        });
         if (!string.IsNullOrWhiteSpace(description))
         {
             panel.Children.Add(new TextBlock
@@ -916,11 +945,15 @@ internal sealed class BackstageView : Window
                 Text = description,
                 Foreground = SecondaryInk,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 16),
+                FontSize = metrics.DescriptionFontSize,
+                Margin = ToThickness(metrics.DescriptionBottomMargin),
             });
         }
         return panel;
     }
+
+    private static Control BuildPaneHeader(string title, string description) =>
+        BuildPaneHeader(title, description, BackstagePaneSurfacePlanner.HomePaneVisualMetrics);
 
     private static Control BuildOpenPaneHeader(
         string title,
@@ -977,6 +1010,15 @@ internal sealed class BackstageView : Window
         FontWeight = FontWeight.SemiBold,
         Foreground = PrimaryInk,
         Margin = new Thickness(0, 16, 0, 6),
+    };
+
+    private static TextBlock CreateSectionHeader(string text, BackstageHomePaneVisualMetrics metrics) => new()
+    {
+        Text = text,
+        FontSize = metrics.SectionHeaderFontSize,
+        FontWeight = FontWeight.SemiBold,
+        Foreground = PrimaryInk,
+        Margin = ToThickness(metrics.SectionHeaderMargin),
     };
 
     private static Button CreateLinkButton(

@@ -16,7 +16,20 @@ public sealed class SmartArtTextPaneReachabilitySourceTests
         source.Should().Contain("HorizontalAlignment = HorizontalAlignment.Left");
         source.Should().Contain("DockPanel.SetDock(_smartArtTextPaneCommandActions, Dock.Bottom)");
         source.Should().Contain("_smartArtTextPaneCommandActions.Children.Add(_smartArtTextPaneAssistantButton)");
+        source.Should().Contain("_smartArtTextPaneCommandActions.Children.Add(_smartArtTextPaneApplyButton)");
         source.Should().Contain("_smartArtTextPaneCommandActions.Children.Add(_smartArtTextPaneCloseButton)");
         source.Should().Contain("Width = 320");
+    }
+
+    [Fact]
+    public void AvaloniaSmartArtTextPane_RefreshesAfterEditorUndoRedo()
+    {
+        var sourcePath = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "../../../../FreeP.App.Avalonia/MainWindow.cs"));
+        var source = File.ReadAllText(sourcePath);
+
+        source.Should().MatchRegex(
+            @"if\s*\(IsSmartArtTextPaneVisible\)\s*ShowSmartArtTextPane\(\);");
     }
 }

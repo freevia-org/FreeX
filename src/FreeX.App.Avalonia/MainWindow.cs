@@ -2044,12 +2044,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         AutomationProperties.SetHelpText(_sheetGridHost, "Shows the active workbook sheet.");
         _sheetGridHost.PointerMoved += SheetGridHost_PointerMoved;
         _sheetGridHost.PointerExited += (_, _) => _sheetGridHost.Cursor = Cursor.Default;
+        AttachSplitPanePointerHandlers();
 
         _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.Content = _sheetGridHost;
         _sheetScrollViewer.SizeChanged += SheetScrollViewer_SizeChanged;
-        _sheetScrollViewer.PointerWheelChanged += SheetScrollViewer_PointerWheelChanged;
+        // Avalonia's ScrollViewer class handler can consume a vertical wheel before a bubbling
+        // subscription sees it. Handle the worksheet wheel in the tunnel so split-pane wheels use
+        // the shared workbook viewport before the ScrollViewer attempts its own offset update.
+        _sheetScrollViewer.AddHandler(
+            InputElement.PointerWheelChangedEvent,
+            SheetScrollViewer_PointerWheelChanged,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
 
         _verticalWorksheetScrollBar.Orientation = Orientation.Vertical;
         _verticalWorksheetScrollBar.Width = 16;
@@ -5002,7 +5010,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             zoomFactor);
 
         if (splitRowCount > 0 || splitColCount > 0)
+        {
             AddSplitPaneDividerOverlayToGrid(grid, rowMetrics, colMetrics, splitRowCount, splitColCount, headerOffset);
+            AddSplitPanePointerChromeToGrid(
+                grid,
+                viewport,
+                rowMetrics,
+                colMetrics,
+                showHeadings,
+                zoomFactor);
+        }
         AddSelectionOverlayToGrid(
             grid,
             rowMetrics,
@@ -10736,6 +10753,39 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             _sheetGridHost.Cursor = new Cursor(StandardCursorType.Cross);
             return;
+        }
+
+        if (TryGetSplitPanePointerLayout(out var splitLayout))
+        {
+            var splitPosition = args.GetPosition(_sheetGridHost);
+            var splitPointer = new GridPoint(splitPosition.X, splitPosition.Y);
+            if (SplitPanePointerPlanner.HitTestScrollbar(
+                    splitLayout.Chrome,
+                    splitPointer) is { } scrollbarHit)
+            {
+                _sheetGridHost.Cursor = scrollbarHit.Orientation == SplitPanePointerScrollbarOrientation.Horizontal
+                    ? new Cursor(StandardCursorType.SizeWestEast)
+                    : new Cursor(StandardCursorType.SizeNorthSouth);
+                return;
+            }
+
+            var splitHandle = SplitPanePointerPlanner.HitTestDivider(
+                splitLayout.Viewport,
+                splitPointer,
+                splitLayout.Width,
+                splitLayout.Height,
+                splitLayout.RowHeaderWidth,
+                splitLayout.ColumnHeaderHeight,
+                splitLayout.MetricScale);
+            if (splitHandle != SplitPanePointerHandle.None)
+            {
+                _sheetGridHost.Cursor = splitHandle == SplitPanePointerHandle.Intersection
+                    ? new Cursor(StandardCursorType.SizeAll)
+                    : splitHandle == SplitPanePointerHandle.Vertical
+                        ? new Cursor(StandardCursorType.SizeWestEast)
+                        : new Cursor(StandardCursorType.SizeNorthSouth);
+                return;
+            }
         }
 
         if (IsPointerOnAutofillHandle(args))
@@ -28134,7 +28184,39 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             return;
 
         var step = GetWheelScrollLinesPerNotch();
-        if (_session.PanViewport(rowDelta * step, colDelta * step))
+        SplitPanePointerWheelTarget? splitTarget = null;
+        if (TryGetSplitPanePointerLayout(out var splitLayout))
+        {
+            var position = e.GetPosition(_sheetGridHost);
+            splitTarget = SplitPanePointerPlanner.ResolveWheelTarget(
+                splitLayout.Viewport,
+                new GridPoint(position.X, position.Y),
+                splitLayout.Width,
+                splitLayout.Height,
+                splitLayout.RowHeaderWidth,
+                splitLayout.ColumnHeaderHeight,
+                colDelta != 0,
+                splitLayout.MetricScale);
+        }
+
+        if (splitTarget is { } target && !CanScrollSplitPane(target.Region, target.Horizontal))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        // Split-pane scrollbar chrome is only a second visual for the shared main scrollbar. WPF
+        // deliberately removed independent TopRight/BottomLeft offsets (r56), so every permitted
+        // split-pane wheel route must use the same PanViewport delta as BottomRight.
+        var routesToSharedScrollbar = splitTarget is null ||
+            splitTarget is { Region: SplitPanePointerRegion.BottomRight } ||
+            splitTarget is { Region: SplitPanePointerRegion.TopRight, Horizontal: true } ||
+            splitTarget is { Region: SplitPanePointerRegion.BottomLeft, Horizontal: false };
+        var changed = routesToSharedScrollbar
+            ? _session.PanViewport(rowDelta * step, colDelta * step)
+            : false;
+
+        if (changed)
         {
             RefreshShellForViewportPan("Ready");
             BroadcastScrollOffsetToSideBySidePartner();

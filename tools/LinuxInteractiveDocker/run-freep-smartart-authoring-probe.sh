@@ -183,6 +183,7 @@ ids = [
     "visible-window-discovery",
     "smartart-outline-add-sibling",
     "smartart-outline-apply-text",
+    "smartart-outline-apply-undo-redo",
     "smartart-outline-save",
     "smartart-outline-reopen",
 ]
@@ -227,13 +228,13 @@ manifest = {
         "fixture": fixture,
     },
     "coverage": {
-        "scope": "physical FreeP SmartArt text-pane text replacement, add-sibling, save, and reopen",
+        "scope": "physical FreeP SmartArt text-pane text replacement, add-sibling, apply undo/redo, save, and reopen",
         "exhaustive": False,
     },
     "semanticReadback": {
         "tool": "xclip",
         "selection": "clipboard",
-        "transcripts": ["smartart-outline-apply-text", "smartart-outline-reopen"],
+        "transcripts": ["smartart-outline-apply-text", "smartart-outline-apply-undo-redo", "smartart-outline-reopen"],
         "packageParts": ["ppt/diagrams/data1.xml", "ppt/diagrams/drawing1.xml"],
     },
     "contractValidation": {
@@ -338,10 +339,10 @@ if [[ "$phase" == "first" ]]; then
     xdotool type --delay "$input_delay_ms" "Discover"
     sleep "$settle_seconds"
 
-    # The command strip is a two-row WrapPanel at the bottom of the fixed-width
-    # pane: clear-picture, Apply, and Close occupy its second row.
+    # The fixed pane keeps its picture actions above the outline-authoring rows.
+    # Resolve Apply from the owner bottom so the Xfce decoration offset remains included.
     apply_x=$((pane_x + 180))
-    apply_y=$((Y + HEIGHT - 28))
+    apply_y=$((Y + HEIGHT - 167))
     xdotool mousemove "$apply_x" "$apply_y" click 1
     sleep "$settle_seconds"
     xdotool mousemove "$first_row_x" "$first_row_y" click 1
@@ -362,6 +363,49 @@ if [[ "$phase" == "first" ]]; then
         record "smartart-outline-apply-text" "passed" "A physical click on Apply committed the edited SmartArt outline text, which read back exactly through the visible pane." smartart-apply-text.png smartart-apply-text-proof.txt apply-text-row-clipboard.txt
     else
         record "smartart-outline-apply-text" "failed" "The physical Apply action did not expose the edited SmartArt text through clipboard readback." smartart-apply-text.png smartart-apply-text-proof.txt apply-text-row-clipboard.txt
+        exit 1
+    fi
+
+    # Apply must commit the shared SmartArt model, not only leave the edited
+    # TextBox value visible. Clipboard readback above returned focus to that TextBox;
+    # move focus to the active Home ribbon tab, a production shell-shortcut target,
+    # before dispatching Ctrl+Z/Ctrl+Y through the real window route.
+    shell_focus_x=$((X + 62))
+    shell_focus_y=$((Y + 28))
+    xdotool mousemove "$shell_focus_x" "$shell_focus_y" click 1
+    sleep "$settle_seconds"
+    send_key ctrl+z
+    xdotool mousemove "$first_row_x" "$first_row_y" click 1
+    xdotool key ctrl+a ctrl+c
+    undo_clipboard="$output/apply-undo-row-clipboard.txt"
+    undo_clipboard_pass=false
+    if read_clipboard "$undo_clipboard" && assert_clipboard "$undo_clipboard" "Plan"; then
+        undo_clipboard_pass=true
+    fi
+
+    xdotool mousemove "$shell_focus_x" "$shell_focus_y" click 1
+    sleep "$settle_seconds"
+    send_key ctrl+y
+    xdotool mousemove "$first_row_x" "$first_row_y" click 1
+    xdotool key ctrl+a ctrl+c
+    redo_clipboard="$output/apply-redo-row-clipboard.txt"
+    redo_clipboard_pass=false
+    if read_clipboard "$redo_clipboard" && assert_clipboard "$redo_clipboard" "Discover"; then
+        redo_clipboard_pass=true
+    fi
+    capture "smartart-apply-undo-redo.png" || true
+    {
+        printf 'undo-shell-focus-point=%s,%s\n' "$shell_focus_x" "$shell_focus_y"
+        printf 'undo-expected-text=Plan\n'
+        printf 'undo-clipboard=%s\n' "$undo_clipboard_pass"
+        printf 'redo-shell-focus-point=%s,%s\n' "$shell_focus_x" "$shell_focus_y"
+        printf 'redo-expected-text=Discover\n'
+        printf 'redo-clipboard=%s\n' "$redo_clipboard_pass"
+    } > "$output/smartart-apply-undo-redo-proof.txt"
+    if [[ "$undo_clipboard_pass" == true && "$redo_clipboard_pass" == true ]]; then
+        record "smartart-outline-apply-undo-redo" "passed" "Apply changed the shared SmartArt model and the visible pane reflected both shell undo and redo transitions." smartart-apply-undo-redo.png smartart-apply-undo-redo-proof.txt apply-undo-row-clipboard.txt apply-redo-row-clipboard.txt
+    else
+        record "smartart-outline-apply-undo-redo" "failed" "The visible SmartArt pane did not reflect the expected model-level undo and redo transitions after Apply." smartart-apply-undo-redo.png smartart-apply-undo-redo-proof.txt apply-undo-row-clipboard.txt apply-redo-row-clipboard.txt
         exit 1
     fi
 

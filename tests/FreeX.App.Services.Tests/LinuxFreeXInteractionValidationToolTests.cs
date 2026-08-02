@@ -48,6 +48,35 @@ public sealed class LinuxFreeXInteractionValidationToolTests
     }
 
     [Fact]
+    public void SplitPanePointerSelectorRequiresSharedScrollbarPhysicalEvidenceRows()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var probe = File.ReadAllText(RepositoryFileLocator.Find(
+            "tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+
+        runner.Should().Contain("\"split-pane-pointer\"");
+        runner.Should().Contain("split-pane-divider-drag-physical");
+        runner.Should().Contain("split-pane-active-pane-wheel-physical");
+        runner.Should().Contain("split-pane-bottom-left-wheel-physical");
+        runner.Should().Contain("split-pane-mini-scrollbar-physical");
+        probe.Should().Contain("probe_split_pane_pointer()");
+        probe.Should().Contain("enter_view_keytip");
+        probe.Should().Contain("split_button_x");
+        probe.Should().Contain("split-command-gesture=view-tab-physical-click");
+        probe.Should().Contain("split-pane-before-grid.png");
+        probe.Should().Contain("split-pane-open-grid.png");
+        probe.Should().Contain("xdotool mousedown 1");
+        probe.Should().Contain("xdotool keydown --window \"$window_id\" Shift_L");
+        probe.Should().Contain("xdotool click 5");
+        probe.Should().Contain("split-pane-pointer-postcondition.txt");
+        probe.Should().Contain("divider-postcondition=$divider_passed");
+        probe.Should().Contain("active-pane-shared-column-band-postcondition=$wheel_passed");
+        probe.Should().Contain("bottom-left-shared-row-band-postcondition=$bottom_wheel_passed");
+        probe.Should().Contain("mini-scrollbar-shared-column-band-postcondition=$scrollbar_passed");
+    }
+
+    [Fact]
     public void PhysicalEvidencePackagingUsesLongPathSafeExactFileCopies()
     {
         var script = File.ReadAllText(RepositoryFileLocator.Find(
@@ -207,7 +236,8 @@ public sealed class LinuxFreeXInteractionValidationToolTests
         probe.Should().Contain("outline-expanded.png");
         probe.Should().Contain("values-restored=$values_restored");
         probe.Should().Contain("xdotool_mousemove_sync \"$toggle_x\" \"$toggle_y\" click 1");
-        probe.Should().Contain("probe_window_management\nprobe_outline_group_physical");
+        probe.Should().MatchRegex(
+            @"probe_window_management\r?\nprobe_split_pane_pointer\r?\nprobe_outline_group_physical");
         runner.Split("\"outline-group-physical\"").Should().HaveCountGreaterThanOrEqualTo(4,
             "the focused selector and default all lane must both require the physical outline result and artifacts");
     }

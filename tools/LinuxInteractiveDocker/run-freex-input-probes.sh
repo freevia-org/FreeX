@@ -2365,6 +2365,207 @@ probe_grid_drag_parity() {
     fi
 }
 
+probe_split_pane_pointer() {
+    local split_before="split-pane-before.png" split_after="split-pane-open.png"
+    local divider_before="split-pane-divider-before.png" divider_after="split-pane-divider-after.png"
+    local wheel_before="split-pane-wheel-before.png" wheel_after="split-pane-wheel-after.png"
+    local bottom_wheel_before="split-pane-bottom-left-wheel-before.png" bottom_wheel_after="split-pane-bottom-left-wheel-after.png"
+    local scrollbar_before="split-pane-scrollbar-before.png" scrollbar_after="split-pane-scrollbar-after.png"
+    local postcondition="split-pane-pointer-postcondition.txt"
+    local artifacts="$split_before;$split_after;split-pane-before-grid.png;split-pane-open-grid.png;$divider_before;$divider_after;$wheel_before;$wheel_after;$bottom_wheel_before;$bottom_wheel_after;$scrollbar_before;$scrollbar_after;$postcondition"
+    local split_open=false divider_passed=false wheel_passed=false bottom_wheel_passed=false scrollbar_passed=false
+    local split_row_y split_column_x divider_drag_x drag_y top_right_left top_right_width top_right_top top_right_height
+    local bottom_left_left bottom_left_width bottom_left_top bottom_left_height scrollbar_x scrollbar_y
+    local split_button_x split_button_y
+
+    # The focused lane runs at the harness's fixed 1280x820 viewport. Resolve the visible Split
+    # toggle from that measured View-tab position, normalized to the actual X11 owner width.
+    split_button_x="$((window_x + window_width * 925 / 1280))"
+    # XGetWindowAttributes reports the client origin below the Xfce decoration; in the
+    # fixed harness the rendered command center is 60 px below that origin (98 root px).
+    split_button_y="$((window_y + 60))"
+
+    # C5 gives the real View > Split command a deterministic two-axis anchor. The coordinates
+    # below deliberately come from the calibrated cell pitch, so the probe remains bounded and
+    # does not claim a result when the rendered split is not where the product placed it.
+    if select_cell 2 4 C5; then
+        capture "$split_before"
+        crop_region "$split_before" "split-pane-before-grid.png" "$a1_x" "$a1_y" "$((window_x + window_width - a1_x))" "$((window_y + window_height - a1_y - 40))"
+        enter_view_keytip
+        xdotool_mousemove_sync "$split_button_x" "$split_button_y"
+        xdotool click 1
+        sleep "$settle_seconds"
+        capture "$split_after"
+        crop_region "$split_after" "split-pane-open-grid.png" "$a1_x" "$a1_y" "$((window_x + window_width - a1_x))" "$((window_y + window_height - a1_y - 40))"
+        if region_changed "$output/split-pane-before-grid.png" "$output/split-pane-open-grid.png" 300; then
+            split_open=true
+        fi
+    fi
+
+    split_row_y="$((a1_y + cell_height * 4))"
+    split_column_x="$((a1_x + cell_width * 2))"
+    divider_drag_x="$((a1_x + (split_column_x - a1_x) / 2))"
+    # Release inside the next row, not on its inclusive top/bottom boundary: the planner
+    # intentionally maps a shared edge to the preceding row.
+    drag_y="$((split_row_y + cell_height + cell_height / 2))"
+    if $split_open; then
+        capture "$divider_before"
+        focus_app
+        # Stay left of the vertical divider. The top-right segment at the same Y is the
+        # horizontal mini-scrollbar and would page the shared viewport instead of dragging.
+        xdotool_mousemove_sync "$divider_drag_x" "$split_row_y"
+        xdotool mousedown 1
+        sleep 0.18
+        xdotool_mousemove_sync "$divider_drag_x" "$drag_y"
+        sleep 0.18
+        xdotool mouseup 1
+        sleep "$settle_seconds"
+        capture "$divider_after"
+        if screen_changed "$output/$divider_before" "$output/$divider_after" 300; then
+            divider_passed=true
+        fi
+        # A successful drag into the next row moves the rendered boundary by one row; the
+        # pointer itself was released at that row's center.
+        if $divider_passed; then
+            split_row_y="$((split_row_y + cell_height))"
+        fi
+    else
+        capture "$divider_before"
+        capture "$divider_after"
+    fi
+
+    # The top-right pane owns the shared horizontal scrollbar. Shift+wheel is the physical
+    # horizontal-wheel equivalent used by WPF; compare only that quadrant so a changed selection
+    # or footer cannot accidentally satisfy the postcondition.
+    top_right_left="$split_column_x"
+    top_right_width="$((window_x + window_width - top_right_left))"
+    top_right_top="$a1_y"
+    top_right_height="$((split_row_y - top_right_top))"
+    if $split_open && (( top_right_width > 40 && top_right_height > 40 )); then
+        capture "$wheel_before"
+        crop_region "$wheel_before" "split-pane-wheel-before-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        focus_app
+        xdotool_mousemove_sync "$((top_right_left + top_right_width * 3 / 4))" "$((top_right_top + top_right_height / 2))"
+        xdotool keydown --window "$window_id" Shift_L
+        xdotool click 5
+        xdotool keyup --window "$window_id" Shift_L
+        sleep "$settle_seconds"
+        capture "$wheel_after"
+        crop_region "$wheel_after" "split-pane-wheel-after-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        if region_changed "$output/split-pane-wheel-before-crop.png" "$output/split-pane-wheel-after-crop.png" 80; then
+            wheel_passed=true
+        fi
+    else
+        capture "$wheel_before"
+        capture "$wheel_after"
+    fi
+
+    # The bottom-left pane owns the shared vertical scrollbar. Its vertical wheel must move the
+    # same row band as BottomRight, so capture only the bottom-left quadrant for this proof.
+    # Include the row-header band. The demo fixture is intentionally small, so after the
+    # populated rows scroll away the changing row labels remain the authoritative row-band proof.
+    bottom_left_left="$window_x"
+    bottom_left_width="$((split_column_x - bottom_left_left))"
+    bottom_left_top="$split_row_y"
+    bottom_left_height="$((window_y + window_height - bottom_left_top))"
+    if $split_open && (( bottom_left_width > 40 && bottom_left_height > 40 )); then
+        capture "$bottom_wheel_before"
+        crop_region "$bottom_wheel_before" "split-pane-bottom-left-wheel-before-crop.png" "$bottom_left_left" "$bottom_left_top" "$bottom_left_width" "$bottom_left_height"
+        focus_app
+        xdotool_mousemove_sync "$((bottom_left_left + bottom_left_width / 2))" "$((bottom_left_top + bottom_left_height / 2))"
+        # Cross the pinned row band. A single three-line wheel notch can keep the shared
+        # origin above SplitRow, where the bottom pane is expected to render identically.
+        for _ in 1 2 3; do
+            xdotool click 5
+            sleep 0.12
+        done
+        sleep "$settle_seconds"
+        capture "$bottom_wheel_after"
+        crop_region "$bottom_wheel_after" "split-pane-bottom-left-wheel-after-crop.png" "$bottom_left_left" "$bottom_left_top" "$bottom_left_width" "$bottom_left_height"
+        if region_changed "$output/split-pane-bottom-left-wheel-before-crop.png" "$output/split-pane-bottom-left-wheel-after-crop.png" 80; then
+            bottom_wheel_passed=true
+        fi
+    else
+        capture "$bottom_wheel_before"
+        capture "$bottom_wheel_after"
+    fi
+
+    # The top-right mini-scrollbar is the horizontal track immediately above the horizontal
+    # divider. A track click must move the shared main horizontal position and visibly change
+    # that quadrant.
+    scrollbar_x="$((split_column_x + top_right_width * 3 / 4))"
+    scrollbar_y="$((split_row_y - 5))"
+    if $split_open && (( top_right_width > 40 )); then
+        capture "$scrollbar_before"
+        crop_region "$scrollbar_before" "split-pane-scrollbar-before-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        focus_app
+        xdotool_mousemove_sync "$scrollbar_x" "$scrollbar_y" click 1
+        sleep "$settle_seconds"
+        capture "$scrollbar_after"
+        crop_region "$scrollbar_after" "split-pane-scrollbar-after-crop.png" "$top_right_left" "$top_right_top" "$top_right_width" "$top_right_height"
+        if region_changed "$output/split-pane-scrollbar-before-crop.png" "$output/split-pane-scrollbar-after-crop.png" 80; then
+            scrollbar_passed=true
+        fi
+    else
+        capture "$scrollbar_before"
+        capture "$scrollbar_after"
+    fi
+
+    write_artifact "$postcondition" \
+        "schema-version=1\nselector=split-pane-pointer\nsplit-command-gesture=view-tab-physical-click\nsplit-button-coordinate=$split_button_x,$split_button_y\nsplit-open=$split_open\ndivider-gesture=horizontal-divider-drag\ndivider-coordinate=$divider_drag_x,$split_row_y\ndivider-target-y=$drag_y\ndivider-postcondition=$divider_passed\nactive-pane-gesture=top-right-shift-wheel-down\nactive-pane-crop=$top_right_left,$top_right_top,${top_right_width}x${top_right_height}\nactive-pane-shared-column-band-postcondition=$wheel_passed\nbottom-left-gesture=bottom-left-wheel-down-three-notches\nbottom-left-crop=$bottom_left_left,$bottom_left_top,${bottom_left_width}x${bottom_left_height}\nbottom-left-shared-row-band-postcondition=$bottom_wheel_passed\nmini-scrollbar-gesture=top-right-horizontal-track-click\nmini-scrollbar-coordinate=$scrollbar_x,$scrollbar_y\nmini-scrollbar-shared-column-band-postcondition=$scrollbar_passed\n"
+
+    if $divider_passed; then
+        record "split-pane-divider-drag-physical" "passed" \
+            "$divider_before; $divider_after; target-y=$drag_y" \
+            "A real X11 pointer drag moved the rendered split divider and changed the captured worksheet surface." \
+            "$artifacts"
+    else
+        record "split-pane-divider-drag-physical" "failed" \
+            "$divider_before; $divider_after; $postcondition" \
+            "The physical divider drag did not produce an observable rendered postcondition." \
+            "$artifacts"
+    fi
+    if $wheel_passed; then
+        record "split-pane-active-pane-wheel-physical" "passed" \
+            "$wheel_before; $wheel_after; split-pane-wheel-before-crop.png; split-pane-wheel-after-crop.png; $postcondition" \
+            "A real X11 Shift+wheel event over the top-right quadrant changed the shared rendered column band." \
+            "$artifacts;split-pane-wheel-before-crop.png;split-pane-wheel-after-crop.png"
+    else
+        record "split-pane-active-pane-wheel-physical" "failed" \
+            "$wheel_before; $wheel_after; $postcondition" \
+            "The physical TopRight Shift+wheel route did not prove shared column-band movement." \
+            "$artifacts"
+    fi
+    if $bottom_wheel_passed; then
+        record "split-pane-bottom-left-wheel-physical" "passed" \
+            "$bottom_wheel_before; $bottom_wheel_after; split-pane-bottom-left-wheel-before-crop.png; split-pane-bottom-left-wheel-after-crop.png; $postcondition" \
+            "A real X11 vertical wheel event over the bottom-left quadrant changed the shared rendered row band." \
+            "$artifacts;split-pane-bottom-left-wheel-before-crop.png;split-pane-bottom-left-wheel-after-crop.png"
+    else
+        record "split-pane-bottom-left-wheel-physical" "failed" \
+            "$bottom_wheel_before; $bottom_wheel_after; $postcondition" \
+            "The physical BottomLeft vertical wheel route did not prove shared row-band movement." \
+            "$artifacts"
+    fi
+    if $scrollbar_passed; then
+        record "split-pane-mini-scrollbar-physical" "passed" \
+            "$scrollbar_before; $scrollbar_after; split-pane-scrollbar-before-crop.png; split-pane-scrollbar-after-crop.png; $postcondition" \
+            "A real X11 track click on the top-right mini-scrollbar changed the rendered split-pane content." \
+            "$artifacts;split-pane-scrollbar-before-crop.png;split-pane-scrollbar-after-crop.png"
+    else
+        record "split-pane-mini-scrollbar-physical" "failed" \
+            "$scrollbar_before; $scrollbar_after; $postcondition" \
+            "The mini-scrollbar interaction did not produce an observable postcondition." \
+            "$artifacts"
+    fi
+    if $split_open; then
+        enter_view_keytip
+        xdotool_mousemove_sync "$split_button_x" "$split_button_y"
+        xdotool click 1
+    fi
+    send_key Escape || true
+}
+
 outline_toggle_visible() {
     local screenshot="$1" center_x="$2" center_y="$3" left top metrics white_score border_score
     left=$((center_x - 7))
@@ -4262,6 +4463,19 @@ if [[ "$probe_selector" == "grid-drag" ]]; then
     exit 0
 fi
 
+if [[ "$probe_selector" == "split-pane-pointer" ]]; then
+    # Focused Wave104 lane for divider drag, active-pane wheel ownership, and mini-scrollbar input.
+    probe_split_pane_pointer
+    if (( mousemove_timeout_count > 0 )); then
+        record "x11-bounded-mousemove-timeout" "failed" "x11-input-results.json; timeout-count=$mousemove_timeout_count" "A synchronous X11 pointer move reached the ${mousemove_timeout_seconds}s bound during the focused split-pane pointer probe."
+    fi
+    write_manifest
+    if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
+        exit 1
+    fi
+    exit 0
+fi
+
 if [[ "$probe_selector" == "outline-group" ]]; then
     # Focused iteration mode for physical row and column grouping plus visible outline controls.
     probe_outline_group_physical
@@ -4622,6 +4836,7 @@ probe_worksheet_context_clear
 probe_clipboard_roundtrips
 probe_sheet_tabs
 probe_window_management
+probe_split_pane_pointer
 probe_outline_group_physical
 probe_outline_column_group_physical
 probe_outline_nested_rows_physical

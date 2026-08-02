@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.GridInteraction;
 using FreeX.Core.Model;
 using System.Windows;
 
@@ -10,69 +11,25 @@ public static class SplitPaneViewportChrome
         double actualWidth,
         double actualHeight)
     {
-        if (viewport.SplitPanes is not { } splitPanes)
-            return new SplitPaneScrollbarChrome(null, null);
-
-        var dividerLayout = GridView.CalculateSplitDividerLayout(viewport);
-        SplitPaneScrollbar? horizontalTopRight = null;
-        SplitPaneScrollbar? verticalBottomLeft = null;
-        var topRightColumns = splitPanes.TopRightColumns ?? viewport.ColMetrics;
-        var bottomLeftRows = splitPanes.BottomLeftRows ?? viewport.RowMetrics;
-
-        if (dividerLayout.HorizontalY is { } horizontalY &&
-            dividerLayout.VerticalX is { } verticalX &&
-            topRightColumns.Count > 0 &&
-            actualWidth > verticalX)
-        {
-            var track = new Rect(
-                verticalX,
-                Math.Max(GridView.ColHeaderHeight, horizontalY - SplitPaneScrollbarLayoutPlanner.Thickness),
-                Math.Max(0, actualWidth - verticalX),
-                SplitPaneScrollbarLayoutPlanner.Thickness);
-            var visibleSpan = Math.Max(1, topRightColumns.Count);
-            var maxStartIndex = Math.Max(1, CellAddress.MaxCol - (uint)visibleSpan + 1);
-            horizontalTopRight = new SplitPaneScrollbar(
-                SplitPaneScrollbarOrientation.Horizontal,
-                SplitPaneRegion.TopRight,
-                track,
-                SplitPaneScrollbarLayoutPlanner.CalculateThumb(
-                    SplitPaneScrollbarOrientation.Horizontal,
-                    track,
-                    topRightColumns[0].Col,
-                    topRightColumns.Count,
-                    CellAddress.MaxCol),
-                visibleSpan,
-                maxStartIndex);
-        }
-
-        if (dividerLayout.HorizontalY is { } bottomY &&
-            dividerLayout.VerticalX is { } leftX &&
-            bottomLeftRows.Count > 0 &&
-            actualHeight > bottomY)
-        {
-            var track = new Rect(
-                Math.Max(GridView.CalculateRowHeaderWidth(viewport), leftX - SplitPaneScrollbarLayoutPlanner.Thickness),
-                bottomY,
-                SplitPaneScrollbarLayoutPlanner.Thickness,
-                Math.Max(0, actualHeight - bottomY));
-            var visibleSpan = Math.Max(1, bottomLeftRows.Count);
-            var maxStartIndex = Math.Max(1, CellAddress.MaxRow - (uint)visibleSpan + 1);
-            verticalBottomLeft = new SplitPaneScrollbar(
-                SplitPaneScrollbarOrientation.Vertical,
-                SplitPaneRegion.BottomLeft,
-                track,
-                SplitPaneScrollbarLayoutPlanner.CalculateThumb(
-                    SplitPaneScrollbarOrientation.Vertical,
-                    track,
-                    bottomLeftRows[0].Row,
-                    bottomLeftRows.Count,
-                    CellAddress.MaxRow),
-                visibleSpan,
-                maxStartIndex);
-        }
-
-        return new SplitPaneScrollbarChrome(horizontalTopRight, verticalBottomLeft);
+        var shared = SplitPanePointerPlanner.CalculateScrollbarChrome(
+            viewport,
+            actualWidth,
+            actualHeight,
+            GridView.CalculateRowHeaderWidth(viewport),
+            GridView.ColHeaderHeight);
+        return new SplitPaneScrollbarChrome(ToWpf(shared.HorizontalTopRight), ToWpf(shared.VerticalBottomLeft));
     }
+
+    private static SplitPaneScrollbar? ToWpf(SplitPanePointerScrollbar? scrollbar) =>
+        scrollbar is { } value
+            ? new SplitPaneScrollbar(
+                (SplitPaneScrollbarOrientation)value.Orientation,
+                (SplitPaneRegion)value.Region,
+                new Rect(value.Track.Left, value.Track.Top, value.Track.Width, value.Track.Height),
+                new Rect(value.Thumb.Left, value.Thumb.Top, value.Thumb.Width, value.Thumb.Height),
+                value.VisibleSpan,
+                value.MaxStartIndex)
+            : null;
 
     public static SplitPaneScrollbarHit? HitTestScrollbar(SplitPaneScrollbarChrome chrome, Point pos)
     {

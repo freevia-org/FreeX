@@ -85,19 +85,18 @@ public sealed partial class GridViewRenderPerformanceTests
     }
 
     [Fact]
-    public void SplitPaneViewportChrome_ReusesNormalizedScrollbarSpans()
+    public void SplitPaneViewportChrome_ReusesSharedScrollbarPlanner()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("SplitPaneViewportChrome.cs");
         var calculateChrome = source[
             source.IndexOf("public static SplitPaneScrollbarChrome CalculateScrollbarChrome", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneScrollbarHit? HitTestScrollbar", StringComparison.Ordinal)];
 
-        calculateChrome.Should().Contain("var visibleSpan = Math.Max(1, topRightColumns.Count);");
-        calculateChrome.Should().Contain("var visibleSpan = Math.Max(1, bottomLeftRows.Count);");
-        calculateChrome.Should().Contain("var maxStartIndex = Math.Max(1, CellAddress.MaxCol - (uint)visibleSpan + 1);");
-        calculateChrome.Should().Contain("var maxStartIndex = Math.Max(1, CellAddress.MaxRow - (uint)visibleSpan + 1);");
-        calculateChrome.Should().NotContain("(uint)Math.Max(1, topRightColumns.Count)");
-        calculateChrome.Should().NotContain("(uint)Math.Max(1, bottomLeftRows.Count)");
+        calculateChrome.Should().Contain("SplitPanePointerPlanner.CalculateScrollbarChrome(");
+        calculateChrome.Should().Contain("GridView.CalculateRowHeaderWidth(viewport)");
+        calculateChrome.Should().Contain("GridView.ColHeaderHeight");
+        calculateChrome.Should().NotContain("var visibleSpan =");
+        calculateChrome.Should().NotContain("var maxStartIndex =");
     }
 
     [Fact]

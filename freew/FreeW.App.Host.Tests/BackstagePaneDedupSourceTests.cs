@@ -47,6 +47,10 @@ public sealed class BackstagePaneDedupSourceTests
             source.Should().Contain("UseNewPane = true");
             source.Should().Contain("Close = backstage.FrameCommand(_actions.Close)");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildHomePane(");
+            source.Should().Contain("var metrics = surface.VisualMetrics");
+            source.Should().Contain("HomeActionRow(action, metrics)");
+            source.Should().Contain("AutomationProperties.NameProperty");
+            source.Should().Contain("return Kit.Scroll(panel)");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildOpenPane(");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildSaveAsPane(");
             source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
