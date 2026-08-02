@@ -43,6 +43,7 @@ internal static class XlsxCustomViewMapper
             var printOptions = customSheetView.Element(worksheetNs + "printOptions");
             var autoFilter = XlsxWorksheetAutoFilterXmlMapper.Read(customSheetView.Element(worksheetNs + "autoFilter"));
             var paperSizeCode = ParsePaperSizeCode(pageSetup);
+            var fitToPage = XlsxXmlAttributeReader.ReadNullableBoolAttribute(customSheetView, "fitToPage");
 
             customViews.Add(new XlsxWorksheetCustomViewState(
                 id,
@@ -71,7 +72,7 @@ internal static class XlsxCustomViewMapper
                     // flag) and AutoFilter/print settings also have schema support (nested
                     // autoFilter/pageMargins/pageSetup/printOptions elements), so all of those
                     // round-trip below.
-                    FitToPage: XlsxXmlAttributeReader.ReadNullableBoolAttribute(customSheetView, "fitToPage"),
+                    FitToPage: fitToPage,
                     AutoFilter: autoFilter,
                     PageOrientation: ParseOrientation(pageSetup?.Attribute("orientation")?.Value),
                     PaperSize: paperSizeCode is { } code && PaperSizeCodes.TryGetEnum(code, out var paperSize) ? paperSize : null,
@@ -81,7 +82,7 @@ internal static class XlsxCustomViewMapper
                     FooterMargin: ParseNullableDouble(pageMargins, "footer"),
                     PrintGridlines: XlsxXmlAttributeReader.ReadNullableBoolAttribute(printOptions, "gridLines"),
                     PrintHeadings: XlsxXmlAttributeReader.ReadNullableBoolAttribute(printOptions, "headings"),
-                    ScaleToFit: ParseScaleToFit(pageSetup))));
+                    ScaleToFit: ParseScaleToFit(pageSetup, fitToPage))));
         }
 
         return customViews;
@@ -150,7 +151,22 @@ internal static class XlsxCustomViewMapper
             WorksheetPageMargins.Narrow);
     }
 
-    private static WorksheetScaleToFit? ParseScaleToFit(XElement? pageSetup)
+    // R115: CT_CustomSheetView's nested <pageSetup> can carry scale/fitToWidth/fitToHeight
+    // attributes together even though only one mode is ever actually active -- Excel is known to
+    // leave the inactive mode's attribute(s) behind as stale leftovers (the same "sibling attribute
+    // goes stale" quirk this codebase already documents for firstPageNumber/useFirstPageNumber; see
+    // XlsxFileAdapter.cs). The sibling customSheetView/@fitToPage attribute (read into `fitToPage`
+    // above) is the SOLE discriminator for which mode is actually live, mirroring exactly how
+    // XlsxFileAdapter.cs resolves the identical ambiguity for the main worksheet via ClosedXML's
+    // PagesWide/PagesTall (which itself defers to sheetPr/pageSetUpPr/@fitToPage). Resolving the
+    // ambiguity here -- rather than passing all three raw attributes through unconditionally -- keeps
+    // the resulting WorksheetScaleToFit from ever encoding "both modes active" the way the main
+    // sheet's ScaleToFit never does, so every downstream consumer (ToPageSetupXml below,
+    // XlsxWorksheetPageSetupMetadataWriter.DetermineEffectiveFitToPage, and
+    // CustomViewCommands.ApplyState copying this straight onto Sheet.ScaleToFit when a view is
+    // shown) sees an already-unambiguous value instead of having to re-derive the same priority
+    // decision -- and possibly disagreeing with each other, as they did before this fix.
+    private static WorksheetScaleToFit? ParseScaleToFit(XElement? pageSetup, bool? fitToPage)
     {
         if (pageSetup is null)
             return null;
@@ -161,9 +177,11 @@ internal static class XlsxCustomViewMapper
         if (scale is null && fitToWidth is null && fitToHeight is null)
             return null;
 
-        return XlsxWorksheetValueSanitizer.ValidScaleToFitOrDefault(
-            new WorksheetScaleToFit(scale, fitToWidth, fitToHeight),
-            WorksheetScaleToFit.Default);
+        var resolved = fitToPage is true
+            ? new WorksheetScaleToFit(null, fitToWidth, fitToHeight)
+            : new WorksheetScaleToFit(scale, null, null);
+
+        return XlsxWorksheetValueSanitizer.ValidScaleToFitOrDefault(resolved, WorksheetScaleToFit.Default);
     }
 
     public static void Save(Stream packageStream, Workbook workbook)
@@ -306,7 +324,7 @@ internal static class XlsxCustomViewMapper
             state.ShowRulers ? null : new XAttribute("showRuler", "0"),
             state.ZoomPercent == 100 ? null : new XAttribute("scale", XlsxWorksheetValueSanitizer.ValidZoomPercentOrDefault(state.ZoomPercent)),
             state.ShowFormulas ? new XAttribute("showFormulas", "1") : null,
-            state.FitToPage is true ? new XAttribute("fitToPage", "1") : null,
+            DetermineEffectiveFitToPage(state) is true ? new XAttribute("fitToPage", "1") : null,
             // ShowAutoFilter ("Show AutoFilter Drop Down Controls") is distinct from the <autoFilter>
             // child element's own ref/criteria: without it, Excel restores the view without the
             // filter dropdown arrows even though the underlying autoFilter element round-trips.
@@ -373,6 +391,35 @@ internal static class XlsxCustomViewMapper
             customSheetView.Add(autoFilterXml);
 
         return customSheetView;
+    }
+
+    /// <summary>
+    /// Resolves the customSheetView/@fitToPage attribute from the captured
+    /// <see cref="WorksheetCustomViewState.ScaleToFit"/> rather than trusting the raw
+    /// <see cref="WorksheetCustomViewState.FitToPage"/> field, mirroring
+    /// XlsxWorksheetPageSetupMetadataWriter.DetermineEffectiveFitToPage's identical treatment of
+    /// Sheet.FitToPage for the main worksheet. WorksheetCustomViewState.FitToPage can be populated
+    /// two ways: (1) round-tripped from a loaded file's customSheetView/@fitToPage, in which case it
+    /// was the very attribute ParseScaleToFit above already used to resolve ScaleToFit -- so the two
+    /// already agree; or (2) copied from Sheet.FitToPage when the user does View &gt; Custom Views &gt;
+    /// Add (see CustomViewCommands/CustomViewStatePlanner.CaptureSheetState) -- and Sheet.FitToPage is
+    /// documented (see XlsxWorksheetPageSetupMetadataWriter) as a load-time flag the Page Setup
+    /// dialog's scale/fit-to-page toggle never updates, so it can be stale relative to the sheet's
+    /// actual current Sheet.ScaleToFit. Deriving from ScaleToFit's own populated field first -- and
+    /// only falling back to the raw flag when ScaleToFit itself was never captured -- keeps this
+    /// element's fitToPage attribute from ever disagreeing with its own sibling &lt;pageSetup&gt;
+    /// (written by ToPageSetupXml from that same ScaleToFit) the way it could before this fix.
+    /// </summary>
+    private static bool? DetermineEffectiveFitToPage(WorksheetCustomViewState state)
+    {
+        var scaleToFit = state.ScaleToFit;
+        if (scaleToFit is null)
+            return state.FitToPage;
+        if (scaleToFit.Value.ScalePercent is not null)
+            return false;
+        if (scaleToFit.Value.FitToPagesWide is not null || scaleToFit.Value.FitToPagesTall is not null)
+            return true;
+        return state.FitToPage;
     }
 
     private static XElement? ToPageMarginsXml(XNamespace workbookNs, WorksheetCustomViewState state)

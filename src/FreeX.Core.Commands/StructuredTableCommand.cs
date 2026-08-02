@@ -37,6 +37,14 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         if (sheet.StructuredTables.Any(t => t.Range.Overlaps(_range)))
             return new CommandOutcome(false, "A table cannot overlap another table.");
 
+        // Excel requires a table to have exactly one discrete cell per row/column intersection, so
+        // a merged region inside the candidate range is rejected outright -- mirroring
+        // MergeCellsCommand.Apply's symmetric "Cannot merge cells that overlap a table" guard for
+        // the same tables-and-merges-don't-mix rule, just enforced from the other direction (merge
+        // created first, table attempted second).
+        if (sheet.MergedRegions.Any(region => region.Overlaps(_range)))
+            return new CommandOutcome(false, "A table cannot overlap a merged cell.");
+
         // Excel forbids creating a table over a live dynamic-array spill range — mirrors
         // CellMergePlanner.HasLiveSpillTarget's merge-over-spill guard for the same reason: a
         // table would silently absorb the spilled cells as static table data, and the next

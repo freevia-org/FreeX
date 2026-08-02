@@ -634,12 +634,28 @@ public partial class GridView
     {
         if (Viewport == null) return;
 
+        // R115-manual-break-title-exclusion: a manual break at/before the first body row (or column)
+        // after the print-title range has zero effect on the real printed/exported page layout --
+        // PrintLayoutPlanner.BuildManualBreakSet (the same logic every real pagination consumer routes
+        // through: printing, PDF/XPS export, print preview) silently drops it. Skip drawing the
+        // indicator for those so the on-screen line never implies a split print/export won't produce.
+        var effectiveRange = PrintAreas is { Count: > 0 } areas
+            ? areas[0]
+            : PrintArea ?? PagePreviewRange;
+        var isRowHidden = SheetIsRowHiddenPredicate ?? (row => HiddenRows?.Contains(row) == true);
+        var isColHidden = SheetIsColHiddenPredicate ?? (col => HiddenColumns?.Contains(col) == true);
+
         if (RowPageBreaks is { Count: > 0 } rowPageBreaks)
         {
             var rowBreakLookup = GetPageBreakLookup(rowPageBreaks, ref _rowPageBreakLookupCache);
+            var rowStart = effectiveRange?.Start.Row ?? 1;
+            var rowEnd = effectiveRange?.End.Row ?? CellAddress.MaxRow;
             foreach (var metric in Viewport.RowMetrics)
             {
                 if (!rowBreakLookup.Contains(metric.Row))
+                    continue;
+                if (!PrintLayoutPlanner.IsManualBreakEffective(
+                        metric.Row, rowStart, rowEnd, PrintTitleRows, CellAddress.MaxRow, isRowHidden))
                     continue;
 
                 var y = metric.TopOffset + EffectiveColHeaderHeight;
@@ -650,9 +666,14 @@ public partial class GridView
         if (ColumnPageBreaks is { Count: > 0 } columnPageBreaks)
         {
             var columnBreakLookup = GetPageBreakLookup(columnPageBreaks, ref _columnPageBreakLookupCache);
+            var colStart = effectiveRange?.Start.Col ?? 1;
+            var colEnd = effectiveRange?.End.Col ?? CellAddress.MaxCol;
             foreach (var metric in Viewport.ColMetrics)
             {
                 if (!columnBreakLookup.Contains(metric.Col))
+                    continue;
+                if (!PrintLayoutPlanner.IsManualBreakEffective(
+                        metric.Col, colStart, colEnd, PrintTitleColumns, CellAddress.MaxCol, isColHidden))
                     continue;
 
                 var x = metric.LeftOffset + ActualRowHeaderWidth;

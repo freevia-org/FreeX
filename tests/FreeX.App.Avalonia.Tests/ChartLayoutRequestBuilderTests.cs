@@ -159,6 +159,129 @@ public sealed class ChartLayoutRequestBuilderTests
         request.Series[0].XValues!.Should().HaveCount(3);
     }
 
+    // R115-presentation-chart-bubble-1: Bubble's real Excel data layout is a shared X column
+    // followed by one (Y, Size) column pair per series -- column 1 = X, columns 2/3 = series 1's
+    // (Y, Size), columns 4/5 = series 2's (Y, Size), etc. -- regardless of FirstColIsCategories.
+    // Grid used by the Bubble tests:
+    //   col 1 (shared X): 1, 2, 3
+    //   col 2 (Series 1 Y):    header "Y1", 10, 20, 30
+    //   col 3 (Series 1 Size): header "S1", 100, 200, 300
+    //   col 4 (Series 2 Y):    header "Y2", 40, 50, 60
+    //   col 5 (Series 2 Size): header "S2", 400, 500, 600
+    private static ChartLayoutRequestBuilder.ChartCellAccessor BuildBubbleAccessor()
+    {
+        var cells = new Dictionary<(uint, uint), (double? Value, string Text)>
+        {
+            [(1, 1)] = (null, "X"),
+            [(2, 1)] = (1, "1"),
+            [(3, 1)] = (2, "2"),
+            [(4, 1)] = (3, "3"),
+            [(1, 2)] = (null, "Y1"),
+            [(2, 2)] = (10, "10"),
+            [(3, 2)] = (20, "20"),
+            [(4, 2)] = (30, "30"),
+            [(1, 3)] = (null, "S1"),
+            [(2, 3)] = (100, "100"),
+            [(3, 3)] = (200, "200"),
+            [(4, 3)] = (300, "300"),
+            [(1, 4)] = (null, "Y2"),
+            [(2, 4)] = (40, "40"),
+            [(3, 4)] = (50, "50"),
+            [(4, 4)] = (60, "60"),
+            [(1, 5)] = (null, "S2"),
+            [(2, 5)] = (400, "400"),
+            [(3, 5)] = (500, "500"),
+            [(4, 5)] = (600, "600"),
+        };
+
+        return (uint row, uint col, out double value, out string text) =>
+        {
+            if (cells.TryGetValue((row, col), out var entry))
+            {
+                text = entry.Text;
+                if (entry.Value is { } v)
+                {
+                    value = v;
+                    return true;
+                }
+            }
+            else
+            {
+                text = "";
+            }
+
+            value = 0;
+            return false;
+        };
+    }
+
+    private static ChartModel BubbleChart(bool firstColIsCategories = false) => new()
+    {
+        Type = ChartType.Bubble,
+        FirstRowIsHeader = true,
+        FirstColIsCategories = firstColIsCategories,
+        DataRange = new GridRange(
+            new CellAddress(default, 1, 1),
+            new CellAddress(default, 4, 5)),
+    };
+
+    [Fact]
+    public void R115_TryBuild_Bubble_PairsSharedXWithEachYSizeColumn()
+    {
+        var request = ChartLayoutRequestBuilder.TryBuild(BubbleChart(), Plot, BuildBubbleAccessor(), new FakeTextMeasurer());
+
+        request.Should().NotBeNull();
+        // Two (Y, Size) column pairs after the shared X column => exactly two series, not four
+        // (or five) flat single-value series.
+        request!.Series.Should().HaveCount(2);
+
+        var series1 = request.Series[0];
+        series1.Name.Should().Be("Y1");
+        series1.Values.Should().Equal(10d, 20d, 30d);
+        series1.XValues.Should().NotBeNull();
+        series1.XValues!.Should().Equal(1d, 2d, 3d);
+        series1.SizeValues.Should().NotBeNull();
+        series1.SizeValues!.Should().Equal(100d, 200d, 300d);
+
+        var series2 = request.Series[1];
+        series2.Name.Should().Be("Y2");
+        series2.Values.Should().Equal(40d, 50d, 60d);
+        series2.XValues.Should().NotBeNull();
+        series2.XValues!.Should().Equal(1d, 2d, 3d);
+        series2.SizeValues.Should().NotBeNull();
+        series2.SizeValues!.Should().Equal(400d, 500d, 600d);
+    }
+
+    [Fact]
+    public void R115_TryBuild_Bubble_IgnoresFirstColIsCategoriesForSharedXColumn()
+    {
+        // Bubble always treats DataRange's first column as the shared X column, even when
+        // FirstColIsCategories is set (unlike every other chart type extracted via ExtractSeries).
+        var request = ChartLayoutRequestBuilder.TryBuild(
+            BubbleChart(firstColIsCategories: true), Plot, BuildBubbleAccessor(), new FakeTextMeasurer());
+
+        request.Should().NotBeNull();
+        request!.Series.Should().HaveCount(2);
+        request.Series[0].XValues!.Should().Equal(1d, 2d, 3d);
+        request.Series[1].XValues!.Should().Equal(1d, 2d, 3d);
+    }
+
+    [Fact]
+    public void R115_TryBuild_Bubble_NoRegression_ColumnChartStillUsesFlatSeriesExtraction()
+    {
+        // Sibling-behavior guard: the ordinary (non-Scatter, non-Bubble) family must still go
+        // through the plain flat-column ExtractSeries path with no XValues/SizeValues -- adding the
+        // Bubble branch must not perturb Column/Line/Area/etc.
+        var request = ChartLayoutRequestBuilder.TryBuild(ColumnChart(), Plot, BuildAccessor(), new FakeTextMeasurer());
+
+        request.Should().NotBeNull();
+        request!.Series.Should().HaveCount(2);
+        request.Series[0].XValues.Should().BeNull();
+        request.Series[0].SizeValues.Should().BeNull();
+        request.Series[1].XValues.Should().BeNull();
+        request.Series[1].SizeValues.Should().BeNull();
+    }
+
     [Fact]
     public void TryBuild_ReturnsNullForUnsupportedChartType()
     {

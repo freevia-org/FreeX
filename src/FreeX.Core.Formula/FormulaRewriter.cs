@@ -16,7 +16,24 @@ public sealed record DeleteRowsOp(string SheetName, uint StartRow,  uint Count, 
 public sealed record InsertColsOp(string SheetName, uint BeforeCol, uint Count) : RewriteOperation;
 // DeletedTableNames: same as DeleteRowsOp.DeletedTableNames above, for a column delete that fully
 // consumes a table's range.
-public sealed record DeleteColsOp(string SheetName, uint StartCol,  uint Count, IReadOnlyList<string>? DeletedTableNames = null) : RewriteOperation;
+// DeletedColumnNamesByTable (R115-formula-structuredref-coldelete-survivingtable-ref): a column
+// delete that a table SURVIVES (only some of its columns fall inside the deleted band) still
+// removes those columns' names from the table -- see
+// RowColumnShiftHelpers.ReconcileStructuredTableColumns, which rebuilds the table's own Columns
+// list to the post-delete width. A Table[ColumnName]/Table[@ColumnName] structured reference
+// elsewhere in the workbook naming one of those now-gone columns is exactly as dead as one naming
+// a fully-deleted table (see DeletedTableNames above and MatchesDeletedTable below), and Excel
+// rewrites it to Table[#REF!] (-> #REF!) the instant the column disappears rather than leaving the
+// stale name to resolve to #NAME? at evaluation time. Keyed by table name (OrdinalIgnoreCase, to
+// match StructuredTableNameMatches) -> the list of column names this op removed from that table.
+// Optional/defaulted so existing callers that only rewrite cell/range refs keep compiling
+// unchanged.
+public sealed record DeleteColsOp(
+    string SheetName,
+    uint StartCol,
+    uint Count,
+    IReadOnlyList<string>? DeletedTableNames = null,
+    IReadOnlyDictionary<string, IReadOnlyList<string>>? DeletedColumnNamesByTable = null) : RewriteOperation;
 public sealed record PasteOffsetOp(int RowDelta, int ColDelta)                  : RewriteOperation;
 // Transpose paste: a relative reference's (row,col) offset from the COPIED block's own anchor
 // (SourceAnchorRow/Col) is axis-swapped and re-anchored at the DESTINATION block's anchor
@@ -210,6 +227,12 @@ public static class FormulaRewriter
             return new ErrorNode(ErrorValue.Ref);
         }
 
+        if (!string.IsNullOrEmpty(sr.TableName) && ReferencesDeletedColumn(sr.TableName, sr.ColumnName, op))
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
         if (op is DeleteSheetOp or DeleteRowsOp or DeleteColsOp)
             return sr;
 
@@ -228,6 +251,12 @@ public static class FormulaRewriter
         StructuredCurrentRowReferenceNode scr, RewriteOperation op, ref bool changed)
     {
         if (!string.IsNullOrEmpty(scr.TableName) && MatchesDeletedTable(scr.TableName, op))
+        {
+            changed = true;
+            return new ErrorNode(ErrorValue.Ref);
+        }
+
+        if (!string.IsNullOrEmpty(scr.TableName) && ReferencesDeletedColumn(scr.TableName, scr.ColumnName, op))
         {
             changed = true;
             return new ErrorNode(ErrorValue.Ref);
@@ -271,6 +300,50 @@ public static class FormulaRewriter
         }
 
         return false;
+    }
+
+    // R115-formula-structuredref-coldelete-survivingtable-ref: a DeleteColsOp that a table SURVIVES
+    // (only some of its columns fell inside the deleted band) still removes those columns' names --
+    // see DeleteColsOp.DeletedColumnNamesByTable above. A structured reference naming one of those
+    // now-gone columns is exactly as dead as one naming a fully-deleted table (MatchesDeletedTable
+    // above), so it collapses to #REF! the same way, instead of silently keeping the stale column
+    // name to fail as #NAME? at evaluation time (StructuredReferenceResolver can no longer find it).
+    //
+    // Only a plain, single-column selector is recognized here -- one optionally wrapped in a single
+    // matching pair of brackets, e.g. "Amount" (Table1[Amount]), "Amount" from a "@Amount" current-row
+    // shorthand, or "[Sales Amount]" (Table1[@[Sales Amount]] / Table1[[Sales Amount]]) -- mirroring
+    // StructuredReferenceResolver.UnwrapCurrentRowSingleColumnBracket. A selector containing '#'
+    // (section keywords like #Data/#Headers/#Totals/#This Row), ':' (a column range), or ',' (a
+    // combined selector such as "[#Headers],[Amount]") is left untouched: those richer shapes need
+    // resolver-level parsing to know which column(s) they actually name, and misclassifying one as a
+    // dead plain column name would wrongly convert a still-valid selector to #REF!.
+    private static bool ReferencesDeletedColumn(string tableName, string columnSelector, RewriteOperation op)
+    {
+        if (op is not DeleteColsOp { DeletedColumnNamesByTable: { } deletedColumnNamesByTable })
+            return false;
+
+        if (!deletedColumnNamesByTable.TryGetValue(tableName, out var deletedNames))
+            return false;
+
+        if (columnSelector.AsSpan().IndexOfAny("#:,") >= 0)
+            return false;
+
+        var normalized = UnwrapSingleColumnBracket(columnSelector);
+        foreach (var deletedName in deletedNames)
+        {
+            if (string.Equals(deletedName, normalized, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static string UnwrapSingleColumnBracket(string columnName)
+    {
+        var trimmed = columnName.Trim();
+        return trimmed.Length >= 2 && trimmed[0] == '[' && trimmed.IndexOf(']') == trimmed.Length - 1
+            ? trimmed[1..^1]
+            : trimmed;
     }
 
     private static FunctionCallNode RewriteFunctionArgs(

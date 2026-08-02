@@ -95,6 +95,32 @@ public static class PrintLayoutPlanner
             static (titleColumns, bodyPage) => new PrintPageColumnPlan(titleColumns, bodyPage));
     }
 
+    /// <summary>
+    /// Reports whether a manual row/column break registered at <paramref name="manualBreak"/> would have
+    /// any effect on the real printed/exported page layout -- i.e. whether <see cref="BuildManualBreakSet"/>
+    /// (used by <see cref="BuildAxisPlans{TPlan}"/>, and therefore by every real pagination consumer:
+    /// printing, PDF/XPS export, and print preview) would keep it. Excel pins the print-title rows/columns
+    /// to the top/left of every printed page and never lets a manual break split them from themselves, so a
+    /// break registered at or before the first body row/column after the title range is silently dropped --
+    /// this mirrors that exclusion exactly so a page-break UI indicator (drawn in both the WPF and Avalonia
+    /// shells) never shows a break line print/export will ignore. See R115-manual-break-title-exclusion.
+    /// </summary>
+    public static bool IsManualBreakEffective(
+        uint manualBreak,
+        uint startValue,
+        uint endValue,
+        WorksheetRepeatRange? repeatRange,
+        uint maxIndex,
+        Func<uint, bool>? isHidden)
+    {
+        var titleValues = BuildTitleIndexes(repeatRange, maxIndex, isHidden).ToHashSet();
+        var bodyValues = BuildBodyValues(startValue, endValue, titleValues, isHidden);
+        if (bodyValues.Count == 0)
+            return false;
+
+        return manualBreak > bodyValues[0] && manualBreak <= bodyValues[^1];
+    }
+
     public static PrintGridMeasurement MeasurePrintableGrid(
         double printableWidth,
         double printableHeight,

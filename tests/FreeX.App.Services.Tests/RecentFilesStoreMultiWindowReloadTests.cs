@@ -44,25 +44,32 @@ public sealed class RecentFilesStoreMultiWindowReloadTests
     }
 
     [Fact]
-    public void StaleCachedInstance_WithoutReload_LosesSiblingWindowsEntry()
+    public void StaleCachedInstance_WithoutExplicitReload_NoLongerLosesSiblingWindowsEntry()
     {
-        // Demonstrates the bug this fix prevents: mutating through a stale, un-reloaded instance
-        // (the old MainWindow.Backstage.cs behavior of writing through the constructor-time
-        // _recentFiles field) clobbers a sibling window's later write.
+        // Historically this demonstrated the bug that made the MainWindow.Backstage.cs-level
+        // ReloadRecentFilesStore() fix (H58) necessary: mutating through a stale, un-reloaded
+        // instance clobbered a sibling window's later write, because the mutator rewrote the whole
+        // file from its own stale in-memory snapshot. RecentFilesStore's mutators now reload from
+        // disk immediately before applying their change (see ReloadEntriesLocked/R115 cross-process
+        // lock fix), so even a caller that never explicitly reloads no longer loses a sibling's
+        // write — this is now a belt-and-suspenders guarantee at the store level, not just at the
+        // MainWindow call-site level.
         using var temp = new TestTemporaryDirectory();
         var path = Path.Combine(temp.Path, "recent.json");
 
         var windowA = RecentFilesStore.Load(path);
-        var windowB = RecentFilesStore.Load(path); // Loaded before Z exists — this is the stale cache.
+        var windowB = RecentFilesStore.Load(path); // Loaded before Z exists — the "stale" cache.
 
         windowA.AddOrUpdate(@"C:\Docs\Z.xlsx");
 
-        // Window B mutates through its stale, never-reloaded instance (the bug).
+        // Window B mutates through its stale, never-reloaded instance. The store itself now
+        // reloads from disk before applying the mutation, so Z survives.
         windowB.AddOrUpdate(@"C:\Docs\W.xlsx");
 
         var final = RecentFilesStore.Load(path);
-        final.Entries.Select(e => e.Path).Should().NotContain(@"C:\Docs\Z.xlsx",
-            "the stale-cache write path silently clobbers a sibling window's earlier entry");
+        final.Entries.Select(e => e.Path).Should().Contain(@"C:\Docs\Z.xlsx",
+            "the store reloads from disk immediately before every mutation, so a sibling's earlier write survives");
+        final.Entries.Select(e => e.Path).Should().Contain(@"C:\Docs\W.xlsx");
     }
 
     [Fact]

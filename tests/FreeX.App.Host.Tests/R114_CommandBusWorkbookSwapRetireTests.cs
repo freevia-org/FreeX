@@ -45,6 +45,7 @@ public sealed class R114_CommandBusWorkbookSwapRetireTests
         public void SetScrollOffset(WorkbookScrollOffset offset) { }
         public void TileToWorkArea(Rect bounds) { }
         public void ApplyFormulaBarVisibility(bool visible) { }
+        public void ApplySaveInProgress(bool inProgress) { }
     }
 
     private static MainWindow CreateWindow(

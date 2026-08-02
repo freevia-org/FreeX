@@ -907,6 +907,43 @@ public partial class MainWindow
         StatusInteractiveControls.IsEnabled = true;
     }
 
+    /// <summary>
+    /// Acquires or releases one hold on this window's save-input gate, applying
+    /// <see cref="SetFileOperationInputEnabled"/> only on the 0→1 / 1→0 transition. Both this
+    /// window's own save (<see cref="SaveWorkbookToTargetAsync"/>) and a "New Window" sibling's
+    /// save (via <see cref="ApplySaveInProgress"/>, broadcast through
+    /// <see cref="WorkbookWindowRegistry.BroadcastSaveInProgress"/>) acquire a hold here, so if
+    /// both happen to overlap on the same shared document, the earlier save finishing first does
+    /// not prematurely re-enable input while the other save is still serializing the live
+    /// workbook (R115-app-host-save-race).
+    /// </summary>
+    private void AdjustSaveGate(bool acquire)
+    {
+        if (acquire)
+        {
+            _saveGateHoldCount++;
+            if (_saveGateHoldCount == 1)
+                SetFileOperationInputEnabled(false);
+            return;
+        }
+
+        if (_saveGateHoldCount > 0)
+            _saveGateHoldCount--;
+        if (_saveGateHoldCount == 0)
+            SetFileOperationInputEnabled(true);
+    }
+
+    /// <summary>
+    /// <see cref="IWorkbookWindow.ApplySaveInProgress"/>: applies (or releases) the save-input
+    /// gate that a sibling window sharing this document is broadcasting for the duration of its
+    /// own full-workbook save. Save serializes the LIVE Workbook instance on a background thread
+    /// (see <see cref="SaveWorkbookToTargetAsync"/>), and a "New Window" sibling shares that exact
+    /// Workbook/CommandBus instance (<see cref="AdoptSharedWorkbook"/>) — without this, a keystroke
+    /// landing in this window while the OTHER window's background serialize enumerates the shared
+    /// Sheet cell dictionaries could tear them structurally mid-enumeration (R115-app-host-save-race).
+    /// </summary>
+    public void ApplySaveInProgress(bool inProgress) => AdjustSaveGate(inProgress);
+
     // Start screen button handlers. The former rail-button forwarders (SsBackBtn_Click, SsNewBtn_Click,
     // SsOpenBtn_Click, SsCloseBtn_Click, SsHomeRibbonBtn_Click, SsShareBtn_Click, SsHomeNavBtn_Click,
     // SsInfoBtn_Click, SsPrintNavBtn_Click) were removed when the rail moved to the shared BackstageFrame —
@@ -1285,7 +1322,15 @@ public partial class MainWindow
             // including a keyboard edit, which a mouse-only overlay would not stop — could tear the
             // snapshot.  Disable the app surface while leaving the status-bar cancel affordance live;
             // the generation check below is belt-and-suspenders.
-            SetFileOperationInputEnabled(false);
+            //
+            // A "New Window" sibling shares this EXACT Workbook/CommandBus instance (see
+            // AdoptSharedWorkbook), so disabling only this window's own surface is not enough: the
+            // sibling would stay fully interactive while this window's background thread enumerates
+            // the shared Sheet cell dictionaries, and a keystroke landing there could tear them
+            // structurally mid-enumeration.  Extend the same input gate to every OTHER window
+            // viewing this document via the registry (R115-app-host-save-race).
+            AdjustSaveGate(acquire: true);
+            _windowRegistry?.BroadcastSaveInProgress(this, inProgress: true);
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowSaveProgress(CreateSaveProgress("preparing", TimeSpan.Zero, 1));
             var progress = new Progress<SaveProgressUpdate>(
@@ -1389,7 +1434,8 @@ public partial class MainWindow
         {
             ClearFileOperationCancellation(operationCancellation);
             _isSavingFile = false;
-            SetFileOperationInputEnabled(true);
+            AdjustSaveGate(acquire: false);
+            _windowRegistry?.BroadcastSaveInProgress(this, inProgress: false);
             HideSaveProgress();
         }
     }

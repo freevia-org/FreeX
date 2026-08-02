@@ -253,6 +253,94 @@ public sealed class WorkbookSaveServiceTests
     }
 
     [Fact]
+    public async Task R115_SaveAsync_TargetMissingWithOrphanedFallbackBackup_RecoversAndDiscardsBackup()
+    {
+        // R115-services-workbooksave-orphaned-fallback-backup: ReplaceExistingFileWithFallback's
+        // vacate-then-place sequence vacates `path` to a hidden `.bak` sibling BEFORE placing the
+        // new content back into `path` (see its own comments). If the process dies in that window
+        // -- power loss, OS crash, forced task-kill -- after the vacate move completes but before
+        // the placement move starts or finishes, `path` is left missing entirely while the
+        // last-known-good content survives only under the hidden, GUID-suffixed backup that
+        // nothing ever scanned for. This test seeds exactly that post-crash disk state (no code
+        // path in this codebase can interrupt itself mid-move to produce it directly, so we place
+        // the same artifact the crash would have left) and exercises the very next SaveAsync call
+        // for the same path, which must self-heal instead of leaving the orphaned backup
+        // forever undiscovered next to a `path` that has simply vanished.
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "saved.fxjson");
+        var orphanedBackupPath = Path.Combine(temp.Path, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.bak");
+        await File.WriteAllTextAsync(orphanedBackupPath, "orphaned original");
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("replacement");
+        });
+
+        await new WorkbookSaveService().SaveAsync(path, adapter, workbook);
+
+        (await File.ReadAllTextAsync(path)).Should().Be("replacement");
+        Directory.GetFiles(temp.Path, "*.bak").Should().BeEmpty(
+            "the orphaned fallback backup must be consumed by the recovery scan on the next save, not left behind forever as undiscoverable clutter");
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task R115_SaveAsync_TargetExistsWithStaleFallbackBackup_DiscardsBackupWithoutTouchingTarget()
+    {
+        // Covers the sibling branch of the same recovery scan: when `path` already holds valid
+        // content (either it was never touched by a fallback save, or an earlier fallback
+        // placement succeeded but the process died before the trailing DeleteFile(backupPath)
+        // cleanup ran), any backup found next to it is stale and must be discarded WITHOUT ever
+        // touching `path` itself -- the scan must not confuse "a backup exists" with "path needs
+        // restoring" when path is already fine.
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "saved.fxjson");
+        await File.WriteAllTextAsync(path, "current content");
+        var staleBackupPath = Path.Combine(temp.Path, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.bak");
+        await File.WriteAllTextAsync(staleBackupPath, "stale backup content");
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("updated content");
+        });
+
+        await new WorkbookSaveService().SaveAsync(path, adapter, workbook);
+
+        (await File.ReadAllTextAsync(path)).Should().Be("updated content");
+        Directory.GetFiles(temp.Path, "*.bak").Should().BeEmpty(
+            "a stale backup sitting next to an already-valid target must be cleaned up, not left as permanent clutter");
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task R115_SaveAsync_NoOrphanedBackupPresent_NormalSaveBehaviorUnchanged()
+    {
+        // No-regression sibling: the ordinary case (no fallback ever ran for this path, so no
+        // backup sits next to it) must save exactly as before -- the new recovery scan must be a
+        // silent no-op here, not alter the write, the move count, or leave any new artifact.
+        using var temp = new TestTemporaryDirectory();
+        var path = Path.Combine(temp.Path, "saved.fxjson");
+        await File.WriteAllTextAsync(path, "original");
+        var workbook = new Workbook("Saved");
+        workbook.AddSheet("Sheet1");
+        var adapter = new TestFileAdapter(save: (_, stream) =>
+        {
+            using var writer = new StreamWriter(stream, leaveOpen: true);
+            writer.Write("replacement");
+        });
+
+        await new WorkbookSaveService().SaveAsync(path, adapter, workbook);
+
+        (await File.ReadAllTextAsync(path)).Should().Be("replacement");
+        Directory.GetFiles(temp.Path, "*.bak").Should().BeEmpty();
+        Directory.GetFiles(temp.Path, "*.tmp").Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task SaveAsync_DoesNotFallbackForOrdinaryFileReplaceFailures()
     {
         using var temp = new TestTemporaryDirectory();
@@ -445,5 +533,10 @@ public sealed class WorkbookSaveServiceTests
             File.Copy(sourcePath, destinationPath, overwrite);
 
         public void DeleteFile(string path) => File.Delete(path);
+
+        public IEnumerable<string> EnumerateFiles(string directory, string searchPattern) =>
+            Directory.Exists(directory)
+                ? Directory.EnumerateFiles(directory, searchPattern)
+                : [];
     }
 }

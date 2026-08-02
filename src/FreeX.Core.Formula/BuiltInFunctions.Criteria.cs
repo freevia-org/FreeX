@@ -85,11 +85,16 @@ public static partial class BuiltInFunctions
             if (criteria is BlankValue)
                 return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: 0);
 
+            // Round the criterion to 15 significant digits up front, matching CompareValues
+            // in FormulaEvaluator.Operators.cs (the worksheet = operator). Without this, a
+            // criteria value coming from a cell reference whose own raw double result differs
+            // from its displayed/typed text only in the 16th+ significant digit (e.g. STDEV.S/
+            // VAR results) would fail to match cells that the '=' operator treats as equal.
             if (criteria is NumberValue cn)
-                return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: cn.Value);
+                return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: FormulaEvaluator.RoundTo15SignificantDigits(cn.Value));
 
             if (criteria is DateTimeValue cdt)
-                return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: cdt.Value);
+                return new CriteriaMatcher(CriteriaMatcherKind.NumberEquals, number: FormulaEvaluator.RoundTo15SignificantDigits(cdt.Value));
 
             if (criteria is BoolValue cb)
                 return new CriteriaMatcher(CriteriaMatcherKind.BoolEquals, boolean: cb.Value);
@@ -112,7 +117,7 @@ public static partial class BuiltInFunctions
             if (TrySplitCriteriaComparison(crit, out var op, out var rhs))
             {
                 if (TryParseCriteriaNumber(rhs, out var rhsNum))
-                    return new CriteriaMatcher(CriteriaMatcherKind.NumericComparison, op, number: rhsNum);
+                    return new CriteriaMatcher(CriteriaMatcherKind.NumericComparison, op, number: FormulaEvaluator.RoundTo15SignificantDigits(rhsNum));
 
                 return IsWildcardCriteria(rhs) && op is CriteriaComparisonOp.Equal or CriteriaComparisonOp.NotEqual
                     ? new CriteriaMatcher(CriteriaMatcherKind.WildcardComparison, op, rhs)
@@ -123,7 +128,7 @@ public static partial class BuiltInFunctions
                 return new CriteriaMatcher(CriteriaMatcherKind.WildcardText, text: crit);
 
             if (TryParseCriteriaNumber(crit, out var numericCriteria))
-                return new CriteriaMatcher(CriteriaMatcherKind.NumericOrTextEquals, text: crit, number: numericCriteria);
+                return new CriteriaMatcher(CriteriaMatcherKind.NumericOrTextEquals, text: crit, number: FormulaEvaluator.RoundTo15SignificantDigits(numericCriteria));
 
             return textPrefixMatch
                 ? new CriteriaMatcher(CriteriaMatcherKind.TextBeginsWith, text: crit)
@@ -133,7 +138,7 @@ public static partial class BuiltInFunctions
         public bool Matches(ScalarValue cellValue) => _kind switch
         {
             CriteriaMatcherKind.NumberEquals =>
-                TryCellNumber(cellValue, out double cellNumber) && cellNumber == _number,
+                TryCellNumber(cellValue, out double cellNumber) && FormulaEvaluator.RoundTo15SignificantDigits(cellNumber) == _number,
 
             CriteriaMatcherKind.BoolEquals =>
                 cellValue is BoolValue cvb && cvb.Value == _bool,
@@ -146,7 +151,7 @@ public static partial class BuiltInFunctions
 
             CriteriaMatcherKind.NumericOrTextEquals =>
                 TryCellNumber(cellValue, out double comparableNumber)
-                    ? comparableNumber == _number
+                    ? FormulaEvaluator.RoundTo15SignificantDigits(comparableNumber) == _number
                     : string.Equals(CriteriaComparableText(cellValue), _text, StringComparison.OrdinalIgnoreCase),
 
             CriteriaMatcherKind.WildcardText =>
@@ -182,6 +187,11 @@ public static partial class BuiltInFunctions
                 if (cellValue is BlankValue) return false;
                 return _op == CriteriaComparisonOp.NotEqual;
             }
+            // Round the cell's numeric value to 15 significant digits before comparing,
+            // matching CompareValues in FormulaEvaluator.Operators.cs (the worksheet
+            // comparison operators) and this matcher's own criterion, which was rounded
+            // at construction time above.
+            value = FormulaEvaluator.RoundTo15SignificantDigits(value);
             return _op switch
             {
                 CriteriaComparisonOp.GreaterThan => value > _number,
