@@ -174,8 +174,9 @@ public static class DocxReader
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
     /// conventional word/settings.xml path), loads w:settings, and maps w:documentProtection/@w:edit back
-    /// into <see cref="TextDocument.Protection"/>, w:trackRevisions into
-    /// <see cref="TextDocument.TrackRevisions"/>, and the w:autoHyphenation toggle into
+    /// into <see cref="TextDocument.Protection"/>, the revision-tracking toggles into
+    /// <see cref="TextDocument.TrackRevisions"/> and <see cref="TextDocument.DoNotTrackFormatting"/>,
+    /// and the w:autoHyphenation toggle into
     /// <see cref="PageSettings.AutoHyphenation"/>. A missing part — or one without an enforced
     /// documentProtection — leaves the document at <see cref="ProtectionMode.None"/>; a missing
     /// autoHyphenation leaves it disabled.
@@ -222,6 +223,10 @@ public static class DocxReader
         // Track revisions (w:trackRevisions): controls whether subsequent edits should be recorded as
         // revisions. Existing revision content is represented separately by the document's runs/properties.
         document.TrackRevisions = ReadToggle(root, "trackRevisions");
+
+        // Do not track formatting (w:doNotTrackFormatting): when enabled, formatting-only edits are excluded
+        // from tracked revisions. It remains independent in the model even when revision tracking is off.
+        document.DoNotTrackFormatting = ReadToggle(root, "doNotTrackFormatting");
 
         // Footnote numbering options (w:footnotePr in settings.xml): number format, start-at, restart.
         if (root.Element(W + "footnotePr") is { } footnotePr)

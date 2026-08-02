@@ -53,6 +53,48 @@ public sealed class DocumentViewTrackEditTests
     private static Run? RunWithText(DocumentView view, string text) =>
         Para(view).Runs.FirstOrDefault(r => r.Text == text);
 
+    [Fact]
+    public async Task LoadDocument_UsesAuthoredTrackRevisionsState()
+    {
+        bool enabledState = false;
+        bool disabledState = true;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            var enabled = TextDocument.CreateEmpty();
+            enabled.TrackRevisions = true;
+            view.LoadDocument(enabled);
+            enabledState = view.TrackChangesEnabled;
+
+            var disabled = TextDocument.CreateEmpty();
+            view.LoadDocument(disabled);
+            disabledState = view.TrackChangesEnabled;
+        });
+        if (!ran) return;
+
+        enabledState.Should().BeTrue();
+        disabledState.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ToggleTrackChanges_PersistsAuthoredDocumentState()
+    {
+        bool enabledState = false;
+        bool disabledState = true;
+        var ran = await OnUiThread(() =>
+        {
+            var view = BuildView("Hello world");
+            view.ToggleTrackChanges();
+            enabledState = view.Document.TrackRevisions;
+            view.ToggleTrackChanges();
+            disabledState = view.Document.TrackRevisions;
+        });
+        if (!ran) return;
+
+        enabledState.Should().BeTrue();
+        disabledState.Should().BeFalse();
+    }
+
     // ── Typing records a tracked insertion ────────────────────────────────────────
 
     [Fact]
