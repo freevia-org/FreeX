@@ -120,6 +120,9 @@ public static class SmartArtLayoutEngine
         if (IsContinuousBlockProcessLayout(data.LayoutUniqueId))
             return LayoutContinuousBlockProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsSegmentedProcessLayout(data.LayoutUniqueId))
+            return LayoutSegmentedProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsBasicRadialLayout(data.LayoutUniqueId))
             return LayoutBasicRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -416,6 +419,23 @@ public static class SmartArtLayoutEngine
             FlipV         = flipV,
             Outline       = new ShapeOutline.Visible(style.Outline, style.WidthPt)
         };
+    }
+
+    private static SlideShape MakeDownConnector(
+        uint id,
+        long x1,
+        long y1,
+        long x2,
+        long y2,
+        SmartArtConnectorStyle style)
+    {
+        var connector = MakeConnector(id, x1, y1, x2, y2, style);
+        connector.Kind = SlideShapeKind.Connector;
+        connector.Outline = new ShapeOutline.Visible(
+            style.Outline,
+            style.WidthPt,
+            endLineEnd: new ShapeLineEnd(ShapeLineEndKind.Triangle));
+        return connector;
     }
 
     private static SlideShape MakeCaption(
@@ -889,6 +909,67 @@ public static class SmartArtLayoutEngine
                 connector.Name = $"SmartArt_ContinuousBlockProcess_Connector_{index + 1}";
                 shapes.Add(connector);
                 currentX += blockW + gap + connectorW;
+            }
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Segmented Process geometry: authored stages form a vertical stack of broad
+    /// rectangular segments, with a centered down-arrow relationship between each
+    /// adjacent pair. This keeps the preset's Level 2-friendly stacked reading order
+    /// distinct from the compact horizontal continuous-block plan.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutSegmentedProcess(
+        List<SmartArtNode> nodes,
+        long fx,
+        long fy,
+        long fcx,
+        long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count == 0 || fcx <= 0 || fcy <= 0)
+            return [];
+
+        long padX = Math.Max((long)(fcx * 0.045), 1L);
+        long padY = Math.Max((long)(fcy * 0.07), 1L);
+        long gapY = Math.Max((long)(fcy * 0.018), 1L);
+        long innerW = Math.Max(fcx - 2 * padX, 1L);
+        long innerH = Math.Max(fcy - 2 * padY - (nodes.Count - 1) * gapY, 1L);
+        long segmentH = Math.Max(innerH / nodes.Count, 1L);
+        var shapes = new List<SlideShape>(nodes.Count * 2 - 1);
+        uint idCounter = 320;
+        long currentY = fy + padY;
+
+        for (var index = 0; index < nodes.Count; index++)
+        {
+            var style = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.Process);
+            var segment = MakeBox(
+                idCounter++,
+                nodes[index].Text,
+                style,
+                fx + padX,
+                currentY,
+                innerW,
+                segmentH,
+                NodeFontSizePt,
+                DrawingShapeKind.Rectangle);
+            segment.Name = $"SmartArt_SegmentedProcess_Segment_{index + 1}";
+            shapes.Add(segment);
+
+            if (index < nodes.Count - 1)
+            {
+                var relationship = MakeDownConnector(
+                    idCounter++,
+                    fx + fcx / 2,
+                    currentY + segmentH,
+                    fx + fcx / 2,
+                    currentY + segmentH + gapY,
+                    stylePlan.Connector);
+                relationship.Name = $"SmartArt_SegmentedProcess_Relationship_{index + 1}_{index + 2}";
+                shapes.Add(relationship);
+                currentY += segmentH + gapY;
             }
         }
 
@@ -3960,6 +4041,12 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "continuousblockprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsSegmentedProcessLayout(string uniqueId)
+    {
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "segmentedprocess", StringComparison.Ordinal);
     }
 
     private static bool IsBasicRadialLayout(string uniqueId)

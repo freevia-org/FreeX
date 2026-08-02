@@ -1708,6 +1708,54 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void RegenerateDrawingCache_SegmentedProcessUsesSharedSegmentPlan()
+    {
+        var data = MakeFlatData(
+            SmartArtFamily.Process,
+            ("plan", "Plan"),
+            ("build", "Build"),
+            ("ship", "Ship"));
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess";
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.NodeCount.Should().Be(3);
+        result.ShapeCount.Should().Be(5, "the segmented stack has three segments and two relationships");
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_SegmentedProcess_Segment_", StringComparison.Ordinal))
+            .Should().OnlyContain(shape => shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.Rectangle);
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_SegmentedProcess_Segment_", StringComparison.Ordinal))
+            .Select(shape => shape.PlainText)
+            .Should().Equal("Plan", "Build", "Ship");
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_SegmentedProcess_Relationship_", StringComparison.Ordinal))
+            .Select(shape => shape.Name)
+            .Should().Equal(
+                "SmartArt_SegmentedProcess_Relationship_1_2",
+                "SmartArt_SegmentedProcess_Relationship_2_3");
+
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        doc.Descendants(dsp + "sp").Should().HaveCount(5);
+        doc.Descendants(a + "t").Select(text => text.Value)
+            .Should().Equal("Plan", "Build", "Ship");
+        doc.Descendants(a + "headEnd")
+            .Should().HaveCount(2)
+            .And.OnlyContain(element => (string?)element.Attribute("type") == "triangle");
+    }
+
+    [Fact]
     public void RegenerateDrawingCache_Hierarchy3UsesSharedLeftToRightLayout()
     {
         var root = new SmartArtNode { ModelId = "root", Text = "Portfolio", Level = 0 };

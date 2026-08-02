@@ -6277,6 +6277,16 @@ public sealed class MainWindowHeadlessTests
             window.Editor.Undo();
             smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
 
+            registry.TryGet(SmartArtAuthoringPlanner.SegmentedProcessLayoutCommandId, out var segmentedCommand)
+                .Should().BeTrue();
+            segmentedCommand!.Execute(RibbonCommandContext.Empty);
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/segmentedProcess");
+            smartArt.Data.Family.Should().Be(SmartArtFamily.Process);
+            Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/layout1.xml"].Bytes)
+                .Should().Contain("segmentedProcess");
+            window.Editor.Undo();
+            smartArt.Data.LayoutUniqueId.Should().EndWith("/basicProcess");
+
             registry.TryGet(SmartArtAuthoringPlanner.BasicRadialLayoutCommandId, out var radialCommand)
                 .Should().BeTrue();
             radialCommand!.Execute(RibbonCommandContext.Empty);
@@ -6508,6 +6518,40 @@ public sealed class MainWindowHeadlessTests
             .Should().BeInAscendingOrder("Avalonia host should consume shared left-to-right bending-process geometry");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(2, "Avalonia host should consume shared bending-process connector ops");
+    }
+
+    [Fact]
+    public async Task SmartArt_segmented_process_shape_composes_shared_vertical_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Process,
+                "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess",
+                ["Plan", "Build", "Ship"]);
+            window.Editor.CurrentSlide!.Shapes.Clear();
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(5, "Avalonia consumes the shared three-segment stack plus two relationships");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Plan", "Build", "Ship");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("Avalonia should consume shared vertical segmented geometry");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "Avalonia should consume shared segmented relationship DrawOps");
     }
 
     [Fact]

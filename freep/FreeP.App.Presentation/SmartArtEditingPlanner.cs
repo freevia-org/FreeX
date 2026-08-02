@@ -526,7 +526,7 @@ public static class SmartArtEditingPlanner
         }
 
         var shapes = plannedShapes.ToList();
-        if (shapes.Any(shape => shape.Kind is not (SlideShapeKind.AutoShape or SlideShapeKind.Picture)))
+        if (shapes.Any(shape => shape.Kind is not (SlideShapeKind.AutoShape or SlideShapeKind.Connector or SlideShapeKind.Picture)))
         {
             return new SmartArtDrawingCacheRegenerationResult(
                 false,
@@ -1537,7 +1537,13 @@ public static class SmartArtEditingPlanner
                 new XAttribute("w", Math.Max(0, (int)Math.Round(outline.WidthPt * 12700.0))),
                 new XElement(A + "solidFill",
                     new XElement(A + "srgbClr",
-                        new XAttribute("val", ToHex(outline.Color.Resolved))))));
+                        new XAttribute("val", ToHex(outline.Color.Resolved)))),
+                shape.Kind == SlideShapeKind.Connector || shape.AutoShapeKind == DrawingShapeKind.Line
+                    ? BuildLineEndElement(A + "headEnd", outline.EndLineEnd)
+                    : null,
+                shape.Kind == SlideShapeKind.Connector || shape.AutoShapeKind == DrawingShapeKind.Line
+                    ? BuildLineEndElement(A + "tailEnd", outline.BeginLineEnd)
+                    : null));
         }
         else if (shape.Outline is ShapeOutline.None)
         {
@@ -1546,6 +1552,11 @@ public static class SmartArtEditingPlanner
 
         return spPr;
     }
+
+    private static XElement? BuildLineEndElement(XName name, ShapeLineEnd? lineEnd) =>
+        lineEnd is null
+            ? null
+            : new XElement(name, new XAttribute("type", lineEnd.Kind == ShapeLineEndKind.Triangle ? "triangle" : "none"));
 
     private static XElement BuildTextBody(TextBody? textBody)
     {

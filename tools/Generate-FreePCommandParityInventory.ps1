@@ -1431,14 +1431,18 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt layout planner; no renderer-local SmartArt policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-smartart-segmented-process-2026-07-06.md"
+                "docs/parity/freep-smartart-segmented-process-2026-07-06.md",
+                "docs/parity/freep-smartart-segmented-process-wave113-20260802.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
-                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/PptxRepairCorpusValidityTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "segmentedProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes while other unsupported process variants remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+            RemainingWork: "segmentedProcess now uses dedicated shared vertical rectangular segments with stable ordered down-arrow relationships, regenerated drawing-cache evidence, and schema-valid PPTX round-trip coverage. Exact PowerPoint segment styling/effects, PowerPoint-authoritative visual baselines, and broader SmartArt geometry families remain deferred."),
         new(
             EvidenceId: "freep.smartart.chevron-process",
             Area: "SmartArt chevron process live layout",

@@ -1386,6 +1386,41 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void SegmentedProcess_UsesVerticalRectangularSegmentsAndOrderedArrowRelationships()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Plan", "Build", "Ship", "Learn");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("segmentedProcess has a dedicated shared stacked process plan");
+        var segments = shapes!
+            .Where(shape => shape.Name.StartsWith("SmartArt_SegmentedProcess_Segment_", StringComparison.Ordinal))
+            .ToList();
+        var relationships = shapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_SegmentedProcess_Relationship_", StringComparison.Ordinal))
+            .ToList();
+
+        segments.Should().HaveCount(4);
+        relationships.Should().HaveCount(3);
+        segments.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle);
+        segments.Select(shape => shape.PlainText).Should().Equal("Plan", "Build", "Ship", "Learn");
+        segments.Select(shape => shape.OffsetYEmu).Should().BeInAscendingOrder();
+        segments.Select(shape => shape.OffsetXEmu).Distinct().Should().ContainSingle();
+        relationships.Select(shape => shape.Name)
+            .Should().Equal(
+                "SmartArt_SegmentedProcess_Relationship_1_2",
+                "SmartArt_SegmentedProcess_Relationship_2_3",
+                "SmartArt_SegmentedProcess_Relationship_3_4");
+        relationships.Select(shape => shape.Outline)
+            .OfType<ShapeOutline.Visible>()
+            .Should().HaveCount(3);
+        relationships
+            .Select(shape => (shape.Outline as ShapeOutline.Visible)?.EndLineEnd?.Kind)
+            .Should().OnlyContain(kind => kind == ShapeLineEndKind.Triangle);
+    }
+
+    [Fact]
     public void BasicProcess_ReturnsLiveProcessBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
@@ -1466,7 +1501,7 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void SegmentedProcess_ReturnsLiveProcessBoxesAndConnectors()
+    public void SegmentedProcess_ReturnsLiveVerticalSegmentsAndArrowRelationships()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/segmentedProcess";
@@ -1474,16 +1509,17 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull("segmentedProcess is a bounded ordered-stage process layout");
-        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
-            .Should().HaveCount(3, "one live box should be emitted per segmented-process node");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Rectangle)
+            .Should().HaveCount(3, "one live rectangular segment should be emitted per segmented-process node");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
-            .Should().HaveCount(2, "adjacent segmented-process nodes need shared connectors");
+            .Should().HaveCount(2, "adjacent segmented-process nodes need shared arrow relationships");
 
-        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
-        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+        var segments = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Rectangle).ToList();
+        segments.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal("A", "B", "C");
-        boxes.Select(s => s.OffsetXEmu)
-            .Should().BeInAscendingOrder("segmentedProcess should reuse the shared process-family geometry");
+        segments.Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder("segmentedProcess should use a vertical shared segment stack");
+        segments.Select(s => s.OffsetXEmu).Distinct().Should().ContainSingle();
     }
 
     [Fact]

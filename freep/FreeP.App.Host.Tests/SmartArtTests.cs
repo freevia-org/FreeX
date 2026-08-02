@@ -3743,6 +3743,15 @@ public sealed class SmartArtTests : IDisposable
         renderedText.Should().Contain("Plan");
         renderedText.Should().Contain("Build");
         renderedText.Should().Contain("Ship");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("segmentedProcess stages should consume the shared vertical stack");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.X)
+            .Distinct()
+            .Should().ContainSingle("segmentedProcess stages should share one centered segment column");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(2, "WPF and Avalonia hosts consume shared connector DrawOps");
     }

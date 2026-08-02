@@ -140,6 +140,67 @@ public sealed class PptxRepairCorpusValidityTests
             .Select(shape => shape.PlainText)
             .Should().Equal(smartArt.FallbackShapes
                 .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal))
+            .Select(shape => shape.PlainText));
+    }
+
+    [Fact]
+    public void EditingSmartArtSegmentedProcess_RoundTripsLiveCacheAndSchema()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var smartArt = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Select(shape => shape.SmartArt)
+            .FirstOrDefault(candidate => candidate is not null);
+
+        smartArt.Should().NotBeNull("the live SmartArt corpus must contain an editable diagram");
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
+            smartArt, SmartArtLayoutPreset.SegmentedProcess);
+
+        result.Applied.Should().BeTrue(result.Message);
+        smartArt!.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+        var container = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .First(shape => shape.SmartArt == smartArt);
+        var cacheResult = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            container.OffsetXEmu,
+            container.OffsetYEmu,
+            container.ExtentCxEmu,
+            container.ExtentCyEmu,
+            presentation.Theme!);
+
+        cacheResult.Applied.Should().BeTrue(cacheResult.Message);
+        var segmentCount = smartArt.FallbackShapes.Count(shape =>
+            shape.Name.StartsWith("SmartArt_SegmentedProcess_Segment_", StringComparison.Ordinal));
+        segmentCount.Should().BeGreaterThan(0);
+        smartArt.FallbackShapes.Count(shape =>
+            shape.Name.StartsWith("SmartArt_SegmentedProcess_Relationship_", StringComparison.Ordinal))
+            .Should().Be(segmentCount - 1);
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_SegmentedProcess_Segment_", StringComparison.Ordinal))
+            .Should().OnlyContain(shape => shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.Rectangle);
+
+        using var roundTrip = new MemoryStream();
+        PptxPackageWriter.Write(presentation, roundTrip);
+        var roundTripBytes = roundTrip.ToArray();
+        ValidateSlideSchema(roundTripBytes)
+            .Should().BeEmpty("an edited segmented process SmartArt package must remain schema-valid");
+
+        var reread = PptxPackageReader.Read(new MemoryStream(roundTripBytes));
+        var rereadSmartArt = reread.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Select(shape => shape.SmartArt)
+            .FirstOrDefault(candidate => candidate is not null);
+
+        rereadSmartArt.Should().NotBeNull();
+        rereadSmartArt!.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+        rereadSmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        rereadSmartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_SegmentedProcess_Segment_", StringComparison.Ordinal))
+            .Select(shape => shape.PlainText)
+            .Should().Equal(smartArt.FallbackShapes
+                .Where(shape => shape.Name.StartsWith("SmartArt_SegmentedProcess_Segment_", StringComparison.Ordinal))
                 .Select(shape => shape.PlainText));
     }
 
