@@ -109,6 +109,9 @@ public sealed class PageBorderArtVisualPlannerTests
         plan.Fills.Should().BeEmpty();
         plan.Polygons.Should().HaveCount(918);
         plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(38, 56));
+        plan.Polygons[0].Points.Skip(6).Take(2).Should().Equal(
+            new PageBorderArtPoint(54, 62),
+            new PageBorderArtPoint(45, 62));
         plan.Polygons[1].Points.Take(3).Should().Equal(
             new PageBorderArtPoint(43, 32),
             new PageBorderArtPoint(50, 32),

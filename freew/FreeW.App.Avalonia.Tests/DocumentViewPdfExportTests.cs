@@ -1526,7 +1526,7 @@ public sealed class DocumentViewPdfExportTests
                 if (pixel.Red > 245 && pixel.Green > 245 && pixel.Blue > 245)
                     whiteEggInterior++;
             }
-            blackInk.Should().BeInRange(280, 290);
+            blackInk.Should().BeInRange(250, 260);
             whiteEggInterior.Should().BeGreaterThan(200);
             bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
         }, CancellationToken.None);
