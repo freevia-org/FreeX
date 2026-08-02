@@ -2418,6 +2418,8 @@ public sealed partial class MainWindow : Window
             new ActionRibbonCommand(() => _ = OpenSectionZoomDialogAsync()));
         r.Register(SummaryZoomInsertionPlanner.CommandId,
             new ActionRibbonCommand(() => _ = OpenSummaryZoomDialogAsync()));
+        r.Register(ZoomObjectPropertiesPlanner.CommandId,
+            new ActionRibbonCommand(() => _ = OpenZoomObjectPropertiesDialogAsync()));
         r.Register(PresentationDesignCommandPlanner.LayoutCommandId, new ActionRibbonCommand(() =>
             PresentationDesignCommandPlanner.TryApply(
                 Editor,
@@ -4154,6 +4156,18 @@ public sealed partial class MainWindow : Window
             shape,
             slideIndex => SlideRenderer.RenderToBytes(
                 Editor.Presentation, slideIndex, widthPx, heightPx));
+    }
+
+    internal async Task OpenZoomObjectPropertiesDialogAsync()
+    {
+        var current = Editor.SelectedZoomObjectProperties;
+        if (current is null || !IsVisible)
+            return;
+
+        var dialog = new ZoomObjectPropertiesDialog(current);
+        var result = await dialog.ShowDialog<bool?>(this);
+        if (result == true)
+            Editor.SetSelectedZoomObjectProperties(dialog.Properties);
     }
 
     internal void OpenFindDialog() =>

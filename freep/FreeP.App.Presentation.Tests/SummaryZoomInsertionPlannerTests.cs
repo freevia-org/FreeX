@@ -71,6 +71,40 @@ public sealed class SummaryZoomInsertionPlannerTests
         targetIndex.Should().Be(2);
     }
 
+    [Fact]
+    public void Zoom_properties_are_undoable_and_update_every_summary_tile()
+    {
+        var presentation = BuildPresentation();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}", "{SECTION-THREE}" });
+        var properties = new ZoomObjectProperties(
+            ReturnToParent: false,
+            ImageType: "cover",
+            TransitionDuration: "120000",
+            ShowBackground: false);
+
+        session.SetZoomObjectProperties(shape.Id, properties).Should().BeTrue();
+        shape.PreservedObject!.ZoomProperties.Should().Be(properties);
+        var xml = XElement.Parse(shape.PreservedObject.RawXml);
+        xml.Descendants().Where(element => element.Name.LocalName == "zmPr")
+            .Should().AllSatisfy(element =>
+            {
+                element.Attribute("returnToParent")!.Value.Should().Be("0");
+                element.Attribute("imageType")!.Value.Should().Be("cover");
+                element.Attribute("transitionDur")!.Value.Should().Be("120000");
+                element.Attribute("showBg")!.Value.Should().Be("0");
+            });
+
+        session.Undo();
+        shape.PreservedObject.ZoomProperties.Should()
+            .Be(new ZoomObjectProperties(true, "preview", null, true));
+        shape.PreservedObject.RawXml.Should().Contain("imageType=\"preview\"");
+
+        session.Redo();
+        shape.PreservedObject.ZoomProperties.Should().Be(properties);
+        shape.PreservedObject.RawXml.Should().Contain("imageType=\"cover\"");
+    }
+
     private static Presentation BuildPresentation()
     {
         var presentation = new Presentation();

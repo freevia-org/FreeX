@@ -677,6 +677,38 @@ public sealed class EditingSession
         return shape is not null && SetShapeHidden(shapeId, !shape.IsHidden);
     }
 
+    /// <summary>Applies native PowerPoint Zoom properties through the shared undo bus.</summary>
+    public bool SetZoomObjectProperties(uint shapeId, ZoomObjectProperties properties)
+    {
+        var slide = CurrentSlide;
+        var shape = slide is null ? null : FindShape(slide.Shapes, shapeId);
+        if (shape is not { Kind: SlideShapeKind.Zoom }
+            || shape.PreservedObject?.ObjectKind != PreservedObjectKind.Zoom)
+            return false;
+
+        Bus.Execute(new SetZoomObjectPropertiesCommand(_currentSlideIndex, shapeId, properties));
+        var normalized = properties with
+        {
+            ImageType = properties.ImageType?.Trim().ToLowerInvariant(),
+            TransitionDuration = properties.TransitionDuration?.Trim(),
+        };
+        return Equals(shape.PreservedObject.ZoomProperties, normalized);
+    }
+
+    /// <summary>Returns the supported Zoom properties when exactly one Zoom is selected.</summary>
+    public ZoomObjectProperties? SelectedZoomObjectProperties =>
+        _selectedShapeIds.Count == 1
+            && CurrentSlide is { } slide
+            && FindShape(slide.Shapes, _selectedShapeIds[0]) is
+                { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom } shape
+            ? ZoomObjectPropertiesPlanner.Effective(shape.PreservedObject)
+            : null;
+
+    /// <summary>Applies Zoom properties to the single selected Zoom through the undo bus.</summary>
+    public bool SetSelectedZoomObjectProperties(ZoomObjectProperties properties) =>
+        _selectedShapeIds.Count == 1
+        && SetZoomObjectProperties(_selectedShapeIds[0], properties);
+
     /// <summary>Renames an object through the shared undo bus, including grouped children.</summary>
     public bool SetShapeName(uint shapeId, string? name)
     {

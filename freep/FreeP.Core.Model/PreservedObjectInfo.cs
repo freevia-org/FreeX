@@ -34,6 +34,22 @@ public sealed record SummaryZoomTarget(
     int ScaleFactorY);
 
 /// <summary>
+/// Native PowerPoint Zoom object properties shared by slide, section, and summary Zooms.
+/// Nullable values distinguish an omitted source attribute from its schema default.
+/// </summary>
+public sealed record ZoomObjectProperties(
+    bool? ReturnToParent = null,
+    string? ImageType = null,
+    string? TransitionDuration = null,
+    bool? ShowBackground = null)
+{
+    public bool IsEmpty => ReturnToParent is null
+        && ImageType is null
+        && TransitionDuration is null
+        && ShowBackground is null;
+}
+
+/// <summary>
 /// Payload for a preserved modern object (SlideShapeKind.Zoom / Ink / Model3d / PreservedObject).
 ///
 /// All three modern objects (slide zoom, ink, 3D model) and any UNKNOWN graphicFrame or
@@ -73,6 +89,12 @@ public sealed class PreservedObjectInfo
     /// compatibility and is not used to collapse this list.
     /// </summary>
     public List<SummaryZoomTarget> SummaryZoomTargets { get; } = new();
+
+    /// <summary>
+    /// Authored CT_ZoomObjectProperties attributes. The raw XML remains authoritative for
+    /// unmodeled child content; this projection makes the supported editing contract explicit.
+    /// </summary>
+    public ZoomObjectProperties? ZoomProperties { get; set; }
 
     // ── Verbatim XML round-trip ───────────────────────────────────────────────────
 

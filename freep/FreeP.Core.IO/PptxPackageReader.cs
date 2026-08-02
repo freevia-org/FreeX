@@ -1613,6 +1613,9 @@ public static class PptxPackageReader
             ZoomTargetSectionId = kind == PreservedObjectKind.Zoom
                 ? ReadZoomTargetSectionId(gfEl)
                 : null,
+            ZoomProperties       = kind == PreservedObjectKind.Zoom
+                ? ReadZoomObjectProperties(gfEl)
+                : null,
             RawXml              = gfEl.ToString(SaveOptions.DisableFormatting),
             AlternateContentFallbackXml = alternateContentFallbackXml,
             WasAlternateContent = wasAlternateContent,
@@ -1663,6 +1666,22 @@ public static class PptxPackageReader
             .FirstOrDefault(element => string.Equals(
                 element.Name.LocalName, "sectionZmObj", StringComparison.OrdinalIgnoreCase))
             ?.Attribute("sectionId")?.Value;
+
+    private static ZoomObjectProperties? ReadZoomObjectProperties(XElement graphicFrame)
+    {
+        var properties = graphicFrame.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "zmPr",
+                StringComparison.OrdinalIgnoreCase));
+        if (properties is null)
+            return null;
+
+        var value = new ZoomObjectProperties(
+            ParseNullableBoolean(properties.Attribute("returnToParent")?.Value),
+            properties.Attribute("imageType")?.Value,
+            properties.Attribute("transitionDur")?.Value,
+            ParseNullableBoolean(properties.Attribute("showBg")?.Value));
+        return value.IsEmpty ? null : value;
+    }
 
     private static IEnumerable<SummaryZoomTarget> ReadSummaryZoomTargets(XElement graphicFrame)
     {

@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Xml.Linq;
 using Free.Shared.Commands;
 using Free.Shared.Drawing;
 
@@ -676,6 +677,140 @@ public sealed class SetShapeHiddenCommand : IPresentationCommand
         }
 
         return null;
+    }
+}
+
+/// <summary>Edits the supported native PowerPoint Zoom properties as one undoable operation.</summary>
+public sealed class SetZoomObjectPropertiesCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly ZoomObjectProperties _newValue;
+    private ZoomObjectProperties? _oldValue;
+    private string? _oldRawXml;
+
+    public SetZoomObjectPropertiesCommand(
+        int slideIndex,
+        uint shapeId,
+        ZoomObjectProperties properties)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newValue = Validate(properties);
+    }
+
+    public string Label => "Format Zoom";
+
+    public bool HasEffect(Presentation p) =>
+        TryGetZoom(p, out var shape)
+        && shape.PreservedObject is { } info
+        && !Equals(info.ZoomProperties, _newValue);
+
+    public void Apply(Presentation p)
+    {
+        if (!TryGetZoom(p, out var shape) || shape.PreservedObject is not { } info)
+            return;
+
+        _oldValue = info.ZoomProperties;
+        _oldRawXml = info.RawXml;
+        if (TryPatchRawXml(info.RawXml, _newValue, out var rawXml))
+            info.RawXml = rawXml;
+        info.ZoomProperties = _newValue;
+    }
+
+    public void Revert(Presentation p)
+    {
+        if (!TryGetZoom(p, out var shape) || shape.PreservedObject is not { } info)
+            return;
+
+        info.ZoomProperties = _oldValue;
+        if (_oldRawXml is not null)
+            info.RawXml = _oldRawXml;
+    }
+
+    private bool TryGetZoom(Presentation p, out SlideShape shape)
+    {
+        shape = null!;
+        if (_slideIndex < 0 || _slideIndex >= p.Slides.Count)
+            return false;
+
+        shape = FindShape(p.Slides[_slideIndex].Shapes, _shapeId)!;
+        return shape is { Kind: SlideShapeKind.Zoom, PreservedObject.ObjectKind: PreservedObjectKind.Zoom };
+    }
+
+    private static SlideShape? FindShape(IEnumerable<SlideShape> shapes, uint shapeId)
+    {
+        foreach (var shape in shapes)
+        {
+            if (shape.Id == shapeId)
+                return shape;
+            if (shape.Children.Count > 0 && FindShape(shape.Children, shapeId) is { } child)
+                return child;
+        }
+
+        return null;
+    }
+
+    private static ZoomObjectProperties Validate(ZoomObjectProperties properties)
+    {
+        ArgumentNullException.ThrowIfNull(properties);
+        if (properties.ImageType is not null
+            && !string.Equals(properties.ImageType, "preview", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(properties.ImageType, "cover", StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException("Zoom imageType must be 'preview' or 'cover'.", nameof(properties));
+
+        return properties with
+        {
+            ImageType = properties.ImageType?.Trim().ToLowerInvariant(),
+            TransitionDuration = properties.TransitionDuration?.Trim(),
+        };
+    }
+
+    private static bool TryPatchRawXml(
+        string rawXml,
+        ZoomObjectProperties properties,
+        out string patchedXml)
+    {
+        patchedXml = rawXml;
+        if (string.IsNullOrWhiteSpace(rawXml))
+            return false;
+
+        XElement root;
+        try { root = XElement.Parse(rawXml, LoadOptions.PreserveWhitespace); }
+        catch { return false; }
+
+        var zoomProperties = root.Descendants()
+            .Where(element => string.Equals(element.Name.LocalName, "zmPr",
+                StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (zoomProperties.Length == 0)
+            return false;
+
+        foreach (var zoomProperty in zoomProperties)
+        {
+            SetAttribute(zoomProperty, "returnToParent", properties.ReturnToParent);
+            SetAttribute(zoomProperty, "imageType", properties.ImageType);
+            SetAttribute(zoomProperty, "transitionDur", properties.TransitionDuration);
+            SetAttribute(zoomProperty, "showBg", properties.ShowBackground);
+        }
+        patchedXml = root.ToString(SaveOptions.DisableFormatting);
+        return true;
+    }
+
+    private static void SetAttribute(XElement element, string name, bool? value)
+    {
+        if (value is null)
+            element.Attribute(name)?.Remove();
+        else
+            element.SetAttributeValue(name, value.Value ? "1" : "0");
+    }
+
+    private static void SetAttribute(XElement element, string name, string? value)
+    {
+        if (value is null)
+            element.Attribute(name)?.Remove();
+        else
+            element.SetAttributeValue(name, value);
     }
 }
 

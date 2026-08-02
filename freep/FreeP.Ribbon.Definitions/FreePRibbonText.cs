@@ -234,6 +234,8 @@ internal static class FreePRibbonText
     public static string InsertSectionZoomKeyTip => Get("Ribbon_Command_InsertSectionZoom_KeyTip");
     public static string InsertSummaryZoomLabel => Get("Ribbon_Command_InsertSummaryZoom_Label");
     public static string InsertSummaryZoomKeyTip => Get("Ribbon_Command_InsertSummaryZoom_KeyTip");
+    public static string FormatZoomLabel => Get("Ribbon_Command_FormatZoom_Label");
+    public static string FormatZoomKeyTip => Get("Ribbon_Command_FormatZoom_KeyTip");
     public static string RemoveLinkLabel => Get("Ribbon_Command_RemoveLink_Label");
     public static string RemoveLinkKeyTip => Get("Ribbon_Command_RemoveLink_KeyTip");
 

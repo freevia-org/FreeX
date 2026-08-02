@@ -487,6 +487,7 @@ public sealed partial class MainWindow : Window
             onInsertSlideZoom:  () => OpenSlideZoomDialog(),
             onInsertSectionZoom: () => OpenSectionZoomDialog(),
             onInsertSummaryZoom: () => OpenSummaryZoomDialog(),
+            onFormatZoom:       () => OpenZoomObjectPropertiesDialog(),
             // Wave 12B: Find & Replace dialogs.
             onFind:             () => OpenFindDialog(),
             onFindReplace:      () => OpenFindReplaceDialog(),
@@ -4809,6 +4810,19 @@ public sealed partial class MainWindow : Window
             var shape = Editor.InsertSummaryZoom(dialog.SelectedTargetSectionIds);
             AttachSummaryZoomPreviews(shape);
         }
+    }
+
+    internal void OpenZoomObjectPropertiesDialog()
+    {
+        var current = Editor.SelectedZoomObjectProperties;
+        if (current is null)
+            return;
+
+        var dialog = new ZoomObjectPropertiesDialog(current);
+        if (IsVisible)
+            dialog.Owner = this;
+        if (dialog.ShowDialog() == true)
+            Editor.SetSelectedZoomObjectProperties(dialog.Properties);
     }
 
     private void AttachSummaryZoomPreviews(SlideShape shape)
