@@ -118,6 +118,9 @@ public sealed class Wave104_SplitPanePointerWorkflowTests
         windowSource.Should().Contain("PanViewport(rowDelta * step, colDelta * step)");
         windowSource.Should().NotContain("ScrollSplitPaneTopRight");
         windowSource.Should().NotContain("ScrollSplitPaneBottomLeft");
+        windowSource.Should().Contain("InputElement.PointerWheelChangedEvent");
+        windowSource.Should().Contain("RoutingStrategies.Tunnel");
+        windowSource.Should().Contain("handledEventsToo: true");
     }
 
     private static ViewportModel BuildSplitViewport() =>

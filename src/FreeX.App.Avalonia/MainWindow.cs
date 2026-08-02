@@ -2050,7 +2050,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.Content = _sheetGridHost;
         _sheetScrollViewer.SizeChanged += SheetScrollViewer_SizeChanged;
-        _sheetScrollViewer.PointerWheelChanged += SheetScrollViewer_PointerWheelChanged;
+        // Avalonia's ScrollViewer class handler can consume a vertical wheel before a bubbling
+        // subscription sees it. Handle the worksheet wheel in the tunnel so split-pane wheels use
+        // the shared workbook viewport before the ScrollViewer attempts its own offset update.
+        _sheetScrollViewer.AddHandler(
+            InputElement.PointerWheelChangedEvent,
+            SheetScrollViewer_PointerWheelChanged,
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
 
         _verticalWorksheetScrollBar.Orientation = Orientation.Vertical;
         _verticalWorksheetScrollBar.Width = 16;
