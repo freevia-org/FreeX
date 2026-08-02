@@ -83,6 +83,9 @@ public sealed class PreservedObjectInfo
     /// </summary>
     public string RawXml { get; set; } = string.Empty;
 
+    /// <summary>Raw XML for the first child of an original <c>mc:Fallback</c> branch.</summary>
+    public string? AlternateContentFallbackXml { get; set; }
+
     /// <summary>
     /// True when the original element was wrapped in mc:AlternateContent. The writer must
     /// re-wrap the emitted element in mc:AlternateContent when this is true.

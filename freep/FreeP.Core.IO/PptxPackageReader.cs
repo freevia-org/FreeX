@@ -1183,9 +1183,11 @@ public static class PptxPackageReader
             // recognisable element in mc:Choice; if none found we fall back to mc:Fallback.
             var effectiveEl = child;
             XElement? mcChoiceEl = null;   // EA3: capture mc:Choice for Requires token
+            XElement? mcFallbackEl = null;
             if (child.Name == MC + "AlternateContent")
             {
                 mcChoiceEl = child.Element(MC + "Choice");
+                mcFallbackEl = child.Element(MC + "Fallback")?.Elements().FirstOrDefault();
                 var choiceChild = mcChoiceEl?.Elements().FirstOrDefault();
                 if (choiceChild is not null)
                     effectiveEl = choiceChild;
@@ -1207,7 +1209,8 @@ public static class PptxPackageReader
                 // EA3: pass mcChoiceEl so ReadGraphicFrame can capture the Requires token
                 "graphicFrame" => ReadGraphicFrame(effectiveEl, archive, partPath, scheme, tableStyles,
                                       slideRels, allSlides, slideDir, slidePartPathToId,
-                                      wasAlternateContent: child != effectiveEl, mcChoiceEl: mcChoiceEl),
+                                      wasAlternateContent: child != effectiveEl, mcChoiceEl: mcChoiceEl,
+                                      alternateContentFallbackXml: mcFallbackEl?.ToString(SaveOptions.DisableFormatting)),
                 // Wave 25A: ink annotations arrive as p:contentPart (possibly inside mc:AlternateContent)
                 "contentPart"  => ReadContentPartInk(child, effectiveEl, archive, partPath, mcChoiceEl),
                 _ => null
@@ -1373,7 +1376,8 @@ public static class PptxPackageReader
         List<Slide>? allSlides = null,
         string? slideDir = null,
         IReadOnlyDictionary<string, string>? slidePartPathToId = null,
-        bool wasAlternateContent = false, XElement? mcChoiceEl = null)
+        bool wasAlternateContent = false, XElement? mcChoiceEl = null,
+        string? alternateContentFallbackXml = null)
     {
         var cNvPr = gfEl.Element(P + "nvGraphicFramePr")?.Element(P + "cNvPr");
 
@@ -1514,7 +1518,7 @@ public static class PptxPackageReader
         // Unknown graphicFrame type — preserve verbatim (Wave 25A: no-silent-loss guarantee).
         // EA3: pass mcChoiceEl so ReadPreservedGraphicFrame can capture the Requires token.
         var preserved = ReadPreservedGraphicFrame(gfEl, graphicData, uri, cNvPr, offX, offY, extCx, extCy,
-            archive, partPath, wasAlternateContent, mcChoiceEl);
+            archive, partPath, wasAlternateContent, mcChoiceEl, alternateContentFallbackXml);
         var preservedHlink = cNvPr?.Element(A + "hlinkClick");
         if (preservedHlink is not null)
             preserved.Hyperlink = ResolveHlinkClick(preservedHlink, slideRels, allSlides, slideDir, slidePartPathToId);
@@ -1568,7 +1572,7 @@ public static class PptxPackageReader
         XElement gfEl, XElement graphicData, string? uri,
         XElement? cNvPr, long offX, long offY, long extCx, long extCy,
         ZipArchive archive, string partPath, bool wasAlternateContent,
-        XElement? mcChoiceEl = null)
+        XElement? mcChoiceEl = null, string? alternateContentFallbackXml = null)
     {
         var kind = IsZoomUri(uri) ? PreservedObjectKind.Zoom
                  : Is3dModelUri(uri) ? PreservedObjectKind.Model3d
@@ -1610,6 +1614,7 @@ public static class PptxPackageReader
                 ? ReadZoomTargetSectionId(gfEl)
                 : null,
             RawXml              = gfEl.ToString(SaveOptions.DisableFormatting),
+            AlternateContentFallbackXml = alternateContentFallbackXml,
             WasAlternateContent = wasAlternateContent,
             McRequiresToken     = mcRequiresToken,
             McRequiresNsUri     = mcRequiresNsUri,
