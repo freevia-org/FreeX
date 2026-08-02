@@ -1291,7 +1291,9 @@ public enum RubyAlignment
 /// whose run carries an <see cref="InlineImage"/>; <see cref="DocumentPart"/> is a document-part list
 /// (w:sdtPr/w:docPartList); <see cref="BuildingBlockGallery"/> is a building-block gallery control
 /// (w:sdtPr/w:docPartObj); <see cref="Group"/> is a Group control (w:sdtPr/w:group); and
-/// <see cref="Citation"/> is a citation control (w:sdtPr/w:citation).
+/// <see cref="Citation"/> is a citation control (w:sdtPr/w:citation); and <see cref="Equation"/> is an
+/// inline equation control (w:sdtPr/w:equation), whose run may carry an OMML
+/// <see cref="FreeW.Core.Model.Equation"/>.
 /// </summary>
 public enum ContentControlKind
 {
@@ -1305,7 +1307,8 @@ public enum ContentControlKind
     DocumentPart,
     BuildingBlockGallery,
     Group,
-    Citation
+    Citation,
+    Equation
 }
 
 /// <summary>Word content-control locking from w:sdtPr/w:lock.</summary>
