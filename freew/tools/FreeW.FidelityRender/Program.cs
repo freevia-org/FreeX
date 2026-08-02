@@ -1580,6 +1580,17 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         DrawSoftwareFilledShapePlan(canvas, birdPlan);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var eggPlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, eggPlan);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildVineFrame(
             border.ArtId,
             border.WidthPt,

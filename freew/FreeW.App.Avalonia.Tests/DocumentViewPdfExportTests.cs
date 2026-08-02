@@ -1197,6 +1197,49 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedPaintedEggsPageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.PaintedEggsArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            pdf.Pages.Single().Ops.OfType<PdfFillRect>().Should().BeEmpty();
+            paths.Should().HaveCount(918);
+            paths[0].FillColor.Should().Be(PdfColor.Black);
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(28.5, 750));
+            paths[1].FillColor.Should().Be(PdfColor.Black);
+            paths[2].FillColor.Should().Be(new PdfColor(255, 255, 255));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var blackInk = 0;
+            var whiteEggInterior = 0;
+            for (var y = 30; y < 64; y++)
+            for (var x = 32; x < 64; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red < 40 && pixel.Green < 40 && pixel.Blue < 40)
+                    blackInk++;
+                if (pixel.Red > 245 && pixel.Green > 245 && pixel.Blue > 245)
+                    whiteEggInterior++;
+            }
+            blackInk.Should().BeGreaterThan(300);
+            whiteEggInterior.Should().BeGreaterThan(200);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {

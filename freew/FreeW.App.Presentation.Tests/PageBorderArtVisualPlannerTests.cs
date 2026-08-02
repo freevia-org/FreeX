@@ -101,6 +101,24 @@ public sealed class PageBorderArtVisualPlannerTests
     }
 
     [Fact]
+    public void PaintedEggs_UsesWordCadenceAndOrderedMottledEggGeometry()
+    {
+        PageBorderArtVisualPlanner.TryBuildPaintedEggsFrame(66, 3, 816, 1056, 32, out var plan)
+            .Should().BeTrue();
+
+        plan.Fills.Should().BeEmpty();
+        plan.Polygons.Should().HaveCount(918);
+        plan.Polygons[0].Points[0].Should().Be(new PageBorderArtPoint(38, 56));
+        plan.Polygons[1].Points.Take(3).Should().Equal(
+            new PageBorderArtPoint(43, 32),
+            new PageBorderArtPoint(50, 30),
+            new PageBorderArtPoint(56, 34));
+        plan.Polygons[2].Should().Match<PageBorderArtPolygon>(polygon =>
+            polygon.Red == 0xFF && polygon.Green == 0xFF && polygon.Blue == 0xFF);
+        plan.Polygons[207].Points[0].Should().Be(new PageBorderArtPoint(38, 1016));
+    }
+
+    [Fact]
     public void ShorebirdTracks_UsesMeasuredAlternatingFootprintCadenceAndSharedSegments()
     {
         PageBorderArtVisualPlanner.TryBuildShorebirdTracksFrame(83, 3, 816, 1056, 32, out var motifs)

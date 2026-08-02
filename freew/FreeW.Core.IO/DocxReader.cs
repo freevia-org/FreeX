@@ -3078,10 +3078,10 @@ public static class DocxReader
     /// Reads a content control's w:sdtPr into a <see cref="ContentControl"/>: recovers the optional
     /// w:tag / w:alias and the control kind. A w14:checkbox (or w:checkbox) marks a checkbox control,
     /// whose checked state comes from the nested w14:checked/@val ("1"/"true"/"on"); a w:date marks a
-    /// date picker (recovering its w:dateFormat); a w:dropDownList / w:comboBox marks a list control
-    /// (recovering its w:listItem choices); a w:picture marks a picture control; a w:richText marks a
-    /// rich-text control; anything else is a plain-text control. A null/absent w:sdtPr yields a default
-    /// plain-text control.
+    /// date picker (recovering its w:dateFormat, w:fullDate, w:calendar, w:lid, and
+    /// w:storeMappedDataAs); a w:dropDownList / w:comboBox marks a list control (recovering its
+    /// w:listItem choices); a w:picture marks a picture control; a w:richText marks a rich-text control;
+    /// anything else is a plain-text control. A null/absent w:sdtPr yields a default plain-text control.
     /// </summary>
     private static void AddContentControlRuns(
         Paragraph paragraph,
@@ -3232,7 +3232,8 @@ public static class DocxReader
             return new ContentControl(ContentControlKind.DatePicker, normTag, normAlias,
                 DateFormat: string.IsNullOrEmpty(format) ? ContentControl.DefaultDateFormat : format,
                 LockMode: lockMode,
-                WordMetadata: wordMetadata);
+                WordMetadata: wordMetadata,
+                DateMetadata: ReadContentControlDateMetadata(date));
         }
 
         var dropDown = sdtPr?.Element(W + "dropDownList");
@@ -3263,6 +3264,18 @@ public static class DocxReader
 
         return new ContentControl(ContentControlKind.PlainText, normTag, normAlias,
             LockMode: lockMode, WordMetadata: wordMetadata);
+    }
+
+    private static ContentControlDateMetadata? ReadContentControlDateMetadata(XElement date)
+    {
+        static string? Normalize(string? value) => string.IsNullOrEmpty(value) ? null : value;
+
+        var metadata = new ContentControlDateMetadata(
+            FullDate: Normalize(date.Attribute(W + "fullDate")?.Value),
+            Calendar: Normalize(date.Element(W + "calendar")?.Attribute(W + "val")?.Value),
+            LanguageId: Normalize(date.Element(W + "lid")?.Attribute(W + "val")?.Value),
+            StoreMappedDataAs: Normalize(date.Element(W + "storeMappedDataAs")?.Attribute(W + "val")?.Value));
+        return metadata == new ContentControlDateMetadata() ? null : metadata;
     }
 
     private static ContentControlWordMetadata? ReadContentControlWordMetadata(XElement? sdtPr)

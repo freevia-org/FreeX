@@ -2742,11 +2742,11 @@ public static class DocxWriter
     /// Builds the w:sdtPr (content-control properties) for a content control. Emits w:tag / w:alias when
     /// set, then the control-kind element: w:text for a plain-text control; a w14:checkbox carrying the
     /// checked state (w14:checked val="1"/"0") for a checkbox; w:richText for a rich-text control; a
-    /// w:date carrying the w:dateFormat for a date picker; a w:dropDownList / w:comboBox carrying a
-    /// w:listItem (w:displayText/w:value) per choice for a list control; an empty w:picture for a
-    /// picture control; w:docPartList for a document-part list; w:docPartObj for a building-block
-    /// gallery; w:group for a Group control; or w:citation for a Citation control. This is the minimal
-    /// valid shape FreeW's own reader recovers (see <see cref="DocxReader"/>).
+    /// w:date carrying date-picker format and metadata; a w:dropDownList / w:comboBox carrying a
+    /// w:listItem (w:displayText/w:value) per choice for a list control; an empty w:picture for a picture
+    /// control; w:docPartList for a document-part list; w:docPartObj for a building-block gallery;
+    /// w:group for a Group control; or w:citation for a Citation control. This is the minimal valid shape
+    /// FreeW's own reader recovers (see <see cref="DocxReader"/>).
     /// </summary>
     private static XElement BuildSdtProperties(ContentControl control)
     {
@@ -2768,9 +2768,7 @@ public static class DocxWriter
                 sdtPr.Add(new XElement(W + "richText"));
                 break;
             case ContentControlKind.DatePicker:
-                sdtPr.Add(new XElement(W + "date",
-                    new XElement(W + "dateFormat",
-                        new XAttribute(W + "val", control.DateFormat ?? ContentControl.DefaultDateFormat))));
+                sdtPr.Add(BuildDateElement(control));
                 break;
             case ContentControlKind.DropDownList:
                 sdtPr.Add(BuildListElement(W + "dropDownList", control.Items));
@@ -2804,6 +2802,23 @@ public static class DocxWriter
                 break;
         }
         return sdtPr;
+    }
+
+    private static XElement BuildDateElement(ContentControl control)
+    {
+        var date = new XElement(W + "date");
+        if (control.DateMetadata?.FullDate is { Length: > 0 } fullDate)
+            date.Add(new XAttribute(W + "fullDate", fullDate));
+
+        date.Add(new XElement(W + "dateFormat",
+            new XAttribute(W + "val", control.DateFormat ?? ContentControl.DefaultDateFormat)));
+        if (control.DateMetadata?.LanguageId is { Length: > 0 } languageId)
+            date.Add(new XElement(W + "lid", new XAttribute(W + "val", languageId)));
+        if (control.DateMetadata?.StoreMappedDataAs is { Length: > 0 } storeMappedDataAs)
+            date.Add(new XElement(W + "storeMappedDataAs", new XAttribute(W + "val", storeMappedDataAs)));
+        if (control.DateMetadata?.Calendar is { Length: > 0 } calendar)
+            date.Add(new XElement(W + "calendar", new XAttribute(W + "val", calendar)));
+        return date;
     }
 
     private static void AddContentControlWordMetadata(XElement sdtPr, ContentControlWordMetadata? metadata)
