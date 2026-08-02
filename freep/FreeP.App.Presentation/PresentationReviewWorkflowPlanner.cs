@@ -349,6 +349,14 @@ public sealed record PresentationSlideTitleMutationPlan(
     string SuggestedTitle,
     string? ValidationMessage);
 
+public sealed record PresentationChartTitleMutationPlan(
+    bool ShouldApply,
+    int SlideIndex,
+    uint? ShapeId,
+    string Title,
+    string SuggestedTitle,
+    string? ValidationMessage);
+
 public sealed record PresentationTableHeaderRowMutationPlan(
     bool ShouldApply,
     int SlideIndex,
@@ -808,6 +816,12 @@ public static class PresentationReviewWorkflowPlanner
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
         "Enter a slide title before applying the accessibility fix.";
+    public const string ChartTitleMissingSlideMessage =
+        "Chart title target slide was not found.";
+    public const string ChartTitleMissingShapeMessage =
+        "Chart title target chart was not found.";
+    public const string ChartTitleAlreadySetMessage =
+        "The selected chart already has a title.";
     public const string TableHeaderRowMissingSlideMessage =
         "Table header-row target slide was not found.";
     public const string TableHeaderRowMissingShapeMessage =
@@ -1740,6 +1754,75 @@ public static class PresentationReviewWorkflowPlanner
         {
             editor.SetSlideTitle(plan.SlideIndex, plan.Title);
         }
+
+        return plan;
+    }
+
+    public static string BuildSuggestedChartTitle(
+        Presentation presentation,
+        int slideIndex,
+        uint? shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var slide = GetSlide(presentation.Slides, slideIndex);
+        var shape = shapeId is { } id ? slide is null ? null : FindShape(slide.Shapes, id) : null;
+        if (shape?.Chart is not { } chart)
+            return "Chart";
+
+        if (NormalizeText(chart.Title) is { } existingTitle)
+            return existingTitle;
+
+        var altText = NormalizeText(shape.AlternativeText);
+        if (altText is not null)
+            return BuildPreview(altText.TrimEnd('.', '!', '?'));
+
+        var shapeName = NormalizeText(shape.Name);
+        return shapeName is null ? "Chart" : BuildPreview(shapeName);
+    }
+
+    public static PresentationChartTitleMutationPlan BuildChartTitleMutationPlan(
+        Presentation presentation,
+        int slideIndex,
+        uint? shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var suggestedTitle = BuildSuggestedChartTitle(presentation, slideIndex, shapeId);
+        var slide = GetSlide(presentation.Slides, slideIndex);
+        if (slide is null)
+        {
+            return new PresentationChartTitleMutationPlan(
+                false, slideIndex, shapeId, suggestedTitle, suggestedTitle, ChartTitleMissingSlideMessage);
+        }
+
+        var shape = shapeId is { } id ? FindShape(slide.Shapes, id) : null;
+        if (shape?.Chart is null)
+        {
+            return new PresentationChartTitleMutationPlan(
+                false, slideIndex, shapeId, suggestedTitle, suggestedTitle, ChartTitleMissingShapeMessage);
+        }
+
+        if (NormalizeText(shape.Chart.Title) is not null)
+        {
+            return new PresentationChartTitleMutationPlan(
+                false, slideIndex, shape.Id, shape.Chart.Title!, suggestedTitle, ChartTitleAlreadySetMessage);
+        }
+
+        return new PresentationChartTitleMutationPlan(
+            true, slideIndex, shape.Id, suggestedTitle, suggestedTitle, null);
+    }
+
+    public static PresentationChartTitleMutationPlan TryApplyChartTitleMutation(
+        EditingSession editor,
+        int slideIndex,
+        uint? shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        var plan = BuildChartTitleMutationPlan(editor.Presentation, slideIndex, shapeId);
+        if (plan is { ShouldApply: true, ShapeId: { } targetShapeId })
+            editor.SetChartTitle(plan.SlideIndex, targetShapeId, plan.Title);
 
         return plan;
     }

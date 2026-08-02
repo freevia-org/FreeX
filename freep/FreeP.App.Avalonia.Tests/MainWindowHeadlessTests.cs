@@ -4706,9 +4706,11 @@ public sealed class MainWindowHeadlessTests
         PresentationAccessibilityCheckerPanePlan? selectedChart = null;
         PresentationAccessibilityCheckerPanePlan? selectedTitle = null;
         PresentationAccessibilityCheckerPanePlan? invalidSelection = null;
+        PresentationAccessibilityCheckerPanePlan? actionedChart = null;
         PresentationAccessibilityCheckerPanePlan? actionedTitle = null;
         PresentationAccessibilityCheckerPanePlan? actionedAltText = null;
         PresentationSlideTitleMutationPlan? titleMutation = null;
+        PresentationChartTitleMutationPlan? chartTitleMutation = null;
         var paneVisible = false;
         var rowCount = 0;
         var selectedRowCount = 0;
@@ -4718,6 +4720,7 @@ public sealed class MainWindowHeadlessTests
         var titleSlideIndex = -1;
         var titleSelectionCount = -1;
         var titleAfterAction = string.Empty;
+        var chartTitleAfterAction = string.Empty;
         var dirtyAfterTitle = false;
         var altTextSlideIndex = -1;
         uint[] altTextSelection = [];
@@ -4771,7 +4774,11 @@ public sealed class MainWindowHeadlessTests
             chartSlideIndex = window.Editor.CurrentSlideIndex;
             chartSelection = window.Editor.SelectedShapeIds.ToArray();
 
-            selectedTitle = window.SelectAccessibilityCheckerRow(3);
+            actionedChart = window.ApplyAccessibilityCheckerRowAction(2);
+            chartTitleAfterAction = chart.Chart?.Title ?? string.Empty;
+            chartTitleMutation = window.LastChartTitleMutationPlan;
+
+            selectedTitle = window.SelectAccessibilityCheckerRow(2);
             titleSlideIndex = window.Editor.CurrentSlideIndex;
             titleSelectionCount = window.Editor.SelectedShapeIds.Count;
 
@@ -4779,7 +4786,7 @@ public sealed class MainWindowHeadlessTests
             titleSlideIndex = window.Editor.CurrentSlideIndex;
             titleSelectionCount = window.Editor.SelectedShapeIds.Count;
 
-            actionedTitle = window.ApplyAccessibilityCheckerRowAction(3);
+            actionedTitle = window.ApplyAccessibilityCheckerRowAction(2);
             titleAfterAction = window.Editor.CurrentSlide?.Title ?? string.Empty;
             titleMutation = window.LastSlideTitleMutationPlan;
             dirtyAfterTitle = window.IsDirty;
@@ -4827,18 +4834,30 @@ public sealed class MainWindowHeadlessTests
         selectedChart!.SelectedRow!.Title.Should().Be("Chart title missing");
         chartSlideIndex.Should().Be(0);
         chartSelection.Should().Equal(910u);
+        chartTitleAfterAction.Should().Be("Quarterly sales by region");
+        actionedChart.Should().NotBeNull();
+        chartTitleMutation.Should().Be(new PresentationChartTitleMutationPlan(
+            true,
+            0,
+            910,
+            "Quarterly sales by region",
+            "Quarterly sales by region",
+            null));
+        actionedChart!.Rows.Select(row => row.Title).Should().Equal(
+            "Alt text missing",
+            "Unclear hyperlink text",
+            "Missing slide title");
         selectedTitle.Should().NotBeNull();
         selectedTitle!.SelectedRow!.Title.Should().Be("Missing slide title");
         titleSlideIndex.Should().Be(1);
         titleSelectionCount.Should().Be(0);
         invalidSelection.Should().NotBeNull();
-        invalidSelection!.SelectedRowIndex.Should().Be(3);
+        invalidSelection!.SelectedRowIndex.Should().Be(2);
         invalidSelection.SelectedRow!.Title.Should().Be("Missing slide title");
         actionedTitle.Should().NotBeNull();
         actionedTitle!.Rows.Select(row => row.Title).Should().Equal(
             "Alt text missing",
-            "Unclear hyperlink text",
-            "Chart title missing");
+            "Unclear hyperlink text");
         titleAfterAction.Should().Be("Slide 2");
         titleMutation.Should().Be(new PresentationSlideTitleMutationPlan(
             true,

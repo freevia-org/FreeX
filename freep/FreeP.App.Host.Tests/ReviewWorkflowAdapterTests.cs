@@ -524,7 +524,21 @@ public sealed class ReviewWorkflowAdapterTests
             selectedChart.SelectedRow.Should().NotBeNull();
             selectedChart.SelectedRow!.Title.Should().Be("Chart title missing");
 
-            var selectedTitle = window.SelectAccessibilityCheckerRow(3);
+            var actionedChart = window.ApplyAccessibilityCheckerRowAction(2);
+            chart.Chart!.Title.Should().Be("Quarterly sales by region");
+            window.LastChartTitleMutationPlan.Should().Be(new PresentationChartTitleMutationPlan(
+                true,
+                0,
+                chart.Id,
+                "Quarterly sales by region",
+                "Quarterly sales by region",
+                null));
+            actionedChart.Rows.Select(row => row.Title).Should().Equal(
+                "Alt text missing",
+                "Unclear hyperlink text",
+                "Missing slide title");
+
+            var selectedTitle = window.SelectAccessibilityCheckerRow(2);
 
             window.Editor.CurrentSlideIndex.Should().Be(1);
             window.Editor.SelectedShapeIds.Should().BeEmpty();
@@ -533,12 +547,12 @@ public sealed class ReviewWorkflowAdapterTests
 
             var invalidSelection = window.SelectAccessibilityCheckerRow(99);
 
-            invalidSelection.SelectedRowIndex.Should().Be(3);
+            invalidSelection.SelectedRowIndex.Should().Be(2);
             invalidSelection.SelectedRow!.Title.Should().Be("Missing slide title");
             window.Editor.CurrentSlideIndex.Should().Be(1);
             window.Editor.SelectedShapeIds.Should().BeEmpty();
 
-            var actionedTitle = window.ApplyAccessibilityCheckerRowAction(3);
+            var actionedTitle = window.ApplyAccessibilityCheckerRowAction(2);
 
             window.Editor.CurrentSlideIndex.Should().Be(1);
             window.Editor.CurrentSlide!.Title.Should().Be("Slide 2");
@@ -550,8 +564,7 @@ public sealed class ReviewWorkflowAdapterTests
                 null));
             actionedTitle.Rows.Select(row => row.Title).Should().Equal(
                 "Alt text missing",
-                "Unclear hyperlink text",
-                "Chart title missing");
+                "Unclear hyperlink text");
             window.LastAccessibilitySummaryPlan!.Issues.Should().NotContain(issue =>
                 issue.Title == "Missing slide title");
             window.IsDirty.Should().BeTrue();

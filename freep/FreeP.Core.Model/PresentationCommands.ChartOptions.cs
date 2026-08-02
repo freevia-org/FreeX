@@ -1,5 +1,46 @@
 namespace FreeP.Core.Model;
 
+/// <summary>Sets one chart title as a single undoable accessibility edit.</summary>
+public sealed class SetChartTitleCommand : IPresentationCommand
+{
+    private readonly int _slideIndex;
+    private readonly uint _shapeId;
+    private readonly string _newTitle;
+    private string? _oldTitle;
+    private bool _oldAutomaticTitle;
+
+    public SetChartTitleCommand(int slideIndex, uint shapeId, string title)
+    {
+        _slideIndex = slideIndex;
+        _shapeId = shapeId;
+        _newTitle = title?.Trim() ?? string.Empty;
+    }
+
+    public string Label => "Add Chart Title";
+
+    public void Apply(Presentation presentation)
+    {
+        var chart = ChartHelper.FindFormattingEditable(presentation, _slideIndex, _shapeId);
+        if (chart is null || string.IsNullOrWhiteSpace(_newTitle))
+            return;
+
+        _oldTitle = chart.Title;
+        _oldAutomaticTitle = chart.HasAutomaticTitle;
+        chart.Title = _newTitle;
+        chart.HasAutomaticTitle = false;
+    }
+
+    public void Revert(Presentation presentation)
+    {
+        var chart = ChartHelper.FindFormattingEditable(presentation, _slideIndex, _shapeId);
+        if (chart is null)
+            return;
+
+        chart.Title = _oldTitle;
+        chart.HasAutomaticTitle = _oldAutomaticTitle;
+    }
+}
+
 /// <summary>Atomically updates common PowerPoint chart display options.</summary>
 public sealed class SetChartDisplayOptionsCommand : IPresentationCommand
 {

@@ -613,6 +613,20 @@ public sealed class EditingSession
         return StringComparer.Ordinal.Equals(Presentation.Slides[slideIndex].Title, title);
     }
 
+    /// <summary>Sets one chart title through the shared undoable command bus.</summary>
+    public bool SetChartTitle(int slideIndex, uint shapeId, string title)
+    {
+        if (slideIndex < 0 || slideIndex >= Presentation.Slides.Count || string.IsNullOrWhiteSpace(title))
+            return false;
+
+        var command = new SetChartTitleCommand(slideIndex, shapeId, title);
+        Bus.Execute(command);
+        return string.Equals(
+            FindShape(Presentation.Slides[slideIndex].Shapes, shapeId)?.Chart?.Title,
+            title.Trim(),
+            StringComparison.Ordinal);
+    }
+
     /// <summary>Deletes the current slide. Adjusts CurrentSlideIndex after deletion.</summary>
     public void DeleteCurrentSlide()
     {

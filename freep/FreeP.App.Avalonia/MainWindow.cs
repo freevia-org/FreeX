@@ -437,6 +437,7 @@ public sealed partial class MainWindow : Window
     internal PresentationAccessibilitySummaryPlan? LastAccessibilitySummaryPlan { get; private set; }
     internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
     internal PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
+    internal PresentationChartTitleMutationPlan? LastChartTitleMutationPlan { get; private set; }
     internal PresentationTableHeaderRowMutationPlan? LastTableHeaderRowMutationPlan { get; private set; }
     internal PresentationTableStructureReviewPlan? LastTableStructureReviewPlan { get; private set; }
     internal PresentationTableStructureReviewDisplayPlan? LastTableStructureReviewDisplayPlan { get; private set; }
@@ -6955,7 +6956,12 @@ public sealed partial class MainWindow : Window
         }
         else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ChartTitleCommandId)
         {
-            OpenChartDisplayOptionsDialog();
+            LastChartTitleMutationPlan =
+                PresentationReviewWorkflowPlanner.TryApplyChartTitleMutation(
+                    Editor,
+                    row.SlideIndex,
+                    row.ShapeId);
+            RefreshAccessibilitySummaryPlan();
         }
         else if (row?.CommandHint == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneOpenCommandId
             || row?.Category == "Media")

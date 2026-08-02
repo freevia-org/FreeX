@@ -1423,6 +1423,35 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void ChartTitleMutation_UsesAccessibleNameAndSupportsUndo()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var chart = new SlideShape
+        {
+            Id = 21,
+            Name = "Sales chart",
+            Kind = SlideShapeKind.Chart,
+            Chart = new ChartShape(),
+            AlternativeText = "Quarterly sales by region."
+        };
+        presentation.Slides[0].Shapes.Add(chart);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+
+        var plan = PresentationReviewWorkflowPlanner.BuildChartTitleMutationPlan(presentation, 0, chart.Id);
+        plan.ShouldApply.Should().BeTrue();
+        plan.Title.Should().Be("Quarterly sales by region");
+
+        var applied = PresentationReviewWorkflowPlanner.TryApplyChartTitleMutation(editor, 0, chart.Id);
+        applied.Should().Be(plan);
+        chart.Chart!.Title.Should().Be("Quarterly sales by region");
+        PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation).Issues
+            .Should().NotContain(issue => issue.Title == "Chart title missing");
+
+        editor.Undo();
+        chart.Chart.Title.Should().BeNull();
+    }
+
+    [Fact]
     public void BuildAccessibilitySummaryPlan_FlagsVideosWithoutCaptions()
     {
         var presentation = Presentation.CreateEmpty();
