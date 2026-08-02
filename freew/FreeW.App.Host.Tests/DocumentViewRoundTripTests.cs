@@ -1474,7 +1474,10 @@ public sealed class DocumentViewRoundTripTests
         rendered.Margin.Left.Should().Be(0);
         rendered.Margin.Right.Should().Be(0);
         rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
-            .BeApproximately(2 + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0), 0.01);
+            .BeApproximately(
+                sourceTable.Rows[0].Cells[0].Margins!.TopPt * (96.0 / 72.0)
+                + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0),
+                0.01);
         rendered.RowGroups[0].Rows[0].Cells[0].Background.Should().NotBeNull(
             "ordinary flow tables retain their existing WPF cell-surface ownership");
     }
@@ -1498,6 +1501,8 @@ public sealed class DocumentViewRoundTripTests
         var expectedTrailing = contentWidth - 460 * (96.0 / 72.0);
         rendered.Margin.Left.Should().Be(0);
         rendered.Margin.Right.Should().BeApproximately(expectedTrailing, 0.01);
+        rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should().Be(0);
+        rendered.RowGroups[0].Rows[0].Cells[0].Padding.Bottom.Should().Be(0);
     }
 
     [StaFact]

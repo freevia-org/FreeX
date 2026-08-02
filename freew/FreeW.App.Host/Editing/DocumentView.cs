@@ -9614,13 +9614,16 @@ public sealed class DocumentView : RichTextBox
             foreach (var modelCell in modelRow.Cells)
             {
                 var span = Math.Max(1, modelCell.GridSpan);
+                var ordinaryCellMargins = !isPaginationSegment
+                    ? modelCell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default
+                    : null;
                 var wpfCell = new WpfTableCell
                 {
                     Padding = new Thickness(
                         4,
-                        2 + paginationVerticalCellSpacingDip,
+                        (ordinaryCellMargins?.TopPt * PxPerPoint ?? 2) + paginationVerticalCellSpacingDip,
                         4,
-                        2 + paginationVerticalCellSpacingDip)
+                        (ordinaryCellMargins?.BottomPt * PxPerPoint ?? 2) + paginationVerticalCellSpacingDip)
                 };
                 if (span > 1)
                     wpfCell.ColumnSpan = span;
