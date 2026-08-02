@@ -32,6 +32,7 @@ public sealed class PageSetupDialogPlannerTests
         PageSetupDialogPlanner.RightMarginLabel.Should().Be("Right (pt):");
         PageSetupDialogPlanner.GutterLabel.Should().Be("Gutter (pt):");
         PageSetupDialogPlanner.PaperSizeLabel.Should().Be("Paper size:");
+        PageSetupDialogPlanner.CustomHeightLabel.Should().Be("Height (pt):");
     }
 
     [Fact]

@@ -142,7 +142,7 @@ public static class PageSetupDialogPlanner
     public const string PaperSizeSectionLabel = "Paper Size";
     public const string PaperSizeLabel = "Paper size:";
     public const string CustomWidthLabel = "Width (pt):";
-    public const string CustomHeightLabel = "  Height (pt):";
+    public const string CustomHeightLabel = "Height (pt):";
     public const string SectionStartLabel = "Section start:";
     public const string VerticalAlignmentLabel = "Vertical alignment:";
     public const string HeaderDistanceLabel = "Header from edge (pt):";
