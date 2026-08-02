@@ -4438,6 +4438,137 @@ public sealed class DocumentView : RichTextBox
         LoadModel(_model);
     }
 
+    internal bool TryToggleSelectedRunFormatting(
+        Func<RunFormatting, bool> isSet,
+        Func<RunFormatting, bool, RunFormatting> set)
+    {
+        ArgumentNullException.ThrowIfNull(isSet);
+        ArgumentNullException.ThrowIfNull(set);
+
+        if (!AllowsRestrictEditingOperation(RestrictEditingOperationKind.BodyFormatting))
+            return true;
+
+        var selectedRange = SelectedVisibleTextRange();
+        if (selectedRange is null
+            || (selectedRange.Value.VisibleBlockIndices.Count == 1
+                && selectedRange.Value.StartOffset == selectedRange.Value.EndOffset))
+        {
+            return false;
+        }
+
+        CommitToModel();
+        var ranges = new List<(int BlockIndex, int StartOffset, int EndOffset)>();
+        for (var i = 0; i < selectedRange.Value.VisibleBlockIndices.Count; i++)
+        {
+            var modelIndex = ModelIndexFromVisible(selectedRange.Value.VisibleBlockIndices[i]);
+            if (modelIndex < 0 || modelIndex >= _model.Blocks.Count
+                || _model.Blocks[modelIndex] is not ModelParagraph paragraph)
+            {
+                continue;
+            }
+
+            var textLength = paragraph.Runs.Sum(run => run.Text.Length);
+            var start = i == 0 ? selectedRange.Value.StartOffset : 0;
+            var end = i == selectedRange.Value.VisibleBlockIndices.Count - 1
+                ? selectedRange.Value.EndOffset
+                : textLength;
+            start = Math.Clamp(start, 0, textLength);
+            end = Math.Clamp(end, 0, textLength);
+            if (end > start)
+                ranges.Add((modelIndex, start, end));
+        }
+
+        if (ranges.Count == 0)
+            return false;
+
+        var allSet = ranges.All(range => RunRangeAllMatches(
+            (ModelParagraph)_model.Blocks[range.BlockIndex],
+            range.StartOffset,
+            range.EndOffset,
+            isSet));
+        var target = !allSet;
+
+        if (ranges.Count > 1)
+            _commands.BeginUndoGroup();
+        foreach (var range in ranges)
+        {
+            _commands.Execute(new FormatRunRangeCommand(
+                range.BlockIndex,
+                range.StartOffset,
+                range.EndOffset,
+                formatting => set(formatting, target)));
+        }
+        if (ranges.Count > 1)
+            _commands.CommitUndoGroup("Character Formatting");
+
+        return true;
+    }
+
+    private static bool RunRangeAllMatches(
+        ModelParagraph paragraph,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, bool> predicate)
+    {
+        var position = 0;
+        var sawText = false;
+        foreach (var run in paragraph.Runs)
+        {
+            var runStart = position;
+            var runEnd = position + run.Text.Length;
+            position = runEnd;
+            if (runEnd <= startOffset || runStart >= endOffset || run.Text.Length == 0)
+                continue;
+            sawText = true;
+            if (!predicate(run.Formatting))
+                return false;
+        }
+        return sawText;
+    }
+
+    private sealed class FormatRunRangeCommand(
+        int blockIndex,
+        int startOffset,
+        int endOffset,
+        Func<RunFormatting, RunFormatting> transform) : IDocumentCommand
+    {
+        private List<ModelRun>? _previous;
+        private List<ModelRun>? _replacement;
+
+        public string Label => "Character Formatting";
+        public DocumentCommandMutationKind MutationKind => DocumentCommandMutationKind.BodyFormatting;
+
+        public void Apply(IDocumentCommandContext context)
+        {
+            var paragraph = (ModelParagraph)context.Document.Blocks[blockIndex];
+            if (_replacement is not null)
+            {
+                paragraph.Runs.Clear();
+                paragraph.Runs.AddRange(_replacement);
+                return;
+            }
+
+            _previous = [.. paragraph.Runs];
+            ApplyRunFormattingToTextRange(
+                paragraph,
+                startOffset,
+                endOffset,
+                transform,
+                context.Document,
+                context.RevisionAuthor);
+            _replacement = [.. paragraph.Runs];
+        }
+
+        public void Revert(IDocumentCommandContext context)
+        {
+            if (_previous is null)
+                return;
+            var paragraph = (ModelParagraph)context.Document.Blocks[blockIndex];
+            paragraph.Runs.Clear();
+            paragraph.Runs.AddRange(_previous);
+        }
+    }
+
     /// <summary>
     /// Set (or clear when <paramref name="border"/> is null) the character border on every run in the
     /// selected paragraphs. Routes through the undo/redo bus and re-renders.
@@ -16046,7 +16177,9 @@ public sealed class DocumentView : RichTextBox
         ModelParagraph paragraph,
         int startOffset,
         int endOffset,
-        Func<RunFormatting, RunFormatting> transform)
+        Func<RunFormatting, RunFormatting> transform,
+        TextDocument? document = null,
+        string? revisionAuthor = null)
     {
         var rebuilt = new List<ModelRun>();
         var position = 0;
@@ -16077,7 +16210,17 @@ public sealed class DocumentView : RichTextBox
                 rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[..localStart]));
 
             var covered = RevisionEditPlanner.CloneRunWithText(source, source.Text[localStart..localEnd]);
-            covered.Formatting = transform(source.Formatting);
+            var formatting = transform(source.Formatting);
+            covered.Formatting = formatting;
+            if (document is { TrackRevisions: true, DoNotTrackFormatting: false }
+                && formatting != source.Formatting
+                && covered.FormatRevision is null)
+            {
+                covered.FormatRevision = new ModelFormatRevision(
+                    source.Formatting,
+                    string.IsNullOrWhiteSpace(revisionAuthor) ? "FreeW User" : revisionAuthor.Trim(),
+                    CurrentRevisionDateXml());
+            }
             rebuilt.Add(covered);
 
             if (localEnd < length)
