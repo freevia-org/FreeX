@@ -233,4 +233,37 @@ public sealed class MailMergeDialogPlannerTests
         result.Issues.Select(issue => issue.Instruction).Should().BeEquivalentTo(
             "SectionMissing", "FirstMissing", "EvenMissing");
     }
+
+    [Fact]
+    public void CheckForErrors_InspectsVisibleDrawingAndAnnotationStories()
+    {
+        var template = TextDocument.CreateEmpty();
+        var paragraph = template.Paragraphs.Single();
+        paragraph.Runs.Add(Run.FromShape(Shape.TextBoxWith(
+            $"Shape {MailMerge.FieldOpen}ShapeMissing{MailMerge.FieldClose}", 100, 30)));
+        var chart = Chart.Create(
+            ChartKind.Column,
+            [$"{MailMerge.FieldOpen}CategoryMissing{MailMerge.FieldClose}"],
+            [1d],
+            seriesName: $"{MailMerge.FieldOpen}SeriesMissing{MailMerge.FieldClose}",
+            title: $"{MailMerge.FieldOpen}ChartMissing{MailMerge.FieldClose}");
+        paragraph.Runs.Add(Run.FromChart(chart));
+        template.Footnotes[1] = new Footnote(
+            1, $"Foot {MailMerge.FieldOpen}FootMissing{MailMerge.FieldClose}");
+        template.Comments[2] = new Comment(
+            2, $"Comment {MailMerge.FieldOpen}CommentMissing{MailMerge.FieldClose}");
+        IReadOnlyDictionary<string, string>[] rows =
+        [new Dictionary<string, string> { ["Name"] = "Ada" }];
+
+        var result = MailMergeCheckForErrorsPlanner.Check(
+            template, rows, MailMergeCheckForErrorsMode.SimulateAndReport);
+
+        result.Issues.Select(issue => issue.Instruction).Should().BeEquivalentTo(
+            "ShapeMissing",
+            "ChartMissing",
+            "CategoryMissing",
+            "SeriesMissing",
+            "FootMissing",
+            "CommentMissing");
+    }
 }

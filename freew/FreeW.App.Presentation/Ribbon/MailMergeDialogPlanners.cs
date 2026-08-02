@@ -326,8 +326,6 @@ public static class MailMergeCheckForErrorsPlanner
         var firstRow = rows.FirstOrDefault()
             ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var instructions = MailMerge.FieldNames(template).ToList();
-        foreach (var section in template.Sections)
-            AddInstructions(section.HeadersFooters, instructions);
 
         foreach (var instruction in instructions.Distinct(StringComparer.OrdinalIgnoreCase))
         {
@@ -400,31 +398,6 @@ public static class MailMergeCheckForErrorsPlanner
         }
 
         return report;
-    }
-
-    private static void AddInstructions(string text, ICollection<string> instructions)
-    {
-        foreach (var instruction in MailMerge.FieldNames(text))
-            instructions.Add(instruction);
-    }
-
-    private static void AddInstructions(
-        SectionHeadersFooters headersFooters,
-        ICollection<string> instructions)
-    {
-        foreach (var story in new[]
-                 {
-                     headersFooters.Header,
-                     headersFooters.Footer,
-                     headersFooters.EvenHeader,
-                     headersFooters.EvenFooter,
-                     headersFooters.FirstHeader,
-                     headersFooters.FirstFooter
-                 })
-        {
-            if (story is not null)
-                AddInstructions(story.PlainText, instructions);
-        }
     }
 
     private static bool IsSpecialInstruction(string instruction) =>
