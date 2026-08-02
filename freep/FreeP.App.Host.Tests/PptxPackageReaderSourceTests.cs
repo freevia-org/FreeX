@@ -98,6 +98,7 @@ public sealed class PptxPackageReaderSourceTests
         ExtractMethod(source, "private static bool IsLiveSmartArtLayoutSupported(")
             .Should()
             .Contain("picturecaptionlist")
+            .And.Contain("pictureaccentprocess")
             .And.Contain("pictureaccentlist")
             .And.Contain("picturestack")
             .And.Contain("picturelineup")

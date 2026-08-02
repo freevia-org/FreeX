@@ -55,9 +55,18 @@ public sealed class ErrorCheckingDialogSourceTests
     public void ErrorCheckingParityCapture_UsesTheSharedIssueFixture()
     {
         var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+        var avaloniaSource = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs");
+        var avaloniaDialogSource = WorkspaceFileLocator.ReadAllText(
+            "src", "FreeX.App.Avalonia", "MainWindow.ErrorChecking.cs");
 
         source.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
         source.Should().Contain("targetSurfaceId, \"dialog.ErrorChecking\"");
+        source.Should().Contain("private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingIssues(SheetId sheetId) =>");
+        source.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);");
+        avaloniaSource.Should().Contain("(\"dialog.ErrorChecking\", () => ShowErrorCheckingParityDialogAsync()),");
+        avaloniaDialogSource.Should().Contain("ErrorCheckingDialogPlanner.CreateParityIssues(sheetId)");
+        avaloniaDialogSource.Should().NotContain("CreateErrorCheckingIssues(sheetId)");
     }
 
     [Fact]
