@@ -1178,11 +1178,22 @@ public sealed class SlideCanvas : Control
             chartOp.PlotAreaOutline);
 
         var frameRect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-        dc.FillRectangle(scene.ChartAreaFill is { } chartFill ? ToBrush(chartFill) : Brushes.White, frameRect);
+        var chartBrush = scene.ChartAreaFill is { } chartFill ? ToBrush(chartFill) : Brushes.White;
+        var chartPen = scene.ChartAreaOutline is { } chartOutline ? ToPen(chartOutline) : null;
+        if (scene.RoundedCorners)
+        {
+            var radius = Math.Min(ChartRenderPlanner.RoundedChartCornerRadius,
+                Math.Min(frameRect.Width, frameRect.Height) / 2.0);
+            dc.DrawRectangle(chartBrush, chartPen, frameRect, radius, radius);
+        }
+        else
+        {
+            dc.FillRectangle(chartBrush, frameRect);
+        }
         if (scene.PlotAreaFill is { } plotFill)
             dc.FillRectangle(ToBrush(plotFill), ToRect(scene.Frame.Plot));
-        if (scene.ChartAreaOutline is { } chartOutline)
-            dc.DrawRectangle(ToPen(chartOutline), frameRect);
+        if (!scene.RoundedCorners && scene.ChartAreaOutline is { } outline)
+            dc.DrawRectangle(ToPen(outline), frameRect);
         if (scene.PlotAreaOutline is { } plotOutline)
             dc.DrawRectangle(ToPen(plotOutline), ToRect(scene.Frame.Plot));
 

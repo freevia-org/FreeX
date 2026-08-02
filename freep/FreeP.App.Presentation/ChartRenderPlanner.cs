@@ -558,6 +558,7 @@ public sealed class ChartScenePlan
     public ChartStrokePlan? PlotAreaOutline { get; init; }
     public ChartSceneGeometryKind GeometryKind { get; init; }
     public bool UsesStockLineFallback { get; init; }
+    public bool RoundedCorners { get; init; }
     public ChartTextPlan? Title { get; init; }
     public bool DrawFlatGrid { get; init; }
     // WPF consumes this as a host-local raster hint. Avalonia intentionally
@@ -605,6 +606,7 @@ public sealed class ChartScenePlan
 public static partial class ChartRenderPlanner
 {
     public const double Margin = 8.0;
+    public const double RoundedChartCornerRadius = 8.0;
     public const double TitleHeight = 18.0;
     public const double LegendHeight = 14.0;
     public const double AxisLabelWidth = 40.0;
@@ -1665,6 +1667,7 @@ public static partial class ChartRenderPlanner
             PlotAreaOutline = plotAreaOutline,
             GeometryKind = geometryKind,
             UsesStockLineFallback = UsesStockLineFallback(chart),
+            RoundedCorners = chart.RoundedCorners == true,
             Title = title,
             DrawFlatGrid = !UsesProjectedSurfaceFrame(chart) &&
                 !UsesImportedThreeDColumnDefaults(chart) &&

@@ -3967,6 +3967,26 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_UsesAuthoredRoundedCornersFlag()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            RoundedCorners = true
+        };
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        scene.RoundedCorners.Should().BeTrue();
+        ChartRenderPlanner.RoundedChartCornerRadius.Should().Be(8.0);
+
+        var defaultScene = ChartRenderPlanner.BuildScenePlan(
+            new ChartShape { ChartType = ChartType.ColumnClustered },
+            new ChartPlanRect(0, 0, 480, 320));
+        defaultScene.RoundedCorners.Should().BeFalse();
+    }
+
+    [Fact]
     public void BuildScenePlan_OfPieBarUsesSecondaryColumnPrimitives()
     {
         var series = new ChartSeries { Name = "Share" };
