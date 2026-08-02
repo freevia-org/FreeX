@@ -9911,26 +9911,47 @@ public sealed class DocumentView : RichTextBox
         if (table.AutoFit != AutoFitMode.Contents
             || table.ColumnCount == 0
             || table.Rows.SelectMany(row => row.Cells).Any(cell =>
-                cell.GridSpan != 1 || cell.TextDirection != CellTextDirection.Horizontal))
+                cell.TextDirection != CellTextDirection.Horizontal))
         {
             return null;
         }
 
         const double contentAllowanceDip = 14;
         var widths = Enumerable.Repeat(contentAllowanceDip, table.ColumnCount).ToArray();
+        var spanningRequirements = new List<(int StartColumn, int Span, double RequiredWidth)>();
         foreach (var row in table.Rows)
         {
-            for (var columnIndex = 0; columnIndex < row.Cells.Count && columnIndex < widths.Length; columnIndex++)
+            var gridColumn = 0;
+            foreach (var cell in row.Cells)
             {
-                var cell = row.Cells[columnIndex];
+                var span = Math.Min(Math.Max(1, cell.GridSpan), widths.Length - gridColumn);
+                if (span <= 0)
+                    break;
                 var contentWidth = cell.Paragraphs.Count == 0
                     ? 0
                     : cell.Paragraphs.Max(paragraph => paragraph.Runs.Sum(run =>
                         MeasureRunText(run.Text, run, paragraph, document)));
-                widths[columnIndex] = Math.Max(
-                    widths[columnIndex],
-                    contentWidth + contentAllowanceDip);
+                var requiredWidth = contentWidth + contentAllowanceDip * span;
+                if (span == 1)
+                    widths[gridColumn] = Math.Max(widths[gridColumn], requiredWidth);
+                else
+                    spanningRequirements.Add((gridColumn, span, requiredWidth));
+                gridColumn += span;
             }
+        }
+
+        foreach (var requirement in spanningRequirements)
+        {
+            var currentWidth = widths
+                .Skip(requirement.StartColumn)
+                .Take(requirement.Span)
+                .Sum();
+            if (currentWidth >= requirement.RequiredWidth)
+                continue;
+
+            var widestColumn = Enumerable.Range(requirement.StartColumn, requirement.Span)
+                .MaxBy(column => widths[column]);
+            widths[widestColumn] += requirement.RequiredWidth - currentWidth;
         }
 
         var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
