@@ -198,6 +198,7 @@ public static class DocxWriter
             || document.Blocks.OfType<Paragraph>().Any(p => p.SectionBreak?.Page.DifferentOddEvenPages == true);
 
         var hasSettings = hasProtection
+            || document.DoNotDisplayPageBoundaries
             || document.RemovePersonalInformation
             || document.HideSpellingErrors
             || document.HideGrammaticalErrors
@@ -270,7 +271,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.DoNotDisplayPageBoundaries, document.RemovePersonalInformation, document.HideSpellingErrors, document.HideGrammaticalErrors, document.AutomaticallyUpdateStylesFromTemplate, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8249,7 +8250,8 @@ public static class DocxWriter
     /// w:background), the automatic-hyphenation toggle (w:autoHyphenation), the different-odd/even-headers
     /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>), the embed-TrueType-fonts
     /// toggle (w:embedTrueTypeFonts), the personal-information removal toggle
-    /// (w:removePersonalInformation), the proofing-indicator toggles (w:hideSpellingErrors and
+    /// (w:removePersonalInformation), the page-boundary view toggle
+    /// (w:doNotDisplayPageBoundaries), the proofing-indicator toggles (w:hideSpellingErrors and
     /// w:hideGrammaticalErrors), the template-style refresh toggle (w:linkStyles),
     /// the revision-tracking toggles (w:trackRevisions,
     /// w:doNotTrackMoves, and w:doNotTrackFormatting), and the document-protection element
@@ -8264,7 +8266,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool doNotDisplayPageBoundaries, bool removePersonalInformation, bool hideSpellingErrors, bool hideGrammaticalErrors, bool automaticallyUpdateStylesFromTemplate, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8297,6 +8299,8 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "w", W.NamespaceName));
             if (removePersonalInformation)
                 fresh.Add(new XElement(W + "removePersonalInformation"));
+            if (doNotDisplayPageBoundaries)
+                fresh.Add(new XElement(W + "doNotDisplayPageBoundaries"));
             if (embedTrueTypeFonts)
                 fresh.Add(new XElement(W + "embedTrueTypeFonts"));
             if (displayBackground)
@@ -8349,6 +8353,7 @@ public static class DocxWriter
         // preserved one — is authoritative for these. Unmodelled settings keep their place.
         var settings = new XElement(original);
         OverlaySetting(settings, "removePersonalInformation", removePersonalInformation ? new XElement(W + "removePersonalInformation") : null);
+        OverlaySetting(settings, "doNotDisplayPageBoundaries", doNotDisplayPageBoundaries ? new XElement(W + "doNotDisplayPageBoundaries") : null);
         OverlaySetting(settings, "embedTrueTypeFonts", embedTrueTypeFonts ? new XElement(W + "embedTrueTypeFonts") : null);
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
