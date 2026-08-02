@@ -153,6 +153,30 @@ public sealed class OptionsDialogAdvancedParitySourceTests
     }
 
     [Fact]
+    public void AddIns_UsesWpfGeometryAndEnabledOwnedDeferredRoute()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Options.cs"));
+        var planner = File.ReadAllText(RepoFile("src", "FreeX.App.Services", "OptionsDialogPlanner.cs"));
+        var wpf = File.ReadAllText(RepoFile("src", "FreeX.App.Host", "OptionsDialog.xaml"));
+
+        planner.Should().Contain("AddInsSectionHeaderTopMargin");
+        planner.Should().Contain("AddInsSectionRuleBottomMargin");
+        source.Should().Contain("var addInsGoButton = OptionsButton(");
+        source.Should().Contain("OptionsDialogPlanner.AddInsGoButtonWidth");
+        source.Should().Contain("AutomationProperties.SetAutomationId(addInsGoButton, \"AddInsGoButton\")");
+        source.Should().Contain("addInsGoButton.Click += async (_, _) =>");
+        source.Should().Contain("UiText.Get(\"DeferredCommand_OfficeAddIns_Body\")");
+        source.Should().Contain("UiText.Get(\"DeferredCommand_OfficeAddIns_Title\")");
+        source.Should().Contain("addInsPanel.Spacing = 0;");
+        source.Should().NotContain("OptionsButton(OptionsText(\"Options_Go\"), width: 72, isEnabled: false)");
+
+        wpf.Should().Contain("x:Name=\"PanelAddIns\"");
+        wpf.Should().Contain("x:Name=\"AddInsGoButton\"");
+        wpf.Should().Contain("Width=\"70\" Height=\"26\"");
+        wpf.Should().Contain("Click=\"AddInsGoButton_Click\"");
+    }
+
+    [Fact]
     public async Task CustomizeRibbonImportExport_UsesOwnedModalAndClosesThroughClickAndKeyboard()
     {
         await Session.Dispatch(async () =>

@@ -72,6 +72,12 @@ public static class OptionsDialogPlanner
     public const double LanguageSectionBottomMargin = 14;
     public const double LanguageFieldBottomMargin = 9;
     public const double LanguageDescriptionTopMargin = 4;
+    public const double AddInsSectionHeaderTopMargin = 0;
+    public const double AddInsSectionHeaderBottomMargin = 0;
+    public const double AddInsSectionRuleTopMargin = 5;
+    public const double AddInsSectionRuleBottomMargin = 12;
+    public const double AddInsDescriptionBottomMargin = 8;
+    public const double AddInsGoButtonWidth = 70;
     public const double ProofingContentWidth = CaptureWidth - CategoryColumnWidth - (ContentPaddingHorizontal * 2);
     public const double ProofingWordsListHeight = 108;
     public const double ProofingAddWordLabelWidth = 94;

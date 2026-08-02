@@ -136,6 +136,23 @@ public sealed partial class OptionsDialogSourceTests
     }
 
     [Fact]
+    public void OptionsDialog_AddInsMatchesTheWpfSectionAndDeferredActionContract()
+    {
+        var xaml = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml");
+        var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");
+
+        xaml.Should().Contain("x:Name=\"PanelAddIns\"");
+        xaml.Should().Contain("Options_ViewAndManageAddIns");
+        xaml.Should().Contain("Options_ActiveApplicationAddIns");
+        xaml.Should().Contain("x:Name=\"AddInsGoButton\"");
+        xaml.Should().Contain("Width=\"70\" Height=\"26\"");
+        xaml.Should().Contain("Click=\"AddInsGoButton_Click\"");
+        source.Should().Contain("PanelAddIns.Visibility");
+        source.Should().Contain("private void AddInsGoButton_Click");
+        source.Should().Contain("DeferredCommandMessages.OfficeAddIns()");
+    }
+
+    [Fact]
     public void OptionsDialog_DefaultFormatUsesNativeFreexWorkbookExtension()
     {
         var source = DialogSourceTestSupport.ReadHostSources("OptionsDialog.xaml.cs");

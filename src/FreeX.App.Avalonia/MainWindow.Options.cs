@@ -919,10 +919,30 @@ public sealed partial class MainWindow
             quickAccessGrid,
             quickAccessImportExportButton);
 
+        var addInsGoButton = OptionsButton(
+            OptionsText("Options_Go"),
+            width: OptionsDialogPlanner.AddInsGoButtonWidth);
+        AutomationProperties.SetAutomationId(addInsGoButton, "AddInsGoButton");
+        addInsGoButton.Click += async (_, _) =>
+            await AvaloniaUserMessageDialog.ShowWarningAsync(
+                dialog,
+                UiText.Get("DeferredCommand_OfficeAddIns_Body"),
+                UiText.Get("DeferredCommand_OfficeAddIns_Title"));
+
+        var addInsDescription = OptionsDescription(
+            OptionsText("Options_ActiveApplicationAddIns"),
+            bottomMargin: OptionsDialogPlanner.AddInsDescriptionBottomMargin);
+        addInsDescription.Foreground = Brushes.Black;
         var addInsPanel = OptionsCategoryPanel(
-            OptionsSectionHeader(OptionsText("Options_ViewAndManageAddIns")),
-            OptionsDescription(OptionsText("Options_ActiveApplicationAddIns")),
-            OptionsButton(OptionsText("Options_Go"), width: 72, isEnabled: false));
+            OptionsSectionHeader(
+                OptionsText("Options_ViewAndManageAddIns"),
+                topMargin: OptionsDialogPlanner.AddInsSectionHeaderTopMargin,
+                bottomMargin: OptionsDialogPlanner.AddInsSectionHeaderBottomMargin,
+                ruleTopMargin: OptionsDialogPlanner.AddInsSectionRuleTopMargin,
+                ruleBottomMargin: OptionsDialogPlanner.AddInsSectionRuleBottomMargin),
+            addInsDescription,
+            addInsGoButton);
+        addInsPanel.Spacing = 0;
 
         var crashAnalyticsBox = new CheckBox
         {

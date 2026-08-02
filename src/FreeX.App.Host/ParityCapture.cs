@@ -617,6 +617,7 @@ internal static class ParityCapture
                 string.Equals(targetSurfaceId, "dialog.Options.Language", StringComparison.Ordinal) ||
                 string.Equals(targetSurfaceId, "dialog.Options.EaseOfAccess", StringComparison.Ordinal) ||
                 string.Equals(targetSurfaceId, "dialog.Options.CustomizeRibbon", StringComparison.Ordinal) ||
+                string.Equals(targetSurfaceId, "dialog.Options.AddIns", StringComparison.Ordinal) ||
                 string.Equals(targetSurfaceId, "dialog.Options.TrustCenter", StringComparison.Ordinal))
             {
                 CaptureDialogTabs(results, "dialog.Options", outDir,
