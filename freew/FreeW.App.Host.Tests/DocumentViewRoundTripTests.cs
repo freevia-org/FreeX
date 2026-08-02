@@ -1379,6 +1379,35 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void PerCellBorderChrome_UsesTheCellEdgeWhileOrdinaryCellsKeepTheirInset()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        table.Rows[0].Cells[0].Borders = new CellBorders
+        {
+            Top = new CellBorderEdge(BorderLineStyle.Single, "#CC0000", 3)
+        };
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedCells = RenderedTables(view.Document).Single().RowGroups.Single().Rows.Single().Cells;
+        var customCell = renderedCells[0];
+        customCell.Padding.Left.Should().Be(0);
+        customCell.Padding.Right.Should().Be(0);
+        var customHost = customCell.Blocks.OfType<BlockUIContainer>().Single().Child
+            .Should().BeOfType<System.Windows.Controls.Grid>().Subject;
+        var transform = customHost.RenderTransform.Should().BeOfType<System.Windows.Media.TranslateTransform>().Subject;
+        transform.X.Should().Be(-4);
+        transform.Y.Should().Be(0);
+
+        renderedCells[1].Padding.Left.Should().Be(4);
+        renderedCells[1].Padding.Right.Should().Be(4);
+    }
+
+    [StaFact]
     public void TableVerticalMerge_RendersFiniteMergedRegion_AndRoundTrips()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
