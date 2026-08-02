@@ -385,6 +385,9 @@ public sealed class ChartMarkerStyle
 /// <summary>Point-level authored chart style override, keyed by zero-based point index.</summary>
 public sealed class ChartPointStyle
 {
+    /// <summary>Pie or doughnut slice explosion percentage from <c>c:explosion</c>.</summary>
+    public int? ExplosionPercent { get; set; }
+
     /// <summary>Optional data-label override for this individual point.</summary>
     public ChartDataLabels? DataLabels { get; set; }
 
@@ -454,6 +457,12 @@ public sealed class ChartSeries
 
     /// <summary>Authored smooth-line decision from <c>c:smooth</c>. Null means use PowerPoint's chart-type default.</summary>
     public bool? SmoothLine { get; set; }
+
+    /// <summary>
+    /// Whether negative values use the inverted series fill from OOXML
+    /// <c>c:invertIfNegative</c>. Null preserves the chart application's default.
+    /// </summary>
+    public bool? InvertIfNegative { get; set; }
 
     /// <summary>Data point values, one per category. Null entries represent missing/gap points.</summary>
     public List<double?> Values { get; } = new();

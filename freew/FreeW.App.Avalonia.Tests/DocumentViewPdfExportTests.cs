@@ -1240,6 +1240,99 @@ public sealed class DocumentViewPdfExportTests
         }, CancellationToken.None);
 
     [Fact]
+    public Task BuildPdfContent_UsesSharedCandyCornPageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.CandyCornArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            pdf.Pages.Single().Ops.OfType<PdfFillRect>().Should().BeEmpty();
+            paths.Should().HaveCount(1272);
+            paths[0].FillColor.Should().Be(PdfColor.Black);
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(42, 767.25));
+            paths[1].FillColor.Should().Be(new PdfColor(0xF5, 0xC6, 0x0A));
+            paths[2].FillColor.Should().Be(new PdfColor(0xFE, 0x45, 0x01));
+            paths[3].FillColor.Should().Be(new PdfColor(255, 255, 255));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var orangeInk = 0;
+            var yellowInk = 0;
+            for (var y = 32; y < 64; y++)
+            for (var x = 48; x < 80; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red > 220 && pixel.Green < 110 && pixel.Blue < 40)
+                    orangeInk++;
+                if (pixel.Red > 210 && pixel.Green > 130 && pixel.Blue < 60)
+                    yellowInk++;
+            }
+            orangeInk.Should().BeGreaterThan(100);
+            yellowInk.Should().BeGreaterThan(80);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task BuildPdfContent_UsesSharedIceCreamConesPageBorderPlan() =>
+        Session.Dispatch(() =>
+        {
+            var document = TextDocument.CreateEmpty();
+            document.Page.WidthPt = 612;
+            document.Page.HeightPt = 792;
+            document.Page.PageBorder = new PageBorder("#000000", 3)
+            {
+                SpacePt = 24,
+                ArtId = PageBorderArtVisualPlanner.IceCreamConesArtId,
+            };
+
+            var view = new DocumentView();
+            view.LoadDocument(document);
+
+            var pdf = view.BuildPdfContent();
+            var paths = pdf.Pages.Single().Ops.OfType<PdfPath>().ToArray();
+            pdf.Pages.Single().Ops.OfType<PdfFillRect>().Should().BeEmpty();
+            paths.Should().HaveCount(510);
+            paths[0].FillColor.Should().Be(PdfColor.Black);
+            paths[0].Contours.Single().Start.Should().Be(new PdfPathPoint(30.75, 759.75));
+            paths[1].FillColor.Should().Be(new PdfColor(0x60, 0x40, 0x20));
+            paths[2].FillColor.Should().Be(PdfColor.Black);
+            paths[3].FillColor.Should().Be(new PdfColor(0xFF, 0x80, 0xFF));
+            paths[4].FillColor.Should().Be(new PdfColor(0xFF, 0xFF, 0x80));
+            pdf.Pages.Single().Ops.Should().NotContain(op => op is PdfStrokeRect);
+
+            using var bitmap = SKBitmap.Decode(SkiaPdfWriter.RenderPagesToPng(pdf, dpi: 96).Single());
+            var brownInk = 0;
+            var pinkInk = 0;
+            var yellowInk = 0;
+            for (var y = 32; y < 64; y++)
+            for (var x = 32; x < 64; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red is > 60 and < 130 && pixel.Green < 100 && pixel.Blue < 70)
+                    brownInk++;
+                if (pixel.Red > 220 && pixel.Green is > 70 and < 180 && pixel.Blue > 220)
+                    pinkInk++;
+                if (pixel.Red > 220 && pixel.Green > 220 && pixel.Blue is > 70 and < 180)
+                    yellowInk++;
+            }
+            brownInk.Should().BeGreaterThan(50);
+            pinkInk.Should().BeGreaterThan(50);
+            yellowInk.Should().BeGreaterThan(80);
+            bitmap.GetPixel(408, 528).Should().Be(SKColors.White);
+        }, CancellationToken.None);
+
+    [Fact]
     public Task BuildPdfContent_DoesNotEmitPageBorderWithoutAuthoredBorder() =>
         Session.Dispatch(() =>
         {

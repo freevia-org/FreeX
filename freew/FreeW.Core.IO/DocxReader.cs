@@ -3239,12 +3239,14 @@ public static class DocxReader
         var dropDown = sdtPr?.Element(W + "dropDownList");
         if (dropDown is not null)
             return new ContentControl(ContentControlKind.DropDownList, normTag, normAlias,
-                ListItems: ReadListItems(dropDown), LockMode: lockMode, WordMetadata: wordMetadata);
+                ListItems: ReadListItems(dropDown), LockMode: lockMode, WordMetadata: wordMetadata,
+                ListLastValue: dropDown.Attribute(W + "lastValue")?.Value);
 
         var combo = sdtPr?.Element(W + "comboBox");
         if (combo is not null)
             return new ContentControl(ContentControlKind.ComboBox, normTag, normAlias,
-                ListItems: ReadListItems(combo), LockMode: lockMode, WordMetadata: wordMetadata);
+                ListItems: ReadListItems(combo), LockMode: lockMode, WordMetadata: wordMetadata,
+                ListLastValue: combo.Attribute(W + "lastValue")?.Value);
 
         if (sdtPr?.Element(W + "picture") is not null)
             return new ContentControl(ContentControlKind.Picture, normTag, normAlias,
@@ -3262,8 +3264,11 @@ public static class DocxReader
             return new ContentControl(ContentControlKind.RichText, normTag, normAlias,
                 LockMode: lockMode, WordMetadata: wordMetadata);
 
+        var plainText = sdtPr?.Element(W + "text");
         return new ContentControl(ContentControlKind.PlainText, normTag, normAlias,
-            LockMode: lockMode, WordMetadata: wordMetadata);
+            LockMode: lockMode,
+            WordMetadata: wordMetadata,
+            PlainTextMultiLine: ReadNullableOnOffAttribute(plainText?.Attribute(W + "multiLine")));
     }
 
     private static ContentControlDateMetadata? ReadContentControlDateMetadata(XElement date)
@@ -3323,6 +3328,9 @@ public static class DocxReader
             ?? element.Attribute(W15 + "val")?.Value;
         return value is null or "1" or "true" or "on";
     }
+
+    private static bool? ReadNullableOnOffAttribute(XAttribute? attribute) =>
+        attribute is null ? null : ReadOnOffValue(attribute.Value);
 
     /// <summary>
     /// Reads the w:listItem choices (w:displayText / w:value) of a w:dropDownList / w:comboBox element

@@ -164,6 +164,30 @@ public static class PageBorderArtWpfRenderer
             return true;
         }
 
+        if (PageBorderArtVisualPlanner.TryBuildCandyCornFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var candyPlan))
+        {
+            DrawFilledShapePlan(context, frame, candyPlan);
+            return true;
+        }
+
+        if (PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(
+                border.ArtId,
+                border.WidthPt,
+                frame.Width,
+                frame.Height,
+                edgeInsetDip,
+                out var conePlan))
+        {
+            DrawFilledShapePlan(context, frame, conePlan);
+            return true;
+        }
+
         if (PageBorderArtVisualPlanner.TryBuildVineFrame(
                 border.ArtId,
                 border.WidthPt,

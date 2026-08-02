@@ -1018,6 +1018,9 @@ internal static class PptxChartWriter
         if (marker is not null)
             el.Add(marker);
 
+        if (series.InvertIfNegative is { } invertIfNegative)
+            el.Add(new XElement(C + "invertIfNegative", new XAttribute("val", BoolValue(invertIfNegative))));
+
         AddPointStyleElements(el, series);
 
         // Per-series data labels
@@ -1126,6 +1129,9 @@ internal static class PptxChartWriter
         var marker = BuildMarkerStyleEl(series.MarkerStyle);
         if (marker is not null)
             el.Add(marker);
+
+        if (series.InvertIfNegative is { } invertIfNegative)
+            el.Add(new XElement(C + "invertIfNegative", new XAttribute("val", BoolValue(invertIfNegative))));
 
         AddPointStyleElements(el, series);
 
@@ -1331,6 +1337,12 @@ internal static class PptxChartWriter
             series.PointColors.TryGetValue(pointIndex, out var pointColor);
             var dPt = new XElement(C + "dPt",
                 new XElement(C + "idx", new XAttribute("val", pointIndex)));
+
+            if (style?.ExplosionPercent is { } explosion)
+            {
+                dPt.Add(new XElement(C + "explosion",
+                    new XAttribute("val", Math.Clamp(explosion, 0, 100))));
+            }
 
             var spPr = BuildPointShapePropertiesEl(pointColor, style);
             if (spPr is not null)

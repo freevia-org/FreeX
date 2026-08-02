@@ -1591,6 +1591,28 @@ static void DrawSoftwarePageBorder(SKCanvas canvas, PageBorder border, int width
         DrawSoftwareFilledShapePlan(canvas, eggPlan);
         return;
     }
+    if (PageBorderArtVisualPlanner.TryBuildCandyCornFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var candyPlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, candyPlan);
+        return;
+    }
+    if (PageBorderArtVisualPlanner.TryBuildIceCreamConesFrame(
+            border.ArtId,
+            border.WidthPt,
+            width,
+            height,
+            artInset,
+            out var conePlan))
+    {
+        DrawSoftwareFilledShapePlan(canvas, conePlan);
+        return;
+    }
     if (PageBorderArtVisualPlanner.TryBuildVineFrame(
             border.ArtId,
             border.WidthPt,

@@ -170,6 +170,76 @@ public static class WindowsNativePrintOutput
         }
     }
 
+    /// <summary>
+    /// Opens the native Windows printer-selection dialog and returns the queue selected by the
+    /// user. The Avalonia host owns the surrounding print plan; this method only supplies the
+    /// OS-owned queue selection surface that PowerPoint exposes from its Print workflow.
+    /// </summary>
+    public static bool TryShowPrinterSelectionDialog(
+        string? currentPrinter,
+        out string? selectedPrinter)
+    {
+        selectedPrinter = null;
+        if (!OperatingSystem.IsWindows())
+            return false;
+
+        var dialog = default(PrintDlgExStruct);
+        try
+        {
+            // PrintDlgEx is the Windows common-dialog surface used by native print
+            // workflows. Calling it directly keeps this adapter free of a Windows
+            // Forms runtime dependency, which matters for FreeP's non-Windows RIDs.
+            _ = currentPrinter;
+            dialog = new PrintDlgExStruct
+            {
+                StructSize = (uint)Marshal.SizeOf<PrintDlgExStruct>(),
+                Flags = PrintDialogFlags.NoPageNums | PrintDialogFlags.NoSelection,
+            };
+
+            var result = PrintDlgEx(ref dialog);
+            if (result != 0 || dialog.ResultAction != PrintDialogResultAction.Print)
+                return false;
+
+            selectedPrinter = ReadSelectedPrinter(dialog.DevNames);
+            return !string.IsNullOrWhiteSpace(selectedPrinter);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // A missing shell/desktop printer provider should not take down the portable
+            // print pane; the existing queue picker and submission path remain available.
+            return false;
+        }
+        finally
+        {
+            // PrintDlgEx transfers these global handles to the caller.
+            if (dialog.DevMode != IntPtr.Zero)
+                GlobalFree(dialog.DevMode);
+            if (dialog.DevNames != IntPtr.Zero)
+                GlobalFree(dialog.DevNames);
+        }
+    }
+
+    private static string? ReadSelectedPrinter(IntPtr hDevNames)
+    {
+        if (hDevNames == IntPtr.Zero)
+            return null;
+
+        var locked = GlobalLock(hDevNames);
+        if (locked == IntPtr.Zero)
+            return null;
+
+        try
+        {
+            var names = Marshal.PtrToStructure<DevNames>(locked);
+            return Marshal.PtrToStringUni(
+                IntPtr.Add(locked, checked(names.DeviceOffset * sizeof(char))))?.Trim();
+        }
+        finally
+        {
+            GlobalUnlock(hDevNames);
+        }
+    }
+
     public static ILinuxNativePrintHandoffAdapter CreateAdapter(
         LinuxNativePrintCapability capability) =>
         new WindowsNativePrintHandoffAdapter(capability);
@@ -205,6 +275,68 @@ public static class WindowsNativePrintOutput
         uint cbBuf,
         out uint pcbNeeded,
         out uint pcReturned);
+
+    [DllImport("comdlg32.dll", CharSet = CharSet.Unicode)]
+    private static extern int PrintDlgEx(ref PrintDlgExStruct dialog);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalLock(IntPtr handle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GlobalUnlock(IntPtr handle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalFree(IntPtr handle);
+
+    [Flags]
+    private enum PrintDialogFlags : uint
+    {
+        NoSelection = 0x00000004,
+        NoPageNums = 0x00000008,
+    }
+
+    private enum PrintDialogResultAction : uint
+    {
+        None = 0,
+        Print = 1,
+        Apply = 2,
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct PrintDlgExStruct
+    {
+        public uint StructSize;
+        public IntPtr Owner;
+        public IntPtr DevMode;
+        public IntPtr DevNames;
+        public IntPtr DeviceContext;
+        public PrintDialogFlags Flags;
+        public uint Flags2;
+        public uint ExclusionFlags;
+        public uint PageRangeCount;
+        public uint MaxPageRangeCount;
+        public IntPtr PageRanges;
+        public uint MinPage;
+        public uint MaxPage;
+        public uint Copies;
+        public IntPtr Instance;
+        public IntPtr PrintTemplateName;
+        public IntPtr Callback;
+        public uint PropertyPageCount;
+        public IntPtr PropertyPages;
+        public uint StartPage;
+        public PrintDialogResultAction ResultAction;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct DevNames
+    {
+        public ushort DriverOffset;
+        public ushort DeviceOffset;
+        public ushort OutputOffset;
+        public ushort Default;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct PrinterInfo4
