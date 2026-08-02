@@ -2622,6 +2622,13 @@ public sealed class EditingSession
                 chart.Series.Add(series);
             }
         }
+        else if (chartType == ChartType.Funnel)
+        {
+            chart.Categories.AddRange(["Awareness", "Interest", "Consideration", "Conversion"]);
+            var series = new ChartSeries { Name = "Value" };
+            series.Values.AddRange([100, 68, 42, 18]);
+            chart.Series.Add(series);
+        }
         else
         {
             // Default sample data — 3 categories, 2 series.

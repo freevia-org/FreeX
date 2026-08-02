@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 
 namespace Free.Shared.AppServices;
 
@@ -16,6 +17,15 @@ public sealed class RecentFileEntry
 public sealed class RecentFilesStore
 {
     public const int MaxRecentEntries = 25;
+
+    // Cross-process lock tuning: FreeX has no single-instance enforcement, so two separate
+    // FreeX.exe processes (or a Windows + companion instance) can each hold their own
+    // RecentFilesStore over the same recent.json. Without coordination, process B's
+    // load-modify-write would silently discard process A's write that landed in between B's own
+    // load and save (a classic lost-update race) even though each individual write is atomic at
+    // the file-replace level (AtomicFileWriter). See ReloadEntriesLocked()/AcquireCrossProcessLock().
+    private const int CrossProcessLockTimeoutMs = 3000;
+    private const int CrossProcessLockRetryDelayMs = 15;
 
     private readonly Func<DateTimeOffset> _clock;
     private readonly PlatformPathIdentityComparer _pathIdentityComparer;
@@ -90,11 +100,9 @@ public sealed class RecentFilesStore
         var store = new RecentFilesStore(storePath, clock, pathIdentityComparer);
         try
         {
-            if (File.Exists(storePath))
-            {
-                var json = File.ReadAllText(storePath);
-                store.Entries = LimitForPersistence(JsonSerializer.Deserialize<List<RecentFileEntry>>(json) ?? []);
-            }
+            var raw = ReadEntriesFromDisk(storePath);
+            if (raw is not null)
+                store.Entries = LimitForPersistence(raw);
         }
         catch (Exception ex)
         {
@@ -102,6 +110,95 @@ public sealed class RecentFilesStore
         }
 
         return store;
+    }
+
+    /// <summary>
+    /// Reads and deserializes <paramref name="storePath"/> as-is (no cap applied), or returns null
+    /// when the file does not exist. Shared by <see cref="LoadCore"/> (initial load, which applies
+    /// the default <see cref="MaxRecentEntries"/> cap on top — see below) and
+    /// <see cref="ReloadEntriesLocked"/> (the fresh-from-disk re-read every mutator performs
+    /// immediately before applying its change, which must NOT collapse the list down to the default
+    /// cap: a mutator invoked with a larger app-configured <c>maxRecentEntries</c> would otherwise have
+    /// its own earlier writes silently truncated back to 25 on every subsequent call).
+    /// </summary>
+    private static List<RecentFileEntry>? ReadEntriesFromDisk(string storePath)
+    {
+        if (!File.Exists(storePath))
+            return null;
+
+        var json = File.ReadAllText(storePath);
+        return JsonSerializer.Deserialize<List<RecentFileEntry>>(json) ?? [];
+    }
+
+    /// <summary>
+    /// Re-reads <see cref="Entries"/> from disk immediately before a mutator applies its change, so a
+    /// concurrent writer's already-saved update (same process via a sibling instance, or a wholly
+    /// separate FreeX.exe process) is merged rather than clobbered. Must be called while holding both
+    /// <see cref="_sync"/> and the cross-process lock (see <see cref="AcquireCrossProcessLock"/>) so no
+    /// third writer can land between this read and the mutator's subsequent <see cref="Save"/>.
+    /// Deliberately does NOT apply <see cref="LimitForPersistence"/>: capping (when applicable) is the
+    /// mutator's own job at the end, using whatever cap that specific caller supplied (see
+    /// <see cref="AddOrUpdate(string, int, WorkbookFileAccessIdentity?)"/>); Pin/Unpin/Remove never
+    /// capped even before this fix.
+    /// </summary>
+    private void ReloadEntriesLocked()
+    {
+        try
+        {
+            var diskEntries = ReadEntriesFromDisk(_storePath);
+            if (diskEntries is not null)
+                Entries = diskEntries;
+        }
+        catch (Exception ex)
+        {
+            // Best-effort: if the on-disk copy can't be read, proceed with whatever Entries already
+            // holds rather than losing the caller's in-flight mutation entirely.
+            System.Diagnostics.Debug.WriteLine($"[RecentFiles] Failed to reload before mutate: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Acquires an exclusive, cross-process lock scoped to this store's backing file, via an
+    /// exclusively-opened sibling ".lock" file (FileShare.None is honored across separate OS
+    /// processes, unlike the in-process-only <see cref="_sync"/> monitor). Falls back to a no-op
+    /// lock (best-effort, no cross-process serialization) if the lock file can't be created/opened
+    /// at all, so a locked-down environment degrades gracefully instead of losing the user's action.
+    /// </summary>
+    private IDisposable AcquireCrossProcessLock()
+    {
+        var lockPath = _storePath + ".lock";
+        try
+        {
+            var directory = Path.GetDirectoryName(lockPath);
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
+
+            var deadline = Environment.TickCount64 + CrossProcessLockTimeoutMs;
+            while (true)
+            {
+                try
+                {
+                    return new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                }
+                catch (IOException) when (Environment.TickCount64 < deadline)
+                {
+                    Thread.Sleep(CrossProcessLockRetryDelayMs);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[RecentFiles] Failed to acquire cross-process lock: {ex.Message}");
+            return NoOpLock.Instance;
+        }
+    }
+
+    private sealed class NoOpLock : IDisposable
+    {
+        public static readonly NoOpLock Instance = new();
+        public void Dispose()
+        {
+        }
     }
 
     public static string GetDefaultStorePath(IApplicationDataPathProvider pathProvider)
@@ -129,6 +226,9 @@ public sealed class RecentFilesStore
 
         lock (_sync)
         {
+            using var crossProcessLock = AcquireCrossProcessLock();
+            ReloadEntriesLocked();
+
             var existing = FindEntryByPath(path);
             var wasPinned = existing?.IsPinned ?? false;
             var identity = TryPreparePersistentIdentity(fileAccessIdentity, path) ??
@@ -178,6 +278,9 @@ public sealed class RecentFilesStore
     {
         lock (_sync)
         {
+            using var crossProcessLock = AcquireCrossProcessLock();
+            ReloadEntriesLocked();
+
             var entry = FindEntryByPath(path);
             if (entry is null)
                 return;
@@ -191,6 +294,9 @@ public sealed class RecentFilesStore
     {
         lock (_sync)
         {
+            using var crossProcessLock = AcquireCrossProcessLock();
+            ReloadEntriesLocked();
+
             var entry = FindEntryByPath(path);
             if (entry is null)
                 return;
@@ -204,6 +310,9 @@ public sealed class RecentFilesStore
     {
         lock (_sync)
         {
+            using var crossProcessLock = AcquireCrossProcessLock();
+            ReloadEntriesLocked();
+
             RemoveEntriesByPath(path);
             Save();
         }

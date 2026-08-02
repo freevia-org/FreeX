@@ -147,7 +147,12 @@ public static class DocumentCompare
         foreach (var (originalIndex, revisedIndex) in matches)
             revisedAnchorToOriginal[revisedIndex] = originalIndex;
 
-        var moveIds = FindWholeParagraphMoves(originalParagraphs, revisedParagraphs, matches, settings);
+        var moveIds = FindWholeParagraphMoves(
+            originalParagraphs,
+            revisedParagraphs,
+            matches,
+            settings,
+            revised.DoNotTrackMoves);
 
         // Drive the walk off the revised block order so non-paragraph blocks keep their place. Each revised
         // paragraph is either an anchor (identical to some original) or part of a "gap" since the previous
@@ -179,7 +184,7 @@ public static class DocumentCompare
                     revisedParagraph,
                     author,
                     dateXml,
-                    settings));
+                    settings.Formatting && !revised.DoNotTrackFormatting));
                 prevOriginalAnchor = anchorOriginalIndex;
             }
             else
@@ -418,10 +423,11 @@ public static class DocumentCompare
         IReadOnlyList<Paragraph> original,
         IReadOnlyList<Paragraph> revised,
         IReadOnlyList<(int OriginalIndex, int RevisedIndex)> anchors,
-        CompareSettings settings)
+        CompareSettings settings,
+        bool doNotTrackMoves)
     {
         var result = new WholeParagraphMoveIds();
-        if (!settings.Moves || !settings.Insertions || !settings.Deletions)
+        if (doNotTrackMoves || !settings.Moves || !settings.Insertions || !settings.Deletions)
             return result;
 
         var anchoredOriginal = anchors.Select(anchor => anchor.OriginalIndex).ToHashSet();
@@ -585,6 +591,8 @@ public static class DocumentCompare
     {
         target.DefaultRun = source.DefaultRun;
         target.DefaultParagraph = source.DefaultParagraph;
+        target.DoNotTrackMoves = source.DoNotTrackMoves;
+        target.DoNotTrackFormatting = source.DoNotTrackFormatting;
         target.DoNotAutoCompressPictures = source.DoNotAutoCompressPictures;
         target.EmbedSystemFonts = source.EmbedSystemFonts;
         target.SaveSubsetFonts = source.SaveSubsetFonts;
@@ -767,10 +775,10 @@ public static class DocumentCompare
         Paragraph revised,
         string author,
         string? dateXml,
-        CompareSettings settings)
+        bool trackFormatting)
     {
         var clone = ClonePlain(revised);
-        if (!settings.Formatting
+        if (!trackFormatting
             || !string.Equals(original.PlainText, revised.PlainText, StringComparison.Ordinal)
             || original.Runs.Count != revised.Runs.Count)
             return clone;

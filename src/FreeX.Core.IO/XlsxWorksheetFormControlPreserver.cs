@@ -19,8 +19,19 @@ internal static class XlsxWorksheetFormControlPreserver
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
     private static readonly XNamespace VmlNs = "urn:schemas-microsoft-com:vml";
     private static readonly XNamespace ExcelVmlNs = "urn:schemas-microsoft-com:office:excel";
+    private static readonly XNamespace ContentTypesNs = "http://schemas.openxmlformats.org/package/2006/content-types";
     private const string VmlDrawingRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+
+    /// <summary>
+    /// R115-io-deleted-form-control-1: describes a <c>&lt;control&gt;</c> that existed in the SOURCE
+    /// worksheet but no longer has a corresponding live <see cref="FormControlModel"/> in
+    /// <see cref="Sheet.FormControls"/> -- i.e. a control whose anchor was fully deleted by a
+    /// row/column delete (see <c>RowColumnShiftHelpers.AddressState.ShiftFormControls</c>, which
+    /// removes such controls from the in-memory model entirely). <see cref="RelationshipId"/> is the
+    /// element's own <c>r:id</c> (used to locate and remove its now-orphaned ctrlProp part).
+    /// </summary>
+    private readonly record struct OrphanedControl(uint ShapeId, string? RelationshipId);
 
     // Mirrors XlsxFormControlMapper.EmusPerPixel: the VML x:ClientData/x:Anchor stores its
     // colOff/rowOff sub-cell offsets in pixels, while FormControlModel.AnchorOffsets carries EMU.
@@ -82,6 +93,16 @@ internal static class XlsxWorksheetFormControlPreserver
                 // ClientData Anchor to the live anchor/offsets regardless of whether the modern
                 // controls block below is being injected or already survived byte-identical.
                 SyncFormControlVmlAnchors(sourceArchive, targetArchive, context, sourceWorksheetPath, sheet);
+
+                // R115-io-deleted-form-control-1: a control whose anchor was fully deleted is dropped
+                // from sheet.FormControls by ShiftFormControls, but its ctrlProp part, worksheet
+                // relationship, and VML shape were all already byte-copied forward by
+                // XlsxPackageMetadataMerger.CopyUnknownPackageParts regardless of that in-memory
+                // removal. Clean those package-level leftovers up here (independent of whether the
+                // modern <controls> XML block below gets touched) so the control cannot resurrect
+                // from its still-referenced VML shape even when the "already survived" shortcut just
+                // below skips the modern block entirely.
+                RemoveOrphanedControlPackageArtifacts(sourceArchive, targetArchive, context, sourceWorksheetPath, targetWorksheetPath, sheet);
             }
 
             // If a controls block already survived (clean byte-copy path), leave it alone.
@@ -151,6 +172,20 @@ internal static class XlsxWorksheetFormControlPreserver
                 continue;
 
             SyncFormControlVmlAnchors(sourceArchive, targetArchive, context, sourceWorksheetPath, sheet);
+
+            // R115-io-deleted-form-control-1: XlsxLegacyCommentPreserver.Preserve (which ran just
+            // before this) rebuilds the WHOLE VML document from the pristine SOURCE archive's copy
+            // whenever the sheet has any Notes, undoing any VML shape removal
+            // RemoveOrphanedControlPackageArtifacts already performed for a deleted form control
+            // during the earlier Preserve() call -- the exact same resurrection risk R112 fixed for
+            // anchor sync, but for outright removal instead of a stale position. Re-run it here so a
+            // deleted control's VML shape stays gone regardless of comment-preserver ordering. The
+            // ctrlProp part/relationship were already removed during Preserve() and stay removed
+            // (nothing after it re-copies them), so re-running the full cleanup is a safe no-op there.
+            var targetWorksheetPath = context.TargetSheets.TryGetValue(sheetName, out var resolvedTargetPath)
+                ? resolvedTargetPath
+                : sourceWorksheetPath;
+            RemoveOrphanedControlPackageArtifacts(sourceArchive, targetArchive, context, sourceWorksheetPath, targetWorksheetPath, sheet);
         }
     }
 
@@ -204,11 +239,24 @@ internal static class XlsxWorksheetFormControlPreserver
         for (var i = 0; i < controlElements.Count; i++)
         {
             var element = controlElements[i];
-            FormControlModel? control = null;
-            if (uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId))
-                controlsByShapeId.TryGetValue(shapeId, out control);
+            var hasShapeId = uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId);
+            FormControlModel? control;
+            if (hasShapeId)
+            {
+                // R115-io-deleted-form-control-1: a shapeId present on the element but absent from
+                // the live model means this control was deleted (RowColumnShiftHelpers.AddressState.
+                // ShiftFormControls dropped it from sheet.FormControls). Do NOT fall back to
+                // positional indexing here -- that would silently rewrite a SURVIVING control's live
+                // state onto this orphaned control's ctrlProp part, right before
+                // RemoveOrphanedControlPackageArtifacts deletes that same part; skip it outright.
+                if (!controlsByShapeId.TryGetValue(shapeId, out control))
+                    continue;
+            }
+            else
+            {
+                control = i < sheet.FormControls.Count ? sheet.FormControls[i] : null;
+            }
 
-            control ??= i < sheet.FormControls.Count ? sheet.FormControls[i] : null;
             if (control is null)
                 continue;
 
@@ -558,14 +606,18 @@ internal static class XlsxWorksheetFormControlPreserver
     /// Rewrites each control's <c>controlPr/anchor</c> <c>from</c>/<c>to</c> markers (in the just-
     /// cloned controls block) from the corresponding <see cref="FormControlModel"/>'s live
     /// <see cref="FormControlModel.Anchor"/>/<see cref="FormControlModel.AnchorOffsets"/> — matched
-    /// primarily by <c>shapeId</c>, falling back to document order when a shapeId is unavailable on
-    /// either side, mirroring <see cref="WriteControlStateToCtrlProps"/>'s matching.
+    /// primarily by <c>shapeId</c>, falling back to document order only when a shapeId is
+    /// unavailable on the ELEMENT side (mirroring <see cref="WriteControlStateToCtrlProps"/>'s
+    /// matching). R115-io-deleted-form-control-1: when an element's shapeId IS present but has no
+    /// corresponding live model, the control was deleted by a row/column edit (see
+    /// <c>RowColumnShiftHelpers.AddressState.ShiftFormControls</c>) — such an element is removed from
+    /// the clone outright rather than falling back to positional indexing, which would otherwise
+    /// wrongly bind a SURVIVING control's live anchor onto this orphaned element (producing a
+    /// duplicate, overlapping shape at the survivor's position instead of the deleted control simply
+    /// disappearing).
     /// </summary>
     private static void ApplyControlAnchorsToClone(XElement clonedControlsBlock, XNamespace worksheetNs, Sheet sheet)
     {
-        if (sheet.FormControls.Count == 0)
-            return;
-
         var controlElements = EnumerateControlElements(clonedControlsBlock, worksheetNs + "control").ToList();
         if (controlElements.Count == 0)
             return;
@@ -577,11 +629,21 @@ internal static class XlsxWorksheetFormControlPreserver
         for (var i = 0; i < controlElements.Count; i++)
         {
             var element = controlElements[i];
-            FormControlModel? control = null;
-            if (uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId))
-                controlsByShapeId.TryGetValue(shapeId, out control);
+            var hasShapeId = uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId);
+            FormControlModel? control;
+            if (hasShapeId)
+            {
+                if (!controlsByShapeId.TryGetValue(shapeId, out control))
+                {
+                    RemoveControlElement(element);
+                    continue;
+                }
+            }
+            else
+            {
+                control = i < sheet.FormControls.Count ? sheet.FormControls[i] : null;
+            }
 
-            control ??= i < sheet.FormControls.Count ? sheet.FormControls[i] : null;
             if (control?.Anchor is not { } anchor)
                 continue;
 
@@ -591,6 +653,264 @@ internal static class XlsxWorksheetFormControlPreserver
 
             ApplyAnchorToElement(anchorElement, anchor, control.AnchorOffsets);
         }
+    }
+
+    /// <summary>
+    /// Removes an orphaned <c>&lt;control&gt;</c> element from a cloned controls block, then cleans
+    /// up any now-empty <c>mc:Choice</c>/<c>mc:Fallback</c>/<c>mc:AlternateContent</c> ancestor chain
+    /// (Excel commonly wraps each individual control in its own AlternateContent for forward
+    /// compatibility — see the fixtures in <c>XlsxFormControlShiftPersistenceTests</c>), so the saved
+    /// worksheet does not carry a hollow wrapper with no content. Stops at the enclosing
+    /// <c>&lt;controls&gt;</c> element itself, which is left in place (possibly empty — a
+    /// <c>controls</c> element with zero children is valid) since other controls may still live
+    /// alongside it.
+    /// </summary>
+    private static void RemoveControlElement(XElement element)
+    {
+        var parent = element.Parent;
+        element.Remove();
+
+        while (parent is not null &&
+               parent.Name.LocalName is "Choice" or "Fallback" or "AlternateContent" &&
+               !parent.Elements().Any())
+        {
+            var grandParent = parent.Parent;
+            parent.Remove();
+            parent = grandParent;
+        }
+    }
+
+    /// <summary>
+    /// Finds every <c>&lt;control&gt;</c> in the SOURCE worksheet's controls container that no longer
+    /// has a corresponding live <see cref="FormControlModel"/> in <paramref name="sheet"/>'s
+    /// <see cref="Sheet.FormControls"/> — i.e. a control deleted by a row/column edit (see
+    /// <see cref="OrphanedControl"/>). Elements without a parseable <c>shapeId</c> cannot be
+    /// correlated to the model at all and are conservatively left out (never reported as orphaned),
+    /// matching the same fallback semantics used elsewhere in this file.
+    /// </summary>
+    private static IReadOnlyList<OrphanedControl> FindOrphanedControls(
+        XElement sourceRoot,
+        XNamespace worksheetNs,
+        XNamespace relNs,
+        Sheet sheet)
+    {
+        var container = FindControlsContainer(sourceRoot, worksheetNs);
+        if (container is null)
+            return [];
+
+        var liveShapeIds = sheet.FormControls
+            .Where(c => c.ShapeId is not null)
+            .Select(c => c.ShapeId!.Value)
+            .ToHashSet();
+
+        List<OrphanedControl>? orphaned = null;
+        foreach (var element in EnumerateControlElements(container, worksheetNs + "control"))
+        {
+            if (!uint.TryParse(element.Attribute("shapeId")?.Value, out var shapeId) ||
+                liveShapeIds.Contains(shapeId))
+            {
+                continue;
+            }
+
+            orphaned ??= [];
+            orphaned.Add(new OrphanedControl(shapeId, element.Attribute(relNs + "id")?.Value));
+        }
+
+        return orphaned ?? (IReadOnlyList<OrphanedControl>)[];
+    }
+
+    /// <summary>
+    /// R115-io-deleted-form-control-1: removes the package-level leftovers of every control that
+    /// <see cref="FindOrphanedControls"/> finds deleted from the live model — its ctrlProp part, the
+    /// worksheet relationship pointing at that part, the part's <c>[Content_Types].xml</c> override,
+    /// and its VML shape (Excel renders legacy Form Controls from the VML layer, not the modern
+    /// <c>&lt;control&gt;</c>/<c>controlPr</c> block, so leaving the VML shape behind would keep the
+    /// "deleted" control fully visible even after the modern XML element is gone). Safe to call more
+    /// than once for the same sheet (e.g. once from <see cref="Preserve"/> and again from
+    /// <see cref="ReapplyVmlAnchorsAfterCommentReconciliation"/> to defend against
+    /// <see cref="XlsxLegacyCommentPreserver.Preserve"/> rebuilding the whole VML part from the
+    /// pristine source afterward) — once a part/relationship is gone, re-finding it is a harmless
+    /// no-op.
+    /// </summary>
+    private static void RemoveOrphanedControlPackageArtifacts(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
+        string sourceWorksheetPath,
+        string targetWorksheetPath,
+        Sheet sheet)
+    {
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceRoot = sourceWorksheetXml?.Root;
+        if (sourceRoot is null)
+            return;
+
+        var orphanedControls = FindOrphanedControls(sourceRoot, context.WorkbookNs, context.RelNs, sheet);
+        if (orphanedControls.Count == 0)
+            return;
+
+        RemoveOrphanedCtrlProps(targetArchive, context, targetWorksheetPath, orphanedControls);
+        RemoveOrphanedVmlShapes(sourceArchive, targetArchive, context, sourceWorksheetPath, orphanedControls);
+    }
+
+    private static void RemoveOrphanedCtrlProps(
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
+        string targetWorksheetPath,
+        IReadOnlyList<OrphanedControl> orphanedControls)
+    {
+        var relIds = orphanedControls
+            .Select(o => o.RelationshipId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id!)
+            .ToHashSet(StringComparer.Ordinal);
+        if (relIds.Count == 0)
+            return;
+
+        var targetRelsPath = XlsxPackagePath.GetRelationshipPartPath(targetWorksheetPath);
+        var targetRelsEntry = targetArchive.GetEntry(targetRelsPath);
+        if (targetRelsEntry is null)
+            return;
+
+        XDocument targetRelsXml;
+        try
+        {
+            targetRelsXml = XlsxPackageXmlEditor.LoadXml(targetRelsEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        var relsRoot = targetRelsXml.Root;
+        if (relsRoot is null)
+            return;
+
+        var removedPartPaths = new List<string>();
+        var relsChanged = false;
+        foreach (var relationship in relsRoot.Elements(context.PackageRelNs + "Relationship").ToList())
+        {
+            var id = relationship.Attribute("Id")?.Value;
+            if (id is null || !relIds.Contains(id))
+                continue;
+
+            var target = relationship.Attribute("Target")?.Value;
+            if (!string.IsNullOrWhiteSpace(target))
+            {
+                var resolved = XlsxPackagePath.ResolveRelationshipTarget(targetWorksheetPath, target);
+                if (!string.IsNullOrWhiteSpace(resolved))
+                    removedPartPaths.Add(resolved);
+            }
+
+            relationship.Remove();
+            relsChanged = true;
+        }
+
+        if (relsChanged)
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, targetRelsPath, targetRelsXml);
+
+        if (removedPartPaths.Count == 0)
+            return;
+
+        foreach (var partPath in removedPartPaths)
+            targetArchive.GetEntry(partPath)?.Delete();
+
+        RemoveContentTypeOverridesForParts(targetArchive, removedPartPaths);
+    }
+
+    private static void RemoveContentTypeOverridesForParts(ZipArchive targetArchive, IReadOnlyList<string> partPaths)
+    {
+        var contentTypesEntry = targetArchive.GetEntry("[Content_Types].xml");
+        if (contentTypesEntry is null)
+            return;
+
+        XDocument contentTypesXml;
+        try
+        {
+            contentTypesXml = XlsxPackageXmlEditor.LoadXml(contentTypesEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        var root = contentTypesXml.Root;
+        if (root is null)
+            return;
+
+        var targets = partPaths
+            .Select(path => "/" + path.TrimStart('/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var element in root.Elements(ContentTypesNs + "Override").ToList())
+        {
+            var partName = element.Attribute("PartName")?.Value;
+            if (partName is null || !targets.Contains(partName))
+                continue;
+
+            element.Remove();
+            changed = true;
+        }
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, "[Content_Types].xml", contentTypesXml);
+    }
+
+    /// <summary>
+    /// Removes the VML shape(s) belonging to each orphaned control from the worksheet's legacy VML
+    /// drawing part, matched by <c>shapeId</c> suffix the same way <see cref="SyncFormControlVmlAnchors"/>
+    /// matches a LIVE control's shape (<c>id.EndsWith("s" + shapeId)</c>).
+    /// </summary>
+    private static void RemoveOrphanedVmlShapes(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
+        string sourceWorksheetPath,
+        IReadOnlyList<OrphanedControl> orphanedControls)
+    {
+        var vmlPath = ResolveSourceLegacyDrawingVmlPath(sourceArchive, context, sourceWorksheetPath);
+        if (vmlPath is null)
+            return;
+
+        var targetVmlEntry = targetArchive.GetEntry(vmlPath);
+        if (targetVmlEntry is null)
+            return;
+
+        XDocument vmlXml;
+        try
+        {
+            vmlXml = XlsxPackageXmlEditor.LoadXml(targetVmlEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        var root = vmlXml.Root;
+        if (root is null)
+            return;
+
+        var suffixes = orphanedControls
+            .Select(o => "s" + o.ShapeId.ToString(CultureInfo.InvariantCulture))
+            .ToList();
+
+        var changed = false;
+        foreach (var shape in root.Descendants(VmlNs + "shape").ToList())
+        {
+            var id = shape.Attribute("id")?.Value;
+            if (string.IsNullOrEmpty(id))
+                continue;
+
+            if (suffixes.Any(suffix => id.EndsWith(suffix, StringComparison.Ordinal)))
+            {
+                shape.Remove();
+                changed = true;
+            }
+        }
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, vmlPath, vmlXml);
     }
 
     /// <summary>

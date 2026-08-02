@@ -249,6 +249,12 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
     private StructuredTableModel? _previousTable;
     private readonly Dictionary<CellAddress, Cell?> _previousCells = [];
     private RefreshStructuredTableTotalsCommand? _totalsRefreshCommand;
+    // R115: only populated when the shrink actually drops a column that carried an active
+    // FilterColumns criterion -- see the cleanup block in Apply for why each of these is needed.
+    private HashSet<uint>? _previousFilterHiddenRows;
+    private HashSet<uint>? _previousValueFilterHiddenRows;
+    private Dictionary<uint, IReadOnlyList<string>>? _previousActiveValueFilterColumns;
+    private Dictionary<uint, HashSet<uint>>? _previousColumnFilterOwnedRows;
 
     public string Label => "Resize Table";
 
@@ -264,6 +270,10 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         _previousTable = null;
         _previousCells.Clear();
         _totalsRefreshCommand = null;
+        _previousFilterHiddenRows = null;
+        _previousValueFilterHiddenRows = null;
+        _previousActiveValueFilterColumns = null;
+        _previousColumnFilterOwnedRows = null;
         var sheet = ctx.GetSheet(_sheetId);
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
@@ -278,10 +288,28 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         if (sheet.StructuredTables.Any(t => t.Id != _tableId && t.Range.Overlaps(_newRange)))
             return new CommandOutcome(false, "A table cannot overlap another table.");
 
+        // Excel requires a table to have exactly one discrete cell per row/column intersection, so
+        // growing/shrinking a table into a range that contains a merged cell is rejected -- mirrors
+        // CreateStructuredTableCommand's symmetric guard (and MergeCellsCommand.Apply's "Cannot
+        // merge cells that overlap a table" check enforced from the other direction) for the same
+        // tables-and-merges-don't-mix rule.
+        if (sheet.MergedRegions.Any(region => region.Overlaps(_newRange)))
+            return new CommandOutcome(false, "A table cannot overlap a merged cell.");
+
         _previousTable = table;
         var columns = BuildColumns(sheet, table, _newRange).ToList();
         var filterColumns = table.FilterColumns
             .Where(filter => filter.ColumnId >= 0 && filter.ColumnId < columns.Count)
+            .ToList();
+
+        // R115: a column that fell outside the new (narrower) range takes its FilterColumns
+        // criterion with it above, but Excel also stops that criterion from hiding any row the
+        // moment the column leaves the table -- AutoFilter state for a table is scoped to its
+        // CURRENT column set. Left untouched, rows hidden solely by a now-dropped filter would stay
+        // hidden forever: the column's dropdown (the only supported UI to clear it) only renders for
+        // columns still inside the table's range, so there would be no path left to un-hide them.
+        var droppedFilters = table.FilterColumns
+            .Where(filter => filter.ColumnId < 0 || filter.ColumnId >= columns.Count)
             .ToList();
 
         var resizedTable = StructuredTableDesignCommandHelpers.CopyTable(
@@ -290,6 +318,9 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
             columns: columns,
             filterColumns: filterColumns);
         sheet.StructuredTables[tableIndex] = resizedTable;
+
+        if (droppedFilters.Count > 0)
+            ReleaseDroppedColumnFilters(sheet, table, resizedTable, droppedFilters);
 
         // Excel auto-fills a calculated column's formula into every newly added row when a table
         // grows — mirror that here so new rows aren't left blank in that column. When the table has
@@ -347,6 +378,33 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
                 sheet.SetCell(address, cell);
         }
         _previousCells.Clear();
+
+        if (_previousFilterHiddenRows is not null)
+        {
+            sheet.FilterHiddenRows.Clear();
+            sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
+            _previousFilterHiddenRows = null;
+        }
+        if (_previousValueFilterHiddenRows is not null)
+        {
+            sheet.ValueFilterHiddenRows.Clear();
+            sheet.ValueFilterHiddenRows.UnionWith(_previousValueFilterHiddenRows);
+            _previousValueFilterHiddenRows = null;
+        }
+        if (_previousActiveValueFilterColumns is not null)
+        {
+            sheet.ActiveValueFilterColumns.Clear();
+            foreach (var (col, values) in _previousActiveValueFilterColumns)
+                sheet.ActiveValueFilterColumns[col] = values;
+            _previousActiveValueFilterColumns = null;
+        }
+        if (_previousColumnFilterOwnedRows is not null)
+        {
+            sheet.ColumnFilterOwnedRows.Clear();
+            foreach (var (col, owned) in _previousColumnFilterOwnedRows)
+                sheet.ColumnFilterOwnedRows[col] = owned;
+            _previousColumnFilterOwnedRows = null;
+        }
 
         if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
@@ -448,6 +506,60 @@ public sealed class ResizeStructuredTableCommand : IWorkbookCommand
         if (!_previousCells.ContainsKey(address))
             _previousCells[address] = sheet.GetCell(address)?.Clone();
         sheet.SetCell(address, cell);
+    }
+
+    /// <summary>
+    /// R115: releases every sheet-wide filter mechanism a column carries once it falls out of the
+    /// table's resized (narrower) range, so rows it hid solely on its own reappear -- matching Excel,
+    /// which scopes a table's AutoFilter state to its CURRENT column set, so shrinking a column out of
+    /// a table drops that column's criterion entirely. Two independent mechanisms can be responsible
+    /// for a dropped column's hidden rows (see Sheet.ActiveValueFilterColumns/.ColumnFilterOwnedRows
+    /// doc comments for the full split):
+    /// <list type="bullet">
+    /// <item>a plain value-list AutoFilter criterion, mirrored into
+    /// <see cref="Sheet.ActiveValueFilterColumns"/> keyed by this column's absolute index (kept in
+    /// lockstep with a <see cref="StructuredTableFilterColumnModel"/> entry with no
+    /// CustomFilters/NativeFilterXmls) -- removing the stale entry here, then recomputing via
+    /// <see cref="ApplyStructuredTableFiltersCommand.RecomputeHiddenRows"/> against the table's own
+    /// (already-reconciled) surviving FilterColumns, un-hides any row that failed only this dropped
+    /// criterion while correctly keeping rows a SURVIVING filter still excludes.</item>
+    /// <item>a Top10/Above-Average/custom-condition/color filter, which owns its hidden rows directly
+    /// in <see cref="Sheet.ColumnFilterOwnedRows"/> without ever populating ActiveValueFilterColumns --
+    /// <see cref="FilterHiddenRowUpdater.ClearColumnOwnedRange"/> relinquishes exactly the rows this
+    /// column's own mechanism owns, leaving any row a different active column's filter still needs
+    /// hidden untouched.</item>
+    /// </list>
+    /// Mirrors <see cref="ConvertStructuredTableToRangeCommand.Apply"/>'s equivalent cleanup for the
+    /// whole-table-removal case, scoped down to just the columns this resize actually dropped.
+    /// Snapshots every touched sheet-wide collection first so <see cref="Revert"/> can restore them
+    /// exactly.
+    /// </summary>
+    private void ReleaseDroppedColumnFilters(
+        Sheet sheet,
+        StructuredTableModel previousTable,
+        StructuredTableModel resizedTable,
+        List<StructuredTableFilterColumnModel> droppedFilters)
+    {
+        _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
+        _previousValueFilterHiddenRows = [.. sheet.ValueFilterHiddenRows];
+        _previousActiveValueFilterColumns = sheet.ActiveValueFilterColumns.Count == 0
+            ? null
+            : sheet.ActiveValueFilterColumns.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+        _previousColumnFilterOwnedRows = sheet.ColumnFilterOwnedRows.Count == 0
+            ? null
+            : sheet.ColumnFilterOwnedRows.ToDictionary(kvp => kvp.Key, kvp => new HashSet<uint>(kvp.Value));
+
+        foreach (var filter in droppedFilters)
+        {
+            // The table's Start.Col is pinned by ValidateResizeRange (Resize Table keeps the header
+            // cell fixed), so the OLD table's Range.Start.Col still correctly locates this
+            // (about-to-be-dropped) column's absolute sheet position.
+            var absoluteCol = previousTable.Range.Start.Col + (uint)filter.ColumnId;
+            sheet.ActiveValueFilterColumns.Remove(absoluteCol);
+            FilterHiddenRowUpdater.ClearColumnOwnedRange(sheet, absoluteCol, previousTable.Range);
+        }
+
+        ApplyStructuredTableFiltersCommand.RecomputeHiddenRows(sheet, resizedTable);
     }
 
     /// <summary>

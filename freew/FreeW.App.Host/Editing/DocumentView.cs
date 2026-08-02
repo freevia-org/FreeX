@@ -104,6 +104,7 @@ public sealed class DocumentView : RichTextBox
     private const double NoteReferenceSuperscriptOffsetDip = 5.0;
 
     private TextDocument _model = TextDocument.CreateEmpty();
+    private bool _spellCheckEnabled = true;
     private DocumentViewDepthLayoutPlan _viewDepthLayout =
         DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
 
@@ -401,15 +402,19 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public bool SpellCheckEnabled
     {
-        get => SpellCheck.IsEnabled;
-        set => SpellCheck.IsEnabled = value;
+        get => _spellCheckEnabled;
+        set
+        {
+            _spellCheckEnabled = value;
+            ApplySpellCheckVisibility();
+        }
     }
 
     /// <summary>Turn the editor's spell checking on/off and return the new state. Used by the Review ribbon.</summary>
     public bool ToggleSpellCheck()
     {
-        SpellCheck.IsEnabled = !SpellCheck.IsEnabled;
-        return SpellCheck.IsEnabled;
+        SpellCheckEnabled = !SpellCheckEnabled;
+        return SpellCheckEnabled;
     }
 
     /// <summary>
@@ -418,9 +423,14 @@ public sealed class DocumentView : RichTextBox
     /// non-WPF renderers.
     /// </summary>
     public IReadOnlyList<ProofingDiagnostic> SharedGrammarDiagnostics =>
-        ProofingDiagnosticPlanner.Build(_model, SpellCheckEnabled)
+        ProofingDiagnosticPlanner.BuildVisibleIndicators(_model, SpellCheckEnabled)
             .Where(diagnostic => diagnostic.Kind == ProofingDiagnosticKind.Grammar)
             .ToList();
+
+    internal bool NativeSpellCheckEnabledForTest => SpellCheck.IsEnabled;
+
+    private void ApplySpellCheckVisibility() =>
+        SpellCheck.IsEnabled = _spellCheckEnabled && !_model.HideSpellingErrors;
 
     /// <summary>
     /// Register a custom dictionary (<c>.lex</c>) file with this control's spell checker so the words it
@@ -916,6 +926,7 @@ public sealed class DocumentView : RichTextBox
     {
         _model = document;
         _trackChangesEnabled = document.TrackRevisions || RestrictEditingPolicy.ShouldForceTrackChanges;
+        ApplySpellCheckVisibility();
         Render();
     }
 

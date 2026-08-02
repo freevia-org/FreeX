@@ -34,17 +34,7 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
 
         _previousFilterHiddenRows = [.. sheet.FilterHiddenRows];
 
-        RemoveExistingFilterRows(sheet, table.Range, table.TotalsRowShown);
-
-        if (filters.Count == 0)
-            return new CommandOutcome(true);
-
-        var lastDataRow = LastDataRow(table.Range, table.TotalsRowShown);
-        for (var row = table.Range.Start.Row + 1; row <= lastDataRow; row++)
-        {
-            if (!RowMatchesAllFilters(sheet, row, filters))
-                sheet.FilterHiddenRows.Add(row);
-        }
+        ApplyFilters(sheet, table, filters);
 
         return new CommandOutcome(true);
     }
@@ -58,6 +48,49 @@ public sealed class ApplyStructuredTableFiltersCommand : IWorkbookCommand
         sheet.FilterHiddenRows.Clear();
         sheet.FilterHiddenRows.UnionWith(_previousFilterHiddenRows);
     }
+
+    /// <summary>
+    /// R115: shared entry point used by <see cref="ResizeStructuredTableCommand"/> so it can recompute
+    /// a table's own FilterHiddenRows contribution in-place after reconciling FilterColumns down to a
+    /// narrower column span, without going through this command's own Apply/Revert cycle (the caller
+    /// already owns snapshotting/undo for sheet.FilterHiddenRows around its whole resize operation).
+    /// Mirrors this command's own Apply body exactly -- a column that fell out of the table's range no
+    /// longer contributes a filter criterion (its FilterColumns entry is already gone by the time this
+    /// runs), so any row that was hidden solely because of it reappears here, matching Excel scoping
+    /// AutoFilter state to a table's CURRENT column set. Returns false only when
+    /// <paramref name="table"/>'s own FilterColumns still reference a column outside its current
+    /// range (a caller bug -- reconcile FilterColumns before calling this).
+    /// </summary>
+    internal static bool RecomputeHiddenRows(Sheet sheet, StructuredTableModel table)
+    {
+        var filters = BuildFilters(table);
+        if (filters is null)
+            return false;
+
+        if (FilterHiddenRowsAlreadyMatch(sheet, table.Range, table.TotalsRowShown, filters))
+            return true;
+
+        ApplyFilters(sheet, table, filters);
+        return true;
+    }
+
+    private static void ApplyFilters(Sheet sheet, GridRange range, bool totalsRowShown, IReadOnlyList<TableFilterState> filters)
+    {
+        RemoveExistingFilterRows(sheet, range, totalsRowShown);
+
+        if (filters.Count == 0)
+            return;
+
+        var lastDataRow = LastDataRow(range, totalsRowShown);
+        for (var row = range.Start.Row + 1; row <= lastDataRow; row++)
+        {
+            if (!RowMatchesAllFilters(sheet, row, filters))
+                sheet.FilterHiddenRows.Add(row);
+        }
+    }
+
+    private static void ApplyFilters(Sheet sheet, StructuredTableModel table, IReadOnlyList<TableFilterState> filters) =>
+        ApplyFilters(sheet, table.Range, table.TotalsRowShown, filters);
 
     private static List<TableFilterState>? BuildFilters(StructuredTableModel table)
     {

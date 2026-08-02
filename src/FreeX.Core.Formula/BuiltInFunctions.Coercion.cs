@@ -207,6 +207,15 @@ public static partial class BuiltInFunctions
         {
             double av = a is DateTimeValue ad ? ad.Value : ((NumberValue)a).Value;
             double bv = b is DateTimeValue bd ? bd.Value : ((NumberValue)b).Value;
+            // Round both operands to 15 significant digits before comparing, matching
+            // CompareValues in FormulaEvaluator.Operators.cs (the worksheet =,<,>,<=,>=,<>
+            // operators). Without this, a value that displays/compares as equal via the
+            // worksheet operators (e.g. a raw STDEV.S result vs the value the user typed
+            // in matching its General-format text) can fail to be found by MATCH/VLOOKUP/
+            // HLOOKUP/XLOOKUP/XMATCH approximate-match ordering and SORT/SORTBY, purely
+            // because of noise in the 16th+ significant digit.
+            av = FormulaEvaluator.RoundTo15SignificantDigits(av);
+            bv = FormulaEvaluator.RoundTo15SignificantDigits(bv);
             return av.CompareTo(bv);
         }
         if (a is TextValue ta && b is TextValue tb)
@@ -259,7 +268,17 @@ public static partial class BuiltInFunctions
         if (a is BlankValue) a = CoerceBlankForCompare(b);
         if (b is BlankValue) b = CoerceBlankForCompare(a);
         if (TryCellNumber(a, out double aNumber) && TryCellNumber(b, out double bNumber))
+        {
+            // Round both operands to 15 significant digits before comparing, matching
+            // CompareValues in FormulaEvaluator.Operators.cs (the worksheet = operator).
+            // Otherwise MATCH/VLOOKUP/HLOOKUP/XLOOKUP/XMATCH exact match (via MatchExactValue)
+            // disagree with '=' on the exact same values whenever the looked-up value comes
+            // from a function whose raw double result differs from its own displayed/typed
+            // text only in the 16th+ significant digit (e.g. STDEV.S/VAR and similar).
+            aNumber = FormulaEvaluator.RoundTo15SignificantDigits(aNumber);
+            bNumber = FormulaEvaluator.RoundTo15SignificantDigits(bNumber);
             return aNumber == bNumber;
+        }
         if (a is TextValue ta && b is TextValue tb)
             return string.Equals(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase);
         if (a is BoolValue ba && b is BoolValue bb)

@@ -135,6 +135,32 @@ public sealed record HyperlinkMetadata(
     string Bookmark = "");
 
 /// <summary>
+/// Metadata for a registered What-If Analysis Data Table (see <see cref="Sheet.RegisterDataTableRange"/>).
+/// <paramref name="SecondInputCell"/> is non-null only for a two-variable table -- it then holds the
+/// column-input cell, with <paramref name="InputCell"/> holding the row-input cell (and
+/// <paramref name="IsRowOriented"/> is meaningless). For a one-variable table
+/// <paramref name="SecondInputCell"/> is always null, <paramref name="InputCell"/> holds the single
+/// substituted input cell, and <paramref name="IsRowOriented"/> selects the orientation. Kept as
+/// plain data in FreeX.Core.Model (rather than referencing FreeX.Core.Commands' own
+/// DataTableInputOrientation enum) since this project has no dependency on FreeX.Core.Commands --
+/// OneVariableDataTableCommand/TwoVariableDataTableCommand and DataTableAutoRefreshEffects there are
+/// the sole writer/readers.
+/// </summary>
+public readonly record struct DataTableRegistration(
+    GridRange TableRange,
+    CellAddress FormulaCell,
+    CellAddress InputCell,
+    CellAddress? SecondInputCell,
+    bool IsRowOriented)
+{
+    /// <summary>The result body -- the full table range minus its header row/column of trial input
+    /// values, i.e. rows [Start.Row+1..End.Row] x cols [Start.Col+1..End.Col].</summary>
+    public GridRange BodyRange => new(
+        new CellAddress(TableRange.Start.Sheet, TableRange.Start.Row + 1, TableRange.Start.Col + 1),
+        TableRange.End);
+}
+
+/// <summary>
 /// Represents a worksheet within a workbook.
 /// Storage is Dictionary-based (sparse) per the build plan — NOT sparse columnar.
 /// </summary>
@@ -1300,36 +1326,45 @@ public sealed partial class Sheet
     /// stored in a separate overlay, torn down via <see cref="SetSpillRange"/>/<see cref="ClearSpillRange"/>)
     /// doesn't fit a Data Table's plain-formula-cell body. Consulted by
     /// <see cref="CommandGuards.RejectIfSplitsArray"/> alongside the array/spill check.
+    ///
+    /// R115-data-table-master-formula-refresh: also carries the driver-cell metadata (master
+    /// formula cell + input cell(s) + orientation) needed to re-derive the body when the master
+    /// formula is edited after the table already exists -- see <see cref="DataTableRegistrations"/>
+    /// and FreeX.Core.Commands' DataTableAutoRefreshEffects, the sole reader of that metadata (kept
+    /// as plain data here since FreeX.Core.Model has no dependency on FreeX.Core.Commands).
     /// </summary>
-    private readonly List<GridRange> _dataTableRanges = [];
+    private readonly List<DataTableRegistration> _dataTableRanges = [];
 
     /// <summary>Whether this sheet has any registered Data Table range at all -- lets callers cheaply
     /// skip the per-address scan when no Data Table has ever been created (see <see cref="_dataTableRanges"/>).</summary>
     public bool HasDataTableRanges => _dataTableRanges.Count > 0;
 
     /// <summary>
-    /// Registers <paramref name="range"/> (the Data Table's result body, not including its header
-    /// row/column of trial inputs) so edits/deletes of a single interior cell are blocked. Replaces
-    /// any previously-registered range sharing the same top-left corner, so re-running the Data
-    /// Table command over a resized range doesn't leave a stale, differently-sized registration.
+    /// Registers <paramref name="registration"/> (the Data Table's full range plus its driver
+    /// formula/input cells) so edits/deletes of a single body cell are blocked, and so a later edit
+    /// of the master/header formula cell(s) can be detected and the body refreshed. Replaces any
+    /// previously-registered table sharing the same top-left corner, so re-running the Data Table
+    /// command over a resized range doesn't leave a stale, differently-sized registration.
     /// </summary>
-    public void RegisterDataTableRange(GridRange range)
+    public void RegisterDataTableRange(DataTableRegistration registration)
     {
-        _dataTableRanges.RemoveAll(r => r.Start == range.Start);
-        _dataTableRanges.Add(range);
+        _dataTableRanges.RemoveAll(r => r.TableRange.Start == registration.TableRange.Start);
+        _dataTableRanges.Add(registration);
     }
 
-    /// <summary>Removes a previously-registered Data Table range (e.g. on command undo).</summary>
-    public void UnregisterDataTableRange(GridRange range) => _dataTableRanges.Remove(range);
+    /// <summary>Removes a previously-registered Data Table (matched by its result-body range, e.g.
+    /// on command undo).</summary>
+    public void UnregisterDataTableRange(GridRange bodyRange) =>
+        _dataTableRanges.RemoveAll(r => r.BodyRange.Equals(bodyRange));
 
-    /// <summary>If <paramref name="address"/> falls within a registered Data Table range, returns it.</summary>
+    /// <summary>If <paramref name="address"/> falls within a registered Data Table's result body, returns it.</summary>
     public bool TryGetDataTableRange(CellAddress address, out GridRange range)
     {
         foreach (var candidate in _dataTableRanges)
         {
-            if (candidate.Contains(address))
+            if (candidate.BodyRange.Contains(address))
             {
-                range = candidate;
+                range = candidate.BodyRange;
                 return true;
             }
         }
@@ -1337,6 +1372,10 @@ public sealed partial class Sheet
         range = default;
         return false;
     }
+
+    /// <summary>Every registered Data Table on this sheet, including its driver-cell metadata --
+    /// see <see cref="RegisterDataTableRange"/>.</summary>
+    public IReadOnlyList<DataTableRegistration> DataTableRegistrations => _dataTableRanges;
 
     /// <summary>Get all non-empty cells as a dictionary keyed by CellAddress.</summary>
     public Dictionary<CellAddress, Cell> GetUsedCells()

@@ -246,7 +246,7 @@ internal static class PptxChartWriter
     private static XElement BuildPlotArea(ChartShape chart)
     {
         bool isScatterLike = chart.ChartType is ChartType.Scatter or ChartType.Bubble;
-        bool noCatAx       = chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.Unknown;
+        bool noCatAx       = chart.ChartType is ChartType.Pie or ChartType.Doughnut or ChartType.Funnel or ChartType.Unknown;
 
         // CA1: split series by OnSecondaryAxis only when there IS a SecondaryValueAxis and at
         // least one secondary series. All other charts use a single group (no regression).
@@ -432,12 +432,23 @@ internal static class PptxChartWriter
                 BuildRadarChartEl(chart, seriesEls, catAxId, valAxId),
             ChartType.Stock =>
                 BuildStockChartEl(chart, seriesEls, catAxId, valAxId),
+            ChartType.Funnel =>
+                BuildFunnelChartEl(chart, seriesEls),
             ChartType.Surface or ChartType.Surface3D =>
                 BuildSurfaceChartEl(chart, seriesEls, catAxId, valAxId, PrimarySerAxId),
             _ =>
                 BuildBarChartEl(chart, seriesEls, isBar: false, catAxId, valAxId)
         };
     }
+
+    private static XElement BuildFunnelChartEl(ChartShape chart, List<XElement> seriesEls) =>
+        new(
+            C + "funnelChart",
+            BuildVaryColorsEl(chart),
+            seriesEls,
+            chart.BarGapWidthPercent is { } gapWidth
+                ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
+                : null);
 
     private static XElement BuildBarChartEl(ChartShape chart, List<XElement> seriesEls, bool isBar,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId)

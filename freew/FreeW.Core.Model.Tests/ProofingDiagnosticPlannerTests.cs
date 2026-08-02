@@ -30,6 +30,36 @@ public sealed class ProofingDiagnosticPlannerTests
             .Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData(true, false, ProofingDiagnosticKind.Grammar)]
+    [InlineData(false, true, ProofingDiagnosticKind.Spelling)]
+    public void BuildVisibleIndicators_honors_document_error_visibility_independently(
+        bool hideSpelling,
+        bool hideGrammar,
+        ProofingDiagnosticKind expectedKind)
+    {
+        var doc = DocumentWithRun(new Run("teh the the"));
+        doc.HideSpellingErrors = hideSpelling;
+        doc.HideGrammaticalErrors = hideGrammar;
+
+        ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true)
+            .Should().HaveCount(2, "hiding indicators must retain the underlying diagnostics");
+        ProofingDiagnosticPlanner.BuildVisibleIndicators(doc, spellCheckEnabled: true)
+            .Should().ContainSingle()
+            .Which.Kind.Should().Be(expectedKind);
+    }
+
+    [Fact]
+    public void BuildVisibleIndicators_hides_both_kinds_without_removing_diagnostics()
+    {
+        var doc = DocumentWithRun(new Run("teh the the"));
+        doc.HideSpellingErrors = true;
+        doc.HideGrammaticalErrors = true;
+
+        ProofingDiagnosticPlanner.BuildVisibleIndicators(doc, spellCheckEnabled: true).Should().BeEmpty();
+        ProofingDiagnosticPlanner.Build(doc, spellCheckEnabled: true).Should().HaveCount(2);
+    }
+
     [Fact]
     public void Build_suppresses_custom_dictionary_words()
     {

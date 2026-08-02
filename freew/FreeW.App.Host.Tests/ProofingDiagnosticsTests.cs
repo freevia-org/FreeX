@@ -43,6 +43,39 @@ public sealed class ProofingDiagnosticsTests
     }
 
     [StaFact]
+    public void Document_proofing_visibility_flags_hide_only_their_indicators()
+    {
+        var hiddenSpelling = TextDocument.CreateEmpty();
+        hiddenSpelling.Blocks.Clear();
+        hiddenSpelling.Blocks.Add(new Paragraph("teh the the"));
+        hiddenSpelling.HideSpellingErrors = true;
+        var view = new DocumentView();
+
+        view.LoadModel(hiddenSpelling);
+
+        view.SpellCheckEnabled.Should().BeTrue("the document setting must not change the user toggle");
+        view.NativeSpellCheckEnabledForTest.Should().BeFalse();
+        view.SharedGrammarDiagnostics.Should().ContainSingle();
+
+        var hiddenGrammar = TextDocument.CreateEmpty();
+        hiddenGrammar.Blocks.Clear();
+        hiddenGrammar.Blocks.Add(new Paragraph("teh the the"));
+        hiddenGrammar.HideGrammaticalErrors = true;
+
+        view.LoadModel(hiddenGrammar);
+
+        view.NativeSpellCheckEnabledForTest.Should().BeTrue();
+        view.SharedGrammarDiagnostics.Should().BeEmpty();
+
+        view.SpellCheckEnabled = false;
+        view.LoadModel(hiddenSpelling);
+        view.LoadModel(TextDocument.CreateEmpty());
+
+        view.SpellCheckEnabled.Should().BeFalse("switching documents must preserve the user preference");
+        view.NativeSpellCheckEnabledForTest.Should().BeFalse();
+    }
+
+    [StaFact]
     public void NoProof_disables_native_spellcheck_only_on_effective_run_and_survives_commit()
     {
         var doc = TextDocument.CreateEmpty();

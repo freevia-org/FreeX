@@ -156,11 +156,18 @@ public sealed class R94_PivotCacheFieldsReconciledOnTableResizeRefreshTests
 
         cache.Fields.Should().HaveCount(4);
         cache.Fields.Select(f => f.Name).Should().Equal("Region", "Quarter", "Amount", "Units");
-        cache.Fields.Should().Equal(fieldsBeforeRefresh);
-        // The reconciliation's no-op fast path must preserve field identity (the same record
-        // instances), not silently rebuild every field from scratch on every ordinary refresh.
-        for (var i = 0; i < fieldsBeforeRefresh.Count; i++)
-            ReferenceEquals(cache.Fields[i], fieldsBeforeRefresh[i]).Should().BeTrue($"field {i} ('{fieldsBeforeRefresh[i].Name}') must not be reallocated when nothing changed");
+        // R115-commands-pivot-sharedItems-refresh: the fields must still be VALUE-equal (same names,
+        // NumberFormatId, SharedItems content) when nothing in the underlying data changed -- but they
+        // are no longer guaranteed to be the SAME record instances any more. Re-deriving SharedItems
+        // from the live column on every refresh (not only when the header itself changed) is exactly
+        // the fix for R115's staleness defect, and doing that unconditionally means a brand-new
+        // (immutable) PivotCacheFieldModel record is built even when the recomputed content happens to
+        // be identical to what was already there -- see PivotCacheFieldFactory.MergeFromSourceData.
+        // BeEquivalentTo (deep/structural, including collection CONTENT) rather than Equal (which uses
+        // PivotCacheFieldModel's synthesized record Equals -- and List<T> has no value-equality
+        // override, so two content-identical-but-different-instance SharedItems lists would otherwise
+        // register as a false mismatch).
+        cache.Fields.Should().BeEquivalentTo(fieldsBeforeRefresh, options => options.WithStrictOrdering());
 
         pivot.DataFields.Should().HaveCount(2, "no field was invalidated -- both data fields must still be present");
     }

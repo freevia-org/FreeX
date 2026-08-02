@@ -512,6 +512,9 @@ public sealed partial class ViewportService
         if (CanSkipDefaultTerminalRowMetrics(sheet, requestedStartRow, availableHeight))
             return null;
 
+        if (requestedStartRow < ComputeTerminalRowThresholdLowerBound(sheet, maxRow, availableHeight))
+            return null;
+
         var rows = new List<(uint Row, double Height)>();
         double totalHeight = 0;
         for (uint row = maxRow; row >= 1; row--)
@@ -581,6 +584,9 @@ public sealed partial class ViewportService
         if (CanSkipDefaultTerminalColMetrics(sheet, requestedStartCol, availableWidth))
             return null;
 
+        if (requestedStartCol < ComputeTerminalColThresholdLowerBound(sheet, maxCol, availableWidth))
+            return null;
+
         var columns = new List<(uint Col, double Width)>();
         double totalWidth = 0;
         for (uint col = maxCol; col >= 1; col--)
@@ -636,6 +642,66 @@ public sealed partial class ViewportService
         var firstTerminalColumn = CellAddress.MaxCol - (uint)visibleColumnCount + 1;
         var terminalThreshold = firstTerminalColumn > 1 ? firstTerminalColumn - 1 : 1;
         return requestedStartCol < terminalThreshold;
+    }
+
+    /// <summary>
+    /// Cheap O(1) LOWER BOUND on <c>BuildTerminalRowMetrics</c>'s <c>terminalThreshold</c> that lets a
+    /// caller nowhere near the sheet's bottom skip the expensive bottom-anchored reverse row scan
+    /// entirely, instead of paying for the scan and then discarding its result (the pre-existing
+    /// <c>requestedStartRow &lt; terminalThreshold</c> check only gated USE of the scan's result, not
+    /// whether the scan ran at all).
+    ///
+    /// However many rows are hidden (manual/filter/group) or custom-height ANYWHERE on the whole
+    /// sheet -- <see cref="CanSkipDefaultTerminalRowMetrics"/>'s fast path requires there be NONE of
+    /// either -- the reverse scan can never need to walk back further than
+    /// <c>hiddenCount + customHeightCount + ceil(availableHeight / DefaultRowHeight)</c> rows from
+    /// <paramref name="maxRow"/>: take any window of that many consecutive rows ending at
+    /// <paramref name="maxRow"/> and arrange every hidden/custom-height row in the sheet inside it (the
+    /// worst possible placement, each contributing zero height) -- the remaining rows are plain
+    /// default-height and there are still enough of them to reach <paramref name="availableHeight"/>.
+    /// So the real terminal window the full scan would find is never wider than this bound, which
+    /// makes <c>maxRow - bound</c> a safe (if not always tight) lower bound on where it starts. A
+    /// single stray hidden or resized row elsewhere on a million-row sheet therefore no longer forces
+    /// every scroll tick to pay for scanning the whole trailing region -- only genuinely dense
+    /// hidden/custom-height counts near the bottom do.
+    /// </summary>
+    private static uint ComputeTerminalRowThresholdLowerBound(Sheet sheet, uint maxRow, double availableHeight)
+    {
+        if (sheet.DefaultRowHeight <= 0)
+            return 0;
+
+        var defaultRowsNeeded = Math.Ceiling(availableHeight / sheet.DefaultRowHeight);
+        if (!double.IsFinite(defaultRowsNeeded) || defaultRowsNeeded < 0)
+            return 0;
+
+        long hiddenCount = sheet.HiddenRows.Count;
+        hiddenCount += sheet.FilterHiddenRows.Count;
+        hiddenCount += sheet.GroupHiddenRows.Count;
+        long customCount = sheet.RowHeights.Count;
+
+        var worstCaseSpan = hiddenCount + customCount + (long)defaultRowsNeeded + 1;
+        var candidate = (long)maxRow - worstCaseSpan;
+        return candidate < 1 ? 0 : (uint)candidate;
+    }
+
+    /// <summary>Column counterpart of <see cref="ComputeTerminalRowThresholdLowerBound"/>.</summary>
+    private static uint ComputeTerminalColThresholdLowerBound(Sheet sheet, uint maxCol, double availableWidth)
+    {
+        var defaultWidthPixels = GetDefaultColumnWidthPixels(sheet);
+        if (defaultWidthPixels <= 0)
+            return 0;
+
+        var defaultColsNeeded = Math.Ceiling(availableWidth / defaultWidthPixels);
+        if (!double.IsFinite(defaultColsNeeded) || defaultColsNeeded < 0)
+            return 0;
+
+        long hiddenCount = sheet.HiddenCols.Count;
+        hiddenCount += sheet.GroupHiddenCols.Count;
+        long customCount = sheet.ColumnWidths.Count;
+
+        var worstCaseSpan = hiddenCount + customCount + (long)defaultColsNeeded + 1;
+        var candidate = (long)maxCol - worstCaseSpan;
+        return candidate < 1 ? 0 : (uint)candidate;
     }
 
     private sealed class DefaultRowMetricList : IReadOnlyList<RowMetric>
