@@ -966,6 +966,37 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void MoveAssistantAndReport_KeepAssistantPrefixTogether()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+        data.Nodes[0].Children.AddRange(
+        [
+            new SmartArtNode { ModelId = "assistant", Text = "Assistant", Level = 1, IsAssistant = true },
+            new SmartArtNode { ModelId = "report1", Text = "Report 1", Level = 1 },
+            new SmartArtNode { ModelId = "report2", Text = "Report 2", Level = 1 }
+        ]);
+
+        var moveAssistantDown = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.MoveDown("assistant"));
+        moveAssistantDown.Applied.Should().BeFalse();
+        moveAssistantDown.Message.Should().Be("SmartArt assistants must remain before regular reports.");
+        data.Nodes[0].Children.Select(node => node.ModelId)
+            .Should().Equal("assistant", "report1", "report2");
+
+        var moveReportUp = SmartArtEditingPlanner.Apply(
+            data,
+            SmartArtNodeEditIntent.MoveUp("report1"));
+        moveReportUp.Applied.Should().BeFalse();
+        moveReportUp.Message.Should().Be("SmartArt assistants must remain before regular reports.");
+
+        SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.MoveDown("report1"))
+            .Applied.Should().BeTrue();
+        data.Nodes[0].Children.Select(node => node.ModelId)
+            .Should().Equal("assistant", "report2", "report1");
+    }
+
+    [Fact]
     public void AddAssistant_InsertsAssistantChildBeforeRegularChildrenAndRewritesNodeType()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
