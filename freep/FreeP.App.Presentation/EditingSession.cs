@@ -759,6 +759,23 @@ public sealed class EditingSession
         Bus.Execute(new AddShapeCommand(_currentSlideIndex, shape));
     }
 
+    /// <summary>
+    /// Inserts a native PowerPoint Slide Zoom targeting <paramref name="targetSlideId"/>.
+    /// The target must be a different slide in this presentation; the operation is undoable.
+    /// </summary>
+    public SlideShape InsertSlideZoom(string targetSlideId)
+    {
+        if (CurrentSlide is null)
+            throw new InvalidOperationException("A current slide is required to insert a Slide Zoom.");
+
+        var shape = SlideZoomInsertionPlanner.CreateShape(
+            Presentation,
+            _currentSlideIndex,
+            targetSlideId);
+        AddShape(shape);
+        return shape;
+    }
+
     /// <summary>Deletes all currently selected shapes.</summary>
     public void DeleteSelected()
     {

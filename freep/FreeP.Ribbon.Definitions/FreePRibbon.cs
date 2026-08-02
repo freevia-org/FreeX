@@ -566,6 +566,8 @@ public static class FreePRibbon
         tab.Group("links", FreePRibbonText.LinksGroupLabel, FreePRibbonText.LinksGroupKeyTip, 92, group =>
         {
             group.Large("freep.insert-link", FreePRibbonText.InsertLinkLabel, RibbonCommandIconKind.Link, FreePRibbonText.InsertLinkKeyTip);
+            group.Medium(SlideZoomInsertionPlanner.CommandId, FreePRibbonText.InsertSlideZoomLabel,
+                RibbonCommandIconKind.Zoom, FreePRibbonText.InsertSlideZoomKeyTip);
             group.Medium("freep.remove-link", FreePRibbonText.RemoveLinkLabel, RibbonCommandIconKind.Delete, FreePRibbonText.RemoveLinkKeyTip);
         });
         tab.Group("illustrations", FreePRibbonText.IllustrationsGroupLabel, FreePRibbonText.IllustrationsGroupKeyTip, 90, group =>
