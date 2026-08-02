@@ -11,8 +11,10 @@ public sealed class WindowsPrinterSelectionTests
         var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("FreePWindowsPrinterPicker");
+        source.Should().Contain("FreePWindowsPrinterDialog");
         source.Should().Contain("WindowsNativePrintOutput.GetPrinters()");
         source.Should().Contain("WindowsNativePrintOutput.ForPrinter(printerName)");
+        source.Should().Contain("WindowsNativePrintOutput.TryShowPrinterSelectionDialog");
     }
 
     [Fact]
