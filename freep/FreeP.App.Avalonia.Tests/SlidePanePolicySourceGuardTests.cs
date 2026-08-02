@@ -48,6 +48,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("BorderThickness = new Thickness(plan.ThumbnailBorderThickness)");
         source.Should().Contain("Margin      = new Thickness(plan.ItemMarginHorizontal, plan.ItemMarginVertical)");
         source.Should().Contain("Foreground          = BrushFromHex(plan.LabelForegroundHex)");
+        source.Should().Contain("HorizontalAlignment = plan.CenterThumbnailContent");
         source.Should().Contain("Background      = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBackgroundHex : plan.ItemNormalBackgroundHex)");
         source.Should().Contain("BorderBrush     = BrushFromHex(plan.IsSelected ? plan.ItemSelectedBorderHex : plan.ItemNormalBorderHex)");
         source.Should().Contain("BorderThickness = new Thickness(plan.IsSelected ? plan.SelectedBorderThickness : plan.NormalBorderThickness)");

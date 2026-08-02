@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Themes.Fluent;
 using Avalonia.VisualTree;
@@ -1107,6 +1108,7 @@ public sealed class MainWindowHeadlessTests
         var paneItems = -1;
         var thumbnailHitTestVisible = true;
         var thumbnailEnabled = true;
+        var panelAlignment = HorizontalAlignment.Stretch;
 
         var ran = await OnUiThread(() =>
         {
@@ -1115,6 +1117,7 @@ public sealed class MainWindowHeadlessTests
             firstPlan = window.SlidePaneRenderedThumbnailPlans.FirstOrDefault();
             var itemChrome = window.SelectedSlidePaneItemForTests?.Content as Border;
             var panel = itemChrome?.Child as StackPanel;
+            panelAlignment = panel?.HorizontalAlignment ?? HorizontalAlignment.Stretch;
             var thumbnailBorder = panel?.Children.OfType<Border>().SingleOrDefault();
             var thumbnail = thumbnailBorder?.Child as SlideCanvas;
             thumbnailHitTestVisible = thumbnail?.IsHitTestVisible ?? true;
@@ -1137,9 +1140,14 @@ public sealed class MainWindowHeadlessTests
         firstPlan.ThumbnailBorderThickness.Should().Be(SlidePanePlanner.DefaultThumbnailBorderThickness);
         firstPlan.ItemMarginHorizontal.Should().Be(SlidePanePlanner.DefaultItemMarginHorizontal);
         firstPlan.ItemMarginVertical.Should().Be(SlidePanePlanner.DefaultItemMarginVertical);
+        firstPlan.CenterThumbnailContent.Should().Be(SlidePanePlanner.DefaultCenterThumbnailContent);
         firstPlan.ItemCornerRadius.Should().Be(SlidePanePlanner.DefaultItemCornerRadius);
         firstPlan.NormalBorderThickness.Should().Be(SlidePanePlanner.DefaultNormalBorderThickness);
         firstPlan.SelectedBorderThickness.Should().Be(SlidePanePlanner.DefaultSelectedBorderThickness);
+        panelAlignment.Should().Be(
+            SlidePanePlanner.DefaultCenterThumbnailContent
+                ? HorizontalAlignment.Center
+                : HorizontalAlignment.Stretch);
         thumbnailHitTestVisible.Should().BeFalse("the preview must leave pointer routing to the slide-pane item");
         thumbnailEnabled.Should().BeFalse("the preview must not own keyboard focus or editing input");
     }

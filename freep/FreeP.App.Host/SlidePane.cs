@@ -318,7 +318,9 @@ public sealed class SlidePane : Border
         var panel = new StackPanel
         {
             Orientation         = Orientation.Vertical,
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = plan.CenterThumbnailContent
+                ? HorizontalAlignment.Center
+                : HorizontalAlignment.Stretch
         };
         panel.Children.Add(label);
         panel.Children.Add(thumbBorder);
