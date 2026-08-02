@@ -200,6 +200,7 @@ public static class DocxWriter
         var hasSettings = hasProtection
             || document.UpdateFieldsOnOpen
             || document.TrackRevisions
+            || document.DoNotTrackMoves
             || document.DoNotTrackFormatting
             || document.Page.AutoHyphenation
             || anyDifferentOddEvenPages
@@ -259,7 +260,7 @@ public static class DocxWriter
         WritePart(archive, "word/styles.xml", BuildStyles(document, preservedNumbering));
         WritePart(archive, ThemePartName.TrimStart('/'), BuildTheme(document.Theme));
         if (hasSettings)
-            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
+            WritePart(archive, SettingsPartName.TrimStart('/'), BuildSettings(document.Protection, document.UpdateFieldsOnOpen, document.TrackRevisions, document.DoNotTrackMoves, document.DoNotTrackFormatting, document.Page, hasBackground, hasEmbeddedFonts, document.FootnoteNumbering, document.EndnoteNumbering, document.Preserved.OriginalSettings, anyDifferentOddEvenPages));
         if (hasBibliography)
             WritePart(archive, BibliographyPartName.TrimStart('/'), BuildBibliographySources(document));
         // Embedded fonts: word/fontTable.xml + its rels + one obfuscated .odttf per embedded style.
@@ -8218,8 +8219,8 @@ public static class DocxWriter
     /// toggle (w:displayBackgroundShape, when <paramref name="displayBackground"/> so Word paints the
     /// w:background), the automatic-hyphenation toggle (w:autoHyphenation), the different-odd/even-headers
     /// toggle (w:evenAndOddHeaders, when <paramref name="differentOddEvenPages"/>), the embed-TrueType-fonts
-    /// toggle (w:embedTrueTypeFonts), the revision-tracking toggles (w:trackRevisions and
-    /// w:doNotTrackFormatting), and the document-protection element
+    /// toggle (w:embedTrueTypeFonts), the revision-tracking toggles (w:trackRevisions,
+    /// w:doNotTrackMoves, and w:doNotTrackFormatting), and the document-protection element
     /// (w:documentProtection: w:edit + w:enforcement="1").
     ///
     /// <para>
@@ -8231,7 +8232,7 @@ public static class DocxWriter
     /// FreeW's features still apply.
     /// </para>
     /// </summary>
-    private static XDocument BuildSettings(ProtectionSettings protection, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
+    private static XDocument BuildSettings(ProtectionSettings protection, bool updateFieldsOnOpen, bool trackRevisions, bool doNotTrackMoves, bool doNotTrackFormatting, PageSettings page, bool displayBackground, bool embedTrueTypeFonts, NoteNumberingOptions footnoteNumbering, NoteNumberingOptions endnoteNumbering, XElement? original, bool anyDifferentOddEvenPages = false)
     {
         var autoHyphenation = page.AutoHyphenation;
         // Use the caller-supplied flag (any-section OR) instead of just the final section's flag, so a
@@ -8272,6 +8273,8 @@ public static class DocxWriter
                 fresh.Add(new XElement(W + "mirrorMargins"));
             if (trackRevisions)
                 fresh.Add(new XElement(W + "trackRevisions"));
+            if (doNotTrackMoves)
+                fresh.Add(new XElement(W + "doNotTrackMoves"));
             if (doNotTrackFormatting)
                 fresh.Add(new XElement(W + "doNotTrackFormatting"));
             if (defaultTabStop is not null)
@@ -8309,6 +8312,7 @@ public static class DocxWriter
         OverlaySetting(settings, "displayBackgroundShape", displayBackground ? new XElement(W + "displayBackgroundShape") : null);
         OverlaySetting(settings, "mirrorMargins", mirrorMargins ? new XElement(W + "mirrorMargins") : null);
         OverlaySetting(settings, "trackRevisions", trackRevisions ? new XElement(W + "trackRevisions") : null);
+        OverlaySetting(settings, "doNotTrackMoves", doNotTrackMoves ? new XElement(W + "doNotTrackMoves") : null);
         OverlaySetting(settings, "doNotTrackFormatting", doNotTrackFormatting ? new XElement(W + "doNotTrackFormatting") : null);
         OverlaySetting(settings, "defaultTabStop", defaultTabStop);
         OverlaySetting(settings, "autoHyphenation", autoHyphenation ? new XElement(W + "autoHyphenation") : null);

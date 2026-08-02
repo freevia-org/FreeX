@@ -105,6 +105,48 @@ public sealed class SummaryZoomInsertionPlannerTests
         shape.PreservedObject.RawXml.Should().Contain("imageType=\"cover\"");
     }
 
+    [Fact]
+    public void Summary_zoom_tile_cover_images_are_individual_and_undoable()
+    {
+        var presentation = BuildPresentation();
+        var session = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var shape = session.InsertSummaryZoom(new[] { "{SECTION-ONE}", "{SECTION-TWO}" });
+        var firstImage = new byte[] { 1, 2, 3 };
+        var secondImage = new byte[] { 4, 5, 6 };
+
+        session.SetSummaryZoomTileCoverImage(
+            shape.Id, "{SECTION-ONE}", firstImage, "image/png").Should().BeTrue();
+        session.SetSummaryZoomTileCoverImage(
+            shape.Id, "{SECTION-TWO}", secondImage, "image/jpeg").Should().BeTrue();
+
+        var root = XElement.Parse(shape.PreservedObject!.RawXml);
+        var tiles = root.Descendants().Where(element => element.Name.LocalName == "summaryZmObj").ToArray();
+        tiles.Should().HaveCount(2);
+        var firstTile = tiles.Single(tile => tile.Attribute("sectionId")?.Value == "{SECTION-ONE}");
+        firstTile.Descendants().Any(element =>
+            element.Name.LocalName == "zmPr"
+            && element.Attribute("imageType")?.Value == "cover").Should().BeTrue();
+        var secondTile = tiles.Single(tile => tile.Attribute("sectionId")?.Value == "{SECTION-TWO}");
+        secondTile.Descendants().Any(element =>
+            element.Name.LocalName == "zmPr"
+            && element.Attribute("imageType")?.Value == "cover").Should().BeTrue();
+        shape.PreservedObject.Parts.Values.Should().Contain(bytes => bytes.SequenceEqual(firstImage));
+        shape.PreservedObject.Parts.Values.Should().Contain(bytes => bytes.SequenceEqual(secondImage));
+        shape.PreservedObject.Parts.Keys.Should().OnlyHaveUniqueItems();
+
+        session.Undo();
+        XElement.Parse(shape.PreservedObject.RawXml).Descendants()
+            .Single(element => element.Name.LocalName == "summaryZmObj"
+                && element.Attribute("sectionId")?.Value == "{SECTION-TWO}")
+            .Descendants().Single(element => element.Name.LocalName == "zmPr")
+            .Attribute("imageType")!.Value.Should().Be("preview");
+        shape.PreservedObject.Parts.Values.Should().ContainSingle().Which.Should().BeEquivalentTo(firstImage);
+
+        session.Redo();
+        shape.PreservedObject.Parts.Values.Should().Contain(bytes => bytes.SequenceEqual(firstImage));
+        shape.PreservedObject.Parts.Values.Should().Contain(bytes => bytes.SequenceEqual(secondImage));
+    }
+
     private static Presentation BuildPresentation()
     {
         var presentation = new Presentation();

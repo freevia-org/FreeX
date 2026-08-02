@@ -3611,6 +3611,13 @@ public sealed class TextDocument
     public bool TrackRevisions { get; set; }
 
     /// <summary>
+    /// Whether moved content should be tracked as deletion/insertion revisions instead of move revisions. Maps
+    /// to <c>w:settings/w:doNotTrackMoves</c>. False is Word's default and is omitted from newly authored
+    /// packages; this option is meaningful when <see cref="TrackRevisions"/> is enabled.
+    /// </summary>
+    public bool DoNotTrackMoves { get; set; }
+
+    /// <summary>
     /// Whether formatting-only changes should be excluded from tracked revisions. Maps to
     /// <c>w:settings/w:doNotTrackFormatting</c>. False is Word's default and is omitted from newly
     /// authored packages; this option is meaningful when <see cref="TrackRevisions"/> is enabled.
