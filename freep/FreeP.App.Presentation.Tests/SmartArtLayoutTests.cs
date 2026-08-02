@@ -409,6 +409,38 @@ public sealed class SmartArtLayoutTests
         }
     }
 
+    [Fact]
+    public void ContinuousBlockProcess_UsesCompactEditableBlocksAndConnectors()
+    {
+        var data = MakeChevronData("continuousBlockProcess", "Plan", "Build", "Ship", "Learn");
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("continuousBlockProcess is admitted through the bounded process catalog");
+        var blocks = shapes!
+            .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal))
+            .OrderBy(shape => shape.OffsetXEmu)
+            .ToArray();
+
+        blocks.Should().HaveCount(4, "one editable block is emitted per ordered process node");
+        blocks.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle);
+        blocks.Select(shape => shape.PlainText).Should().Equal("Plan", "Build", "Ship", "Learn");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "each adjacent block pair has one shared progression connector");
+        shapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().OnlyContain(shape => shape.Name.StartsWith(
+                "SmartArt_ContinuousBlockProcess_Connector_", StringComparison.Ordinal));
+
+        for (var index = 1; index < blocks.Length; index++)
+        {
+            blocks[index].OffsetXEmu.Should().BeGreaterThan(
+                blocks[index - 1].OffsetXEmu + blocks[index - 1].ExtentCxEmu,
+                "continuous process blocks leave only a compact connector gap");
+            blocks[index].OffsetYEmu.Should().Be(blocks[0].OffsetYEmu,
+                "continuous process blocks share one centered band");
+        }
+    }
+
     // ── List layout ───────────────────────────────────────────────────────────────
 
     [Fact]
@@ -2823,6 +2855,56 @@ public sealed class SmartArtLayoutTests
         ops.Should().HaveCountGreaterThan(1, "live layout must produce shape ops");
         ops.Skip(1).Should().AllBeOfType<DrawOp.Shape>("all live shapes are DrawOp.Shape");
         ops.Should().HaveCount(6, "background + 3 boxes + 2 connectors");
+    }
+
+    [Fact]
+    public void Compositor_ContinuousBlockProcess_UsesSharedLiveBlocksOverCachedDrawing()
+    {
+        var data = MakeChevronData("continuousBlockProcess", "Live A", "Live B", "Live C");
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 90,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "Cached continuous fallback" } } }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 91,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(container);
+
+        var shapeOps = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        shapeOps.Should().HaveCount(5, "continuousBlockProcess has three shared live blocks and two connectors");
+        shapeOps.Where(op => op.Text != null)
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Live A", "Live B", "Live C");
+        shapeOps.Count(op => op.Text == null).Should().Be(2,
+            "both WPF and Avalonia hosts consume the shared connector DrawOps without cached fallback output");
     }
 
     [Fact]

@@ -1655,6 +1655,59 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void RegenerateDrawingCache_ContinuousBlockProcessUsesSharedBlockPlan()
+    {
+        var data = MakeFlatData(
+            SmartArtFamily.Process,
+            ("plan", "Plan"),
+            ("build", "Build"),
+            ("ship", "Ship"),
+            ("learn", "Learn"));
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/continuousBlockProcess";
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme());
+
+        result.Applied.Should().BeTrue(result.Message);
+        result.NodeCount.Should().Be(4);
+        result.ShapeCount.Should().Be(7, "the continuous band has four cached blocks and three connectors");
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal))
+            .Should().HaveCount(4);
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Connector_", StringComparison.Ordinal))
+            .Should().HaveCount(3);
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal))
+            .Should().OnlyContain(shape =>
+                shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.RoundedRectangle);
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal))
+            .Select(shape => shape.PlainText)
+            .Should().Equal("Plan", "Build", "Ship", "Learn");
+
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+        doc.Root!.Name.Should().Be(dsp + "drawing");
+        doc.Descendants(dsp + "sp").Should().HaveCount(7);
+        doc.Descendants(a + "t").Select(text => text.Value)
+            .Should().Equal("Plan", "Build", "Ship", "Learn");
+    }
+
+    [Fact]
     public void RegenerateDrawingCache_Hierarchy3UsesSharedLeftToRightLayout()
     {
         var root = new SmartArtNode { ModelId = "root", Text = "Portfolio", Level = 0 };

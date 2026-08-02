@@ -117,6 +117,9 @@ public static class SmartArtLayoutEngine
         if (IsBasicTimelineLayout(data.LayoutUniqueId))
             return LayoutBasicTimeline(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsContinuousBlockProcessLayout(data.LayoutUniqueId))
+            return LayoutContinuousBlockProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsBasicRadialLayout(data.LayoutUniqueId))
             return LayoutBasicRadial(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -833,6 +836,60 @@ public static class SmartArtLayoutEngine
             long boxEdgeY = aboveRail ? boxY + boxH : boxY;
             shapes.Add(MakeConnector(idCounter++, centerX, railY, centerX, boxEdgeY, stylePlan.Connector));
             shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, boxX, boxY, boxW, boxH));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Continuous Block Process geometry: the ordered nodes form a compact centered
+    /// band of editable blocks with short shared connectors. The band is deliberately
+    /// shorter and tighter than the generic process row so the preset keeps its own
+    /// visual role while retaining an explicit ordered connector path.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutContinuousBlockProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count == 0 || fcx <= 0 || fcy <= 0)
+            return [];
+
+        long padX = Math.Max((long)(fcx * 0.045), 1L);
+        long gap = Math.Max((long)(fcx * 0.012), 1L);
+        long connectorW = Math.Max((long)(fcx * 0.018), 1L);
+        long innerW = Math.Max(fcx - 2 * padX - (nodes.Count - 1) * (gap + connectorW), 1L);
+        long blockH = Math.Max((long)(fcy * 0.56), 1L);
+        long topY = fy + (fcy - blockH) / 2;
+        long blockW = Math.Max(innerW / nodes.Count, 1L);
+        var shapes = new List<SlideShape>(nodes.Count * 2 - 1);
+        uint idCounter = 230;
+        long currentX = fx + padX;
+
+        for (int index = 0; index < nodes.Count; index++)
+        {
+            var style = stylePlan.GetNodeStyle(index, nodes[index].Level, SmartArtFamily.Process);
+            var block = MakeBox(
+                idCounter++, nodes[index].Text, style,
+                currentX, topY, blockW, blockH,
+                NodeFontSizePt, DrawingShapeKind.RoundedRectangle);
+            block.Name = $"SmartArt_ContinuousBlockProcess_Block_{index + 1}";
+            shapes.Add(block);
+
+            if (index < nodes.Count - 1)
+            {
+                long connectorX = currentX + blockW + gap / 2;
+                var connector = MakeConnector(
+                    idCounter++,
+                    connectorX,
+                    topY + blockH / 2,
+                    connectorX + connectorW,
+                    topY + blockH / 2,
+                    stylePlan.Connector);
+                connector.Name = $"SmartArt_ContinuousBlockProcess_Connector_{index + 1}";
+                shapes.Add(connector);
+                currentX += blockW + gap + connectorW;
+            }
         }
 
         return shapes;
@@ -3894,6 +3951,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return id.Split('/').Last() is "basictimeline" or "circleaccenttimeline";
+    }
+
+    private static bool IsContinuousBlockProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "continuousblockprocess", StringComparison.Ordinal);
     }
 
     private static bool IsBasicRadialLayout(string uniqueId)

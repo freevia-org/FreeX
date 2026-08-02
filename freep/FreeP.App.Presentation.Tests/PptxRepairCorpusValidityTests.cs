@@ -80,6 +80,70 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void EditingSmartArtContinuousBlockProcess_RoundTripsLiveCacheAndSchema()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var smartArt = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Select(shape => shape.SmartArt)
+            .FirstOrDefault(candidate => candidate is not null);
+
+        smartArt.Should().NotBeNull("the live SmartArt corpus must contain an editable diagram");
+        var result = SmartArtAuthoringPlanner.ApplyLayoutPreset(
+            smartArt,
+            SmartArtLayoutPreset.ContinuousBlockProcess);
+
+        result.Applied.Should().BeTrue(result.Message);
+        smartArt!.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+        var container = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .First(shape => shape.SmartArt == smartArt);
+        var cacheResult = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            container.OffsetXEmu,
+            container.OffsetYEmu,
+            container.ExtentCxEmu,
+            container.ExtentCyEmu,
+            presentation.Theme!);
+        cacheResult.Applied.Should().BeTrue(cacheResult.Message);
+        var expectedBlockCount = smartArt.FallbackShapes.Count;
+        expectedBlockCount.Should().BeGreaterThan(0);
+        var blockCount = smartArt.FallbackShapes.Count(shape => shape.Name.StartsWith(
+            "SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal));
+        blockCount.Should().BeGreaterThan(0);
+        smartArt.FallbackShapes.Count(shape => shape.Name.StartsWith(
+            "SmartArt_ContinuousBlockProcess_Connector_", StringComparison.Ordinal))
+            .Should().Be(blockCount - 1);
+        smartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal))
+            .Should().OnlyContain(shape =>
+                shape.AutoShapeKind == Free.Shared.Drawing.DrawingShapeKind.RoundedRectangle);
+
+        using var roundTrip = new MemoryStream();
+        PptxPackageWriter.Write(presentation, roundTrip);
+        ValidateSlideSchema(roundTrip.ToArray())
+            .Should().BeEmpty("an edited continuous block SmartArt package must remain schema-valid");
+
+        var reread = PptxPackageReader.Read(new MemoryStream(roundTrip.ToArray()));
+        var rereadSmartArt = reread.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Select(shape => shape.SmartArt)
+            .FirstOrDefault(candidate => candidate is not null);
+
+        rereadSmartArt.Should().NotBeNull();
+        rereadSmartArt!.Data!.LayoutUniqueId.Should().Be(result.LayoutUniqueId);
+        rereadSmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        rereadSmartArt.FallbackShapes.Should().HaveCount(expectedBlockCount);
+        rereadSmartArt.FallbackShapes
+            .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal))
+            .Select(shape => shape.PlainText)
+            .Should().Equal(smartArt.FallbackShapes
+                .Where(shape => shape.Name.StartsWith("SmartArt_ContinuousBlockProcess_Block_", StringComparison.Ordinal))
+                .Select(shape => shape.PlainText));
+    }
+
+    [Fact]
     public void EditingSmartArtQuickStyleAndColors_PreservesSchemaValidPackage()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
