@@ -72,7 +72,8 @@ public sealed class HSparklinesRegressionTests
     [Fact]
     public void ReadSeries_DisplayHiddenTrue_IncludesHiddenRowAndColumnValues()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         for (uint row = 1; row <= 4; row++)
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
 
@@ -88,7 +89,7 @@ public sealed class HSparklinesRegressionTests
             DisplayHidden = true
         };
 
-        var series = SparklineSeriesReader.ReadSeries(sheet, sparkline);
+        var series = SparklineSeriesReader.ReadSeries(workbook, sheet, sparkline);
 
         series.Should().Equal(
             new double[] { 1, 2, 3, 4 },
@@ -99,7 +100,8 @@ public sealed class HSparklinesRegressionTests
     [Fact]
     public void ReadSeries_DisplayHiddenFalse_StillSkipsHiddenRowAndColumnValues()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         for (uint row = 1; row <= 4; row++)
             sheet.SetCell(new CellAddress(sheet.Id, row, 1), new NumberValue(row));
 
@@ -115,7 +117,7 @@ public sealed class HSparklinesRegressionTests
             DisplayHidden = false
         };
 
-        var series = SparklineSeriesReader.ReadSeries(sheet, sparkline);
+        var series = SparklineSeriesReader.ReadSeries(workbook, sheet, sparkline);
 
         series.Should().Equal(
             new double[] { 1, 3, 4 },

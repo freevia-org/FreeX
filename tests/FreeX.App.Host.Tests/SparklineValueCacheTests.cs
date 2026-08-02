@@ -19,7 +19,7 @@ public sealed class SparklineValueCacheTests
     public void GetOrCreate_ReusesSparklineValuesWhenSheetAndRevisionAreUnchanged()
     {
         var cache = new SparklineValueCache();
-        var sheet = CreateSheetWithSparkline();
+        var (workbook, sheet) = CreateSheetWithSparkline();
         var calls = 0;
 
         var first = cache.GetOrCreate(sheet, revision: 2, CreateValues);
@@ -33,7 +33,7 @@ public sealed class SparklineValueCacheTests
         IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues()
         {
             calls++;
-            return SparklineSeriesReader.BuildValues(sheet);
+            return SparklineSeriesReader.BuildValues(workbook, sheet);
         }
     }
 
@@ -41,7 +41,7 @@ public sealed class SparklineValueCacheTests
     public void GetOrCreate_RebuildsSparklineValuesWhenRevisionChanges()
     {
         var cache = new SparklineValueCache();
-        var sheet = CreateSheetWithSparkline();
+        var (workbook, sheet) = CreateSheetWithSparkline();
         var calls = 0;
 
         cache.GetOrCreate(sheet, revision: 2, CreateValues);
@@ -55,7 +55,7 @@ public sealed class SparklineValueCacheTests
         IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues()
         {
             calls++;
-            return SparklineSeriesReader.BuildValues(sheet);
+            return SparklineSeriesReader.BuildValues(workbook, sheet);
         }
     }
 
@@ -63,13 +63,13 @@ public sealed class SparklineValueCacheTests
     public void GetOrCreate_KeepsSameRevisionValuesSeparateForDifferentSheetInstances()
     {
         var cache = new SparklineValueCache();
-        var firstSheet = CreateSheetWithSparkline();
-        var secondSheet = CreateSheetWithSparkline();
+        var (firstWorkbook, firstSheet) = CreateSheetWithSparkline();
+        var (secondWorkbook, secondSheet) = CreateSheetWithSparkline();
         secondSheet.SetCell(new CellAddress(secondSheet.Id, 1, 1), new NumberValue(42));
         var calls = 0;
 
-        var first = cache.GetOrCreate(firstSheet, revision: 2, () => CreateValues(firstSheet));
-        var second = cache.GetOrCreate(secondSheet, revision: 2, () => CreateValues(secondSheet));
+        var first = cache.GetOrCreate(firstSheet, revision: 2, () => CreateValues(firstWorkbook, firstSheet));
+        var second = cache.GetOrCreate(secondSheet, revision: 2, () => CreateValues(secondWorkbook, secondSheet));
 
         calls.Should().Be(2);
         first.Should().NotBeSameAs(second);
@@ -77,10 +77,10 @@ public sealed class SparklineValueCacheTests
         second.Values.Single().Should().StartWith(42);
         return;
 
-        IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues(Sheet sheet)
+        IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues(Workbook workbook, Sheet sheet)
         {
             calls++;
-            return SparklineSeriesReader.BuildValues(sheet);
+            return SparklineSeriesReader.BuildValues(workbook, sheet);
         }
     }
 
@@ -88,7 +88,7 @@ public sealed class SparklineValueCacheTests
     public void Clear_DropsCachedSparklineValues()
     {
         var cache = new SparklineValueCache();
-        var sheet = CreateSheetWithSparkline();
+        var (workbook, sheet) = CreateSheetWithSparkline();
         var calls = 0;
 
         cache.GetOrCreate(sheet, revision: 2, CreateValues);
@@ -101,19 +101,19 @@ public sealed class SparklineValueCacheTests
         IReadOnlyDictionary<Guid, IReadOnlyList<double>> CreateValues()
         {
             calls++;
-            return SparklineSeriesReader.BuildValues(sheet);
+            return SparklineSeriesReader.BuildValues(workbook, sheet);
         }
     }
 
     [Fact]
     public void GetOrCreate_CacheHitAvoidsRepeatedPlannerWork()
     {
-        var sheet = CreateSheetWithManySparklines(sparklineCount: 200, valuesPerSparkline: 25);
+        var (workbook, sheet) = CreateSheetWithManySparklines(sparklineCount: 200, valuesPerSparkline: 25);
         var cache = new SparklineValueCache();
         const int repetitions = 100;
 
-        var uncached = Measure(repetitions, () => SparklineSeriesReader.BuildValues(sheet));
-        var cached = Measure(repetitions, () => cache.GetOrCreate(sheet, revision: 9, () => SparklineSeriesReader.BuildValues(sheet)));
+        var uncached = Measure(repetitions, () => SparklineSeriesReader.BuildValues(workbook, sheet));
+        var cached = Measure(repetitions, () => cache.GetOrCreate(sheet, revision: 9, () => SparklineSeriesReader.BuildValues(workbook, sheet)));
 
         _output.WriteLine(
             $"Sparkline values repeated {repetitions}x over {sheet.Sparklines.Count:N0} sparklines: " +
@@ -138,9 +138,10 @@ public sealed class SparklineValueCacheTests
         return (stopwatch.Elapsed, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
-    private static Sheet CreateSheetWithSparkline()
+    private static (Workbook Workbook, Sheet Sheet) CreateSheetWithSparkline()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(3));
@@ -153,12 +154,13 @@ public sealed class SparklineValueCacheTests
             Location = new CellAddress(sheet.Id, 1, 4),
             Kind = SparklineKind.Line
         });
-        return sheet;
+        return (workbook, sheet);
     }
 
-    private static Sheet CreateSheetWithManySparklines(int sparklineCount, int valuesPerSparkline)
+    private static (Workbook Workbook, Sheet Sheet) CreateSheetWithManySparklines(int sparklineCount, int valuesPerSparkline)
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         for (uint row = 1; row <= sparklineCount; row++)
         {
             for (uint col = 1; col <= valuesPerSparkline; col++)
@@ -175,6 +177,6 @@ public sealed class SparklineValueCacheTests
             });
         }
 
-        return sheet;
+        return (workbook, sheet);
     }
 }

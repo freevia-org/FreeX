@@ -111,11 +111,23 @@ public static class ChartLayoutRequestBuilder
         ITextMeasurer textMeasurer)
     {
         // Categories are shared across series in the model (one axis), but each embedded series
-        // carries its own cached copy (they read the same <c:cat>/<c:xVal> formula) -- use the first
-        // non-empty one, matching the desktop renderer's BuildPlotModelFromEmbeddedData fallback.
+        // carries its own cached copy (they read the same <c:cat>/<c:xVal> formula), and a series
+        // whose own cache was truncated/short can still disagree with a sibling's -- e.g. series 0
+        // cached only 2 categories while series 1's cache (or its Values) run to 5. Every
+        // ChartLayoutEngine label lookup guards with `i < request.Categories.Count`, but several
+        // geometry loops (see LayoutStackedColumns/LayoutStackedBars/LayoutClusteredBars/
+        // StackedTotals's `i < series.Values.Count && i < categoryCount`, and ResolveCategoryCount's
+        // own "Categories.Count wins when non-zero") use request.Categories.Count as the
+        // authoritative point count too -- so picking a too-short cache doesn't just mislabel the
+        // extra points, it can silently drop them from the plotted geometry. Use the LONGEST
+        // non-empty cache across all series so the axis covers every series' points; this can only
+        // add correctly-labelled category slots versus the old first-non-empty pick, never remove
+        // any that were already covered.
         var categories = embeddedSeries
             .Select(s => s.Categories)
-            .FirstOrDefault(c => c.Count > 0)?.ToList() ?? [];
+            .Where(c => c.Count > 0)
+            .OrderByDescending(c => c.Count)
+            .FirstOrDefault()?.ToList() ?? [];
 
         var isScatter = chart.Type == ChartType.Scatter;
         var series = new List<ChartSeriesData>(embeddedSeries.Count);

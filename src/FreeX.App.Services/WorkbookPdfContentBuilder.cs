@@ -203,7 +203,7 @@ public static class WorkbookPdfContentBuilder
         // silently omitting them.
         var sparklinesByCell = BuildSparklinesByCell(sheet);
         var sparklineValues = sparklinesByCell.Count > 0
-            ? SparklineSeriesReader.BuildValues(sheet)
+            ? SparklineSeriesReader.BuildValues(workbook, sheet)
             : EmptySparklineValues;
         BuildSparklineGroupScalingBounds(
             sheet.Sparklines, sparklineValues, out var groupMinValues, out var groupMaxValues, out var groupMaxAbsValues);

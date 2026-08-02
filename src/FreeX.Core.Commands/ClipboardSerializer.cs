@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using FreeX.Core.Model;
 
@@ -169,9 +168,11 @@ public static class ClipboardSerializer
             : displayText;
     }
 
-    /// <summary>Mirrors the coercions PasteCommandFactory.ParseClipboardValue applies to pasted plain
-    /// text, so a leading apostrophe is added exactly when omitting it would change the value's type
-    /// on the round trip.</summary>
+    /// <summary>Mirrors every coercion PasteCommandFactory.ParseClipboardValue applies to pasted
+    /// plain text (via the shared <see cref="PasteCommandFactory.WouldClipboardTextCoerceToNonTextValue"/>
+    /// predicate), so a leading apostrophe is added exactly when omitting it would change the value's
+    /// type on the round trip -- including the percent ("45%") and date ("3/4", "12/25") coercions
+    /// ParseClipboardValue performs, not just the plain-number/boolean ones.</summary>
     private static bool RequiresLeadingApostropheEscape(string text)
     {
         // A pre-existing leading apostrophe is itself the text-escape marker; without one of our own,
@@ -179,60 +180,8 @@ public static class ClipboardSerializer
         if (text.StartsWith('\''))
             return true;
 
-        if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var cultureNumber) &&
-            double.IsFinite(cultureNumber))
-        {
-            return true;
-        }
-
-        if (TryParseExcelPasteNumber(text, out var excelNumber) && double.IsFinite(excelNumber))
-            return true;
-
-        if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
-            text.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        return false;
+        return PasteCommandFactory.WouldClipboardTextCoerceToNonTextValue(text);
     }
-
-    /// <summary>Parses accounting/thousands/parenthesized numeric text the way Excel does on paste,
-    /// mirroring PasteCommandFactory.TryParseExcelPasteNumber (same grouping regex, culture, and
-    /// NumberStyles) so the escape decision here matches the coercion that would actually happen on
-    /// the way back in.</summary>
-    private static bool TryParseExcelPasteNumber(string text, out double number)
-    {
-        if (!text.Contains(','))
-            return double.TryParse(text, StylesWithoutThousands, UsCulture, out number);
-
-        if (double.TryParse(text, StylesWithoutThousands, UsCulture, out number))
-            return true;
-
-        if (!ValidGroupingRegex.IsMatch(text))
-        {
-            number = 0;
-            return false;
-        }
-
-        return double.TryParse(text, NumberStyles.Any, UsCulture, out number);
-    }
-
-    // Kept in exact sync with PasteCommandFactory.ValidGroupingRegex/UsCulture/StylesWithoutThousands
-    // so a cell is only escaped here when the round trip would actually re-coerce it.
-    private static readonly System.Text.RegularExpressions.Regex ValidGroupingRegex = new(
-        @"^\(?[+-]?\$?\d{1,3}(,\d{3})*(\.\d*)?\$?[+-]?\)?$",
-        System.Text.RegularExpressions.RegexOptions.None);
-
-    private static readonly CultureInfo UsCulture = CultureInfo.GetCultureInfo("en-US");
-
-    private const NumberStyles StylesWithoutThousands =
-        NumberStyles.AllowLeadingSign |
-        NumberStyles.AllowTrailingSign |
-        NumberStyles.AllowParentheses |
-        NumberStyles.AllowDecimalPoint |
-        NumberStyles.AllowExponent |
-        NumberStyles.AllowCurrencySymbol;
 
     private static void AppendTsvCell(StringBuilder sb, string text)
     {

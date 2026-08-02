@@ -63,7 +63,8 @@ public sealed partial class NamedRangeDialog : Window
                 FormatValue(range, _workbook),
                 FormatRange(range, _workbook),
                 metadata.Scope,
-                metadata.Comment));
+                metadata.Comment,
+                scopeSheetId: null));
         }
 
         // Sheet-scoped names (Excel "localSheetId") are stored separately from the workbook-global
@@ -78,7 +79,8 @@ public sealed partial class NamedRangeDialog : Window
                 FormatValue(range, _workbook),
                 FormatRange(range, _workbook),
                 scopeLabel,
-                metadata.Comment));
+                metadata.Comment,
+                scopeSheetId));
         }
 
         // Named formulas/constants (Excel names whose "Refers To" is a formula expression, e.g.
@@ -91,7 +93,8 @@ public sealed partial class NamedRangeDialog : Window
                 ? savedMetadata
                 : NamedRangeMetadata.WorkbookScope;
             _items.Add(new NamedRangeViewModel(
-                name, FormatNamedFormulaValue(_workbook, formulaText, scopeSheetId: null), formulaText, metadata.Scope, metadata.Comment));
+                name, FormatNamedFormulaValue(_workbook, formulaText, scopeSheetId: null), formulaText, metadata.Scope, metadata.Comment,
+                scopeSheetId: null));
         }
 
         foreach (var ((name, scopeSheetId), formulaText) in _workbook.ScopedNamedFormulas)
@@ -99,7 +102,8 @@ public sealed partial class NamedRangeDialog : Window
             _workbook.TryGetScopedNamedRangeMetadata(name, scopeSheetId, out var metadata);
             var scopeLabel = _workbook.GetSheet(scopeSheetId)?.Name ?? metadata.Scope;
             _items.Add(new NamedRangeViewModel(
-                name, FormatNamedFormulaValue(_workbook, formulaText, scopeSheetId), formulaText, scopeLabel, metadata.Comment));
+                name, FormatNamedFormulaValue(_workbook, formulaText, scopeSheetId), formulaText, scopeLabel, metadata.Comment,
+                scopeSheetId));
         }
 
         ApplyFilter();
@@ -271,7 +275,7 @@ public sealed partial class NamedRangeDialog : Window
             RequestRangeSelection,
             isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _) || IsPossibleNamedFormulaText(rangeText),
             validateName: _workbook.ValidateNamedRangeName) { Owner = this };
-        ShowNameDefinitionDialog(dialog, originalName: null, originalScope: null);
+        ShowNameDefinitionDialog(dialog, originalName: null, originalScope: null, originalScopeSheetId: null);
     }
 
     private void EditButton_Click(object sender, RoutedEventArgs e)
@@ -284,7 +288,7 @@ public sealed partial class NamedRangeDialog : Window
         }
 
         var dialog = new NameDefinitionDialog(
-            new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo),
+            new NameDefinitionDialogResult(vm.Name, vm.Scope, vm.Comment, vm.RefersTo, vm.ScopeSheetId),
             GetScopeOptions(),
             RequestRangeSelection,
             isValidRange: rangeText => NamedRangeInputParser.TryParseRange(_workbook, rangeText, out _) || IsPossibleNamedFormulaText(rangeText),
@@ -293,16 +297,20 @@ public sealed partial class NamedRangeDialog : Window
             Owner = this
         };
 
-        ShowNameDefinitionDialog(dialog, originalName: vm.Name, originalScope: vm.Scope);
+        ShowNameDefinitionDialog(dialog, originalName: vm.Name, originalScope: vm.Scope, originalScopeSheetId: vm.ScopeSheetId);
     }
 
-    private void ShowNameDefinitionDialog(NameDefinitionDialog dialog, string? originalName, string? originalScope)
+    private void ShowNameDefinitionDialog(
+        NameDefinitionDialog dialog,
+        string? originalName,
+        string? originalScope,
+        SheetId? originalScopeSheetId)
     {
         _activeDefinitionDialog = dialog;
         try
         {
             if (dialog.ShowDialog() == true)
-                DefineOrUpdateName(dialog.Result, originalName, originalScope);
+                DefineOrUpdateName(dialog.Result, originalName, originalScope, originalScopeSheetId);
         }
         finally
         {
@@ -311,19 +319,28 @@ public sealed partial class NamedRangeDialog : Window
     }
 
     /// <summary>
-    /// Resolves a Name Manager scope label ("Workbook" or a sheet name) to the sheet-scope
-    /// SheetId to pass to <see cref="DefineNamedRangeCommand"/>, or null for workbook scope.
+    /// R114-app-name-manager-workbook-sentinel-3-2: the target scope identity is now threaded
+    /// end-to-end from the Scope combo's actual selection (<see cref="NameDefinitionDialogResult.ScopeSheetId"/>,
+    /// populated by <see cref="NameDefinitionDialog"/> from the chosen <see cref="NamedRangeScopeOption"/>)
+    /// rather than re-derived here from the display label. A worksheet can legally be named exactly
+    /// "Workbook" (nothing in <see cref="Workbook.ValidateSheetNameStructure"/> reserves that text),
+    /// which would make a label-based lookup here indistinguishable from the workbook-global scope
+    /// sentinel -- silently misrouting Define/Delete to the wrong scope (or the wrong pre-existing
+    /// name of the same text) for any name actually scoped to that sheet. There is deliberately no
+    /// "ResolveScopeSheetId(string)" helper here any more: every caller that needs a scope identity
+    /// already has the real one in hand (from the dialog result or from a row's own
+    /// <see cref="NamedRangeViewModel.ScopeSheetId"/>) and must use that directly.
     /// </summary>
-    private SheetId? ResolveScopeSheetId(string scope) =>
-        string.Equals(scope, "Workbook", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : _workbook.GetSheet(scope)?.Id;
-
-    private void DefineOrUpdateName(NameDefinitionDialogResult definition, string? originalName, string? originalScope)
+    private void DefineOrUpdateName(
+        NameDefinitionDialogResult definition,
+        string? originalName,
+        string? originalScope,
+        SheetId? originalScopeSheetId)
     {
         var name = definition.Name.Trim();
         var rangeText = definition.RefersTo.Trim();
         var scope = definition.Scope.Trim();
+        var scopeSheetId = definition.ScopeSheetId;
 
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -336,11 +353,13 @@ public sealed partial class NamedRangeDialog : Window
         // new name, or an edit that changed the name and/or scope — must not silently clobber an
         // unrelated existing name already occupying that scope (Excel's New Name dialog rejects
         // this with "already exists"; cross-scope same-text names are fine and simply coexist).
+        // Scope sameness is compared by actual identity (SheetId?), not by display label, so a
+        // worksheet literally named "Workbook" can't be confused with the global scope sentinel here.
         var isEditingExisting = originalName is not null && originalScope is not null;
         var isSameEntry =
             isEditingExisting &&
             string.Equals(originalName, name, StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(originalScope, scope, StringComparison.OrdinalIgnoreCase);
+            Nullable.Equals(originalScopeSheetId, scopeSheetId);
 
         if (!NamedRangeInputParser.TryParseRange(_workbook, rangeText, out var range))
         {
@@ -348,7 +367,7 @@ public sealed partial class NamedRangeDialog : Window
             // FORMULAS/constants (Refers To can be any formula expression, e.g. "=1.05" or
             // "=SUM(Sheet1!A:A)", not just a range), so fall back to the formula counterpart of
             // DefineNamedRangeCommand below instead of rejecting outright.
-            DefineOrUpdateNamedFormula(name, rangeText, scope, isSameEntry);
+            DefineOrUpdateNamedFormula(name, rangeText, scopeSheetId, isSameEntry);
             return;
         }
 
@@ -367,7 +386,7 @@ public sealed partial class NamedRangeDialog : Window
             name,
             range,
             new NamedRangeMetadata(scope, definition.Comment.Trim()),
-            ResolveScopeSheetId(scope),
+            scopeSheetId,
             allowRedefine: isSameEntry);
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
@@ -392,9 +411,11 @@ public sealed partial class NamedRangeDialog : Window
     /// <see cref="DefineNamedRangeCommand"/> used by <see cref="DefineOrUpdateName"/> for ranges.
     /// Unlike DefineNamedRangeCommand, DefineNamedFormulaCommand always overwrites any existing
     /// formula of the same name/scope (it has no allowRedefine guard), so New/Edit's own-scope
-    /// duplicate rejection is performed here first, mirroring the range branch's behavior.
+    /// duplicate rejection is performed here first, mirroring the range branch's behavior. Takes the
+    /// already-resolved <paramref name="scopeSheetId"/> identity directly (see
+    /// <see cref="DefineOrUpdateName"/>'s doc comment for why no scope-label lookup happens here).
     /// </summary>
-    private void DefineOrUpdateNamedFormula(string name, string rangeText, string scope, bool isSameEntry)
+    private void DefineOrUpdateNamedFormula(string name, string rangeText, SheetId? scopeSheetId, bool isSameEntry)
     {
         var formulaText = rangeText.StartsWith('=') ? rangeText[1..].Trim() : rangeText;
         if (string.IsNullOrWhiteSpace(formulaText))
@@ -404,14 +425,14 @@ public sealed partial class NamedRangeDialog : Window
             return;
         }
 
-        if (!isSameEntry && NameAlreadyExistsInScope(name, scope))
+        if (!isSameEntry && NameAlreadyExistsInScope(name, scopeSheetId))
         {
             DialogMessageHelper.ShowWarning(this, $"The name '{name}' already exists in this scope.", UiText.Get("NamedRange_NamedRangeTitle"));
             FocusNamesListOrNewButton();
             return;
         }
 
-        var cmd = new DefineNamedFormulaCommand(name, formulaText, ResolveScopeSheetId(scope));
+        var cmd = new DefineNamedFormulaCommand(name, formulaText, scopeSheetId);
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
@@ -435,9 +456,9 @@ public sealed partial class NamedRangeDialog : Window
     /// otherwise silently overwrite an unrelated existing definition, since
     /// <see cref="DefineNamedFormulaCommand"/> itself has no such guard.
     /// </summary>
-    private bool NameAlreadyExistsInScope(string name, string scope) =>
-        ResolveScopeSheetId(scope) is { } scopeSheetId
-            ? _workbook.ScopedNamedRanges.ContainsKey((name, scopeSheetId)) || _workbook.ScopedNamedFormulas.ContainsKey((name, scopeSheetId))
+    private bool NameAlreadyExistsInScope(string name, SheetId? scopeSheetId) =>
+        scopeSheetId is { } sheetId
+            ? _workbook.ScopedNamedRanges.ContainsKey((name, sheetId)) || _workbook.ScopedNamedFormulas.ContainsKey((name, sheetId))
             : _workbook.NamedRanges.ContainsKey(name) || _workbook.NamedFormulas.ContainsKey(name);
 
     /// <summary>
@@ -461,7 +482,12 @@ public sealed partial class NamedRangeDialog : Window
             return;
         }
 
-        var cmd = new RemoveNamedRangeCommand(vm.Name, ResolveScopeSheetId(vm.Scope));
+        // Uses the row's own tracked scope identity directly (not a re-resolution of vm.Scope's
+        // display label) -- see the R114-app-name-manager-workbook-sentinel-3-2 doc comment on
+        // DefineOrUpdateName for why: a worksheet can legally be named exactly "Workbook", which
+        // would otherwise make Delete indistinguishable from the workbook-global scope and either
+        // fail outright or silently remove an unrelated pre-existing global name of the same text.
+        var cmd = new RemoveNamedRangeCommand(vm.Name, vm.ScopeSheetId);
         var outcome = _commandBus.Execute(_workbook.Id, cmd);
         if (!outcome.Success)
         {
@@ -510,11 +536,22 @@ public sealed partial class NamedRangeDialog : Window
         Keyboard.Focus(RefersToBox);
     }
 
-    private IReadOnlyList<string> GetScopeOptions() =>
-        new[] { "Workbook" }
-            .Concat(_workbook.Sheets.Select(sheet => sheet.Name))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+    /// <summary>
+    /// Builds the Scope combo's choices: the workbook-global sentinel first, then every sheet in
+    /// workbook order. Deliberately does NOT de-duplicate by display label: sheet names are already
+    /// guaranteed unique among themselves (<see cref="Workbook.ValidateSheetName"/>), so the only
+    /// possible label collision is between the global sentinel and a sheet literally named
+    /// "Workbook" -- and those two must remain two distinct entries (different
+    /// <see cref="NamedRangeScopeOption.SheetId"/>) or that sheet's own scope could never be
+    /// selected/preselected at all (see the R114-app-name-manager-workbook-sentinel-3-2 doc comment
+    /// on <see cref="DefineOrUpdateName"/>).
+    /// </summary>
+    private IReadOnlyList<NamedRangeScopeOption> GetScopeOptions()
+    {
+        var options = new List<NamedRangeScopeOption> { new("Workbook", null) };
+        options.AddRange(_workbook.Sheets.Select(sheet => new NamedRangeScopeOption(sheet.Name, sheet.Id)));
+        return options;
+    }
 
     public static NamedRangeSelectionRequest CreateRangeSelectionRequest(
         NamedRangeSelectionTarget target,

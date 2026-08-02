@@ -2154,9 +2154,19 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
                         // has no spill/member semantics beyond the anchor itself — Dynamic with a 1x1
                         // extent behaves identically to Implicit, so only mark it Dynamic when the
                         // declared range actually covers more than one cell.
-                        cell.ArrayMode = arrayRange.LastRow > arrayRange.FirstRow || arrayRange.LastColumn > arrayRange.FirstColumn
-                            ? FormulaArrayMode.Dynamic
-                            : FormulaArrayMode.Implicit;
+                        var isMultiCell = arrayRange.LastRow > arrayRange.FirstRow || arrayRange.LastColumn > arrayRange.FirstColumn;
+                        cell.ArrayMode = isMultiCell ? FormulaArrayMode.Dynamic : FormulaArrayMode.Implicit;
+                        if (isMultiCell)
+                        {
+                            // Mirror XlsxFileAdapter's legacy-CSE handling (see Cell.LegacyArrayRows /
+                            // RecalcEngine): confine this formula's result to the originally declared
+                            // ref extent on every recalc instead of letting it free-spill like a modern
+                            // dynamic-array formula. Without this, RecalcEngine's LegacyArrayRows > 0
+                            // gate never fires for .xls-sourced CSE arrays and they fall through to the
+                            // free-spilling / IsSpillBlocked path instead.
+                            cell.LegacyArrayRows = (uint)(arrayRange.LastRow - arrayRange.FirstRow + 1);
+                            cell.LegacyArrayCols = (uint)(arrayRange.LastColumn - arrayRange.FirstColumn + 1);
+                        }
                         sheet.SetCell(address, cell);
                     }
                     else

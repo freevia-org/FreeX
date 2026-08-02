@@ -148,7 +148,12 @@ public partial class GridView
             !style.Strikethrough &&
             !style.Superscript &&
             !style.Subscript &&
-            style.FontColor.IsBlack;
+            // Must check the theme-RESOLVED color, not the baked style.FontColor: a cell whose
+            // FontThemeColor happened to bake to black under the theme in effect at load/creation
+            // time would otherwise stay eligible for this "assume default black text" fast path
+            // forever, even after a theme swap re-resolves FontThemeColor to a non-black color --
+            // silently painting it black instead of the correct themed color.
+            style.ResolveFontColor(theme).IsBlack;
     }
 
     private double MeasureCellTextWidth(

@@ -4877,7 +4877,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 cellsByAddress[(cell.Row, cell.Col)] = cell;
         }
 
-        _sparklinesByCell = BuildSparklineCellLookup(_session.ActiveSheet);
+        _sparklinesByCell = BuildSparklineCellLookup(_session.Workbook, _session.ActiveSheet);
         BuildPivotAdornmentLookups(_session.Workbook, _session.ActiveSheet);
         _activeSheetHasBackgroundImage = _session.ActiveSheet.BackgroundImage != null;
         var grid = new AvaloniaGrid
@@ -8823,17 +8823,20 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     /// <summary>
     /// Reads every sparkline on <paramref name="sheet"/> into a per-cell lookup keyed by its anchor
     /// <see cref="SparklineModel.Location"/>, using the same numeric series read as the Windows host
-    /// (<see cref="SparklineRenderPlanner.BuildValues"/>). Empty series are dropped so cells without
-    /// drawable data don't get an empty panel. Group scaling (min/max/maxAbs) is pre-computed here
-    /// so each <see cref="SparklineCellPanel"/> receives the correct axis overrides at construction.
+    /// (<see cref="SparklineRenderPlanner.BuildValues"/>). <paramref name="workbook"/> must own
+    /// <paramref name="sheet"/> -- it resolves each sparkline's data range to its own source sheet
+    /// when that differs from the host sheet (Excel's cross-sheet sparkline data range). Empty
+    /// series are dropped so cells without drawable data don't get an empty panel. Group scaling
+    /// (min/max/maxAbs) is pre-computed here so each <see cref="SparklineCellPanel"/> receives the
+    /// correct axis overrides at construction.
     /// </summary>
-    private static IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> BuildSparklineCellLookup(Sheet sheet)
+    private static IReadOnlyDictionary<(uint Row, uint Col), SparklineCellEntry> BuildSparklineCellLookup(Workbook workbook, Sheet sheet)
     {
         var lookup = new Dictionary<(uint Row, uint Col), SparklineCellEntry>();
         if (sheet.Sparklines.Count == 0)
             return lookup;
 
-        var values = SparklineRenderPlanner.BuildValues(sheet);
+        var values = SparklineRenderPlanner.BuildValues(workbook, sheet);
 
         // ── Pre-compute group scaling bounds ──────────────────────────────────
         // When MinAxisType or MaxAxisType == Group, find the shared min/max across all
@@ -9052,7 +9055,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             mergeRegion: mergeRegion,
             flowDirection: flowDirection,
             commentDisplay: cell.CommentDisplay,
-            fontFamily: fontFamily);
+            fontFamily: fontFamily,
+            isFormula: !string.IsNullOrEmpty(cell.Formula));
     }
 
     private static FontFamily ResolveAvaloniaCellFontFamily(CellStyle? style, WorkbookTheme theme)
@@ -9170,7 +9174,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         GridRange? mergeRegion = null,
         FlowDirection flowDirection = FlowDirection.LeftToRight,
         CellCommentDisplay? commentDisplay = null,
-        FontFamily? fontFamily = null)
+        FontFamily? fontFamily = null,
+        bool isFormula = false)
     {
         var applySelectionFill = selected &&
             address != _session.ActiveCell &&
@@ -9245,14 +9250,24 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
 
         // Per-cell accessible name/id so a screen reader (Orca/AT-SPI on Linux, VoiceOver on macOS)
-        // can announce which cell has focus, its address, and its value while navigating the grid —
-        // mirrors WPF's GridViewCellAutomationPeer.GetAutomationIdCore/GetNameCore format exactly
-        // ("Cell_A1" / "A1" or "A1: value") so the two shells read identically to assistive tech.
+        // can announce which cell has focus, its address, its value, and (R114 parity fix for
+        // finding "Avalonia grid's screen-reader cell name silently drops comment/formula/merge/
+        // hyperlink cues that WPF announces") the same "has <note>", "is a formula", "is merged",
+        // and "has a hyperlink" cues WPF's GridViewCellAutomationPeer.GetNameCore/
+        // GridView.BuildCellAnnouncementName append (GridView.cs:688-708) -- previously this shell
+        // only ever emitted the bare "<address>" or "<address>: <value>", silently omitting every
+        // cue a sighted user gets for free from the comment corner-triangle, the formula-bar "="
+        // prefix, the merged span, and the hand cursor. HasDataValidation/IsLocked cues are
+        // intentionally left out here too, mirroring WPF: CellAnnouncementMetadata's own doc
+        // comment (GridView.cs) explains neither is wired to a live signal on that shell either.
         // Cells are plain Borders rebuilt on every selection change/RefreshShell (no persisted control
         // to "update" in place), so setting these at construction time keeps them live automatically.
         var columnName = CellAddress.NumberToColumnName(address.Col);
         AutomationProperties.SetAutomationId(border, $"Cell_{columnName}{address.Row}");
-        AutomationProperties.SetName(border, FormatCellAccessibleName(columnName, address.Row, text));
+        var hasHyperlink = _session.Workbook.GetSheet(address.Sheet)?.Hyperlinks.ContainsKey(address) == true;
+        AutomationProperties.SetName(
+            border,
+            FormatCellAccessibleName(columnName, address.Row, text, commentDisplay, isFormula, mergeRegion is not null, hasHyperlink));
 
         // The active cell (not just any selected cell) is made a REAL focusable/focus-tracked
         // element so keyboard focus actually moves as the user arrows around the grid, matching
@@ -11412,8 +11427,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private void CommitFunctionAutocomplete(TextBox editor, string chosenName)
     {
+        var isFunction = FormulaFunctionAutocompletePlanner.IsFunctionCandidate(chosenName, BuiltInFunctions.Names);
         var (text, caretIndex) = FormulaFunctionAutocompletePlanner.Commit(
-            editor.Text ?? "", _functionAutocompleteTokenStart, _functionAutocompleteTokenLength, chosenName);
+            editor.Text ?? "", _functionAutocompleteTokenStart, _functionAutocompleteTokenLength, chosenName, isFunction);
         HideFormulaFunctionAutocomplete();
         ApplyTextBoxEdit(editor, new ExcelTextEdit(text, caretIndex, 0));
         SynchronizeFormulaEditors(editor);
@@ -29943,18 +29959,53 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     /// <summary>
     /// Builds the UIA/AT-SPI accessible name for a worksheet cell: the plain A1-style address alone
-    /// when the cell is empty, or "&lt;address&gt;: &lt;value&gt;" when it has display text — matching
-    /// WPF's <c>GridViewCellAutomationPeer.GetNameCore</c> (GridView.cs) exactly so a screen reader
-    /// announces the same thing on both platforms regardless of the R1C1 display option (accessible
-    /// names always use plain A1 addressing, matching Excel/NVDA/VoiceOver convention).
+    /// when the cell is empty, or "&lt;address&gt;: &lt;value&gt;" when it has display text, followed
+    /// by a comma-separated "has X"/"is X" cue for each piece of metadata the cell carries -- mirrors
+    /// WPF's <c>GridViewCellAutomationPeer.GetNameCore</c>/<c>GridView.BuildCellAnnouncementName</c>
+    /// (GridView.cs:688-708, :113-137) so a screen reader announces the same thing on both platforms
+    /// regardless of the R1C1 display option (accessible names always use plain A1 addressing,
+    /// matching Excel/NVDA/VoiceOver convention). <paramref name="comment"/>'s cue text uses its
+    /// <c>Title</c> lower-cased ("has note"/"has threaded comment"/"has mixed comment"), exactly as
+    /// WPF's builder does; HasDataValidation/IsLocked cues are deliberately not produced here because
+    /// WPF's own equivalent leaves them unwired too (see <c>CellAnnouncementMetadata</c>'s doc comment).
     /// </summary>
-    private static string FormatCellAccessibleName(string columnName, uint row, string displayText)
+    private static string FormatCellAccessibleName(
+        string columnName,
+        uint row,
+        string displayText,
+        CellCommentDisplay? comment,
+        bool isFormula,
+        bool isMerged,
+        bool hasHyperlink)
     {
         var address = $"{columnName}{row}";
-        return string.IsNullOrWhiteSpace(displayText)
-            ? address
-            : $"{address}: {displayText}";
+        var name = string.IsNullOrWhiteSpace(displayText) ? address : $"{address}: {displayText}";
+
+        List<string>? cues = null;
+        void AddCue(string cue) => (cues ??= []).Add(cue);
+
+        if (comment is { } activeComment && !string.IsNullOrEmpty(activeComment.Title))
+            AddCue($"has {activeComment.Title.ToLowerInvariant()}");
+        if (isFormula)
+            AddCue("is a formula");
+        if (isMerged)
+            AddCue("is merged");
+        if (hasHyperlink)
+            AddCue("has a hyperlink");
+
+        return cues is null ? name : $"{name}, {string.Join(", ", cues)}";
     }
+
+    /// <summary>Test-only forwarder for <see cref="FormatCellAccessibleName"/>.</summary>
+    internal static string FormatCellAccessibleNameForTest(
+        string columnName,
+        uint row,
+        string displayText,
+        CellCommentDisplay? comment = null,
+        bool isFormula = false,
+        bool isMerged = false,
+        bool hasHyperlink = false) =>
+        FormatCellAccessibleName(columnName, row, displayText, comment, isFormula, isMerged, hasHyperlink);
 
     private static string FormatRangeReference(GridRange range)
     {

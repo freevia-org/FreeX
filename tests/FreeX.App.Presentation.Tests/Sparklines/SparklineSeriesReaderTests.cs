@@ -9,7 +9,8 @@ public sealed class SparklineSeriesReaderTests
     [Fact]
     public void BuildValues_CollectsSupportedScalarValuesInRowMajorOrder()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         var sparklineId = Guid.NewGuid();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(12.5));
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), DateTimeValue.FromDateTime(new DateTime(2026, 5, 19)));
@@ -25,7 +26,7 @@ public sealed class SparklineSeriesReaderTests
             Kind = SparklineKind.Line
         });
 
-        var values = SparklineSeriesReader.BuildValues(sheet);
+        var values = SparklineSeriesReader.BuildValues(workbook, sheet);
 
         values.Should().ContainKey(sparklineId);
         // Round-8 finding N5: text cells are treated as blank, and the default DisplayEmptyCellsAs
@@ -41,7 +42,8 @@ public sealed class SparklineSeriesReaderTests
     [Fact]
     public void BuildValues_SkipsHiddenAndFilteredRowsAndColumns()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         var sparklineId = Guid.NewGuid();
         var value = 1;
         for (uint row = 1; row <= 4; row++)
@@ -67,7 +69,7 @@ public sealed class SparklineSeriesReaderTests
             Kind = SparklineKind.Line
         });
 
-        var values = SparklineSeriesReader.BuildValues(sheet);
+        var values = SparklineSeriesReader.BuildValues(workbook, sheet);
 
         values.Should().ContainKey(sparklineId);
         values[sparklineId].Should().Equal(1, 4);
@@ -76,7 +78,8 @@ public sealed class SparklineSeriesReaderTests
     [Fact]
     public void BuildValues_SkipsOversizedSourceRanges()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         var sparklineId = Guid.NewGuid();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
         sheet.Sparklines.Add(new SparklineModel
@@ -89,7 +92,7 @@ public sealed class SparklineSeriesReaderTests
             Kind = SparklineKind.Line
         });
 
-        var values = SparklineSeriesReader.BuildValues(sheet);
+        var values = SparklineSeriesReader.BuildValues(workbook, sheet);
 
         values.Should().ContainKey(sparklineId);
         values[sparklineId].Should().BeEmpty();

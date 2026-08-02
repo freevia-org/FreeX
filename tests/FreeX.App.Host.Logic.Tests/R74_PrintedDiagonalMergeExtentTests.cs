@@ -142,6 +142,7 @@ public sealed class R74_PrintedDiagonalMergeExtentTests
                 WorksheetPrintErrorValue.Displayed,
                 0.0,
                 0.0,
+                new Workbook(),
                 false,
                 sheet,
             ]);

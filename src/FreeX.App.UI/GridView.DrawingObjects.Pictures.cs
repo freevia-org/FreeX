@@ -173,13 +173,13 @@ public partial class GridView
 
     private void DrawPictureCellStyle(DrawingContext dc, Rect rect, CellStyle style)
     {
-        Brush? fillBrush = style.FillColor is { } fillColor
+        Brush? fillBrush = style.ResolveFillColor(WorkbookTheme) is { } fillColor
             ? BrushForCellColor(fillColor, _brushCache)
             : null;
         if (fillBrush is not null)
             dc.DrawRectangle(fillBrush, null, rect);
 
-        DrawFillPattern(dc, rect, style, _brushCache, _fillPatternPenCache);
+        DrawFillPattern(dc, rect, style, WorkbookTheme, _brushCache, _fillPatternPenCache);
     }
 
     private void DrawPictureCellText(
@@ -222,7 +222,7 @@ public partial class GridView
         ResolveSuperSubFontAdjustment(style, fontSize, out fontSize, out double pictureSuperSubBaselineOffsetPx);
 
         var typefaceForText = CreateCellTypefaceWithTheme(style, _typefaceCache);
-        if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
+        if (style?.ResolveFontColor(WorkbookTheme) is { } fontColor && !fontColor.IsBlack)
             textBrush = BrushForCellColor(fontColor, _brushCache);
 
         var text = new FormattedText(

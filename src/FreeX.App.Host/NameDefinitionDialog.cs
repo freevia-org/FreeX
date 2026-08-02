@@ -2,10 +2,36 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
 
-public sealed record NameDefinitionDialogResult(string Name, string Scope, string Comment, string RefersTo);
+/// <param name="ScopeSheetId">
+///   The actual scope identity to route Define/Delete against: null for workbook-global, or the
+///   target sheet's <see cref="SheetId"/> for a sheet-scoped name (Excel "localSheetId"). Tracked
+///   separately from <paramref name="Scope"/> (the display label shown in the Scope combo/column)
+///   because a worksheet can legally be named exactly "Workbook" -- nothing in
+///   <see cref="FreeX.Core.Model.Workbook.ValidateSheetNameStructure"/> reserves that text -- which
+///   would otherwise make the label alone ambiguous with the workbook-global scope sentinel.
+/// </param>
+public sealed record NameDefinitionDialogResult(string Name, string Scope, string Comment, string RefersTo, SheetId? ScopeSheetId = null);
+
+/// <summary>
+/// A choice offered by the Name Manager's Scope combo: <see cref="Label"/> is the text shown to the
+/// user (matching Excel, which always displays "Workbook" for the global scope regardless of any
+/// sheet's own name), while <see cref="SheetId"/> is the real, non-collidable identity used to route
+/// Define/Delete commands. Two options may legitimately share the same <see cref="Label"/> (the
+/// workbook-global sentinel and a worksheet literally named "Workbook"); they are still distinct
+/// entries here because they carry different <see cref="SheetId"/> values.
+/// </summary>
+internal readonly record struct NamedRangeScopeOption(string Label, SheetId? SheetId)
+{
+    public override string ToString() => Label;
+
+    /// <summary>Lets call sites/tests still write a plain scope-label string for the common (no
+    /// same-named-sheet-collision) case; always maps to the workbook-global scope.</summary>
+    public static implicit operator NamedRangeScopeOption(string label) => new(label, null);
+}
 
 internal sealed class NameDefinitionDialog : Window
 {
@@ -14,7 +40,7 @@ internal sealed class NameDefinitionDialog : Window
     private readonly TextBox _commentBox = new();
     private readonly TextBox _refersToBox = new();
     private readonly Button _rangePickerButton = new() { Content = "...", Width = 26 };
-    private readonly IReadOnlyList<string> _scopeOptions;
+    private readonly IReadOnlyList<NamedRangeScopeOption> _scopeOptions;
     private readonly Action<NamedRangeSelectionRequest>? _requestRangeSelection;
     private readonly Func<string, bool> _isValidRange;
     private readonly Func<string, string?> _validateName;
@@ -24,13 +50,13 @@ internal sealed class NameDefinitionDialog : Window
 
     public NameDefinitionDialog(
         NameDefinitionDialogResult initial,
-        IReadOnlyList<string> scopeOptions,
+        IReadOnlyList<NamedRangeScopeOption> scopeOptions,
         Action<NamedRangeSelectionRequest>? requestRangeSelection = null,
         Func<string, bool>? isValidRange = null,
         Func<string, string?>? validateName = null)
     {
         Result = initial;
-        _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : ["Workbook"];
+        _scopeOptions = scopeOptions.Count > 0 ? scopeOptions : [new NamedRangeScopeOption("Workbook", null)];
         _requestRangeSelection = requestRangeSelection;
         _isValidRange = isValidRange ?? (rangeText => !string.IsNullOrWhiteSpace(rangeText));
         _validateName = validateName ?? (_ => null);
@@ -47,7 +73,7 @@ internal sealed class NameDefinitionDialog : Window
         AutomationProperties.SetName(_nameBox, UiText.Get("NameDefinition_NameAutomationName"));
         foreach (var scope in _scopeOptions)
             _scopeBox.Items.Add(scope);
-        _scopeBox.SelectedItem = FindScopeOption(initial.Scope) ?? _scopeOptions[0];
+        _scopeBox.SelectedItem = FindScopeOption(initial.Scope, initial.ScopeSheetId) ?? _scopeOptions[0];
         AutomationProperties.SetName(_scopeBox, UiText.Get("NameDefinition_ScopeAutomationName"));
         _commentBox.Text = initial.Comment;
         AutomationProperties.SetName(_commentBox, UiText.Get("NameDefinition_CommentAutomationName"));
@@ -71,11 +97,24 @@ internal sealed class NameDefinitionDialog : Window
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 
-    private string? FindScopeOption(string scopeName)
+    /// <summary>
+    /// Resolves the combo entry that matches the original scope. Prefers an exact identity match
+    /// (<paramref name="scopeSheetId"/>) so a worksheet literally named "Workbook" (see
+    /// <see cref="NamedRangeScopeOption"/>) is preselected correctly even though its label collides
+    /// with the workbook-global sentinel; falls back to a label match only when no identity was
+    /// supplied (e.g. a caller that only ever deals in workbook-global names).
+    /// </summary>
+    private NamedRangeScopeOption? FindScopeOption(string scopeName, SheetId? scopeSheetId)
     {
         foreach (var scope in _scopeOptions)
         {
-            if (string.Equals(scope, scopeName, StringComparison.OrdinalIgnoreCase))
+            if (Nullable.Equals(scope.SheetId, scopeSheetId))
+                return scope;
+        }
+
+        foreach (var scope in _scopeOptions)
+        {
+            if (string.Equals(scope.Label, scopeName, StringComparison.OrdinalIgnoreCase))
                 return scope;
         }
 
@@ -161,11 +200,13 @@ internal sealed class NameDefinitionDialog : Window
             return;
         }
 
+        var selectedScope = _scopeBox.SelectedItem as NamedRangeScopeOption? ?? _scopeOptions[0];
         Result = new NameDefinitionDialogResult(
             name,
-            (_scopeBox.SelectedItem as string)?.Trim() ?? "Workbook",
+            selectedScope.Label.Trim(),
             _commentBox.Text.Trim(),
-            _refersToBox.Text.Trim());
+            _refersToBox.Text.Trim(),
+            selectedScope.SheetId);
         DialogResult = true;
     }
 

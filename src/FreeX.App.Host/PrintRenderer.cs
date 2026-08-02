@@ -118,6 +118,7 @@ public static partial class PrintRenderer
             // re-deriving an independent per-page ratio from each page's own geometry (P97).
             var configuredScalePercent = printPlan.AreaPlans[page.AreaIndex].Pagination.EffectiveScalePercent;
             var (visual, textOverlays, linkOverlays, cellDestinationOverlays) = RenderPageVisual(
+                workbook,
                 sheet,
                 pageW,
                 pageH,

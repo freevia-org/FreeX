@@ -549,7 +549,7 @@ public partial class MainWindow
             : _sparklineValueCache.GetOrCreate(
                 sheet,
                 _navigationCacheRevision,
-                () => SparklineSeriesReader.BuildValues(sheet));
+                () => SparklineSeriesReader.BuildValues(_workbook, sheet));
         SheetGrid.MergedRegions = sheet?.MergedRegions;
         SheetGrid.WorksheetViewMode = viewState.ViewMode;
         // Gridlines/Headings/Rulers are this window's own state, just like ViewMode/Zoom above

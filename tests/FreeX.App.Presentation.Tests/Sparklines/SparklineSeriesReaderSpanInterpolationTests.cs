@@ -15,7 +15,8 @@ public sealed class SparklineSeriesReaderSpanInterpolationTests
     [Fact]
     public void ReadSeries_SpanMode_KeepsBlankSlotAndInterpolatesItsValue()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         var sparklineId = Guid.NewGuid();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(1));
         // Column 2 left blank.
@@ -34,7 +35,7 @@ public sealed class SparklineSeriesReaderSpanInterpolationTests
         };
         sheet.Sparklines.Add(sparkline);
 
-        var series = SparklineSeriesReader.ReadSeries(sheet, sparkline);
+        var series = SparklineSeriesReader.ReadSeries(workbook, sheet, sparkline);
 
         // The blank keeps its slot: 5 values, not 4 -- so downstream x-positions
         // (i / (Count - 1)) land at 0, 1/4, 2/4, 3/4, 4/4 for the original 5 cells.
@@ -49,7 +50,8 @@ public sealed class SparklineSeriesReaderSpanInterpolationTests
     [Fact]
     public void ReadSeries_SpanMode_InterpolatesProportionallyAcrossMultipleConsecutiveBlanks()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         var sparklineId = Guid.NewGuid();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new NumberValue(0));
         // Columns 2 and 3 left blank.
@@ -66,7 +68,7 @@ public sealed class SparklineSeriesReaderSpanInterpolationTests
         };
         sheet.Sparklines.Add(sparkline);
 
-        var series = SparklineSeriesReader.ReadSeries(sheet, sparkline);
+        var series = SparklineSeriesReader.ReadSeries(workbook, sheet, sparkline);
 
         series.Should().HaveCount(4);
         series[0].Should().Be(0);
@@ -78,7 +80,8 @@ public sealed class SparklineSeriesReaderSpanInterpolationTests
     [Fact]
     public void ReadSeries_SpanMode_LeadingAndTrailingBlanksFallBackToNaN()
     {
-        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var workbook = new Workbook();
+        var sheet = workbook.AddSheet("Sheet1");
         var sparklineId = Guid.NewGuid();
         // Column 1 left blank (leading).
         sheet.SetCell(new CellAddress(sheet.Id, 1, 2), new NumberValue(2));
@@ -95,7 +98,7 @@ public sealed class SparklineSeriesReaderSpanInterpolationTests
         };
         sheet.Sparklines.Add(sparkline);
 
-        var series = SparklineSeriesReader.ReadSeries(sheet, sparkline);
+        var series = SparklineSeriesReader.ReadSeries(workbook, sheet, sparkline);
 
         series.Should().HaveCount(3, "blank slots are kept even when they can't be interpolated");
         double.IsNaN(series[0]).Should().BeTrue("no real value precedes the leading blank to connect from");

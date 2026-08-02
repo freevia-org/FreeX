@@ -1404,6 +1404,51 @@ public static class PasteCommandFactory
         return new TextValue(text);
     }
 
+    /// <summary>Returns true when <paramref name="text"/> would be coerced into something other than
+    /// a literal <see cref="TextValue"/> by <see cref="ParseClipboardValue"/> -- i.e. every coercion
+    /// branch ParseClipboardValue tries after its leading-apostrophe check (culture float, culture
+    /// thousands-grouping, en-US accounting/thousands-grouping, TRUE/FALSE, percent, date). This is
+    /// the single source of truth both ParseClipboardValue's own dispatch above and
+    /// ClipboardSerializer.RequiresLeadingApostropheEscape build on, so the write-side "does this
+    /// Text cell need a protective leading apostrophe before it hits the OS clipboard" decision can
+    /// never drift from the read-side coercions that will actually run on the way back in. Before this
+    /// was factored out, RequiresLeadingApostropheEscape only mirrored the first three (numeric/
+    /// boolean) branches and had no knowledge of the percent/date branches added here, so a
+    /// Text-formatted cell whose display text looked like "45%" or "3/4" round-tripped through the
+    /// external clipboard silently coerced into a number or date.</summary>
+    internal static bool WouldClipboardTextCoerceToNonTextValue(string text)
+    {
+        if (double.TryParse(
+                text,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.CurrentCulture,
+                out var cultureNumber) &&
+            double.IsFinite(cultureNumber))
+        {
+            return true;
+        }
+
+        if (TryParseCultureGroupedNumber(text, System.Globalization.CultureInfo.CurrentCulture, out _))
+            return true;
+
+        if (TryParseExcelPasteNumber(text, out var excelNumber) && double.IsFinite(excelNumber))
+            return true;
+
+        if (text.Equals("TRUE", StringComparison.OrdinalIgnoreCase) ||
+            text.Equals("FALSE", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (TryParsePastePercent(text, out _))
+            return true;
+
+        if (TryParsePasteDate(text, out _))
+            return true;
+
+        return false;
+    }
+
     // Trailing '%' (e.g. "45%") -> Excel stores the underlying fraction (0.45), not the literal 45.
     private static bool TryParsePastePercent(string text, out double value)
     {

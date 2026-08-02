@@ -15,7 +15,7 @@ public static partial class ChartRenderer
         IReadOnlyList<string> categories,
         uint dataStartRow,
         uint endRow,
-        uint dataStartCol,
+        uint sharedXCol,
         uint endCol,
         uint headerRow,
         WorkbookTheme theme,
@@ -29,15 +29,16 @@ public static partial class ChartRenderer
         // Bubble deliberately ignores FirstColIsCategories -- the first column of DataRange is
         // ALWAYS the shared X column for a bubble chart (see
         // BubbleRenderer_IgnoresCategoryFlagAndUsesFirstRangeColumnAsXValues) -- so this reads
-        // chart.DataRange.Start.Col directly rather than the dataStartCol parameter (which shifts
-        // when FirstColIsCategories is set). R113-render-chart-embedded-fallback-all-types:
-        // BuildEmbeddedCellLookup places its synthesized shared-X column at column 1, matching the
-        // 1x1 placeholder DataRange (Start.Col == 1) every embedded-fallback reader sets, so this
-        // still resolves correctly for a fallback-loaded chart -- except the rare case where a
-        // Bubble chart's series is an unresolvable named range AND references a cross-sheet range
-        // whose union DataRange happens to start at a column other than 1 (TryReadCrossSheetEmbeddedData);
-        // that combination is not reproduced exactly by this fallback.
-        var xCol = chart.DataRange.Start.Col;
+        // the unshifted start column rather than the FirstColIsCategories-shifted dataStartCol
+        // BuildPlotModel passes to most other chart types. R114: that unshifted column is
+        // BuildPlotModel's local `startCol`, NOT chart.DataRange.Start.Col -- the two agree for a
+        // live (non-fallback) chart (startCol is read straight from chart.DataRange.Start.Col at
+        // the top of BuildPlotModel), but a cross-sheet embedded-fallback chart (R113:
+        // BuildEmbeddedCellLookup) reassigns startCol to match the column it actually synthesized
+        // (1) while chart.DataRange.Start.Col keeps the REAL worksheet column the resolved
+        // cross-sheet range started at (e.g. 2 for 'Data'!$B$2:$D$10) -- reading the latter would
+        // shift every Y/size column lookup below by one and silently drop every point.
+        var xCol = sharedXCol;
 
         // Matches the Avalonia ChartLayoutEngine.LayoutBubble reference: the bubble radius scale is
         // derived from the largest size value across every series in the chart, not just the current
