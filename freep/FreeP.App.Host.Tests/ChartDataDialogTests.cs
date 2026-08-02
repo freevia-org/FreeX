@@ -346,6 +346,24 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartLayoutOptionsDialog_PreservesUnknownImportedModeWhenAcceptedUnchanged()
+    {
+        var (sess, _) = MakeSession();
+        sess.SelectedChart!.PlotAreaManualLayout = new ChartManualLayout
+        {
+            XMode = ChartManualLayoutMode.Unsupported,
+            RawXModeToken = "futureMode",
+            X = 0.1,
+        };
+
+        var dialog = new ChartLayoutOptionsDialog(sess);
+        var options = dialog.BuildCommitPlanForTests();
+
+        options.XMode.Should().Be(ChartManualLayoutMode.Unsupported);
+        options.RawXModeToken.Should().Be("futureMode");
+    }
+
+    [StaFact]
     public void ChartDataTableOptionsDialog_ConstructsAndUsesSharedPlanner()
     {
         var (sess, _) = MakeSession();

@@ -13,4 +13,8 @@ public sealed record ChartLayoutOptions(
     double? X,
     double? Y,
     double? Width,
-    double? Height);
+    double? Height,
+    string? RawXModeToken = null,
+    string? RawYModeToken = null,
+    string? RawWidthModeToken = null,
+    string? RawHeightModeToken = null);

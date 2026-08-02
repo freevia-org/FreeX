@@ -132,11 +132,15 @@ internal sealed class ChartLayoutOptionsDialog : Window
 
     private static ComboBox MakeLayoutTargetCombo() => new() { MinWidth = 190 };
     private static ComboBox MakeModeCombo() => new() { ItemsSource = ChartLayoutOptionsPlanner.ModeOptions.Select(x => x.Label).ToArray(), MinWidth = 105 };
-    private static ChartManualLayoutMode SelectedMode(ComboBox combo) => combo.SelectedIndex == 1 ? ChartManualLayoutMode.Edge : ChartManualLayoutMode.Factor;
+    private static ChartManualLayoutMode SelectedMode(ComboBox combo) =>
+        combo.SelectedIndex >= 0 && combo.SelectedIndex < ChartLayoutOptionsPlanner.ModeOptions.Count
+            ? ChartLayoutOptionsPlanner.ModeOptions[combo.SelectedIndex].Value
+            : ChartManualLayoutMode.Factor;
     private static double? ParseOptional(string? text, string label) { if (string.IsNullOrWhiteSpace(text)) return null; if (double.TryParse(text, NumberStyles.Float, CultureInfo.CurrentCulture, out var value) && double.IsFinite(value)) return value; throw new FormatException($"{label} must be a finite number or blank."); }
     private static string Format(double? value) => value?.ToString("G", CultureInfo.CurrentCulture) ?? string.Empty;
     private static int FindTargetIndex(ChartLayoutTarget value) => value == ChartLayoutTarget.Legend ? 1 : 0;
-    private static int FindModeIndex(ChartManualLayoutMode value) => value == ChartManualLayoutMode.Edge ? 1 : 0;
+    private static int FindModeIndex(ChartManualLayoutMode value) =>
+        Math.Max(0, ChartLayoutOptionsPlanner.ModeOptions.Select((item, index) => (item, index)).FirstOrDefault(x => x.item.Value == value).index);
     private static Control MakeRow(string label, Control control) { var row = new Grid { ColumnDefinitions = new ColumnDefinitions("140, *") }; row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }); Grid.SetColumn(control, 1); row.Children.Add(control); return row; }
     private static Control MakeRow(string label, Control value, Control mode) { var row = new Grid { ColumnDefinitions = new ColumnDefinitions("140, 110, *") }; row.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) }); Grid.SetColumn(value, 1); row.Children.Add(value); Grid.SetColumn(mode, 2); row.Children.Add(mode); return row; }
     private static Button MakeButton(string label, bool isDefault, Action action) { var button = new Button { Content = label, IsDefault = isDefault, MinWidth = 80 }; AvaloniaCompactDialogChrome.ApplyButton(button, DialogChromeStyle, minWidth: 80, isDefault: isDefault); button.Click += (_, _) => action(); return button; }
