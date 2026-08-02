@@ -49,10 +49,18 @@ public sealed class FreeWHelpInfoTests
         var dialog = new AboutDialog();
 
         dialog.Title.Should().Be("About FreeW");
+        dialog.Width.Should().Be(AboutDialogMetrics.Width);
+        dialog.Height.Should().Be(AboutDialogMetrics.Height);
+        dialog.MinWidth.Should().Be(AboutDialogMetrics.MinWidth);
+        dialog.MinHeight.Should().Be(AboutDialogMetrics.MinHeight);
         AutomationProperties.GetAutomationId(dialog).Should().Be("AboutFreeWDialog");
         LogicalDescendants<TextBox>(dialog)
             .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AboutFreeWText")
-            .Text.Should().Contain("FreeW");
+            .Should().Match<TextBox>(textBox =>
+                textBox.Text.Contains("FreeW") &&
+                textBox.FontSize == AboutDialogMetrics.TextFontSize &&
+                textBox.MinHeight == AboutDialogMetrics.TextMinHeight &&
+                textBox.Padding == new Thickness(AboutDialogMetrics.TextPadding));
     }
 
     [StaFact]

@@ -11,6 +11,7 @@ using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
+using Free.Shared.Shell;
 
 namespace FreeW.App.Avalonia.Tests;
 
@@ -27,13 +28,15 @@ public sealed class WpfAuthoritySurfaceParityTests
             var dialog = new AboutDialog();
 
             dialog.Title.Should().Be("About FreeW");
-            dialog.Width.Should().Be(560);
-            dialog.Height.Should().Be(420);
+            dialog.Width.Should().Be(AboutDialogMetrics.Width);
+            dialog.Height.Should().Be(AboutDialogMetrics.Height);
+            dialog.MinWidth.Should().Be(AboutDialogMetrics.MinWidth);
+            dialog.MinHeight.Should().Be(AboutDialogMetrics.MinHeight);
             AutomationProperties.GetAutomationId(dialog).Should().Be("AboutFreeWDialog");
             var text = dialog.GetLogicalDescendants().OfType<TextBox>()
                 .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AboutFreeWText");
             text.IsReadOnly.Should().BeTrue();
-            text.FontSize.Should().BeApproximately(12.3, 0.001);
+            text.FontSize.Should().Be(AboutDialogMetrics.AvaloniaTextFontSize);
             text.Text.Should().Contain("A free word processor for DOCX editing and format-fidelity work.");
             text.Text.Should().Contain("Built with .NET 10 and Avalonia.");
             text.Text.Should().Contain("Help > Legal Notices");

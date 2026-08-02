@@ -30,10 +30,10 @@ public class SharedAboutDialog : DialogWindow
         string helpText)
     {
         Title = windowTitle;
-        Width = 560;
-        Height = 420;
-        MinWidth = 480;
-        MinHeight = 320;
+        Width = AboutDialogMetrics.Width;
+        Height = AboutDialogMetrics.Height;
+        MinWidth = AboutDialogMetrics.MinWidth;
+        MinHeight = AboutDialogMetrics.MinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = false;
@@ -49,9 +49,10 @@ public class SharedAboutDialog : DialogWindow
             TextWrapping = TextWrapping.Wrap,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Padding = new Thickness(8),
+            FontSize = AboutDialogMetrics.TextFontSize,
+            Padding = new Thickness(AboutDialogMetrics.TextPadding),
             BorderThickness = new Thickness(1),
-            MinHeight = 220
+            MinHeight = AboutDialogMetrics.TextMinHeight
         };
         AutomationProperties.SetName(_aboutTextBox, windowTitle);
         AutomationProperties.SetAutomationId(_aboutTextBox, textAutomationId);
@@ -63,12 +64,12 @@ public class SharedAboutDialog : DialogWindow
 
     private UIElement CreateContent(string okAutomationId, string helpText)
     {
-        var root = new DockPanel { Margin = new Thickness(16) };
+        var root = new DockPanel { Margin = new Thickness(AboutDialogMetrics.RootMargin) };
 
         var buttonRow = DialogButtonRowFactory.CreateOkOnly(
             Close,
-            buttonWidth: 84,
-            rowMargin: new Thickness(0, 12, 0, 0));
+            buttonWidth: AboutDialogMetrics.ButtonWidth,
+            rowMargin: new Thickness(0, AboutDialogMetrics.ActionTopMargin, 0, 0));
         if (buttonRow.Children[0] is Button okButton)
         {
             AutomationProperties.SetAutomationId(okButton, okAutomationId);
