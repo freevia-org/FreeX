@@ -859,6 +859,13 @@ public static class SmartArtAuthoringPlanner
         smartArt.Colors.UniqueId = gallery.UniqueId;
         smartArt.Colors.Title = gallery.Title;
         smartArt.Colors.Category = gallery.Category;
+        smartArt.Colors.ColorLabels.Clear();
+        smartArt.Colors.ColorLabels.AddRange(
+            document.Root?.Elements(Diagram + "styleLbl")
+                .Select(label => label.Attribute("name")?.Value)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(name => name!)
+            ?? Enumerable.Empty<string>());
         smartArt.Colors.Palette.Clear();
         smartArt.Colors.Palette.AddRange(appliedColors.Select(color => color.ModelColor));
 
