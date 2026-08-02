@@ -37,7 +37,8 @@ public sealed record SlideObjectInsertionPlan(
     int TableRows = 0,
     int TableColumns = 0,
     ChartType ChartKind = ChartType.ColumnClustered,
-    SmartArtLayoutPreset SmartArtLayout = SmartArtLayoutPreset.BasicProcess)
+    SmartArtLayoutPreset SmartArtLayout = SmartArtLayoutPreset.BasicProcess,
+    bool IsComboChart = false)
 {
     public bool RequiresPicturePayload => Kind == SlideObjectInsertionKind.Picture;
 
@@ -124,6 +125,7 @@ public static class SlideObjectInsertionPlanner
     public const string ChartSurface3DCommandId = "freep.insert-chart-surface-3d";
     public const string ChartFunnelCommandId = "freep.insert-chart-funnel";
     public const string ChartWaterfallCommandId = "freep.insert-chart-waterfall";
+    public const string ChartComboCommandId = "freep.insert-chart-combo";
     public const string SmartArtBasicProcessCommandId = "freep.insert-smartart-basic-process";
 
     public static IReadOnlyList<SmartArtLayoutPreset> InsertableSmartArtLayouts { get; } =
@@ -211,6 +213,7 @@ public static class SlideObjectInsertionPlanner
         new(ChartSurface3DCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Surface3D),
         new(ChartFunnelCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Funnel),
         new(ChartWaterfallCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.Waterfall),
+        new(ChartComboCommandId, SlideObjectInsertionKind.Chart, ChartKind: ChartType.ColumnClustered, IsComboChart: true),
         new(SmartArtBasicProcessCommandId, SlideObjectInsertionKind.SmartArt,
             SmartArtLayout: SmartArtLayoutPreset.BasicProcess),
     ];
@@ -282,7 +285,9 @@ public static class SlideObjectInsertionPlanner
                     mediaPayload.IsVideo,
                     mediaPayload.ContentType),
             SlideObjectInsertionKind.Table => editor.InsertTable(plan.TableRows, plan.TableColumns),
-            SlideObjectInsertionKind.Chart => editor.InsertChart(plan.ChartKind),
+            SlideObjectInsertionKind.Chart => plan.IsComboChart
+                ? editor.InsertComboChart()
+                : editor.InsertChart(plan.ChartKind),
             SlideObjectInsertionKind.SmartArt => editor.InsertSmartArt(
                 plan.SmartArtLayout,
                 smartArtPicturePayload?.Pictures),

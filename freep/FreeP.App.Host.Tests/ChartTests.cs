@@ -363,6 +363,24 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_ComboChart_PreservesSecondaryLineOverride()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide());
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var inserted = editor.InsertComboChart();
+        var path = WriteToPptx(presentation);
+        var reloaded = PptxPackageReader.Read(path);
+
+        var chart = reloaded.Slides[0].Shapes.Single(s => s.Kind == SlideShapeKind.Chart).Chart;
+        chart.Should().NotBeNull();
+        chart!.Series.Should().HaveCount(2);
+        chart.Series[1].OverrideChartType.Should().Be(ChartType.LineMarkers);
+        chart.Series[1].OnSecondaryAxis.Should().BeTrue();
+        inserted.Chart!.Series[1].OverrideChartType.Should().Be(ChartType.LineMarkers);
+    }
+
+    [Fact]
     public void RoundTrip_Chart_AxisDisplayMetadataPreserved()
     {
         var chart = BuildColumnChart();
