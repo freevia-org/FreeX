@@ -2101,7 +2101,8 @@ public sealed class SmartArtTests : IDisposable
         (string srcId, string destId)[] parOfConnections,
         XDocument? quickStyleXml = null,
         XDocument? colorsXml = null,
-        string[]? assistantNodeIds = null)
+        string[]? assistantNodeIds = null,
+        bool includeCachedHierarchy3Connectors = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_tree_{Guid.NewGuid():N}.pptx");
 
@@ -2161,11 +2162,53 @@ public sealed class SmartArtTests : IDisposable
         var qsXml = quickStyleXml ?? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "styleDef",   new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
         var colorsPartXml = colorsXml ?? new XDocument(new XDeclaration("1.0", "UTF-8", "yes"), new XElement(dgmNs + "colorsDef", new XAttribute(XNamespace.Xmlns + "dgm", dgmNs.NamespaceName)));
 
-        // Minimal dsp:drawing (empty spTree)
+        var fallbackEls = new List<XElement>();
+        if (includeCachedHierarchy3Connectors)
+        {
+            layoutUniqueId.Should().EndWith("/hierarchy3");
+
+            var shapeId = 1;
+            foreach (var node in nodes)
+            {
+                fallbackEls.Add(new XElement(dspNs + "sp",
+                    new XElement(dspNs + "nvSpPr",
+                        new XElement(dspNs + "cNvPr",
+                            new XAttribute("id", shapeId++),
+                            new XAttribute("name", $"Node {node.id}")),
+                        new XElement(dspNs + "cNvSpPr")),
+                    new XElement(dspNs + "spPr",
+                        new XElement(aNs + "xfrm",
+                            new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                            new XElement(aNs + "ext", new XAttribute("cx", "914400"), new XAttribute("cy", "457200"))),
+                        new XElement(aNs + "prstGeom", new XAttribute("prst", "rect"), new XElement(aNs + "avLst"))),
+                    new XElement(dspNs + "txBody",
+                        new XElement(aNs + "bodyPr"),
+                        new XElement(aNs + "lstStyle"),
+                        new XElement(aNs + "p",
+                            new XElement(aNs + "r",
+                                new XElement(aNs + "rPr", new XAttribute("lang", "en-US")),
+                                new XElement(aNs + "t", node.text))))));
+            }
+
+            foreach (var connection in parOfConnections)
+            {
+                fallbackEls.Add(new XElement(dspNs + "sp",
+                    new XElement(dspNs + "nvSpPr",
+                        new XElement(dspNs + "cNvPr",
+                            new XAttribute("id", shapeId++),
+                            new XAttribute("name", $"Connector {connection.srcId}-{connection.destId}")),
+                        new XElement(dspNs + "cNvSpPr")),
+                    new XElement(dspNs + "spPr",
+                        new XElement(aNs + "xfrm",
+                            new XElement(aNs + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
+                            new XElement(aNs + "ext", new XAttribute("cx", "914400"), new XAttribute("cy", "914400"))))));
+            }
+        }
+
         var dspXml = new XDocument(new XDeclaration("1.0", "UTF-8", "yes"),
             new XElement(dspNs + "drawing",
                 new XAttribute(XNamespace.Xmlns + "dsp", dspNs.NamespaceName),
-                new XElement(dspNs + "spTree")));
+                new XElement(dspNs + "spTree", fallbackEls)));
 
         static byte[] ToBytes(XDocument doc)
         {
@@ -3464,6 +3507,61 @@ public sealed class SmartArtTests : IDisposable
         smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue(
             "a cache with exactly one matching text shape per parsed hierarchy node has no unmodeled role");
         smartArt.FallbackShapes.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Reader_Hierarchy3_AdmitsExactNodeAndConnectorCacheToLiveLayout()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3",
+            nodes: [("R", "Portfolio"), ("C1", "Product"), ("C2", "Operations")],
+            parOfConnections: [("R", "C1"), ("R", "C2")],
+            includeCachedHierarchy3Connectors: true);
+
+        var smartArt = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "an exact hierarchy3 cache with one matching node per data node and one line per parent edge is regenerable");
+        smartArt.FallbackShapes.Should().HaveCount(5);
+        smartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().Be(2);
+    }
+
+    [Fact]
+    public void Reader_Hierarchy3_RejectsNodeAndConnectorCacheWithExtraRole()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3",
+            nodes: [("R", "Portfolio"), ("C1", "Product"), ("C2", "Operations")],
+            parOfConnections: [("R", "C1"), ("R", "C2")],
+            includeCachedHierarchy3Connectors: true);
+
+        using (var archive = ZipFile.Open(pptxPath, ZipArchiveMode.Update))
+        {
+            var entry = archive.GetEntry("ppt/diagrams/drawing1.xml")!;
+            string drawingText;
+            using (var reader = new StreamReader(entry.Open()))
+                drawingText = reader.ReadToEnd();
+
+            var drawing = XDocument.Parse(drawingText);
+            drawing.Root!.Element(XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram") + "spTree")!
+                .Add(new XElement(XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram") + "sp"));
+            entry.Delete();
+            var replacement = archive.CreateEntry("ppt/diagrams/drawing1.xml");
+            using var writer = new StreamWriter(replacement.Open(), new UTF8Encoding(false));
+            drawing.Save(writer);
+        }
+
+        var smartArt = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "an extra cached role must keep PowerPoint's authoritative drawing fallback");
     }
 
     [Fact]

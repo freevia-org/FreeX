@@ -2138,11 +2138,13 @@ public static class PptxPackageReader
             if (smart.Data is { } data
                 && (IsGroupedListLayout(data.LayoutUniqueId)
                     || IsHierarchy3Layout(data.LayoutUniqueId))
-                && CanUseSimpleNodeCache(smart, data))
+                && (CanUseSimpleNodeCache(smart, data)
+                    || CanUseHierarchy3NodeAndConnectorCache(smart, data)))
             {
                 // These layouts have bounded live geometry. Imported caches may still
-                // contain backgrounds/connectors that it cannot model, so admit only
-                // the exact node-only cache shape proven by this guard.
+                // contain backgrounds, roles, or other content that it cannot model,
+                // so admit only the exact node-only or node-and-edge cache shapes
+                // proven by the guards above.
                 data.IsLiveLayoutSupported = true;
             }
             TryAttachPictureNodePictures(smart, archive);
@@ -2827,6 +2829,45 @@ public static class PptxPackageReader
         }
 
         return true;
+    }
+
+    private static bool CanUseHierarchy3NodeAndConnectorCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsHierarchy3Layout(data.LayoutUniqueId))
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        if (nodes.Count == 0)
+            return false;
+
+        var expectedConnectorCount = nodes.Sum(node => node.Children.Count);
+        var nodeShapes = smart.FallbackShapes
+            .Where(shape => shape.Kind == SlideShapeKind.AutoShape
+                && shape.AutoShapeKind != DrawingShapeKind.Line)
+            .ToList();
+        var connectorShapes = smart.FallbackShapes
+            .Where(shape => shape.Kind == SlideShapeKind.Connector
+                || (shape.Kind == SlideShapeKind.AutoShape
+                    && shape.AutoShapeKind == DrawingShapeKind.Line))
+            .ToList();
+
+        // A hierarchy3 cache is safe to hand to the live planner only when its
+        // entire visible drawing is the same node-and-edge contract the planner
+        // can regenerate. Any extra background, role, group, or picture keeps
+        // PowerPoint's cached drawing authoritative.
+        if (nodeShapes.Count != nodes.Count
+            || connectorShapes.Count != expectedConnectorCount
+            || nodeShapes.Count + connectorShapes.Count != smart.FallbackShapes.Count)
+            return false;
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(nodeShapes[i].PlainText)
+                || !string.Equals(nodeShapes[i].PlainText, nodes[i].Text, StringComparison.Ordinal))
+                return false;
+        }
+
+        return connectorShapes.All(shape => string.IsNullOrWhiteSpace(shape.PlainText));
     }
 
     private static List<(string? ModelId, ImagePart Picture)> ReadSmartArtDrawingPictures(SmartArtShape smart, ZipArchive archive)
