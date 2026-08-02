@@ -336,6 +336,60 @@ public sealed class DocumentViewTrackEditTests
             && run.FormatRevision == null);
     }
 
+    [StaFact]
+    public void ClearFormatting_SelectedRangeTracksOnlyExactCharactersAndUndoRestoresFormatting()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var original = new RunFormatting { Bold = true, Italic = true, ColorHex = "#C00000" };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Hello world", original));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.CommitToModel();
+        var baseline = ((Paragraph)view.Model.Blocks[0]).Runs.Single().Formatting;
+        view.RevisionAuthor = "Cleanup Reviewer";
+        view.TrackChangesEnabled = true;
+        view.SetSelectionRangeForTest(0, 6, 0, 11);
+
+        view.ClearFormatting();
+
+        paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Single(run => run.Text == "Hello ").Formatting.Should().Be(baseline);
+        var cleared = paragraph.Runs.Single(run => run.Text == "world");
+        cleared.Formatting.Should().Be(RunFormatting.Default);
+        cleared.FormatRevision.Should().NotBeNull();
+        cleared.FormatRevision!.Author.Should().Be("Cleanup Reviewer");
+        cleared.FormatRevision.PreviousFormatting.Should().Be(baseline);
+
+        view.Undo();
+        paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Should().ContainSingle();
+        paragraph.Runs[0].Text.Should().Be("Hello world");
+        paragraph.Runs[0].Formatting.Should().Be(baseline);
+        paragraph.Runs[0].FormatRevision.Should().BeNull();
+    }
+
+    [StaFact]
+    public void ClearFormatting_CollapsedCaretRetainsParagraphFallback()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("Bold ", new RunFormatting { Bold = true }));
+        paragraph.Runs.Add(new Run("italic", new RunFormatting { Italic = true }));
+        document.Blocks.Add(paragraph);
+        var view = new DocumentView();
+        view.LoadModel(document);
+        view.MoveCaretToBlockForTest(0, 2);
+
+        view.ClearFormatting();
+
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().OnlyContain(run =>
+            run.Formatting == RunFormatting.Default);
+    }
+
     private static WpfRun RenderedRun(DocumentView view, string text) =>
         view.Document.Blocks.OfType<WpfParagraph>()
             .SelectMany(paragraph => paragraph.Inlines.OfType<WpfRun>())
