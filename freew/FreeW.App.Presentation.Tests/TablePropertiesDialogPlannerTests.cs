@@ -171,6 +171,59 @@ public sealed class TablePropertiesDialogPlannerTests
         cell.Margins.Should().Be(new TableCellMargins(2, 8, 2, 8));
     }
 
+    [Fact]
+    public void ApplyTablePropertiesCommand_UndoRedoRestoresCompleteMutationFootprint()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(2, 2);
+        table.ColumnWidthsPt.AddRange([90, 110]);
+        document.Blocks.Add(table);
+        var row = table.Rows[0];
+        var cell = row.Cells[1];
+        var values = new TablePropertiesValues(
+            PreferredWidthPt: 300,
+            Alignment: TableAlignment.Right,
+            TextWrapping: true,
+            IndentFromLeftPt: 12,
+            DefaultCellMargins: new TableCellMargins(0, 6, 0, 6),
+            CellSpacingPt: 2,
+            RowHeightPt: 36,
+            RowHeightRule: TableRowHeightRule.Exact,
+            AllowRowBreak: false,
+            RepeatHeaderRow: true,
+            ColumnWidthPt: 120,
+            CellPreferredWidthPt: 140,
+            CellVerticalAlignment: TableCellVerticalAlignment.Center,
+            CellMargins: new TableCellMargins(2, 8, 2, 8));
+        var bus = new DocumentCommandBus(new CommandContext(document));
+
+        bus.Execute(new ApplyTablePropertiesCommand(0, 0, 1, values));
+        cell.WidthPt.Should().Be(140);
+        table.Rows[1].Cells[1].WidthPt.Should().Be(120);
+
+        bus.Undo().Should().BeTrue();
+        table.PreferredWidthPt.Should().BeNull();
+        table.Alignment.Should().Be(TableAlignment.Left);
+        table.TextWrapping.Should().BeFalse();
+        table.ColumnWidthsPt.Should().Equal(90, 110);
+        table.Rows.SelectMany(candidate => candidate.Cells).Should().OnlyContain(candidate => candidate.WidthPt == null);
+        row.HeightPt.Should().BeNull();
+        row.AllowBreakAcrossPages.Should().BeTrue();
+        cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Top);
+        cell.Margins.Should().BeNull();
+
+        bus.Redo().Should().BeTrue();
+        table.PreferredWidthPt.Should().Be(300);
+        cell.WidthPt.Should().Be(140);
+        table.Rows[1].Cells[1].WidthPt.Should().Be(120);
+    }
+
+    private sealed class CommandContext(TextDocument document) : IDocumentCommandContext
+    {
+        public TextDocument Document => document;
+    }
+
     private static TablePropertiesDialogInput ValidInput() => new(
         PreferredWidthOn: true,
         PreferredWidthText: "300",

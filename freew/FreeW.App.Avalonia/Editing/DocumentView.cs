@@ -2306,11 +2306,21 @@ public sealed class DocumentView : Control
 
     public void ApplyTableProperties(TablePropertiesValues values)
     {
-        if (IsEditingLocked || CaretTableContext() is not { } context)
+        ArgumentNullException.ThrowIfNull(values);
+        if (IsEditingLocked || _cellCaret is not { } caret)
             return;
+        if (caret.TableBlock < 0
+            || caret.TableBlock >= _doc.Blocks.Count
+            || _doc.Blocks[caret.TableBlock] is not Table table
+            || caret.Row < 0
+            || caret.Row >= table.Rows.Count)
+        {
+            return;
+        }
 
-        TablePropertiesDialogPlanner.ApplyValues(context, values);
-        InvalidateLayoutAndVisual();
+        var cellIndex = GridColumnToCellIndex(table.Rows[caret.Row], caret.Col);
+        if (cellIndex >= 0)
+            _bus.Execute(new ApplyTablePropertiesCommand(caret.TableBlock, caret.Row, cellIndex, values));
     }
 
     public void InsertTableFormula(TableFormulaField formula)

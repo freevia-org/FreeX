@@ -12439,12 +12439,13 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ApplyTableProperties(TablePropertiesValues values)
     {
-        var context = CaretTableContext();
-        if (context is null)
+        ArgumentNullException.ThrowIfNull(values);
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0)
             return;
 
-        TablePropertiesDialogPlanner.ApplyValues(context, values);
-        Render();
+        _commands.Execute(new ApplyTablePropertiesCommand(blockIndex, rowIndex, columnIndex, values));
     }
 
     // Snapshot of the caret table's previous style id for table-style live-preview.
