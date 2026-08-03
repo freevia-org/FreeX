@@ -40,10 +40,20 @@ public sealed class SmartArtFixtureEvidenceTests
         var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
 
         layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/relationship1");
-        drawing.Descendants(dsp + "sp").Should().HaveCount(3);
+        var shapes = drawing.Descendants(dsp + "sp").ToList();
+        shapes.Should().HaveCount(3);
         drawing.Descendants(a + "prstGeom")
             .Select(element => (string?)element.Attribute("prst"))
             .Should().OnlyContain(value => value == "ellipse");
+        shapes.Select(shape => shape.Descendants(a + "ext").Single().Attributes()
+                .Where(attribute => attribute.Name.LocalName is "cx" or "cy")
+                .Select(attribute => long.Parse(attribute.Value)))
+            .Should().OnlyContain(extents => extents.SequenceEqual(new long[] { 2_400_000L, 2_400_000L }));
+        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("x")!.Value))
+            .Zip(new long[] { 1_522_800L, 2_914_800L, 4_306_800L })
+            .Should().OnlyContain(pair => pair.First == pair.Second);
+        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("y")!.Value))
+            .Should().OnlyContain(value => value == 1_672_400L);
         drawing.Descendants(a + "t").Should().HaveCount(3);
         ReadXml(archive, "ppt/diagrams/data7.xml")
             .Descendants(dgm + "pt")

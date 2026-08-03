@@ -1402,7 +1402,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SmartArtDefaultLiveRendererContractTests.cs",
                 "tools/FreeP.RenderCompare.Tests/SmartArtFixtureEvidenceTests.cs"
             ],
-            RemainingWork: "The checked-in relationship1 package admits exactly three ordered, same-sized, overlapping ellipse nodes with distinct matching text and no extra roles or effects. Missing, duplicate, ambiguous, non-ellipse, non-overlapping, effect-bearing, picture-bearing, or otherwise unproven relationship caches remain on cached drawing fallback; other relationship families and exact PowerPoint intersection/effect fidelity remain deferred."),
+            RemainingWork: "The checked-in relationship1 package admits exactly three ordered, same-sized ellipse nodes with distinct matching text, a horizontal step within 1 EMU of the shared planner's truncated 58% diameter step, and no extra roles or effects. Missing, duplicate, ambiguous, non-ellipse, wrong-ratio, non-overlapping, effect-bearing, picture-bearing, or otherwise unproven relationship caches remain on cached drawing fallback; other relationship families and exact PowerPoint intersection/effect fidelity remain deferred."),
         new(
             EvidenceId: "freep.smartart.basic-process",
             Area: "SmartArt basic process live layout",

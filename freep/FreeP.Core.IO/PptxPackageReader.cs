@@ -3110,14 +3110,23 @@ public static class PptxPackageReader
             || first.ExtentCxEmu != first.ExtentCyEmu)
             return false;
 
+        // The shared relationship1 planner truncates diameter * 0.58 to an EMU
+        // step. Allow one EMU for package integer rounding, but do not admit a
+        // materially different overlap plan under the live renderer.
+        const double sharedRelationshipStepFraction = 0.58;
+        const long relationshipStepIntegerToleranceEmu = 1;
+        var expectedStepEmu = (long)(first.ExtentCxEmu * sharedRelationshipStepFraction);
+
         for (var index = 1; index < shapes.Count; index++)
         {
             var previous = shapes[index - 1];
             var current = shapes[index];
+            var horizontalStepEmu = current.OffsetXEmu - previous.OffsetXEmu;
             if (current.ExtentCxEmu != first.ExtentCxEmu
                 || current.ExtentCyEmu != first.ExtentCyEmu
                 || current.OffsetYEmu != first.OffsetYEmu
                 || current.OffsetXEmu <= previous.OffsetXEmu
+                || Math.Abs(horizontalStepEmu - expectedStepEmu) > relationshipStepIntegerToleranceEmu
                 || current.OffsetXEmu >= previous.OffsetXEmu + previous.ExtentCxEmu)
                 return false;
         }
