@@ -14921,7 +14921,7 @@ public sealed class DocumentView : RichTextBox
     private bool TryInsertNoteThroughCommand(string text, bool footnote)
     {
         if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset))
-            return false;
+            return TryInsertTableCellNoteThroughCommand(text, footnote);
 
         CommitToModel();
         if (paragraphIndex < 0
@@ -14935,6 +14935,39 @@ public sealed class DocumentView : RichTextBox
         _commands.Execute(new InsertNoteCommand(id, footnote, text ?? string.Empty, paragraphIndex, textOffset));
         var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
         PlaceCaretAtModelTextOffset(paragraphIndex, textOffset + markerLength);
+        return true;
+    }
+
+    private bool TryInsertTableCellNoteThroughCommand(string text, bool footnote)
+    {
+        if (!TryGetCurrentTableCellCaretTarget(
+                out var tableBlockIndex,
+                out var rowIndex,
+                out var cellIndex,
+                out var paragraphIndex,
+                out var textOffset))
+        {
+            return false;
+        }
+
+        CommitToModel();
+        var id = footnote ? _model.NextFootnoteId() : _model.NextEndnoteId();
+        _commands.Execute(new InsertTableCellNoteCommand(
+            id,
+            footnote,
+            text ?? string.Empty,
+            tableBlockIndex,
+            rowIndex,
+            cellIndex,
+            paragraphIndex,
+            textOffset));
+        var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+        PlaceCaretAtTableCellTextOffset(
+            tableBlockIndex,
+            rowIndex,
+            cellIndex,
+            paragraphIndex,
+            textOffset + markerLength);
         return true;
     }
 
@@ -14956,6 +14989,68 @@ public sealed class DocumentView : RichTextBox
         paragraphIndex = ModelIndexFromVisible(mappedIndex);
         textOffset = OffsetInParagraph(paragraph, CaretPosition);
         return true;
+    }
+
+    private bool TryGetCurrentTableCellCaretTarget(
+        out int tableBlockIndex,
+        out int rowIndex,
+        out int cellIndex,
+        out int paragraphIndex,
+        out int textOffset)
+    {
+        tableBlockIndex = rowIndex = cellIndex = paragraphIndex = -1;
+        textOffset = 0;
+        var paragraph = CaretPosition?.Paragraph;
+        if (paragraph is null || CaretPosition is null)
+            return false;
+
+        var location = TableLocationOf(paragraph);
+        if (location.BlockIndex < 0)
+            return false;
+
+        TextElement? ancestor = paragraph;
+        while (ancestor is not null && ancestor is not WpfTableCell)
+            ancestor = ancestor.Parent as TextElement;
+        if (ancestor is not WpfTableCell cell)
+            return false;
+
+        var directParagraphs = cell.Blocks.OfType<WpfParagraph>().ToList();
+        var mappedParagraphIndex = directParagraphs.IndexOf(paragraph);
+        if (mappedParagraphIndex < 0)
+            return false;
+
+        tableBlockIndex = location.BlockIndex;
+        rowIndex = location.RowIndex;
+        cellIndex = location.ColumnIndex;
+        paragraphIndex = mappedParagraphIndex;
+        textOffset = OffsetInParagraph(paragraph, CaretPosition);
+        return true;
+    }
+
+    private void PlaceCaretAtTableCellTextOffset(
+        int tableBlockIndex,
+        int rowIndex,
+        int cellIndex,
+        int paragraphIndex,
+        int textOffset)
+    {
+        var table = Document.Blocks
+            .OfType<WpfTable>()
+            .FirstOrDefault(candidate => candidate.Tag is WpfTableTag { SourceBlockIndex: var source }
+                && source == tableBlockIndex);
+        var row = table?.RowGroups
+            .SelectMany(group => group.Rows)
+            .FirstOrDefault(candidate => candidate.Tag is WpfTableRowTag { SourceRowIndex: var source }
+                && source == rowIndex);
+        if (row is null || cellIndex < 0 || cellIndex >= row.Cells.Count)
+            return;
+
+        var paragraphs = row.Cells[cellIndex].Blocks.OfType<WpfParagraph>().ToList();
+        if (paragraphIndex < 0 || paragraphIndex >= paragraphs.Count)
+            return;
+
+        CaretPosition = TextPointerAtParagraphOffset(paragraphs[paragraphIndex], textOffset);
+        Focus();
     }
 
     /// <summary>

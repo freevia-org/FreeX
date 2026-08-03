@@ -64,6 +64,78 @@ public sealed class InsertNoteCommand(
         footnote ? document.Footnotes.ContainsKey(id) : document.Endnotes.ContainsKey(id);
 }
 
+/// <summary>
+/// Inserts one footnote or endnote and its marker into a paragraph inside a table cell. The cell is
+/// addressed by model indices so both desktop hosts can use the same undo and package-safe edit.
+/// </summary>
+public sealed class InsertTableCellNoteCommand(
+    int id,
+    bool footnote,
+    string text,
+    int tableBlockIndex,
+    int rowIndex,
+    int cellIndex,
+    int paragraphIndex,
+    int textOffset) : IDocumentCommand
+{
+    private Run[]? _previousRuns;
+    private bool _applied;
+
+    public string Label => footnote ? "Insert Footnote" : "Insert Endnote";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (ParagraphAt(context.Document) is not { } paragraph || NoteExists(context.Document))
+            return;
+
+        _previousRuns = [.. paragraph.Runs];
+        if (footnote)
+            context.Document.Footnotes[id] = new Footnote(id, text ?? string.Empty);
+        else
+            context.Document.Endnotes[id] = new Endnote(id, text ?? string.Empty);
+
+        var marker = footnote ? Run.FootnoteReference(id) : Run.EndnoteReference(id);
+        RevisionEditPlanner.InsertRunAtOffset(paragraph, textOffset, marker);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || _previousRuns is null || ParagraphAt(context.Document) is not { } paragraph)
+            return;
+
+        if (footnote)
+            context.Document.Footnotes.Remove(id);
+        else
+            context.Document.Endnotes.Remove(id);
+
+        paragraph.Runs.Clear();
+        paragraph.Runs.AddRange(_previousRuns);
+        _previousRuns = null;
+        _applied = false;
+    }
+
+    private Paragraph? ParagraphAt(TextDocument document)
+    {
+        if (tableBlockIndex < 0
+            || tableBlockIndex >= document.Blocks.Count
+            || document.Blocks[tableBlockIndex] is not Table table
+            || rowIndex < 0
+            || rowIndex >= table.Rows.Count
+            || cellIndex < 0
+            || cellIndex >= table.Rows[rowIndex].Cells.Count)
+        {
+            return null;
+        }
+
+        var paragraphs = table.Rows[rowIndex].Cells[cellIndex].Paragraphs;
+        return paragraphIndex >= 0 && paragraphIndex < paragraphs.Count ? paragraphs[paragraphIndex] : null;
+    }
+
+    private bool NoteExists(TextDocument document) =>
+        footnote ? document.Footnotes.ContainsKey(id) : document.Endnotes.ContainsKey(id);
+}
+
 /// <summary>Replaces the rich paragraph content of one footnote or endnote.</summary>
 public sealed class ReplaceNoteContentCommand(
     int id,

@@ -36,6 +36,39 @@ public sealed class NoteEditCommandRoundTripTests
     }
 
     [Fact]
+    public void InsertedTableCellFootnote_RoundTripsMarkerPositionAndNotePart()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph("before after"));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+        var bus = new DocumentCommandBus(new Context(document));
+        bus.Execute(new InsertTableCellNoteCommand(1, true, "table note", 0, 0, 0, 0, 7));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        var package = stream.ToArray();
+        using (var archive = new ZipArchive(new MemoryStream(package), ZipArchiveMode.Read))
+        {
+            var documentXml = ReadEntry(archive, "word/document.xml");
+            documentXml.Should().Contain("<w:tc>");
+            documentXml.Should().Contain("w:footnoteReference w:id=\"1\"");
+            ReadEntry(archive, "word/footnotes.xml").Should().Contain("table note");
+        }
+
+        var reopened = DocxReader.Read(new MemoryStream(package));
+        var reopenedCell = ((Table)reopened.Blocks[0]).Rows[0].Cells[0];
+        reopenedCell.Paragraphs[0].Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        reopenedCell.Paragraphs[0].Runs[1].FootnoteId.Should().Be(1);
+        reopened.Footnotes[1].PlainText.Should().Be("table note");
+    }
+
+    [Fact]
     public void EditedFootnoteAndEndnote_RoundTripInPackageAndReopenedModel()
     {
         var document = TextDocument.CreateEmpty();

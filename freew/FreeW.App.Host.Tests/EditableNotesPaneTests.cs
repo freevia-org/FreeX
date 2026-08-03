@@ -12,6 +12,40 @@ namespace FreeW.App.Host.Tests;
 public sealed class EditableNotesPaneTests
 {
     [StaFact]
+    public void InsertFootnote_InTableCell_UsesSharedUndoableCaretPath()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph("before after"));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        doc.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var wpfParagraph = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single()
+            .RowGroups[0].Rows[0].Cells[0].Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var wpfRun = wpfParagraph.Inlines.OfType<System.Windows.Documents.Run>().Single();
+        view.CaretPosition = wpfRun.ContentStart.GetPositionAtOffset(7) ?? wpfRun.ContentStart;
+
+        view.InsertFootnote("table note");
+
+        var modelCell = ((Table)view.Model.Blocks[0]).Rows[0].Cells[0];
+        modelCell.Paragraphs[0].Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        view.Model.Footnotes[1].PlainText.Should().Be("table note");
+
+        view.Undo();
+        ((Table)view.Model.Blocks[0]).Rows[0].Cells[0].Paragraphs[0].PlainText.Should().Be("before after");
+        view.Model.Footnotes.Should().BeEmpty();
+
+        view.Redo();
+        ((Table)view.Model.Blocks[0]).Rows[0].Cells[0].Paragraphs[0].Runs
+            .Should().Contain(run => run.FootnoteId == 1);
+    }
+
+    [StaFact]
     public void InsertFootnote_UsesCaretOffset_AndUndoRedoRestoresOneEdit()
     {
         var doc = TextDocument.CreateEmpty();

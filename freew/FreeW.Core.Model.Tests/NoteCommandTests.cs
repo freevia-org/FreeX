@@ -2,6 +2,34 @@ namespace FreeW.Core.Model.Tests;
 
 public sealed class NoteCommandTests
 {
+    [Fact]
+    public void InsertTableCellNote_InsertsAtTextOffset_AndUndoRedoRestoresOneEdit()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph("before after"));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        document.Blocks.Add(table);
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new InsertTableCellNoteCommand(1, true, "note", 0, 0, 0, 0, 7));
+
+        cell.Paragraphs[0].Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        document.Footnotes[1].PlainText.Should().Be("note");
+
+        bus.Undo();
+        cell.Paragraphs[0].PlainText.Should().Be("before after");
+        document.Footnotes.Should().BeEmpty();
+
+        bus.Redo();
+        cell.Paragraphs[0].Runs.Should().Contain(run => run.FootnoteId == 1);
+        document.Footnotes[1].PlainText.Should().Be("note");
+    }
+
     private sealed class Context(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document => document;
