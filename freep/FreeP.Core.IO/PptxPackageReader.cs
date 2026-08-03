@@ -2909,10 +2909,15 @@ public static class PptxPackageReader
 
         // The repository's native cycle2 package evidence is exactly one ellipse
         // per data node plus one empty right-arrow transition per node. Any extra
-        // role, connector, or picture leaves the imported drawing authoritative.
+        // role, connector, picture, or authored effect leaves the imported drawing
+        // authoritative because the shared cycle2 planner does not reproduce it.
         if (nodeShapes.Count != nodes.Count
             || arrowShapes.Count != nodes.Count
             || nodeShapes.Count + arrowShapes.Count != smart.FallbackShapes.Count)
+            return false;
+
+        if (smart.FallbackShapes.Any(HasUnsupportedCycle2Effects)
+            || HasUnsupportedCycle2DrawingEffects(smart))
             return false;
 
         for (var i = 0; i < nodes.Count; i++)
@@ -2923,6 +2928,44 @@ public static class PptxPackageReader
         }
 
         return arrowShapes.All(shape => string.IsNullOrWhiteSpace(shape.PlainText));
+    }
+
+    private static bool HasUnsupportedCycle2Effects(SlideShape shape)
+    {
+        var effects = shape.Effects;
+        return effects is not null
+            && (effects.HasOuterShadow
+                || effects.HasInnerShadow
+                || effects.HasGlow
+                || effects.HasSoftEdge
+                || effects.BevelTop is not null
+                || effects.BevelBottom is not null
+                || effects.ExtrusionHeightEmu != 0
+                || effects.ContourWidthEmu != 0
+                || effects.Scene3d is not null
+                || !string.IsNullOrWhiteSpace(effects.PrstMaterial)
+                || effects.ExtrusionColor is not null
+                || effects.ContourColor is not null);
+    }
+
+    private static bool HasUnsupportedCycle2DrawingEffects(SmartArtShape smart)
+    {
+        if (string.IsNullOrWhiteSpace(smart.DrawingPartPath)
+            || !smart.Parts.TryGetValue(smart.DrawingPartPath, out var drawingPart))
+            return false;
+
+        try
+        {
+            using var stream = new MemoryStream(drawingPart.Bytes);
+            var document = OpcXml.LoadXml(stream);
+            return document.Descendants(A + "effectLst")
+                .Any(effectList => effectList.Elements().Any());
+        }
+        catch
+        {
+            // A malformed preserved drawing must not be promoted to live geometry.
+            return true;
+        }
     }
 
     private static List<(string? ModelId, ImagePart Picture)> ReadSmartArtDrawingPictures(SmartArtShape smart, ZipArchive archive)

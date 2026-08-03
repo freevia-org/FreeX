@@ -67,7 +67,9 @@ public sealed class SmartArtTests : IDisposable
         IReadOnlySet<int>? pictureNodeIndexes = null,
         bool includeColors = true,
         string? layoutUniqueId = null,
-        bool groupedListUnmodeledRole = false)
+        bool groupedListUnmodeledRole = false,
+        bool includeNodeOuterShadow = false,
+        bool cycle2NodeAndArrowCache = false)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -126,9 +128,21 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(aNs + "xfrm",
                         new XElement(aNs + "off", new XAttribute("x", (idx - 1) * 914400L), new XAttribute("y", "457200")),
                         new XElement(aNs + "ext", new XAttribute("cx", "914400"), new XAttribute("cy", "457200"))),
-                    new XElement(aNs + "prstGeom", new XAttribute("prst", "rect"), new XElement(aNs + "avLst")),
+                    new XElement(aNs + "prstGeom",
+                        new XAttribute("prst", cycle2NodeAndArrowCache ? "ellipse" : "rect"),
+                        new XElement(aNs + "avLst")),
                     new XElement(aNs + "solidFill",
-                        new XElement(aNs + "srgbClr", new XAttribute("val", "4472C4")))),
+                        new XElement(aNs + "srgbClr", new XAttribute("val", "4472C4"))),
+                includeNodeOuterShadow
+                    ? new XElement(aNs + "effectLst",
+                        new XElement(aNs + "outerShdw",
+                            new XAttribute("blurRad", "76200"),
+                            new XAttribute("dist", "12700"),
+                            new XAttribute("dir", "2700000"),
+                            new XElement(aNs + "srgbClr",
+                                new XAttribute("val", "000000"),
+                                new XElement(aNs + "alpha", new XAttribute("val", "50000")))))
+                    : null),
                 new XElement(dspNs + "style",
                     new XElement(aNs + "fontRef", new XAttribute("idx", "minor"),
                         new XElement(aNs + "schemeClr", new XAttribute("val", "lt1")))),
@@ -139,6 +153,22 @@ public sealed class SmartArtTests : IDisposable
                         new XElement(aNs + "r",
                             new XElement(aNs + "rPr", new XAttribute("lang", "en-US")),
                         new XElement(aNs + "t", text))))));
+
+            if (cycle2NodeAndArrowCache)
+            {
+                idx = shapeIdx++;
+                fallbackEls.Add(new XElement(dspNs + "sp",
+                    new XElement(dspNs + "nvSpPr",
+                        new XElement(dspNs + "cNvPr", new XAttribute("id", idx), new XAttribute("name", $"Transition{idx}")),
+                        new XElement(dspNs + "cNvSpPr")),
+                    new XElement(dspNs + "spPr",
+                        new XElement(aNs + "xfrm",
+                            new XElement(aNs + "off", new XAttribute("x", (idx - 1) * 914400L), new XAttribute("y", "685800")),
+                            new XElement(aNs + "ext", new XAttribute("cx", "457200"), new XAttribute("cy", "228600"))),
+                        new XElement(aNs + "prstGeom", new XAttribute("prst", "rightArrow"), new XElement(aNs + "avLst")),
+                        new XElement(aNs + "solidFill",
+                            new XElement(aNs + "srgbClr", new XAttribute("val", "AAB6C1"))))));
+            }
         }
 
         if (groupedListUnmodeledRole)
@@ -758,6 +788,82 @@ public sealed class SmartArtTests : IDisposable
         smartArt.FallbackShapes.Should().HaveCount(3);
         smartArt.FallbackShapes.Should().Contain(shape => string.IsNullOrEmpty(shape.PlainText),
             "the extra cached role must remain available to the fallback compositor");
+    }
+
+    [Fact]
+    public void Reader_Cycle2_ExactNodeAndArrowCacheWithoutEffects_IsAdmittedLive()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Idea", "Plan"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/cycle2",
+            cycle2NodeAndArrowCache: true);
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue(
+            "the otherwise identical effect-free ellipse-and-arrow cache satisfies every Wave117 admission gate");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().Be(2);
+        smartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .Should().Be(2);
+        smartArt.FallbackShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Select(shape => shape.PlainText)
+            .Should().Equal("Idea", "Plan");
+        smartArt.FallbackShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .Should().OnlyContain(shape => string.IsNullOrWhiteSpace(shape.PlainText));
+        smartArt.FallbackShapes.Should().OnlyContain(shape => shape.Effects == null);
+    }
+
+    [Fact]
+    public void Reader_Cycle2_WithAuthoredEffects_PreservesCachedFallbackThroughSaveReopen()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Idea", "Plan"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/cycle2",
+            includeNodeOuterShadow: true,
+            cycle2NodeAndArrowCache: true);
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "the shared cycle2 planner does not reproduce authored node effects");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Select(shape => shape.Effects is not null && shape.Effects.HasOuterShadow)
+            .Should().OnlyContain(value => value);
+        smartArt.FallbackShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .Should().OnlyContain(shape => string.IsNullOrWhiteSpace(shape.PlainText) && shape.Effects == null);
+
+        var composed = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .ToArray();
+        composed
+            .Select(shape => shape.Effects is not null && shape.Effects.HasOuterShadow)
+            .Should().Contain(true,
+                "the effect-bearing cache must remain the render source");
+
+        var reopened = PptxPackageReader.Read(WriteToPptx(presentation));
+        var reopenedSmartArt = reopened.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        reopenedSmartArt.Data.Should().NotBeNull();
+        reopenedSmartArt.Data!.IsLiveLayoutSupported.Should().BeFalse();
+        reopenedSmartArt.FallbackShapes.Should().HaveCount(4);
+        reopenedSmartArt.FallbackShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Select(shape => shape.Effects is not null && shape.Effects.HasOuterShadow)
+            .Should().OnlyContain(value => value,
+                "save/reopen must retain the authoritative effect-bearing nodes");
+        reopenedSmartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .Should().Be(2);
     }
 
     [Fact]
