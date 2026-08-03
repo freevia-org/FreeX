@@ -141,6 +141,56 @@ public sealed class TableStyleGalleryTests
     }
 
     [StaFact]
+    public void CellAlignment_IsUndoableThroughTheWpfHost()
+    {
+        var model = TableModel();
+        var cell = model.Blocks.OfType<Table>().First().Rows[0].Cells[0];
+        cell.VerticalAlignment = TableCellVerticalAlignment.Bottom;
+        cell.Paragraphs[0].Formatting = cell.Paragraphs[0].Formatting with
+        {
+            Alignment = FreeW.Core.Model.TextAlignment.Left,
+            SpaceAfterPt = 6,
+        };
+        cell.Paragraphs.Add(new Paragraph("second")
+        {
+            Formatting = new ParagraphFormatting
+            {
+                Alignment = FreeW.Core.Model.TextAlignment.Justify,
+                SpaceBeforePt = 4,
+            },
+        });
+        var editor = new DocumentView();
+        editor.LoadModel(model);
+        PlaceCaretInFirstCell(editor);
+        editor.CommitToModel();
+        cell = editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0];
+        var firstBefore = cell.Paragraphs[0].Formatting;
+        var secondBefore = cell.Paragraphs[1].Formatting;
+
+        editor.SetCaretCellAlignment(
+            TableCellVerticalAlignment.Center,
+            FreeW.Core.Model.TextAlignment.Right);
+
+        cell = editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0];
+        cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
+        cell.Paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.Formatting.Alignment == FreeW.Core.Model.TextAlignment.Right);
+        editor.CanUndo.Should().BeTrue();
+
+        editor.Undo();
+        cell = editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0];
+        cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Bottom);
+        cell.Paragraphs[0].Formatting.Should().Be(firstBefore);
+        cell.Paragraphs[1].Formatting.Should().Be(secondBefore);
+
+        editor.Redo();
+        cell = editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0];
+        cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
+        cell.Paragraphs.Should().OnlyContain(paragraph =>
+            paragraph.Formatting.Alignment == FreeW.Core.Model.TextAlignment.Right);
+    }
+
+    [StaFact]
     public void ApplyTableStyle_UpdatesBorderColor_InRenderedTable()
     {
         var editor = new DocumentView();

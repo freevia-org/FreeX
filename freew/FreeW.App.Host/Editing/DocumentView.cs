@@ -1904,10 +1904,12 @@ public sealed class DocumentView : RichTextBox
         var cells = table.Rows[rowIndex].Cells;
         if (columnIndex < 0 || columnIndex >= cells.Count)
             return;
-        var cell = cells[columnIndex];
-        cell.VerticalAlignment = verticalAlignment;
-        foreach (var paragraph in cell.Paragraphs)
-            paragraph.Formatting = paragraph.Formatting with { Alignment = horizontalAlignment };
+        _commands.Execute(new SetCellAlignmentCommand(
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            verticalAlignment,
+            horizontalAlignment));
         Render();
     }
 
