@@ -1540,23 +1540,7 @@ public sealed partial class MainWindow
     }
 
     private Task ShowEvaluateFormulaParityDialogAsync() =>
-        ShowEvaluateFormulaDialogAsync(CreateFormulaEvaluationSummary(_session.ActiveSheet.Id));
-
-    private static FormulaEvaluationSummary CreateFormulaEvaluationSummary(SheetId sheetId)
-    {
-        var address = new CellAddress(sheetId, 6, 4);
-        return new FormulaEvaluationSummary(
-            sheetId,
-            "Sheet1",
-            address,
-            "=SUM(D2:D5)",
-            "469",
-            [
-                new FormulaEvaluationStep("SUM(D2:D5)", "469"),
-                new FormulaEvaluationStep("D2:D5", "{120;85;200;64}"),
-                new FormulaEvaluationStep("=SUM(D2:D5)", "469"),
-            ]);
-    }
+        ShowEvaluateFormulaDialogAsync(EvaluateFormulaDialogPlanner.CreateParitySummary(_session.ActiveSheet.Id));
 
     private Task ShowWatchWindowParityDialogAsync() =>
         ShowWithParitySelectionAsync(

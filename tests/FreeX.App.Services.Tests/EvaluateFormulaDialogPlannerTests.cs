@@ -63,4 +63,43 @@ public sealed class EvaluateFormulaDialogPlannerTests
         session.CurrentHighlight.Highlight.Should().Be("B1");
         session.CanMoveNext.Should().BeTrue();
     }
+
+    [Fact]
+    public void CreateParitySummary_IsTheSharedD6FixtureForBothCaptureHosts()
+    {
+        var sheetId = SheetId.New();
+
+        var summary = EvaluateFormulaDialogPlanner.CreateParitySummary(sheetId);
+
+        summary.SheetId.Should().Be(sheetId);
+        summary.SheetName.Should().Be("Sheet1");
+        summary.Address.Should().Be(new CellAddress(sheetId, 6, 4));
+        summary.FormulaText.Should().Be("=SUM(D2:D5)");
+        summary.ValueText.Should().Be("469");
+        summary.Steps.Select(step => (step.Expression, step.ValueText))
+            .Should().Equal(
+                ("SUM(D2:D5)", "469"),
+                ("D2:D5", "{120;85;200;64}"),
+                ("=SUM(D2:D5)", "469"));
+
+        var session = EvaluateFormulaDialogPlanner.CreateSession(summary);
+        session.CurrentStep!.Expression.Should().Be("SUM(D2:D5)");
+        session.CurrentHighlight.Highlight.Should().Be("SUM(D2:D5)");
+    }
+
+    [Fact]
+    public void LayoutConstants_MatchTheWpfEvaluateFormulaDialogContract()
+    {
+        EvaluateFormulaDialogPlanner.Width.Should().Be(600);
+        EvaluateFormulaDialogPlanner.Height.Should().Be(360);
+        EvaluateFormulaDialogPlanner.MinWidth.Should().Be(420);
+        EvaluateFormulaDialogPlanner.MinHeight.Should().Be(240);
+        EvaluateFormulaDialogPlanner.RootMargin.Should().Be(12);
+        EvaluateFormulaDialogPlanner.ActionRowTopMargin.Should().Be(10);
+        EvaluateFormulaDialogPlanner.ActionSpacing.Should().Be(4);
+        EvaluateFormulaDialogPlanner.ButtonHeight.Should().Be(26);
+        EvaluateFormulaDialogPlanner.HelpButtonWidth.Should().Be(142);
+        EvaluateFormulaDialogPlanner.StepFontSize.Should().Be(16);
+        EvaluateFormulaDialogPlanner.ValueFontSize.Should().Be(14);
+    }
 }

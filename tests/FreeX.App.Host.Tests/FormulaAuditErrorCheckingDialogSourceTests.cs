@@ -51,8 +51,8 @@ public sealed class FormulaAuditErrorCheckingDialogSourceTests
     {
         var source = ReadEvaluateFormulaDialogSource();
 
-        source.Should().Contain("Content = UiText.Get(\"EvaluateFormula_EvaluateButton\"), Width = 80, Height = 26, IsDefault = true");
-        source.Should().Contain("Content = UiText.Get(\"EvaluateFormula_CloseButton\"), Width = 80, Height = 26, IsCancel = true");
+        source.Should().Contain("Content = UiText.Get(\"EvaluateFormula_EvaluateButton\"), Width = EvaluateFormulaDialogPlanner.EvaluateButtonWidth, Height = EvaluateFormulaDialogPlanner.ButtonHeight, IsDefault = true");
+        source.Should().Contain("Content = UiText.Get(\"EvaluateFormula_CloseButton\"), Width = EvaluateFormulaDialogPlanner.CloseButtonWidth, Height = EvaluateFormulaDialogPlanner.ButtonHeight, IsCancel = true");
         UiText.Get("EvaluateFormula_EvaluateButton").Should().Be("_Evaluate");
     }
 

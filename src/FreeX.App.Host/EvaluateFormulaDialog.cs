@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Services;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Host;
@@ -24,25 +25,25 @@ public sealed class EvaluateFormulaDialog : Window
         _session = FormulaEvaluationSession.Start(summary);
 
         Title = UiText.Get("EvaluateFormula_Title");
-        Width = 600;
-        Height = 360;
-        MinWidth = 420;
-        MinHeight = 240;
+        Width = EvaluateFormulaDialogPlanner.Width;
+        Height = EvaluateFormulaDialogPlanner.Height;
+        MinWidth = EvaluateFormulaDialogPlanner.MinWidth;
+        MinHeight = EvaluateFormulaDialogPlanner.MinHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        var root = new DockPanel { Margin = new Thickness(12) };
+        var root = new DockPanel { Margin = new Thickness(EvaluateFormulaDialogPlanner.RootMargin) };
         Content = root;
 
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 10, 0, 0)
+            Margin = new Thickness(0, EvaluateFormulaDialogPlanner.ActionRowTopMargin, 0, 0)
         };
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
-        _nextButton = new Button { Content = UiText.Get("EvaluateFormula_EvaluateButton"), Width = 80, Height = 26, IsDefault = true, Margin = new Thickness(4, 0, 0, 0) };
+        _nextButton = new Button { Content = UiText.Get("EvaluateFormula_EvaluateButton"), Width = EvaluateFormulaDialogPlanner.EvaluateButtonWidth, Height = EvaluateFormulaDialogPlanner.ButtonHeight, IsDefault = true, Margin = new Thickness(EvaluateFormulaDialogPlanner.ActionSpacing, 0, 0, 0) };
         _nextButton.Click += (_, _) =>
         {
             _session.MoveNext();
@@ -50,7 +51,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_nextButton);
 
-        _stepInButton = new Button { Content = UiText.Get("EvaluateFormula_StepInButton"), Width = 68, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _stepInButton = new Button { Content = UiText.Get("EvaluateFormula_StepInButton"), Width = EvaluateFormulaDialogPlanner.StepInButtonWidth, Height = EvaluateFormulaDialogPlanner.ButtonHeight, Margin = new Thickness(EvaluateFormulaDialogPlanner.ActionSpacing, 0, 0, 0) };
         _stepInButton.Click += (_, _) =>
         {
             _session.StepIn();
@@ -58,7 +59,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_stepInButton);
 
-        _stepOutButton = new Button { Content = UiText.Get("EvaluateFormula_StepOutButton"), Width = 76, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        _stepOutButton = new Button { Content = UiText.Get("EvaluateFormula_StepOutButton"), Width = EvaluateFormulaDialogPlanner.StepOutButtonWidth, Height = EvaluateFormulaDialogPlanner.ButtonHeight, Margin = new Thickness(EvaluateFormulaDialogPlanner.ActionSpacing, 0, 0, 0) };
         _stepOutButton.Click += (_, _) =>
         {
             _session.StepOut();
@@ -66,7 +67,7 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(_stepOutButton);
 
-        var restart = new Button { Content = UiText.Get("EvaluateFormula_RestartButton"), Width = 80, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var restart = new Button { Content = UiText.Get("EvaluateFormula_RestartButton"), Width = EvaluateFormulaDialogPlanner.RestartButtonWidth, Height = EvaluateFormulaDialogPlanner.ButtonHeight, Margin = new Thickness(EvaluateFormulaDialogPlanner.ActionSpacing, 0, 0, 0) };
         restart.Click += (_, _) =>
         {
             while (_session.CanMovePrevious)
@@ -75,11 +76,11 @@ public sealed class EvaluateFormulaDialog : Window
         };
         buttons.Children.Add(restart);
 
-        _closeButton = new Button { Content = UiText.Get("EvaluateFormula_CloseButton"), Width = 80, Height = 26, IsCancel = true, Margin = new Thickness(4, 0, 0, 0) };
+        _closeButton = new Button { Content = UiText.Get("EvaluateFormula_CloseButton"), Width = EvaluateFormulaDialogPlanner.CloseButtonWidth, Height = EvaluateFormulaDialogPlanner.ButtonHeight, IsCancel = true, Margin = new Thickness(EvaluateFormulaDialogPlanner.ActionSpacing, 0, 0, 0) };
         _closeButton.Click += (_, _) => Close();
         buttons.Children.Add(_closeButton);
 
-        var help = new Button { Content = UiText.Get("EvaluateFormula_HelpButton"), Width = 142, Height = 26, Margin = new Thickness(4, 0, 0, 0) };
+        var help = new Button { Content = UiText.Get("EvaluateFormula_HelpButton"), Width = EvaluateFormulaDialogPlanner.HelpButtonWidth, Height = EvaluateFormulaDialogPlanner.ButtonHeight, Margin = new Thickness(EvaluateFormulaDialogPlanner.ActionSpacing, 0, 0, 0) };
         help.Click += (_, _) => ShowFormulaHelp();
         buttons.Children.Add(help);
 
@@ -117,7 +118,7 @@ public sealed class EvaluateFormulaDialog : Window
         _stepText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 16,
+            FontSize = EvaluateFormulaDialogPlanner.StepFontSize,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -126,7 +127,7 @@ public sealed class EvaluateFormulaDialog : Window
         _valueText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 14
+            FontSize = EvaluateFormulaDialogPlanner.ValueFontSize
         };
         stack.Children.Add(_valueText);
 

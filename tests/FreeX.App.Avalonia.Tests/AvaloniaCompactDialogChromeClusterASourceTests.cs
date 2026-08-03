@@ -16,9 +16,12 @@ public sealed class AvaloniaCompactDialogChromeClusterASourceTests
         var sparklineSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.Sparklines.cs"));
         var textToColumnsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.TextToColumns.cs"));
 
-        evaluateSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle EvaluateFormulaDialogChromeStyle => new(FormulaBarFontFamily);");
+        evaluateSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle EvaluateFormulaDialogChromeStyle =>");
+        evaluateSource.Should().Contain("ActionSpacing = EvaluateFormulaDialogPlanner.ActionSpacing");
         evaluateSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
+        evaluateSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyWindow(dialog, EvaluateFormulaDialogChromeStyle);");
         evaluateSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, EvaluateFormulaDialogChromeStyle, width, isDefault);");
+        evaluateSource.Should().Contain("formulaText.Inlines!.Clear();");
 
         commentsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle CommentDialogChromeStyle => new(FormulaBarFontFamily);");
         commentsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(box, CommentDialogChromeStyle, fixedHeight: false);");

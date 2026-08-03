@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
@@ -15,7 +16,16 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private static AvaloniaCompactDialogChromeStyle EvaluateFormulaDialogChromeStyle => new(FormulaBarFontFamily);
+    private static AvaloniaCompactDialogChromeStyle EvaluateFormulaDialogChromeStyle =>
+        EvaluateFormulaDialogChromeStyleForTest;
+
+    internal static AvaloniaCompactDialogChromeStyle EvaluateFormulaDialogChromeStyleForTest =>
+        new(FormulaBarFontFamily)
+        {
+            ControlHeight = EvaluateFormulaDialogPlanner.ButtonHeight,
+            ButtonHeight = EvaluateFormulaDialogPlanner.ButtonHeight,
+            ActionSpacing = EvaluateFormulaDialogPlanner.ActionSpacing,
+        };
 
     private async Task ShowEvaluateFormulaDialogAsync()
     {
@@ -36,20 +46,20 @@ public sealed partial class MainWindow
         var formulaText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 12,
+            FontSize = EvaluateFormulaDialogPlanner.LabelFontSize,
             FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(0, 0, 0, 4),
         };
         var positionText = new TextBlock
         {
-            FontSize = 12,
+            FontSize = EvaluateFormulaDialogPlanner.LabelFontSize,
             FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(0, 0, 0, 6),
         };
         var stepText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 16,
+            FontSize = EvaluateFormulaDialogPlanner.StepFontSize,
             FontWeight = FontWeight.SemiBold,
             FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(0, 0, 0, 8),
@@ -57,30 +67,31 @@ public sealed partial class MainWindow
         var valueText = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
-            FontSize = 14,
+            FontSize = EvaluateFormulaDialogPlanner.ValueFontSize,
             FontFamily = FormulaBarFontFamily,
         };
 
         var dialog = new Window
         {
             Title = UiText.Get(EvaluateFormulaDialogPlanner.TitleKey),
-            Width = 600,
-            Height = 360,
-            MinWidth = 420,
-            MinHeight = 240,
+            Width = EvaluateFormulaDialogPlanner.Width,
+            Height = EvaluateFormulaDialogPlanner.Height,
+            MinWidth = EvaluateFormulaDialogPlanner.MinWidth,
+            MinHeight = EvaluateFormulaDialogPlanner.MinHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, EvaluateFormulaDialogChromeStyle);
         AutomationProperties.SetAutomationId(dialog, "EvaluateFormulaDialog");
 
-        var evaluateButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.EvaluateButtonKey, 80, isDefault: true);
+        var evaluateButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.EvaluateButtonKey, EvaluateFormulaDialogPlanner.EvaluateButtonWidth, isDefault: true);
         evaluateButton.IsDefault = true;
-        var stepInButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.StepInButtonKey, 68);
-        var stepOutButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.StepOutButtonKey, 76);
-        var restartButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.RestartButtonKey, 80);
-        var closeButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.CloseButtonKey, 80);
+        var stepInButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.StepInButtonKey, EvaluateFormulaDialogPlanner.StepInButtonWidth);
+        var stepOutButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.StepOutButtonKey, EvaluateFormulaDialogPlanner.StepOutButtonWidth);
+        var restartButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.RestartButtonKey, EvaluateFormulaDialogPlanner.RestartButtonWidth);
+        var closeButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.CloseButtonKey, EvaluateFormulaDialogPlanner.CloseButtonWidth);
         closeButton.IsCancel = true;
-        var helpButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.HelpButtonKey, 142);
+        var helpButton = CreateEvaluateFormulaButton(EvaluateFormulaDialogPlanner.HelpButtonKey, EvaluateFormulaDialogPlanner.HelpButtonWidth);
 
         evaluateButton.Click += (_, _) =>
         {
@@ -108,7 +119,8 @@ public sealed partial class MainWindow
 
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [evaluateButton, stepInButton, stepOutButton, restartButton, closeButton, helpButton],
-            new Thickness(0, 10, 0, 0));
+            new Thickness(0, EvaluateFormulaDialogPlanner.ActionRowTopMargin, 0, 0),
+            EvaluateFormulaDialogChromeStyle);
 
         var stack = new StackPanel
         {
@@ -118,7 +130,7 @@ public sealed partial class MainWindow
                 {
                     Text = UiText.Get(EvaluateFormulaDialogPlanner.EvaluationLabelKey),
                     FontWeight = FontWeight.SemiBold,
-                    FontSize = 12,
+                    FontSize = EvaluateFormulaDialogPlanner.LabelFontSize,
                     FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 6),
                 },
@@ -126,7 +138,7 @@ public sealed partial class MainWindow
                 {
                     Text = $"{summary.SheetName}!{summary.Address.ToA1()}",
                     FontWeight = FontWeight.SemiBold,
-                    FontSize = 12,
+                    FontSize = EvaluateFormulaDialogPlanner.LabelFontSize,
                     FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 6),
                 },
@@ -134,7 +146,7 @@ public sealed partial class MainWindow
                 new TextBlock
                 {
                     Text = UiText.Format(EvaluateFormulaDialogPlanner.ResultTextKey, summary.ValueText),
-                    FontSize = 12,
+                    FontSize = EvaluateFormulaDialogPlanner.LabelFontSize,
                     FontFamily = FormulaBarFontFamily,
                     Margin = new Thickness(0, 0, 0, 12),
                 },
@@ -144,7 +156,7 @@ public sealed partial class MainWindow
             },
         };
 
-        var root = new DockPanel { Margin = new Thickness(12) };
+        var root = new DockPanel { Margin = new Thickness(EvaluateFormulaDialogPlanner.RootMargin) };
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
         root.Children.Add(stack);
@@ -153,11 +165,17 @@ public sealed partial class MainWindow
         void Refresh()
         {
             var highlight = evaluationSession.CurrentHighlight;
-            formulaText.Text =
-                UiText.Get(EvaluateFormulaDialogPlanner.FormulaPrefixKey) +
-                highlight.Prefix +
-                highlight.Highlight +
-                highlight.Suffix;
+            formulaText.Inlines!.Clear();
+            formulaText.Inlines.Add(new Run(UiText.Get(EvaluateFormulaDialogPlanner.FormulaPrefixKey)));
+            if (!string.IsNullOrEmpty(highlight.Prefix))
+                formulaText.Inlines.Add(new Run(highlight.Prefix));
+            formulaText.Inlines.Add(new Run(highlight.Highlight)
+            {
+                FontWeight = FontWeight.Bold,
+                Background = new SolidColorBrush(Color.FromRgb(255, 242, 157)),
+            });
+            if (!string.IsNullOrEmpty(highlight.Suffix))
+                formulaText.Inlines.Add(new Run(highlight.Suffix));
 
             if (evaluationSession.CurrentStep is { } step)
             {

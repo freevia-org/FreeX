@@ -607,6 +607,11 @@ internal static class ParityCapture
                 CaptureDialog(results, "dialog.ErrorChecking", outDir, () =>
                     new ErrorCheckingDialog(ErrorCheckingDialogPlanner.CreateParityIssues(sheet.Id), _ => { }, _ => true, _ => { }));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.EvaluateFormula", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.EvaluateFormula", outDir, () =>
+                    new EvaluateFormulaDialog(EvaluateFormulaDialogPlanner.CreateParitySummary(sheet.Id)));
+            }
             else if (string.Equals(targetSurfaceId, "dialog.ScenarioManager", StringComparison.Ordinal))
             {
                 ScenarioManagerParityFixture.Seed(workbook, sheet.Id);
@@ -632,7 +637,7 @@ internal static class ParityCapture
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.ScenarioManager, and the targeted Options tabs.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.EvaluateFormula, dialog.ScenarioManager, and the targeted Options tabs.");
             }
 
             return;
@@ -720,7 +725,7 @@ internal static class ParityCapture
             new SymbolPickerDialog());
 
         CaptureDialog(results, "dialog.EvaluateFormula", outDir, () =>
-            new EvaluateFormulaDialog(CreateFormulaEvaluationSummary(sheet.Id)));
+            new EvaluateFormulaDialog(EvaluateFormulaDialogPlanner.CreateParitySummary(sheet.Id)));
 
         CaptureDialog(results, "dialog.ErrorChecking", outDir, () =>
             new ErrorCheckingDialog(CreateErrorCheckingIssues(sheet.Id), _ => { }, _ => true, _ => { }));
@@ -1076,22 +1081,6 @@ internal static class ParityCapture
     private static IReadOnlyList<RemoveDuplicateColumnChoice> CreateColumnChoices(params string[] headers) =>
         headers.Select((header, index) => new RemoveDuplicateColumnChoice((uint)index, header, true)).ToArray();
 
-    private static FormulaEvaluationSummary CreateFormulaEvaluationSummary(SheetId sheetId)
-    {
-        var address = new CellAddress(sheetId, 6, 4);
-        return new FormulaEvaluationSummary(
-            sheetId,
-            "Sheet1",
-            address,
-            "=SUM(D2:D5)",
-            "469",
-            [
-                new FormulaEvaluationStep("SUM(D2:D5)", "469"),
-                new FormulaEvaluationStep("D2:D5", "{120;85;200;64}"),
-                new FormulaEvaluationStep("=SUM(D2:D5)", "469"),
-            ]);
-    }
-
     private static IReadOnlyList<FormulaErrorIssue> CreateErrorCheckingIssues(SheetId sheetId) =>
         ErrorCheckingDialogPlanner.CreateParityIssues(sheetId);
 
@@ -1269,6 +1258,8 @@ internal static class ParityCapture
             "dialog.ScenarioManager" =>
                 (ScenarioManagerDialogLayout.DialogWidth, ScenarioManagerDialogLayout.DialogHeight),
             "dialog.Zoom" => (ZoomDialogPlanner.Width, ZoomDialogPlanner.Height),
+            "dialog.EvaluateFormula" =>
+                (EvaluateFormulaDialogPlanner.Width, EvaluateFormulaDialogPlanner.Height),
             _ => (0, 0)
         };
 
