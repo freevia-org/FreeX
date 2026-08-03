@@ -2761,7 +2761,7 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void UnsupportedMatrixSibling_ReturnsNull()
+    public void GridMatrix_UnsupportedImportedCacheUsesFallback()
     {
         var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix";
@@ -2769,7 +2769,47 @@ public sealed class SmartArtLayoutTests
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().BeNull("matrix-family layouts outside the bounded live planner should use cached drawing");
+        result.Should().BeNull("an unproven Grid Matrix cache must remain on cached drawing fallback");
+
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 99,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "Cached Grid Matrix fallback" } } }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 100,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smartArt
+        };
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var shapeOps = SlideCompositor.Compose(pres, pres.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        shapeOps.Should().ContainSingle();
+        shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached Grid Matrix fallback");
     }
 
     [Fact]

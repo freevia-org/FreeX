@@ -2714,6 +2714,16 @@ public static class PptxPackageReader
             data.IsLiveLayoutSupported = false;
         }
 
+        if (IsGridMatrixLayout(layoutUniqueId)
+            && smart.FallbackShapes.Count > 0
+            && !CanUseGridMatrixCache(smart, data))
+        {
+            // gridMatrix is live only for the exact four-cell square grammar
+            // reproduced by the shared planner. Preserve richer imported caches
+            // until their additional roles have a dedicated plan.
+            data.IsLiveLayoutSupported = false;
+        }
+
         return data;
 
         string ReadSmartArtParagraphText(XElement paragraph)
@@ -2861,6 +2871,15 @@ public static class PptxPackageReader
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return id.Split('/').Last() == "relationship1";
+    }
+
+    private static bool IsGridMatrixLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "gridmatrix";
     }
 
     private static bool IsDefaultListLayout(string uniqueId)
@@ -3132,6 +3151,57 @@ public static class PptxPackageReader
         }
 
         return true;
+    }
+
+    private static bool CanUseGridMatrixCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsGridMatrixLayout(data.LayoutUniqueId))
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        var shapes = smart.FallbackShapes;
+        if (nodes.Count != 4 || shapes.Count != 4)
+            return false;
+
+        if (smart.FallbackShapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        if (shapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape
+                || shape.AutoShapeKind != DrawingShapeKind.Rectangle
+                || string.IsNullOrWhiteSpace(shape.PlainText)))
+            return false;
+
+        if (!shapes.Select(shape => shape.PlainText)
+            .SequenceEqual(nodes.Select(node => node.Text), StringComparer.Ordinal)
+            || shapes.Select(shape => shape.PlainText)
+                .Distinct(StringComparer.Ordinal)
+                .Count() != nodes.Count)
+            return false;
+
+        var cellSize = shapes[0].ExtentCxEmu;
+        if (cellSize <= 0
+            || shapes.Any(shape => shape.ExtentCxEmu != cellSize
+                || shape.ExtentCyEmu != cellSize))
+            return false;
+
+        var horizontalStep = shapes[1].OffsetXEmu - shapes[0].OffsetXEmu;
+        var verticalStep = shapes[2].OffsetYEmu - shapes[0].OffsetYEmu;
+        if (shapes[0].OffsetYEmu != shapes[1].OffsetYEmu
+            || shapes[2].OffsetXEmu != shapes[0].OffsetXEmu
+            || shapes[3].OffsetXEmu != shapes[1].OffsetXEmu
+            || shapes[3].OffsetYEmu != shapes[2].OffsetYEmu
+            || horizontalStep != verticalStep
+            || horizontalStep <= cellSize)
+            return false;
+
+        // The shared Grid Matrix plan uses a centered square with a deterministic
+        // 2.5% gap. Recompute that gap from the cache so arbitrary four-cell grids
+        // do not get mistaken for the proven native grammar.
+        var gap = horizontalStep - cellSize;
+        var gridSize = 2 * cellSize + gap;
+        var expectedGap = (long)(gridSize * 0.025);
+        return Math.Abs(gap - expectedGap) <= 1;
     }
 
     private static bool CanUseDefaultListStaggeredCache(SmartArtShape smart, SmartArtData data)

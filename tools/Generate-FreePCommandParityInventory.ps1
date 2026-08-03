@@ -1404,6 +1404,28 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "The checked-in relationship1 package admits exactly three ordered, same-sized ellipse nodes with distinct matching text, a horizontal step within 1 EMU of the shared planner's truncated 58% diameter step, and no extra roles or effects. Missing, duplicate, ambiguous, non-ellipse, wrong-ratio, non-overlapping, effect-bearing, picture-bearing, or otherwise unproven relationship caches remain on cached drawing fallback; other relationship families and exact PowerPoint intersection/effect fidelity remain deferred."),
         new(
+            EvidenceId: "freep.smartart.grid-matrix-import-cells",
+            Area: "SmartArt gridMatrix imported four-cell live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume the same shared Grid Matrix four-cell plan through SlideCompositor; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/avalonia-parity-wave134-freep-smartart-depth-20260804.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
+                "freep/FreeP.App.Presentation/SlideCompositor.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "tools/FreeP.RenderCompare.Tests/SmartArtFixtureEvidenceTests.cs",
+                "tools/FreeP.RenderCompare/SmartArtFixtureGenerator.cs"
+            ],
+            RemainingWork: "The deterministic gridMatrix package admits only four ordered, distinct, non-empty rectangle nodes with equal square cells and the shared planner's 2.5% gap signature, without unsupported effects or extra roles. Missing, duplicate, ambiguous, non-square, wrongly spaced, effect-bearing, picture-bearing, or otherwise unproven Grid Matrix caches remain on cached drawing fallback; exact PowerPoint cell metrics, effects, text fitting, and wider matrix-family import parity remain deferred."),
+        new(
             EvidenceId: "freep.smartart.basic-process",
             Area: "SmartArt basic process live layout",
             Status: "shared-render-planner-evidence",

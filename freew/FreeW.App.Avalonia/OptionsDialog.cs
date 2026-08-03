@@ -296,9 +296,9 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
     private Control BuildAutoFormatTab()
     {
-        ConfigureToggle(_autoCorrectEnabled, _surface.AutoFormat.MasterToggle);
+        ConfigureToggle(_autoCorrectEnabled, _surface.AutoFormat.MasterToggle, contentSpacing: 7);
         foreach (var spec in _surface.AutoFormat.RuleToggles)
-            ConfigureToggle(ToggleFor(spec.Kind), spec);
+            ConfigureToggle(ToggleFor(spec.Kind), spec, contentSpacing: 7);
 
         var ruleBoxes = new[]
         {
@@ -328,17 +328,18 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         var panel = new StackPanel
         {
             Margin = new Thickness(
-                OptionsDialogPlanner.ContentMargin,
+                OptionsDialogPlanner.ContentMargin + OptionsDialogPlanner.ToggleTopMargin,
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ContentBottomMargin)
         };
+        _autoCorrectEnabled.Margin = new Thickness(0, 0, 0, 8);
         panel.Children.Add(_autoCorrectEnabled);
         panel.Children.Add(new TextBlock
         {
             Text = _surface.AutoFormat.RuleSectionLabel,
             FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0),
         });
         panel.Children.Add(rules);
 
@@ -352,12 +353,15 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         return panel;
     }
 
-    private static void ConfigureToggle(CheckBox box, OptionsDialogToggleSpec spec)
+    private static void ConfigureToggle(
+        CheckBox box,
+        OptionsDialogToggleSpec spec,
+        double contentSpacing = 4)
     {
         box.Content = spec.Label;
         box.IsChecked = spec.IsChecked;
         box.Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0);
-        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle, contentSpacing);
         box.Height = 16;
         box.MinHeight = 16;
         box.MaxHeight = 16;

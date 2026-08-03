@@ -60,6 +60,42 @@ public sealed class SmartArtFixtureEvidenceTests
             .Should().HaveCount(3);
     }
 
+    [Fact]
+    public void GridMatrixFixtureContainsTheAuditedFourCellSquareGrammar()
+    {
+        var root = FindRepositoryRoot();
+        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
+
+        using var archive = ZipFile.OpenRead(path);
+        var layout = ReadXml(archive, "ppt/diagrams/layout8.xml");
+        var drawing = ReadXml(archive, "ppt/diagrams/drawing8.xml");
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/gridMatrix");
+        var shapes = drawing.Descendants(dsp + "sp").ToList();
+        shapes.Should().HaveCount(4);
+        drawing.Descendants(a + "prstGeom")
+            .Select(element => (string?)element.Attribute("prst"))
+            .Should().OnlyContain(value => value == "rect");
+
+        var extents = shapes.Select(shape => shape.Descendants(a + "ext").Single().Attributes()
+            .Where(attribute => attribute.Name.LocalName is "cx" or "cy")
+            .Select(attribute => long.Parse(attribute.Value))
+            .ToArray()).ToArray();
+        extents.Should().OnlyContain(extent => extent.SequenceEqual(new long[] { 2_576_543L, 2_576_543L }));
+
+        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("x")!.Value))
+            .Should().Equal(1_472_192L, 4_180_865L, 1_472_192L, 4_180_865L);
+        shapes.Select(shape => long.Parse(shape.Descendants(a + "off").Single().Attribute("y")!.Value))
+            .Should().Equal(229_792L, 229_792L, 2_938_465L, 2_938_465L);
+        drawing.Descendants(a + "t").Should().HaveCount(4);
+        ReadXml(archive, "ppt/diagrams/data8.xml")
+            .Descendants(dgm + "pt")
+            .Should().HaveCount(4);
+    }
+
     private static XDocument ReadXml(ZipArchive archive, string path)
     {
         var entry = archive.GetEntry(path);

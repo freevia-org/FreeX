@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -193,6 +194,42 @@ public sealed class OptionsDialogVisualParityTests
                 smartQuotes.IsEnabled.Should().BeTrue();
                 replaceText.IsChecked = true;
                 table.IsEnabled.Should().BeTrue();
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Options_autoformat_matches_wpf_row_spacing_and_control_geometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new OptionsDialog(new FreeWOptions());
+            try
+            {
+                var checks = dialog.GetLogicalDescendants().OfType<CheckBox>().ToArray();
+                var master = checks.Single(check => check.Content?.ToString() == "Enable AutoCorrect (smart typing) as you type");
+                var rules = checks.Where(check => check.Content?.ToString() is not null &&
+                    check.Content.ToString() != "Enable AutoCorrect (smart typing) as you type" &&
+                    check.Content.ToString() != "Correct TWo INitial CApitals" &&
+                    check.Content.ToString() != "Capitalize names of days" &&
+                    check.Content.ToString() != "Replace text as you type").ToArray();
+                var autoFormatPanel = master.Parent as StackPanel;
+                var section = dialog.GetLogicalDescendants().OfType<TextBlock>()
+                    .Single(text => text.Text == OptionsDialogPlanner.AutoFormatSectionLabel);
+
+                master.Margin.Should().Be(new Thickness(0, 0, 0, 8));
+                rules.Should().HaveCount(10);
+                rules.Should().OnlyContain(check => check.Margin == new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0));
+                rules.Should().OnlyContain(check => check.Height == 16 && check.MinHeight == 16 && check.MaxHeight == 16);
+                section.Margin.Should().Be(new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0));
+                autoFormatPanel.Should().NotBeNull();
+                autoFormatPanel!.Margin.Left.Should().Be(OptionsDialogPlanner.ContentMargin + OptionsDialogPlanner.ToggleTopMargin);
+                master.IsChecked.Should().BeTrue();
+                rules.Should().OnlyContain(check => check.IsChecked == true && check.IsEnabled);
             }
             finally
             {

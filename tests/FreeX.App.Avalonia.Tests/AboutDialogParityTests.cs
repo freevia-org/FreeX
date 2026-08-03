@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -30,6 +31,12 @@ public sealed class AboutDialogParityTests
                 .Single(textBox => AutomationProperties.GetAutomationId(textBox) == "AboutFreeXText");
             text.IsReadOnly.Should().BeTrue();
             text.FontSize.Should().Be(AboutDialogMetrics.AvaloniaTextFontSize);
+            text.Padding.Should().Be(new Thickness(
+                AboutDialogMetrics.AvaloniaTextPaddingLeft,
+                AboutDialogMetrics.AvaloniaTextPaddingTop,
+                AboutDialogMetrics.AvaloniaTextPaddingRight,
+                AboutDialogMetrics.TextPadding));
+            text.LineHeight.Should().Be(AboutDialogMetrics.AvaloniaTextLineHeight);
             text.Text.Should().Contain("A free spreadsheet app for XLSX editing");
             text.Text.Should().Contain("Built with .NET 10, Avalonia, ClosedXML.");
             text.Text.Should().Contain("Help > Legal Notices");

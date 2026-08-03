@@ -67,4 +67,20 @@ public sealed class SmartArtDefaultLiveRendererContractTests
         source.Should().NotContain("SmartArtLayoutEngine.Layout(",
             "relationship1 geometry must remain renderer-neutral");
     }
+
+    [Fact]
+    public void WpfGridMatrixRendering_ConsumesTheSharedLivePlan()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("SlideCompositor.Compose(");
+        source.Should().NotContain("LayoutGridMatrix(");
+        source.Should().NotContain("SmartArtLayoutEngine.Layout(",
+            "gridMatrix geometry must remain renderer-neutral");
+    }
 }

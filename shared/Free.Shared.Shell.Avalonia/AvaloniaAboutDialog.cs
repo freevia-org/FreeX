@@ -42,7 +42,12 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
             FontSize = AboutDialogMetrics.AvaloniaTextFontSize,
-            Padding = new Thickness(AboutDialogMetrics.TextPadding),
+            Padding = new Thickness(
+                AboutDialogMetrics.AvaloniaTextPaddingLeft,
+                AboutDialogMetrics.AvaloniaTextPaddingTop,
+                AboutDialogMetrics.AvaloniaTextPaddingRight,
+                AboutDialogMetrics.TextPadding),
+            LineHeight = AboutDialogMetrics.AvaloniaTextLineHeight,
             BorderThickness = new Thickness(1),
             MinHeight = AboutDialogMetrics.TextMinHeight,
         };
@@ -57,10 +62,10 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         AutomationProperties.SetHelpText(_aboutTextBox, helpText);
 
         Content = CreateContent(okAutomationId, helpText);
+        ApplyAboutVisualChrome();
         Opened += (_, _) =>
         {
-            _aboutTextBox.FontSize = AboutDialogMetrics.AvaloniaTextFontSize;
-            _aboutTextBox.Padding = new Thickness(AboutDialogMetrics.TextPadding);
+            ApplyAboutVisualChrome();
             FocusInitialKeyboardTarget();
         };
     }
@@ -101,6 +106,26 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         root.Children.Add(buttonRow);
         root.Children.Add(_aboutTextBox);
         return root;
+    }
+
+    private void ApplyAboutVisualChrome()
+    {
+        // Reuse the shared read-only document scrollbar/focus treatment, then retain the About
+        // host's measured bounds while correcting its line box and vertical viewport inset.
+        AvaloniaCompactDialogChrome.ApplyAvaloniaReadOnlyDocumentTemplatePadding(
+            _aboutTextBox,
+            AboutDialogMetrics.TextPadding);
+        _aboutTextBox.Margin = new Thickness(0);
+        _aboutTextBox.Padding = new Thickness(
+            AboutDialogMetrics.AvaloniaTextPaddingLeft,
+            AboutDialogMetrics.AvaloniaTextPaddingTop,
+            AboutDialogMetrics.AvaloniaTextPaddingRight,
+            AboutDialogMetrics.TextPadding);
+        _aboutTextBox.FontSize = AboutDialogMetrics.AvaloniaTextFontSize;
+        _aboutTextBox.LineHeight = AboutDialogMetrics.AvaloniaTextLineHeight;
+        // WPF's About action button has a white resting surface; preserve the shared button
+        // metrics and border while correcting this authority-specific fill.
+        _okButton.Background = Brushes.White;
     }
 
     private void FocusInitialKeyboardTarget()
