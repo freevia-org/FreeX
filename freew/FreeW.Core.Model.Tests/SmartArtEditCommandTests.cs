@@ -77,6 +77,37 @@ public sealed class SmartArtEditCommandTests
         smartArt.StyleId.Should().Be(SmartArtStyle.Catalog[3].Id);
     }
 
+    [Fact]
+    public void LayoutAndColorCommands_AreUndoableAndPreserveOtherSmartArtState()
+    {
+        var (bus, smartArt) = CreateDocument(SmartArt.Create(SmartArtKind.List, ["A", "B"]));
+        StampUnrelatedState(smartArt);
+        var originalNodes = smartArt.Nodes.Select(node => node.Text).ToArray();
+
+        bus.Execute(new SetSmartArtLayoutCommand(0, 0, SmartArtKind.Hierarchy, "hierarchy1"));
+        smartArt.Kind.Should().Be(SmartArtKind.Hierarchy);
+        smartArt.LayoutId.Should().Be("hierarchy1");
+        smartArt.ColorSchemeId.Should().Be("colorful2");
+        smartArt.StyleId.Should().Be("flat1");
+        smartArt.Nodes.Select(node => node.Text).Should().Equal(originalNodes);
+        bus.Undo().Should().BeTrue();
+        smartArt.Kind.Should().Be(SmartArtKind.List);
+        smartArt.LayoutId.Should().Be("process1");
+        bus.Redo().Should().BeTrue();
+        smartArt.LayoutId.Should().Be("hierarchy1");
+        bus.Undo().Should().BeTrue();
+
+        bus.Execute(new SetSmartArtColorCommand(0, 0, "accent1_2"));
+        smartArt.ColorSchemeId.Should().Be("accent1_2");
+        smartArt.LayoutId.Should().Be("process1");
+        smartArt.StyleId.Should().Be("flat1");
+        smartArt.Nodes.Select(node => node.Text).Should().Equal(originalNodes);
+        bus.Undo().Should().BeTrue();
+        smartArt.ColorSchemeId.Should().Be("colorful2");
+        bus.Redo().Should().BeTrue();
+        smartArt.ColorSchemeId.Should().Be("accent1_2");
+    }
+
     private static (DocumentCommandBus Bus, SmartArt SmartArt) CreateDocument(SmartArt smartArt)
     {
         var document = TextDocument.CreateEmpty();

@@ -56,8 +56,9 @@ internal static class SmartArtGallery
         });
 
         return WrapGalleryButton(thumb, preset.Name,
-            onEnter: () => editor.ApplySmartArtLayout(preset),
-            onClick: () => editor.ApplySmartArtLayout(preset));
+            onEnter: () => PreviewLayout(editor, preset),
+            onLeave: () => EndPreview(editor),
+            onClick: () => { EndPreview(editor); editor.ApplySmartArtLayout(preset); });
     }
 
     // Miniature that sketches the layout with simple bars/boxes.
@@ -225,8 +226,9 @@ internal static class SmartArtGallery
         });
 
         return WrapGalleryButton(thumb, scheme.Name + " colors",
-            onEnter: () => editor.ApplySmartArtColorScheme(scheme),
-            onClick: () => editor.ApplySmartArtColorScheme(scheme));
+            onEnter: () => PreviewColor(editor, scheme),
+            onLeave: () => EndPreview(editor),
+            onClick: () => { EndPreview(editor); editor.ApplySmartArtColorScheme(scheme); });
     }
 
     // ── SmartArt Styles gallery ──────────────────────────────────────────────────────────────────────
@@ -295,21 +297,90 @@ internal static class SmartArtGallery
         });
 
         return WrapGalleryButton(thumb, style.Name + " style",
-            onEnter: () => editor.ApplySmartArtStyle(style),
-            onClick: () => editor.ApplySmartArtStyle(style));
+            onEnter: () => PreviewStyle(editor, style),
+            onLeave: () => EndPreview(editor),
+            onClick: () => { EndPreview(editor); editor.ApplySmartArtStyle(style); });
+    }
+
+    private sealed record PreviewSnapshot(
+        SmartArt SmartArt,
+        SmartArtKind Kind,
+        string? LayoutId,
+        string? ColorSchemeId,
+        string? StyleId);
+
+    private static PreviewSnapshot? _previewSnapshot;
+
+    internal static void PreviewLayout(DocumentView editor, SmartArtLayoutPreset preset)
+    {
+        if (BeginPreview(editor) is not { } smartArt)
+            return;
+        smartArt.Kind = preset.Kind;
+        smartArt.LayoutId = preset.Id;
+        editor.Rerender();
+    }
+
+    internal static void PreviewColor(DocumentView editor, SmartArtColorScheme scheme)
+    {
+        if (BeginPreview(editor) is not { } smartArt)
+            return;
+        smartArt.ColorSchemeId = scheme.Id;
+        editor.Rerender();
+    }
+
+    internal static void PreviewStyle(DocumentView editor, SmartArtStyle style)
+    {
+        if (BeginPreview(editor) is not { } smartArt)
+            return;
+        smartArt.StyleId = style.Id;
+        editor.Rerender();
+    }
+
+    private static SmartArt? BeginPreview(DocumentView editor)
+    {
+        RestorePreviewFields();
+        var smartArt = editor.SelectedSmartArt();
+        if (smartArt is null)
+            return null;
+        _previewSnapshot = new PreviewSnapshot(
+            smartArt,
+            smartArt.Kind,
+            smartArt.LayoutId,
+            smartArt.ColorSchemeId,
+            smartArt.StyleId);
+        return smartArt;
+    }
+
+    internal static void EndPreview(DocumentView editor)
+    {
+        if (_previewSnapshot is null)
+            return;
+        RestorePreviewFields();
+        editor.Rerender();
+    }
+
+    private static void RestorePreviewFields()
+    {
+        if (_previewSnapshot is not { } snapshot)
+            return;
+        snapshot.SmartArt.Kind = snapshot.Kind;
+        snapshot.SmartArt.LayoutId = snapshot.LayoutId;
+        snapshot.SmartArt.ColorSchemeId = snapshot.ColorSchemeId;
+        snapshot.SmartArt.StyleId = snapshot.StyleId;
+        _previewSnapshot = null;
     }
 
     // ── Shared helpers ───────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Wrap a thumbnail in a borderless button. <paramref name="onEnter"/> is called on hover (live
-    /// preview); <paramref name="onClick"/> is called on click (commit). No revert-on-leave is applied
-    /// because applying the change is idempotent — re-clicking applies the same value.
+    /// Wrap a thumbnail in a borderless button. <paramref name="onEnter"/> starts live preview,
+    /// <paramref name="onLeave"/> restores it, and <paramref name="onClick"/> commits one edit.
     /// </summary>
     private static FrameworkElement WrapGalleryButton(
         FrameworkElement content,
         string tip,
         Action onEnter,
+        Action onLeave,
         Action onClick)
     {
         var button = new Button
@@ -335,6 +406,7 @@ internal static class SmartArtGallery
         {
             button.Background = System.Windows.Media.Brushes.Transparent;
             button.BorderBrush = System.Windows.Media.Brushes.Transparent;
+            onLeave();
         };
         button.Click += (_, _) => onClick();
         return button;

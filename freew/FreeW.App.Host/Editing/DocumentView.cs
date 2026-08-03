@@ -3124,10 +3124,13 @@ public sealed class DocumentView : RichTextBox
     public void ApplySmartArtLayout(SmartArtLayoutPreset preset)
     {
         CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null) return;
-        smartArt.LayoutId = preset.Id;
-        smartArt.Kind = preset.Kind;
+        var location = SelectedSmartArtLocation();
+        if (location.SmartArt is null) return;
+        _commands.Execute(new SetSmartArtLayoutCommand(
+            location.BlockIndex,
+            location.RunIndex,
+            preset.Kind,
+            preset.Id));
         Render();
     }
 
@@ -3139,9 +3142,12 @@ public sealed class DocumentView : RichTextBox
     public void ApplySmartArtColorScheme(SmartArtColorScheme scheme)
     {
         CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null) return;
-        smartArt.ColorSchemeId = scheme.Id;
+        var location = SelectedSmartArtLocation();
+        if (location.SmartArt is null) return;
+        _commands.Execute(new SetSmartArtColorCommand(
+            location.BlockIndex,
+            location.RunIndex,
+            scheme.Id));
         Render();
     }
 
@@ -3156,6 +3162,7 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
         _commands.Execute(new SetSmartArtStyleCommand(location.BlockIndex, location.RunIndex, style.Id));
+        Render();
     }
 
     private void ExecuteSmartArtStructureCommand(SmartArtStructureOperation operation)

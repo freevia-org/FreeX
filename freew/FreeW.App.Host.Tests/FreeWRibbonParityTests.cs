@@ -2683,6 +2683,25 @@ public sealed class FreeWRibbonParityTests
         smartArt.Nodes.Select(node => node.Text).Should().Equal(before);
         editor.Undo();
         smartArt.StyleId.Should().Be("flat1");
+
+        var layout = SmartArtLayoutPreset.Catalog.First(preset => preset.Id != smartArt.LayoutId);
+        editor.ApplySmartArtLayout(layout);
+        smartArt.Kind.Should().Be(layout.Kind);
+        smartArt.LayoutId.Should().Be(layout.Id);
+        editor.Undo();
+        smartArt.Kind.Should().Be(SmartArtKind.Hierarchy);
+        smartArt.LayoutId.Should().Be("hierarchy1");
+        editor.Redo();
+        smartArt.LayoutId.Should().Be(layout.Id);
+        editor.Undo();
+
+        var color = SmartArtColorScheme.Catalog.First(scheme => scheme.Id != smartArt.ColorSchemeId);
+        editor.ApplySmartArtColorScheme(color);
+        smartArt.ColorSchemeId.Should().Be(color.Id);
+        editor.Undo();
+        smartArt.ColorSchemeId.Should().Be("colorful2");
+        editor.Redo();
+        smartArt.ColorSchemeId.Should().Be(color.Id);
     }
 
     // ── Header & Footer Design contextual tab ───────────────────────────────────────────────────
