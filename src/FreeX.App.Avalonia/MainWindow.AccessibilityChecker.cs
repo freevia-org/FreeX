@@ -163,6 +163,17 @@ public sealed partial class MainWindow
                 new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
             },
         });
+        resultsTree.Styles.Add(new Style(s => s.OfType<TreeViewItem>()
+            .Class(":selected")
+            .Template().OfType<Border>().Name("PART_LayoutRoot"))
+        {
+            Setters =
+            {
+                new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(0xE6, 0xF0, 0xFA))),
+                new Setter(Border.BorderBrushProperty, Brushes.Transparent),
+                new Setter(Border.BorderThicknessProperty, new Thickness(0)),
+            },
+        });
         ApplyAutomation(resultsTree, plan.IssueListAutomation);
 
         var resultsBorder = new Border
