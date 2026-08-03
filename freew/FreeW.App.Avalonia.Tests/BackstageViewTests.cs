@@ -688,14 +688,16 @@ public class BackstageViewTests
             view.TryActivateEntry("Export").Should().BeTrue();
 
             var pdf = FindControl<Button>(view, "BackstageAction_Create_PDF_or_XPS");
-            pdf.Content.Should().Be("Create PDF or XPS");
+            pdf.Content.Should().BeOfType<TextBlock>();
+            ((TextBlock)pdf.Content!).Text.Should().Be("Create PDF or XPS");
             pdf.FontSize.Should().Be(14);
             pdf.Parent.Should().BeOfType<StackPanel>();
             ((StackPanel)pdf.Parent!).Children.OfType<TextBlock>()
                 .Single(block => (block.Text ?? string.Empty).Contains("Export-only fixed-layout PDF copy", StringComparison.Ordinal));
 
             var xps = FindControl<Button>(view, "BackstageAction_Export_to_XPS");
-            xps.Content.Should().Be("Export to XPS");
+            xps.Content.Should().BeOfType<TextBlock>();
+            ((TextBlock)xps.Content!).Text.Should().Be("Export to XPS");
             xps.Parent.Should().BeOfType<StackPanel>();
             ((StackPanel)xps.Parent!).Children.OfType<TextBlock>()
                 .Single(block => (block.Text ?? string.Empty).Contains("Export-only fixed-layout XPS copy", StringComparison.Ordinal));
@@ -745,7 +747,12 @@ public class BackstageViewTests
                     .StartsWith("BackstageAction_", StringComparison.Ordinal))
                 .ToArray();
 
-            buttons.Select(button => button.Content).Should().Equal(
+            buttons.Select(button => button.Content switch
+            {
+                string text => text,
+                TextBlock block => block.Text,
+                _ => null,
+            }).Should().Equal(
                 "Create PDF or XPS",
                 "Export to XPS",
                 "Word Document (*.docx)",

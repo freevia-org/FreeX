@@ -23,7 +23,9 @@ using SkiaSharp;
 
 internal static class Program
 {
-const int WpfNonClientWidth = 16;
+// The neutral WPF Backstage host paints a 546-DIP client surface inside its
+// 560-DIP capture, so the paired Avalonia surface must reserve 14 DIPs.
+const int WpfNonClientWidth = 14;
 const int WpfNonClientHeight = 37;
 
 static async Task<int> Main(string[] args)

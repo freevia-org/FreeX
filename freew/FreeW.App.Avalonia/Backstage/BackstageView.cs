@@ -651,9 +651,11 @@ internal sealed class BackstageView : Window
         BuildActionPaneContent(surface);
 
     private static Control BuildExportActionGroupContent(BackstageActionPaneSurfaceSpec surface) =>
-        BuildActionPaneContent(surface);
+        BuildActionPaneContent(surface, useWpfTextContent: true);
 
-    private static Control BuildActionPaneContent(BackstageActionPaneSurfaceSpec surface)
+    private static Control BuildActionPaneContent(
+        BackstageActionPaneSurfaceSpec surface,
+        bool useWpfTextContent = false)
     {
         var metrics = surface.VisualMetrics;
         var content = new StackPanel
@@ -666,7 +668,7 @@ internal sealed class BackstageView : Window
         {
             content.Children.Add(BuildActionPaneSectionHeader(group.Heading, metrics));
             foreach (var action in group.Actions)
-                content.Children.Add(BuildActionPaneRow(action, metrics));
+                content.Children.Add(BuildActionPaneRow(action, metrics, useWpfTextContent));
         }
 
         return CreateScroll(content);
@@ -674,7 +676,8 @@ internal sealed class BackstageView : Window
 
     private static Control BuildActionPaneRow(
         BackstageActionRow action,
-        BackstageActionPaneVisualMetrics metrics)
+        BackstageActionPaneVisualMetrics metrics,
+        bool useWpfTextContent)
     {
         var stack = new StackPanel { Margin = ToThickness(metrics.ActionRowMargin) };
         var button = CreateLinkButton(
@@ -682,6 +685,17 @@ internal sealed class BackstageView : Window
             action.Invoke,
             fontSize: metrics.ActionFontSize,
             automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}");
+        if (useWpfTextContent)
+        {
+            // WPF's Button.Content string is realized as a TextBlock by its default template;
+            // supply the equivalent Avalonia content for the export capture path.
+            button.Content = new TextBlock
+            {
+                Text = action.Label,
+                Foreground = LinkBrush,
+                FontSize = metrics.ActionFontSize,
+            };
+        }
         stack.Children.Add(button);
         if (!string.IsNullOrWhiteSpace(action.Description))
         {
