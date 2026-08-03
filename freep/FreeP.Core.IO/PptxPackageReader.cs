@@ -2704,6 +2704,16 @@ public static class PptxPackageReader
             data.IsLiveLayoutSupported = false;
         }
 
+        if (IsBasicRelationshipLayout(layoutUniqueId)
+            && smart.FallbackShapes.Count > 0
+            && !CanUseBasicRelationshipNodeCache(smart, data))
+        {
+            // relationship1 is live only for the exact node-only overlapping-ellipse
+            // cache reproduced by the shared planner. Preserve any richer imported
+            // relationship drawing until its extra roles have a dedicated plan.
+            data.IsLiveLayoutSupported = false;
+        }
+
         return data;
 
         string ReadSmartArtParagraphText(XElement paragraph)
@@ -2842,6 +2852,15 @@ public static class PptxPackageReader
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return id.Split('/').Last() == "cycle2";
+    }
+
+    private static bool IsBasicRelationshipLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "relationship1";
     }
 
     private static bool IsDefaultListLayout(string uniqueId)
@@ -3055,6 +3074,55 @@ public static class PptxPackageReader
         }
 
         return arrowShapes.All(shape => string.IsNullOrWhiteSpace(shape.PlainText));
+    }
+
+    private static bool CanUseBasicRelationshipNodeCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsBasicRelationshipLayout(data.LayoutUniqueId))
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        if (nodes.Count != 3 || smart.FallbackShapes.Count != nodes.Count)
+            return false;
+
+        if (smart.FallbackShapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        var shapes = smart.FallbackShapes;
+        if (shapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape
+                || shape.AutoShapeKind != DrawingShapeKind.Ellipse
+                || string.IsNullOrWhiteSpace(shape.PlainText)))
+            return false;
+
+        if (!shapes.Select(shape => shape.PlainText)
+            .SequenceEqual(nodes.Select(node => node.Text), StringComparer.Ordinal))
+            return false;
+
+        if (shapes.Select(shape => shape.PlainText)
+            .Distinct(StringComparer.Ordinal)
+            .Count() != nodes.Count)
+            return false;
+
+        var first = shapes[0];
+        if (first.ExtentCxEmu <= 0
+            || first.ExtentCyEmu <= 0
+            || first.ExtentCxEmu != first.ExtentCyEmu)
+            return false;
+
+        for (var index = 1; index < shapes.Count; index++)
+        {
+            var previous = shapes[index - 1];
+            var current = shapes[index];
+            if (current.ExtentCxEmu != first.ExtentCxEmu
+                || current.ExtentCyEmu != first.ExtentCyEmu
+                || current.OffsetYEmu != first.OffsetYEmu
+                || current.OffsetXEmu <= previous.OffsetXEmu
+                || current.OffsetXEmu >= previous.OffsetXEmu + previous.ExtentCxEmu)
+                return false;
+        }
+
+        return true;
     }
 
     private static bool CanUseDefaultListStaggeredCache(SmartArtShape smart, SmartArtData data)

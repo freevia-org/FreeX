@@ -1383,6 +1383,27 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "The real fixture-backed grouped-list cache grammar with two distinct empty body bands, two headers, and four child boxes is admitted to the shared live plan. Missing, duplicate, ambiguous, extra, effect-bearing, picture-bearing, or otherwise unproven grouped-list roles remain on cached drawing fallback; broader grouped-list role parity, exact PowerPoint geometry/effects, and authoritative visual baselines remain deferred."),
         new(
+            EvidenceId: "freep.smartart.relationship1-import-ellipses",
+            Area: "SmartArt relationship1 imported node-ellipse live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume the same shared relationship1 overlapping-ellipse plan through SlideCompositor; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/avalonia-parity-wave133-freep-smartart-20260803.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
+                "freep/FreeP.App.Presentation/SlideCompositor.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "tools/FreeP.RenderCompare.Tests/SmartArtFixtureEvidenceTests.cs"
+            ],
+            RemainingWork: "The checked-in relationship1 package admits exactly three ordered, same-sized, overlapping ellipse nodes with distinct matching text and no extra roles or effects. Missing, duplicate, ambiguous, non-ellipse, non-overlapping, effect-bearing, picture-bearing, or otherwise unproven relationship caches remain on cached drawing fallback; other relationship families and exact PowerPoint intersection/effect fidelity remain deferred."),
+        new(
             EvidenceId: "freep.smartart.basic-process",
             Area: "SmartArt basic process live layout",
             Status: "shared-render-planner-evidence",
