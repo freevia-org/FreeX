@@ -151,6 +151,9 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("new Setter(Layoutable.MinHeightProperty, style.ListBoxItemMinHeight)");
         source.Should().Contain("public static StackPanel CreateActionRow(");
         source.Should().Contain("public static void ApplyClassicTabChrome(");
+        source.Should().Contain("var tabHeight = style.TabHeight ?? style.ControlHeight;");
+        source.Should().Contain("new Setter(Layoutable.HeightProperty, explicitTabHeight)");
+        source.Should().Contain("new Setter(Layoutable.MaxHeightProperty, explicitTabHeight)");
         source.Should().Contain("Name(\"PART_ItemsPresenter\")");
         source.Should().Contain("Name(\"PART_SelectedContentHost\")");
         source.Should().Contain("style.DialogTabPaneBorderBrush ?? DialogTabPaneBorderBrush");

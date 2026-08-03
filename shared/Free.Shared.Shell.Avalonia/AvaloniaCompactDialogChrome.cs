@@ -882,7 +882,13 @@ public static class AvaloniaCompactDialogChrome
         tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brushes.Black));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontFamilyProperty, style.FontFamily));
         tabStyle.Setters.Add(new Setter(TemplatedControl.FontSizeProperty, style.FontSize));
-        tabStyle.Setters.Add(new Setter(Layoutable.MinHeightProperty, style.TabHeight ?? style.ControlHeight));
+        var tabHeight = style.TabHeight ?? style.ControlHeight;
+        tabStyle.Setters.Add(new Setter(Layoutable.MinHeightProperty, tabHeight));
+        if (style.TabHeight is { } explicitTabHeight)
+        {
+            tabStyle.Setters.Add(new Setter(Layoutable.HeightProperty, explicitTabHeight));
+            tabStyle.Setters.Add(new Setter(Layoutable.MaxHeightProperty, explicitTabHeight));
+        }
         tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(6, 2)));
         tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, -1, 0)));
         tabControl.Styles.Add(tabStyle);

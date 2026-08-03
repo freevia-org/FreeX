@@ -17126,7 +17126,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetName(numberFormatBox, "Type");
         AutomationProperties.SetAutomationId(numberFormatBox, "FormatCellsNumberFormatBox");
-        ApplyDialogComboBoxChrome(numberFormatBox);
+        ApplyFormatCellsComboBoxChrome(numberFormatBox);
 
         var numberDecimalPlacesBox = new TextBox
         {
@@ -17207,7 +17207,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetName(numberSymbolBox, "Symbol");
         AutomationProperties.SetAutomationId(numberSymbolBox, "FormatCellsNumberSymbolBox");
-        ApplyDialogComboBoxChrome(numberSymbolBox);
+        ApplyFormatCellsComboBoxChrome(numberSymbolBox);
 
         var numberNegativeBox = new ListBox
         {
@@ -17580,7 +17580,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetName(borderPresetBox, "Border preset");
         AutomationProperties.SetAutomationId(borderPresetBox, "FormatCellsBorderPresetBox");
-        ApplyDialogComboBoxChrome(borderPresetBox);
+        ApplyFormatCellsComboBoxChrome(borderPresetBox);
         // Windows renders the line style as a scrollable textual list, not a combo.
         // Keep the FormatCellsBorderStyleBox automation id + the FormatCellsNullableChoice
         // SelectedItem contract so Accept()/SelectedBorderLineStyle() are unchanged.
@@ -17655,7 +17655,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 Width = 150,
             };
             AutomationProperties.SetAutomationId(box, automationId);
-            ApplyDialogComboBoxChrome(box);
+            ApplyFormatCellsComboBoxChrome(box);
             box.Background = Brush(240, 240, 240);
             box.BorderBrush = Brush(171, 173, 179);
             return box;
@@ -18625,7 +18625,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
         AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
-        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabStrip);
+        foreach (var tab in new[] { numberTab, alignmentTab, fontTab, borderTab, fillTab, protectionTab })
+            tab.MinWidth = FormatCellsDialogAlignmentLayout.TabHeaderMinWidth;
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            tabStrip,
+            AvaloniaCompactDialogChrome.WindowsStyle with
+            {
+                TabHeight = FormatCellsDialogAlignmentLayout.TabHeaderHeight,
+            });
 
         void ApplyFormatCellsDialogFrameForSelectedTab()
         {
@@ -18790,7 +18797,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             MinWidth = 180,
         };
         AutomationProperties.SetAutomationId(comboBox, automationId);
-        ApplyDialogComboBoxChrome(comboBox);
+        ApplyFormatCellsComboBoxChrome(comboBox);
         return comboBox;
     }
 
@@ -21103,6 +21110,13 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         cb.BorderBrush = Brush(130, 130, 130);
         cb.BorderThickness = new Thickness(1);
         cb.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
+    }
+
+    private static void ApplyFormatCellsComboBoxChrome(ComboBox comboBox)
+    {
+        AvaloniaCompactDialogChrome.ApplyComboBox(
+            comboBox,
+            AvaloniaCompactDialogChrome.WindowsStyle);
     }
 
     private static void ApplyDialogCheckBoxChrome(CheckBox cb)

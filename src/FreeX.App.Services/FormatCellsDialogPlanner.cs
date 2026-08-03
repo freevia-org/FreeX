@@ -129,6 +129,8 @@ public sealed record FormatCellsDialogResult(
 public static class FormatCellsDialogAlignmentLayout
 {
     public const double ContentInset = 8;
+    public const double TabHeaderHeight = 20;
+    public const double TabHeaderMinWidth = 54;
     public const double LabelTopMargin = 4;
     public const double LabelBottomMargin = 2;
     public const double FollowupLabelTopMargin = 8;

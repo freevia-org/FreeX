@@ -12,6 +12,8 @@ public sealed class FormatCellsDialogPlannerTests
     public void AlignmentLayout_UsesWpfDialogSpacingContract()
     {
         FormatCellsDialogAlignmentLayout.ContentInset.Should().Be(8);
+        FormatCellsDialogAlignmentLayout.TabHeaderHeight.Should().Be(20);
+        FormatCellsDialogAlignmentLayout.TabHeaderMinWidth.Should().Be(54);
         FormatCellsDialogAlignmentLayout.LabelTopMargin.Should().Be(4);
         FormatCellsDialogAlignmentLayout.LabelBottomMargin.Should().Be(2);
         FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin.Should().Be(8);
