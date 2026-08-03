@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -21,6 +23,16 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private static AvaloniaCompactDialogChromeStyle AllowEditRangeDialogChromeStyle =>
+        new(FormulaBarFontFamily)
+        {
+            ControlHeight = 20,
+            TextBoxHeight = 18,
+            ButtonHeight = 20,
+            ButtonPadding = new Thickness(4, 1),
+            RemoveFocusAdorner = true,
+        };
+
     // ── Review ▸ Protect entry point ───────────────────────────────────────────
     private void AllowEditRanges() => _ = ShowAllowEditRangeDialogAsync();
 
@@ -42,9 +54,10 @@ public sealed partial class MainWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "AllowEditRangeDialog");
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, AllowEditRangeDialogChromeStyle);
 
         var rangesList = new ListBox { MinHeight = 80 };
-        ApplyDataOpsListBoxChrome(rangesList);
+        AvaloniaCompactDialogChrome.ApplyListBox(rangesList, AllowEditRangeDialogChromeStyle);
         AutomationProperties.SetAutomationId(rangesList, "AllowEditRangeExistingRangesList");
 
         var rangeBox = new TextBox
@@ -52,35 +65,38 @@ public sealed partial class MainWindow
             Text = initialRangeText ?? FormatRangeReference(_session.SelectedRange),
             MinWidth = 220,
         };
-        ApplyDataOpsTextBoxChrome(rangeBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(rangeBox, AllowEditRangeDialogChromeStyle);
         AutomationProperties.SetAutomationId(rangeBox, "AllowEditRangeBox");
+
+        // F4 on the bare WPF-like range field enters the shared worksheet pointing session.
+        // The registered picker remains collapsed so it contributes no visual or tab-layout space.
         var rangePicker = CreateDialogRangePickerButton(
             "AllowEditRangePickerButton",
-            UiText.Get("AllowEditRange_PickerAutomationName"));
-        AutomationProperties.SetHelpText(rangePicker, UiText.Get("AllowEditRange_PickerHelpText"));
-        ToolTip.SetTip(rangePicker, UiText.Get("AllowEditRange_PickerToolTip"));
+            UiText.Get("AllowEditRange_RangeAutomationName"));
+        rangePicker.IsVisible = false;
+        rangePicker.IsTabStop = false;
 
         // Range-specific password (Excel's per-range "Range Password", distinct from the sheet password):
         // optional, so an empty box means the range stays freely editable once reached. WPF parity
         // (AllowEditRangeDialog.cs, _rangePasswordBox).
         var rangePasswordBox = new TextBox { PasswordChar = '•', MinWidth = 220 };
-        ApplyDataOpsTextBoxChrome(rangePasswordBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(rangePasswordBox, AllowEditRangeDialogChromeStyle);
         AutomationProperties.SetName(rangePasswordBox, UiText.Get("Protection_PasswordAutomationName"));
         AutomationProperties.SetAutomationId(rangePasswordBox, "AllowEditRangePasswordBox");
         AutomationProperties.SetHelpText(rangePasswordBox, UiText.Get("Protection_PasswordHelpText"));
 
         var newButton = new Button { Content = UiText.Get("AllowEditRange_NewButton"), MinWidth = 82 };
-        ApplyDataOpsButtonChrome(newButton);
+        AvaloniaCompactDialogChrome.ApplyButton(newButton, AllowEditRangeDialogChromeStyle, newButton.MinWidth);
         AutomationProperties.SetAutomationId(newButton, "AllowEditRangeNewButton");
         var modifyButton = new Button { Content = UiText.Get("AllowEditRange_ModifyButton"), MinWidth = 82, IsEnabled = false };
-        ApplyDataOpsButtonChrome(modifyButton);
+        AvaloniaCompactDialogChrome.ApplyButton(modifyButton, AllowEditRangeDialogChromeStyle, modifyButton.MinWidth);
         AutomationProperties.SetAutomationId(modifyButton, "AllowEditRangeModifyButton");
         var deleteButton = new Button { Content = UiText.Get("AllowEditRange_DeleteButton"), MinWidth = 82, IsEnabled = false };
-        ApplyDataOpsButtonChrome(deleteButton);
+        AvaloniaCompactDialogChrome.ApplyButton(deleteButton, AllowEditRangeDialogChromeStyle, deleteButton.MinWidth);
         AutomationProperties.SetAutomationId(deleteButton, "AllowEditRangeDeleteButton");
         // WPF has a Permissions button (always disabled in this implementation)
         var permissionsButton = new Button { Content = UiText.Get("AllowEditRange_PermissionsButton"), MinWidth = 100, IsEnabled = false };
-        ApplyDataOpsButtonChrome(permissionsButton);
+        AvaloniaCompactDialogChrome.ApplyButton(permissionsButton, AllowEditRangeDialogChromeStyle, permissionsButton.MinWidth);
         AutomationProperties.SetAutomationId(permissionsButton, "AllowEditRangePermissionsButton");
 
         var warningText = new TextBlock
@@ -248,37 +264,43 @@ public sealed partial class MainWindow
 
         // WPF has [OK][Cancel] at bottom; OK is an alias for Close (ranges are applied in real-time)
         var okButton = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, MinWidth = 84 };
-        ApplyDataOpsButtonChrome(okButton, isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(okButton, AllowEditRangeDialogChromeStyle, okButton.MinWidth, isDefault: true);
         AutomationProperties.SetAutomationId(okButton, "AllowEditRangeOkButton");
         okButton.Click += (_, _) => dialog.Close();
         var closeButton = new Button { Content = UiText.Get("Common_Cancel"), IsCancel = true, MinWidth = 84 };
-        ApplyDataOpsButtonChrome(closeButton);
+        AvaloniaCompactDialogChrome.ApplyButton(closeButton, AllowEditRangeDialogChromeStyle, closeButton.MinWidth);
         AutomationProperties.SetAutomationId(closeButton, "AllowEditRangeCloseButton");
         closeButton.Click += (_, _) => dialog.Close();
 
         RefreshRanges();
 
-        // WPF button order: [New...][Modify...][Delete][Permissions...] in a row, right-aligned
-        var rangeButtons = AvaloniaCompactDialogChrome.CreateActionRow(
-            [newButton, modifyButton, deleteButton, permissionsButton],
-            new Thickness(0, 8, 0, 0));
+        // WPF button order: [New...][Modify...][Delete][Permissions...] in a left-aligned row.
+        var rangeButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+            Spacing = 6,
+            Margin = new Thickness(0, 8, 0, 0),
+            Children = { newButton, modifyButton, deleteButton, permissionsButton },
+        };
 
-        // WPF: GroupBox (no explicit header visible) containing label + list + action buttons.
-        // The label is shown as the GroupBox Header so it matches the WPF visual framing.
-        var existingRangesGroupContent = new DockPanel { Margin = new Thickness(4), LastChildFill = true };
-        DockPanel.SetDock(rangeButtons, Dock.Bottom);
-        existingRangesGroupContent.Children.Add(rangeButtons);
-        existingRangesGroupContent.Children.Add(rangesList);
+        // WPF: GroupBox containing the list and its left-aligned action row.
+        var existingRangesGroupContent = new StackPanel
+        {
+            Margin = new Thickness(4, 10, 2, 6),
+            Children = { rangesList, rangeButtons },
+        };
 
         var existingRangesGroup = new GroupBox
         {
             Header = StripDisplayMnemonic(UiText.Get("AllowEditRange_ExistingRangesLabel")),
             Content = existingRangesGroupContent,
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 6),
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
         };
+        AvaloniaCompactDialogChrome.ApplyGroupBox(existingRangesGroup, AllowEditRangeDialogChromeStyle);
 
-        // WPF: the Range section is a bare label and editor. Keep the picker in the editor row for
-        // Avalonia interaction parity even though the current WPF capture does not show that button.
+        // WPF: the Range section is a bare label and editor with no inline picker.
         var rangeGroup = new StackPanel
         {
             Spacing = 4,
@@ -290,9 +312,9 @@ public sealed partial class MainWindow
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                 },
-                BuildDialogRangePickerRow(rangeBox, rangePicker),
+                rangeBox,
             },
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 5),
         };
 
         // Range-specific password label + box (WPF parity: AllowEditRangeDialog.cs's Protection_Password
@@ -300,7 +322,7 @@ public sealed partial class MainWindow
         var rangePasswordPanel = new StackPanel
         {
             Spacing = 4,
-            Margin = new Thickness(0, 6, 0, 0),
+            Margin = new Thickness(0, 8, 0, 0),
             Children =
             {
                 new TextBlock
@@ -314,11 +336,11 @@ public sealed partial class MainWindow
         };
 
         // WPF bottom button order: [OK][Cancel]
-        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], new Thickness(0, 10, 0, 0));
-        DockPanel.SetDock(bottomRow, Dock.Bottom);
+        var bottomRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, closeButton], style: AvaloniaCompactDialogChrome.WindowsStyle);
 
         var dialogBody = new StackPanel
         {
+            Width = 390,
             Spacing = 4,
             Children =
             {
@@ -331,20 +353,26 @@ public sealed partial class MainWindow
             },
         };
 
-        dialog.Content = new DockPanel
+        dialog.Content = new StackPanel
         {
-            Margin = new Thickness(12),
+            Margin = new Thickness(4, 12, 12, 12),
+            Width = 390,
             Children =
             {
+                dialogBody,
                 bottomRow,
-                new ScrollViewer
-                {
-                    VerticalScrollBarVisibility = global::Avalonia.Controls.Primitives.ScrollBarVisibility.Hidden,
-                    Content = dialogBody,
-                },
+                rangePicker,
             },
         };
         AttachDialogRangePicker(dialog, rangePicker, rangeBox, "range.allow-edit-range.range");
+        rangeBox.KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.F4 || args.KeyModifiers != KeyModifiers.None)
+                return;
+
+            rangePicker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent) { Source = rangePicker });
+            args.Handled = true;
+        };
         // Match WPF AllowEditRangeDialog.Loaded: the range input owns initial focus and its
         // contents are selected so typing immediately replaces the current reference.
         dialog.Opened += (_, _) =>
