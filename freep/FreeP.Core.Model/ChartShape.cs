@@ -663,6 +663,13 @@ public sealed class ChartShape
     public bool SeriesLinesSpecified { get; set; }
 
     /// <summary>
+    /// Whether a pie-family chart explicitly included the chart-level
+    /// <c>leaderLines</c> element. This is distinct from the data-label
+    /// <c>showLeaderLines</c> option, which is the older modeled route.
+    /// </summary>
+    public bool LeaderLinesSpecified { get; set; }
+
+    /// <summary>
     /// True when an imported stock chart authors <c>c:hiLowLines</c>. When false,
     /// PowerPoint renders the stock series as ordinary line-and-marker series.
     /// </summary>
