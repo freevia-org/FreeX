@@ -1,6 +1,7 @@
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 using PresentationModel = FreeP.Core.Model.Presentation;
+using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeP.App.Compositor;
@@ -261,10 +262,19 @@ public static class SlideCompositor
                 ? ResolveShapeShadowAsTextShadow(shape.Effects)
                 : null;
 
+            var textInsets = TextFrameLayoutPlanner.FromOptionalInsets(
+                PointsToDip(shape.TextBody.InsetLeftPt ?? layoutPh?.TextBody?.InsetLeftPt ?? masterPh?.TextBody?.InsetLeftPt),
+                PointsToDip(shape.TextBody.InsetTopPt ?? layoutPh?.TextBody?.InsetTopPt ?? masterPh?.TextBody?.InsetTopPt),
+                PointsToDip(shape.TextBody.InsetRightPt ?? layoutPh?.TextBody?.InsetRightPt ?? masterPh?.TextBody?.InsetRightPt),
+                PointsToDip(shape.TextBody.InsetBottomPt ?? layoutPh?.TextBody?.InsetBottomPt ?? masterPh?.TextBody?.InsetBottomPt),
+                DefaultInsetHorzDip,
+                DefaultInsetVertDip);
+
             text = ResolveTextLayout(shape.TextBody, presentation, effectiveAnchor, effectiveDefaultAlign,
                 effectiveDefaultRightToLeft, shape.Placeholder,
                 theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, masterPh?.TextBody, resolvedMaster?.TextStyles,
-                inheritedTextShadow);
+                inheritedTextShadow,
+                Math.Max(1, boundsDip.Width - textInsets.Left - textInsets.Right));
         }
 
         // Wave 26: convert the elbow route from EMU to DIP for connector shapes
@@ -1655,7 +1665,8 @@ public static class SlideCompositor
         TextBody? layoutBody = null,
         TextBody? masterBody = null,
         MasterTextStyles? masterTextStyles = null,
-        ResolvedRunShadow? inheritedTextShadow = null)
+        ResolvedRunShadow? inheritedTextShadow = null,
+        double textAreaWidthDip = 1)
     {
         // Determine hard-coded fallback font size and font (last resort only).
         double fallbackFontSizePt = placeholder?.Type switch
@@ -1690,6 +1701,15 @@ public static class SlideCompositor
         double lnSpcReduc   = body.LnSpcReductionPPT.HasValue && body.LnSpcReductionPPT.Value > 0
             ? body.LnSpcReductionPPT.Value / 100000.0 : 0.0;
 
+        var insets = TextFrameLayoutPlanner.FromOptionalInsets(
+            PointsToDip(body.InsetLeftPt ?? layoutBody?.InsetLeftPt ?? masterBody?.InsetLeftPt),
+            PointsToDip(body.InsetTopPt ?? layoutBody?.InsetTopPt ?? masterBody?.InsetTopPt),
+            PointsToDip(body.InsetRightPt ?? layoutBody?.InsetRightPt ?? masterBody?.InsetRightPt),
+            PointsToDip(body.InsetBottomPt ?? layoutBody?.InsetBottomPt ?? masterBody?.InsetBottomPt),
+            DefaultInsetHorzDip,
+            DefaultInsetVertDip);
+        double resolvedTextAreaWidthDip = Math.Max(1, textAreaWidthDip);
+
         var autoNumState = new PresentationListMarkerContinuationState();
 
         var resolvedParas = new List<ResolvedParagraph>(body.Paragraphs.Count);
@@ -1712,6 +1732,10 @@ public static class SlideCompositor
             string? inheritedFont = inheritedStyle?.LatinFont is { Length: > 0 } lf
                 ? ResolveLatinFont(lf, theme)
                 : null;
+            long marLEmu = para.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu ?? 0;
+            double mathParagraphWidthDip = Math.Max(
+                1,
+                resolvedTextAreaWidthDip - Math.Max(0, marLEmu) / EmuPerDip);
 
             foreach (var run in para.Runs)
             {
@@ -1840,7 +1864,11 @@ public static class SlideCompositor
                         run.Math.RawXml,
                         resolvedText,
                         ToParserMathProperties(containingProperties));
-                    mathLayout = FreeP.App.Compositor.MathLayout.MathLayoutEngine.Layout(mathNode, fontFamily, fontSizePt);
+                    mathLayout = FreeP.App.Compositor.MathLayout.MathLayoutEngine.Layout(
+                        mathNode,
+                        fontFamily,
+                        fontSizePt,
+                        paragraphWidthDip: mathParagraphWidthDip);
                 }
 
                 resolvedRuns.Add(new ResolvedRun
@@ -1952,7 +1980,6 @@ public static class SlideCompositor
             double hangingDip = 0.0;
 
             // Resolve marL/indent for indentation.
-            long marLEmu = para.MarginLeftEmu ?? inheritedStyle?.MarginLeftEmu ?? 0;
             long indentEmu = para.IndentEmu ?? inheritedStyle?.IndentEmu ?? 0;
             if (marLEmu > 0)
                 indentDip = marLEmu / EmuPerDip;
@@ -2026,14 +2053,6 @@ public static class SlideCompositor
                 HangingDip       = hangingDip,
             });
         }
-
-        var insets = TextFrameLayoutPlanner.FromOptionalInsets(
-            PointsToDip(body.InsetLeftPt ?? layoutBody?.InsetLeftPt ?? masterBody?.InsetLeftPt),
-            PointsToDip(body.InsetTopPt ?? layoutBody?.InsetTopPt ?? masterBody?.InsetTopPt),
-            PointsToDip(body.InsetRightPt ?? layoutBody?.InsetRightPt ?? masterBody?.InsetRightPt),
-            PointsToDip(body.InsetBottomPt ?? layoutBody?.InsetBottomPt ?? masterBody?.InsetBottomPt),
-            DefaultInsetHorzDip,
-            DefaultInsetVertDip);
 
         return new ResolvedTextLayout
         {
@@ -2125,6 +2144,17 @@ public static class SlideCompositor
                 properties.NaryLimitLocation,
                 FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation.UndOvr);
 
+        static int? ParseMargin(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var twips)
+                && twips >= 0
+                ? twips
+                : 0;
+        }
+
         return new FreeP.App.Compositor.MathLayout.MathNode.MathProperties(
             binaryBreak,
             binarySubtraction,
@@ -2133,7 +2163,9 @@ public static class SlideCompositor
             defaultJustification,
             integralLimitLocation,
             naryLimitLocation,
-            properties.DisplayDefaults);
+            properties.DisplayDefaults,
+            ParseMargin(properties.LeftMargin),
+            ParseMargin(properties.RightMargin));
     }
 
     // ─── Wave 19A: auto-number formatter ────────────────────────────────────────────────────

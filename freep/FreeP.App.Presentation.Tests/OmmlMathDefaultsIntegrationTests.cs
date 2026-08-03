@@ -150,6 +150,41 @@ public sealed class OmmlMathDefaultsIntegrationTests
     }
 
     [Fact]
+    public void Reader_ExtractsMathMarginsWithTwipsDefaultsAndPreservesInvalid()
+    {
+        using var package = WriteMathPackage();
+        AddRelatedSettingsPart(package,
+            "<m:mathPr xmlns:m=\"" + MathNamespace + "\"><m:dispDef/>" +
+            "<m:lMargin m:val=\"720\"/><m:rMargin/><m:mathFont m:val=\"bogus\"/>" +
+            "</m:mathPr>");
+
+        package.Position = 0;
+        var presentation = PptxPackageReader.Read(package);
+
+        presentation.DocumentMathProperties.Should().Be(
+            new OmmlMathProperties(
+                MathFontFamily: "bogus",
+                DisplayDefaults: true,
+                LeftMargin: "720",
+                RightMargin: "1440"));
+    }
+
+    [Theory]
+    [InlineData("bogus")]
+    [InlineData("-1")]
+    public void Reader_PreservesInvalidMathMarginValue(string value)
+    {
+        using var package = WriteMathPackage();
+        AddRelatedSettingsPart(package,
+            "<m:mathPr xmlns:m=\"" + MathNamespace + "\"><m:lMargin m:val=\"" + value + "\"/></m:mathPr>");
+
+        package.Position = 0;
+        var presentation = PptxPackageReader.Read(package);
+
+        presentation.DocumentMathProperties!.LeftMargin.Should().Be(value);
+    }
+
+    [Fact]
     public void Reader_DoesNotInventDocumentDefaultsWhenSettingsSourceIsAbsent()
     {
         using var package = WriteMathPackage();

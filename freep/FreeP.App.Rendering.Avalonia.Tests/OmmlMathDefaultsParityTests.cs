@@ -197,6 +197,46 @@ public sealed class OmmlMathDefaultsParityTests
         thrown.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Avalonia_DocumentMathMarginsChangeSharedLayoutAndRender()
+    {
+        Exception? thrown = null;
+        await Session.Dispatch(() =>
+        {
+            try
+            {
+                var withoutMargins = ComposeMathRun(
+                    new OmmlMathProperties(DisplayDefaults: true),
+                    "<m:mathPr><m:defJc m:val=\"left\"/></m:mathPr>");
+                var withMargins = ComposeMathRun(
+                    new OmmlMathProperties(DisplayDefaults: true, LeftMargin: "720", RightMargin: "360"),
+                    "<m:mathPr><m:defJc m:val=\"left\"/></m:mathPr>");
+
+                var withoutGlyph = MathBoxRenderPlanner.Plan(
+                        withoutMargins.MathLayout!, 0, 0, SrgbColor.Black, withoutMargins.FontFamily)
+                    .OfType<MathDrawOp.DrawGlyph>().Single();
+                var withGlyph = MathBoxRenderPlanner.Plan(
+                        withMargins.MathLayout!, 0, 0, SrgbColor.Black, withMargins.FontFamily)
+                    .OfType<MathDrawOp.DrawGlyph>().Single();
+
+                withGlyph.X.Should().BeApproximately(withoutGlyph.X + 48, 0.01);
+                var bitmap = new RenderTargetBitmap(new PixelSize(320, 120));
+                using DrawingContext drawingContext = bitmap.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(
+                    drawingContext,
+                    new ResolvedParagraph { Runs = new[] { withMargins } },
+                    10,
+                    20);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+        }, CancellationToken.None);
+
+        thrown.Should().BeNull();
+    }
+
     private static ResolvedRun ComposeMathRun(
         OmmlMathProperties documentDefaults,
         string localProperties,

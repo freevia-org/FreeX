@@ -4964,7 +4964,21 @@ public static class PptxPackageReader
             NaryLimitLocation: ReadLimitLocationValue(
                 mathProperties.Element(M + "naryLim"),
                 defaultValue: "undOvr"),
-            DisplayDefaults: ReadOnOffValue(mathProperties.Element(M + "dispDef")));
+            DisplayDefaults: ReadOnOffValue(mathProperties.Element(M + "dispDef")),
+            LeftMargin: ReadTwipsMarginValue(mathProperties.Element(M + "lMargin")),
+            RightMargin: ReadTwipsMarginValue(mathProperties.Element(M + "rMargin")));
+    }
+
+    private static string? ReadTwipsMarginValue(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        var value = element.Attribute(M + "val")?.Value
+            ?? element.Attribute("val")?.Value
+            ?? element.Value;
+        // A present val-less CT_TwipsMeasure defaults to 1440 twips.
+        return string.IsNullOrWhiteSpace(value) ? "1440" : value.Trim();
     }
 
     private static string? ReadLimitLocationValue(XElement? element, string defaultValue)

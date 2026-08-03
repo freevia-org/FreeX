@@ -135,6 +135,33 @@ public sealed class OmmlMathDefaultsParityTests
             20);
     }
 
+    [StaFact]
+    public void Wpf_DocumentMathMarginsChangeSharedLayoutAndRender()
+    {
+        var withoutMargins = ComposeMathRun(
+            new OmmlMathProperties(DisplayDefaults: true),
+            "<m:mathPr><m:defJc m:val=\"left\"/></m:mathPr>");
+        var withMargins = ComposeMathRun(
+            new OmmlMathProperties(DisplayDefaults: true, LeftMargin: "720", RightMargin: "360"),
+            "<m:mathPr><m:defJc m:val=\"left\"/></m:mathPr>");
+
+        var withoutGlyph = MathBoxRenderPlanner.Plan(
+                withoutMargins.MathLayout!, 0, 0, SrgbColor.Black, withoutMargins.FontFamily)
+            .OfType<MathDrawOp.DrawGlyph>().Single();
+        var withGlyph = MathBoxRenderPlanner.Plan(
+                withMargins.MathLayout!, 0, 0, SrgbColor.Black, withMargins.FontFamily)
+            .OfType<MathDrawOp.DrawGlyph>().Single();
+
+        withGlyph.X.Should().BeApproximately(withoutGlyph.X + 48, 0.01);
+        var visual = new DrawingVisual();
+        using var drawingContext = visual.RenderOpen();
+        SlideCanvas.RenderParaWithMath(
+            drawingContext,
+            new ResolvedParagraph { Runs = new[] { withMargins } },
+            10,
+            20);
+    }
+
     private static ResolvedRun ComposeMathRun(
         OmmlMathProperties documentDefaults,
         string localProperties,

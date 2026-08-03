@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Xml.Linq;
 
 namespace FreeP.App.Compositor.MathLayout;
@@ -140,7 +141,9 @@ public static class OmmlParser
             ParseMathParagraphBinaryBreak(paragraphProperties, resolvedProperties),
             ParseMathParagraphBinarySubtraction(paragraphProperties, resolvedProperties),
             resolvedProperties.MathFontFamily,
-            resolvedProperties.SmallFraction);
+            resolvedProperties.SmallFraction,
+            resolvedProperties.DisplayDefaults == true ? resolvedProperties.LeftMarginTwips : null,
+            resolvedProperties.DisplayDefaults == true ? resolvedProperties.RightMarginTwips : null);
     }
 
     private static MathNode.MathProperties ParseInheritedMathProperties(XElement mathRoot)
@@ -174,7 +177,26 @@ public static class OmmlParser
             ParseLimitLocationOverride(
                 mathProperties.Element(M + "naryLim"),
                 MathNode.MathLimitLocation.UndOvr),
-            ParseDisplayDefaultsOverride(mathProperties));
+            ParseDisplayDefaultsOverride(mathProperties),
+            ParseTwipsMarginOverride(mathProperties.Element(M + "lMargin")),
+            ParseTwipsMarginOverride(mathProperties.Element(M + "rMargin")));
+    }
+
+    private static int? ParseTwipsMarginOverride(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        var value = ReadVal(element)?.Trim();
+        if (string.IsNullOrWhiteSpace(value))
+            return 1440;
+
+        // Invalid ST_TwipsMeasure values use the no-margin fallback while still
+        // overriding a lower-precedence authored value.
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var twips)
+            && twips >= 0
+            ? twips
+            : 0;
     }
 
     private static MathNode.MathLimitLocation? ParseLimitLocationOverride(

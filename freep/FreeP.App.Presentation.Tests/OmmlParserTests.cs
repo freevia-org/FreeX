@@ -1716,4 +1716,55 @@ public sealed class OmmlParserTests
         Assert.Equal("Arial", root.Properties.MathFontFamily);
         Assert.IsType<MathNode.Run>(root.Content);
     }
+
+    [Fact]
+    public void OMathPara_MarginsUseDocumentOverlayAndLocalValuesWin()
+    {
+        var node = OmmlParser.Parse(
+            $"<m:oMathPara xmlns:m=\"{M}\"><m:mathPr>" +
+            "<m:dispDef/><m:lMargin m:val=\"1440\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>",
+            "FALLBACK",
+            new MathNode.MathProperties(
+                DisplayDefaults: true,
+                LeftMarginTwips: 720,
+                RightMarginTwips: 360));
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(1440, paragraph.LeftMarginTwips);
+        Assert.Equal(360, paragraph.RightMarginTwips);
+    }
+
+    [Theory]
+    [InlineData("<m:dispDef/>", "<m:lMargin m:val=\"720\"/><m:rMargin m:val=\"360\"/>", 720, 360)]
+    [InlineData("<m:dispDef/>", "<m:lMargin/><m:rMargin/>", 1440, 1440)]
+    [InlineData("<m:dispDef/>", "<m:lMargin m:val=\"0\"/><m:rMargin m:val=\"0\"/>", 0, 0)]
+    [InlineData("<m:dispDef m:val=\"off\"/>", "<m:lMargin m:val=\"720\"/><m:rMargin m:val=\"360\"/>", null, null)]
+    [InlineData("", "<m:lMargin m:val=\"720\"/><m:rMargin m:val=\"360\"/>", null, null)]
+    public void OMathPara_MarginsHandleExplicitValuelessZeroAndDispDefGate(
+        string displayDefaults,
+        string values,
+        int? expectedLeft,
+        int? expectedRight)
+    {
+        var node = ParseParagraph(
+            $"<m:mathPr>{displayDefaults}{values}</m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(expectedLeft, paragraph.LeftMarginTwips);
+        Assert.Equal(expectedRight, paragraph.RightMarginTwips);
+    }
+
+    [Fact]
+    public void OMathPara_InvalidMarginUsesNoMarginFallback()
+    {
+        var node = ParseParagraph(
+            "<m:mathPr><m:dispDef/><m:lMargin m:val=\"bogus\"/><m:rMargin m:val=\"-1\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(0, paragraph.LeftMarginTwips);
+        Assert.Equal(0, paragraph.RightMarginTwips);
+    }
 }

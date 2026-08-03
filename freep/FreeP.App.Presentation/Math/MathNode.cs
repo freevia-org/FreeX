@@ -32,7 +32,9 @@ public abstract class MathNode
         MathParagraphJustification? DefaultJustification = null,
         MathLimitLocation? IntegralLimitLocation = null,
         MathLimitLocation? NaryLimitLocation = null,
-        bool? DisplayDefaults = null)
+        bool? DisplayDefaults = null,
+        int? LeftMarginTwips = null,
+        int? RightMarginTwips = null)
     {
         public bool HasValues =>
             BinaryBreak.HasValue ||
@@ -42,7 +44,9 @@ public abstract class MathNode
             DefaultJustification.HasValue ||
             IntegralLimitLocation.HasValue ||
             NaryLimitLocation.HasValue ||
-            DisplayDefaults.HasValue;
+            DisplayDefaults.HasValue ||
+            LeftMarginTwips.HasValue ||
+            RightMarginTwips.HasValue;
 
         public MathProperties Overlay(MathProperties? overriding) => overriding is null
             ? this
@@ -54,7 +58,9 @@ public abstract class MathNode
                 overriding.DefaultJustification ?? DefaultJustification,
                 overriding.IntegralLimitLocation ?? IntegralLimitLocation,
                 overriding.NaryLimitLocation ?? NaryLimitLocation,
-                overriding.DisplayDefaults ?? DisplayDefaults);
+                overriding.DisplayDefaults ?? DisplayDefaults,
+                overriding.LeftMarginTwips ?? LeftMarginTwips,
+                overriding.RightMarginTwips ?? RightMarginTwips);
     }
 
     /// <summary>OMML's two legal limit placements for n-ary operators.</summary>
@@ -699,13 +705,21 @@ public abstract class MathNode
         /// <summary>Resolved <c>m:mathPr/m:smallFrac</c> setting.</summary>
         public bool? SmallFraction { get; }
 
+        /// <summary>Effective left math margin in twips; null means no margin.</summary>
+        public int? LeftMarginTwips { get; }
+
+        /// <summary>Effective right math margin in twips; null means no margin.</summary>
+        public int? RightMarginTwips { get; }
+
         public MathParagraph(
             MathNode content,
             MathParagraphJustification justification,
             MathParagraphBinaryBreak binaryBreak = MathParagraphBinaryBreak.Before,
             MathParagraphBinarySubtraction binarySubtraction = MathParagraphBinarySubtraction.MinusMinus,
             string? mathFontFamily = null,
-            bool? smallFraction = null)
+            bool? smallFraction = null,
+            int? leftMarginTwips = null,
+            int? rightMarginTwips = null)
         {
             Content = content;
             Justification = justification;
@@ -713,6 +727,8 @@ public abstract class MathNode
             BinarySubtraction = binarySubtraction;
             MathFontFamily = mathFontFamily;
             SmallFraction = smallFraction;
+            LeftMarginTwips = leftMarginTwips;
+            RightMarginTwips = rightMarginTwips;
         }
     }
 

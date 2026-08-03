@@ -10,6 +10,10 @@ namespace FreeP.Core.Model;
 /// Limit-location values remain strings at the
 /// package boundary so malformed authored values remain observable until the
 /// shared parser applies the schema fallback.
+/// <c>LeftMargin</c> and <c>RightMargin</c> retain the authored twips text for
+/// <c>m:lMargin</c>/<c>m:rMargin</c>; a null value means that the element was
+/// absent, while a present val-less element is normalized to <c>1440</c> by
+/// the package reader.
 /// </summary>
 public sealed record OmmlMathProperties(
     string? BinaryBreak = null,
@@ -19,7 +23,9 @@ public sealed record OmmlMathProperties(
     string? DefaultJustification = null,
     string? IntegralLimitLocation = null,
     string? NaryLimitLocation = null,
-    bool? DisplayDefaults = null)
+    bool? DisplayDefaults = null,
+    string? LeftMargin = null,
+    string? RightMargin = null)
 {
     public bool HasValues =>
         !string.IsNullOrWhiteSpace(BinaryBreak) ||
@@ -29,7 +35,9 @@ public sealed record OmmlMathProperties(
         !string.IsNullOrWhiteSpace(DefaultJustification) ||
         !string.IsNullOrWhiteSpace(IntegralLimitLocation) ||
         !string.IsNullOrWhiteSpace(NaryLimitLocation) ||
-        DisplayDefaults.HasValue;
+        DisplayDefaults.HasValue ||
+        !string.IsNullOrWhiteSpace(LeftMargin) ||
+        !string.IsNullOrWhiteSpace(RightMargin);
 
     /// <summary>
     /// Applies authored values from <paramref name="overriding"/> one property
@@ -45,5 +53,7 @@ public sealed record OmmlMathProperties(
             overriding.DefaultJustification ?? DefaultJustification,
             overriding.IntegralLimitLocation ?? IntegralLimitLocation,
             overriding.NaryLimitLocation ?? NaryLimitLocation,
-            overriding.DisplayDefaults ?? DisplayDefaults);
+            overriding.DisplayDefaults ?? DisplayDefaults,
+            overriding.LeftMargin ?? LeftMargin,
+            overriding.RightMargin ?? RightMargin);
 }

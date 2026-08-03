@@ -22,6 +22,7 @@ namespace FreeP.App.Compositor.MathLayout;
 public static class MathLayoutEngine
 {
     private const string MatrixPlaceholderGlyph = "\u25A1";
+    private const double TwipsPerDip = 15.0;
     private readonly record struct LayoutOptions(bool SmallFraction);
 
     // ── Public entry ──────────────────────────────────────────────────────
@@ -227,10 +228,12 @@ public static class MathLayoutEngine
         var effectiveFontFamily = string.IsNullOrWhiteSpace(paragraph.MathFontFamily)
             ? fontFamily
             : paragraph.MathFontFamily!;
+        var (leftMarginDip, rightMarginDip, contentWidthDip) =
+            ResolveMathMargins(paragraph, paragraphWidthDip);
         var content = paragraphWidthDip is > 0
             ? WrapBinaryOperators(
                 paragraph.Content,
-                paragraphWidthDip.Value,
+                contentWidthDip,
                 paragraph.BinaryBreak,
                 paragraph.BinarySubtraction,
                 effectiveFontFamily,
@@ -242,16 +245,20 @@ public static class MathLayoutEngine
             effectiveFontFamily,
             fontSizePt,
             options with { SmallFraction = paragraph.SmallFraction ?? options.SmallFraction });
-        var width = paragraphWidthDip.HasValue && paragraphWidthDip.Value > contentBox.Metrics.Width
-            ? paragraphWidthDip.Value
-            : contentBox.Metrics.Width;
+        var width = paragraphWidthDip is > 0
+            ? Math.Max(paragraphWidthDip.Value, leftMarginDip + contentBox.Metrics.Width + rightMarginDip)
+            : leftMarginDip + contentBox.Metrics.Width + rightMarginDip;
 
+        var alignmentWidthDip = paragraphWidthDip is > 0
+            ? contentWidthDip
+            : contentBox.Metrics.Width;
         contentBox.X = paragraph.Justification switch
         {
-            MathNode.MathParagraphJustification.Right => width - contentBox.Metrics.Width,
+            MathNode.MathParagraphJustification.Right => leftMarginDip +
+                Math.Max(0, alignmentWidthDip - contentBox.Metrics.Width),
             MathNode.MathParagraphJustification.Center or MathNode.MathParagraphJustification.CenterGroup =>
-                (width - contentBox.Metrics.Width) / 2.0,
-            _ => 0
+                leftMarginDip + Math.Max(0, (alignmentWidthDip - contentBox.Metrics.Width) / 2.0),
+            _ => leftMarginDip
         };
         contentBox.Y = 0;
 
@@ -262,6 +269,31 @@ public static class MathLayoutEngine
         container.Metrics.Ascent = contentBox.Metrics.Ascent;
         return container;
     }
+
+    private static (double LeftDip, double RightDip, double ContentWidthDip) ResolveMathMargins(
+        MathNode.MathParagraph paragraph,
+        double? paragraphWidthDip)
+    {
+        double leftDip = TwipsToDip(paragraph.LeftMarginTwips ?? 0);
+        double rightDip = TwipsToDip(paragraph.RightMarginTwips ?? 0);
+
+        if (paragraphWidthDip is not > 0)
+            return (leftDip, rightDip, double.PositiveInfinity);
+
+        var availableWidthDip = paragraphWidthDip.Value;
+        // Word ignores the left margin when the two authored margins do not fit.
+        if (leftDip + rightDip > availableWidthDip)
+            leftDip = 0;
+
+        // If the right margin alone exceeds the available width, Word uses the
+        // documented 1440-twip fallback indent.
+        if (rightDip > availableWidthDip)
+            rightDip = TwipsToDip(1440);
+
+        return (leftDip, rightDip, Math.Max(0, availableWidthDip - leftDip - rightDip));
+    }
+
+    private static double TwipsToDip(int twips) => twips / TwipsPerDip;
 
     private static MathNode WrapBinaryOperators(
         MathNode content,

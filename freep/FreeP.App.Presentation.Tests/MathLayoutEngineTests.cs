@@ -2416,4 +2416,55 @@ public sealed class MathLayoutEngineTests
         ops[2].X.Should().BeGreaterThan(ops[1].X,
             "the applied argument must remain to the right of the complete scripted function-name object");
     }
+
+    [Fact]
+    public void OmmlParagraph_MarginsAddToBoundedParagraphAndShiftContent()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:dispDef/><m:lMargin m:val=\"720\"/><m:rMargin m:val=\"360\"/>" +
+            "<m:defJc m:val=\"left\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 200);
+        var glyph = MathBoxRenderPlanner.Plan(layout, 0, 0, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        layout.Metrics.Width.Should().BeApproximately(200, 0.01);
+        glyph.X.Should().BeApproximately(48, 0.01);
+        glyph.X.Should().BeGreaterThan(0,
+            "the left math margin must affect the renderer-neutral glyph coordinate");
+    }
+
+    [Fact]
+    public void OmmlParagraph_MarginOverflowIgnoresLeftMargin()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:dispDef/><m:lMargin m:val=\"2000\"/><m:rMargin m:val=\"1000\"/>" +
+            "<m:defJc m:val=\"right\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+        var natural = MathLayoutEngine.Layout(
+            ((MathNode.MathParagraph)node).Content, "Cambria Math", FontSizePt);
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 100);
+        var glyph = MathBoxRenderPlanner.Plan(layout, 0, 0, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        glyph.X.Should().BeApproximately(100 - 1000 / 15.0 - natural.Metrics.Width, 0.01);
+    }
+
+    [Fact]
+    public void OmmlParagraph_RightMarginOverflowUses1440TwipFallback()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:dispDef/><m:rMargin m:val=\"3600\"/>" +
+            "<m:defJc m:val=\"left\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 200);
+        var glyph = MathBoxRenderPlanner.Plan(layout, 0, 0, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        glyph.X.Should().BeApproximately(0, 0.01);
+        layout.Metrics.Width.Should().BeApproximately(200, 0.01);
+    }
 }
