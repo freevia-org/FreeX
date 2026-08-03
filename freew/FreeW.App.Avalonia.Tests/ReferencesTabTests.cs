@@ -99,6 +99,28 @@ public sealed class ReferencesTabTests
         view.Document.Footnotes.Keys.Should().BeEquivalentTo(new[] { 1, 2 });
     }
 
+    [Fact]
+    public void InsertFootnote_places_marker_at_caret_and_redo_repeats_the_same_edit()
+    {
+        var view = ViewWith(new Paragraph("before after"));
+        view.SetSelectionRangePublic(0, 7, 0, 7);
+
+        view.InsertFootnote("note text");
+
+        var paragraph = (Paragraph)view.Document.Blocks[0];
+        paragraph.Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        paragraph.Runs[1].FootnoteId.Should().Be(1);
+        view.Document.Footnotes[1].PlainText.Should().Be("note text");
+
+        view.Undo();
+        paragraph.Runs.Select(run => run.Text).Should().Equal("before after");
+        view.Document.Footnotes.Should().BeEmpty();
+
+        view.Redo();
+        paragraph.Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        view.Document.Footnotes[1].PlainText.Should().Be("note text");
+    }
+
     // ── Table of Contents ──────────────────────────────────────────────────────────
 
     [Fact]

@@ -459,7 +459,7 @@ internal static class PptxChartWriter
             C + "waterfallChart",
             BuildVaryColorsEl(chart),
             seriesEls,
-            new XElement(C + "showConnectorLines", new XAttribute("val", "1")),
+            new XElement(C + "showConnectorLines", new XAttribute("val", BoolValue(chart.ShowWaterfallConnectorLines))),
             chart.BarGapWidthPercent is { } gapWidth
                 ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
                 : null);
@@ -510,6 +510,17 @@ internal static class PptxChartWriter
             new XElement(C + "grouping", new XAttribute("val", "standard")),
             BuildVaryColorsEl(chart),
             seriesEls,
+            chart.ShowDropLines ? new XElement(C + "dropLines") : null,
+            chart.ShowUpDownBars
+                ? new XElement(C + "upDownBars",
+                    chart.UpDownBarGapWidthPercent is { } gapWidth
+                        ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
+                        : null,
+                    new XElement(C + "upBars",
+                        chart.UpBarFill is null ? null : new XElement(C + "spPr", BuildChartFillEl(chart.UpBarFill, null))),
+                    new XElement(C + "downBars",
+                        chart.DownBarFill is null ? null : new XElement(C + "spPr", BuildChartFillEl(chart.DownBarFill, null))))
+                : null,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
 
@@ -633,9 +644,23 @@ internal static class PptxChartWriter
         new XElement(C + "stockChart",
             BuildVaryColorsEl(chart),
             seriesEls,
+            chart.ShowDropLines ? new XElement(C + "dropLines") : null,
             chart.HasHighLowLines ? new XElement(C + "hiLowLines") : null,
+            BuildStockUpDownBarsEl(chart),
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
+
+    private static XElement? BuildStockUpDownBarsEl(ChartShape chart) =>
+        chart.ShowUpDownBars
+            ? new XElement(C + "upDownBars",
+                chart.UpDownBarGapWidthPercent is { } gapWidth
+                    ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
+                    : null,
+                new XElement(C + "upBars",
+                    chart.UpBarFill is null ? null : new XElement(C + "spPr", BuildChartFillEl(chart.UpBarFill, null))),
+                new XElement(C + "downBars",
+                    chart.DownBarFill is null ? null : new XElement(C + "spPr", BuildChartFillEl(chart.DownBarFill, null))))
+            : null;
 
     private static XElement BuildSurfaceChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId, int serAxId = PrimarySerAxId) =>

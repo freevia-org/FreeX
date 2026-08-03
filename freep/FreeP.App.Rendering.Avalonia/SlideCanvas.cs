@@ -1443,6 +1443,9 @@ public sealed class SlideCanvas : Control
                 primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
                 ToRect(primitive.Bounds));
         }
+
+        foreach (var connector in scene.WaterfallConnectorLines)
+            dc.DrawLine(ToPen(connector.Stroke), ToPoint(connector.Start), ToPoint(connector.End));
     }
 
     private static void RenderThreeDColumn(
@@ -1528,6 +1531,7 @@ public sealed class SlideCanvas : Control
     {
         if (scene.Stock is null)
         {
+            RenderDropLines(dc, scene.DropLines);
             foreach (var primitive in scene.LineSeries)
                 RenderLineSeriesPrimitive(dc, primitive);
             return;
@@ -1539,6 +1543,11 @@ public sealed class SlideCanvas : Control
                 ToBrush(primitive.Fill),
                 primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
                 ToRect(primitive.Bounds));
+        }
+
+        foreach (var bar in scene.UpDownBars)
+        {
+            dc.FillRectangle(ToBrush(bar.Fill), ToRect(bar.Bounds));
         }
 
         var plan = scene.Stock.Value;
@@ -1660,8 +1669,17 @@ public sealed class SlideCanvas : Control
 
     private static void RenderLineChart(DrawingContext dc, ChartScenePlan scene)
     {
+        foreach (var bar in scene.UpDownBars)
+            dc.FillRectangle(ToBrush(bar.Fill), ToRect(bar.Bounds));
+        RenderDropLines(dc, scene.DropLines);
         foreach (var primitive in scene.LineSeries)
             RenderLineSeriesPrimitive(dc, primitive);
+    }
+
+    private static void RenderDropLines(DrawingContext dc, IReadOnlyList<ChartLineSegmentPrimitive> lines)
+    {
+        foreach (var line in lines)
+            dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
     }
 
     private static void RenderLineSeriesPrimitive(

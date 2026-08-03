@@ -142,6 +142,88 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_EmitsDropLinesForAuthoredLineChart()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            ShowDropLines = true,
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.DropLines.Should().HaveCount(2);
+        scene.DropLines.Should().AllSatisfy(line =>
+        {
+            line.Start.X.Should().Be(line.End.X);
+            line.End.Y.Should().Be(scene.Frame.Plot.Bottom);
+        });
+    }
+
+    [Fact]
+    public void BuildScenePlan_DoesNotEmitDropLinesWhenFlagIsOmitted()
+    {
+        var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.DropLines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildScenePlan_EmitsUpDownBarsBetweenFirstTwoLineSeries()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            ShowUpDownBars = true,
+            UpDownBarGapWidthPercent = 100,
+            UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33)),
+            DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC)),
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var first = new ChartSeries { Name = "Open" };
+        first.Values.AddRange(new double?[] { 10, 20, 15 });
+        var second = new ChartSeries { Name = "Close" };
+        second.Values.AddRange(new double?[] { 20, 10, 15 });
+        chart.Series.Add(first);
+        chart.Series.Add(second);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.UpDownBars.Should().HaveCount(2);
+        scene.UpDownBars[0].Bounds.Height.Should().BeGreaterThan(0);
+        scene.UpDownBars[0].Fill.Color.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        scene.UpDownBars[1].Fill.Color.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
+    }
+
+    [Fact]
+    public void BuildScenePlan_DoesNotEmitUpDownBarsForSingleSeries()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            ShowUpDownBars = true,
+            Categories = { "Q1", "Q2" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.UpDownBars.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildScenePlan_RespectsScatterXPlusOnlyAndNoEndCap()
     {
         var chart = new ChartShape { ChartType = ChartType.Scatter, ScatterStyle = ScatterStyle.Marker };
@@ -998,6 +1080,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_StockUpDownBarsUseOpenCloseBands()
+    {
+        var chart = MakeStockChart();
+        chart.ShowUpDownBars = true;
+        chart.UpDownBarGapWidthPercent = 100;
+        chart.UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33));
+        chart.DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC));
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.UpDownBars.Should().HaveCount(3);
+        scene.UpDownBars[0].Fill.Color.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        scene.UpDownBars[1].Fill.Color.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
+        scene.UpDownBars[2].Fill.Color.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        scene.UpDownBars.Should().OnlyContain(bar => bar.Bounds.Height > 0);
+    }
+
+    [Fact]
     public void BuildFunnelSegmentPrimitives_CreatesCenteredDescendingStages()
     {
         var chart = new ChartShape
@@ -1044,6 +1144,13 @@ public sealed class ChartRenderPlannerTests
         bars[1].Bounds.Y.Should().BeApproximately(bars[0].Bounds.Y, 0.001);
         bars[1].Bounds.Height.Should().BeGreaterThan(0);
         bars[2].Bounds.Y.Should().BeLessThan(bars[1].Bounds.Y + bars[1].Bounds.Height);
+        scene.WaterfallConnectorLines.Should().HaveCount(2);
+        scene.WaterfallConnectorLines.Should().OnlyContain(line => line.Start.Y == line.End.Y);
+        scene.WaterfallConnectorLines[0].Start.X.Should().BeLessThan(scene.WaterfallConnectorLines[0].End.X);
+
+        chart.ShowWaterfallConnectorLines = false;
+        ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300))
+            .WaterfallConnectorLines.Should().BeEmpty();
     }
 
     [Fact]

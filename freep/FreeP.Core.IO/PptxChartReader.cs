@@ -429,6 +429,15 @@ internal static class PptxChartReader
         });
 
         shape.ChartType = hasMarkers ? ChartType.LineMarkers : ChartType.Line;
+        shape.ShowDropLines = el.Element(C + "dropLines") is not null;
+        var upDownBars = el.Element(C + "upDownBars");
+        shape.ShowUpDownBars = upDownBars is not null;
+        shape.UpDownBarGapWidthPercent = ParseNullableInt(
+            upDownBars?.Element(C + "gapWidth")?.Attribute("val")?.Value);
+        var upBarSpPr = upDownBars?.Element(C + "upBars")?.Element(C + "spPr");
+        shape.UpBarFill = upBarSpPr is null ? null : PptxColorReader.TryReadFill(upBarSpPr, scheme);
+        var downBarSpPr = upDownBars?.Element(C + "downBars")?.Element(C + "spPr");
+        shape.DownBarFill = downBarSpPr is null ? null : PptxColorReader.TryReadFill(downBarSpPr, scheme);
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
@@ -438,6 +447,15 @@ internal static class PptxChartReader
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Stock;
         shape.HasHighLowLines = el.Element(C + "hiLowLines") is not null;
+        shape.ShowDropLines = el.Element(C + "dropLines") is not null;
+        var upDownBars = el.Element(C + "upDownBars");
+        shape.ShowUpDownBars = upDownBars is not null;
+        shape.UpDownBarGapWidthPercent = ParseNullableInt(
+            upDownBars?.Element(C + "gapWidth")?.Attribute("val")?.Value);
+        var upBarSpPr = upDownBars?.Element(C + "upBars")?.Element(C + "spPr");
+        shape.UpBarFill = upBarSpPr is null ? null : PptxColorReader.TryReadFill(upBarSpPr, scheme);
+        var downBarSpPr = upDownBars?.Element(C + "downBars")?.Element(C + "spPr");
+        shape.DownBarFill = downBarSpPr is null ? null : PptxColorReader.TryReadFill(downBarSpPr, scheme);
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
@@ -455,6 +473,8 @@ internal static class PptxChartReader
     {
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Waterfall;
+        shape.ShowWaterfallConnectorLines = ParseNullableBoolElement(
+            el.Element(C + "showConnectorLines")) ?? true;
         shape.BarGapWidthPercent = ParseNullableInt(el.Element(C + "gapWidth")?.Attribute("val")?.Value);
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }

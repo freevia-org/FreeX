@@ -661,6 +661,24 @@ public sealed class ChartShape
     /// </summary>
     public bool HasHighLowLines { get; set; } = true;
 
+    /// <summary>Whether an imported line-family chart authors <c>c:dropLines</c>.</summary>
+    public bool ShowDropLines { get; set; }
+
+    /// <summary>Whether an imported line-family chart authors <c>c:upDownBars</c>.</summary>
+    public bool ShowUpDownBars { get; set; }
+
+    /// <summary>Whether a waterfall chart draws the authored <c>c:showConnectorLines</c>.</summary>
+    public bool ShowWaterfallConnectorLines { get; set; } = true;
+
+    /// <summary>Authored <c>c:upDownBars/c:gapWidth</c> percentage, when present.</summary>
+    public int? UpDownBarGapWidthPercent { get; set; }
+
+    /// <summary>Authored <c>c:upDownBars/c:upBars/c:spPr</c> fill, when present.</summary>
+    public ShapeFill? UpBarFill { get; set; }
+
+    /// <summary>Authored <c>c:upDownBars/c:downBars/c:spPr</c> fill, when present.</summary>
+    public ShapeFill? DownBarFill { get; set; }
+
     /// <summary>
     /// Authored chart style identifier from <c>c:chartSpace/c:style</c> or its
     /// newer compatibility extension. Null means the classic Office default style.

@@ -235,6 +235,18 @@ public sealed class WpfAuthoritySurfaceParityTests
             table.PreferredWidthPt.Should().Be(300);
             cell.WidthPt.Should().Be(144);
             cell.Margins.Should().Be(new TableCellMargins(3, 5, 3, 5));
+
+            editor.CanUndo.Should().BeTrue();
+            editor.Undo();
+            table.PreferredWidthPt.Should().BeNull();
+            cell.WidthPt.Should().BeNull();
+            cell.Margins.Should().BeNull();
+            cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Top);
+
+            editor.Redo();
+            table.PreferredWidthPt.Should().Be(300);
+            cell.WidthPt.Should().Be(144);
+            cell.Margins.Should().Be(new TableCellMargins(3, 5, 3, 5));
         }, CancellationToken.None);
     }
 

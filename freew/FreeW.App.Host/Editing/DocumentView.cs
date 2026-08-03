@@ -12439,12 +12439,13 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void ApplyTableProperties(TablePropertiesValues values)
     {
-        var context = CaretTableContext();
-        if (context is null)
+        ArgumentNullException.ThrowIfNull(values);
+        CommitToModel();
+        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
+        if (blockIndex < 0)
             return;
 
-        TablePropertiesDialogPlanner.ApplyValues(context, values);
-        Render();
+        _commands.Execute(new ApplyTablePropertiesCommand(blockIndex, rowIndex, columnIndex, values));
     }
 
     // Snapshot of the caret table's previous style id for table-style live-preview.
@@ -14862,6 +14863,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertFootnote(string text)
     {
+        if (TryInsertNoteThroughCommand(text, footnote: true))
+            return;
+
         CommitToModel();
 
         var id = _model.NextFootnoteId();
@@ -14891,6 +14895,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertEndnote(string text)
     {
+        if (TryInsertNoteThroughCommand(text, footnote: false))
+            return;
+
         CommitToModel();
 
         var id = _model.NextEndnoteId();
@@ -14912,6 +14919,141 @@ public sealed class DocumentView : RichTextBox
         Render();
     }
 
+    private bool TryInsertNoteThroughCommand(string text, bool footnote)
+    {
+        if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset))
+            return TryInsertTableCellNoteThroughCommand(text, footnote);
+
+        CommitToModel();
+        if (paragraphIndex < 0
+            || paragraphIndex >= _model.Blocks.Count
+            || _model.Blocks[paragraphIndex] is not ModelParagraph)
+        {
+            return false;
+        }
+
+        var id = footnote ? _model.NextFootnoteId() : _model.NextEndnoteId();
+        _commands.Execute(new InsertNoteCommand(id, footnote, text ?? string.Empty, paragraphIndex, textOffset));
+        var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+        PlaceCaretAtModelTextOffset(paragraphIndex, textOffset + markerLength);
+        return true;
+    }
+
+    private bool TryInsertTableCellNoteThroughCommand(string text, bool footnote)
+    {
+        if (!TryGetCurrentTableCellCaretTarget(
+                out var tableBlockIndex,
+                out var rowIndex,
+                out var cellIndex,
+                out var paragraphIndex,
+                out var textOffset))
+        {
+            return false;
+        }
+
+        CommitToModel();
+        var id = footnote ? _model.NextFootnoteId() : _model.NextEndnoteId();
+        _commands.Execute(new InsertTableCellNoteCommand(
+            id,
+            footnote,
+            text ?? string.Empty,
+            tableBlockIndex,
+            rowIndex,
+            cellIndex,
+            paragraphIndex,
+            textOffset));
+        var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+        PlaceCaretAtTableCellTextOffset(
+            tableBlockIndex,
+            rowIndex,
+            cellIndex,
+            paragraphIndex,
+            textOffset + markerLength);
+        return true;
+    }
+
+    private bool TryGetCurrentBodyCaretTarget(out int paragraphIndex, out int textOffset)
+    {
+        paragraphIndex = -1;
+        textOffset = 0;
+        var paragraph = CaretPosition?.Paragraph;
+        if (paragraph is null || CaretPosition is null)
+            return false;
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var visibleIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref visibleIndex);
+        if (!indexOf.TryGetValue(paragraph, out var mappedIndex))
+            return false;
+
+        paragraphIndex = ModelIndexFromVisible(mappedIndex);
+        textOffset = OffsetInParagraph(paragraph, CaretPosition);
+        return true;
+    }
+
+    private bool TryGetCurrentTableCellCaretTarget(
+        out int tableBlockIndex,
+        out int rowIndex,
+        out int cellIndex,
+        out int paragraphIndex,
+        out int textOffset)
+    {
+        tableBlockIndex = rowIndex = cellIndex = paragraphIndex = -1;
+        textOffset = 0;
+        var paragraph = CaretPosition?.Paragraph;
+        if (paragraph is null || CaretPosition is null)
+            return false;
+
+        var location = TableLocationOf(paragraph);
+        if (location.BlockIndex < 0)
+            return false;
+
+        TextElement? ancestor = paragraph;
+        while (ancestor is not null && ancestor is not WpfTableCell)
+            ancestor = ancestor.Parent as TextElement;
+        if (ancestor is not WpfTableCell cell)
+            return false;
+
+        var directParagraphs = cell.Blocks.OfType<WpfParagraph>().ToList();
+        var mappedParagraphIndex = directParagraphs.IndexOf(paragraph);
+        if (mappedParagraphIndex < 0)
+            return false;
+
+        tableBlockIndex = location.BlockIndex;
+        rowIndex = location.RowIndex;
+        cellIndex = location.ColumnIndex;
+        paragraphIndex = mappedParagraphIndex;
+        textOffset = OffsetInParagraph(paragraph, CaretPosition);
+        return true;
+    }
+
+    private void PlaceCaretAtTableCellTextOffset(
+        int tableBlockIndex,
+        int rowIndex,
+        int cellIndex,
+        int paragraphIndex,
+        int textOffset)
+    {
+        var table = Document.Blocks
+            .OfType<WpfTable>()
+            .FirstOrDefault(candidate => candidate.Tag is WpfTableTag { SourceBlockIndex: var source }
+                && source == tableBlockIndex);
+        var row = table?.RowGroups
+            .SelectMany(group => group.Rows)
+            .FirstOrDefault(candidate => candidate.Tag is WpfTableRowTag { SourceRowIndex: var source }
+                && source == rowIndex);
+        if (row is null || cellIndex < 0 || cellIndex >= row.Cells.Count)
+            return;
+
+        var paragraphs = row.Cells[cellIndex].Blocks.OfType<WpfParagraph>().ToList();
+        if (paragraphIndex < 0 || paragraphIndex >= paragraphs.Count)
+            return;
+
+        CaretPosition = TextPointerAtParagraphOffset(paragraphs[paragraphIndex], textOffset);
+        Focus();
+    }
+
     /// <summary>
     /// Removes a footnote from the model and strips its reference marker from the body. Re-renders so
     /// the change is immediately visible. Mirrors <see cref="InsertFootnote"/> in reverse.
@@ -14919,10 +15061,7 @@ public sealed class DocumentView : RichTextBox
     public void DeleteFootnote(int id)
     {
         CommitToModel();
-        _model.Footnotes.Remove(id);
-        StripNoteMarker(id, footnote: true);
-        CommitToModel();
-        Render();
+        _commands.Execute(new DeleteNoteCommand(id, footnote: true));
     }
 
     /// <summary>
@@ -14932,25 +15071,15 @@ public sealed class DocumentView : RichTextBox
     public void DeleteEndnote(int id)
     {
         CommitToModel();
-        _model.Endnotes.Remove(id);
-        StripNoteMarker(id, footnote: false);
-        CommitToModel();
-        Render();
+        _commands.Execute(new DeleteNoteCommand(id, footnote: false));
     }
 
-    private void StripNoteMarker(int id, bool footnote)
+    /// <summary>Replaces a note's rich content as one undoable edit.</summary>
+    public void ReplaceNoteContent(int id, bool footnote, IReadOnlyList<ModelParagraph> paragraphs)
     {
-        var toRemove = new List<WpfRun>();
-        foreach (var run in NoteMarkers(footnote))
-        {
-            var markerId = footnote
-                ? (run.Tag as FootnoteMarker)?.FootnoteId
-                : (run.Tag as EndnoteMarker)?.EndnoteId;
-            if (markerId == id)
-                toRemove.Add(run);
-        }
-        foreach (var run in toRemove)
-            run.ContentStart.Paragraph?.Inlines.Remove(run);
+        ArgumentNullException.ThrowIfNull(paragraphs);
+        CommitToModel();
+        _commands.Execute(new ReplaceNoteContentCommand(id, footnote, paragraphs));
     }
 
     /// <summary>Moves the caret to the next footnote reference marker in visible document order.</summary>

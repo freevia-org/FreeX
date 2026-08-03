@@ -11,6 +11,65 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class EditableNotesPaneTests
 {
+    [StaFact]
+    public void InsertFootnote_InTableCell_UsesSharedUndoableCaretPath()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = new Table();
+        var row = new TableRow();
+        var cell = new TableCell();
+        cell.Paragraphs.Add(new Paragraph("before after"));
+        row.Cells.Add(cell);
+        table.Rows.Add(row);
+        doc.Blocks.Add(table);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        var wpfParagraph = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single()
+            .RowGroups[0].Rows[0].Cells[0].Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var wpfRun = wpfParagraph.Inlines.OfType<System.Windows.Documents.Run>().Single();
+        view.CaretPosition = wpfRun.ContentStart.GetPositionAtOffset(7) ?? wpfRun.ContentStart;
+
+        view.InsertFootnote("table note");
+
+        var modelCell = ((Table)view.Model.Blocks[0]).Rows[0].Cells[0];
+        modelCell.Paragraphs[0].Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        view.Model.Footnotes[1].PlainText.Should().Be("table note");
+
+        view.Undo();
+        ((Table)view.Model.Blocks[0]).Rows[0].Cells[0].Paragraphs[0].PlainText.Should().Be("before after");
+        view.Model.Footnotes.Should().BeEmpty();
+
+        view.Redo();
+        ((Table)view.Model.Blocks[0]).Rows[0].Cells[0].Paragraphs[0].Runs
+            .Should().Contain(run => run.FootnoteId == 1);
+    }
+
+    [StaFact]
+    public void InsertFootnote_UsesCaretOffset_AndUndoRedoRestoresOneEdit()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("before after"));
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.MoveCaretToBlockForTest(0, 7);
+
+        view.InsertFootnote("note text");
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        paragraph.Runs[1].FootnoteId.Should().Be(1);
+        view.Model.Footnotes[1].PlainText.Should().Be("note text");
+
+        view.Undo();
+        view.Model.Footnotes.Should().BeEmpty();
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("before after");
+
+        view.Redo();
+        view.Model.Footnotes[1].PlainText.Should().Be("note text");
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().Contain(run => run.FootnoteId == 1);
+    }
     // ── Phase 1A: Notes pane backing — DeleteFootnote / DeleteEndnote ─────────────────────────────
 
     /// <summary>
@@ -41,6 +100,15 @@ public sealed class EditableNotesPaneTests
         paragraph.Runs.Should()
             .Contain(r => r.Text == "before " || r.Text == " after",
                 "non-marker runs must survive");
+
+        view.CanUndo.Should().BeTrue("deleting a note must be one undoable document edit");
+        view.Undo();
+        view.Model.Footnotes[1].PlainText.Should().Be("The footnote body");
+        view.Model.Blocks.OfType<Paragraph>().First().Runs.Should()
+            .Contain(r => r.FootnoteId == 1, "undo must restore the reference marker");
+
+        view.Redo();
+        view.Model.Footnotes.Should().NotContainKey(1);
     }
 
     /// <summary>DeleteEndnote mirrors DeleteFootnote but for the endnote dict and endnote markers.</summary>
@@ -92,7 +160,7 @@ public sealed class EditableNotesPaneTests
         wrapper.DefaultRun = doc.DefaultRun;
         wrapper.Blocks.Clear();
         foreach (var para in doc.Footnotes[1].Content)
-            wrapper.Blocks.Add(para);
+            wrapper.Blocks.Add(DocumentMerge.CloneBlock(para));
 
         var subEditor = new DocumentView();
         subEditor.LoadModel(wrapper);
@@ -112,6 +180,31 @@ public sealed class EditableNotesPaneTests
 
         note.PlainText.Should().Be("edited text",
             "applying sub-editor content must update note.PlainText");
+    }
+
+    [StaFact]
+    public void ReplaceNoteContent_IsUndoableAndPreservesRichParagraphs()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Footnotes[1] = new Footnote(1, "original text");
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var edited = new Paragraph();
+        edited.Runs.Add(new Run("edited text")
+        {
+            Formatting = RunFormatting.Default with { Bold = true },
+        });
+        view.ReplaceNoteContent(1, footnote: true, [edited, new Paragraph("more")]);
+
+        view.Model.Footnotes[1].PlainText.Should().Be("edited text\nmore");
+        view.Model.Footnotes[1].Content[0].Runs.Single().Formatting.Bold.Should().BeTrue();
+        view.CanUndo.Should().BeTrue();
+
+        view.Undo();
+        view.Model.Footnotes[1].PlainText.Should().Be("original text");
+        view.Redo();
+        view.Model.Footnotes[1].PlainText.Should().Be("edited text\nmore");
     }
 
     /// <summary>

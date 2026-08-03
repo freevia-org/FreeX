@@ -1365,6 +1365,9 @@ public sealed class SlideCanvas : FrameworkElement
                 primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
                 ToRect(primitive.Bounds));
         }
+
+        foreach (var connector in scene.WaterfallConnectorLines)
+            dc.DrawLine(ToPen(connector.Stroke), ToPoint(connector.Start), ToPoint(connector.End));
     }
 
     private static void RenderThreeDColumn(
@@ -1524,8 +1527,17 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderLineChart(DrawingContext dc, ChartScenePlan scene)
     {
+        foreach (var bar in scene.UpDownBars)
+            dc.DrawRectangle(ToBrush(bar.Fill), bar.Stroke.HasValue ? ToPen(bar.Stroke.Value) : null, ToRect(bar.Bounds));
+        RenderDropLines(dc, scene.DropLines);
         foreach (var primitive in scene.LineSeries)
             RenderLineSeriesPrimitive(dc, primitive);
+    }
+
+    private static void RenderDropLines(DrawingContext dc, IReadOnlyList<ChartLineSegmentPrimitive> lines)
+    {
+        foreach (var line in lines)
+            dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
     }
 
     private static void RenderLineSeriesPrimitive(
@@ -1851,6 +1863,7 @@ public sealed class SlideCanvas : FrameworkElement
     {
         if (scene.Stock is null)
         {
+            RenderDropLines(dc, scene.DropLines);
             foreach (var primitive in scene.LineSeries)
                 RenderLineSeriesPrimitive(dc, primitive);
             return;
@@ -1862,6 +1875,11 @@ public sealed class SlideCanvas : FrameworkElement
                 ToBrush(primitive.Fill),
                 primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
                 ToRect(primitive.Bounds));
+        }
+
+        foreach (var bar in scene.UpDownBars)
+        {
+            dc.DrawRectangle(ToBrush(bar.Fill), null, ToRect(bar.Bounds));
         }
 
         var plan = scene.Stock.Value;

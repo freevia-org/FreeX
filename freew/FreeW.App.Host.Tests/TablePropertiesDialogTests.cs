@@ -118,6 +118,20 @@ public sealed class TablePropertiesDialogTests
         var cell = row.Cells[1];
         Assert.Equal(TableCellVerticalAlignment.Center, cell.VerticalAlignment);
         Assert.Equal(8, cell.Margins!.LeftPt);
+
+        Assert.True(view.CanUndo);
+        view.Undo();
+        table = view.Model.Blocks.OfType<Table>().Single();
+        Assert.Null(table.PreferredWidthPt);
+        Assert.Equal(TableAlignment.Left, table.Alignment);
+        Assert.Null(table.Rows[1].HeightPt);
+        Assert.Null(table.Rows[1].Cells[1].WidthPt);
+        Assert.Equal(TableCellVerticalAlignment.Top, table.Rows[1].Cells[1].VerticalAlignment);
+
+        view.Redo();
+        table = view.Model.Blocks.OfType<Table>().Single();
+        Assert.Equal(400, table.PreferredWidthPt);
+        Assert.Equal(120, table.Rows[1].Cells[1].WidthPt);
     }
 
     [StaFact]

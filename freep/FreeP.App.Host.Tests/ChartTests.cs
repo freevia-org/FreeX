@@ -79,6 +79,11 @@ public sealed class ChartTests : IDisposable
         };
         chart.DisplayBlanksAs = ChartDisplayBlanksAs.Span;
         chart.ShowDataLabelsOverMaximum = true;
+        chart.ShowDropLines = true;
+        chart.ShowUpDownBars = true;
+        chart.UpDownBarGapWidthPercent = 180;
+        chart.UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33));
+        chart.DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC));
         slide.Shapes.Add(new SlideShape
         {
             Id = 7,
@@ -108,6 +113,11 @@ public sealed class ChartTests : IDisposable
         clonedChart.View3D.DepthPercent.Should().Be(100);
         clonedChart.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Span);
         clonedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
+        clonedChart.ShowDropLines.Should().BeTrue();
+        clonedChart.ShowUpDownBars.Should().BeTrue();
+        clonedChart.UpDownBarGapWidthPercent.Should().Be(180);
+        clonedChart.UpBarFill.Should().Be(chart.UpBarFill);
+        clonedChart.DownBarFill.Should().Be(chart.DownBarFill);
     }
 
     [Fact]
@@ -1058,6 +1068,59 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_LineChart_DropLinesPreservedInPackageAndModel()
+    {
+        var chart = BuildLineChart();
+        chart.ShowDropLines = true;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var lineChart = chartDoc.Descendants(ChartNs + "lineChart").Single();
+            lineChart.Element(ChartNs + "dropLines").Should().NotBeNull();
+            ChartChildIndex(lineChart, "dropLines").Should().BeLessThan(ChartChildIndex(lineChart, "axId"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ShowDropLines.Should().BeTrue();
+    }
+
+    [Fact]
+    public void RoundTrip_LineChart_UpDownBarsPreservedInPackageAndModel()
+    {
+        var chart = BuildLineChart();
+        chart.Series.Add(new ChartSeries { Name = "Baseline", Values = { 8, 12, 11 } });
+        chart.ShowUpDownBars = true;
+        chart.UpDownBarGapWidthPercent = 180;
+        chart.UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33));
+        chart.DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC));
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var lineChart = chartDoc.Descendants(ChartNs + "lineChart").Single();
+            var bars = lineChart.Element(ChartNs + "upDownBars");
+            bars.Should().NotBeNull();
+            bars!.Element(ChartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("180");
+            bars.Element(ChartNs + "upBars")!.Element(ChartNs + "spPr")!.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("112233");
+            bars.Element(ChartNs + "downBars")!.Element(ChartNs + "spPr")!.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("AABBCC");
+            ChartChildIndex(lineChart, "upDownBars").Should().BeLessThan(ChartChildIndex(lineChart, "axId"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ShowUpDownBars.Should().BeTrue();
+        rt.UpDownBarGapWidthPercent.Should().Be(180);
+        ((ShapeFill.Solid)rt.UpBarFill!).Color.Resolved.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        ((ShapeFill.Solid)rt.DownBarFill!).Color.Resolved.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
+    }
+
+    [Fact]
     public void RoundTrip_LineChart_PreservesAuthoredSeriesAndPointStyle()
     {
         var chart = BuildLineChart();
@@ -1528,6 +1591,10 @@ public sealed class ChartTests : IDisposable
     public void RoundTrip_StockChart_TypePreservedInPackageAndModel()
     {
         var chart = BuildStockChart();
+        chart.ShowUpDownBars = true;
+        chart.UpDownBarGapWidthPercent = 180;
+        chart.UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33));
+        chart.DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC));
         var path = WriteToPptx(BuildPresWithChart(chart));
 
         using (var archive = ZipFile.OpenRead(path))
@@ -1537,6 +1604,12 @@ public sealed class ChartTests : IDisposable
                 "stock charts should keep their PowerPoint chart family instead of downgrading to c:lineChart");
             chartDoc.Descendants(ChartNs + "hiLowLines").Should().ContainSingle(
                 "new stock charts use the high-low rendering authored by PowerPoint");
+            var bars = chartDoc.Descendants(ChartNs + "upDownBars").Should().ContainSingle().Subject;
+            bars.Element(ChartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("180");
+            bars.Element(ChartNs + "upBars")!.Element(ChartNs + "spPr")!.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("112233");
+            bars.Element(ChartNs + "downBars")!.Element(ChartNs + "spPr")!.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("AABBCC");
             chartDoc.Descendants(ChartNs + "lineChart").Should().BeEmpty();
         }
 
@@ -1544,6 +1617,10 @@ public sealed class ChartTests : IDisposable
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Stock);
         rt.HasHighLowLines.Should().BeTrue();
+        rt.ShowUpDownBars.Should().BeTrue();
+        rt.UpDownBarGapWidthPercent.Should().Be(180);
+        ((ShapeFill.Solid)rt.UpBarFill!).Color.Resolved.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        ((ShapeFill.Solid)rt.DownBarFill!).Color.Resolved.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
         rt.Series.Should().HaveCount(4);
     }
 
@@ -1586,18 +1663,22 @@ public sealed class ChartTests : IDisposable
         var series = new ChartSeries { Name = "Value" };
         series.Values.AddRange(new double?[] { 100, -30, 20 });
         chart.Series.Add(series);
+        chart.ShowWaterfallConnectorLines = false;
         var path = WriteToPptx(BuildPresWithChart(chart));
 
         using (var archive = ZipFile.OpenRead(path))
         {
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
             chartDoc.Descendants(ChartNs + "waterfallChart").Should().ContainSingle();
+            chartDoc.Descendants(ChartNs + "showConnectorLines").Single()
+                .Attribute("val")!.Value.Should().Be("0");
             chartDoc.Descendants(ChartNs + "catAx").Should().ContainSingle();
         }
 
         var rt = PptxPackageReader.Read(path).Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Waterfall);
+        rt.ShowWaterfallConnectorLines.Should().BeFalse();
         rt.Categories.Should().Equal("Start", "Reduction", "Growth");
         rt.Series.Should().ContainSingle();
         rt.Series[0].Values.Should().Equal(100, -30, 20);
