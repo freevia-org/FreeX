@@ -1876,9 +1876,9 @@ public static partial class ChartRenderPlanner
         IReadOnlyList<ChartDataLabelPlan> labels,
         IReadOnlyList<ChartPieSlicePrimitive> slices)
     {
-        if (chart.DataLabels?.ShowLeaderLines != true ||
+        if (chart.DataLabels?.ShowLeaderLines != true && !chart.LeaderLinesSpecified ||
             geometryKind is not (ChartSceneGeometryKind.Pie or ChartSceneGeometryKind.Doughnut) ||
-            chart.DataLabels.Position is DataLabelPosition.InsideEnd or DataLabelPosition.Center)
+            chart.DataLabels?.Position is DataLabelPosition.InsideEnd or DataLabelPosition.Center)
         {
             return Array.Empty<ChartLineSegmentPrimitive>();
         }

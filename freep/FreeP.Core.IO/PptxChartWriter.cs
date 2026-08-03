@@ -539,7 +539,8 @@ internal static class PptxChartWriter
         new XElement(C + (chart.ThreeDStyle == ChartThreeDStyle.Pie ? "pie3DChart" : "pieChart"),
             BuildVaryColorsEl(chart),
             seriesEls,
-            BuildFirstSliceAngleEl(chart));
+            BuildFirstSliceAngleEl(chart),
+            chart.LeaderLinesSpecified ? new XElement(C + "leaderLines") : null);
 
     private static XElement BuildOfPieChartEl(ChartShape chart, List<XElement> seriesEls) =>
         new XElement(C + "ofPieChart",
@@ -572,7 +573,8 @@ internal static class PptxChartWriter
             chart.OfPieSecondPieSizePercent is { } secondPieSize
                 ? new XElement(C + "secondPieSize", new XAttribute("val", Math.Clamp(secondPieSize, 5, 200)))
                 : null,
-            chart.OfPieSeriesLinesSpecified ? new XElement(C + "serLines") : null);
+            chart.OfPieSeriesLinesSpecified ? new XElement(C + "serLines") : null,
+            chart.LeaderLinesSpecified ? new XElement(C + "leaderLines") : null);
 
     private static XElement BuildAreaChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
@@ -607,7 +609,8 @@ internal static class PptxChartWriter
             seriesEls,
             BuildFirstSliceAngleEl(chart),
             new XElement(C + "holeSize",
-                new XAttribute("val", chart.DoughnutHolePercent.ToString(CultureInfo.InvariantCulture))));
+                new XAttribute("val", chart.DoughnutHolePercent.ToString(CultureInfo.InvariantCulture))),
+            chart.LeaderLinesSpecified ? new XElement(C + "leaderLines") : null);
 
     private static XElement? BuildFirstSliceAngleEl(ChartShape chart)
     {

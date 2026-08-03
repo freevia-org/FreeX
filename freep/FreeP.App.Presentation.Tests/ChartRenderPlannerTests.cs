@@ -61,6 +61,30 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_PieNativeLeaderLinesActivateWithoutDataLabelFlag()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            LeaderLinesSpecified = true,
+            Categories = { "North", "South", "West" },
+            DataLabels = new ChartDataLabels
+            {
+                ShowPercent = true,
+                Position = DataLabelPosition.OutsideEnd
+            }
+        };
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 40, 35, 25 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 320));
+
+        scene.DataLabels.Should().HaveCount(3);
+        scene.DataLabelLeaderLines.Should().HaveCount(6);
+    }
+
+    [Fact]
     public void BuildScenePlan_DoesNotEmitLeaderLinesForNonPieChartsOrDisabledOption()
     {
         var chart = new ChartShape
