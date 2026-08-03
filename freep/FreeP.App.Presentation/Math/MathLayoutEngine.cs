@@ -23,7 +23,9 @@ public static class MathLayoutEngine
 {
     private const string MatrixPlaceholderGlyph = "\u25A1";
     private const double TwipsPerDip = 15.0;
-    private readonly record struct LayoutOptions(bool SmallFraction);
+    private readonly record struct LayoutOptions(
+        bool SmallFraction,
+        double? InterEquationSpacingDip = null);
 
     // ── Public entry ──────────────────────────────────────────────────────
 
@@ -249,7 +251,14 @@ public static class MathLayoutEngine
                 paragraph.WrapIndentTwips,
                 paragraph.WrapRight)
             : paragraph.Content;
-        var contentOptions = options with { SmallFraction = paragraph.SmallFraction ?? options.SmallFraction };
+        var contentOptions = options with
+        {
+            SmallFraction = paragraph.SmallFraction ?? options.SmallFraction,
+            InterEquationSpacingDip = paragraph.UsesInterEquationSpacing &&
+                paragraph.InterSpacingTwips.HasValue
+                    ? TwipsToDip(paragraph.InterSpacingTwips.Value)
+                    : null
+        };
         var contentBox = content is MathNode.WrappedParagraph wrapped && paragraphWidthDip is > 0
             ? LayoutWrappedParagraph(
                 wrapped,
@@ -1633,7 +1642,7 @@ public static class MathLayoutEngine
     private static MathBox LayoutEqArray(MathNode.EqArray eqArray, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
-        double rowGap = ResolveMathArrayGap(
+        double rowGap = options.InterEquationSpacingDip ?? ResolveMathArrayGap(
             ToMathArraySpacingRule(eqArray.RowSpacingRule),
             eqArray.RowSpacing,
             em * 0.20);

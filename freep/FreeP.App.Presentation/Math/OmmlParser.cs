@@ -152,7 +152,9 @@ public static class OmmlParser
             resolvedProperties.DisplayDefaults == true ? resolvedProperties.RightMarginTwips : null,
             resolvedProperties.WrapIndentTwips,
             resolvedProperties.WrapRight,
-            wrapPropertiesEnabled: resolvedProperties.DisplayDefaults == true);
+            wrapPropertiesEnabled: resolvedProperties.DisplayDefaults == true,
+            interSpacingTwips: resolvedProperties.InterSpacingTwips,
+            usesInterEquationSpacing: oMathNodes.Length > 1);
     }
 
     private static MathNode.MathProperties ParseInheritedMathProperties(XElement mathRoot)
@@ -190,7 +192,8 @@ public static class OmmlParser
             ParseTwipsMeasureOverride(mathProperties.Element(M + "lMargin")),
             ParseTwipsMeasureOverride(mathProperties.Element(M + "rMargin")),
             ParseTwipsMeasureOverride(mathProperties.Element(M + "wrapIndent")),
-            ParseOnOffOverride(mathProperties.Element(M + "wrapRight")));
+            ParseOnOffOverride(mathProperties.Element(M + "wrapRight")),
+            ParseInterSpacingOverride(mathProperties.Element(M + "interSp")));
     }
 
     private static int? ParseTwipsMeasureOverride(XElement? element)
@@ -208,6 +211,18 @@ public static class OmmlParser
             && twips >= 0
             ? twips
             : 0;
+    }
+
+    private static int? ParseInterSpacingOverride(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        var value = ReadVal(element)?.Trim();
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var twips)
+            && twips >= 0
+            ? twips
+            : null;
     }
 
     private static MathNode.MathLimitLocation? ParseLimitLocationOverride(

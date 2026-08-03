@@ -36,7 +36,8 @@ public abstract class MathNode
         int? LeftMarginTwips = null,
         int? RightMarginTwips = null,
         int? WrapIndentTwips = null,
-        bool? WrapRight = null)
+        bool? WrapRight = null,
+        int? InterSpacingTwips = null)
     {
         public bool HasValues =>
             BinaryBreak.HasValue ||
@@ -50,7 +51,8 @@ public abstract class MathNode
             LeftMarginTwips.HasValue ||
             RightMarginTwips.HasValue ||
             WrapIndentTwips.HasValue ||
-            WrapRight.HasValue;
+            WrapRight.HasValue ||
+            InterSpacingTwips.HasValue;
 
         public MathProperties Overlay(MathProperties? overriding) => overriding is null
             ? this
@@ -66,7 +68,8 @@ public abstract class MathNode
                 overriding.LeftMarginTwips ?? LeftMarginTwips,
                 overriding.RightMarginTwips ?? RightMarginTwips,
                 overriding.WrapIndentTwips ?? WrapIndentTwips,
-                overriding.WrapRight ?? WrapRight);
+                overriding.WrapRight ?? WrapRight,
+                overriding.InterSpacingTwips ?? InterSpacingTwips);
     }
 
     /// <summary>OMML's two legal limit placements for n-ary operators.</summary>
@@ -764,6 +767,15 @@ public abstract class MathNode
         /// <summary>True when wrapped continuation lines are right aligned.</summary>
         public bool WrapRight { get; }
 
+        /// <summary>Optional authored <c>m:mathPr/m:interSp</c> value in twips.</summary>
+        public int? InterSpacingTwips { get; }
+
+        /// <summary>
+        /// True when this paragraph contains multiple display equations, so
+        /// <see cref="InterSpacingTwips"/> applies between its rows.
+        /// </summary>
+        public bool UsesInterEquationSpacing { get; }
+
         public MathParagraph(
             MathNode content,
             MathParagraphJustification justification,
@@ -775,7 +787,9 @@ public abstract class MathNode
             int? rightMarginTwips = null,
             int? wrapIndentTwips = null,
             bool? wrapRight = null,
-            bool wrapPropertiesEnabled = true)
+            bool wrapPropertiesEnabled = true,
+            int? interSpacingTwips = null,
+            bool usesInterEquationSpacing = false)
         {
             Content = content;
             Justification = justification;
@@ -787,6 +801,10 @@ public abstract class MathNode
             RightMarginTwips = rightMarginTwips;
             WrapIndentTwips = wrapPropertiesEnabled ? Math.Max(0, wrapIndentTwips ?? 1440) : 0;
             WrapRight = wrapPropertiesEnabled && wrapRight == true;
+            InterSpacingTwips = interSpacingTwips.HasValue
+                ? Math.Max(0, interSpacingTwips.Value)
+                : null;
+            UsesInterEquationSpacing = usesInterEquationSpacing;
         }
     }
 

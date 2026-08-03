@@ -376,6 +376,47 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_InterEquationSpacing_UsesSharedMathBoxPlan_DoesNotThrow()
+    {
+        var mathNode = OmmlParser.Parse(
+            "<m:settings xmlns:m=\"" + M + "\"><m:mathPr><m:interSp m:val=\"120\"/></m:mathPr>" +
+            "<m:oMathPara><m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>y</m:t></m:r></m:oMath></m:oMathPara></m:settings>",
+            fallbackText: "FALLBACK");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToArray();
+
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "x", "y" });
+        glyphs.Single(g => g.Text == "y").Y.Should().BeGreaterThan(glyphs.Single(g => g.Text == "x").Y,
+            "m:mathPr/m:interSp must reach WPF through the shared row-gap plan");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun
+                {
+                    FontFamily = "Cambria Math",
+                    FontSizePt = 18.0,
+                    Color = SrgbColor.Black,
+                    MathLayout = mathBox,
+                },
+            },
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow("WPF must draw the shared inter-equation spacing plan");
+    }
+
+    [StaFact]
     public void RenderParaWithMath_ManualBreakAlignment_UsesSharedMathBoxPlan_DoesNotThrow()
     {
         var mathNode = ParseOmml(

@@ -1800,6 +1800,51 @@ public sealed class OmmlParserTests
         Assert.Equal(360, paragraph.RightMarginTwips);
     }
 
+    [Fact]
+    public void OMathPara_InterEquationSpacingReadsAuthoredTwipsAndMultiEquationScope()
+    {
+        var node = ParseParagraph(
+            "<m:mathPr><m:interSp m:val=\"120\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>y</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(120, paragraph.InterSpacingTwips);
+        Assert.True(paragraph.UsesInterEquationSpacing);
+
+        var omitted = Assert.IsType<MathNode.MathParagraph>(ParseParagraph(
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>y</m:t></m:r></m:oMath>"));
+        Assert.Null(omitted.InterSpacingTwips);
+        Assert.True(omitted.UsesInterEquationSpacing);
+
+        var single = Assert.IsType<MathNode.MathParagraph>(ParseParagraph(
+            "<m:mathPr><m:interSp m:val=\"120\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>"));
+        Assert.Equal(120, single.InterSpacingTwips);
+        Assert.False(single.UsesInterEquationSpacing);
+    }
+
+    [Theory]
+    [InlineData("0", 0)]
+    [InlineData("-1", null)]
+    [InlineData("bogus", null)]
+    public void OMathPara_InterEquationSpacingUsesCanonicalInheritedMathPrAndSTTwipsFallback(
+        string value,
+        int? expected)
+    {
+        var xml =
+            $"<m:settings xmlns:m=\"{M}\">" +
+            $"<m:mathPr><m:interSp m:val=\"{value}\"/></m:mathPr>" +
+            "<m:oMathPara>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>y</m:t></m:r></m:oMath>" +
+            "</m:oMathPara></m:settings>";
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(OmmlParser.Parse(xml, "FALLBACK"));
+        Assert.Equal(expected, paragraph.InterSpacingTwips);
+    }
+
     [Theory]
     [InlineData("<m:dispDef/>", "<m:lMargin m:val=\"720\"/><m:rMargin m:val=\"360\"/>", 720, 360)]
     [InlineData("<m:dispDef/>", "<m:lMargin/><m:rMargin/>", 1440, 1440)]

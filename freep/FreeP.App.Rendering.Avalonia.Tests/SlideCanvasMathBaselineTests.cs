@@ -421,6 +421,57 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_InterEquationSpacing_UsesSharedMathBoxPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = OmmlParser.Parse(
+                    "<m:settings xmlns:m=\"" + M + "\"><m:mathPr><m:interSp m:val=\"120\"/></m:mathPr>" +
+                    "<m:oMathPara><m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>" +
+                    "<m:oMath><m:r><m:t>y</m:t></m:r></m:oMath></m:oMathPara></m:settings>",
+                    fallbackText: "FALLBACK");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToArray();
+
+                glyphs.Select(g => g.Text).Should().Equal(new[] { "x", "y" });
+                glyphs.Single(g => g.Text == "y").Y.Should().BeGreaterThan(glyphs.Single(g => g.Text == "x").Y,
+                    "m:mathPr/m:interSp must reach Avalonia through the shared row-gap plan");
+
+                var bitmap = new RenderTargetBitmap(new PixelSize(320, 160));
+                using DrawingContext drawingContext = bitmap.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(
+                    drawingContext,
+                    new ResolvedParagraph
+                    {
+                        Runs = new[]
+                        {
+                            new ResolvedRun
+                            {
+                                FontFamily = "Cambria Math",
+                                FontSizePt = 18.0,
+                                Color = SrgbColor.Black,
+                                MathLayout = mathBox,
+                            },
+                        },
+                    },
+                    10,
+                    20);
+            }
+            catch (System.Exception ex)
+            {
+                thrown = ex;
+            }
+        });
+
+        thrown.Should().BeNull("Avalonia must draw the shared inter-equation spacing plan");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_ManualBreakAlignment_UsesSharedMathBoxPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

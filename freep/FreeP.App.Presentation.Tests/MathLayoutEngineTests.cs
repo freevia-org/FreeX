@@ -2280,6 +2280,43 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlParagraph_InterEquationSpacingChangesOnlyMultiEquationRowGap()
+    {
+        var defaultNode = ParseOmmlParagraph(
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>y</m:t></m:r></m:oMath>");
+        var spacedNode = ParseOmmlParagraph(
+            "<m:mathPr><m:interSp m:val=\"120\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>y</m:t></m:r></m:oMath>");
+
+        var defaultLayout = MathLayoutEngine.Layout(defaultNode, "Cambria Math", FontSizePt);
+        var defaultParagraph = Assert.IsType<MathBox.Container>(defaultLayout.Children[0]);
+        var defaultRows = Assert.IsType<MathBox.Container>(defaultParagraph.Children[0]);
+        var spacedLayout = MathLayoutEngine.Layout(spacedNode, "Cambria Math", FontSizePt);
+        var spacedParagraph = Assert.IsType<MathBox.Container>(spacedLayout.Children[0]);
+        var spacedRows = Assert.IsType<MathBox.Container>(spacedParagraph.Children[0]);
+
+        spacedRows.Children[1].Y.Should().BeGreaterThan(defaultRows.Children[1].Y,
+            "m:mathPr/m:interSp is a twips-valued gap between display equations");
+        spacedRows.Children[1].Y.Should().BeApproximately(
+            spacedRows.Children[0].Metrics.Height + 8.0,
+            0.01,
+            "120 twips must resolve to 8 DIP before the shared renderer plan");
+
+        var glyphs = MathBoxRenderPlanner.Plan(
+                spacedLayout,
+                10,
+                20,
+                SrgbColor.Black,
+                "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToArray();
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "x", "y" });
+        glyphs.Single(g => g.Text == "y").Y.Should().BeGreaterThan(glyphs.Single(g => g.Text == "x").Y);
+    }
+
+    [Fact]
     public void OmmlParagraphJustification_CenterGroupUsesCenteredSharedParagraphPlan()
     {
         var node = ParseOmmlParagraph(
