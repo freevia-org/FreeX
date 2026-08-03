@@ -21029,6 +21029,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         button.VerticalContentAlignment = AvaloniaVerticalAlignment.Center;
     }
 
+    private static void ApplyGoalSeekStatusButtonChrome(Button button, double width, bool isDefault = false)
+    {
+        var style = AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ButtonHeight = GoalSeekStatusDialogPlanner.ButtonHeight,
+            ButtonPadding = new Thickness(4, 0),
+        };
+        AvaloniaCompactDialogChrome.ApplyButton(button, style, width, isDefault);
+        AvaloniaCompactDialogChrome.ApplyNeutralDefaultButtonChrome(button);
+    }
+
     private static void ApplyDataToolsTextBoxChrome(TextBox tb)
     {
         tb.Height = 24;
@@ -21480,12 +21491,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var dialog = new Window
         {
             Title = "Goal Seek Status",
-            Width = 380,
-            Height = result.Status == WorkbookGoalSeekStatus.Applied ? 190 : 170,
-            MinWidth = 380,
-            MinHeight = result.Status == WorkbookGoalSeekStatus.Applied ? 190 : 170,
-            MaxWidth = 380,
-            MaxHeight = result.Status == WorkbookGoalSeekStatus.Applied ? 190 : 170,
+            Width = GoalSeekStatusDialogPlanner.WindowWidth,
+            Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
+            MinWidth = GoalSeekStatusDialogPlanner.WindowWidth,
+            MinHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
+            MaxWidth = GoalSeekStatusDialogPlanner.WindowWidth,
+            MaxHeight = GoalSeekStatusDialogPlanner.WindowHeight(result.Status == WorkbookGoalSeekStatus.Applied),
             CanResize = false,
             FontFamily = FormulaBarFontFamily,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
@@ -21497,12 +21508,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = FormatGoalSeekStatus(result),
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 16),
+            Margin = new Thickness(
+                0,
+                GoalSeekStatusDialogPlanner.SummaryTopCompensation,
+                0,
+                GoalSeekStatusDialogPlanner.SummaryBottomMargin),
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
             // Space the status lines out vertically to match the Windows dialog,
             // which renders each line with a blank-line gap between them.
-            LineHeight = 28,
+            LineHeight = GoalSeekStatusDialogPlanner.SummaryLineHeight,
         };
         AutomationProperties.SetName(summaryBlock, "Goal Seek Status");
         AutomationProperties.SetAutomationId(summaryBlock, "GoalSeekStatusText");
@@ -21521,12 +21536,11 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var restoreButton = new Button
             {
                 Content = "Restore Original Values",
-                Width = 152,
-                MinWidth = 152,
-                Margin = new Thickness(4, 0, 0, 0),
+                Width = GoalSeekStatusDialogPlanner.RestoreOriginalValuesButtonWidth,
+                MinWidth = GoalSeekStatusDialogPlanner.RestoreOriginalValuesButtonWidth,
                 IsCancel = true,
             };
-            ApplyDataToolsButtonChrome(restoreButton, 152);
+            ApplyGoalSeekStatusButtonChrome(restoreButton, GoalSeekStatusDialogPlanner.RestoreOriginalValuesButtonWidth);
             AutomationProperties.SetName(restoreButton, "Restore Original Values");
             AutomationProperties.SetAutomationId(restoreButton, "GoalSeekRestoreOriginalValuesButton");
             AutomationProperties.SetHelpText(restoreButton, "Undo the Goal Seek result and restore the original changing cell value.");
@@ -21534,12 +21548,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var keepButton = new Button
             {
                 Content = "Keep Result",
-                Width = 104,
-                MinWidth = 104,
-                Margin = new Thickness(4, 0, 0, 0),
+                Width = GoalSeekStatusDialogPlanner.KeepResultButtonWidth,
+                MinWidth = GoalSeekStatusDialogPlanner.KeepResultButtonWidth,
+                Margin = new Thickness(0, 0, GoalSeekStatusDialogPlanner.ButtonGap, 0),
                 IsDefault = true,
             };
-            ApplyDataToolsButtonChrome(keepButton, 104, isDefault: true);
+            ApplyGoalSeekStatusButtonChrome(keepButton, GoalSeekStatusDialogPlanner.KeepResultButtonWidth, isDefault: true);
             AutomationProperties.SetName(keepButton, "Keep Result");
             AutomationProperties.SetAutomationId(keepButton, "GoalSeekKeepResultButton");
             AutomationProperties.SetHelpText(keepButton, "Keep the applied Goal Seek result in the workbook.");
@@ -21563,13 +21577,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             var okButton = new Button
             {
                 Content = "OK",
-                Width = 76,
-                MinWidth = 76,
-                Margin = new Thickness(4, 0, 0, 0),
+                Width = GoalSeekStatusDialogPlanner.OkButtonWidth,
+                MinWidth = GoalSeekStatusDialogPlanner.OkButtonWidth,
                 IsDefault = true,
                 IsCancel = true,
             };
-            ApplyDataToolsButtonChrome(okButton, 76, isDefault: true);
+            ApplyGoalSeekStatusButtonChrome(okButton, GoalSeekStatusDialogPlanner.OkButtonWidth, isDefault: true);
             AutomationProperties.SetName(okButton, "OK");
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
             AutomationProperties.SetHelpText(okButton, "Close the Goal Seek status dialog.");
@@ -21590,13 +21603,17 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 dialog.Close();
             }
         };
-        dialog.Content = new DockPanel
+        dialog.Content = new StackPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(GoalSeekStatusDialogPlanner.ContentMargin),
             Children =
             {
-                buttonRow,
                 summaryBlock,
+                new Border
+                {
+                    Child = buttonRow,
+                    Margin = new Thickness(0, 0, GoalSeekStatusDialogPlanner.ContentMargin, 0),
+                },
             },
         };
         dialog.Opened += (_, _) => defaultButton.Focus();

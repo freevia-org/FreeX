@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using FreeX.Core.Calc;
+using FreeX.App.Presentation.Dialogs;
 
 namespace FreeX.App.Host;
 
@@ -13,8 +14,8 @@ public sealed class GoalSeekStatusDialog : Window
     public GoalSeekStatusDialog(GoalSeekResult result, double targetValue)
     {
         Title = UiText.Get("GoalSeekStatus_GoalSeekStatus");
-        Width = 380;
-        Height = result.Converged ? 190 : 170;
+        Width = GoalSeekStatusDialogPlanner.WindowWidth;
+        Height = GoalSeekStatusDialogPlanner.WindowHeight(result.Converged);
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
@@ -37,8 +38,7 @@ public sealed class GoalSeekStatusDialog : Window
             var keepButton = new Button
             {
                 Content = UiText.Get("GoalSeekStatus_KeepResult"),
-                Width = 104,
-                Margin = new Thickness(4, 0, 0, 0),
+                Width = GoalSeekStatusDialogPlanner.KeepResultButtonWidth,
                 IsDefault = true
             };
             AutomationProperties.SetName(keepButton, UiText.Get("GoalSeekStatus_KeepResult2"));
@@ -53,8 +53,7 @@ public sealed class GoalSeekStatusDialog : Window
             var restoreButton = new Button
             {
                 Content = UiText.Get("GoalSeekStatus_RestoreOriginalValues"),
-                Width = 152,
-                Margin = new Thickness(4, 0, 0, 0),
+                Width = GoalSeekStatusDialogPlanner.RestoreOriginalValuesButtonWidth,
                 IsCancel = true
             };
             AutomationProperties.SetName(restoreButton, UiText.Get("GoalSeekStatus_RestoreOriginalValues2"));
