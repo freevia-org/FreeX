@@ -2967,6 +2967,95 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void DefaultList_UsesAuditedThreeOverTwoGeometryAndKeepsEmptySlot()
+    {
+        var data = MakeData(
+            SmartArtFamily.List,
+            "Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4", string.Empty);
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/default";
+        data.IsLiveLayoutSupported = true;
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Should().HaveCount(5);
+        shapes.Select(shape => shape.AutoShapeKind).Should().AllBeEquivalentTo(DrawingShapeKind.Rectangle);
+        var expectedBoxW = FrameCx * 5 / 16; // 0.3125 of the audited cache frame
+        var expectedBoxH = expectedBoxW * 3 / 5;
+        var expectedGap = (FrameCx - 3 * expectedBoxW) / 2;
+        var expectedTopY = FrameY + (FrameCy - (2 * expectedBoxH + expectedGap)) / 2;
+        shapes.Select(shape => shape.ExtentCxEmu).Should().AllBeEquivalentTo(expectedBoxW);
+        shapes.Select(shape => shape.ExtentCyEmu).Should().AllBeEquivalentTo(expectedBoxH);
+        shapes.Select(shape => shape.OffsetXEmu)
+            .Should().Equal(FrameX, FrameX + expectedBoxW + expectedGap,
+                FrameX + 2 * expectedBoxW + 2 * expectedGap,
+                FrameX + (expectedBoxW + expectedGap) / 2,
+                FrameX + expectedBoxW + expectedGap + (expectedBoxW + expectedGap) / 2);
+        shapes.Select(shape => shape.OffsetYEmu)
+            .Should().Equal(expectedTopY, expectedTopY, expectedTopY,
+                expectedTopY + expectedBoxH + expectedGap,
+                expectedTopY + expectedBoxH + expectedGap);
+        shapes.Take(3).Select(shape => shape.OffsetYEmu).Distinct().Should().ContainSingle();
+        shapes.Skip(3).Select(shape => shape.OffsetYEmu).Distinct().Should().ContainSingle();
+        shapes[0].OffsetXEmu.Should().BeLessThan(shapes[1].OffsetXEmu);
+        shapes[1].OffsetXEmu.Should().BeLessThan(shapes[2].OffsetXEmu);
+        shapes[3].OffsetXEmu.Should().BeGreaterThan(shapes[0].OffsetXEmu);
+        shapes[3].OffsetXEmu.Should().BeLessThan(shapes[4].OffsetXEmu);
+        shapes[4].TextBody!.Paragraphs.Should().BeEmpty("the fifth slot is an empty template rectangle");
+    }
+
+    [Fact]
+    public void Compositor_DefaultList_UsesSharedLiveSlotsOverCachedDrawing()
+    {
+        var data = MakeData(
+            SmartArtFamily.List,
+            "Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4", string.Empty);
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/default";
+        data.IsLiveLayoutSupported = true;
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 300,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "Cached default fallback" } } }
+                }
+            }
+        });
+
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 301,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        });
+
+        var text = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Where(value => value is not null)
+            .ToArray();
+
+        text.Should().Contain("Requirement 1");
+        text.Should().Contain("Requirement 4");
+        text.Should().NotContain("Cached default fallback");
+    }
+
+    [Fact]
     public void Compositor_ContinuousBlockProcess_UsesSharedLiveBlocksOverCachedDrawing()
     {
         var data = MakeChevronData("continuousBlockProcess", "Live A", "Live B", "Live C");

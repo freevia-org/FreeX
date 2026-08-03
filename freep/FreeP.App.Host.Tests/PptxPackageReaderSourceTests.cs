@@ -121,17 +121,17 @@ public sealed class PptxPackageReaderSourceTests
             .Contain("DrawingShapeKind.Ellipse")
             .And.Contain("DrawingShapeKind.RightArrow")
             .And.Contain("nodeShapes.Count + arrowShapes.Count != smart.FallbackShapes.Count")
-            .And.Contain("HasUnsupportedCycle2Effects")
+            .And.Contain("HasUnsupportedSmartArtShapeEffects")
             .And.Contain("string.IsNullOrWhiteSpace(shape.PlainText)");
 
-        ExtractMethod(source, "private static bool HasUnsupportedCycle2Effects(")
+        ExtractMethod(source, "private static bool HasUnsupportedSmartArtShapeEffects(")
             .Should()
             .Contain("effects.HasOuterShadow")
             .And.Contain("effects.HasGlow")
             .And.Contain("effects.BevelTop is not null")
             .And.Contain("effects.Scene3d is not null");
 
-        ExtractMethod(source, "private static bool HasUnsupportedCycle2DrawingEffects(")
+        ExtractMethod(source, "private static bool HasUnsupportedSmartArtDrawingEffects(")
             .Should()
             .Contain("smart.DrawingPartPath")
             .And.Contain("effectList.Elements().Any()")

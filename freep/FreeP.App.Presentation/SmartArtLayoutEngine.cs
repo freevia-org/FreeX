@@ -79,6 +79,9 @@ public static class SmartArtLayoutEngine
 
         var stylePlan = SmartArtStylePlanner.Build(data.Family, quickStyle, colors, theme, effectiveClrMap);
 
+        if (IsDefaultListLayout(data.LayoutUniqueId))
+            return LayoutDefaultListStaggered(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsVerticalBulletListLayout(data.LayoutUniqueId))
             return LayoutVerticalBulletList(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -337,6 +340,35 @@ public static class SmartArtLayoutEngine
         return shape;
     }
 
+    private static SlideShape MakeDefaultListSlot(
+        uint id, SmartArtNode node, SmartArtNodeStyle baseStyle,
+        long x, long y, long cx, long cy)
+    {
+        // The audited /default cache uses the simple-fill node color, white line,
+        // white regular text, and a 43pt DrawingML size (21.5pt in the model).
+        var style = new SmartArtNodeStyle(
+            baseStyle.Fill,
+            new ThemeAwareColor(SrgbColor.White),
+            new ThemeAwareColor(SrgbColor.White),
+            1.0);
+        var shape = MakeBox(id, node.Text, style, x, y, cx, cy, 21.5, DrawingShapeKind.Rectangle);
+        shape.Name = $"SmartArt_DefaultList_Slot_{id}";
+        if (shape.TextBody is { } body)
+        {
+            body.InsetTopPt = 12.9;
+            body.InsetBottomPt = 12.9;
+            body.InsetLeftPt = 12.9;
+            body.InsetRightPt = 12.9;
+            foreach (var run in body.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+                run.Bold = false;
+
+            if (string.IsNullOrWhiteSpace(node.Text))
+                body.Paragraphs.Clear();
+        }
+
+        return shape;
+    }
+
     private static string NormalizeSmartArtText(string? text) =>
         (text ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
 
@@ -535,6 +567,58 @@ public static class SmartArtLayoutEngine
             }
 
             curX += boxW + gap + connectorW;
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// PowerPoint's checked-in /layout/default cache is five equal rectangle slots:
+    /// three across the upper row and two centered below. The fifth node is empty but
+    /// remains an editable template slot, so it is emitted instead of being filtered.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutDefaultListStaggered(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        if (nodes.Count != 5 || fcx <= 0 || fcy <= 0)
+            return null;
+
+        // 5/16 is the audited 0.3125 cache width. Split the odd remaining
+        // space across the two gaps so the second top step receives the extra EMU.
+        var boxW = Math.Max(fcx * 5 / 16, 1L);
+        var remainingWidth = fcx - 3 * boxW;
+        var leftGap = remainingWidth / 2;
+        var rightGap = remainingWidth - leftGap;
+        var boxH = Math.Max(boxW * 3 / 5, 1L);
+        var verticalGap = Math.Max(rightGap, 1L);
+        var totalHeight = 2 * boxH + verticalGap;
+        if (leftGap <= 0 || totalHeight > fcy)
+            return null;
+
+        var topY = fy + (fcy - totalHeight) / 2;
+        var bottomY = topY + boxH + verticalGap;
+        var shapes = new List<SlideShape>(nodes.Count);
+        var baseStyle = stylePlan.GetNodeStyle(0, nodes[0].Level, SmartArtFamily.List);
+
+        var topX = new[]
+        {
+            fx,
+            fx + boxW + leftGap,
+            fx + 2 * boxW + leftGap + rightGap,
+        };
+        for (var index = 0; index < 3; index++)
+            shapes.Add(MakeDefaultListSlot(
+                (uint)(760 + index), nodes[index], baseStyle,
+                topX[index], topY, boxW, boxH));
+
+        for (var index = 0; index < 2; index++)
+        {
+            var staggeredX = topX[index] + (topX[index + 1] - topX[index]) / 2;
+            shapes.Add(MakeDefaultListSlot(
+                (uint)(763 + index), nodes[index + 3], baseStyle,
+                staggeredX, bottomY, boxW, boxH));
         }
 
         return shapes;
@@ -4156,6 +4240,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "picturegrid", StringComparison.Ordinal);
+    }
+
+    private static bool IsDefaultListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "default", StringComparison.Ordinal);
     }
 
     private static bool IsPictureAccentProcessLayout(string uniqueId)

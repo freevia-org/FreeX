@@ -2596,7 +2596,8 @@ public static class PptxPackageReader
         foreach (var pt in ptLst.Elements(dgmNsData + "pt"))
         {
             var modelId = pt.Attribute("modelId")?.Value ?? string.Empty;
-            var type    = pt.Attribute("type")?.Value ?? "node";
+            var typeValue = pt.Attribute("type")?.Value;
+            var type = string.IsNullOrWhiteSpace(typeValue) ? "node" : typeValue;
 
             // Extract text from dgm:t/a:p/a:r/a:t while preserving paragraph and break
             // boundaries. SmartArt name-and-title nodes commonly use two authored a:p
@@ -2679,6 +2680,13 @@ public static class PptxPackageReader
 
         foreach (var rootId in roots)
             data.Nodes.Add(BuildNode(rootId, 0));
+
+        if (IsDefaultListLayout(layoutUniqueId))
+        {
+            // /layout/default is a broad Office definition.  Only promote the
+            // checked-in five-slot 3-over-2 cache whose geometry is modeled below.
+            data.IsLiveLayoutSupported = CanUseDefaultListStaggeredCache(smart, data);
+        }
 
         if (IsCycle2Layout(layoutUniqueId)
             && smart.FallbackShapes.Count > 0
@@ -2830,6 +2838,15 @@ public static class PptxPackageReader
         return id.Split('/').Last() == "cycle2";
     }
 
+    private static bool IsDefaultListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "default";
+    }
+
     private static bool CanUseSimpleNodeCache(SmartArtShape smart, SmartArtData data)
     {
         var nodes = FlattenSmartArtNodes(data);
@@ -2916,8 +2933,8 @@ public static class PptxPackageReader
             || nodeShapes.Count + arrowShapes.Count != smart.FallbackShapes.Count)
             return false;
 
-        if (smart.FallbackShapes.Any(HasUnsupportedCycle2Effects)
-            || HasUnsupportedCycle2DrawingEffects(smart))
+        if (smart.FallbackShapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
             return false;
 
         for (var i = 0; i < nodes.Count; i++)
@@ -2930,7 +2947,88 @@ public static class PptxPackageReader
         return arrowShapes.All(shape => string.IsNullOrWhiteSpace(shape.PlainText));
     }
 
-    private static bool HasUnsupportedCycle2Effects(SlideShape shape)
+    private static bool CanUseDefaultListStaggeredCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsDefaultListLayout(data.LayoutUniqueId))
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        var shapes = smart.FallbackShapes;
+        if (nodes.Count != 5 || shapes.Count != 5)
+            return false;
+
+        // These are the local EMU values observed in corpus slide 4's drawing4.xml.
+        // Keep the admission signature exact; a similar-looking default layout is
+        // still safer on its preserved cached-drawing path.
+        const long slotWidth = 3_413_125;
+        const long slotHeight = 2_047_875;
+        if (!shapes.Select(shape => shape.ExtentCxEmu).All(value => value == slotWidth)
+            || !shapes.Select(shape => shape.ExtentCyEmu).All(value => value == slotHeight)
+            || !shapes.Select(shape => shape.OffsetXEmu)
+                .SequenceEqual(new long[] { 0, 3_754_437, 7_508_875, 1_877_218, 5_631_656 })
+            || !shapes.Select(shape => shape.OffsetYEmu)
+                .SequenceEqual(new long[] { 194_468, 194_468, 194_468, 2_583_656, 2_583_656 }))
+            return false;
+
+        // The audited cache has four visible node texts and one deliberately empty
+        // fifth template slot.  Preserve that slot in the live plan for authoring.
+        if (nodes.Take(4).Select(node => node.Text)
+                .Any(string.IsNullOrWhiteSpace)
+            || !string.IsNullOrWhiteSpace(nodes[4].Text))
+            return false;
+
+        if (shapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape
+                || shape.AutoShapeKind != DrawingShapeKind.Rectangle
+                || HasUnsupportedSmartArtShapeEffects(shape)))
+            return false;
+
+        if (HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        for (var index = 0; index < 4; index++)
+        {
+            if (!string.Equals(shapes[index].PlainText, nodes[index].Text, StringComparison.Ordinal))
+                return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(shapes[4].PlainText))
+            return false;
+
+        var firstRow = shapes.Take(3).ToArray();
+        var secondRow = shapes.Skip(3).ToArray();
+        if (firstRow.Any(shape => shape.ExtentCxEmu <= 0 || shape.ExtentCyEmu <= 0)
+            || secondRow.Any(shape => shape.ExtentCxEmu <= 0 || shape.ExtentCyEmu <= 0))
+            return false;
+
+        if (firstRow.Any(shape => shape.ExtentCxEmu != firstRow[0].ExtentCxEmu
+                || shape.ExtentCyEmu != firstRow[0].ExtentCyEmu)
+            || secondRow.Any(shape => shape.ExtentCxEmu != firstRow[0].ExtentCxEmu
+                || shape.ExtentCyEmu != firstRow[0].ExtentCyEmu))
+            return false;
+
+        var columnStep = firstRow[1].OffsetXEmu - firstRow[0].OffsetXEmu;
+        var secondColumnStep = firstRow[2].OffsetXEmu - firstRow[1].OffsetXEmu;
+        var horizontalGap = columnStep - firstRow[0].ExtentCxEmu;
+        var verticalGap = secondRow[0].OffsetYEmu - firstRow[0].OffsetYEmu - firstRow[0].ExtentCyEmu;
+        if (columnStep <= firstRow[0].ExtentCxEmu
+            || secondColumnStep != columnStep + 1
+            || horizontalGap <= 0
+            || Math.Abs(verticalGap - horizontalGap) > 1
+            || firstRow.Any(shape => shape.OffsetYEmu != firstRow[0].OffsetYEmu)
+            || secondRow.Any(shape => shape.OffsetYEmu != secondRow[0].OffsetYEmu))
+            return false;
+
+        // The lower pair is centered between the upper pair's columns, with the
+        // same midpoint rounding PowerPoint used in the checked-in package.
+        var expectedSecondRowFirstX = firstRow[0].OffsetXEmu
+            + (firstRow[1].OffsetXEmu - firstRow[0].OffsetXEmu) / 2;
+        var expectedSecondRowSecondX = firstRow[1].OffsetXEmu
+            + (firstRow[2].OffsetXEmu - firstRow[1].OffsetXEmu) / 2;
+        return secondRow[0].OffsetXEmu == expectedSecondRowFirstX
+            && secondRow[1].OffsetXEmu == expectedSecondRowSecondX;
+    }
+
+    private static bool HasUnsupportedSmartArtShapeEffects(SlideShape shape)
     {
         var effects = shape.Effects;
         return effects is not null
@@ -2948,7 +3046,7 @@ public static class PptxPackageReader
                 || effects.ContourColor is not null);
     }
 
-    private static bool HasUnsupportedCycle2DrawingEffects(SmartArtShape smart)
+    private static bool HasUnsupportedSmartArtDrawingEffects(SmartArtShape smart)
     {
         if (string.IsNullOrWhiteSpace(smart.DrawingPartPath)
             || !smart.Parts.TryGetValue(smart.DrawingPartPath, out var drawingPart))
@@ -3025,7 +3123,13 @@ public static class PptxPackageReader
         if (string.IsNullOrWhiteSpace(uniqueId)) return SmartArtFamily.Unknown;
 
         // Normalise to lowercase for matching
-        var uid = uniqueId.ToLowerInvariant();
+        var uid = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        var layoutId = uid.Split('/').Last();
+
+        // Office's generic default definition is list-like, but it is only
+        // renderable below after the exact audited cache signature is proven.
+        if (layoutId == "default")
+            return SmartArtFamily.List;
 
         // Order matters: check more-specific patterns first
         if (uid.Contains("hierarchy") || uid.Contains("orgchart") || uid.Contains("org-chart")

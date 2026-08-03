@@ -1,0 +1,22 @@
+using System.IO;
+
+namespace FreeP.App.Host.Tests;
+
+public sealed class SmartArtDefaultLiveRendererContractTests
+{
+    [Fact]
+    public void WpfSlideCanvas_ConsumesSharedCompositorForSmartArtDrawOps()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("SlideCompositor.Compose(");
+        source.Should().Contain("RenderOp(");
+        source.Should().NotContain("SmartArtLayoutEngine.Layout(",
+            "SmartArt geometry must remain shared with Avalonia through SlideCompositor");
+    }
+}

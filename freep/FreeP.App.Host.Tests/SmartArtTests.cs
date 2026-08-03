@@ -5421,6 +5421,120 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void RenderCompareCorpus_DefaultList_IsAdmittedOnlyForTheAuditedStaggeredCache()
+    {
+        var presentation = PptxPackageReader.Read(FindRenderCompareCorpusFile("14-smartart-live.pptx"));
+        var smartShape = presentation.Slides[3].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartShape.SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.List);
+        smartArt.Data.LayoutUniqueId.Should().EndWith("/default");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
+        smartArt.FallbackShapes.Should().HaveCount(5);
+        smartArt.FallbackShapes.Select(shape => shape.OffsetXEmu)
+            .Should().Equal(0, 3_754_437, 7_508_875, 1_877_218, 5_631_656);
+        smartArt.FallbackShapes.Select(shape => shape.OffsetYEmu)
+            .Should().Equal(194_468, 194_468, 194_468, 2_583_656, 2_583_656);
+        smartArt.FallbackShapes.Select(shape => shape.ExtentCxEmu)
+            .Should().AllBeEquivalentTo(3_413_125);
+        smartArt.FallbackShapes.Select(shape => shape.ExtentCyEmu)
+            .Should().AllBeEquivalentTo(2_047_875);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4", string.Empty);
+
+        var live = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartShape.OffsetXEmu,
+            smartShape.OffsetYEmu,
+            smartShape.ExtentCxEmu,
+            smartShape.ExtentCyEmu,
+            presentation.Theme,
+            presentation.Slides[3].ColorMapOverride,
+            smartArt.QuickStyle,
+            smartArt.Colors);
+
+        live.Should().NotBeNull();
+        live!.Should().HaveCount(5);
+        for (var index = 0; index < live.Count; index++)
+        {
+            (live[index].OffsetXEmu - smartShape.OffsetXEmu)
+                .Should().Be(smartArt.FallbackShapes[index].OffsetXEmu);
+            (live[index].OffsetYEmu - smartShape.OffsetYEmu)
+                .Should().Be(smartArt.FallbackShapes[index].OffsetYEmu);
+            live[index].ExtentCxEmu.Should().Be(smartArt.FallbackShapes[index].ExtentCxEmu);
+            live[index].ExtentCyEmu.Should().Be(smartArt.FallbackShapes[index].ExtentCyEmu);
+        }
+
+        var upper = live.Take(3).ToArray();
+        var lower = live.Skip(3).ToArray();
+        upper.Select(shape => shape.OffsetYEmu).Distinct().Should().ContainSingle();
+        lower.Select(shape => shape.OffsetYEmu).Distinct().Should().ContainSingle();
+        lower[0].OffsetXEmu.Should().BeLessThan(lower[1].OffsetXEmu);
+        live[4].TextBody!.Paragraphs.Should().BeEmpty("the fifth package slot is an empty editable template slot");
+    }
+
+    [Fact]
+    public void RenderCompareCorpus_DefaultList_EffectBearingCacheStaysCachedAndSurvivesSaveReopen()
+    {
+        var sourcePath = FindRenderCompareCorpusFile("14-smartart-live.pptx");
+        var mutatedPath = Path.Combine(_tempDir, "default-list-effect.pptx");
+        File.Copy(sourcePath, mutatedPath);
+        AddOuterShadowToDefaultDrawing(mutatedPath);
+
+        var loaded = PptxPackageReader.Read(mutatedPath);
+        var loadedSmartArt = loaded.Slides[3].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        loadedSmartArt.Data!.IsLiveLayoutSupported.Should().BeFalse();
+        SmartArtLayoutEngine.Layout(
+            loadedSmartArt.Data,
+            loaded.Slides[3].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt).OffsetXEmu,
+            loaded.Slides[3].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt).OffsetYEmu,
+            loaded.Slides[3].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt).ExtentCxEmu,
+            loaded.Slides[3].Shapes.Single(shape => shape.Kind == SlideShapeKind.SmartArt).ExtentCyEmu,
+            loaded.Theme)
+            .Should().BeNull("an effect-bearing imported cache is outside the live default contract");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var reopened = PptxPackageReader.Read(new MemoryStream(saved.ToArray()));
+        var reopenedSmartArt = reopened.Slides[3].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reopenedSmartArt.Data!.IsLiveLayoutSupported.Should().BeFalse();
+        Encoding.UTF8.GetString(reopenedSmartArt.Parts[reopenedSmartArt.DrawingPartPath!].Bytes)
+            .Should().Contain("outerShdw");
+        reopenedSmartArt.FallbackShapes.Should().HaveCount(5);
+        reopenedSmartArt.FallbackShapes[3].PlainText.Should().Be("Requirement 4");
+    }
+
+    [Theory]
+    [InlineData("slot-count")]
+    [InlineData("geometry")]
+    [InlineData("text")]
+    public void RenderCompareCorpus_DefaultList_NearMissesRemainCached(string mutation)
+    {
+        var mutatedPath = Path.Combine(_tempDir, $"default-list-{mutation}.pptx");
+        File.Copy(FindRenderCompareCorpusFile("14-smartart-live.pptx"), mutatedPath);
+        MutateDefaultDrawing(mutatedPath, mutation);
+
+        var presentation = PptxPackageReader.Read(mutatedPath);
+        var smartShape = presentation.Slides[3].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartShape.SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(mutation);
+        SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartShape.OffsetXEmu,
+            smartShape.OffsetYEmu,
+            smartShape.ExtentCxEmu,
+            smartShape.ExtentCyEmu,
+            presentation.Theme)
+            .Should().BeNull(mutation);
+    }
+
+    [Fact]
     public void Reader_ParsesSmartArtData_HierarchyWithChildren()
     {
         // root "R" has two children "C1", "C2" via parOf connections
@@ -5711,5 +5825,56 @@ public sealed class SmartArtTests : IDisposable
         }
 
         throw new FileNotFoundException($"Could not locate the RenderCompare corpus deck '{fileName}'.");
+    }
+
+    private static void AddOuterShadowToDefaultDrawing(string path) =>
+        RewriteDefaultDrawing(path, document =>
+            document.Descendants(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "effectLst")
+                .First()
+                .Add(new XElement(
+                    XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "outerShdw",
+                    new XAttribute("blurRad", "25400"))));
+
+    private static void MutateDefaultDrawing(string path, string mutation)
+    {
+        var dspNs = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var aNs = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        RewriteDefaultDrawing(path, document =>
+        {
+            var shapes = document.Descendants(dspNs + "sp").ToList();
+            switch (mutation)
+            {
+                case "slot-count":
+                    shapes[^1].Remove();
+                    break;
+                case "geometry":
+                    shapes[^1].Element(dspNs + "spPr")!
+                        .Element(aNs + "xfrm")!
+                        .Element(aNs + "off")!
+                        .SetAttributeValue("x", "5631655");
+                    break;
+                case "text":
+                    shapes[3].Descendants(aNs + "t").Single().Value = "Requirement X";
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null);
+            }
+        });
+    }
+
+    private static void RewriteDefaultDrawing(string path, Action<XDocument> mutate)
+    {
+        const string drawingPath = "ppt/diagrams/drawing4.xml";
+        using var archive = ZipFile.Open(path, ZipArchiveMode.Update);
+        var source = archive.GetEntry(drawingPath)!;
+        XDocument document;
+        using (var stream = source.Open())
+            document = XDocument.Load(stream);
+
+        mutate(document);
+        source.Delete();
+        var replacement = archive.CreateEntry(drawingPath);
+        using var writer = new StreamWriter(replacement.Open(), new UTF8Encoding(false));
+        document.Save(writer, SaveOptions.DisableFormatting);
     }
 }
