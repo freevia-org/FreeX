@@ -1947,7 +1947,15 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartLineSegmentPrimitive>();
         }
 
-        var stroke = new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 220, Thickness: 0.8);
+        var authored = chart.SeriesLineStyle;
+        if (authored?.NoFill == true)
+            return Array.Empty<ChartLineSegmentPrimitive>();
+
+        var stroke = new ChartStrokePlan(
+            authored?.Color?.Resolved ?? new SrgbColor(0x7F, 0x7F, 0x7F),
+            Alpha: 220,
+            Thickness: PointsToDip(authored?.WidthPt) ?? 0.8,
+            Dash: authored?.Dash ?? OutlineDash.Solid);
         var lines = new List<ChartLineSegmentPrimitive>();
         foreach (var series in rectangles.GroupBy(rectangle => rectangle.SeriesIndex))
         {
