@@ -16604,7 +16604,9 @@ public sealed class DocumentView : RichTextBox
     public void RemoveBookmark(string name)
     {
         CommitToModel();
-        Bookmarks.RemoveBookmark(_model, name);
+        if (string.IsNullOrWhiteSpace(name))
+            return;
+        _commands.Execute(new RemoveBookmarkCommand(name.Trim()));
         Render();
     }
 
@@ -17034,9 +17036,8 @@ public sealed class DocumentView : RichTextBox
     public IReadOnlyList<string> BookmarkNames()
     {
         CommitToModel();
-        return _model.Blocks.OfType<ModelParagraph>()
-            .Where(p => p.BookmarkName is { Length: > 0 })
-            .Select(p => p.BookmarkName!)
+        return Bookmarks.List(_model)
+            .Select(location => location.Name)
             .Distinct(StringComparer.Ordinal)
             .ToList();
     }
@@ -17051,9 +17052,9 @@ public sealed class DocumentView : RichTextBox
         Focus();
         CommitToModel();
         var index = CaretBlockIndex();
-        if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph paragraph)
+        if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
             return;
-        paragraph.BookmarkName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        _commands.Execute(new SetParagraphBookmarkNameCommand(index, name));
         Render();
     }
 
