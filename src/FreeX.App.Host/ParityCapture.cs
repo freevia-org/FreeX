@@ -25,6 +25,7 @@ using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
 using FreeX.Ribbon.Definitions;
+using Free.Shared.Shell;
 using SubtotalColumnChoice = FreeX.App.Presentation.DataTools.SubtotalDialogColumnChoice;
 using SharedRibbon = Free.Shared.Ribbon;
 
@@ -1268,6 +1269,7 @@ internal static class ParityCapture
     {
         (width, height) = surfaceId switch
         {
+            "dialog.About" => (AboutDialogMetrics.Width, AboutDialogMetrics.Height),
             "dialog.ScenarioManager" =>
                 (ScenarioManagerDialogLayout.DialogWidth, ScenarioManagerDialogLayout.DialogHeight),
             "dialog.Zoom" => (ZoomDialogPlanner.Width, ZoomDialogPlanner.Height),

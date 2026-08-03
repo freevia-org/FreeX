@@ -8,6 +8,8 @@ public static class AboutDialogMetrics
     public const double MinWidth = 480;
     public const double MinHeight = 320;
     public const double TextFontSize = 12;
+    // Linux text rendering needs this measured 0.3 DIP adjustment to match the WPF authority's
+    // line placement at the shared 560x420 client capture size.
     public const double AvaloniaTextFontSize = 12.3;
     public const double TextMinHeight = 220;
     public const double TextPadding = 8;

@@ -33,4 +33,12 @@ public sealed class AboutDialogTests
             AutomationProperties.GetAcceleratorKey(okButton).Should().Be("Alt+O");
         });
     }
+
+    [Fact]
+    public void ParityCapture_UsesSharedAboutClientGeometry()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("ParityCapture.cs");
+
+        source.Should().Contain("\"dialog.About\" => (AboutDialogMetrics.Width, AboutDialogMetrics.Height)");
+    }
 }

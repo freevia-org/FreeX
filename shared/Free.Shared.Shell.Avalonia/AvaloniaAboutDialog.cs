@@ -60,12 +60,7 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
         Opened += (_, _) =>
         {
             _aboutTextBox.FontSize = AboutDialogMetrics.AvaloniaTextFontSize;
-            _aboutTextBox.Padding = new Thickness(
-                AboutDialogMetrics.TextPadding + 2,
-                AboutDialogMetrics.TextPadding,
-                AboutDialogMetrics.TextPadding,
-                AboutDialogMetrics.TextPadding);
-            AvaloniaCompactDialogChrome.ApplyNeutralDefaultButtonChrome(_okButton);
+            _aboutTextBox.Padding = new Thickness(AboutDialogMetrics.TextPadding);
             FocusInitialKeyboardTarget();
         };
     }
@@ -79,7 +74,7 @@ public class AvaloniaAboutDialog : AvaloniaDialogWindow
             Margin = new Thickness(
                 AboutDialogMetrics.RootMargin,
                 AboutDialogMetrics.RootMargin,
-                AboutDialogMetrics.RootMargin - 1,
+                AboutDialogMetrics.RootMargin,
                 AboutDialogMetrics.RootMargin),
         };
         var ok = _okButton = new Button

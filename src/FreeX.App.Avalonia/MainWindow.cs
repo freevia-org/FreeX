@@ -326,7 +326,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private const uint PortablePdfRowsPerPage = 28;
     private const string WorkbookShareSheetLabel = "macOS Share Sheet";
     private const string NativeWorkbookExtension = ".fxl";
-    private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
     private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
     private static readonly IBrush TitleBarSurface =
@@ -30565,60 +30564,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
 
     private async Task ShowAboutDialogAsync()
     {
-        var versionText = AppHelpInfo.GetVersionText(typeof(MainWindow).Assembly);
-        var title = "About FreeX";
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 560,
-            Height = 420,
-            MinWidth = 480,
-            MinHeight = 320,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
-        };
-        AutomationProperties.SetName(dialog, title);
-        AutomationProperties.SetAutomationId(dialog, "AboutFreeXDialog");
-        AutomationProperties.SetHelpText(dialog, "View version and license information about FreeX.");
-
-        var aboutTextBox = new TextBox
-        {
-            Text = AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary),
-            IsReadOnly = true,
-            TextWrapping = TextWrapping.Wrap,
-            Padding = new Thickness(8),
-            BorderThickness = new Thickness(1),
-            MinHeight = 220,
-        };
-        AutomationProperties.SetName(aboutTextBox, title);
-        AutomationProperties.SetAutomationId(aboutTextBox, "AboutFreeXText");
-        AutomationProperties.SetHelpText(aboutTextBox, "Read-only About FreeX text.");
-
-        var okButton = new Button
-        {
-            Content = "OK",
-            IsDefault = true,
-            IsCancel = true,
-            Width = 84,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
-        };
-        ApplyDialogButtonChrome(okButton, width: 84, isDefault: true);
-        AutomationProperties.SetName(okButton, "OK");
-        AutomationProperties.SetAutomationId(okButton, "AboutFreeXOkButton");
-        AutomationProperties.SetHelpText(okButton, "Close About FreeX.");
-        okButton.Click += (_, _) => dialog.Close();
-
-        var root = new DockPanel
-        {
-            Margin = new Thickness(16),
-        };
-        DockPanel.SetDock(okButton, Dock.Bottom);
-        root.Children.Add(okButton);
-        root.Children.Add(aboutTextBox);
-
-        dialog.Content = root;
-        dialog.Opened += (_, _) => aboutTextBox.Focus();
+        var dialog = new AboutDialog();
         await dialog.ShowDialog(this);
     }
 
