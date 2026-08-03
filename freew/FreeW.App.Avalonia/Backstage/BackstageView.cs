@@ -791,11 +791,16 @@ internal sealed class BackstageView : Window
     {
         var metrics = BackstagePaneSurfacePlanner.OpenPaneVisualMetrics;
         var stack = new StackPanel { Margin = ToThickness(metrics.ActionRowMargin) };
-        stack.Children.Add(CreateLinkButton(
+        var button = CreateLinkButton(
             action.Label,
             action.Invoke,
             fontSize: metrics.ActionFontSize,
-            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}"));
+            automationId: $"BackstageAction_{action.Label.Replace(' ', '_')}");
+        // Avalonia's default Button template reserves one extra DIP here;
+        // match the WPF link-button footprint so repeated rows do not drift.
+        button.MinHeight = 17;
+        button.Height = 17;
+        stack.Children.Add(button);
         stack.Children.Add(new TextBlock
         {
             Text = action.Description,

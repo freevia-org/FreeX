@@ -284,6 +284,12 @@ public class BackstageViewTests
             tabs.Items.Cast<TabItem>().Should().OnlyContain(item => item.MinHeight == 22);
             tabs.SelectedIndex.Should().Be(0);
             tabs.SelectedItem.Should().Be(items[0]);
+
+            view.GetLogicalDescendants()
+                .OfType<Button>()
+                .Where(button => (AutomationProperties.GetAutomationId(button) ?? string.Empty)
+                    .StartsWith("BackstageAction_", StringComparison.Ordinal))
+                .Should().OnlyContain(button => button.Height == 17 && button.MinHeight == 17);
         }, CancellationToken.None);
     }
 
