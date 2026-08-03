@@ -1524,6 +1524,8 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderLineChart(DrawingContext dc, ChartScenePlan scene)
     {
+        foreach (var bar in scene.UpDownBars)
+            dc.DrawRectangle(ToBrush(bar.Fill), bar.Stroke.HasValue ? ToPen(bar.Stroke.Value) : null, ToRect(bar.Bounds));
         RenderDropLines(dc, scene.DropLines);
         foreach (var primitive in scene.LineSeries)
             RenderLineSeriesPrimitive(dc, primitive);

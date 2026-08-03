@@ -575,6 +575,8 @@ public sealed class ChartScenePlan
     public IReadOnlyList<ChartLineSegmentPrimitive> OfPieSeriesLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     /// <summary>Vertical line-chart connectors from each point to the category axis.</summary>
     public IReadOnlyList<ChartLineSegmentPrimitive> DropLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
+    /// <summary>Filled intervals between the first two line-series points.</summary>
+    public IReadOnlyList<ChartRectPrimitive> UpDownBars { get; init; } = Array.Empty<ChartRectPrimitive>();
     public ChartDataTablePrimitivePlan DataTable { get; init; }
     public ChartSecondaryValueAxisPrimitivePlan SecondaryAxis { get; init; }
     public IReadOnlyList<ChartTextPlan> CategoryAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
@@ -1665,6 +1667,9 @@ public static partial class ChartRenderPlanner
         var dropLines = chart.ShowDropLines
             ? BuildDropLinePrimitives(plot, geometryKind, lineSeries)
             : Array.Empty<ChartLineSegmentPrimitive>();
+        var upDownBars = chart.ShowUpDownBars
+            ? BuildUpDownBarPrimitives(chart, plot, geometryKind, lineSeries)
+            : Array.Empty<ChartRectPrimitive>();
         var dataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans);
         var ofPieSeriesLines = chart.ChartType == ChartType.OfPie
             ? BuildOfPieSeriesLines(chart, ofPieSecondaryType, pieSlices, ofPieSecondarySlices, rectangles)
@@ -1697,6 +1702,7 @@ public static partial class ChartRenderPlanner
                 geometryKind == ChartSceneGeometryKind.Pie ? pieSlices : doughnutSlices),
             OfPieSeriesLines = ofPieSeriesLines,
             DropLines = dropLines,
+            UpDownBars = upDownBars,
             DataTable = BuildDataTablePrimitivePlan(chart, frame, seriesColors, fillPlans),
             SecondaryAxis = BuildSecondaryValueAxisPrimitivePlan(chart, frame),
             CategoryAxisLabels = BuildCategoryAxisLabelPlans(chart, frame),
@@ -1753,6 +1759,57 @@ public static partial class ChartRenderPlanner
 
         return lines;
     }
+
+    private static IReadOnlyList<ChartRectPrimitive> BuildUpDownBarPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        ChartSceneGeometryKind geometryKind,
+        IReadOnlyList<ChartLineSeriesPrimitive> lineSeries)
+    {
+        if (!plot.HasPositiveArea || geometryKind != ChartSceneGeometryKind.Line || lineSeries.Count < 2)
+            return Array.Empty<ChartRectPrimitive>();
+
+        var first = lineSeries[0].Points;
+        var second = lineSeries[1].Points;
+        int pointCount = Math.Min(first.Count, second.Count);
+        if (pointCount == 0)
+            return Array.Empty<ChartRectPrimitive>();
+
+        double categoryWidth = plot.Width / Math.Max(1, pointCount);
+        double gapWidth = Math.Clamp(chart.UpDownBarGapWidthPercent ?? 150, 0, 500);
+        double barWidth = categoryWidth * 100.0 / (100.0 + gapWidth);
+        var upFill = ResolveUpDownFill(chart.UpBarFill, new SrgbColor(0x70, 0xAD, 0x47));
+        var downFill = ResolveUpDownFill(chart.DownBarFill, new SrgbColor(0xC0, 0x00, 0x00));
+        var bars = new List<ChartRectPrimitive>();
+        for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+        {
+            if (first[pointIndex] is not { } firstPoint || second[pointIndex] is not { } secondPoint)
+                continue;
+
+            double top = Math.Min(firstPoint.Y, secondPoint.Y);
+            double bottom = Math.Max(firstPoint.Y, secondPoint.Y);
+            if (bottom <= top)
+                continue;
+
+            bars.Add(new ChartRectPrimitive(
+                SeriesIndex: lineSeries[1].SeriesIndex,
+                CategoryIndex: pointIndex,
+                Bounds: new ChartPlanRect(
+                    firstPoint.X - barWidth / 2.0,
+                    top,
+                    barWidth,
+                    bottom - top),
+                Fill: secondPoint.Y < firstPoint.Y ? upFill : downFill,
+                Stroke: null));
+        }
+
+        return bars;
+    }
+
+    private static ChartFillPlan ResolveUpDownFill(ShapeFill? fill, SrgbColor fallback) =>
+        fill is ShapeFill.Solid solid
+            ? new ChartFillPlan(solid.Color.Resolved, Alpha: 255)
+            : new ChartFillPlan(fallback, Alpha: 255);
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildDataLabelLeaderLines(
         ChartShape chart,

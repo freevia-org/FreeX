@@ -179,6 +179,51 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_EmitsUpDownBarsBetweenFirstTwoLineSeries()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            ShowUpDownBars = true,
+            UpDownBarGapWidthPercent = 100,
+            UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33)),
+            DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC)),
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var first = new ChartSeries { Name = "Open" };
+        first.Values.AddRange(new double?[] { 10, 20, 15 });
+        var second = new ChartSeries { Name = "Close" };
+        second.Values.AddRange(new double?[] { 20, 10, 15 });
+        chart.Series.Add(first);
+        chart.Series.Add(second);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.UpDownBars.Should().HaveCount(2);
+        scene.UpDownBars[0].Bounds.Height.Should().BeGreaterThan(0);
+        scene.UpDownBars[0].Fill.Color.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        scene.UpDownBars[1].Fill.Color.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
+    }
+
+    [Fact]
+    public void BuildScenePlan_DoesNotEmitUpDownBarsForSingleSeries()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            ShowUpDownBars = true,
+            Categories = { "Q1", "Q2" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.UpDownBars.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildScenePlan_RespectsScatterXPlusOnlyAndNoEndCap()
     {
         var chart = new ChartShape { ChartType = ChartType.Scatter, ScatterStyle = ScatterStyle.Marker };

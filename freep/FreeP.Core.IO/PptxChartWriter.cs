@@ -511,6 +511,16 @@ internal static class PptxChartWriter
             BuildVaryColorsEl(chart),
             seriesEls,
             chart.ShowDropLines ? new XElement(C + "dropLines") : null,
+            chart.ShowUpDownBars
+                ? new XElement(C + "upDownBars",
+                    chart.UpDownBarGapWidthPercent is { } gapWidth
+                        ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
+                        : null,
+                    new XElement(C + "upBars",
+                        chart.UpBarFill is null ? null : new XElement(C + "spPr", BuildChartFillEl(chart.UpBarFill, null))),
+                    new XElement(C + "downBars",
+                        chart.DownBarFill is null ? null : new XElement(C + "spPr", BuildChartFillEl(chart.DownBarFill, null))))
+                : null,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
 
