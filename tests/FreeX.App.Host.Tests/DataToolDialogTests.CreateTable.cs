@@ -18,7 +18,8 @@ public sealed partial class DataToolDialogTests
 
         source.Should().Contain("_headersBox");
         source.Should().Contain("Content = UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey)");
-        source.Should().Contain("new Label { Content = UiText.Get(CreateTableDialogPlanner.RangeLabelKey), Target = _rangeBox");
+        source.Should().Contain("Content = UiText.Get(CreateTableDialogPlanner.RangeLabelKey)");
+        source.Should().Contain("Target = _rangeBox");
         source.Should().Contain("CreateReferenceEditor(_rangeBox");
         source.Should().Contain("DialogReferencePicker.CreateEditor");
         source.Should().Contain("RequestRangeSelection");

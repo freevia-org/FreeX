@@ -13,7 +13,11 @@ public sealed class CreateTableDialog : Window
 {
     private readonly SheetId _sheetId;
     private readonly TextBox _rangeBox = new();
-    private readonly CheckBox _headersBox = new() { Content = UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey), IsChecked = true };
+    private readonly CheckBox _headersBox = new()
+    {
+        Content = UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey),
+        IsChecked = CreateTableDialogPlanner.DefaultFirstRowHasHeaders
+    };
     private readonly string _tableStyleName;
     private readonly Action<CreateTableRangeSelectionRequest>? _requestRangeSelection;
 
@@ -44,10 +48,16 @@ public sealed class CreateTableDialog : Window
         AutomationProperties.SetName(_headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));
         AutomationProperties.SetAutomationId(_headersBox, CreateTableDialogPlanner.HeadersBoxAutomationId);
         AutomationProperties.SetHelpText(_headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationHelpTextKey));
-        var root = new StackPanel { Margin = new Thickness(16) };
-        root.Children.Add(new Label { Content = UiText.Get(CreateTableDialogPlanner.RangeLabelKey), Target = _rangeBox, Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4) });
+        var root = new StackPanel { Margin = new Thickness(CreateTableDialogPlanner.ContentMargin) };
+        root.Children.Add(new Label
+        {
+            Content = UiText.Get(CreateTableDialogPlanner.RangeLabelKey),
+            Target = _rangeBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.RangeLabelBottomMargin)
+        });
         root.Children.Add(CreateReferenceEditor(_rangeBox, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey), RequestRangeSelection));
-        _headersBox.Margin = new Thickness(0, 0, 0, 16);
+        _headersBox.Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.HeadersBottomMargin);
         root.Children.Add(_headersBox);
         root.Children.Add(TextToColumnsDialog.CreateButtonRow(Accept));
         Content = root;
@@ -72,7 +82,7 @@ public sealed class CreateTableDialog : Window
         Action<DialogReferencePickerRequest>? requestSelection)
     {
         var panel = DialogReferencePicker.CreateEditor(textBox, automationName, requestSelection: requestSelection);
-        panel.Margin = new Thickness(0, 0, 0, 12);
+        panel.Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.RangeEditorBottomMargin);
         return panel;
     }
 

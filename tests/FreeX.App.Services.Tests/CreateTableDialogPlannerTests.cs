@@ -51,8 +51,28 @@ public sealed class CreateTableDialogPlannerTests
         CreateTableDialogPlanner.Width.Should().Be(360);
         CreateTableDialogPlanner.Height.Should().Be(190);
         CreateTableDialogPlanner.ButtonWidth.Should().Be(76);
+        CreateTableDialogPlanner.DefaultFirstRowHasHeaders.Should().BeTrue();
+        CreateTableDialogPlanner.ContentMargin.Should().Be(16);
+        CreateTableDialogPlanner.RangeLabelBottomMargin.Should().Be(4);
+        CreateTableDialogPlanner.RangeEditorBottomMargin.Should().Be(12);
+        CreateTableDialogPlanner.HeadersBottomMargin.Should().Be(16);
+        CreateTableDialogPlanner.RangeBoxMinimumWidth.Should().Be(248);
+        CreateTableDialogPlanner.RangePickerWidth.Should().Be(28);
+        CreateTableDialogPlanner.RangePickerGap.Should().Be(6);
+        CreateTableDialogPlanner.ActionRowTopMargin.Should().Be(12);
         CreateTableDialogPlanner.DialogAutomationId.Should().Be("CreateTableDialog");
         CreateTableDialogPlanner.RangeBoxAutomationId.Should().Be("CreateTableRangeBox");
         CreateTableDialogPlanner.HeadersBoxAutomationId.Should().Be("CreateTableHeadersBox");
+    }
+
+    [Fact]
+    public void TryParse_DelegatesRangeSemanticsToSharedPresentationParser()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Services", "CreateTableDialogPlanner.cs"));
+
+        source.Should().Contain("CreateTableInputParser.TryParse(");
+        source.Should().Contain("CreateTableInputParseIssue.MinimumRows");
+        source.Should().NotContain("GridRange.Parse(trimmedRangeText, sheetId)");
     }
 }

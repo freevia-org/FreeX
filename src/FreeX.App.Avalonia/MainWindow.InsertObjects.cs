@@ -217,14 +217,17 @@ public sealed partial class MainWindow
 
         var sourceRange = TableCreationPlanner.PlanSourceRange(_session.ActiveSheet, _session.SelectedRange);
         var defaultRangeText = FormatRangeReference(sourceRange);
-        var plan = await ShowCreateTableDialogAsync(defaultRangeText, tableStyleName: string.Empty);
+        var defaultStyle = TableStyleGalleryPlanner.GetOption(0, _session.Workbook.Theme);
+        var plan = await ShowCreateTableDialogAsync(defaultRangeText, defaultStyle.StyleName);
         if (plan is null)
             return;
 
-        var command = TableCreationPlanner.BuildInsertCommand(
+        var command = TableCreationPlanner.BuildStyledCommand(
             _session.ActiveSheet.Id,
             plan.Range,
-            plan.FirstRowHasHeaders);
+            plan.TableStyleName,
+            plan.FirstRowHasHeaders,
+            defaultStyle.Banding);
         var result = _session.ExecuteReviewCommand(command);
         if (!result.Success)
         {
@@ -250,7 +253,11 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, CreateTableDialogPlanner.DialogAutomationId);
 
-        var rangeBox = new TextBox { Text = defaultRangeText, MinWidth = 248 };
+        var rangeBox = new TextBox
+        {
+            Text = defaultRangeText,
+            MinWidth = CreateTableDialogPlanner.RangeBoxMinimumWidth
+        };
         ApplyInsertObjectTextBoxChrome(rangeBox);
         // Lighter selection highlight so the (auto-selected) range text stays readable in black —
         // Avalonia's default accent selection is too dark for black text (matches Windows' lighter selection).
@@ -262,17 +269,17 @@ public sealed partial class MainWindow
         var rangePicker = new Button
         {
             Content = "...",
-            Margin = new Thickness(4, 0, 0, 0),
+            Margin = new Thickness(0, 0, CreateTableDialogPlanner.RangePickerGap, 0),
         };
-        ApplyInsertObjectFixedButtonChrome(rangePicker, 28);
+        ApplyInsertObjectFixedButtonChrome(rangePicker, CreateTableDialogPlanner.RangePickerWidth);
         AutomationProperties.SetName(rangePicker, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey));
         AutomationProperties.SetAutomationId(rangePicker, "CreateTableRangePicker");
 
         var headersBox = new CheckBox
         {
             Content = StripDisplayMnemonic(UiText.Get(CreateTableDialogPlanner.HeadersCheckBoxKey)),
-            IsChecked = true,
-            Margin = new Thickness(0, 0, 0, 16),
+            IsChecked = CreateTableDialogPlanner.DefaultFirstRowHasHeaders,
+            Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.HeadersBottomMargin),
         };
         ApplyInsertObjectCheckBoxChrome(headersBox);
         AutomationProperties.SetName(headersBox, UiText.Get(CreateTableDialogPlanner.HeadersAutomationNameKey));
@@ -291,7 +298,7 @@ public sealed partial class MainWindow
             IsCancel = true,
         };
         ApplyInsertObjectFixedButtonChrome(cancelButton, CreateTableDialogPlanner.ButtonWidth);
-        okButton.Click += (_, _) =>
+        okButton.Click += async (_, _) =>
         {
             if (!CreateTableDialogPlanner.TryParse(
                     _session.ActiveSheet.Id,
@@ -301,7 +308,10 @@ public sealed partial class MainWindow
                     out var parsed,
                     out var errorKey))
             {
-                ShowEditIssue(UiText.Get(errorKey ?? CreateTableDialogPlanner.InvalidRangeMessageKey));
+                await AvaloniaUserMessageDialog.ShowWarningAsync(
+                    dialog,
+                    UiText.Get(errorKey ?? CreateTableDialogPlanner.InvalidRangeMessageKey),
+                    UiText.Get(CreateTableDialogPlanner.TitleKey));
                 rangeBox.Focus();
                 rangeBox.SelectAll();
                 return;
@@ -312,31 +322,34 @@ public sealed partial class MainWindow
         };
         cancelButton.Click += (_, _) => dialog.Close();
 
-        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
+            [okButton, cancelButton],
+            new Thickness(0, CreateTableDialogPlanner.ActionRowTopMargin, 0, 0));
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(CreateTableDialogPlanner.ContentMargin),
             Children =
             {
                 new TextBlock
                 {
                     Text = StripDisplayMnemonic(UiText.Get(CreateTableDialogPlanner.RangeLabelKey)),
-                    Margin = new Thickness(0, 0, 0, 4),
+                    Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.RangeLabelBottomMargin),
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
                 },
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Margin = new Thickness(0, 0, 0, 12),
-                    Children = { rangeBox, rangePicker },
+                    Margin = new Thickness(0, 0, 0, CreateTableDialogPlanner.RangeEditorBottomMargin),
+                    Children = { rangePicker, rangeBox },
                 },
                 headersBox,
                 buttonRow,
             },
         };
         AttachDialogRangePicker(dialog, rangePicker, rangeBox, "range.create-table.range");
+        ConfigureDialogCancelOnEscape(dialog, cancelButton);
         dialog.Opened += (_, _) =>
         {
             rangeBox.Focus();

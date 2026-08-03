@@ -1,3 +1,4 @@
+using FreeX.App.Presentation.TableUI;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Services;
@@ -25,6 +26,15 @@ public static class CreateTableDialogPlanner
     public const double Width = 360;
     public const double Height = 190;
     public const double ButtonWidth = 76;
+    public const bool DefaultFirstRowHasHeaders = true;
+    public const double ContentMargin = 16;
+    public const double RangeLabelBottomMargin = 4;
+    public const double RangeEditorBottomMargin = 12;
+    public const double HeadersBottomMargin = 16;
+    public const double RangeBoxMinimumWidth = 248;
+    public const double RangePickerWidth = 28;
+    public const double RangePickerGap = 6;
+    public const double ActionRowTopMargin = 12;
 
     public static bool TryParse(
         SheetId sheetId,
@@ -35,33 +45,26 @@ public static class CreateTableDialogPlanner
         out string? errorKey)
     {
         plan = default!;
-        errorKey = null;
-        if (string.IsNullOrWhiteSpace(rangeText))
+        if (!CreateTableInputParser.TryParse(
+                sheetId,
+                rangeText,
+                firstRowHasHeaders,
+                tableStyleName,
+                out var parsed,
+                out var issue))
         {
-            errorKey = MissingRangeMessageKey;
-            return false;
-        }
-
-        try
-        {
-            var trimmedRangeText = rangeText.Trim();
-            var range = trimmedRangeText.Contains(':', StringComparison.Ordinal)
-                ? GridRange.Parse(trimmedRangeText, sheetId)
-                : new GridRange(CellAddress.Parse(trimmedRangeText, sheetId), CellAddress.Parse(trimmedRangeText, sheetId));
-
-            if (range.End.Row <= range.Start.Row)
+            errorKey = issue switch
             {
-                errorKey = MinimumRowsMessageKey;
-                return false;
-            }
-
-            plan = new CreateTableDialogPlan(range, firstRowHasHeaders, tableStyleName.Trim());
-            return true;
-        }
-        catch (FormatException)
-        {
-            errorKey = InvalidRangeMessageKey;
+                CreateTableInputParseIssue.MissingRange => MissingRangeMessageKey,
+                CreateTableInputParseIssue.MinimumRows => MinimumRowsMessageKey,
+                CreateTableInputParseIssue.InvalidRange => InvalidRangeMessageKey,
+                _ => InvalidRangeMessageKey,
+            };
             return false;
         }
+
+        plan = new CreateTableDialogPlan(parsed.Range, parsed.FirstRowHasHeaders, parsed.TableStyleName);
+        errorKey = null;
+        return true;
     }
 }

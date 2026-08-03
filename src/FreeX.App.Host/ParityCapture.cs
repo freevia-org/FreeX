@@ -620,6 +620,11 @@ internal static class ParityCapture
                         TextToColumnsParityFixture.SampleRows,
                         new CellAddress(sheet.Id, 2, 6)));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.CreateTable", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.CreateTable", outDir, () =>
+                    new CreateTableDialog(sheet.Id, "Sheet1!$A$1:$D$5", "TableStyleMedium2"));
+            }
             else if (string.Equals(targetSurfaceId, "dialog.ScenarioManager", StringComparison.Ordinal))
             {
                 ScenarioManagerParityFixture.Seed(workbook, sheet.Id);
@@ -645,7 +650,7 @@ internal static class ParityCapture
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.EvaluateFormula, dialog.TextToColumns, dialog.ScenarioManager, and the targeted Options tabs.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.CreateTable, dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.EvaluateFormula, dialog.TextToColumns, dialog.ScenarioManager, and the targeted Options tabs.");
             }
 
             return;

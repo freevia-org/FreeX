@@ -2601,7 +2601,9 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("ShowCreateTableDialogAsync(\"Sheet1!$A$1:$D$5\", \"TableStyleMedium2\")");
         insertObjectsSource.Should().Contain("private async Task InsertTableFromSelectionAsync()");
         insertObjectsSource.Should().Contain("TableCreationPlanner.PlanSourceRange(_session.ActiveSheet, _session.SelectedRange)");
-        insertObjectsSource.Should().Contain("await ShowCreateTableDialogAsync(defaultRangeText, tableStyleName: string.Empty)");
+        insertObjectsSource.Should().Contain("var defaultStyle = TableStyleGalleryPlanner.GetOption(0, _session.Workbook.Theme)");
+        insertObjectsSource.Should().Contain("await ShowCreateTableDialogAsync(defaultRangeText, defaultStyle.StyleName)");
+        insertObjectsSource.Should().Contain("TableCreationPlanner.BuildStyledCommand(");
         insertObjectsSource.Should().Contain("CreateTableDialogPlanner.TryParse(");
         insertObjectsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, CreateTableDialogPlanner.DialogAutomationId)");
         insertObjectsSource.Should().Contain("AutomationProperties.SetAutomationId(rangeBox, CreateTableDialogPlanner.RangeBoxAutomationId)");
