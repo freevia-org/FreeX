@@ -21,7 +21,7 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
     {
         Owner = owner;
         Title = CustomizeThemeFontsDialogPlanner.Title;
-        Width = 380;
+        Width = CustomizeThemeFontsDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -30,7 +30,7 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
         var state = CustomizeThemeFontsDialogPlanner.BuildInitialState(current);
         _headingCombo = FontCombo(state.HeadingFontText);
         _bodyCombo    = FontCombo(state.BodyFontText);
-        _nameBox      = new TextBox { Text = state.NameText, MinWidth = 200 };
+        _nameBox      = new TextBox { Text = state.NameText, MinWidth = CustomizeThemeFontsDialogPlanner.FieldMinWidth };
 
         Content = BuildContent();
         Loaded += (_, _) => _headingCombo.Focus();
@@ -38,8 +38,8 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
 
     private UIElement BuildContent()
     {
-        var grid = new Grid { Margin = new Thickness(14) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(130) });
+        var grid = new Grid { Margin = new Thickness(CustomizeThemeFontsDialogPlanner.DialogMargin) };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CustomizeThemeFontsDialogPlanner.LabelColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         for (var i = 0; i < 5; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -50,7 +50,7 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
             TextWrapping = TextWrapping.Wrap,
             Foreground = System.Windows.Media.Brushes.Gray,
             FontSize = 10,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, CustomizeThemeFontsDialogPlanner.HintBottomMargin)
         };
         Grid.SetRow(hint, 0);
         Grid.SetColumnSpan(hint, 2);
@@ -62,10 +62,10 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
             {
                 Text = label,
                 VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 4, 8, 4)
+                Margin = new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, CustomizeThemeFontsDialogPlanner.LabelRightMargin, CustomizeThemeFontsDialogPlanner.RowMargin)
             };
             if (field is FrameworkElement fe)
-                fe.Margin = new Thickness(0, 4, 0, 4);
+                fe.Margin = new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, 0, CustomizeThemeFontsDialogPlanner.RowMargin);
             Grid.SetRow(lbl, row); Grid.SetColumn(lbl, 0);
             Grid.SetRow(field, row); Grid.SetColumn(field, 1);
             grid.Children.Add(lbl);
@@ -75,7 +75,10 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
         AddRow(1, "Heading font:", _headingCombo);
         AddRow(2, "Body font:",    _bodyCombo);
 
-        var sep = new Separator { Margin = new Thickness(0, 6, 0, 2) };
+        var sep = new Separator
+        {
+            Margin = new Thickness(0, CustomizeThemeFontsDialogPlanner.SeparatorTopMargin, 0, CustomizeThemeFontsDialogPlanner.SeparatorBottomMargin)
+        };
         Grid.SetRow(sep, 3); Grid.SetColumnSpan(sep, 2);
         grid.Children.Add(sep);
 
@@ -84,14 +87,18 @@ internal sealed class CustomizeThemeFontsDialog : Free.Shared.Ribbon.Wpf.DialogW
         // Append button row below the grid.
         var panel = new StackPanel();
         panel.Children.Add(grid);
-        panel.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: 72,
-            rowMargin: new Thickness(14, 8, 14, 14)));
+        panel.Children.Add(DialogButtonRowFactory.Create(Accept, buttonWidth: CustomizeThemeFontsDialogPlanner.ActionButtonWidth,
+            rowMargin: new Thickness(
+                CustomizeThemeFontsDialogPlanner.DialogMargin,
+                CustomizeThemeFontsDialogPlanner.ActionRowTopMargin,
+                CustomizeThemeFontsDialogPlanner.DialogMargin,
+                CustomizeThemeFontsDialogPlanner.ActionRowBottomMargin)));
         return panel;
     }
 
     private static ComboBox FontCombo(string current)
     {
-        var combo = new ComboBox { IsEditable = true, MinWidth = 200 };
+        var combo = new ComboBox { IsEditable = true, MinWidth = CustomizeThemeFontsDialogPlanner.FieldMinWidth };
         foreach (var f in CustomizeThemeFontsDialogPlanner.CommonFonts)
             combo.Items.Add(f);
         combo.Text = current;

@@ -338,7 +338,8 @@ internal static class InsertDialogLayout
         string label,
         Control field,
         double? rowHeight = null,
-        Thickness? labelMargin = null)
+        Thickness? labelMargin = null,
+        Thickness? fieldMargin = null)
     {
         grid.RowDefinitions.Add(new RowDefinition
         {
@@ -357,6 +358,8 @@ internal static class InsertDialogLayout
 
         Grid.SetRow(field, row);
         Grid.SetColumn(field, 1);
+        if (fieldMargin is { } margin)
+            field.Margin = margin;
         grid.Children.Add(field);
     }
 

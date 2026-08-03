@@ -16,6 +16,23 @@ public sealed class DesignDialogParitySourceTests
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.BuildInitialState(current)");
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.TryBuildResult(");
         fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.CommonFonts");
+        fonts.Should().Contain("DialogMessageHelper.ShowWarning");
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.DialogWidth");
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.DialogMargin");
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.LabelColumnWidth");
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.FieldMinWidth");
+        fonts.Should().Contain("CustomizeThemeFontsDialogPlanner.ActionButtonWidth");
+
+        var avalonia = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "DesignDialogParity.cs"));
+        avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.DialogWidth");
+        avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.DialogMargin");
+        avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.LabelColumnWidth");
+        avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.FieldMinWidth");
+        avalonia.Should().Contain("CustomizeThemeFontsDialogPlanner.ActionButtonWidth");
+        avalonia.Should().Contain("AvaloniaCompactDialogChrome.DialogSeparatorBrush");
+        avalonia.Should().Contain("CreateActionButton(");
+        avalonia.Should().Contain("ApplyValidationStatus");
+        avalonia.Should().Contain("(validation?.Field == CustomizeThemeFontsDialogField.BodyFont ? _body : _heading).Focus();");
     }
 
     [Fact]

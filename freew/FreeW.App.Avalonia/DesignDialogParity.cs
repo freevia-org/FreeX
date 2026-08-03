@@ -39,7 +39,7 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
         CanResize = false;
         ShowInTaskbar = false;
 
-        var content = new StackPanel { Margin = new Thickness(14) };
+        var content = new StackPanel { Margin = new Thickness(CustomizeThemeFontsDialogPlanner.DialogMargin) };
         content.Children.Add(new TextBlock
         {
             Text = CustomizeThemeColorsDialogPlanner.Hint,
@@ -148,11 +148,11 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         var state = CustomizeThemeFontsDialogPlanner.BuildInitialState(current);
         _heading = MakeFontBox(state.HeadingFontText);
         _body = MakeFontBox(state.BodyFontText);
-        _name = new TextBox { Text = state.NameText, MinWidth = 220 };
+        _name = new TextBox { Text = state.NameText, MinWidth = CustomizeThemeFontsDialogPlanner.FieldMinWidth };
         AvaloniaCompactDialogChrome.ApplyTextBox(_name, InsertDialogLayout.ChromeStyle);
 
         Title = CustomizeThemeFontsDialogPlanner.Title;
-        Width = 410;
+        Width = CustomizeThemeFontsDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -162,15 +162,30 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
         content.Children.Add(new TextBlock
         {
             Text = CustomizeThemeFontsDialogPlanner.Hint,
+            TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
-            Margin = new Thickness(0, 0, 0, 10),
+            FontSize = 10,
+            Margin = new Thickness(0, 0, 0, CustomizeThemeFontsDialogPlanner.HintBottomMargin),
         });
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(145) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CustomizeThemeFontsDialogPlanner.LabelColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        InsertDialogLayout.AddLabeledRow(grid, 0, "Heading font:", _heading);
-        InsertDialogLayout.AddLabeledRow(grid, 1, "Body font:", _body);
-        InsertDialogLayout.AddLabeledRow(grid, 2, "Name:", _name);
+        var rowLabelMargin = new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, CustomizeThemeFontsDialogPlanner.LabelRightMargin, CustomizeThemeFontsDialogPlanner.RowMargin);
+        var rowFieldMargin = new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, 0, CustomizeThemeFontsDialogPlanner.RowMargin);
+        InsertDialogLayout.AddLabeledRow(grid, 0, "Heading font:", _heading, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        InsertDialogLayout.AddLabeledRow(grid, 1, "Body font:", _body, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        var separator = new Border
+        {
+            Height = CustomizeThemeFontsDialogPlanner.SeparatorHeight,
+            Background = AvaloniaCompactDialogChrome.DialogSeparatorBrush,
+            Margin = new Thickness(0, CustomizeThemeFontsDialogPlanner.SeparatorTopMargin, 0, CustomizeThemeFontsDialogPlanner.SeparatorBottomMargin),
+        };
+        Grid.SetRow(separator, 2);
+        Grid.SetColumnSpan(separator, 2);
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.Children.Add(separator);
+        InsertDialogLayout.AddLabeledRow(grid, 3, "Name:", _name, labelMargin: rowLabelMargin, fieldMargin: rowFieldMargin);
+        grid.Margin = new Thickness(0, 0, 0, CustomizeThemeFontsDialogPlanner.DialogMargin);
         content.Children.Add(grid);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(0, 8, 0, 0));
         content.Children.Add(_status);
@@ -202,14 +217,18 @@ public sealed class CustomizeThemeFontsDialog : FreeWDialogWindow
 
     private StackPanel CreateActionRow()
     {
-        var ok = InsertDialogLayout.MakeButton("OK", (_, _) => Accept(closeOnSuccess: true));
-        var cancel = InsertDialogLayout.MakeButton("Cancel", (_, _) => Close());
-        return AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
+        var ok = AvaloniaCompactDialogChrome.CreateActionButton(
+            "OK", () => Accept(closeOnSuccess: true), CustomizeThemeFontsDialogPlanner.ActionButtonWidth, isDefault: true);
+        var cancel = AvaloniaCompactDialogChrome.CreateActionButton(
+            "Cancel", Close, CustomizeThemeFontsDialogPlanner.ActionButtonWidth, isCancel: true);
+        return AvaloniaCompactDialogChrome.CreateActionRow(
+            [ok, cancel],
+            new Thickness(0, CustomizeThemeFontsDialogPlanner.ActionRowTopMargin, 0, 0));
     }
 
     private static ComboBox MakeFontBox(string value)
     {
-        var combo = new ComboBox { IsEditable = true, Text = value, MinWidth = 220 };
+        var combo = new ComboBox { IsEditable = true, Text = value, MinWidth = CustomizeThemeFontsDialogPlanner.FieldMinWidth };
         combo.ItemsSource = CustomizeThemeFontsDialogPlanner.CommonFonts;
         AvaloniaCompactDialogChrome.ApplyComboBox(combo, InsertDialogLayout.ChromeStyle);
         return combo;

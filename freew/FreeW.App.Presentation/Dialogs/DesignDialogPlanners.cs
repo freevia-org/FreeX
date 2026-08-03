@@ -130,6 +130,19 @@ public static class CustomizeThemeFontsDialogPlanner
     public const string Title = "Create New Theme Fonts";
     public const string Hint = "Type a font name or select one from the list.";
     public const string DefaultName = "Custom";
+    public const double DialogWidth = 380;
+    public const double DialogMargin = 14;
+    public const double LabelColumnWidth = 130;
+    public const double FieldMinWidth = 200;
+    public const double ActionButtonWidth = 72;
+    public const double HintBottomMargin = 8;
+    public const double ActionRowTopMargin = 8;
+    public const double ActionRowBottomMargin = 14;
+    public const double RowMargin = 4;
+    public const double LabelRightMargin = 8;
+    public const double SeparatorHeight = 1;
+    public const double SeparatorTopMargin = 6;
+    public const double SeparatorBottomMargin = 2;
 
     public static readonly IReadOnlyList<string> CommonFonts =
     [

@@ -1,7 +1,9 @@
 using System.IO;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
+using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -97,6 +99,63 @@ public sealed class DesignDialogParityTests
             var spacing = new CustomParagraphSpacingDialog(DocumentParagraphSpacingSet.Default);
             spacing.AcceptForTests().Should().BeTrue();
             spacing.Result.Should().Be(new DocumentParagraphSpacingSet("Custom", 0, 6, 1.15));
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ThemeFontsDialog_UsesWpfGeometryAndActionSemantics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new CustomizeThemeFontsDialog(DocumentFontSet.Default);
+
+            dialog.Width.Should().Be(CustomizeThemeFontsDialogPlanner.DialogWidth);
+            var grid = dialog.GetLogicalDescendants().OfType<Grid>()
+                .Single(candidate => candidate.RowDefinitions.Count == 4);
+            grid.Margin.Should().Be(new Thickness(0, 0, 0, CustomizeThemeFontsDialogPlanner.DialogMargin));
+            grid.ColumnDefinitions[0].Width.Value.Should().Be(CustomizeThemeFontsDialogPlanner.LabelColumnWidth);
+
+            var fields = grid.Children.OfType<Control>()
+                .Where(control => control is ComboBox or TextBox)
+                .ToArray();
+            fields.Should().HaveCount(3);
+            fields.Should().OnlyContain(field => field.MinWidth == CustomizeThemeFontsDialogPlanner.FieldMinWidth);
+            fields.Should().OnlyContain(field => field.Margin == new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, 0, CustomizeThemeFontsDialogPlanner.RowMargin));
+            grid.Children.OfType<TextBlock>()
+                .Where(label => label.Text is "Heading font:" or "Body font:" or "Name:")
+                .Should().OnlyContain(label => label.Margin == new Thickness(0, CustomizeThemeFontsDialogPlanner.RowMargin, CustomizeThemeFontsDialogPlanner.LabelRightMargin, CustomizeThemeFontsDialogPlanner.RowMargin));
+
+            grid.Children.OfType<Border>().Should().ContainSingle(separator =>
+                separator.Height == CustomizeThemeFontsDialogPlanner.SeparatorHeight
+                && separator.Background == AvaloniaCompactDialogChrome.DialogSeparatorBrush
+                && separator.Margin == new Thickness(0, CustomizeThemeFontsDialogPlanner.SeparatorTopMargin, 0, CustomizeThemeFontsDialogPlanner.SeparatorBottomMargin));
+
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
+            buttons.Select(button => button.Content?.ToString()).Should().Equal("OK", "Cancel");
+            buttons.Should().OnlyContain(button => button.MinWidth == CustomizeThemeFontsDialogPlanner.ActionButtonWidth);
+            buttons.Single(button => button.IsDefault).Content.Should().Be("OK");
+            buttons.Single(button => button.IsCancel).Content.Should().Be("Cancel");
+            dialog.GetLogicalDescendants().OfType<StackPanel>()
+                .Single(row => row.Children.OfType<Button>().Count() == 2)
+                .Margin.Should().Be(new Thickness(0, CustomizeThemeFontsDialogPlanner.ActionRowTopMargin, 0, 0));
+            dialog.GetLogicalDescendants().OfType<TextBlock>().Should().NotContain(text => text.IsVisible && text.Text == "Enter a heading font name.");
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ThemeFontsDialog_ValidationUsesInlineAvaloniaStatusAndFocusesInvalidField()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new CustomizeThemeFontsDialog(DocumentFontSet.Default);
+            var heading = dialog.GetLogicalDescendants().OfType<ComboBox>().First();
+            heading.Text = string.Empty;
+
+            dialog.AcceptForTests().Should().BeFalse();
+            dialog.Result.Should().BeNull();
+            dialog.GetLogicalDescendants().OfType<TextBlock>()
+                .Single(text => text.Text == "Enter a heading font name.")
+                .IsVisible.Should().BeTrue();
         }, CancellationToken.None);
     }
 

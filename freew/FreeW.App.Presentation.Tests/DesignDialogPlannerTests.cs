@@ -65,6 +65,16 @@ public sealed class DesignDialogPlannerTests
         var state = CustomizeThemeFontsDialogPlanner.BuildInitialState(DocumentFontSet.Default);
         state.Should().Be(new CustomizeThemeFontsInitialState("Calibri", "Calibri", "Custom"));
         CustomizeThemeFontsDialogPlanner.CommonFonts.Should().ContainInOrder("Arial", "Calibri", "Cambria", "Georgia", "Verdana");
+        CustomizeThemeFontsDialogPlanner.DialogWidth.Should().Be(380);
+        CustomizeThemeFontsDialogPlanner.DialogMargin.Should().Be(14);
+        CustomizeThemeFontsDialogPlanner.LabelColumnWidth.Should().Be(130);
+        CustomizeThemeFontsDialogPlanner.FieldMinWidth.Should().Be(200);
+        CustomizeThemeFontsDialogPlanner.ActionButtonWidth.Should().Be(72);
+        CustomizeThemeFontsDialogPlanner.ActionRowTopMargin.Should().Be(8);
+        CustomizeThemeFontsDialogPlanner.ActionRowBottomMargin.Should().Be(14);
+        CustomizeThemeFontsDialogPlanner.RowMargin.Should().Be(4);
+        CustomizeThemeFontsDialogPlanner.SeparatorTopMargin.Should().Be(6);
+        CustomizeThemeFontsDialogPlanner.SeparatorBottomMargin.Should().Be(2);
     }
 
     [Theory]
