@@ -274,8 +274,10 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
         _properties = AddCheck(body, "Document properties", result.NonEmptyProperties);
         _bookmarks = AddCheck(body, "Bookmarks", result.Bookmarks);
 
-        var remove = new Button { Content = result.IsClean ? "OK" : "Remove", IsDefault = true };
-        AvaloniaCompactDialogChrome.ApplyButton(remove, DialogChromeStyle, minWidth: 72, isDefault: true);
+        var actionPlans = DocumentInspectorDialogPlanner.ActionButtons;
+        var removePlan = actionPlans[0];
+        var remove = new Button { Content = removePlan.Label, IsDefault = removePlan.IsDefault };
+        AvaloniaCompactDialogChrome.ApplyButton(remove, DialogChromeStyle, minWidth: 72, isDefault: removePlan.IsDefault);
         remove.Click += (_, _) =>
         {
             Choice = result.IsClean
@@ -288,9 +290,7 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
             Close();
         };
 
-        IReadOnlyList<Control> controls = result.IsClean
-            ? [remove]
-            : [remove, CreateCancelButton()];
+        IReadOnlyList<Control> controls = [remove, CreateCancelButton(actionPlans[1])];
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(controls, new Thickness(16, 12, 16, 14));
         DockPanel.SetDock(buttons, Dock.Bottom);
 
@@ -310,9 +310,9 @@ internal sealed class DocumentInspectorDialog : FreeWDialogWindow
         return box;
     }
 
-    private Button CreateCancelButton()
+    private Button CreateCancelButton(DialogActionButtonPlan plan)
     {
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var cancel = new Button { Content = plan.Label, IsCancel = plan.IsCancel };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => Close();
         return cancel;

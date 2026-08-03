@@ -1,7 +1,9 @@
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -27,6 +29,24 @@ public sealed class WatermarkDialogTests
         source.Should().Contain("WatermarkOptionsDialogPlanner.FormatPickedImageLabel(");
         source.Should().Contain("WatermarkOptionsDialogPlanner.SelectWatermarkImageTitle");
         source.Should().NotContain("new WatermarkOptions(text)");
+    }
+
+    [Fact]
+    public async Task WatermarkDialog_uses_shared_default_and_cancel_action_semantics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new WatermarkDialog(null);
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>()
+                .Where(button => button.Content is string content &&
+                    content is "OK" or "Remove Watermark" or "Cancel")
+                .ToArray();
+
+            buttons.Select(button => button.Content?.ToString()).Should().Equal(
+                "OK", "Remove Watermark", "Cancel");
+            buttons.Should().ContainSingle(button => button.IsDefault && button.Content as string == "OK");
+            buttons.Should().ContainSingle(button => button.IsCancel && button.Content as string == "Cancel");
+        }, CancellationToken.None);
     }
 
     [Fact]

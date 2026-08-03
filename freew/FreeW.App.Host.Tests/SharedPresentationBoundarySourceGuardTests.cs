@@ -37,6 +37,26 @@ public sealed class SharedPresentationBoundarySourceGuardTests
     }
 
     [Fact]
+    public void DialogActionRows_ConsumeSharedPresentationSemanticsAcrossBothHosts()
+    {
+        var wpfCrossReference = ReadSource("freew", "FreeW.App.Host", "CrossReferenceDialog.cs");
+        var avaloniaCrossReference = ReadSource("freew", "FreeW.App.Avalonia", "ReferencesDialogs.cs");
+        var wpfInspector = ReadSource("freew", "FreeW.App.Host", "DocumentInspectorDialog.cs");
+        var avaloniaInspector = ReadSource("freew", "FreeW.App.Avalonia", "SafetyDialogs.cs");
+        var wpfWatermark = ReadSource("freew", "FreeW.App.Host", "WatermarkOptionsDialog.cs");
+        var avaloniaWatermark = ReadSource("freew", "FreeW.App.Avalonia", "DesignDialogs.cs");
+
+        wpfCrossReference.Should().Contain("CrossReferenceDialogPlanner.ActionButtons");
+        avaloniaCrossReference.Should().Contain("CrossReferenceDialogPlanner.ActionButtons");
+        wpfInspector.Should().Contain("DocumentInspectorDialogPlanner.ActionButtons");
+        avaloniaInspector.Should().Contain("DocumentInspectorDialogPlanner.ActionButtons");
+        wpfWatermark.Should().Contain("WatermarkOptionsDialogPlanner.ActionButtons");
+        avaloniaWatermark.Should().Contain("WatermarkOptionsDialogPlanner.ActionButtons");
+        avaloniaWatermark.Should().Contain("okButton.IsDefault = okPlan.IsDefault");
+        avaloniaWatermark.Should().Contain("cancelButton.IsCancel = cancelPlan.IsCancel");
+    }
+
+    [Fact]
     public void PlatformDocumentViews_ConsumeSharedReviewDisplayStateTransitions()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");

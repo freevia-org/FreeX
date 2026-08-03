@@ -162,11 +162,14 @@ internal sealed class WatermarkOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
 
         // ── Buttons ───────────────────────────────────────────────────────────────────────────────
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
-        var ok = new Button { Content = WatermarkOptionsDialogPlanner.OkButton, MinWidth = 72, IsDefault = true, Margin = new Thickness(0, 0, 8, 0) };
+        var actionPlans = WatermarkOptionsDialogPlanner.ActionButtons;
+        var okPlan = actionPlans[0];
+        var ok = new Button { Content = okPlan.Label, MinWidth = 72, IsDefault = okPlan.IsDefault, Margin = new Thickness(0, 0, 8, 0) };
         ok.Click += (_, _) => Accept();
-        var remove = new Button { Content = WatermarkOptionsDialogPlanner.RemoveWatermarkButton, MinWidth = 130, Margin = new Thickness(0, 0, 8, 0) };
+        var remove = new Button { Content = actionPlans[1].Label, MinWidth = 130, Margin = new Thickness(0, 0, 8, 0) };
         remove.Click += (_, _) => { _removeClicked = true; Close(); };
-        var cancel = new Button { Content = WatermarkOptionsDialogPlanner.CancelButton, MinWidth = 72, IsCancel = true };
+        var cancelPlan = actionPlans[2];
+        var cancel = new Button { Content = cancelPlan.Label, MinWidth = 72, IsCancel = cancelPlan.IsCancel };
         buttonRow.Children.Add(ok);
         buttonRow.Children.Add(remove);
         buttonRow.Children.Add(cancel);

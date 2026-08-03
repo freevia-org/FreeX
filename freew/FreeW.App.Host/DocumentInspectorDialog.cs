@@ -51,21 +51,23 @@ internal sealed class DocumentInspectorDialog : Free.Shared.Ribbon.Wpf.DialogWin
         _bookmarks = AddRow(panel, "Bookmarks", result.Bookmarks,
             "Removes named bookmarks and internal links to them.");
 
+        var removePlan = DocumentInspectorDialogPlanner.ActionButtons[0];
         var remove = new Button
         {
-            Content = "Remove Selected",
+            Content = removePlan.Label,
             MinWidth = 120,
-            IsDefault = true,
+            IsDefault = removePlan.IsDefault,
             Padding = new Thickness(6, 3, 6, 3),
             Margin = new Thickness(0, 0, 8, 0)
         };
         remove.Click += (_, _) => { DialogResult = true; };
 
+        var cancelPlan = DocumentInspectorDialogPlanner.ActionButtons[1];
         var cancel = new Button
         {
-            Content = "Close",
+            Content = cancelPlan.Label,
             MinWidth = 84,
-            IsCancel = true,
+            IsCancel = cancelPlan.IsCancel,
             Padding = new Thickness(6, 3, 6, 3)
         };
 

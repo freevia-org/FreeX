@@ -290,13 +290,18 @@ public sealed class WatermarkDialog : FreeWDialogWindow
         modeRow.Children.Add(_textMode);
         modeRow.Children.Add(_pictureMode);
 
-        var okButton = InsertDialogLayout.MakeButton(WatermarkOptionsDialogPlanner.OkButton, (_, _) => Accept(closeOnSuccess: true));
-        var noneButton = InsertDialogLayout.MakeButton(WatermarkOptionsDialogPlanner.RemoveWatermarkButton, (_, _) =>
+        var actionPlans = WatermarkOptionsDialogPlanner.ActionButtons;
+        var okPlan = actionPlans[0];
+        var okButton = InsertDialogLayout.MakeButton(okPlan.Label, (_, _) => Accept(closeOnSuccess: true));
+        okButton.IsDefault = okPlan.IsDefault;
+        var noneButton = InsertDialogLayout.MakeButton(actionPlans[1].Label, (_, _) =>
         {
             RemoveRequested = true;
             Close();
         });
-        var cancelButton = InsertDialogLayout.MakeButton(WatermarkOptionsDialogPlanner.CancelButton, (_, _) => Close());
+        var cancelPlan = actionPlans[2];
+        var cancelButton = InsertDialogLayout.MakeButton(cancelPlan.Label, (_, _) => Close());
+        cancelButton.IsCancel = cancelPlan.IsCancel;
         var btnRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, noneButton, cancelButton], new Thickness(14, 12, 14, 12));
 
         var outer = new StackPanel();

@@ -62,6 +62,12 @@ public static class WatermarkOptionsDialogPlanner
     public const string OkButton = "OK";
     public const string RemoveWatermarkButton = "Remove Watermark";
     public const string CancelButton = "Cancel";
+    public static IReadOnlyList<DialogActionButtonPlan> ActionButtons { get; } =
+    [
+        new(OkButton, IsDefault: true),
+        new(RemoveWatermarkButton),
+        new(CancelButton, IsCancel: true),
+    ];
     public const string DefaultText = "DRAFT";
     public const string DefaultFontFamily = "Calibri";
     public const string DefaultFontColorHex = "#808080";

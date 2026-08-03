@@ -8,7 +8,12 @@ public static class DialogButtonRowFactory
 {
     private const string DefaultOkContent = "_OK";
 
-    public static StackPanel Create(Action accept, double buttonWidth, Thickness rowMargin = default, string acceptContent = DefaultOkContent)
+    public static StackPanel Create(
+        Action accept,
+        double buttonWidth,
+        Thickness rowMargin = default,
+        string acceptContent = DefaultOkContent,
+        string? cancelContent = null)
     {
         var resolvedAcceptContent = ResolveDefaultAcceptContent(acceptContent);
         var row = new StackPanel
@@ -28,15 +33,15 @@ public static class DialogButtonRowFactory
         SetAcceleratorKey(ok, resolvedAcceptContent);
         ok.Click += (_, _) => accept();
         row.Children.Add(ok);
-        var cancelContent = ShellStrings.Current.Cancel;
+        var resolvedCancelContent = ResolveCancelContent(cancelContent);
         var cancel = new Button
         {
-            Content = cancelContent,
+            Content = resolvedCancelContent,
             MinWidth = buttonWidth,
             IsCancel = true
         };
-        AutomationProperties.SetName(cancel, ShellStrings.Current.CreateAutomationName(cancelContent));
-        SetAcceleratorKey(cancel, cancelContent);
+        AutomationProperties.SetName(cancel, ShellStrings.Current.CreateAutomationName(resolvedCancelContent));
+        SetAcceleratorKey(cancel, resolvedCancelContent);
         row.Children.Add(cancel);
         return row;
     }
@@ -83,8 +88,16 @@ public static class DialogButtonRowFactory
 
     private static string ResolveDefaultAcceptContent(string acceptContent) =>
         string.Equals(acceptContent, DefaultOkContent, StringComparison.Ordinal)
+            || string.Equals(acceptContent, "OK", StringComparison.Ordinal)
             ? ShellStrings.Current.Ok
             : acceptContent;
+
+    private static string ResolveCancelContent(string? cancelContent) =>
+        cancelContent is null
+            || string.Equals(cancelContent, "Cancel", StringComparison.Ordinal)
+            || string.Equals(cancelContent, "_Cancel", StringComparison.Ordinal)
+            ? ShellStrings.Current.Cancel
+            : cancelContent;
 
     private static void SetAcceleratorKey(Button button, string content)
     {

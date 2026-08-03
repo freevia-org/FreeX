@@ -77,7 +77,15 @@ internal sealed class CrossReferenceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var targetColumn = LabeledColumn(CrossReferenceDialogPlanner.TargetLabel, _targetList, column: -1);
 
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 80, rowMargin: new Thickness(0, 14, 0, 0));
+        var actionPlans = CrossReferenceDialogPlanner.ActionButtons;
+        var acceptPlan = actionPlans[0];
+        var cancelPlan = actionPlans[1];
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: 80,
+            rowMargin: new Thickness(0, 14, 0, 0),
+            acceptContent: acceptPlan.Label,
+            cancelContent: cancelPlan.Label);
 
         var panel = new StackPanel { Margin = new Thickness(16) };
         panel.Children.Add(topRow);

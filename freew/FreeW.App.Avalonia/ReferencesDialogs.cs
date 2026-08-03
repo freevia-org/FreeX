@@ -81,8 +81,9 @@ internal sealed class CrossReferenceDialog : FreeWDialogWindow
             Child = _targetList,
         };
 
-        var ok = Button("Insert", Accept, isDefault: true);
-        var cancel = Button("Cancel", () => Close(), isCancel: true);
+        var actionPlans = CrossReferenceDialogPlanner.ActionButtons;
+        var ok = Button(actionPlans[0].Label, Accept, isDefault: actionPlans[0].IsDefault);
+        var cancel = Button(actionPlans[1].Label, () => Close(), isCancel: actionPlans[1].IsCancel);
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(16, 12, 16, 14));
 
         var body = new StackPanel();

@@ -1,4 +1,5 @@
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Presentation.Ribbon;
 
@@ -26,11 +27,19 @@ public sealed record CrossReferenceDialogChoice(
 public static class CrossReferenceDialogPlanner
 {
     public const string Title = "Cross-reference";
+    public const string AcceptButtonLabel = "OK";
+    public const string CancelButtonLabel = "Cancel";
     public const string ReferenceTypeLabel = "Reference type:";
     public const string InsertReferenceToLabel = "Insert reference to:";
     public const string TargetLabel = "For which item:";
     public const string HyperlinkLabel = "Insert as hyperlink";
     public const string MissingTargetMessage = "Select an item to reference.";
+
+    public static IReadOnlyList<DialogActionButtonPlan> ActionButtons { get; } =
+    [
+        new(AcceptButtonLabel, IsDefault: true),
+        new(CancelButtonLabel, IsCancel: true),
+    ];
 
     private static readonly IReadOnlyList<CrossRefType> TypeOrder =
     [
