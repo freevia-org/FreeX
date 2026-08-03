@@ -61,6 +61,67 @@ public sealed class DataBoundContentControlRoundTripTests
         document.Paragraphs.Single().Runs.Single().Text.Should().Be("A-17");
     }
 
+    [Theory]
+    [InlineData("dropDownList")]
+    [InlineData("comboBox")]
+    public void BoundListControl_RefreshesStoredValueAsMatchingDisplayText(string controlElement)
+    {
+        using var input = BuildPackage(
+            itemBytes: Encoding.UTF8.GetBytes(
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>CA</name></root>"),
+            controlElement: controlElement,
+            listItems:
+            [
+                new ContentControlListItem("Canada", "CA"),
+                new ContentControlListItem("United States", "US")
+            ]);
+
+        var document = DocxReader.Read(input);
+        var run = document.Paragraphs.Single().Runs.Single();
+
+        run.Text.Should().Be("Canada");
+        run.Control!.Items.Should().ContainInOrder(
+            new ContentControlListItem("Canada", "CA"),
+            new ContentControlListItem("United States", "US"));
+    }
+
+    [Fact]
+    public void BoundComboBox_UnmatchedStoredValueDisplaysTheCustomValue()
+    {
+        using var input = BuildPackage(
+            itemBytes: Encoding.UTF8.GetBytes(
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>Custom value</name></root>"),
+            controlElement: "comboBox",
+            listItems: [new ContentControlListItem("Canada", "CA")]);
+
+        var document = DocxReader.Read(input);
+
+        document.Paragraphs.Single().Runs.Single().Text.Should().Be("Custom value");
+    }
+
+    [Fact]
+    public void BoundListControl_LegacyRefreshApiUsesTheExpandedTextualMapping()
+    {
+        using var input = BuildPackage(
+            controlElement: "dropDownList",
+            listItems:
+            [
+                new ContentControlListItem("Original display", "Original value"),
+                new ContentControlListItem("Updated display", "Updated value")
+            ]);
+        var document = DocxReader.Read(input);
+        var itemIndex = document.Preserved.Parts.FindIndex(part => part.PartName == "/customXml/item1.xml");
+        document.Preserved.Parts[itemIndex] = document.Preserved.Parts[itemIndex] with
+        {
+            Bytes = Encoding.UTF8.GetBytes(
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>Updated value</name></root>")
+        };
+
+        CustomXmlDataBindingResolver.RefreshBoundPlainTextControls(document).Should().Be(1);
+
+        document.Paragraphs.Single().Runs.Single().Text.Should().Be("Updated display");
+    }
+
     [Fact]
     public void BoundBlockPlainTextControl_RefreshesDisplayedTextFromCustomXmlOnOpen()
     {
@@ -134,8 +195,11 @@ public sealed class DataBoundContentControlRoundTripTests
     private static MemoryStream BuildPackage(
         string xpath = "/ns0:root/ns0:name",
         byte[]? itemBytes = null,
-        bool blockLevel = false)
+        bool blockLevel = false,
+        string controlElement = "text",
+        IReadOnlyList<ContentControlListItem>? listItems = null)
     {
+        var controlProperties = BuildControlProperties(controlElement, listItems);
         var stream = new MemoryStream();
         using (var zip = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
         {
@@ -158,7 +222,7 @@ public sealed class DataBoundContentControlRoundTripTests
                     <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
                       <w:body><w:sdt><w:sdtPr>
                         <w:dataBinding w:prefixMappings="xmlns:ns0='urn:freew:test'" w:xpath="{{xpath}}" w:storeItemID="{{StoreItemId}}"/>
-                        <w:id w:val="17"/><w:tag w:val="BoundName"/><w:text/>
+                        <w:id w:val="17"/><w:tag w:val="BoundName"/>{{controlProperties}}
                       </w:sdtPr><w:sdtContent><w:p><w:r><w:t>Original display value</w:t></w:r></w:p></w:sdtContent></w:sdt><w:sectPr/></w:body>
                     </w:document>
                     """);
@@ -169,7 +233,7 @@ public sealed class DataBoundContentControlRoundTripTests
                     <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
                       <w:body><w:p><w:sdt><w:sdtPr>
                         <w:dataBinding w:prefixMappings="xmlns:ns0='urn:freew:test'" w:xpath="{{xpath}}" w:storeItemID="{{StoreItemId}}"/>
-                        <w:id w:val="17"/><w:tag w:val="BoundName"/><w:text/>
+                        <w:id w:val="17"/><w:tag w:val="BoundName"/>{{controlProperties}}
                       </w:sdtPr><w:sdtContent><w:r><w:t>Original display value</w:t></w:r></w:sdtContent></w:sdt></w:p><w:sectPr/></w:body>
                     </w:document>
                     """);
@@ -189,6 +253,18 @@ public sealed class DataBoundContentControlRoundTripTests
         }
         stream.Position = 0;
         return stream;
+    }
+
+    private static string BuildControlProperties(
+        string controlElement,
+        IReadOnlyList<ContentControlListItem>? listItems)
+    {
+        if (controlElement == "text")
+            return "<w:text/>";
+
+        var items = string.Concat((listItems ?? []).Select(item =>
+            $"<w:listItem w:displayText=\"{item.DisplayText}\" w:value=\"{item.Value}\"/>"));
+        return $"<w:{controlElement}>{items}</w:{controlElement}>";
     }
 
     private static void Add(ZipArchive zip, string path, string text) =>

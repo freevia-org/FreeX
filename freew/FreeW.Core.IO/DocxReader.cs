@@ -121,7 +121,7 @@ public static class DocxReader
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
         ReadPreservedParts(archive, document, documentXml);
-        CustomXmlDataBindingResolver.RefreshBoundPlainTextControls(document);
+        CustomXmlDataBindingResolver.RefreshBoundTextControls(document);
 
         return document;
     }

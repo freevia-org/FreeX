@@ -18,10 +18,10 @@ public static class CustomXmlDataBindingResolver
         "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
 
     /// <summary>
-    /// Refreshes successfully resolved plain-text content controls and leaves every unresolved control unchanged.
+    /// Refreshes successfully resolved textual content controls and leaves every unresolved control unchanged.
     /// Returns the number of distinct controls whose display text was updated.
     /// </summary>
-    public static int RefreshBoundPlainTextControls(TextDocument document)
+    public static int RefreshBoundTextControls(TextDocument document)
     {
         ArgumentNullException.ThrowIfNull(document);
 
@@ -36,6 +36,13 @@ public static class CustomXmlDataBindingResolver
         refreshed += RefreshBodyBlockControls(document.Blocks, stores);
         return refreshed;
     }
+
+    /// <summary>
+    /// Backward-compatible entry point for callers that used the original plain-text-only refresh API.
+    /// List and combo controls are now refreshed by the same Word XML-mapping pass.
+    /// </summary>
+    public static int RefreshBoundPlainTextControls(TextDocument document) =>
+        RefreshBoundTextControls(document);
 
     /// <summary>Attempts to evaluate one binding against the document's preserved custom XML data store.</summary>
     public static bool TryResolve(
@@ -60,10 +67,11 @@ public static class CustomXmlDataBindingResolver
             while (end < paragraph.Runs.Count && ReferenceEquals(paragraph.Runs[end].Control, control))
                 end++;
 
-            if (control is { Kind: ContentControlKind.PlainText, WordMetadata.DataBinding: { } binding }
+            if (control is { WordMetadata.DataBinding: { } binding }
+                && IsTextualBindingKind(control.Kind)
                 && TryResolve(stores, binding, out var value))
             {
-                paragraph.Runs[start].Text = value;
+                paragraph.Runs[start].Text = ResolveDisplayText(control, value);
                 for (var index = start + 1; index < end; index++)
                     paragraph.Runs[index].Text = string.Empty;
                 refreshed++;
@@ -73,6 +81,20 @@ public static class CustomXmlDataBindingResolver
         }
 
         return refreshed;
+    }
+
+    private static bool IsTextualBindingKind(ContentControlKind kind) =>
+        kind is ContentControlKind.PlainText
+            or ContentControlKind.DropDownList
+            or ContentControlKind.ComboBox;
+
+    private static string ResolveDisplayText(ContentControl control, string value)
+    {
+        if (control.Kind is not (ContentControlKind.DropDownList or ContentControlKind.ComboBox))
+            return value;
+
+        return control.Items.FirstOrDefault(item => string.Equals(item.Value, value, StringComparison.Ordinal))
+            ?.DisplayText ?? value;
     }
 
     private static int RefreshBodyBlockControls(
