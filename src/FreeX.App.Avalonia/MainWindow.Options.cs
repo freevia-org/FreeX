@@ -195,9 +195,6 @@ public sealed partial class MainWindow
         ApplyOptionsCheckBoxChrome(r1c1Box);
         AutomationProperties.SetAutomationId(r1c1Box, "OptionsR1C1ReferenceStyleCheckBox");
 
-        var errorCheckingBox = new CheckBox { Content = UiText.Get("Options_EnableErrorChecking"), IsChecked = current.ErrorCheckingEnabled };
-        ApplyOptionsCheckBoxChrome(errorCheckingBox);
-        AutomationProperties.SetAutomationId(errorCheckingBox, "OptionsEnableErrorCheckingCheckBox");
         var errorRuleBoxes = new Dictionary<string, CheckBox>(StringComparer.OrdinalIgnoreCase);
         var errorRulesPanel = new StackPanel { Spacing = 0 };
         foreach (var rule in FormulaErrorCheckingRuleCatalog.SupportedRules)
@@ -238,7 +235,6 @@ public sealed partial class MainWindow
             OptionsCheckBox(OptionsText("Options_EnableAutoCompleteForCellValues"), isChecked: true, isEnabled: false),
             OptionsSectionHeader(OptionsText("Options_ErrorCheckingRules")),
             OptionsDescription(OptionsText("Options_EnableBackgroundErrorChecksFor")),
-            errorCheckingBox,
             errorRulesPanel);
 
         // ── Proofing ────────────────────────────────────────────────────────────
@@ -1169,7 +1165,7 @@ public sealed partial class MainWindow
                     userNameBox.Text,
                     calcAutoButton.IsChecked == true,
                     r1c1Box.IsChecked == true,
-                    errorCheckingBox.IsChecked == true,
+                    current.ErrorCheckingEnabled,
                     current.ProofingIgnoreUppercase,
                     current.ProofingIgnoreNumbers,
                     showFormulaBarBox.IsChecked == true,

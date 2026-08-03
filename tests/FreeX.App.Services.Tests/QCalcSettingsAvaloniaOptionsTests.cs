@@ -77,6 +77,20 @@ public sealed class QCalcSettingsAvaloniaOptionsTests
     }
 
     [Fact]
+    public void AvaloniaOptions_UsesWpfFormulaRuleSurfaceWithoutExtraMasterRow()
+    {
+        var source = ReadAvaloniaOptionsSource();
+
+        // WPF's authoritative Formulas page exposes the individual rule switches, not an
+        // additional master switch. Keep the persisted legacy field unchanged while removing
+        // its non-authoritative row from the height-constrained paired surface.
+        source.Should().NotContain("OptionsEnableErrorCheckingCheckBox");
+        source.Should().Contain("current.ErrorCheckingEnabled,");
+        source.Should().Contain("FormulaErrorCheckingRuleCatalog.SupportedRules");
+        source.Should().Contain("new SetFormulaErrorCheckingRuleCommand(rule.ErrorCode, enabled: !shouldDisable)");
+    }
+
+    [Fact]
     public void AvaloniaOptions_OnlyAppliesIterativeCalculationWhenValuesActuallyChange()
     {
         var source = ReadAvaloniaOptionsSource();
