@@ -67,6 +67,7 @@ public sealed class OptionsDialogParityTests
             var tabs = FindVisualChildren<TabControl>(dialog).Single();
             tabs.SelectedIndex = 1;
             dialog.UpdateLayout();
+            dialog.UpdateLayout();
 
             var table = FindVisualChildren<DataGrid>(dialog).Single();
             table.HorizontalScrollBarVisibility.Should().Be(ScrollBarVisibility.Disabled);

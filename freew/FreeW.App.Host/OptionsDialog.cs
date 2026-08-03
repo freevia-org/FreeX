@@ -208,8 +208,8 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Width = new DataGridLength(2, DataGridLengthUnitType.Star),
         });
         _replacements.ItemsSource = _replacementRows;
-        _replacements.Loaded += (_, _) => ApplyReplacementColumnWidths(_replacements);
-        _replacements.SizeChanged += (_, _) => ApplyReplacementColumnWidths(_replacements);
+        _replacements.Loaded += (_, _) => TryApplyReplacementColumnWidths(_replacements);
+        _replacements.SizeChanged += (_, _) => TryApplyReplacementColumnWidths(_replacements);
         _replacements.LayoutUpdated += RealizeReplacementColumnsAfterMeasure;
 
         var toggles = new[] { _correctTwoInitialCaps, _capitalizeDayNames, _replaceText };
@@ -313,11 +313,11 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     // when the table is resized. The post-measure hook removes itself after the first successful pass.
     private void RealizeReplacementColumnsAfterMeasure(object? sender, EventArgs e)
     {
-        if (ApplyReplacementColumnWidths(_replacements))
+        if (TryApplyReplacementColumnWidths(_replacements))
             _replacements.LayoutUpdated -= RealizeReplacementColumnsAfterMeasure;
     }
 
-    private static bool ApplyReplacementColumnWidths(DataGrid table)
+    private static bool TryApplyReplacementColumnWidths(DataGrid table)
     {
         if (table.Columns.Count != 2 || table.ActualWidth <= 0)
             return false;
@@ -328,18 +328,11 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var firstWidth = viewport / 3;
         var secondWidth = viewport * 2 / 3;
-        var changed = false;
         if (Math.Abs(table.Columns[0].ActualWidth - firstWidth) > 0.5)
-        {
             table.Columns[0].Width = new DataGridLength(firstWidth, DataGridLengthUnitType.Pixel);
-            changed = true;
-        }
         if (Math.Abs(table.Columns[1].ActualWidth - secondWidth) > 0.5)
-        {
             table.Columns[1].Width = new DataGridLength(secondWidth, DataGridLengthUnitType.Pixel);
-            changed = true;
-        }
-        return changed;
+        return true;
     }
 
     // A mutable two-property row backing the AutoCorrect replace-table DataGrid (DataGrid edits need a
