@@ -19981,17 +19981,11 @@ public sealed class DocumentView : Control
         var sourceBlock = _caret.Block;
         var plan = CrossReferences.PlanInsertion(_doc, type, target, insertAs, hyperlink, sourceBlock);
 
-        _bus.BeginUndoGroup();
-
-        // The shared plan chooses the anchor; Avalonia keeps bookmark mutation inside its existing
-        // undoable command path.
-        if (plan.BookmarkNameToAdd is { } anchor && plan.Target.BlockIndex is { } targetBlock)
-        {
-            _bus.Execute(new SetBookmarkNameCommand(targetBlock, anchor));
-        }
-
-        _bus.Execute(new InsertObjectRunCommand(hostIndex, plan.FieldRun));
-        _bus.CommitUndoGroup("Insert Cross-reference");
+        _bus.Execute(new InsertCrossReferenceCommand(
+            hostIndex,
+            plan.FieldRun,
+            plan.Target.BlockIndex,
+            plan.BookmarkNameToAdd));
 
         _cellCaret = null;
         _caret = new DocPosition(hostIndex, BlockLength(hostIndex));

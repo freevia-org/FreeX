@@ -16232,27 +16232,34 @@ public sealed class DocumentView : RichTextBox
         var sourceBlock = CaretBlockIndex();
         var plan = CrossReferences.PlanInsertion(_model, type, target, insertAs, hyperlink, sourceBlock);
 
-        // The shared plan chooses the anchor; WPF owns the direct model mutation and keeps the existing
-        // commit/render lifecycle intact.
-        if (plan.BookmarkNameToAdd is { } anchor
-            && plan.Target.BlockIndex is { } targetBlock
-            && _model.Blocks[targetBlock] is ModelParagraph targetParagraph)
+        // Append the field run to the caret's paragraph (or the last paragraph / a fresh one). Keep creation,
+        // the hidden target bookmark, and field insertion in one undo step.
+        var caretBlock = sourceBlock >= 0 && sourceBlock < _model.Blocks.Count ? sourceBlock : -1;
+        if (caretBlock < 0 || _model.Blocks[caretBlock] is not ModelParagraph)
         {
-            if (!targetParagraph.BookmarkNames.Contains(anchor))
-                targetParagraph.BookmarkNames.Add(anchor);
+            caretBlock = _model.Blocks.FindLastIndex(block => block is ModelParagraph);
         }
 
-        // Append the field run to the caret's paragraph in the model (or the last paragraph / a fresh one),
-        // then re-render. Working at the model level keeps the just-added target bookmark from being clobbered
-        // by a view->model commit, and avoids losing the field marker that a view round-trip could.
-        var caretBlock = sourceBlock >= 0 && sourceBlock < _model.Blocks.Count ? sourceBlock : -1;
-        if (caretBlock < 0 || _model.Blocks[caretBlock] is not ModelParagraph host)
+        _commands.BeginUndoGroup();
+        try
         {
-            host = _model.Blocks.OfType<ModelParagraph>().LastOrDefault() ?? new ModelParagraph();
-            if (!_model.Blocks.Contains(host))
-                _model.Blocks.Add(host);
+            if (caretBlock < 0)
+            {
+                caretBlock = _model.Blocks.Count;
+                _commands.Execute(new InsertParagraphCommand(caretBlock, new ModelParagraph()));
+            }
+            _commands.Execute(new InsertCrossReferenceCommand(
+                caretBlock,
+                plan.FieldRun,
+                plan.Target.BlockIndex,
+                plan.BookmarkNameToAdd));
+            _commands.CommitUndoGroup("Insert Cross-reference");
         }
-        host.Runs.Add(plan.FieldRun);
+        catch
+        {
+            _commands.AbortUndoGroup();
+            throw;
+        }
         Render();
     }
 
