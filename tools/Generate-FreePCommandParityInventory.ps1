@@ -1362,6 +1362,27 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "continuousBlockProcess now uses dedicated shared compact rounded-block geometry with stable block/connector roles, regenerated drawing-cache evidence, and schema-valid PPTX round-trip coverage. Unsupported process variants still fall back to cached drawing; exact PowerPoint spacing/effects, PowerPoint-authoritative visual baselines, and broader SmartArt authoring remain deferred."),
         new(
+            EvidenceId: "freep.smartart.grouped-list-import-bands",
+            Area: "SmartArt grouped-list imported band-cache live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume the same shared grouped-list band, header, and child shape plan through SlideCompositor; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/avalonia-parity-wave132-freep-smartart-20260803.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
+                "freep/FreeP.App.Presentation/SlideCompositor.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "tools/FreeP.RenderCompare.Tests/SmartArtFixtureEvidenceTests.cs"
+            ],
+            RemainingWork: "The real fixture-backed grouped-list cache grammar with two distinct empty body bands, two headers, and four child boxes is admitted to the shared live plan. Missing, duplicate, ambiguous, extra, effect-bearing, picture-bearing, or otherwise unproven grouped-list roles remain on cached drawing fallback; broader grouped-list role parity, exact PowerPoint geometry/effects, and authoritative visual baselines remain deferred."),
+        new(
             EvidenceId: "freep.smartart.basic-process",
             Area: "SmartArt basic process live layout",
             Status: "shared-render-planner-evidence",

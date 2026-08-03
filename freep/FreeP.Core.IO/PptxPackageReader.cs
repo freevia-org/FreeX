@@ -2136,16 +2136,22 @@ public static class PptxPackageReader
         {
             smart.Data = ReadSmartArtData(smart);
             if (smart.Data is { } data
-                && (IsGroupedListLayout(data.LayoutUniqueId)
-                    || IsHierarchy3Layout(data.LayoutUniqueId))
-                && (CanUseSimpleNodeCache(smart, data)
-                    || CanUseHierarchy3NodeAndConnectorCache(smart, data)))
+                && IsGroupedListLayout(data.LayoutUniqueId)
+                && (CanUseGroupedListNodeAndBandCache(smart, data)
+                    || CanUseSimpleNodeCache(smart, data)))
             {
                 // These layouts have bounded live geometry. Imported caches may still
                 // contain backgrounds, roles, or other content that it cannot model,
                 // so admit only the exact node-only or node-and-edge cache shapes
                 // proven by the guards above.
                 data.IsLiveLayoutSupported = true;
+                data.UsesGroupedListBands = CanUseGroupedListNodeAndBandCache(smart, data);
+            }
+            else if (smart.Data is { } hierarchyData
+                     && IsHierarchy3Layout(hierarchyData.LayoutUniqueId)
+                     && CanUseHierarchy3NodeAndConnectorCache(smart, hierarchyData))
+            {
+                hierarchyData.IsLiveLayoutSupported = true;
             }
             TryAttachPictureNodePictures(smart, archive);
         }
@@ -2865,6 +2871,85 @@ public static class PptxPackageReader
         }
 
         return true;
+    }
+
+    private static bool CanUseGroupedListNodeAndBandCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsGroupedListLayout(data.LayoutUniqueId)
+            || data.Nodes.Count < 2)
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        var visibleNodes = nodes.Where(node => !string.IsNullOrWhiteSpace(node.Text)).ToList();
+        var groups = data.Nodes
+            .Where(node => !string.IsNullOrWhiteSpace(node.Text))
+            .ToList();
+        if (visibleNodes.Count == 0
+            || groups.Any(group => !group.Children.Any(child => !string.IsNullOrWhiteSpace(child.Text))))
+            return false;
+
+        var nodeShapes = smart.FallbackShapes
+            .Where(shape => shape.Kind == SlideShapeKind.AutoShape
+                && !string.IsNullOrWhiteSpace(shape.PlainText))
+            .ToList();
+        var bandShapes = smart.FallbackShapes
+            .Where(shape => shape.Kind == SlideShapeKind.AutoShape
+                && shape.AutoShapeKind == DrawingShapeKind.Rectangle
+                && string.IsNullOrWhiteSpace(shape.PlainText))
+            .ToList();
+        if (nodeShapes.Count != visibleNodes.Count
+            || bandShapes.Count != groups.Count
+            || nodeShapes.Count + bandShapes.Count != smart.FallbackShapes.Count
+            || nodeShapes.Select(shape => shape.PlainText).Distinct(StringComparer.Ordinal).Count() != nodeShapes.Count)
+            return false;
+
+        var nodeByText = nodeShapes.ToDictionary(shape => shape.PlainText, StringComparer.Ordinal);
+        var matchedBandIds = new HashSet<uint>();
+        foreach (var group in groups)
+        {
+            if (!nodeByText.TryGetValue(group.Text, out var header)
+                || header.AutoShapeKind != DrawingShapeKind.RoundedRectangle)
+                return false;
+
+            var children = FlattenGroupNodes(group)
+                .Skip(1)
+                .Where(node => !string.IsNullOrWhiteSpace(node.Text))
+                .ToList();
+            if (children.Count == 0
+                || children.Any(child => !nodeByText.TryGetValue(child.Text, out var childShape)
+                    || childShape.AutoShapeKind != DrawingShapeKind.Rectangle))
+                return false;
+
+            var band = bandShapes.FirstOrDefault(candidate =>
+                !matchedBandIds.Contains(candidate.Id)
+                && children.All(child => Contains(candidate, nodeByText[child.Text])));
+            if (band is null)
+                return false;
+            matchedBandIds.Add(band.Id);
+        }
+
+        return !smart.FallbackShapes.Any(HasUnsupportedSmartArtShapeEffects)
+            && !HasUnsupportedSmartArtDrawingEffects(smart);
+
+        static bool Contains(SlideShape container, SlideShape child)
+        {
+            var childRight = child.OffsetXEmu + child.ExtentCxEmu;
+            var childBottom = child.OffsetYEmu + child.ExtentCyEmu;
+            return child.OffsetXEmu >= container.OffsetXEmu
+                && child.OffsetYEmu >= container.OffsetYEmu
+                && childRight <= container.OffsetXEmu + container.ExtentCxEmu
+                && childBottom <= container.OffsetYEmu + container.ExtentCyEmu;
+        }
+
+        static IEnumerable<SmartArtNode> FlattenGroupNodes(SmartArtNode root)
+        {
+            yield return root;
+            foreach (var child in root.Children)
+            {
+                foreach (var node in FlattenGroupNodes(child))
+                    yield return node;
+            }
+        }
     }
 
     private static bool CanUseHierarchy3NodeAndConnectorCache(SmartArtShape smart, SmartArtData data)

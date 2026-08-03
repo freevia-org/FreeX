@@ -1341,8 +1341,8 @@ public static class SlideCompositor
 
         // PowerPoint's simple1/accent1_2 hierarchy cache uses a distinct
         // connector color from the generic accent1 shade. Keep this correction
-        // on the cached-drawing path because hierarchy3 is intentionally not a
-        // live-layout admission yet.
+        // on the cached-drawing path; the bounded hierarchy3 and grouped-list
+        // imports normally take the shared live plan before reaching here.
         if (IsSimpleAccentHierarchy(smart)
             && shape.AutoShapeKind is DrawingShapeKind.Line or DrawingShapeKind.Rectangle
             && shape.Outline is ShapeOutline.Visible line)
@@ -1356,8 +1356,7 @@ public static class SlideCompositor
                 line.EndLineEnd);
         }
 
-        // IncreasingCircleProcess is outside the bounded live-layout set. Its
-        // cached background ellipses use the accent1 tint from the XML cache,
+        // IncreasingCircleProcess cached background ellipses use the accent1 tint from the XML cache,
         // while PowerPoint renders the bgShp role as the neutral Office gray.
         // Keep this correction at the SmartArt cache boundary so normal DrawingML
         // tint resolution remains unchanged for ordinary shapes.

@@ -594,6 +594,49 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ImportedSmartArtGroupedList_AdmitsBoundedBandCacheToSharedLiveLayout()
+    {
+        var corpusPath = FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx");
+        var presentation = PptxPackageReader.Read(corpusPath);
+        var slide = presentation.Slides[5];
+        var smartArtShape = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartArtShape.SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/groupedList");
+        smartArt.Data.Family.Should().Be(SmartArtFamily.List);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the generated grouped-list cache contains only two group bands and six matching node boxes");
+        smartArt.Data.UsesGroupedListBands.Should().BeTrue();
+        smartArt.FallbackShapes.Should().HaveCount(8,
+            "the cache contains two empty group bands, two headers, and four child boxes");
+        smartArt.FallbackShapes.Count(shape => string.IsNullOrWhiteSpace(shape.PlainText))
+            .Should().Be(2);
+        smartArt.FallbackShapes.Count(shape => !string.IsNullOrWhiteSpace(shape.PlainText))
+            .Should().Be(6);
+
+        var live = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartArtShape.OffsetXEmu,
+            smartArtShape.OffsetYEmu,
+            smartArtShape.ExtentCxEmu,
+            smartArtShape.ExtentCyEmu,
+            presentation.Theme);
+        live.Should().NotBeNull();
+        live!.Count.Should().Be(8,
+            "the shared grouped-list plan preserves both imported group bands behind the six editable nodes");
+        live.Count(shape => string.IsNullOrWhiteSpace(shape.PlainText)).Should().Be(2);
+
+        var composed = SlideCompositor.Compose(presentation, slide)
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        composed.Where(shape => shape.ShapeId is >= 2250 and <= 2257)
+            .Should().HaveCount(8,
+                "the compositor must consume the eight-shape shared live plan instead of the cached drawing");
+    }
+
+    [Fact]
     public void Reader_SmartArt_IncreasingCircleProcess_AdmitsDedicatedLiveLayout()
     {
         var pptxPath = MakeSmartArtPptx(

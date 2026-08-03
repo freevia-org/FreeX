@@ -35,4 +35,20 @@ public sealed class SmartArtDefaultLiveRendererContractTests
         source.Should().NotContain("SmartArtLayoutEngine.Layout(",
             "hierarchy3 geometry must remain renderer-neutral");
     }
+
+    [Fact]
+    public void WpfGroupedListRendering_ConsumesTheSharedLivePlan()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("SlideCompositor.Compose(");
+        source.Should().NotContain("LayoutGroupedList(");
+        source.Should().NotContain("SmartArtLayoutEngine.Layout(",
+            "grouped-list bands must remain renderer-neutral");
+    }
 }

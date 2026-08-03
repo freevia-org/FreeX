@@ -12,7 +12,7 @@ namespace FreeP.RenderCompare;
 /// <summary>
 /// Theme 17: Generates 14-smartart-live.pptx programmatically (pure XML, no COM required).
 ///
-/// Creates a 5-slide deck:
+/// Creates a 6-slide deck:
 ///   Slide 1 — Process:   Plan → Design → Build → Test → Deploy
 ///   Slide 2 — Hierarchy: CEO with VP Sales / VP Engineering / VP Marketing children
 ///   Slide 3 — Hierarchy3: CEO with the same reports, template leaves, and an orthogonal cached drawing
@@ -64,7 +64,7 @@ internal static class SmartArtFixtureGenerator
             return;
         }
 
-        // Define the 4 slides
+        // Define the 6 slides
         var slides = new[]
         {
             new SlideSpec
@@ -102,11 +102,20 @@ internal static class SmartArtFixtureGenerator
                 LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/list1",
                 Nodes     = [("i1","Requirement 1"), ("i2","Requirement 2"), ("i3","Requirement 3"), ("i4","Requirement 4")],
                 Connections = []
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live - Grouped List",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/groupedList",
+                Nodes     = [("g1","Plan"), ("g1a","Scope"), ("g1b","Schedule"), ("g2","Build"), ("g2a","Implement"), ("g2b","Verify")],
+                Connections = [("g1","g1a"), ("g1","g1b"), ("g2","g2a"), ("g2","g2b")],
+                HasGroupedListCachedDrawing = true
             }
         };
 
-        using var zipStream = File.Create(outputPath);
-        using var archive   = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: false);
+        using (var zipStream = File.Create(outputPath))
+        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: false))
+        {
 
         void WriteEntry(string entryPath, byte[] bytes)
         {
@@ -208,6 +217,7 @@ internal static class SmartArtFixtureGenerator
             // data rels (points to drawing for dsp:drawing lookup)
             WriteXml($"ppt/diagrams/_rels/data{si}.xml.rels", MakeRels(
                 ("rIdDraw1", DgmDrawRelType, $"drawing{si}.xml")));
+        }
         }
 
         EnsurePresentationGuideList(outputPath);
@@ -611,6 +621,9 @@ internal static class SmartArtFixtureGenerator
 
     private static XDocument BuildDrawingXml(SlideSpec spec)
     {
+        if (spec.HasGroupedListCachedDrawing)
+            return BuildGroupedListDrawingXml(spec);
+
         if (!spec.HasHierarchy3CachedDrawing)
             return BuildEmptyDrawing();
 
@@ -662,6 +675,63 @@ internal static class SmartArtFixtureGenerator
                 new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XElement(Dsp + "spTree", nodeShapes.Concat(templateShapes).Concat(connectorShapes))));
+    }
+
+    private static XDocument BuildGroupedListDrawingXml(SlideSpec spec)
+    {
+        const long frameCx = 8_229_600;
+        const long frameCy = 5_744_800;
+        var padX = (long)(frameCx * 0.04);
+        var padY = (long)(frameCy * 0.04);
+        var gapX = (long)(frameCx * 0.025);
+        var gapY = Math.Max((long)(frameCy * 0.018), 1L);
+        var groupWidth = Math.Max((frameCx - 2 * padX - gapX) / 2, 1L);
+        var headerHeight = Math.Max((long)(frameCy * 0.22), 1L);
+        var childStartY = padY + headerHeight + gapY;
+        var childHeightArea = Math.Max(frameCy - 2 * padY - headerHeight - gapY, 1L);
+        var childHeight = Math.Max((childHeightArea - gapY) / 2, 1L);
+        var groups = new[]
+        {
+            ("g1", new[] { "g1a", "g1b" }),
+            ("g2", new[] { "g2a", "g2b" })
+        };
+        var elements = new List<XElement>();
+        for (var groupIndex = 0; groupIndex < groups.Length; groupIndex++)
+        {
+            var groupX = padX + groupIndex * (groupWidth + gapX);
+            elements.Add(BuildDspShape(
+                (uint)(40 + groupIndex),
+                $"GroupedList band {groupIndex + 1}",
+                string.Empty,
+                "rect",
+                (groupX, padY + headerHeight, groupWidth, Math.Max(frameCy - 2 * padY - headerHeight, 1L))));
+
+            var header = spec.Nodes.Single(node => node.id == groups[groupIndex].Item1);
+            elements.Add(BuildDspShape(
+                (uint)(50 + groupIndex),
+                $"GroupedList header {groupIndex + 1}",
+                header.text,
+                "roundRect",
+                (groupX, padY, groupWidth, headerHeight)));
+
+            for (var childIndex = 0; childIndex < groups[groupIndex].Item2.Length; childIndex++)
+            {
+                var child = spec.Nodes.Single(node => node.id == groups[groupIndex].Item2[childIndex]);
+                elements.Add(BuildDspShape(
+                    (uint)(60 + groupIndex * 2 + childIndex),
+                    $"GroupedList child {groupIndex + 1}.{childIndex + 1}",
+                    child.text,
+                    "rect",
+                    (groupX, childStartY + childIndex * (childHeight + gapY), groupWidth, childHeight)));
+            }
+        }
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dsp + "spTree", elements)));
     }
 
     private static XElement BuildDspShape(
@@ -827,5 +897,6 @@ internal static class SmartArtFixtureGenerator
         public (string id, string text)[]   Nodes       { get; init; } = [];
         public (string src, string dst)[]   Connections { get; init; } = [];
         public bool HasHierarchy3CachedDrawing { get; init; }
+        public bool HasGroupedListCachedDrawing { get; init; }
     }
 }

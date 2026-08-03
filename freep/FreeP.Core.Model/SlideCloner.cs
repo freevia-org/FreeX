@@ -522,6 +522,7 @@ public static class SlideCloner
             Family = source.Family,
             LayoutUniqueId = source.LayoutUniqueId,
             IsLiveLayoutSupported = source.IsLiveLayoutSupported,
+            UsesGroupedListBands = source.UsesGroupedListBands,
         };
 
         foreach (var node in source.Nodes)

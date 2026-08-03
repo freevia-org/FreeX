@@ -1545,13 +1545,24 @@ public static class SmartArtLayoutEngine
         {
             var group = groups[groupIndex];
             long groupX = fx + padX + groupIndex * (groupWidth + gapX);
+            var children = childrenByGroup[groupIndex];
+            if (data.UsesGroupedListBands)
+            {
+                shapes.Add(MakeGroupedListBand(
+                    idCounter++,
+                    groupX,
+                    fy + padY + headerHeight,
+                    groupWidth,
+                    Math.Max(fcy - 2 * padY - headerHeight, 1L),
+                    stylePlan.GetNodeStyle(groupIndex, group.Level, SmartArtFamily.List)));
+            }
+
             var headerStyle = stylePlan.GetNodeStyle(groupIndex, group.Level, SmartArtFamily.List);
             shapes.Add(MakeBox(
                 idCounter++, group.Text, headerStyle,
                 groupX, fy + padY, groupWidth, headerHeight,
                 NodeFontSizeLargePt, DrawingShapeKind.RoundedRectangle));
 
-            var children = childrenByGroup[groupIndex];
             for (var childIndex = 0; childIndex < children.Count; childIndex++)
             {
                 var child = children[childIndex];
@@ -1566,6 +1577,29 @@ public static class SmartArtLayoutEngine
         }
 
         return shapes;
+
+        static SlideShape MakeGroupedListBand(
+            uint id,
+            long x,
+            long y,
+            long cx,
+            long cy,
+            SmartArtNodeStyle style)
+        {
+            return new SlideShape
+            {
+                Id = id,
+                Name = $"SmartArt_GroupedList_Band_{id}",
+                Kind = SlideShapeKind.AutoShape,
+                AutoShapeKind = DrawingShapeKind.Rectangle,
+                OffsetXEmu = x,
+                OffsetYEmu = y,
+                ExtentCxEmu = cx,
+                ExtentCyEmu = cy,
+                Fill = new ShapeFill.Solid(new ThemeAwareColor(ThemeColorTransform.ApplyTint(style.Fill.Resolved, 0.78))),
+                Outline = ShapeOutline.None.Instance
+            };
+        }
 
         static IEnumerable<SmartArtNode> FlattenChildren(SmartArtNode parent)
         {

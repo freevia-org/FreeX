@@ -302,6 +302,36 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void GroupedList_ImportedBandGrammarAddsBandsBehindEditableNodes()
+    {
+        var first = new SmartArtNode { Text = "Plan", Level = 0 };
+        first.Children.Add(new SmartArtNode { Text = "Scope", Level = 1 });
+        first.Children.Add(new SmartArtNode { Text = "Schedule", Level = 1 });
+        var second = new SmartArtNode { Text = "Build", Level = 0 };
+        second.Children.Add(new SmartArtNode { Text = "Implement", Level = 1 });
+        second.Children.Add(new SmartArtNode { Text = "Verify", Level = 1 });
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/groupedList",
+            UsesGroupedListBands = true
+        };
+        data.Nodes.Add(first);
+        data.Nodes.Add(second);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull();
+        shapes!.Should().HaveCount(8);
+        shapes.Where(shape => string.IsNullOrWhiteSpace(shape.PlainText)).Should().OnlyContain(shape =>
+            shape.AutoShapeKind == DrawingShapeKind.Rectangle
+            && string.IsNullOrWhiteSpace(shape.PlainText));
+        shapes.Where(shape => !string.IsNullOrWhiteSpace(shape.PlainText))
+            .Select(shape => shape.PlainText)
+            .Should().Equal("Plan", "Scope", "Schedule", "Build", "Implement", "Verify");
+    }
+
+    [Fact]
     public void Process_BoxesAreLeftToRight_Increasing_X()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");

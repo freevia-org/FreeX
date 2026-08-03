@@ -71,6 +71,12 @@ public sealed class SmartArtData
     public bool IsLiveLayoutSupported { get; set; } = true;
 
     /// <summary>
+    /// True when an imported grouped-list cache contains exactly one empty body
+    /// band per visible group and the shared planner can reproduce those bands.
+    /// </summary>
+    public bool UsesGroupedListBands { get; set; }
+
+    /// <summary>
     /// Root-level nodes of the diagram tree.  For flat families (List, Process, Cycle)
     /// all visible nodes sit at Level 0 here.  For Hierarchy the root is Nodes[0] with
     /// its children nested inside it.
