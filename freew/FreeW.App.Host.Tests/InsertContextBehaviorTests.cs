@@ -47,7 +47,7 @@ public sealed class InsertContextBehaviorTests
     }
 
     [StaFact]
-    public void ImageWrapCommand_ChangesSelectedImageWrapping()
+    public void ImageWrapCommand_ChangesSelectedImageWrapping_AndIsUndoable()
     {
         var view = EmptyView();
         var image = new InlineImage(OnePixelPng, 96, 96);
@@ -65,6 +65,40 @@ public sealed class InsertContextBehaviorTests
         command!.Execute(RibbonCommandContext.Empty);
 
         Assert.Equal(ImageWrapping.Square, image.Wrapping);
+        Assert.True(view.CanUndo);
+        view.Undo();
+        Assert.Equal(ImageWrapping.Inline, image.Wrapping);
+        view.Redo();
+        Assert.Equal(ImageWrapping.Square, image.Wrapping);
+    }
+
+    [StaFact]
+    public void ImageAlignCommand_AlignsContainingParagraph_AndIsUndoable()
+    {
+        var view = EmptyView();
+        var image = new InlineImage(OnePixelPng, 96, 96);
+        view.InsertImage(image);
+        var container = view.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(p => p.Inlines)
+            .OfType<InlineUIContainer>()
+            .Single();
+        view.Selection.Select(container.ElementStart, container.ElementEnd);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+        FreeW.Core.Model.Paragraph CurrentParagraph() =>
+            view.Model.Blocks.OfType<FreeW.Core.Model.Paragraph>().Single();
+        var before = CurrentParagraph().Formatting;
+
+        Assert.Same(image, view.SelectedImage());
+        Assert.True(registry.TryGet("freew.image-align-right", out var command));
+        command!.Execute(RibbonCommandContext.Empty);
+
+        Assert.Equal(TextAlignment.Right, CurrentParagraph().Formatting.Alignment);
+        Assert.True(view.CanUndo);
+        view.Undo();
+        Assert.Equal(before, CurrentParagraph().Formatting);
+        view.Redo();
+        Assert.Equal(TextAlignment.Right, CurrentParagraph().Formatting.Alignment);
     }
 
     // A minimal valid 1x1 transparent PNG (so InsertImage can decode it into a real BitmapImage).

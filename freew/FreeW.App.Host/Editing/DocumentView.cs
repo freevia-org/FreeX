@@ -3200,21 +3200,23 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, _, image) = SelectedImageLocation();
         if (image is null || blockIndex < 0 || _model.Blocks[blockIndex] is not ModelParagraph paragraph)
             return;
-        paragraph.Formatting = paragraph.Formatting with { Alignment = alignment };
+        _commands.Execute(new SetParagraphFormattingCommand(
+            blockIndex,
+            paragraph.Formatting with { Alignment = alignment }));
         Render();
     }
 
     /// <summary>
-    /// Set the wrapping mode for the currently selected image. No-op without an image selection.
+    /// Set the wrapping mode for the currently selected image. Undoable; no-op without an image selection.
     /// The backing model and DOCX writer already carry the Word-style wrapping modes.
     /// </summary>
     public void SetSelectedImageWrapping(ImageWrapping wrapping)
     {
         CommitToModel();
-        var image = SelectedImageLocation().Image;
+        var (blockIndex, runIndex, image) = SelectedImageLocation();
         if (image is null)
             return;
-        image.Wrapping = wrapping;
+        _commands.Execute(new SetFloatingWrapCommand(blockIndex, runIndex, wrapping));
         Render();
     }
 
