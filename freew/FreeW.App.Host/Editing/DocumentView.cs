@@ -15870,9 +15870,7 @@ public sealed class DocumentView : RichTextBox
         var trimmed = term?.Trim() ?? string.Empty;
         if (trimmed.Length == 0)
             return;
-        if (_model.IndexEntries.Any(e => string.Equals(e.Term, trimmed, StringComparison.OrdinalIgnoreCase)))
-            return;
-        _model.IndexEntries.Add(new IndexEntry(trimmed));
+        _commands.Execute(new AddIndexEntryCommand(trimmed));
     }
 
     /// <summary>
