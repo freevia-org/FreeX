@@ -1591,6 +1591,10 @@ public sealed class ChartTests : IDisposable
     public void RoundTrip_StockChart_TypePreservedInPackageAndModel()
     {
         var chart = BuildStockChart();
+        chart.ShowUpDownBars = true;
+        chart.UpDownBarGapWidthPercent = 180;
+        chart.UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33));
+        chart.DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC));
         var path = WriteToPptx(BuildPresWithChart(chart));
 
         using (var archive = ZipFile.OpenRead(path))
@@ -1600,6 +1604,12 @@ public sealed class ChartTests : IDisposable
                 "stock charts should keep their PowerPoint chart family instead of downgrading to c:lineChart");
             chartDoc.Descendants(ChartNs + "hiLowLines").Should().ContainSingle(
                 "new stock charts use the high-low rendering authored by PowerPoint");
+            var bars = chartDoc.Descendants(ChartNs + "upDownBars").Should().ContainSingle().Subject;
+            bars.Element(ChartNs + "gapWidth")!.Attribute("val")!.Value.Should().Be("180");
+            bars.Element(ChartNs + "upBars")!.Element(ChartNs + "spPr")!.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("112233");
+            bars.Element(ChartNs + "downBars")!.Element(ChartNs + "spPr")!.Element(DrawingNs + "solidFill")!
+                .Element(DrawingNs + "srgbClr")!.Attribute("val")!.Value.Should().Be("AABBCC");
             chartDoc.Descendants(ChartNs + "lineChart").Should().BeEmpty();
         }
 
@@ -1607,6 +1617,10 @@ public sealed class ChartTests : IDisposable
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Stock);
         rt.HasHighLowLines.Should().BeTrue();
+        rt.ShowUpDownBars.Should().BeTrue();
+        rt.UpDownBarGapWidthPercent.Should().Be(180);
+        ((ShapeFill.Solid)rt.UpBarFill!).Color.Resolved.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        ((ShapeFill.Solid)rt.DownBarFill!).Color.Resolved.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
         rt.Series.Should().HaveCount(4);
     }
 

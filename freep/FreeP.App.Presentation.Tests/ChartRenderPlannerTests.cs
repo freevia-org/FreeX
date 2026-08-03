@@ -1080,6 +1080,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_StockUpDownBarsUseOpenCloseBands()
+    {
+        var chart = MakeStockChart();
+        chart.ShowUpDownBars = true;
+        chart.UpDownBarGapWidthPercent = 100;
+        chart.UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33));
+        chart.DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC));
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.UpDownBars.Should().HaveCount(3);
+        scene.UpDownBars[0].Fill.Color.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        scene.UpDownBars[1].Fill.Color.Should().Be(new SrgbColor(0xAA, 0xBB, 0xCC));
+        scene.UpDownBars[2].Fill.Color.Should().Be(new SrgbColor(0x11, 0x22, 0x33));
+        scene.UpDownBars.Should().OnlyContain(bar => bar.Bounds.Height > 0);
+    }
+
+    [Fact]
     public void BuildFunnelSegmentPrimitives_CreatesCenteredDescendingStages()
     {
         var chart = new ChartShape

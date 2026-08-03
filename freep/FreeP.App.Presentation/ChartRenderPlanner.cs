@@ -1668,7 +1668,9 @@ public static partial class ChartRenderPlanner
             ? BuildDropLinePrimitives(plot, geometryKind, lineSeries)
             : Array.Empty<ChartLineSegmentPrimitive>();
         var upDownBars = chart.ShowUpDownBars
-            ? BuildUpDownBarPrimitives(chart, plot, geometryKind, lineSeries)
+            ? geometryKind == ChartSceneGeometryKind.Stock
+                ? BuildStockUpDownBarPrimitives(chart, plot)
+                : BuildUpDownBarPrimitives(chart, plot, geometryKind, lineSeries)
             : Array.Empty<ChartRectPrimitive>();
         var dataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans);
         var ofPieSeriesLines = chart.ChartType == ChartType.OfPie
@@ -1800,6 +1802,56 @@ public static partial class ChartRenderPlanner
                     barWidth,
                     bottom - top),
                 Fill: secondPoint.Y < firstPoint.Y ? upFill : downFill,
+                Stroke: null));
+        }
+
+        return bars;
+    }
+
+    private static IReadOnlyList<ChartRectPrimitive> BuildStockUpDownBarPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (chart.ChartType != ChartType.Stock || !plot.HasPositiveArea ||
+            !TryResolveStockSeries(chart, out var openSeriesIndex, out _, out _, out var closeSeriesIndex) ||
+            openSeriesIndex < 0 || closeSeriesIndex < 0)
+            return Array.Empty<ChartRectPrimitive>();
+
+        var (minimum, maximum, _) = ComputePrimaryValueAxisRange(chart);
+        double range = maximum - minimum;
+        if (range <= 0)
+            return Array.Empty<ChartRectPrimitive>();
+
+        int categoryCount = ResolveChartCategoryCount(chart);
+        double categoryWidth = plot.Width / Math.Max(1, categoryCount);
+        double gapWidth = Math.Clamp(chart.UpDownBarGapWidthPercent ?? 150, 0, 500);
+        double barWidth = categoryWidth * 100.0 / (100.0 + gapWidth);
+        var upFill = ResolveUpDownFill(chart.UpBarFill, new SrgbColor(0x70, 0xAD, 0x47));
+        var downFill = ResolveUpDownFill(chart.DownBarFill, new SrgbColor(0xC0, 0x00, 0x00));
+        var bars = new List<ChartRectPrimitive>();
+
+        for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            var open = TryGetSeriesValue(chart, openSeriesIndex, categoryIndex);
+            var close = TryGetSeriesValue(chart, closeSeriesIndex, categoryIndex);
+            if (open is null || close is null)
+                continue;
+
+            int renderCategoryIndex = ResolveCategoryRenderIndex(
+                chart.CategoryAxis, categoryIndex, categoryCount);
+            double x = plot.X + (renderCategoryIndex + 0.5) * categoryWidth;
+            double openY = MapCartesianValueToY(open.Value, minimum, range, plot, chart.ValueAxis.ReverseOrder);
+            double closeY = MapCartesianValueToY(close.Value, minimum, range, plot, chart.ValueAxis.ReverseOrder);
+            double top = Math.Min(openY, closeY);
+            double bottom = Math.Max(openY, closeY);
+            if (bottom <= top)
+                continue;
+
+            bars.Add(new ChartRectPrimitive(
+                close.Value >= open.Value ? closeSeriesIndex : openSeriesIndex,
+                categoryIndex,
+                new ChartPlanRect(x - barWidth / 2.0, top, barWidth, bottom - top),
+                close.Value >= open.Value ? upFill : downFill,
                 Stroke: null));
         }
 

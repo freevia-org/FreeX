@@ -1874,6 +1874,11 @@ public sealed class SlideCanvas : FrameworkElement
                 ToRect(primitive.Bounds));
         }
 
+        foreach (var bar in scene.UpDownBars)
+        {
+            dc.DrawRectangle(ToBrush(bar.Fill), null, ToRect(bar.Bounds));
+        }
+
         var plan = scene.Stock.Value;
 
         foreach (var segment in plan.HighLowLines)

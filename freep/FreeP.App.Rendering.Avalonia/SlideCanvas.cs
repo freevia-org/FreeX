@@ -1542,6 +1542,11 @@ public sealed class SlideCanvas : Control
                 ToRect(primitive.Bounds));
         }
 
+        foreach (var bar in scene.UpDownBars)
+        {
+            dc.FillRectangle(ToBrush(bar.Fill), ToRect(bar.Bounds));
+        }
+
         var plan = scene.Stock.Value;
         foreach (var segment in plan.HighLowLines)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
