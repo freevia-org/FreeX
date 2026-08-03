@@ -783,7 +783,10 @@ internal static class ParityCapture
             new ShapeEffectsDialog(DrawingShapeEffectPreset.Shadow));
 
         CaptureDialog(results, "dialog.ShapeGradient", outDir, () =>
-            new ShapeGradientDialog());
+            new ShapeGradientDialog(
+                ShapeGradientParityFixture.StartColor,
+                ShapeGradientParityFixture.EndColor,
+                ShapeGradientParityFixture.Direction));
 
         CaptureDialog(results, "dialog.Zoom", outDir, () =>
             new ZoomDialog(100));

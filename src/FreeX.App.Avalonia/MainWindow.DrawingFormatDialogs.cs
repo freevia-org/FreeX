@@ -623,18 +623,19 @@ public sealed partial class MainWindow
             Content = stopGrid,
             Width = 446,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
-            Margin = new Thickness(0, 0, 0, 12),
+            Padding = new Thickness(0),
+            Margin = new Thickness(2, 0, 0, 12),
         };
 
         var startSummary = new TextBlock { Text = $"Start: {FormatRgb(startColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily };
         var endSummary = new TextBlock { Text = $"End: {FormatRgb(endColor)}", Foreground = Brushes.DimGray, FontSize = 12, FontFamily = FormulaBarFontFamily, Margin = new Thickness(0, 2, 0, 6) };
         startSummaryRef = startSummary;
         endSummaryRef = endSummary;
-        var content = new StackPanel { Spacing = 0, Margin = new Thickness(18, 10, 18, 8) };
+        var content = new StackPanel { Spacing = 0, Margin = new Thickness(18, 16, 18, 8) };
         content.Children.Add(gradientGroup);
         content.Children.Add(startSummary);
         content.Children.Add(endSummary);
-        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 16, 15, 0)));
         dialog.Content = content;
 
         // Match the WPF dialog's Loaded focus contract: the first gradient-stop editor owns
@@ -756,7 +757,7 @@ public sealed partial class MainWindow
             Height = 24,
             MinWidth = 30,
             Padding = new Thickness(0),
-            BorderBrush = HeaderForeground,
+            BorderBrush = Brushes.Gray,
             BorderThickness = new Thickness(1),
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
@@ -777,7 +778,7 @@ public sealed partial class MainWindow
         };
         AvaloniaCompactDialogChrome.ApplyButton(
             button,
-            DrawingDialogChromeStyle with { ButtonPadding = new Thickness(8, 1) },
+            DrawingDialogChromeStyle with { ButtonHeight = 22, ButtonPadding = new Thickness(8, 1) },
             76,
             isDefault);
         return button;
