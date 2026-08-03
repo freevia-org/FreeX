@@ -1797,7 +1797,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "basicMatrix alone uses the dedicated shared Basic Matrix plan: the first four model top-level (Level == 0, PowerPoint Level 1) nodes render as stable row-major rounded quadrants over a neutral whole diamond, with no connectors; unused top-level and child nodes remain editable but are omitted from the four-idea layout. matrix1 has no fixture evidence and remains on cached fallback. Unsupported matrix siblings, PowerPoint-authoritative visual baselines, richer SmartArt effects, and broader SmartArt authoring/editing remain deferred.")
+            RemainingWork: "basicMatrix and imported matrix1 use the dedicated shared Basic Matrix plan: the first four model top-level (Level == 0, PowerPoint Level 1) nodes render as stable row-major rounded quadrants over a neutral whole diamond, with no connectors; unused top-level and child nodes remain editable but are omitted from the four-idea layout. Unsupported matrix siblings, PowerPoint-authoritative visual baselines, richer SmartArt effects, and broader SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.titled-matrix",

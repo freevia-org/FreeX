@@ -3290,7 +3290,7 @@ public static class PptxPackageReader
             SmartArtFamily.List => layoutId is "list1" or "list2" or "basicblocklist" or "verticalboxlist" or "verticalblocklist" or "verticalchevronlist" or "verticalarrowlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "pyramidlist" or "invertedpyramid" or "horizontalbulletlist" or "horizontalblocklist" or "trapezoidlist" or "picturecaptionlist" or "pictureaccentlist" or "picturestack" or "picturelineup" or "picturestrips" or "continuouspicturelist" or "picturegrid",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "cycle2" or "radial1" or "basiccycle" or "multidirectionalcycle" or "radialcycle" or "radialcluster" or "radiallist" or "gearcycle" or "textcycle" or "blockcycle" or "nondirectionalcycle" or "continuouscycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "hierarchy3" or "basichierarchy" or "horizontalhierarchy" or "labeledhierarchy" or "tablehierarchy" or "verticalbulletlist" or "orgchart" or "nameandtitleorgchart",
-            SmartArtFamily.Matrix => layoutId is "basicmatrix" or "titledmatrix" or "gridmatrix",
+            SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix" or "titledmatrix" or "gridmatrix",
             SmartArtFamily.Relationship => layoutId is "relationship1" or "opposingideas" or "convergingradial" or "divergingradial" or "basicvenn" or "radialvenn" or "targetlist" or "stackedvenn" or "interlockingrings",
             _ => false
         };
