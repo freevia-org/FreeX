@@ -795,6 +795,67 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ImportedGridMatrix_AdmitsExactFourCellCacheToSharedLiveLayout()
+    {
+        var corpusPath = FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx");
+        var presentation = PptxPackageReader.Read(corpusPath);
+        var slide = presentation.Slides[7];
+        var smartArtShape = slide.Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartArtShape.SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/gridMatrix");
+        smartArt.Data.Family.Should().Be(SmartArtFamily.Matrix);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the deterministic gridMatrix package has four ordered square rectangle cells with the shared 2.5% gap");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+        smartArt.FallbackShapes.Should().OnlyContain(shape =>
+            shape.Kind == SlideShapeKind.AutoShape
+            && shape.AutoShapeKind == DrawingShapeKind.Rectangle
+            && shape.ExtentCxEmu == shape.ExtentCyEmu);
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Should().Equal("Axis", "Speed", "Quality", "Cost");
+
+        var live = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartArtShape.OffsetXEmu,
+            smartArtShape.OffsetYEmu,
+            smartArtShape.ExtentCxEmu,
+            smartArtShape.ExtentCyEmu,
+            presentation.Theme);
+        live.Should().NotBeNull();
+        live!.Should().HaveCount(4);
+
+        var composed = SlideCompositor.Compose(presentation, slide)
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .Where(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text
+                is "Axis" or "Speed" or "Quality" or "Cost")
+            .ToList();
+        composed.Should().HaveCount(4,
+            "the admitted shared Grid Matrix plan replaces the four-shape cache without adding renderer-local geometry");
+        composed.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Axis", "Speed", "Quality", "Cost");
+    }
+
+    [Fact]
+    public void Reader_GridMatrix_WithNonSquareCachePreservesCachedDrawingFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Axis", "Speed", "Quality", "Cost"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix");
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "a non-square generic rectangle cache is outside the proven Grid Matrix grammar");
+        smartArt.FallbackShapes.Should().HaveCount(4);
+    }
+
+    [Fact]
     public void ReaderWriter_Cycle2_AdmitsLiveGeometryAndPreservesNativeIdentity()
     {
         var corpusPath = FindRenderCompareCorpusFile("14-smartart-live.pptx");
@@ -3913,9 +3974,9 @@ public sealed class SmartArtTests : IDisposable
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Matrix,
-            "unsupported matrix siblings still retain broad family metadata for future layout slices");
+            "Grid Matrix retains broad family metadata when no cached drawing is present");
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
-            "gridMatrix is now in the shared live Matrix layout allow-list");
+            "Grid Matrix remains live-capable when the package has no cached drawing to validate");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C", "D");
     }
 
@@ -3931,10 +3992,11 @@ public sealed class SmartArtTests : IDisposable
         var smartArt = presentation.Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.SmartArt)
             .SmartArt!;
+        smartArt.Data!.IsLiveLayoutSupported = true;
         var ops = SlideCompositor.Compose(presentation, presentation.Slides[0]);
         var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
 
-        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
         liveShapes.Should().HaveCount(4, "the WPF host consumes the shared four-quadrant plan");
         liveShapes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
             .Should().Equal("A", "B", "C", "D");

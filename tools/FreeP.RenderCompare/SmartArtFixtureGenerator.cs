@@ -119,6 +119,14 @@ internal static class SmartArtFixtureGenerator
                 Nodes     = [("rel1","Audience"), ("rel2","Need"), ("rel3","Offer")],
                 Connections = [],
                 HasBasicRelationshipCachedDrawing = true
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live - Grid Matrix",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix",
+                Nodes     = [("grid1","Axis"), ("grid2","Speed"), ("grid3","Quality"), ("grid4","Cost")],
+                Connections = [],
+                HasGridMatrixCachedDrawing = true
             }
         };
 
@@ -638,6 +646,9 @@ internal static class SmartArtFixtureGenerator
         if (spec.HasBasicRelationshipCachedDrawing)
             return BuildBasicRelationshipDrawingXml(spec);
 
+        if (spec.HasGridMatrixCachedDrawing)
+            return BuildGridMatrixDrawingXml(spec);
+
         if (!spec.HasHierarchy3CachedDrawing)
             return BuildEmptyDrawing();
 
@@ -761,6 +772,40 @@ internal static class SmartArtFixtureGenerator
             node.text,
             "ellipse",
             (left + index * step, top, diameter, diameter)));
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+            new XElement(Dsp + "spTree", elements)));
+    }
+
+    private static XDocument BuildGridMatrixDrawingXml(SlideSpec spec)
+    {
+        const long frameCx = 8_229_600;
+        const long frameCy = 5_744_800;
+        var outerPad = (long)(Math.Min(frameCx, frameCy) * 0.04);
+        var availableW = frameCx - 2 * outerPad;
+        var availableH = frameCy - 2 * outerPad;
+        var gridSize = Math.Min(availableW, availableH);
+        var gap = (long)(gridSize * 0.025);
+        var cellSize = (gridSize - gap) / 2;
+        var gridX = (frameCx - gridSize) / 2;
+        var gridY = (frameCy - gridSize) / 2;
+        var positions = new[]
+        {
+            (gridX, gridY),
+            (gridX + cellSize + gap, gridY),
+            (gridX, gridY + cellSize + gap),
+            (gridX + cellSize + gap, gridY + cellSize + gap)
+        };
+        var elements = spec.Nodes.Select((node, index) => BuildDspShape(
+            (uint)(80 + index),
+            $"GridMatrix cell {index + 1}",
+            node.text,
+            "rect",
+            (positions[index].Item1, positions[index].Item2, cellSize, cellSize)));
 
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -935,5 +980,6 @@ internal static class SmartArtFixtureGenerator
         public bool HasHierarchy3CachedDrawing { get; init; }
         public bool HasGroupedListCachedDrawing { get; init; }
         public bool HasBasicRelationshipCachedDrawing { get; init; }
+        public bool HasGridMatrixCachedDrawing { get; init; }
     }
 }
