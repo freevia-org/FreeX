@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -460,8 +461,18 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
             TextWrapping = TextWrapping.Wrap,
         });
         panel.Children.Add(table);
+        var actionPlans = InsertChartDialogPlanner.ActionButtons;
         panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow(
-            [Chrome.Button("OK", Accept, isDefault: true), Chrome.Button("Cancel", () => Close(null), isCancel: true)],
+            [
+                Chrome.Button(
+                    ResolveShellButtonLabel(actionPlans[0].Label),
+                    Accept,
+                    isDefault: actionPlans[0].IsDefault),
+                Chrome.Button(
+                    ResolveShellButtonLabel(actionPlans[1].Label),
+                    () => Close(null),
+                    isCancel: actionPlans[1].IsCancel),
+            ],
             new Thickness(0, 12, 0, 0)));
         Content = new Border { Padding = new Thickness(14), Child = panel };
         Opened += (_, _) => Chrome.FocusAndSelect(_title);
@@ -616,6 +627,13 @@ internal sealed class InsertChartDialog : FreeWDialogWindow
     private static bool IsEmpty(RowControls row) =>
         string.IsNullOrWhiteSpace(row.Category.Text)
         && row.Values.All(box => string.IsNullOrWhiteSpace(box.Text));
+
+    private static string ResolveShellButtonLabel(string label) =>
+        label.Equals("OK", StringComparison.OrdinalIgnoreCase)
+            ? ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Ok)
+            : label.Equals("Cancel", StringComparison.OrdinalIgnoreCase)
+                ? ShellStrings.Current.CreateAutomationName(ShellStrings.Current.Cancel)
+                : label;
 }
 
 internal static class Chrome

@@ -42,6 +42,12 @@ public static class InsertChartDialogPlanner
     public const string DefaultTitle = "Quarterly Sales";
     public const string EmptyRowsValidationMessage = "Enter at least one data row.";
 
+    public static IReadOnlyList<DialogActionButtonPlan> ActionButtons { get; } =
+    [
+        new("OK", IsDefault: true),
+        new("Cancel", IsCancel: true),
+    ];
+
     private static readonly string[] DefaultCategories = ["Q1", "Q2", "Q3", "Q4"];
     private static readonly double[] DefaultValues = [8.0, 5.0, 11.0, 7.0];
 

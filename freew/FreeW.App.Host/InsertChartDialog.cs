@@ -67,7 +67,13 @@ internal sealed class InsertChartDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(_dataGrid);
 
         // ── OK / Cancel ──────────────────────────────────────────────────────────────────────────
-        var buttons = DialogButtonRowFactory.Create(Accept, buttonWidth: 72, rowMargin: new Thickness(0, 12, 0, 0));
+        var actionPlans = InsertChartDialogPlanner.ActionButtons;
+        var buttons = DialogButtonRowFactory.Create(
+            Accept,
+            buttonWidth: 72,
+            rowMargin: new Thickness(0, 12, 0, 0),
+            acceptContent: actionPlans[0].Label,
+            cancelContent: actionPlans[1].Label);
         panel.Children.Add(buttons);
 
         Content = panel;

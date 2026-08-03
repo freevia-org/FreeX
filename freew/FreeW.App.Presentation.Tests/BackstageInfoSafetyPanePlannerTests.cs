@@ -30,6 +30,14 @@ public sealed class BackstageInfoSafetyPanePlannerTests
             action.Kind == BackstageInfoSafetyActionKind.CheckAccessibility &&
             action.Label == "Check Accessibility" &&
             action.Description.Contains("accessibility", StringComparison.OrdinalIgnoreCase));
+
+        groups.SelectMany(group => group.Actions)
+            .Select(action => action.Kind)
+            .Should().Equal(
+                BackstageInfoSafetyActionKind.MarkAsFinal,
+                BackstageInfoSafetyActionKind.RestrictEditing,
+                BackstageInfoSafetyActionKind.InspectDocument,
+                BackstageInfoSafetyActionKind.CheckAccessibility);
     }
 
     [Fact]

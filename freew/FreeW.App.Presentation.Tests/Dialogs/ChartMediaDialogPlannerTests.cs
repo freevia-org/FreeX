@@ -50,6 +50,16 @@ public sealed class ChartMediaDialogPlannerTests
     }
 
     [Fact]
+    public void InsertChartActionPlan_matches_WPF_authority()
+    {
+        InsertChartDialogPlanner.ActionButtons
+            .Select(button => (button.Label, button.IsDefault, button.IsCancel))
+            .Should().Equal(
+                ("OK", true, false),
+                ("Cancel", false, true));
+    }
+
+    [Fact]
     public void InsertChartRejectsRowsWithoutCategoryOrValues()
     {
         InsertChartDialogPlanner.TryBuildResult(
