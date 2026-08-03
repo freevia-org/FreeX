@@ -194,6 +194,7 @@ public static class SlideCloner
             HasHighLowLines = src.HasHighLowLines,
             ShowDropLines = src.ShowDropLines,
             ShowUpDownBars = src.ShowUpDownBars,
+            ShowWaterfallConnectorLines = src.ShowWaterfallConnectorLines,
             UpDownBarGapWidthPercent = src.UpDownBarGapWidthPercent,
             UpBarFill = src.UpBarFill,
             DownBarFill = src.DownBarFill,

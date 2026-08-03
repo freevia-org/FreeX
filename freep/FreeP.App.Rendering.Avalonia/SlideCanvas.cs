@@ -1443,6 +1443,9 @@ public sealed class SlideCanvas : Control
                 primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
                 ToRect(primitive.Bounds));
         }
+
+        foreach (var connector in scene.WaterfallConnectorLines)
+            dc.DrawLine(ToPen(connector.Stroke), ToPoint(connector.Start), ToPoint(connector.End));
     }
 
     private static void RenderThreeDColumn(

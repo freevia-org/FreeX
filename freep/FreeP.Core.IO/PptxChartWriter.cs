@@ -459,7 +459,7 @@ internal static class PptxChartWriter
             C + "waterfallChart",
             BuildVaryColorsEl(chart),
             seriesEls,
-            new XElement(C + "showConnectorLines", new XAttribute("val", "1")),
+            new XElement(C + "showConnectorLines", new XAttribute("val", BoolValue(chart.ShowWaterfallConnectorLines))),
             chart.BarGapWidthPercent is { } gapWidth
                 ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
                 : null);

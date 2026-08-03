@@ -667,6 +667,9 @@ public sealed class ChartShape
     /// <summary>Whether an imported line-family chart authors <c>c:upDownBars</c>.</summary>
     public bool ShowUpDownBars { get; set; }
 
+    /// <summary>Whether a waterfall chart draws the authored <c>c:showConnectorLines</c>.</summary>
+    public bool ShowWaterfallConnectorLines { get; set; } = true;
+
     /// <summary>Authored <c>c:upDownBars/c:gapWidth</c> percentage, when present.</summary>
     public int? UpDownBarGapWidthPercent { get; set; }
 

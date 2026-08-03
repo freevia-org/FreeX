@@ -1663,18 +1663,22 @@ public sealed class ChartTests : IDisposable
         var series = new ChartSeries { Name = "Value" };
         series.Values.AddRange(new double?[] { 100, -30, 20 });
         chart.Series.Add(series);
+        chart.ShowWaterfallConnectorLines = false;
         var path = WriteToPptx(BuildPresWithChart(chart));
 
         using (var archive = ZipFile.OpenRead(path))
         {
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
             chartDoc.Descendants(ChartNs + "waterfallChart").Should().ContainSingle();
+            chartDoc.Descendants(ChartNs + "showConnectorLines").Single()
+                .Attribute("val")!.Value.Should().Be("0");
             chartDoc.Descendants(ChartNs + "catAx").Should().ContainSingle();
         }
 
         var rt = PptxPackageReader.Read(path).Slides[0].Shapes
             .First(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Waterfall);
+        rt.ShowWaterfallConnectorLines.Should().BeFalse();
         rt.Categories.Should().Equal("Start", "Reduction", "Growth");
         rt.Series.Should().ContainSingle();
         rt.Series[0].Values.Should().Equal(100, -30, 20);

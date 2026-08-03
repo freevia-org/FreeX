@@ -473,6 +473,8 @@ internal static class PptxChartReader
     {
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Waterfall;
+        shape.ShowWaterfallConnectorLines = ParseNullableBoolElement(
+            el.Element(C + "showConnectorLines")) ?? true;
         shape.BarGapWidthPercent = ParseNullableInt(el.Element(C + "gapWidth")?.Attribute("val")?.Value);
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }

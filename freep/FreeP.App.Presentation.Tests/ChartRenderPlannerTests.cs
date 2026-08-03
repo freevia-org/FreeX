@@ -1144,6 +1144,13 @@ public sealed class ChartRenderPlannerTests
         bars[1].Bounds.Y.Should().BeApproximately(bars[0].Bounds.Y, 0.001);
         bars[1].Bounds.Height.Should().BeGreaterThan(0);
         bars[2].Bounds.Y.Should().BeLessThan(bars[1].Bounds.Y + bars[1].Bounds.Height);
+        scene.WaterfallConnectorLines.Should().HaveCount(2);
+        scene.WaterfallConnectorLines.Should().OnlyContain(line => line.Start.Y == line.End.Y);
+        scene.WaterfallConnectorLines[0].Start.X.Should().BeLessThan(scene.WaterfallConnectorLines[0].End.X);
+
+        chart.ShowWaterfallConnectorLines = false;
+        ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300))
+            .WaterfallConnectorLines.Should().BeEmpty();
     }
 
     [Fact]

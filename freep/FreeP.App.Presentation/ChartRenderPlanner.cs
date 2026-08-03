@@ -577,6 +577,8 @@ public sealed class ChartScenePlan
     public IReadOnlyList<ChartLineSegmentPrimitive> DropLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     /// <summary>Filled intervals between the first two line-series points.</summary>
     public IReadOnlyList<ChartRectPrimitive> UpDownBars { get; init; } = Array.Empty<ChartRectPrimitive>();
+    /// <summary>Horizontal waterfall connectors between consecutive cumulative bars.</summary>
+    public IReadOnlyList<ChartLineSegmentPrimitive> WaterfallConnectorLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     public ChartDataTablePrimitivePlan DataTable { get; init; }
     public ChartSecondaryValueAxisPrimitivePlan SecondaryAxis { get; init; }
     public IReadOnlyList<ChartTextPlan> CategoryAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
@@ -1561,6 +1563,7 @@ public static partial class ChartRenderPlanner
         };
 
         IReadOnlyList<ChartRectPrimitive> rectangles = Array.Empty<ChartRectPrimitive>();
+        IReadOnlyList<ChartLineSegmentPrimitive> waterfallConnectorLines = Array.Empty<ChartLineSegmentPrimitive>();
         ChartSurfaceGeometryPlan? surface = null;
         IReadOnlyList<ChartLineSeriesPrimitive> lineSeries = Array.Empty<ChartLineSeriesPrimitive>();
         ChartStockPrimitivePlan? stock = null;
@@ -1630,6 +1633,9 @@ public static partial class ChartRenderPlanner
                 break;
             case ChartSceneGeometryKind.Waterfall:
                 rectangles = BuildWaterfallPrimitives(chart, plot, seriesColors, fillPlans);
+                waterfallConnectorLines = chart.ShowWaterfallConnectorLines
+                    ? BuildWaterfallConnectorLines(chart, plot)
+                    : Array.Empty<ChartLineSegmentPrimitive>();
                 break;
             case ChartSceneGeometryKind.Scatter:
                 scatter = BuildScatterPrimitivePlan(chart, plot, seriesColors, fillPlans);
@@ -1705,6 +1711,7 @@ public static partial class ChartRenderPlanner
             OfPieSeriesLines = ofPieSeriesLines,
             DropLines = dropLines,
             UpDownBars = upDownBars,
+            WaterfallConnectorLines = waterfallConnectorLines,
             DataTable = BuildDataTablePrimitivePlan(chart, frame, seriesColors, fillPlans),
             SecondaryAxis = BuildSecondaryValueAxisPrimitivePlan(chart, frame),
             CategoryAxisLabels = BuildCategoryAxisLabelPlans(chart, frame),
@@ -4245,6 +4252,55 @@ public static partial class ChartRenderPlanner
                     varyByPoint: true,
                     negativeValue: value < 0),
                 Stroke: null));
+            cumulative = next;
+        }
+
+        return result;
+    }
+
+    public static IReadOnlyList<ChartLineSegmentPrimitive> BuildWaterfallConnectorLines(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (chart.ChartType != ChartType.Waterfall || chart.Series.Count == 0 ||
+            chart.Categories.Count < 2 || !plot.HasPositiveArea)
+            return Array.Empty<ChartLineSegmentPrimitive>();
+
+        var (minimum, maximum, _) = ComputePrimaryValueAxisRange(chart);
+        double range = maximum - minimum;
+        if (range <= 0)
+            return Array.Empty<ChartLineSegmentPrimitive>();
+
+        int categoryCount = Math.Max(1, chart.Categories.Count);
+        var spacing = ResolveBarClusterSpacing(chart, plot.Width / categoryCount, 1, stacked: false);
+        var stroke = new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 1.0);
+        var result = new List<ChartLineSegmentPrimitive>(categoryCount - 1);
+        double cumulative = 0;
+        ChartPlanPoint? previousEnd = null;
+
+        for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            double value = categoryIndex < chart.Series[0].Values.Count
+                ? chart.Series[0].Values[categoryIndex] ?? 0
+                : 0;
+            int renderCategoryIndex = ResolveCategoryRenderIndex(chart.CategoryAxis, categoryIndex, categoryCount);
+            var slot = ResolveBarClusterSlot(plot.X, renderCategoryIndex, spacing);
+            double next = cumulative + value;
+            double startY = MapCartesianValueToY(cumulative, minimum, range, plot, chart.ValueAxis.ReverseOrder);
+            double endY = MapCartesianValueToY(next, minimum, range, plot, chart.ValueAxis.ReverseOrder);
+            var currentEnd = new ChartPlanPoint(slot.ClusterStart + slot.ClusterSize, endY);
+            if (previousEnd is { } prior)
+            {
+                result.Add(new ChartLineSegmentPrimitive(
+                    0,
+                    categoryIndex - 1,
+                    categoryIndex,
+                    prior,
+                    new ChartPlanPoint(slot.ClusterStart, startY),
+                    stroke));
+            }
+
+            previousEnd = currentEnd;
             cumulative = next;
         }
 
