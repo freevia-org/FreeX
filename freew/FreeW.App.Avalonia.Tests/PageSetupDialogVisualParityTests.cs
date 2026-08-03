@@ -133,4 +133,15 @@ public sealed class PageSetupDialogVisualParityTests
             }
         }, CancellationToken.None);
     }
+
+    [Fact]
+    public void Default_action_border_override_runs_after_shared_chrome_normalization()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "PageSetupDialog.cs"));
+
+        source.Should().Contain("DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush");
+        source.Should().Contain("foreach (var button in ((Panel)actions).Children.OfType<Button>())");
+        source.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, actionStyle, metrics.ActionButtonWidth);");
+    }
 }

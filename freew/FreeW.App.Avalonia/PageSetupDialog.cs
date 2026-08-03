@@ -114,17 +114,28 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         };
         Grid.SetRow(tabs, 0);
         Grid.SetRow(_status, 1);
-        var actions = PageLayoutDialogChrome.Actions(Accept, () => Close(null), buttonWidth: metrics.ActionButtonWidth);
+        var actionStyle = DialogChromeStyle with
+        {
+            DefaultButtonBorderBrush = AvaloniaCompactDialogChrome.NeutralButtonBorderBrush
+        };
+        var actions = PageLayoutDialogChrome.Actions(
+            Accept,
+            () => Close(null),
+            style: actionStyle,
+            buttonWidth: metrics.ActionButtonWidth);
         actions.Margin = ToThickness(metrics.ActionRowMargin);
         Grid.SetRow(actions, 2);
-        // Keep the logical/visual child order aligned with the WPF authority: the action row
-        // precedes the tab content even though Grid rows place it at the bottom on screen.
         root.Children.Add(actions);
         root.Children.Add(tabs);
         root.Children.Add(_status);
         Content = root;
 
-        Opened += (_, _) => PageLayoutDialogChrome.FocusAndSelect(_top);
+        Opened += (_, _) =>
+        {
+            foreach (var button in ((Panel)actions).Children.OfType<Button>())
+                AvaloniaCompactDialogChrome.ApplyButton(button, actionStyle, metrics.ActionButtonWidth);
+            PageLayoutDialogChrome.FocusAndSelect(_top);
+        };
         PageLayoutDialogChrome.WireEscape<PageSetupDialogOutcome?>(this);
     }
 
