@@ -489,7 +489,10 @@ public static class AvaloniaCompactDialogChrome
         checkBox.Foreground = DialogForegroundBrush;
     }
 
-    public static void ApplyCompactCheckBox(CheckBox checkBox, AvaloniaCompactDialogChromeStyle style)
+    public static void ApplyCompactCheckBox(
+        CheckBox checkBox,
+        AvaloniaCompactDialogChromeStyle style,
+        double contentSpacing = 4)
     {
         ApplyCheckBox(checkBox, style);
         checkBox.Height = 18;
@@ -537,7 +540,7 @@ public static class AvaloniaCompactDialogChrome
             {
                 Orientation = Orientation.Horizontal,
                 VerticalAlignment = VerticalAlignment.Center,
-                Spacing = 4,
+                Spacing = contentSpacing,
                 Children = { indicator, content },
             };
         });

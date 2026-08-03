@@ -88,6 +88,56 @@ public sealed class OptionsDialogParityTests
         }
     }
 
+    [StaFact]
+    public void Wpf_autoformat_uses_shared_row_spacing_and_enabled_state()
+    {
+        var owner = new Window();
+        owner.Show();
+        var dialog = new OptionsDialog(owner, new FreeWOptions());
+        try
+        {
+            var master = GetField<CheckBox>(dialog, "_autoCorrectEnabled");
+            var rules = new[]
+            {
+                GetField<CheckBox>(dialog, "_smartQuotes"),
+                GetField<CheckBox>(dialog, "_dashes"),
+                GetField<CheckBox>(dialog, "_ellipsis"),
+                GetField<CheckBox>(dialog, "_symbols"),
+                GetField<CheckBox>(dialog, "_capitalization"),
+                GetField<CheckBox>(dialog, "_bulletedLists"),
+                GetField<CheckBox>(dialog, "_numberedLists"),
+                GetField<CheckBox>(dialog, "_ordinals"),
+                GetField<CheckBox>(dialog, "_fractions"),
+                GetField<CheckBox>(dialog, "_hyperlinks"),
+            };
+
+            master.Margin.Should().Be(new Thickness(0, 0, 0, 8));
+            rules.Should().OnlyContain(check => check.Margin == new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0));
+            master.IsChecked.Should().BeTrue();
+            rules.Should().OnlyContain(check => check.IsChecked == true && check.IsEnabled);
+
+            dialog.Show();
+            dialog.UpdateLayout();
+            var tabs = FindVisualChildren<TabControl>(dialog).Single();
+            tabs.SelectedIndex = 2;
+            dialog.UpdateLayout();
+            var section = FindVisualChildren<TextBlock>(dialog)
+                .Single(text => text.Text == OptionsDialogPlanner.AutoFormatSectionLabel);
+            section.Margin.Should().Be(new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0));
+        }
+        finally
+        {
+            dialog.Close();
+            owner.Close();
+        }
+    }
+
+    private static T GetField<T>(OptionsDialog dialog, string name) where T : class =>
+        (T)(typeof(OptionsDialog)
+            .GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(dialog)
+            ?? throw new InvalidOperationException($"Missing OptionsDialog field {name}."));
+
     private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
     {
         if (root is T value)
