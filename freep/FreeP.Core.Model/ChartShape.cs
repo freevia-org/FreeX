@@ -661,6 +661,9 @@ public sealed class ChartShape
     /// </summary>
     public bool HasHighLowLines { get; set; } = true;
 
+    /// <summary>Whether an imported line-family chart authors <c>c:dropLines</c>.</summary>
+    public bool ShowDropLines { get; set; }
+
     /// <summary>
     /// Authored chart style identifier from <c>c:chartSpace/c:style</c> or its
     /// newer compatibility extension. Null means the classic Office default style.

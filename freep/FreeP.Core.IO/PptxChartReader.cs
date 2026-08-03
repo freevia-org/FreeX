@@ -429,6 +429,7 @@ internal static class PptxChartReader
         });
 
         shape.ChartType = hasMarkers ? ChartType.LineMarkers : ChartType.Line;
+        shape.ShowDropLines = el.Element(C + "dropLines") is not null;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
@@ -438,6 +439,7 @@ internal static class PptxChartReader
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Stock;
         shape.HasHighLowLines = el.Element(C + "hiLowLines") is not null;
+        shape.ShowDropLines = el.Element(C + "dropLines") is not null;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 

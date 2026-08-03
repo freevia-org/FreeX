@@ -192,6 +192,7 @@ public static class SlideCloner
             OfPieCustomPointIndices = new(src.OfPieCustomPointIndices),
             OfPieSeriesLinesSpecified = src.OfPieSeriesLinesSpecified,
             HasHighLowLines = src.HasHighLowLines,
+            ShowDropLines = src.ShowDropLines,
             StyleId      = src.StyleId,
             Title        = src.Title,
             TitleOverlay = src.TitleOverlay,

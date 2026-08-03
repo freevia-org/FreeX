@@ -79,6 +79,7 @@ public sealed class ChartTests : IDisposable
         };
         chart.DisplayBlanksAs = ChartDisplayBlanksAs.Span;
         chart.ShowDataLabelsOverMaximum = true;
+        chart.ShowDropLines = true;
         slide.Shapes.Add(new SlideShape
         {
             Id = 7,
@@ -108,6 +109,7 @@ public sealed class ChartTests : IDisposable
         clonedChart.View3D.DepthPercent.Should().Be(100);
         clonedChart.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Span);
         clonedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
+        clonedChart.ShowDropLines.Should().BeTrue();
     }
 
     [Fact]
@@ -1055,6 +1057,26 @@ public sealed class ChartTests : IDisposable
 
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().BeOneOf([ChartType.Line, ChartType.LineMarkers], "line charts round-trip as line variant");
+    }
+
+    [Fact]
+    public void RoundTrip_LineChart_DropLinesPreservedInPackageAndModel()
+    {
+        var chart = BuildLineChart();
+        chart.ShowDropLines = true;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var lineChart = chartDoc.Descendants(ChartNs + "lineChart").Single();
+            lineChart.Element(ChartNs + "dropLines").Should().NotBeNull();
+            ChartChildIndex(lineChart, "dropLines").Should().BeLessThan(ChartChildIndex(lineChart, "axId"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ShowDropLines.Should().BeTrue();
     }
 
     [Fact]

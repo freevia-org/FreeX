@@ -142,6 +142,43 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_EmitsDropLinesForAuthoredLineChart()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            ShowDropLines = true,
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.DropLines.Should().HaveCount(2);
+        scene.DropLines.Should().AllSatisfy(line =>
+        {
+            line.Start.X.Should().Be(line.End.X);
+            line.End.Y.Should().Be(scene.Frame.Plot.Bottom);
+        });
+    }
+
+    [Fact]
+    public void BuildScenePlan_DoesNotEmitDropLinesWhenFlagIsOmitted()
+    {
+        var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.DropLines.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildScenePlan_RespectsScatterXPlusOnlyAndNoEndCap()
     {
         var chart = new ChartShape { ChartType = ChartType.Scatter, ScatterStyle = ScatterStyle.Marker };

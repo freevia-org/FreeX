@@ -1524,8 +1524,15 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderLineChart(DrawingContext dc, ChartScenePlan scene)
     {
+        RenderDropLines(dc, scene.DropLines);
         foreach (var primitive in scene.LineSeries)
             RenderLineSeriesPrimitive(dc, primitive);
+    }
+
+    private static void RenderDropLines(DrawingContext dc, IReadOnlyList<ChartLineSegmentPrimitive> lines)
+    {
+        foreach (var line in lines)
+            dc.DrawLine(ToPen(line.Stroke), ToPoint(line.Start), ToPoint(line.End));
     }
 
     private static void RenderLineSeriesPrimitive(
@@ -1851,6 +1858,7 @@ public sealed class SlideCanvas : FrameworkElement
     {
         if (scene.Stock is null)
         {
+            RenderDropLines(dc, scene.DropLines);
             foreach (var primitive in scene.LineSeries)
                 RenderLineSeriesPrimitive(dc, primitive);
             return;

@@ -573,6 +573,8 @@ public sealed class ChartScenePlan
     public IReadOnlyList<ChartLineSegmentPrimitive> DataLabelLeaderLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     /// <summary>PowerPoint pie-of-pie/bar-of-pie series connectors between the two plots.</summary>
     public IReadOnlyList<ChartLineSegmentPrimitive> OfPieSeriesLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
+    /// <summary>Vertical line-chart connectors from each point to the category axis.</summary>
+    public IReadOnlyList<ChartLineSegmentPrimitive> DropLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     public ChartDataTablePrimitivePlan DataTable { get; init; }
     public ChartSecondaryValueAxisPrimitivePlan SecondaryAxis { get; init; }
     public IReadOnlyList<ChartTextPlan> CategoryAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
@@ -1660,6 +1662,9 @@ public static partial class ChartRenderPlanner
             bubble,
             seriesColors);
         var trendlines = BuildTrendlinePrimitives(chart, plot, geometryKind, seriesColors);
+        var dropLines = chart.ShowDropLines
+            ? BuildDropLinePrimitives(plot, geometryKind, lineSeries)
+            : Array.Empty<ChartLineSegmentPrimitive>();
         var dataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans);
         var ofPieSeriesLines = chart.ChartType == ChartType.OfPie
             ? BuildOfPieSeriesLines(chart, ofPieSecondaryType, pieSlices, ofPieSecondarySlices, rectangles)
@@ -1691,6 +1696,7 @@ public static partial class ChartRenderPlanner
                 dataLabels,
                 geometryKind == ChartSceneGeometryKind.Pie ? pieSlices : doughnutSlices),
             OfPieSeriesLines = ofPieSeriesLines,
+            DropLines = dropLines,
             DataTable = BuildDataTablePrimitivePlan(chart, frame, seriesColors, fillPlans),
             SecondaryAxis = BuildSecondaryValueAxisPrimitivePlan(chart, frame),
             CategoryAxisLabels = BuildCategoryAxisLabelPlans(chart, frame),
@@ -1716,6 +1722,36 @@ public static partial class ChartRenderPlanner
             Trendlines = trendlines,
             ErrorBars = errorBars
         };
+    }
+
+    private static IReadOnlyList<ChartLineSegmentPrimitive> BuildDropLinePrimitives(
+        ChartPlanRect plot,
+        ChartSceneGeometryKind geometryKind,
+        IReadOnlyList<ChartLineSeriesPrimitive> lineSeries)
+    {
+        if (!plot.HasPositiveArea || geometryKind is not (ChartSceneGeometryKind.Line or ChartSceneGeometryKind.Stock))
+            return Array.Empty<ChartLineSegmentPrimitive>();
+
+        var stroke = new ChartStrokePlan(new SrgbColor(0x80, 0x80, 0x80), Alpha: 255, Thickness: 1.0);
+        var lines = new List<ChartLineSegmentPrimitive>();
+        foreach (var series in lineSeries)
+        {
+            for (int pointIndex = 0; pointIndex < series.Points.Count; pointIndex++)
+            {
+                if (series.Points[pointIndex] is not { } point)
+                    continue;
+
+                lines.Add(new ChartLineSegmentPrimitive(
+                    series.SeriesIndex,
+                    pointIndex,
+                    pointIndex,
+                    point,
+                    new ChartPlanPoint(point.X, plot.Bottom),
+                    stroke));
+            }
+        }
+
+        return lines;
     }
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildDataLabelLeaderLines(

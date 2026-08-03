@@ -510,6 +510,7 @@ internal static class PptxChartWriter
             new XElement(C + "grouping", new XAttribute("val", "standard")),
             BuildVaryColorsEl(chart),
             seriesEls,
+            chart.ShowDropLines ? new XElement(C + "dropLines") : null,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
 
@@ -633,6 +634,7 @@ internal static class PptxChartWriter
         new XElement(C + "stockChart",
             BuildVaryColorsEl(chart),
             seriesEls,
+            chart.ShowDropLines ? new XElement(C + "dropLines") : null,
             chart.HasHighLowLines ? new XElement(C + "hiLowLines") : null,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
