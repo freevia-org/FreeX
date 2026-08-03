@@ -263,7 +263,6 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
         _left.IsChecked = border?.Left ?? true;
         _bottom.IsChecked = border?.Bottom ?? true;
         _right.IsChecked = border?.Right ?? true;
-        ApplyParagraphSettingPlan();
         _paragraphSetting.SelectionChanged += (_, _) => ApplyParagraphSettingPlan();
 
         _pageSetting.SelectedIndex = pageBorder is null ? 0 : 1;
@@ -309,7 +308,10 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
             };
             Dispatcher.UIThread.Post(() => target.Focus(), DispatcherPriority.Input);
         };
-        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(_tabs, DialogChromeStyle);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            _tabs,
+            DialogChromeStyle,
+            contentPaneMargin: new Thickness(-12, 0, -12, 0));
 
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(14, 8, 14, 0));
         var ok = Button(LocalizedUiText.Ok, (_, _) => Accept(), isDefault: true);
@@ -415,6 +417,7 @@ public sealed class BordersAndShadingDialog : FreeWDialogWindow
 
         var (_, paragraph) = editor.GetCaretFormatting();
         var dialog = new BordersAndShadingDialog(paragraph, editor.Document.Page.PageBorder);
+        dialog.ApplyParagraphSettingPlan();
         var result = await dialog.ShowDialog<BordersAndShadingDialogResult?>(owner);
         if (result is not null)
             ApplyResult(editor, result);

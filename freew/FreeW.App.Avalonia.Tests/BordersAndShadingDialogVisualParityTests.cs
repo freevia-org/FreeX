@@ -42,6 +42,23 @@ public sealed class BordersAndShadingDialogVisualParityTests
     }
 
     [Fact]
+    public async Task Constructor_seeds_edge_checks_like_the_Wpf_authority_capture()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new BordersAndShadingDialog(ParagraphFormatting.Default, null);
+            var edges = dialog.GetLogicalDescendants()
+                .OfType<CheckBox>()
+                .Where(check => check.Content is "Top" or "Left" or "Bottom" or "Right")
+                .ToArray();
+
+            edges.Should().HaveCount(4);
+            edges.Select(check => check.IsChecked).Should().Equal(true, true, true, true);
+            edges.Select(check => check.IsEnabled).Should().Equal(true, true, true, true);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Exposes_WPF_control_metadata_and_selects_the_width_on_open()
     {
         await Session.Dispatch(() =>
@@ -174,5 +191,15 @@ public sealed class BordersAndShadingDialogVisualParityTests
         avaloniaFactory.Should().Contain("[\"borders-and-shading\"] = \"BordersAndShadingDialog\"");
         wpfFactory.Should().Contain("[\"borders-and-shading\"] = \"BordersAndShadingDialog\"");
         inventoryBuilder.Should().Contain("var classText = text[match.Index..classEnd]");
+    }
+
+    [Fact]
+    public void Uses_the_shared_Wpf_flush_tab_pane_compensation()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var source = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "ParagraphCommandDialogs.cs"));
+
+        source.Should().Contain("contentPaneMargin: new Thickness(-12, 0, -12, 0)");
+        source.Should().Contain("dialog.ApplyParagraphSettingPlan();");
     }
 }
