@@ -41,7 +41,10 @@ public sealed class OptionsDialogVisualParityTests
                 scroller.HorizontalScrollBarVisibility.Should().Be(ScrollBarVisibility.Disabled);
                 var grid = GetField<Grid>(dialog, "_replacementGrid");
                 scroller.Content.Should().BeSameAs(grid);
-                grid.ColumnDefinitions.Count.Should().Be(2);
+                grid.ColumnDefinitions.Count.Should().Be(3, "the WPF DataGrid leaves a star-sized filler surface after its two 20px realized columns");
+                grid.ColumnDefinitions[0].Width.Value.Should().Be(20);
+                grid.ColumnDefinitions[1].Width.Value.Should().Be(20);
+                grid.ColumnDefinitions[2].Width.IsStar.Should().BeTrue();
                 grid.RowDefinitions.Count.Should().Be(3, "the WPF DataGrid has one populated row plus its blank add row");
                 dialog.ReplacementEditorsForTest.Should().HaveCount(2);
 
