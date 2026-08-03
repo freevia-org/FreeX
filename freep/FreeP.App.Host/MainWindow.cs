@@ -731,16 +731,16 @@ public sealed partial class MainWindow : Window
         {
             case ChartSubtargetKind.Point:
                 Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
-                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
                 break;
             case ChartSubtargetKind.Series:
-                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
                 break;
             case ChartSubtargetKind.CategoryAxis:
-                Add("Format Category Axis...", OpenChartAxisOptionsDialog);
+                Add("Format Category Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Category));
                 break;
             case ChartSubtargetKind.ValueAxis:
-                Add("Format Value Axis...", OpenChartAxisOptionsDialog);
+                Add("Format Value Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Value));
                 break;
             case ChartSubtargetKind.AxisTitle:
             case ChartSubtargetKind.Title:
@@ -748,7 +748,7 @@ public sealed partial class MainWindow : Window
                 Add("Format Chart Text...", OpenChartTextOptionsDialog);
                 break;
             case ChartSubtargetKind.PlotArea:
-                Add("Format Plot Area...", OpenChartAreaOptionsDialog);
+                Add("Format Plot Area...", () => OpenChartAreaOptionsDialog(ChartAreaFormattingTarget.PlotArea));
                 break;
             default:
                 Add("Format Chart Area...", OpenChartAreaOptionsDialog);
@@ -4432,21 +4432,25 @@ public sealed partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    internal void OpenChartAxisOptionsDialog()
+    internal void OpenChartAxisOptionsDialog() => OpenChartAxisOptionsDialog(null);
+
+    internal void OpenChartAxisOptionsDialog(ChartAxisKind? initialAxis)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
 
-        var dialog = new ChartAxisOptionsDialog(Editor);
+        var dialog = new ChartAxisOptionsDialog(Editor, initialAxis);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();
     }
 
-    internal void OpenChartSeriesOptionsDialog()
+    internal void OpenChartSeriesOptionsDialog() => OpenChartSeriesOptionsDialog(null);
+
+    internal void OpenChartSeriesOptionsDialog(int? initialSeriesIndex)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
 
-        var dialog = new ChartSeriesOptionsDialog(Editor);
+        var dialog = new ChartSeriesOptionsDialog(Editor, initialSeriesIndex);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();
@@ -4541,10 +4545,12 @@ public sealed partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    internal void OpenChartAreaOptionsDialog()
+    internal void OpenChartAreaOptionsDialog() => OpenChartAreaOptionsDialog(null);
+
+    internal void OpenChartAreaOptionsDialog(ChartAreaFormattingTarget? initialTarget)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
-        var dialog = new ChartAreaOptionsDialog(Editor) { Owner = this };
+        var dialog = new ChartAreaOptionsDialog(Editor, initialTarget) { Owner = this };
         dialog.ShowDialog();
     }
 

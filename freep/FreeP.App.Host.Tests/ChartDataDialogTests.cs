@@ -181,6 +181,24 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartSeriesOptionsDialog_CanStartAtRequestedSeries()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartSeriesOptionsDialog(sess, initialSeriesIndex: 1);
+
+        dialog.BuildCommitPlanForTests().SeriesIndex.Should().Be(1);
+    }
+
+    [StaFact]
+    public void ChartAxisOptionsDialog_CanStartAtRequestedAxis()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartAxisOptionsDialog(sess, ChartAxisKind.Category);
+
+        dialog.BuildCommitPlanForTests().Axis.Should().Be(ChartAxisKind.Category);
+    }
+
+    [StaFact]
     public void ChartAxisOptions_DisplayUnit_IsUndoable()
     {
         var (sess, _) = MakeSession();
@@ -497,6 +515,15 @@ public sealed class ChartDataDialogTests : IDisposable
         options.Target.Should().Be(ChartAreaFormattingTarget.PlotArea);
         options.Fill.Should().BeSameAs(ShapeFill.None.Instance);
         options.Outline.Should().BeSameAs(ShapeOutline.None.Instance);
+    }
+
+    [StaFact]
+    public void ChartAreaOptionsDialog_CanStartAtRequestedTarget()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartAreaOptionsDialog(sess, ChartAreaFormattingTarget.PlotArea);
+
+        dialog.BuildCommitPlanForTests().Target.Should().Be(ChartAreaFormattingTarget.PlotArea);
     }
 
     [StaFact]

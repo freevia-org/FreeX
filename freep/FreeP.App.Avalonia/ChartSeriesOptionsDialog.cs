@@ -58,7 +58,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
 
-    internal ChartSeriesOptionsDialog(EditingSession editor)
+    internal ChartSeriesOptionsDialog(EditingSession editor, int? initialSeriesIndex = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart
@@ -74,10 +74,16 @@ internal sealed class ChartSeriesOptionsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
+        var selectedSeriesIndex = initialSeriesIndex ?? _planner.SeriesIndex;
+        if (_planner.SeriesOptions.Count > 0)
+            selectedSeriesIndex = Math.Clamp(selectedSeriesIndex, 0, _planner.SeriesOptions.Count - 1);
+        else
+            selectedSeriesIndex = 0;
+
         _seriesCombo = new ComboBox
         {
             ItemsSource = _planner.SeriesOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = _planner.SeriesIndex,
+            SelectedIndex = selectedSeriesIndex,
             MinWidth = 200,
         };
         _seriesCombo.SelectionChanged += (_, _) =>
@@ -88,6 +94,7 @@ internal sealed class ChartSeriesOptionsDialog : Window
                 LoadControls();
             }
         };
+        _planner.SetSeriesIndex(_seriesCombo.SelectedIndex);
         _smoothLineCheck = new CheckBox { Content = surface.SmoothLineLabel };
         _secondaryAxisCheck = new CheckBox { Content = surface.SecondaryAxisLabel };
         _invertIfNegativeCheck = new CheckBox { Content = surface.InvertIfNegativeLabel };
