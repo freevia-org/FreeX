@@ -17,6 +17,9 @@ public sealed class AvaloniaPageSetupDialogParitySourceTests
         source.Should().Contain("UiText.Get(\"PageSetup_Right\")");
         source.Should().Contain("UiText.Get(\"PageSetup_Top\")");
         source.Should().Contain("UiText.Get(\"PageSetup_Bottom\")");
+        source.Should().Contain("UiText.Get(\"PageSetup_Header\")");
+        source.Should().Contain("UiText.Get(\"PageSetup_Footer\")");
+        source.Should().Contain("ColumnDefinitions = new ColumnDefinitions(\"120,*\")");
         source.Should().Contain("LeftMarginText = leftMarginBox.Text ?? \"\"");
         source.Should().Contain("RightMarginText = rightMarginBox.Text ?? \"\"");
         source.Should().Contain("TopMarginText = topMarginBox.Text ?? \"\"");
@@ -27,6 +30,9 @@ public sealed class AvaloniaPageSetupDialogParitySourceTests
         source.Should().NotContain("PageSetup_RightMargin");
         source.Should().NotContain("PageSetup_TopMargin");
         source.Should().NotContain("PageSetup_BottomMargin");
+        source.Should().NotContain("UiText.Get(\"PageSetup_HeaderMargin\")");
+        source.Should().NotContain("UiText.Get(\"PageSetup_FooterMargin\")");
+        source.Should().NotContain("UiText.Get(\"PageSetup_CenterOnPage\")");
         source.Should().NotContain("var marginsBox = new TextBox");
     }
 

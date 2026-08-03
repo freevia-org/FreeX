@@ -442,6 +442,51 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public async Task CaptureParitySurfaces_CapturesPageSetupTabsWithoutRunningInteractionContract()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-capture-page-setup-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                window.Show();
+                window.Measure(new global::Avalonia.Size(1120, 720));
+                window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+
+                var results = await window.CaptureParitySurfacesAsync(
+                    outputDirectory,
+                    targetSurfaceId: "dialog.PageSetup");
+
+                results.Should().HaveCount(5);
+                results.Should().OnlyContain(
+                    result => result.Captured,
+                    string.Join(Environment.NewLine, results.Select(result => $"{result.Id}: {result.Note}")));
+                results.Select(result => result.Id).Should().Equal(
+                    "dialog.PageSetup",
+                    "dialog.PageSetup.Page",
+                    "dialog.PageSetup.Margins",
+                    "dialog.PageSetup.HeaderFooter",
+                    "dialog.PageSetup.Sheet");
+                foreach (var result in results)
+                    AssertCapturedPng(outputDirectory, result);
+                window.DialogInteractionContracts.Should().NotContainKey("dialog.PageSetup",
+                    "visual capture must not run the separate keyboard interaction contract");
+
+                window.Close();
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_CapturesGoToSpecialAtFixedSizeWithoutClipping()
     {
         var outputDirectory = Path.Combine(

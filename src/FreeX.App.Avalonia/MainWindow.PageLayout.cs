@@ -932,8 +932,8 @@ public sealed partial class MainWindow
 
         var marginsGrid = new Grid
         {
-            Margin = new Thickness(14),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Margin = new Thickness(10),
+            ColumnDefinitions = new ColumnDefinitions("120,*"),
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
         };
 
@@ -954,24 +954,14 @@ public sealed partial class MainWindow
         AddMarginField(1, UiText.Get("PageSetup_Right"), rightMarginBox);
         AddMarginField(2, UiText.Get("PageSetup_Top"), topMarginBox);
         AddMarginField(3, UiText.Get("PageSetup_Bottom"), bottomMarginBox);
-        AddMarginField(4, UiText.Get("PageSetup_HeaderMargin"), headerMarginBox);
-        AddMarginField(5, UiText.Get("PageSetup_FooterMargin"), footerMarginBox);
+        AddMarginField(4, UiText.Get("PageSetup_Header"), headerMarginBox);
+        AddMarginField(5, UiText.Get("PageSetup_Footer"), footerMarginBox);
 
-        var centerOnPageLabel = new TextBlock
-        {
-            Text = UiText.Get("PageSetup_CenterOnPage"),
-            FontWeight = FontWeight.SemiBold,
-            Margin = new Thickness(0, 6, 8, 4),
-        };
-        Grid.SetRow(centerOnPageLabel, 6);
-        Grid.SetColumn(centerOnPageLabel, 0);
         Grid.SetRow(centerHorizontallyCheck, 6);
         Grid.SetColumn(centerHorizontallyCheck, 1);
-        centerHorizontallyCheck.Margin = new Thickness(0, 4, 0, 4);
+        centerHorizontallyCheck.Margin = new Thickness(0, 4, 0, 8);
         Grid.SetRow(centerVerticallyCheck, 7);
         Grid.SetColumn(centerVerticallyCheck, 1);
-        centerVerticallyCheck.Margin = new Thickness(0, 0, 0, 4);
-        marginsGrid.Children.Add(centerOnPageLabel);
         marginsGrid.Children.Add(centerHorizontallyCheck);
         marginsGrid.Children.Add(centerVerticallyCheck);
 

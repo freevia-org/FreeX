@@ -2497,22 +2497,23 @@ public sealed partial class MainWindow
         finally
         {
             if (!render)
+            {
                 AppendInteractionDialogProgress(outputDirectory, surfaceId, "contract-starting");
-            try
-            {
-                await RecordDialogInteractionContractAsync(
-                    surfaceId,
-                    dialog,
-                    ownerFocusBeforeOpen,
-                    openerTask,
-                    opener);
-            }
-            catch (Exception ex)
-            {
-                RecordDialogInteractionOpenFailure(surfaceId, $"Contract probe threw: {ex.GetType().Name}: {ex.Message}");
-            }
-            if (!render)
+                try
+                {
+                    await RecordDialogInteractionContractAsync(
+                        surfaceId,
+                        dialog,
+                        ownerFocusBeforeOpen,
+                        openerTask,
+                        opener);
+                }
+                catch (Exception ex)
+                {
+                    RecordDialogInteractionOpenFailure(surfaceId, $"Contract probe threw: {ex.GetType().Name}: {ex.Message}");
+                }
                 AppendInteractionDialogProgress(outputDirectory, surfaceId, "contract-complete");
+            }
             try { if (dialog.IsVisible) dialog.Close(); } catch { /* closing best-effort */ }
             await AwaitOpenerQuietlyAsync(openerTask);
         }
@@ -2647,18 +2648,21 @@ public sealed partial class MainWindow
         }
         finally
         {
-            try
+            if (!render)
             {
-                await RecordDialogInteractionContractAsync(
-                    surfaceId,
-                    dialog,
-                    ownerFocusBeforeOpen,
-                    openerTask,
-                    opener);
-            }
-            catch (Exception ex)
-            {
-                RecordDialogInteractionOpenFailure(surfaceId, $"Contract probe threw: {ex.GetType().Name}: {ex.Message}");
+                try
+                {
+                    await RecordDialogInteractionContractAsync(
+                        surfaceId,
+                        dialog,
+                        ownerFocusBeforeOpen,
+                        openerTask,
+                        opener);
+                }
+                catch (Exception ex)
+                {
+                    RecordDialogInteractionOpenFailure(surfaceId, $"Contract probe threw: {ex.GetType().Name}: {ex.Message}");
+                }
             }
             try { if (dialog.IsVisible) dialog.Close(); } catch { /* closing best-effort */ }
             await AwaitOpenerQuietlyAsync(openerTask);
