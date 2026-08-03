@@ -12384,13 +12384,34 @@ public sealed class DocumentView : RichTextBox
     public void InsertTableFormula(TableFormulaField formula)
     {
         Focus();
+        if (!TryGetCurrentTableCellCaretTarget(
+                out var blockIndex,
+                out var rowIndex,
+                out var columnIndex,
+                out var paragraphIndex,
+                out var textOffset))
+        {
+            return;
+        }
+
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
             return;
 
-        var run = TableLayoutOperations.BuildFormulaRun(table, rowIndex, columnIndex, formula);
-        InsertInlineAtCaret(BuildTableFormulaRun(run, _model));
+        var command = new InsertTableCellFormulaCommand(
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            textOffset,
+            formula);
+        _commands.Execute(command);
+        PlaceCaretAtTableCellTextOffset(
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            textOffset + command.InsertedTextLength);
     }
 
     /// <summary>
@@ -12518,7 +12539,10 @@ public sealed class DocumentView : RichTextBox
     /// not blank, and it serialises as the <c>w:fldChar</c>/<c>w:instrText</c> sequence so it round-trips
     /// and supports Alt+F9 / F9.
     /// </summary>
-    public void InsertComplexField(string instruction)
+    public void InsertComplexField(string instruction) =>
+        InsertComplexField(instruction, cachedResult: null);
+
+    public void InsertComplexField(string instruction, string? cachedResult)
     {
         Focus();
         if (string.IsNullOrWhiteSpace(instruction))
@@ -12527,7 +12551,11 @@ public sealed class DocumentView : RichTextBox
         // from a bare "PAGE".
         var normalized = " " + instruction.Trim() + " ";
         var field = new ComplexField(normalized);
-        var cached = ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword), string.Empty, _model, CurrentFileName);
+        var cached = cachedResult ?? ResolveFieldText(
+            ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
+            string.Empty,
+            _model,
+            CurrentFileName);
         var run = new ModelRun(cached) { ComplexField = field };
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
     }

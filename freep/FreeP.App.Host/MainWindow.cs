@@ -631,7 +631,11 @@ public sealed partial class MainWindow : Window
         if (_textOverlay is null) return;
         SlideCanvas.MouseRightButtonUp -= OnSlideCanvasMouseRightButtonUp;
         SlideCanvas.MouseRightButtonUp += OnSlideCanvasMouseRightButtonUp;
-        SlideCanvas.AttachEditing(Editor, _textOverlay, TryOpenOleInPlace);
+        SlideCanvas.AttachEditing(
+            Editor,
+            _textOverlay,
+            TryOpenOleInPlace,
+            OnChartPointDoubleClick);
         SlideCanvas.ApplyViewShowState(_viewShowState);
     }
 
@@ -686,6 +690,18 @@ public sealed partial class MainWindow : Window
         var shape = hitId.HasValue
             ? ShapeTreeLookup.Find(slide, hitId.Value)
             : null;
+        if (shape?.Kind == SlideShapeKind.Chart && shape.Chart is not null &&
+            ChartSubtargetHitTester.TryHitTest(slide, _presentation, slidePoint.X, slidePoint.Y, out var chartHit))
+        {
+            Editor.Select(shape.Id);
+            var chartMenu = BuildChartContextMenu(chartHit);
+            chartMenu.PlacementTarget = SlideCanvas;
+            chartMenu.Placement = PlacementMode.MousePoint;
+            chartMenu.IsOpen = true;
+            e.Handled = true;
+            return;
+        }
+
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
             return;
 
@@ -699,6 +715,49 @@ public sealed partial class MainWindow : Window
         menu.Placement = PlacementMode.MousePoint;
         menu.IsOpen = true;
         e.Handled = true;
+    }
+
+    private ContextMenu BuildChartContextMenu(ChartSubtargetHit hit)
+    {
+        var menu = new ContextMenu();
+        void Add(string header, Action action)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+
+        switch (hit.Kind)
+        {
+            case ChartSubtargetKind.Point:
+                Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
+                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                break;
+            case ChartSubtargetKind.Series:
+                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                break;
+            case ChartSubtargetKind.CategoryAxis:
+                Add("Format Category Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Category));
+                break;
+            case ChartSubtargetKind.ValueAxis:
+                Add("Format Value Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Value));
+                break;
+            case ChartSubtargetKind.AxisTitle:
+            case ChartSubtargetKind.Title:
+            case ChartSubtargetKind.Legend:
+                Add("Format Chart Text...", OpenChartTextOptionsDialog);
+                break;
+            case ChartSubtargetKind.PlotArea:
+                Add("Format Plot Area...", () => OpenChartAreaOptionsDialog(ChartAreaFormattingTarget.PlotArea));
+                break;
+            default:
+                Add("Format Chart Area...", OpenChartAreaOptionsDialog);
+                break;
+        }
+
+        menu.Items.Add(new Separator());
+        Add("Chart Options...", OpenChartDisplayOptionsDialog);
+        return menu;
     }
 
     private ContextMenu BuildTableContextMenu(SlideShape shape)
@@ -4373,11 +4432,13 @@ public sealed partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    internal void OpenChartAxisOptionsDialog()
+    internal void OpenChartAxisOptionsDialog() => OpenChartAxisOptionsDialog(null);
+
+    internal void OpenChartAxisOptionsDialog(ChartAxisKind? initialAxis)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
 
-        var dialog = new ChartAxisOptionsDialog(Editor);
+        var dialog = new ChartAxisOptionsDialog(Editor, initialAxis);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();
@@ -4393,11 +4454,17 @@ public sealed partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    internal void OpenChartPointOptionsDialog()
+    private void OnChartPointDoubleClick(ChartPointHit hit)
+    {
+        Editor.Select(hit.ShapeId);
+        OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex);
+    }
+
+    internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
 
-        var dialog = new ChartPointOptionsDialog(Editor);
+        var dialog = new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();
@@ -4476,10 +4543,12 @@ public sealed partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    internal void OpenChartAreaOptionsDialog()
+    internal void OpenChartAreaOptionsDialog() => OpenChartAreaOptionsDialog(null);
+
+    internal void OpenChartAreaOptionsDialog(ChartAreaFormattingTarget? initialTarget)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
-        var dialog = new ChartAreaOptionsDialog(Editor) { Owner = this };
+        var dialog = new ChartAreaOptionsDialog(Editor, initialTarget) { Owner = this };
         dialog.ShowDialog();
     }
 

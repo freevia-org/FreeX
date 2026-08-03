@@ -40,7 +40,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly ComboBox _autoCrossingCombo;
     private readonly CheckBox _reverseOrderCheck;
 
-    public ChartAxisOptionsDialog(EditingSession editor)
+    public ChartAxisOptionsDialog(EditingSession editor, ChartAxisKind? initialAxis = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart
@@ -58,7 +58,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             ItemsSource = ChartAxisOptionsPlanner.AxisOptions,
             DisplayMemberPath = nameof(ChartAxisKindOption.Label),
-            SelectedIndex = (int)ChartAxisKind.Value,
+            SelectedIndex = (int)(initialAxis ?? ChartAxisKind.Value),
             MinWidth = 180,
         };
         _axisCombo.SelectionChanged += (_, _) =>
@@ -69,6 +69,7 @@ public sealed class ChartAxisOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 LoadControls();
             }
         };
+        _planner.SetAxis((ChartAxisKind)_axisCombo.SelectedIndex);
         _titleBox = new TextBox { MinWidth = 240 };
         _titleFontFamilyBox = new TextBox { MinWidth = 180 };
         _titleFontSizeBox = new TextBox { MinWidth = 120 };

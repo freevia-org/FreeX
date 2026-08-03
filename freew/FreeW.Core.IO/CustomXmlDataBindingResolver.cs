@@ -68,12 +68,9 @@ public static class CustomXmlDataBindingResolver
                 end++;
 
             if (control is { WordMetadata.DataBinding: { } binding }
-                && IsTextualBindingKind(control.Kind)
-                && TryResolve(stores, binding, out var value))
+                && TryResolve(stores, binding, out var value)
+                && TryApplyInlineBinding(paragraph.Runs, start, end, control, value))
             {
-                paragraph.Runs[start].Text = ResolveDisplayText(control, value);
-                for (var index = start + 1; index < end; index++)
-                    paragraph.Runs[index].Text = string.Empty;
                 refreshed++;
             }
 
@@ -81,6 +78,35 @@ public static class CustomXmlDataBindingResolver
         }
 
         return refreshed;
+    }
+
+    private static bool TryApplyInlineBinding(
+        IReadOnlyList<Run> runs,
+        int start,
+        int end,
+        ContentControl control,
+        string value)
+    {
+        if (IsTextualBindingKind(control.Kind))
+        {
+            runs[start].Text = ResolveDisplayText(control, value);
+            for (var index = start + 1; index < end; index++)
+                runs[index].Text = string.Empty;
+            return true;
+        }
+
+        if (control.Kind != ContentControlKind.CheckBox || !TryParseXmlBoolean(value, out var isChecked))
+            return false;
+
+        var updated = control with { Checked = isChecked };
+        runs[start].Text = ResolveCheckBoxGlyph(updated);
+        for (var index = start; index < end; index++)
+        {
+            runs[index].Control = updated;
+            if (index > start)
+                runs[index].Text = string.Empty;
+        }
+        return true;
     }
 
     private static bool IsTextualBindingKind(ContentControlKind kind) =>
@@ -95,6 +121,39 @@ public static class CustomXmlDataBindingResolver
 
         return control.Items.FirstOrDefault(item => string.Equals(item.Value, value, StringComparison.Ordinal))
             ?.DisplayText ?? value;
+    }
+
+    private static bool TryParseXmlBoolean(string value, out bool result)
+    {
+        switch (value.Trim())
+        {
+            case "true":
+            case "1":
+                result = true;
+                return true;
+            case "false":
+            case "0":
+                result = false;
+                return true;
+            default:
+                result = false;
+                return false;
+        }
+    }
+
+    private static string ResolveCheckBoxGlyph(ContentControl control)
+    {
+        var state = control.Checked
+            ? control.CheckBoxMetadata?.CheckedState
+            : control.CheckBoxMetadata?.UncheckedState;
+        if (state?.GlyphCodePoint is { Length: > 0 } code
+            && int.TryParse(code, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var codePoint)
+            && Rune.IsValid(codePoint))
+        {
+            return char.ConvertFromUtf32(codePoint);
+        }
+
+        return control.Checked ? ContentControl.CheckedGlyph : ContentControl.UncheckedGlyph;
     }
 
     private static int RefreshBodyBlockControls(

@@ -7852,6 +7852,26 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartAreaOptionsDialog_can_start_at_requested_target()
+    {
+        ChartAreaOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartAreaOptionsDialog(window.Editor, ChartAreaFormattingTarget.PlotArea);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.Target.Should().Be(ChartAreaFormattingTarget.PlotArea);
+    }
+
+    [Fact]
     public async Task ChartAreaOptionsDialog_accepts_fill_transparency()
     {
         ChartAreaOptions? options = null;
@@ -7945,6 +7965,26 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartAxisOptionsDialog_can_start_at_requested_axis()
+    {
+        ChartAxisOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartAxisOptionsDialog(window.Editor, ChartAxisKind.Category);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.Axis.Should().Be(ChartAxisKind.Category);
+    }
+
+    [Fact]
     public async Task ChartAxisOptionsDialog_supports_secondary_value_axis()
     {
         ChartAxisOptions? options = null;
@@ -8034,6 +8074,27 @@ public sealed class MainWindowHeadlessTests
         options.DataLabels.TextStyle.Bold.Should().BeTrue();
         options.DataLabels.TextStyle.Italic.Should().BeFalse();
         options.DataLabels.TextStyle.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0x2F5496));
+    }
+
+    [Fact]
+    public async Task ChartPointOptionsDialog_can_start_at_hit_point()
+    {
+        ChartPointOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartPointOptionsDialog(window.Editor, initialSeriesIndex: 0, initialPointIndex: 0);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.SeriesIndex.Should().Be(0);
+        options.PointIndex.Should().Be(0);
     }
 
     [Fact]

@@ -36,12 +36,19 @@ public sealed class ChartPointOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindo
     private readonly TextBox _markerSizeBox;
     private readonly TextBox _explosionBox;
 
-    public ChartPointOptionsDialog(EditingSession editor)
+    public ChartPointOptionsDialog(
+        EditingSession editor,
+        int? initialSeriesIndex = null,
+        int? initialPointIndex = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart
             ?? throw new InvalidOperationException("No chart is currently selected.");
         _planner = ChartPointOptionsPlanner.FromChart(chart);
+        if (initialSeriesIndex is { } seriesIndex)
+            _planner.SetSeriesIndex(seriesIndex);
+        if (initialPointIndex is { } pointIndex)
+            _planner.SetPointIndex(pointIndex);
         var surface = ChartPointOptionsPlanner.BuildSurfacePlan();
 
         Title = surface.Title;

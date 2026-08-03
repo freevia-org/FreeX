@@ -40,12 +40,18 @@ public sealed class TableFormulaEditorTests
     }
 
     // Place the caret in the WPF cell at (rowIndex, columnIndex) of the document's first table.
-    private static void PlaceCaretInCell(DocumentView view, int rowIndex, int columnIndex)
+    private static void PlaceCaretInCell(DocumentView view, int rowIndex, int columnIndex, int textOffset = 0)
     {
         var table = view.Document.Blocks.OfType<WpfTable>().First();
         var cell = table.RowGroups[0].Rows[rowIndex].Cells[columnIndex];
-        view.CaretPosition = cell.ContentStart;
+        var paragraph = cell.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        var run = paragraph.Inlines.OfType<System.Windows.Documents.Run>().FirstOrDefault();
+        view.CaretPosition = run?.ContentStart.GetPositionAtOffset(textOffset, LogicalDirection.Forward)
+            ?? cell.ContentStart;
     }
+
+    private static Paragraph FormulaParagraph(DocumentView view) =>
+        ((Table)view.Model.Blocks[0]).Rows[2].Cells[0].Paragraphs.Single();
 
     [StaFact]
     public void InsertTableFormula_ComputesSumAboveAndRoundTrips()
@@ -81,6 +87,37 @@ public sealed class TableFormulaEditorTests
             .SelectMany(p => p.Runs).Single(r => r.TableFormula is not null);
 
         run.Text.Should().Be("30.00");
+    }
+
+    [StaFact]
+    public void InsertTableFormula_IsOneUndoableEditAndRedoRestoresCachedField()
+    {
+        var document = TableModel();
+        var target = ((Table)document.Blocks[0]).Rows[2].Cells[0].Paragraphs.Single();
+        target.Runs.Clear();
+        target.Runs.Add(new Run("before after")
+        {
+            Formatting = RunFormatting.Default with { Bold = true }
+        });
+        var view = new DocumentView();
+        view.LoadModel(document);
+        PlaceCaretInCell(view, rowIndex: 2, columnIndex: 0, textOffset: 7);
+
+        view.InsertTableFormula(new TableFormulaField("=SUM(ABOVE)", "#,##0.00"));
+
+        FormulaParagraph(view).Runs.Select(run => run.Text).Should().Equal("before ", "30.00", "after");
+        view.CanUndo.Should().BeTrue();
+        view.Undo();
+        FormulaParagraph(view).PlainText.Should().Be("before after");
+        FormulaParagraph(view).Runs.Should().NotContain(run => run.TableFormula != null);
+
+        view.CanRedo.Should().BeTrue();
+        view.Redo();
+        var formulaRun = FormulaParagraph(view).Runs.Single(run => run.TableFormula is not null);
+        formulaRun.Text.Should().Be("30.00");
+        formulaRun.TableFormula.Should().Be(new TableFormulaField("=SUM(ABOVE)", "#,##0.00"));
+        FormulaParagraph(view).Runs[0].Formatting.Bold.Should().BeTrue();
+        FormulaParagraph(view).Runs[2].Formatting.Bold.Should().BeTrue();
     }
 
     [StaFact]

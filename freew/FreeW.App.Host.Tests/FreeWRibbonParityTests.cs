@@ -1404,12 +1404,18 @@ public sealed class FreeWRibbonParityTests
 
         editor.CommitToModel();
 
-        var text = string.Join(
-            "\n",
-            editor.Model.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText));
-        text.Should().Contain($"{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}");
-        text.Should().Contain($"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}");
-        text.Should().Contain($"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}");
+        var fields = editor.Model.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToList();
+        fields.ToDictionary(run => run.ComplexField!.Keyword, run => run.Text).Should().BeEquivalentTo(
+            new Dictionary<string, string>
+            {
+                [MailMerge.NextRecordInstruction] = $"{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}",
+                [MailMerge.MergeRecordNumberInstruction] = $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}",
+                [MailMerge.MergeSequenceNumberInstruction] = $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}"
+            });
     }
 
     [StaFact]

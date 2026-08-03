@@ -43,7 +43,7 @@ internal sealed class ChartAxisOptionsDialog : Window
     private readonly ComboBox _autoCrossingCombo;
     private readonly CheckBox _reverseOrderCheck;
 
-    internal ChartAxisOptionsDialog(EditingSession editor)
+    internal ChartAxisOptionsDialog(EditingSession editor, ChartAxisKind? initialAxis = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart
@@ -62,7 +62,7 @@ internal sealed class ChartAxisOptionsDialog : Window
         _axisCombo = new ComboBox
         {
             ItemsSource = ChartAxisOptionsPlanner.AxisOptions.Select(option => option.Label).ToArray(),
-            SelectedIndex = (int)ChartAxisKind.Value,
+            SelectedIndex = (int)(initialAxis ?? ChartAxisKind.Value),
             MinWidth = 180,
         };
         _axisCombo.SelectionChanged += (_, _) =>
@@ -74,6 +74,7 @@ internal sealed class ChartAxisOptionsDialog : Window
                 LoadControls();
             }
         };
+        _planner.SetAxis((ChartAxisKind)_axisCombo.SelectedIndex);
         _titleBox = new TextBox { MinWidth = 230 };
         _titleFontFamilyBox = new TextBox { MinWidth = 180 };
         _titleFontSizeBox = new TextBox { MinWidth = 130 };

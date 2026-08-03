@@ -2183,7 +2183,11 @@ public sealed partial class MainWindow : Window
         _slideCanvas.Focusable = true;
 
         // Gesture handler drives selection, move, resize, rotate.
-        _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+        _gestureHandler = new AvaloniaCanvasGestureHandler(
+            _slideCanvas,
+            Editor,
+            _adorner,
+            OnChartPointDoubleClick);
         _slideCanvas.AttachGestureHandler(_gestureHandler);
         ApplyPresentationViewShowState(_viewShowState);
 
@@ -2228,7 +2232,11 @@ public sealed partial class MainWindow : Window
 
         if (textOverlay is not null)
         {
-            _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+            _gestureHandler = new AvaloniaCanvasGestureHandler(
+                _slideCanvas,
+                Editor,
+                _adorner,
+                OnChartPointDoubleClick);
             _slideCanvas.AttachGestureHandler(_gestureHandler);
             ApplyPresentationViewShowState(_viewShowState);
             _textEditor = new AvaloniaInCanvasTextEditor(
@@ -2268,6 +2276,17 @@ public sealed partial class MainWindow : Window
         var shape = hitId.HasValue
             ? ShapeTreeLookup.Find(slide, hitId.Value)
             : null;
+        if (shape?.Kind == SlideShapeKind.Chart && shape.Chart is not null &&
+            ChartSubtargetHitTester.TryHitTest(slide, Editor.Presentation, slidePoint.X, slidePoint.Y, out var chartHit))
+        {
+            Editor.Select(shape.Id);
+            var chartMenu = BuildChartContextMenu(chartHit);
+            _slideCanvas.ContextMenu = chartMenu;
+            chartMenu.Open(_slideCanvas);
+            e.Handled = true;
+            return;
+        }
+
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
             return;
 
@@ -2280,6 +2299,49 @@ public sealed partial class MainWindow : Window
         _slideCanvas.ContextMenu = menu;
         menu.Open(_slideCanvas);
         e.Handled = true;
+    }
+
+    private ContextMenu BuildChartContextMenu(ChartSubtargetHit hit)
+    {
+        var menu = new ContextMenu();
+        void Add(string header, Action action)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+
+        switch (hit.Kind)
+        {
+            case ChartSubtargetKind.Point:
+                Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
+                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                break;
+            case ChartSubtargetKind.Series:
+                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                break;
+            case ChartSubtargetKind.CategoryAxis:
+                Add("Format Category Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Category));
+                break;
+            case ChartSubtargetKind.ValueAxis:
+                Add("Format Value Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Value));
+                break;
+            case ChartSubtargetKind.AxisTitle:
+            case ChartSubtargetKind.Title:
+            case ChartSubtargetKind.Legend:
+                Add("Format Chart Text...", OpenChartTextOptionsDialog);
+                break;
+            case ChartSubtargetKind.PlotArea:
+                Add("Format Plot Area...", () => OpenChartAreaOptionsDialog(ChartAreaFormattingTarget.PlotArea));
+                break;
+            default:
+                Add("Format Chart Area...", OpenChartAreaOptionsDialog);
+                break;
+        }
+
+        menu.Items.Add(new Separator());
+        Add("Chart Options...", OpenChartDisplayOptionsDialog);
+        return menu;
     }
 
     private ContextMenu BuildTableContextMenu(SlideShape shape)
@@ -2833,7 +2895,9 @@ public sealed partial class MainWindow : Window
         r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));
         r.Register(ChartAxisOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAxisOptionsDialog));
         r.Register(ChartSeriesOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartSeriesOptionsDialog));
-        r.Register(ChartPointOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPointOptionsDialog));
+        r.Register(
+            ChartPointOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => OpenChartPointOptionsDialog()));
         r.Register(ChartLayoutOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartLayoutOptionsDialog));
         r.Register(ChartDataTableOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDataTableOptionsDialog));
         r.Register(ChartBubbleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartBubbleOptionsDialog));
@@ -3895,12 +3959,14 @@ public sealed partial class MainWindow : Window
         dialog.Show();
     }
 
-    internal void OpenChartAxisOptionsDialog()
+    internal void OpenChartAxisOptionsDialog() => OpenChartAxisOptionsDialog(null);
+
+    internal void OpenChartAxisOptionsDialog(ChartAxisKind? initialAxis)
     {
         if (!Editor.CanEditSelectedChartFormatting)
             return;
 
-        var dialog = new ChartAxisOptionsDialog(Editor);
+        var dialog = new ChartAxisOptionsDialog(Editor, initialAxis);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);
@@ -3925,12 +3991,18 @@ public sealed partial class MainWindow : Window
         dialog.Show();
     }
 
-    internal void OpenChartPointOptionsDialog()
+    private void OnChartPointDoubleClick(ChartPointHit hit)
+    {
+        Editor.Select(hit.ShapeId);
+        OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex);
+    }
+
+    internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
     {
         if (!Editor.CanEditSelectedChartFormatting)
             return;
 
-        var dialog = new ChartPointOptionsDialog(Editor);
+        var dialog = new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);
@@ -4048,10 +4120,12 @@ public sealed partial class MainWindow : Window
         dialog.Show();
     }
 
-    internal void OpenChartAreaOptionsDialog()
+    internal void OpenChartAreaOptionsDialog() => OpenChartAreaOptionsDialog(null);
+
+    internal void OpenChartAreaOptionsDialog(ChartAreaFormattingTarget? initialTarget)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
-        var dialog = new ChartAreaOptionsDialog(Editor);
+        var dialog = new ChartAreaOptionsDialog(Editor, initialTarget);
         dialog.ShowDialog(this);
     }
 

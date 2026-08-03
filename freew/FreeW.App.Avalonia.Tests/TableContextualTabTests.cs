@@ -489,6 +489,8 @@ public sealed class TableContextualTabTests
     public async Task Table_formula_command_applies_the_dialog_callback_result()
     {
         Run? formulaRun = null;
+        Run? redoneFormulaRun = null;
+        string? textAfterUndo = null;
         var ran = false;
         try
         {
@@ -516,6 +518,11 @@ public sealed class TableContextualTabTests
                 Execute(registry, "freew.table-formula");
 
                 formulaRun = tbl.Rows[2].Cells[0].Paragraphs[0].Runs.SingleOrDefault(r => r.TableFormula is not null);
+                view.Undo();
+                textAfterUndo = tbl.Rows[2].Cells[0].Paragraphs[0].PlainText;
+                view.Redo();
+                redoneFormulaRun = tbl.Rows[2].Cells[0].Paragraphs[0].Runs
+                    .SingleOrDefault(r => r.TableFormula is not null);
                 ran = true;
             }, CancellationToken.None);
         }
@@ -525,6 +532,9 @@ public sealed class TableContextualTabTests
         formulaRun.Should().NotBeNull();
         formulaRun!.TableFormula!.Expression.Should().Be(TableFormulaDialogPlanner.SumAboveFormula);
         formulaRun.Text.Should().Be("3");
+        textAfterUndo.Should().BeEmpty();
+        redoneFormulaRun.Should().BeSameAs(formulaRun);
+        redoneFormulaRun!.Text.Should().Be("3");
     }
 
     [Fact]
