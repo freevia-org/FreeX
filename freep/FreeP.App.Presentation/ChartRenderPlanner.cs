@@ -542,7 +542,8 @@ public readonly record struct ChartLegendItemPlan(
 
 public readonly record struct ChartAxisTitlePlan(
     ChartTextPlan Label,
-    ChartAxisTitleOrientation Orientation);
+    ChartAxisTitleOrientation Orientation,
+    ChartAxisKind AxisKind);
 
 /// <summary>
 /// Complete renderer-neutral chart scene. The platform canvases consume this
@@ -3715,7 +3716,8 @@ public static partial class ChartRenderPlanner
                             plot.Bottom + CategoryLabelHeight + 2,
                             plot.Width,
                             AxisTitleBand), chart.ValueAxis.TitleStyle),
-                    ChartAxisTitleOrientation.Horizontal));
+                        ChartAxisTitleOrientation.Horizontal,
+                        ChartAxisKind.Value));
             }
             else
             {
@@ -3727,7 +3729,8 @@ public static partial class ChartRenderPlanner
                             plot.Y,
                             AxisTitleBand,
                             plot.Height), chart.ValueAxis.TitleStyle),
-                    ChartAxisTitleOrientation.VerticalCounterclockwise));
+                    ChartAxisTitleOrientation.VerticalCounterclockwise,
+                    ChartAxisKind.Value));
             }
         }
 
@@ -3743,7 +3746,8 @@ public static partial class ChartRenderPlanner
                             plot.Y,
                             AxisTitleBand,
                             plot.Height), chart.CategoryAxis.TitleStyle),
-                    ChartAxisTitleOrientation.VerticalCounterclockwise));
+                    ChartAxisTitleOrientation.VerticalCounterclockwise,
+                    ChartAxisKind.Category));
             }
             else
             {
@@ -3758,7 +3762,8 @@ public static partial class ChartRenderPlanner
                             plot.Bottom + categoryTitleOffset,
                             plot.Width,
                             AxisTitleBand), chart.CategoryAxis.TitleStyle),
-                    ChartAxisTitleOrientation.Horizontal));
+                    ChartAxisTitleOrientation.Horizontal,
+                    ChartAxisKind.Category));
             }
         }
 
@@ -4029,7 +4034,8 @@ public static partial class ChartRenderPlanner
                     IsBold: false,
                     FontSize: AxisTitleFontSize,
                     Alignment: ChartPlanTextAlignment.Center),
-                ChartAxisTitleOrientation.VerticalClockwise);
+                ChartAxisTitleOrientation.VerticalClockwise,
+                ChartAxisKind.SecondaryValue);
         }
 
         return new ChartSecondaryValueAxisPrimitivePlan(
