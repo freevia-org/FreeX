@@ -2183,7 +2183,11 @@ public sealed partial class MainWindow : Window
         _slideCanvas.Focusable = true;
 
         // Gesture handler drives selection, move, resize, rotate.
-        _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+        _gestureHandler = new AvaloniaCanvasGestureHandler(
+            _slideCanvas,
+            Editor,
+            _adorner,
+            OnChartPointDoubleClick);
         _slideCanvas.AttachGestureHandler(_gestureHandler);
         ApplyPresentationViewShowState(_viewShowState);
 
@@ -2228,7 +2232,11 @@ public sealed partial class MainWindow : Window
 
         if (textOverlay is not null)
         {
-            _gestureHandler = new AvaloniaCanvasGestureHandler(_slideCanvas, Editor, _adorner);
+            _gestureHandler = new AvaloniaCanvasGestureHandler(
+                _slideCanvas,
+                Editor,
+                _adorner,
+                OnChartPointDoubleClick);
             _slideCanvas.AttachGestureHandler(_gestureHandler);
             ApplyPresentationViewShowState(_viewShowState);
             _textEditor = new AvaloniaInCanvasTextEditor(
@@ -2833,7 +2841,9 @@ public sealed partial class MainWindow : Window
         r.Register(ChartDisplayOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDisplayOptionsDialog));
         r.Register(ChartAxisOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartAxisOptionsDialog));
         r.Register(ChartSeriesOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartSeriesOptionsDialog));
-        r.Register(ChartPointOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartPointOptionsDialog));
+        r.Register(
+            ChartPointOptionsPlanner.CommandId,
+            new ActionRibbonCommand(() => OpenChartPointOptionsDialog()));
         r.Register(ChartLayoutOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartLayoutOptionsDialog));
         r.Register(ChartDataTableOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartDataTableOptionsDialog));
         r.Register(ChartBubbleOptionsPlanner.CommandId, new ActionRibbonCommand(OpenChartBubbleOptionsDialog));
@@ -3925,12 +3935,18 @@ public sealed partial class MainWindow : Window
         dialog.Show();
     }
 
-    internal void OpenChartPointOptionsDialog()
+    private void OnChartPointDoubleClick(ChartPointHit hit)
+    {
+        Editor.Select(hit.ShapeId);
+        OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex);
+    }
+
+    internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
     {
         if (!Editor.CanEditSelectedChartFormatting)
             return;
 
-        var dialog = new ChartPointOptionsDialog(Editor);
+        var dialog = new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex);
         if (IsVisible)
         {
             _ = dialog.ShowDialog<bool?>(this);

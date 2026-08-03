@@ -29,6 +29,7 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     private readonly SlideCanvas            _canvas;
     private readonly EditingSession         _editor;
     private readonly SelectionAdornerLayer  _adorner;
+    private readonly Action<ChartPointHit>? _onChartPointDoubleClick;
     private IPointer? _capturedPointer;
     private bool _disposed;
 
@@ -93,11 +94,13 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
     // ── Construction / attach ──────────────────────────────────────────────────
 
     public AvaloniaCanvasGestureHandler(SlideCanvas canvas, EditingSession editor,
-                                         SelectionAdornerLayer adorner)
+                                         SelectionAdornerLayer adorner,
+                                         Action<ChartPointHit>? onChartPointDoubleClick = null)
     {
         _canvas  = canvas  ?? throw new ArgumentNullException(nameof(canvas));
         _editor  = editor  ?? throw new ArgumentNullException(nameof(editor));
         _adorner = adorner ?? throw new ArgumentNullException(nameof(adorner));
+        _onChartPointDoubleClick = onChartPointDoubleClick;
 
         _canvas.PointerPressed      += OnPointerPressed;
         _canvas.PointerReleased     += OnPointerReleased;
@@ -297,6 +300,18 @@ public sealed class AvaloniaCanvasGestureHandler : IDisposable
         if (e.ClickCount >= 2)
         {
             var slidePoint = xf.ScreenToSlide(pt.X, pt.Y);
+            if (_onChartPointDoubleClick is not null &&
+                ChartPointHitTester.TryHitTest(
+                    slide,
+                    _editor.Presentation,
+                    slidePoint.X,
+                    slidePoint.Y,
+                    out var chartPointHit))
+            {
+                _onChartPointDoubleClick(chartPointHit);
+                e.Handled = true;
+                return;
+            }
             var oleHitId = ShapeHitTester.HitTest(
                 slide,
                 _editor.Presentation,
