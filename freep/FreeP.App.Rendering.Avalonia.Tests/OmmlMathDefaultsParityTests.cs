@@ -108,9 +108,51 @@ public sealed class OmmlMathDefaultsParityTests
         thrown.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Avalonia_UsesDocumentIntegralLimitDefaultInVisibleSharedPlacement()
+    {
+        Exception? thrown = null;
+        await Session.Dispatch(() =>
+        {
+            try
+            {
+                var run = ComposeMathRun(
+                    new OmmlMathProperties(IntegralLimitLocation: "undOvr"),
+                    string.Empty,
+                    "<m:nary><m:naryPr/>" +
+                    "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+                    "<m:sup><m:r><m:t>1</m:t></m:r></m:sup>" +
+                    "<m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>");
+
+                var glyphs = MathBoxRenderPlanner.Plan(
+                        run.MathLayout!, 0, 0, SrgbColor.Black, run.FontFamily)
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToArray();
+                var operatorGlyph = glyphs.Single(g => g.Text == "\u222B");
+                glyphs.Single(g => g.Text == "1").Y.Should().BeLessThan(operatorGlyph.Y);
+                glyphs.Single(g => g.Text == "0").Y.Should().BeGreaterThan(operatorGlyph.Y);
+
+                var bitmap = new RenderTargetBitmap(new PixelSize(320, 120));
+                using DrawingContext drawingContext = bitmap.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(
+                    drawingContext,
+                    new ResolvedParagraph { Runs = new[] { run } },
+                    10,
+                    20);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+        }, CancellationToken.None);
+
+        thrown.Should().BeNull();
+    }
+
     private static ResolvedRun ComposeMathRun(
         OmmlMathProperties documentDefaults,
-        string localProperties)
+        string localProperties,
+        string? mathContent = null)
     {
         var presentation = Presentation.CreateEmpty();
         presentation.DocumentMathProperties = documentDefaults;
@@ -129,7 +171,9 @@ public sealed class OmmlMathDefaultsParityTests
                         RawXml =
                             "<m:oMathPara xmlns:m=\"" + MathNamespace + "\">" +
                             localProperties +
-                            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>"
+                            "<m:oMath>" +
+                            (mathContent ?? "<m:r><m:t>x</m:t></m:r>") +
+                            "</m:oMath></m:oMathPara>"
                     }
                 }
             }

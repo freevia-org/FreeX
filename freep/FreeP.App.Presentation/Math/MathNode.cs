@@ -23,14 +23,18 @@ public abstract class MathNode
         MathParagraphBinarySubtraction? BinarySubtraction = null,
         string? MathFontFamily = null,
         bool? SmallFraction = null,
-        MathParagraphJustification? DefaultJustification = null)
+        MathParagraphJustification? DefaultJustification = null,
+        MathLimitLocation? IntegralLimitLocation = null,
+        MathLimitLocation? NaryLimitLocation = null)
     {
         public bool HasValues =>
             BinaryBreak.HasValue ||
             BinarySubtraction.HasValue ||
             !string.IsNullOrWhiteSpace(MathFontFamily) ||
             SmallFraction.HasValue ||
-            DefaultJustification.HasValue;
+            DefaultJustification.HasValue ||
+            IntegralLimitLocation.HasValue ||
+            NaryLimitLocation.HasValue;
 
         public MathProperties Overlay(MathProperties? overriding) => overriding is null
             ? this
@@ -39,7 +43,16 @@ public abstract class MathNode
                 overriding.BinarySubtraction ?? BinarySubtraction,
                 overriding.MathFontFamily ?? MathFontFamily,
                 overriding.SmallFraction ?? SmallFraction,
-                overriding.DefaultJustification ?? DefaultJustification);
+                overriding.DefaultJustification ?? DefaultJustification,
+                overriding.IntegralLimitLocation ?? IntegralLimitLocation,
+                overriding.NaryLimitLocation ?? NaryLimitLocation);
+    }
+
+    /// <summary>OMML's two legal limit placements for n-ary operators.</summary>
+    public enum MathLimitLocation
+    {
+        SubSup,
+        UndOvr
     }
 
     /// <summary>Math alphabet requested by <c>m:rPr/m:scr</c>.</summary>

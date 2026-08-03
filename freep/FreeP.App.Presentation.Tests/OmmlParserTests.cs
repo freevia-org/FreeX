@@ -123,6 +123,70 @@ public sealed class OmmlParserTests
         Assert.False(nary.LimitsAboveBelow);
     }
 
+    [Fact]
+    public void Nary_DocumentLimitDefaults_SelectByOperator_AndLocalLimLocWins()
+    {
+        var integral = AssertNary(Parse(
+            "<m:mathPr><m:intLim m:val=\"subSup\"/><m:naryLim m:val=\"undOvr\"/></m:mathPr>" +
+            "<m:nary><m:naryPr/><m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>1</m:t></m:r></m:sup><m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>"));
+        Assert.False(integral.LimitsAboveBelow,
+            "integral operators must use document m:intLim when local m:limLoc is absent");
+
+        var sum = AssertNary(Parse(
+            "<m:mathPr><m:intLim m:val=\"subSup\"/><m:naryLim m:val=\"undOvr\"/></m:mathPr>" +
+            "<m:nary><m:naryPr><m:chr m:val=\"S\"/></m:naryPr>" +
+            "<m:sub><m:r><m:t>0</m:t></m:r></m:sub><m:sup><m:r><m:t>1</m:t></m:r></m:sup>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>"));
+        Assert.True(sum.LimitsAboveBelow,
+            "non-integral n-ary operators must use document m:naryLim");
+
+        var localOverride = AssertNary(Parse(
+            "<m:mathPr><m:intLim m:val=\"subSup\"/></m:mathPr>" +
+            "<m:nary><m:naryPr><m:limLoc m:val=\"undOvr\"/></m:naryPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>"));
+        Assert.True(localOverride.LimitsAboveBelow,
+            "local m:limLoc must override the document default");
+
+        var valuelessLocal = AssertNary(Parse(
+            "<m:mathPr><m:naryLim m:val=\"undOvr\"/></m:mathPr>" +
+            "<m:nary><m:naryPr><m:chr m:val=\"S\"/><m:limLoc/></m:naryPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>"));
+        Assert.False(valuelessLocal.LimitsAboveBelow,
+            "a val-less local m:limLoc uses the CT_LimLoc subSup default and still overrides naryLim");
+    }
+
+    [Fact]
+    public void Nary_DocumentLimitDefaults_HandleValuelessInvalid_AndNestedNodes()
+    {
+        var parsed = Parse(
+            "<m:mathPr><m:intLim/><m:naryLim m:val=\"not-a-limit-location\"/></m:mathPr>" +
+            "<m:nary><m:naryPr><m:chr m:val=\"S\"/></m:naryPr><m:e>" +
+            "<m:nary><m:naryPr><m:limLoc m:val=\"undOvr\"/></m:naryPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>" +
+            "</m:e></m:nary>");
+
+        var outer = AssertNary(parsed);
+        Assert.True(outer.LimitsAboveBelow,
+            "an invalid naryLim must conservatively fall back to its documented undOvr default");
+        var inner = Assert.IsType<MathNode.Nary>(outer.Operand);
+        Assert.True(inner.LimitsAboveBelow,
+            "nested n-ary parsing must receive the same immutable resolved properties and honor its local override");
+
+        var valuelessIntegral = AssertNary(Parse(
+            "<m:mathPr><m:intLim/></m:mathPr>" +
+            "<m:nary><m:naryPr/><m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>"));
+        Assert.False(valuelessIntegral.LimitsAboveBelow,
+            "val-less intLim defaults to subSup");
+    }
+
+    private static MathNode.Nary AssertNary(MathNode node) => node switch
+    {
+        MathNode.Nary nary => nary,
+        MathNode.MathRoot root => Assert.IsType<MathNode.Nary>(root.Content),
+        _ => throw new Xunit.Sdk.XunitException($"Expected n-ary node, got {node.GetType().Name}.")
+    };
+
     // ── HA2: m:nary operator char default ─────────────────────────────────
 
     [Fact]

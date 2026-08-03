@@ -66,7 +66,7 @@ public static class OmmlParser
 
             return mathRoot.Name == M + "oMathPara"
                 ? ParseMathParagraph(mathRoot, inheritedProperties)
-                : WrapWithInheritedProperties(ParseRow(mathRoot), inheritedProperties);
+                : WrapWithInheritedProperties(ParseRow(mathRoot, inheritedProperties), inheritedProperties);
         }
         catch
         {
@@ -112,19 +112,20 @@ public static class OmmlParser
         XElement paragraph,
         MathNode.MathProperties inheritedProperties)
     {
-        var oMathNodes = paragraph.Elements(M + "oMath")
-            .Select(ParseRow)
-            .ToArray();
-
         var paragraphProperties = paragraph.Element(M + "oMathParaPr");
         // ECMA-376 defines brkBin/brkBinSub under m:mathPr. Some authored
         // payloads place them beside jc in oMathParaPr, so accept both forms.
         var mathProperties = paragraph.Element(M + "mathPr");
         var resolvedProperties = inheritedProperties.Overlay(ParseMathProperties(mathProperties));
+        var oMathNodes = paragraph.Elements(M + "oMath")
+            .Select(oMath => ParseRow(
+                oMath,
+                resolvedProperties.Overlay(ParseMathProperties(oMath.Element(M + "mathPr")))))
+            .ToArray();
 
         var content = oMathNodes.Length switch
         {
-            0 => ParseRow(paragraph),
+            0 => ParseRow(paragraph, resolvedProperties),
             1 => oMathNodes[0],
             _ => new MathNode.Row(oMathNodes)
         };
@@ -162,7 +163,33 @@ public static class OmmlParser
             ParseBinarySubtractionOverride(mathProperties),
             string.IsNullOrWhiteSpace(mathFont) ? null : mathFont,
             ParseSmallFractionOverride(mathProperties),
-            ParseDefaultJustificationOverride(mathProperties));
+            ParseDefaultJustificationOverride(mathProperties),
+            ParseLimitLocationOverride(
+                mathProperties.Element(M + "intLim"),
+                MathNode.MathLimitLocation.SubSup),
+            ParseLimitLocationOverride(
+                mathProperties.Element(M + "naryLim"),
+                MathNode.MathLimitLocation.UndOvr));
+    }
+
+    private static MathNode.MathLimitLocation? ParseLimitLocationOverride(
+        XElement? element,
+        MathNode.MathLimitLocation valuelessDefault)
+    {
+        if (element is null)
+            return null;
+
+        var value = ReadVal(element)?.Trim();
+        if (string.IsNullOrWhiteSpace(value))
+            return valuelessDefault;
+
+        return value.Equals("undOvr", StringComparison.OrdinalIgnoreCase)
+            ? MathNode.MathLimitLocation.UndOvr
+            : value.Equals("subSup", StringComparison.OrdinalIgnoreCase)
+                ? MathNode.MathLimitLocation.SubSup
+                // ST_LimLoc has no other legal values. Use the property's
+                // documented fallback for malformed authored values.
+                : valuelessDefault;
     }
 
     private static bool? ParseSmallFractionOverride(XElement mathProperties)
@@ -303,7 +330,9 @@ public static class OmmlParser
 
     // ── Row: parse a list of child elements into a Row or single node ─────
 
-    private static MathNode ParseRow(XElement container)
+    private static MathNode ParseRow(
+        XElement container,
+        MathNode.MathProperties inheritedProperties)
     {
         var children = new List<MathNode>();
         List<MathNode>? rows = null;
@@ -313,6 +342,11 @@ public static class OmmlParser
 
         foreach (var child in container.Elements())
         {
+            // Property containers are consumed by the root/paragraph resolver;
+            // they are not renderable math nodes when a row is parsed.
+            if (child.Name == M + "mathPr" || child.Name == M + "oMathParaPr")
+                continue;
+
             if (TryReadArgumentSize(child, out var childArgumentSizeAdjustment))
             {
                 argumentSizeAdjustment = childArgumentSizeAdjustment;
@@ -333,7 +367,7 @@ public static class OmmlParser
                 currentAlignmentPointIndex = breakAlignmentPointIndex;
             }
 
-            var node = ParseElement(child);
+            var node = ParseElement(child, inheritedProperties);
             if (node is not null)
                 children.Add(node);
         }
@@ -352,7 +386,9 @@ public static class OmmlParser
 
     // ── Dispatcher ────────────────────────────────────────────────────────
 
-    private static MathNode? ParseElement(XElement el)
+    private static MathNode? ParseElement(
+        XElement el,
+        MathNode.MathProperties inheritedProperties)
     {
         var localName = el.Name.LocalName;
         var ns = el.Name.Namespace;
@@ -362,29 +398,29 @@ public static class OmmlParser
         return localName switch
         {
             "r"        => ParseRun(el),
-            "f"        => ParseFrac(el),
-            "sSup"     => ParseSup(el),
-            "sSub"     => ParseSub(el),
-            "sSubSup"  => ParseSubSup(el),
-            "sPre"     => ParsePreSubSup(el),
-            "rad"      => ParseRad(el),
-            "nary"     => ParseNary(el),
-            "limLow"   => ParseLimit(el, isUpper: false),
-            "limUpp"   => ParseLimit(el, isUpper: true),
-            "func"     => ParseFunc(el),
-            "d"        => ParseDelim(el),
-            "acc"      => ParseAcc(el),
-            "bar"      => ParseBar(el),
-            "box"      => ParseBox(el),
-            "phant"    => ParsePhantom(el),
-            "borderBox"=> ParseBorderBox(el),
-            "groupChr" => ParseGroupChr(el),
-            "m"        => ParseMatrix(el),
-            "eqArr"    => ParseEqArray(el),
+            "f"        => ParseFrac(el, inheritedProperties),
+            "sSup"     => ParseSup(el, inheritedProperties),
+            "sSub"     => ParseSub(el, inheritedProperties),
+            "sSubSup"  => ParseSubSup(el, inheritedProperties),
+            "sPre"     => ParsePreSubSup(el, inheritedProperties),
+            "rad"      => ParseRad(el, inheritedProperties),
+            "nary"     => ParseNary(el, inheritedProperties),
+            "limLow"   => ParseLimit(el, false, inheritedProperties),
+            "limUpp"   => ParseLimit(el, true, inheritedProperties),
+            "func"     => ParseFunc(el, inheritedProperties),
+            "d"        => ParseDelim(el, inheritedProperties),
+            "acc"      => ParseAcc(el, inheritedProperties),
+            "bar"      => ParseBar(el, inheritedProperties),
+            "box"      => ParseBox(el, inheritedProperties),
+            "phant"    => ParsePhantom(el, inheritedProperties),
+            "borderBox"=> ParseBorderBox(el, inheritedProperties),
+            "groupChr" => ParseGroupChr(el, inheritedProperties),
+            "m"        => ParseMatrix(el, inheritedProperties),
+            "eqArr"    => ParseEqArray(el, inheritedProperties),
             "aln"      => null,
             "argPr"    => null,
             "brk"      => null,
-            "oMathPara"=> ParseMathParagraph(el, new MathNode.MathProperties()),
+            "oMathPara"=> ParseMathParagraph(el, inheritedProperties),
             _          => ParseUnknown(el)
         };
     }
@@ -445,7 +481,7 @@ public static class OmmlParser
 
     // ── m:f fraction ──────────────────────────────────────────────────────
 
-    private static MathNode ParseFrac(XElement fEl)
+    private static MathNode ParseFrac(XElement fEl, MathNode.MathProperties inheritedProperties)
     {
         var numEl = fEl.Element(M + "num") ?? fEl;
         var denEl = fEl.Element(M + "den") ?? fEl;
@@ -465,59 +501,59 @@ public static class OmmlParser
         };
 
         return new MathNode.Frac(
-            ParseRow(numEl),
-            ParseRow(denEl),
+            ParseRow(numEl, inheritedProperties),
+            ParseRow(denEl, inheritedProperties),
             fracType);
     }
 
     // ── m:sSup superscript ────────────────────────────────────────────────
 
-    private static MathNode ParseSup(XElement el)
+    private static MathNode ParseSup(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var eEl   = el.Element(M + "e")   ?? el;
         var supEl = el.Element(M + "sup") ?? el;
-        return new MathNode.Sup(ParseRow(eEl), ParseRow(supEl));
+        return new MathNode.Sup(ParseRow(eEl, inheritedProperties), ParseRow(supEl, inheritedProperties));
     }
 
     // ── m:sSub subscript ─────────────────────────────────────────────────
 
-    private static MathNode ParseSub(XElement el)
+    private static MathNode ParseSub(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var eEl   = el.Element(M + "e")   ?? el;
         var subEl = el.Element(M + "sub") ?? el;
-        return new MathNode.Sub(ParseRow(eEl), ParseRow(subEl));
+        return new MathNode.Sub(ParseRow(eEl, inheritedProperties), ParseRow(subEl, inheritedProperties));
     }
 
     // ── m:sSubSup ─────────────────────────────────────────────────────────
 
-    private static MathNode ParseSubSup(XElement el)
+    private static MathNode ParseSubSup(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var subSupPr = el.Element(M + "sSubSupPr");
         var eEl   = el.Element(M + "e")   ?? el;
         var subEl = el.Element(M + "sub") ?? el;
         var supEl = el.Element(M + "sup") ?? el;
         return new MathNode.SubSup(
-            ParseRow(eEl),
-            ParseRow(subEl),
-            ParseRow(supEl),
+            ParseRow(eEl, inheritedProperties),
+            ParseRow(subEl, inheritedProperties),
+            ParseRow(supEl, inheritedProperties),
             alignScripts: IsOnOffOn(subSupPr?.Element(M + "alnScr")));
     }
 
     // ── m:rad radical ─────────────────────────────────────────────────────
 
-    private static MathNode ParsePreSubSup(XElement el)
+    private static MathNode ParsePreSubSup(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var eEl = el.Element(M + "e");
         var subEl = el.Element(M + "sub");
         var supEl = el.Element(M + "sup");
 
         return new MathNode.PreSubSup(
-            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
-            subEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(subEl),
-            supEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(supEl));
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl, inheritedProperties),
+            subEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(subEl, inheritedProperties),
+            supEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(supEl, inheritedProperties));
     }
 
-    private static MathNode ParseRad(XElement el)
+    private static MathNode ParseRad(XElement el, MathNode.MathProperties inheritedProperties)
     {
         // m:deg is optional; when absent or has m:argPr with m:degHide=1 → square root
         MathNode? degree = null;
@@ -527,16 +563,16 @@ public static class OmmlParser
             var radPr = el.Element(M + "radPr");
             bool degHide = IsOnOffOn(radPr?.Element(M + "degHide"));
             if (!degHide)
-                degree = ParseRow(degEl);
+                degree = ParseRow(degEl, inheritedProperties);
         }
 
         var eEl = el.Element(M + "e") ?? el;
-        return new MathNode.Rad(degree, ParseRow(eEl));
+        return new MathNode.Rad(degree, ParseRow(eEl, inheritedProperties));
     }
 
     // ── m:nary ────────────────────────────────────────────────────────────
 
-    private static MathNode ParseNary(XElement el)
+    private static MathNode ParseNary(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var naryPr = el.Element(M + "naryPr");
 
@@ -549,18 +585,23 @@ public static class OmmlParser
 
         // m:limLoc: "undOvr" = limits above/below; "subSup" = as scripts.
         // Per ECMA-376 §22.1.2.66 (CT_LimLoc), the default (element absent) is "subSup".
-        var limLoc = naryPr?.Element(M + "limLoc")?.Attribute(M + "val")?.Value
-                  ?? naryPr?.Element(M + "limLoc")?.Value
-                  ?? "subSup";
-        bool aboveBelow = limLoc == "undOvr";
+        var localLimLoc = naryPr?.Element(M + "limLoc");
+        var documentLimitLocation = IsIntegralOperator(opChar)
+            ? inheritedProperties.IntegralLimitLocation ?? MathNode.MathLimitLocation.SubSup
+            : inheritedProperties.NaryLimitLocation ?? MathNode.MathLimitLocation.UndOvr;
+        var limitLocation = localLimLoc is not null
+            ? ParseLimitLocationOverride(localLimLoc, MathNode.MathLimitLocation.SubSup)
+                ?? MathNode.MathLimitLocation.SubSup
+            : documentLimitLocation;
+        bool aboveBelow = limitLocation == MathNode.MathLimitLocation.UndOvr;
 
         MathNode? subLimit = null, supLimit = null;
         bool subHidden = IsOnOffOn(naryPr?.Element(M + "subHide"));
         bool supHidden = IsOnOffOn(naryPr?.Element(M + "supHide"));
         var subEl = el.Element(M + "sub");
         var supEl = el.Element(M + "sup");
-        if (subEl is not null && !subHidden) subLimit = ParseRow(subEl);
-        if (supEl is not null && !supHidden) supLimit = ParseRow(supEl);
+        if (subEl is not null && !subHidden) subLimit = ParseRow(subEl, inheritedProperties);
+        if (supEl is not null && !supHidden) supLimit = ParseRow(supEl, inheritedProperties);
 
         // m:grow is CT_OnOff. For n-ary operators, absent means off; present with
         // absent val means on. The shared layout uses this to grow the operator
@@ -568,27 +609,44 @@ public static class OmmlParser
         bool growOperator = IsOnOffOn(naryPr?.Element(M + "grow"));
 
         var eEl = el.Element(M + "e") ?? el;
-        return new MathNode.Nary(opChar, aboveBelow, subLimit, supLimit, ParseRow(eEl), growOperator);
+        return new MathNode.Nary(
+            opChar,
+            aboveBelow,
+            subLimit,
+            supLimit,
+            ParseRow(eEl, inheritedProperties),
+            growOperator);
     }
+
+    private static bool IsIntegralOperator(string operatorChar) =>
+        operatorChar.Any(static character => character is
+            '\u222B' or '\u222C' or '\u222D' or '\u222E' or '\u222F' or
+            '\u2230' or '\u2231' or '\u2232' or '\u2233' or '\u2A0B' or
+            '\u2A0C' or '\u2A0D' or '\u2A0E' or '\u2A0F');
 
     // ── m:func ────────────────────────────────────────────────────────────
 
-    private static MathNode ParseLimit(XElement el, bool isUpper)
+    private static MathNode ParseLimit(
+        XElement el,
+        bool isUpper,
+        MathNode.MathProperties inheritedProperties)
     {
         var eEl = el.Element(M + "e");
         var limEl = el.Element(M + "lim");
 
         return new MathNode.Limit(
-            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
-            limEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(limEl),
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl, inheritedProperties),
+            limEl is null ? new MathNode.Unknown(string.Empty) : ParseRow(limEl, inheritedProperties),
             isUpper);
     }
 
-    private static MathNode ParseFunc(XElement el)
+    private static MathNode ParseFunc(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var fNameEl = el.Element(M + "fName") ?? el;
         var eEl     = el.Element(M + "e")     ?? el;
-        return new MathNode.Func(NormalizeFunctionName(ParseRow(fNameEl)), ParseRow(eEl));
+        return new MathNode.Func(
+            NormalizeFunctionName(ParseRow(fNameEl, inheritedProperties)),
+            ParseRow(eEl, inheritedProperties));
     }
 
     private static MathNode NormalizeFunctionName(MathNode node) =>
@@ -627,7 +685,7 @@ public static class OmmlParser
 
     // ── m:d delimiter ─────────────────────────────────────────────────────
 
-    private static MathNode ParseDelim(XElement el)
+    private static MathNode ParseDelim(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var dPr = el.Element(M + "dPr");
 
@@ -665,14 +723,14 @@ public static class OmmlParser
 
         var elements = new List<MathNode>();
         foreach (var eEl in el.Elements(M + "e"))
-            elements.Add(ParseRow(eEl));
+            elements.Add(ParseRow(eEl, inheritedProperties));
 
         return new MathNode.Delim(begChr, endChr, elements, sepChr, grow, shape);
     }
 
     // ── m:acc accent ──────────────────────────────────────────────────────
 
-    private static MathNode ParseAcc(XElement el)
+    private static MathNode ParseAcc(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var accPr = el.Element(M + "accPr");
         string accChar = accPr?.Element(M + "chr")?.Attribute(M + "val")?.Value
@@ -680,32 +738,32 @@ public static class OmmlParser
                       ?? "^"; // combining circumflex / hat
 
         var eEl = el.Element(M + "e") ?? el;
-        return new MathNode.Acc(accChar, ParseRow(eEl));
+        return new MathNode.Acc(accChar, ParseRow(eEl, inheritedProperties));
     }
 
     // ── m:bar ─────────────────────────────────────────────────────────────
 
-    private static MathNode ParseBar(XElement el)
+    private static MathNode ParseBar(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var barPr = el.Element(M + "barPr");
         // m:pos: "top" (default) = overline, "bot" = underline
         bool isOver = barPr?.Element(M + "pos")?.Attribute(M + "val")?.Value is not "bot";
         var eEl = el.Element(M + "e") ?? el;
-        return new MathNode.Bar(ParseRow(eEl), isOver);
+        return new MathNode.Bar(ParseRow(eEl, inheritedProperties), isOver);
     }
 
     // ── m:groupChr ────────────────────────────────────────────────────────
 
-    private static MathNode ParseBox(XElement el)
+    private static MathNode ParseBox(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var boxPr = el.Element(M + "boxPr");
         var eEl = el.Element(M + "e");
         return new MathNode.Box(
-            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl, inheritedProperties),
             operatorEmulator: IsOnOffOn(boxPr?.Element(M + "opEmu")));
     }
 
-    private static MathNode ParsePhantom(XElement el)
+    private static MathNode ParsePhantom(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var phantomPr = el.Element(M + "phantPr");
         var eEl = el.Element(M + "e");
@@ -714,7 +772,7 @@ public static class OmmlParser
         bool show = showEl is null || IsOnOffOn(showEl);
 
         return new MathNode.Phantom(
-            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl, inheritedProperties),
             show,
             zeroWidth: IsOnOffOn(phantomPr?.Element(M + "zeroWid")),
             zeroAscent: IsOnOffOn(phantomPr?.Element(M + "zeroAsc")),
@@ -722,7 +780,7 @@ public static class OmmlParser
             transparentSpacing: IsOnOffOn(phantomPr?.Element(M + "transp")));
     }
 
-    private static MathNode ParseBorderBox(XElement el)
+    private static MathNode ParseBorderBox(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var borderBoxPr = el.Element(M + "borderBoxPr");
         var eEl = el.Element(M + "e");
@@ -737,7 +795,7 @@ public static class OmmlParser
         bool strikeTopLeftToBottomRight = IsOnOffOn(borderBoxPr?.Element(M + "strikeTLBR"));
 
         return new MathNode.BorderBox(
-            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl, inheritedProperties),
             showTop: !hideTop,
             showBottom: !hideBottom,
             showLeft: !hideLeft,
@@ -767,7 +825,7 @@ public static class OmmlParser
         };
     }
 
-    private static MathNode ParseGroupChr(XElement el)
+    private static MathNode ParseGroupChr(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var grpPr = el.Element(M + "groupChrPr");
         var pos = ReadVal(grpPr?.Element(M + "pos"));
@@ -778,7 +836,7 @@ public static class OmmlParser
         var eEl = el.Element(M + "e") ?? el;
         return new MathNode.GroupChr(
             grpChar,
-            ParseRow(eEl),
+            ParseRow(eEl, inheritedProperties),
             isAbove,
             ParseGroupChrVerticalJustification(grpPr));
     }
@@ -804,7 +862,7 @@ public static class OmmlParser
         };
     }
 
-    private static MathNode ParseMatrix(XElement el)
+    private static MathNode ParseMatrix(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var mPr = el.Element(M + "mPr");
         var columnAlignments = ParseMatrixColumnAlignments(mPr);
@@ -813,7 +871,7 @@ public static class OmmlParser
         {
             var cells = new List<MathNode>();
             foreach (var eEl in mrEl.Elements(M + "e"))
-                cells.Add(ParseRow(eEl));
+                cells.Add(ParseRow(eEl, inheritedProperties));
             rows.Add(cells);
         }
         return new MathNode.Matrix(
@@ -961,14 +1019,14 @@ public static class OmmlParser
             : null;
     }
 
-    private static MathNode ParseEqArray(XElement el)
+    private static MathNode ParseEqArray(XElement el, MathNode.MathProperties inheritedProperties)
     {
         var eqArrPr = el.Element(M + "eqArrPr");
         var rows = new List<MathNode>();
         var alignmentPointIndices = new List<int?>();
         foreach (var eEl in el.Elements(M + "e"))
         {
-            var (row, alignmentPointIndex) = ParseEqArrayRow(eEl);
+            var (row, alignmentPointIndex) = ParseEqArrayRow(eEl, inheritedProperties);
             rows.Add(row);
             alignmentPointIndices.Add(alignmentPointIndex);
         }
@@ -1014,7 +1072,9 @@ public static class OmmlParser
             : null;
     }
 
-    private static (MathNode Row, int? AlignmentPointIndex) ParseEqArrayRow(XElement eEl)
+    private static (MathNode Row, int? AlignmentPointIndex) ParseEqArrayRow(
+        XElement eEl,
+        MathNode.MathProperties inheritedProperties)
     {
         var children = new List<MathNode>();
         int? alignmentPointIndex = null;
@@ -1030,7 +1090,7 @@ public static class OmmlParser
             if (TryReadBoxAlignmentMarker(child))
                 alignmentPointIndex ??= children.Count;
 
-            var node = ParseElement(child);
+            var node = ParseElement(child, inheritedProperties);
             if (node is not null)
                 children.Add(node);
         }

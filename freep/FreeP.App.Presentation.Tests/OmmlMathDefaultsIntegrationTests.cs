@@ -66,6 +66,23 @@ public sealed class OmmlMathDefaultsIntegrationTests
             new OmmlMathProperties(DefaultJustification: expected));
     }
 
+    [Fact]
+    public void Reader_PropagatesDocumentLimitDefaults_AndNormalizesValuelessElements()
+    {
+        using var package = WriteMathPackage();
+        AddRelatedSettingsPart(package,
+            "<m:mathPr xmlns:m=\"" + MathNamespace + "\">" +
+            "<m:intLim/><m:naryLim/></m:mathPr>");
+
+        package.Position = 0;
+        var presentation = PptxPackageReader.Read(package);
+
+        presentation.DocumentMathProperties.Should().Be(
+            new OmmlMathProperties(
+                IntegralLimitLocation: "subSup",
+                NaryLimitLocation: "undOvr"));
+    }
+
     [Theory]
     [InlineData("1", true)]
     [InlineData("true", true)]

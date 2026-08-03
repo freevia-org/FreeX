@@ -2102,12 +2102,37 @@ public static class SlideCompositor
             _ => (FreeP.App.Compositor.MathLayout.MathNode.MathParagraphJustification?)null,
         };
 
+        static FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation ParseLimitLocation(
+            string? value,
+            FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation fallback) =>
+            value?.Trim() switch
+            {
+                var location when string.Equals(location, "undOvr", StringComparison.OrdinalIgnoreCase)
+                    => FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation.UndOvr,
+                var location when string.Equals(location, "subSup", StringComparison.OrdinalIgnoreCase)
+                    => FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation.SubSup,
+                _ => fallback,
+            };
+
+        var integralLimitLocation = string.IsNullOrWhiteSpace(properties.IntegralLimitLocation)
+            ? (FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation?)null
+            : ParseLimitLocation(
+                properties.IntegralLimitLocation,
+                FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation.SubSup);
+        var naryLimitLocation = string.IsNullOrWhiteSpace(properties.NaryLimitLocation)
+            ? (FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation?)null
+            : ParseLimitLocation(
+                properties.NaryLimitLocation,
+                FreeP.App.Compositor.MathLayout.MathNode.MathLimitLocation.UndOvr);
+
         return new FreeP.App.Compositor.MathLayout.MathNode.MathProperties(
             binaryBreak,
             binarySubtraction,
             string.IsNullOrWhiteSpace(properties.MathFontFamily) ? null : properties.MathFontFamily,
             properties.SmallFraction,
-            defaultJustification);
+            defaultJustification,
+            integralLimitLocation,
+            naryLimitLocation);
     }
 
     // ─── Wave 19A: auto-number formatter ────────────────────────────────────────────────────

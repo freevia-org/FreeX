@@ -4957,7 +4957,27 @@ public static class PptxPackageReader
             BinarySubtraction: ReadValue(mathProperties.Element(M + "brkBinSub")),
             MathFontFamily: ReadValue(mathProperties.Element(M + "mathFont")),
             SmallFraction: ReadOnOffValue(mathProperties.Element(M + "smallFrac")),
-            DefaultJustification: ReadDefaultJustificationValue(mathProperties.Element(M + "defJc")));
+            DefaultJustification: ReadDefaultJustificationValue(mathProperties.Element(M + "defJc")),
+            IntegralLimitLocation: ReadLimitLocationValue(
+                mathProperties.Element(M + "intLim"),
+                defaultValue: "subSup"),
+            NaryLimitLocation: ReadLimitLocationValue(
+                mathProperties.Element(M + "naryLim"),
+                defaultValue: "undOvr"));
+    }
+
+    private static string? ReadLimitLocationValue(XElement? element, string defaultValue)
+    {
+        if (element is null)
+            return null;
+
+        // CT_LimLoc defaults val-less elements to the property's documented
+        // default. Preserve non-empty invalid values for the shared parser to
+        // resolve conservatively instead of silently changing authored XML.
+        var value = element.Attribute(M + "val")?.Value
+            ?? element.Attribute("val")?.Value
+            ?? element.Value;
+        return string.IsNullOrWhiteSpace(value) ? defaultValue : value.Trim();
     }
 
     private static string? ReadDefaultJustificationValue(XElement? element)
