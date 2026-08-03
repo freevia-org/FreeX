@@ -498,6 +498,14 @@ public sealed class ReferencesTabTests
     {
         var dialog = new MarkCitationDialog("Brown v. Board");
 
+        dialog.Width.Should().Be(MarkCitationDialogPlanner.DialogWidth);
+        dialog.GetLogicalDescendants().OfType<TextBlock>()
+            .Select(text => text.Text)
+            .Should().ContainInOrder(
+                MarkCitationDialogPlanner.CategoryLabel,
+                MarkCitationDialogPlanner.LongCitationLabel,
+                MarkCitationDialogPlanner.ShortCitationLabel);
+
         dialog.SetForTests(CitationCategory.Statutes, "  17 U.S.C. 107  ", "  fair use  ");
         dialog.AcceptForTests().Should().BeTrue();
 

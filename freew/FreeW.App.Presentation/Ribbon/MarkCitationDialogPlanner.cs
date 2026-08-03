@@ -16,11 +16,20 @@ public sealed record MarkCitationValidation(string Message);
 
 public static class MarkCitationDialogPlanner
 {
+    public const double DialogWidth = 380;
+    public const double ContentHorizontalMargin = 16;
+    public const double ContentTopMargin = 16;
+    public const double LabelBottomMargin = 4;
+    public const double FieldBottomMargin = 10;
+    public const double StatusBottomMargin = 8;
+    public const double ActionRowTopMargin = 10;
+    public const double ActionRowBottomMargin = 16;
     public const string Title = "Mark Citation";
     public const string CategoryLabel = "Category:";
     public const string LongCitationLabel = "Selected text (long citation):";
     public const string ShortCitationLabel = "Short citation (optional):";
     public const string MarkButtonLabel = "Mark";
+    public const string CancelButtonLabel = "Cancel";
     public const string MissingLongCitationMessage = "Enter the long citation before marking.";
 
     public static IReadOnlyList<MarkCitationCategoryChoice> BuildCategoryChoices() =>

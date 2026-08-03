@@ -5,6 +5,16 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class MarkCitationDialogPlannerTests
 {
     [Fact]
+    public void Geometry_UsesTheSharedMarkCitationBaseline()
+    {
+        MarkCitationDialogPlanner.DialogWidth.Should().Be(380);
+        MarkCitationDialogPlanner.ContentHorizontalMargin.Should().Be(16);
+        MarkCitationDialogPlanner.ContentTopMargin.Should().Be(16);
+        MarkCitationDialogPlanner.LabelBottomMargin.Should().Be(4);
+        MarkCitationDialogPlanner.FieldBottomMargin.Should().Be(10);
+    }
+
+    [Fact]
     public void BuildCategoryChoices_UsesTableOfAuthoritiesCategoryLabels()
     {
         var choices = MarkCitationDialogPlanner.BuildCategoryChoices();

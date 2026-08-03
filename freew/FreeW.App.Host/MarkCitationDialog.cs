@@ -24,14 +24,14 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         Owner = owner;
         Title = MarkCitationDialogPlanner.Title;
-        Width = 380;
+        Width = MarkCitationDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = owner is null ? WindowStartupLocation.CenterScreen : WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
 
         _categoryChoices = MarkCitationDialogPlanner.BuildCategoryChoices();
-        _categoryCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 10) };
+        _categoryCombo = new ComboBox { Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.FieldBottomMargin) };
         foreach (var choice in _categoryChoices)
             _categoryCombo.Items.Add(choice);
         _categoryCombo.SelectedIndex = MarkCitationDialogPlanner.SelectCategoryIndex(_categoryChoices, initialState.Category);
@@ -39,19 +39,19 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _longForm = new TextBox
         {
             MinWidth = 320,
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.FieldBottomMargin),
             Text = initialState.LongCitation
         };
         _shortForm = new TextBox
         {
             MinWidth = 320,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.FieldBottomMargin),
             Text = initialState.ShortCitation
         };
         _status = new TextBlock
         {
             Foreground = Brushes.DarkRed,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.StatusBottomMargin),
             Visibility = Visibility.Collapsed
         };
 
@@ -59,9 +59,16 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Accept,
             buttonWidth: 80,
             acceptContent: MarkCitationDialogPlanner.MarkButtonLabel,
-            rowMargin: new Thickness(0, 10, 0, 0));
+            rowMargin: new Thickness(0, MarkCitationDialogPlanner.ActionRowTopMargin, 0, MarkCitationDialogPlanner.ActionRowBottomMargin));
 
-        var panel = new StackPanel { Margin = new Thickness(16) };
+        var panel = new StackPanel
+        {
+            Margin = new Thickness(
+                MarkCitationDialogPlanner.ContentHorizontalMargin,
+                MarkCitationDialogPlanner.ContentTopMargin,
+                MarkCitationDialogPlanner.ContentHorizontalMargin,
+                0)
+        };
         panel.Children.Add(MakeLabel(MarkCitationDialogPlanner.CategoryLabel));
         panel.Children.Add(_categoryCombo);
         panel.Children.Add(MakeLabel(MarkCitationDialogPlanner.LongCitationLabel));
@@ -80,7 +87,7 @@ internal sealed class MarkCitationDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     private static TextBlock MakeLabel(string text) =>
-        new() { Text = text, Margin = new Thickness(0, 0, 0, 4) };
+        new() { Text = text, Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.LabelBottomMargin) };
 
     private MarkCitationDialogState CurrentState()
     {

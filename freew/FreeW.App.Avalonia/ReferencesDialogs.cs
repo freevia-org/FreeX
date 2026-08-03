@@ -307,7 +307,7 @@ internal sealed class MarkCitationDialog : FreeWDialogWindow
     public MarkCitationDialog(string? seedLongCitation = null)
     {
         Title = MarkCitationDialogPlanner.Title;
-        Width = 420;
+        Width = MarkCitationDialogPlanner.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -325,22 +325,39 @@ internal sealed class MarkCitationDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyTextBox(_longCitationBox, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(_shortCitationBox, DialogChromeStyle);
 
-        var grid = new Grid { Margin = new Thickness(16, 12, 16, 0) };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        AddLabeledRow(grid, 0, MarkCitationDialogPlanner.CategoryLabel, _categoryBox);
-        AddLabeledRow(grid, 1, MarkCitationDialogPlanner.LongCitationLabel, _longCitationBox);
-        AddLabeledRow(grid, 2, MarkCitationDialogPlanner.ShortCitationLabel, _shortCitationBox);
+        var fields = new StackPanel
+        {
+            Margin = new Thickness(
+                MarkCitationDialogPlanner.ContentHorizontalMargin,
+                MarkCitationDialogPlanner.ContentTopMargin,
+                MarkCitationDialogPlanner.ContentHorizontalMargin,
+                0)
+        };
+        AddLabeledField(fields, MarkCitationDialogPlanner.CategoryLabel, _categoryBox);
+        AddLabeledField(fields, MarkCitationDialogPlanner.LongCitationLabel, _longCitationBox);
+        AddLabeledField(fields, MarkCitationDialogPlanner.ShortCitationLabel, _shortCitationBox);
 
         var mark = Button(MarkCitationDialogPlanner.MarkButtonLabel, () => Accept(), isDefault: true);
-        var cancel = Button("Cancel", () => Close(), isCancel: true);
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([mark, cancel], new Thickness(16, 12, 16, 14));
+        var cancel = Button(MarkCitationDialogPlanner.CancelButtonLabel, () => Close(), isCancel: true);
+        var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
+            [mark, cancel],
+            new Thickness(
+                MarkCitationDialogPlanner.ContentHorizontalMargin,
+                MarkCitationDialogPlanner.ActionRowTopMargin,
+                MarkCitationDialogPlanner.ContentHorizontalMargin,
+                MarkCitationDialogPlanner.ActionRowBottomMargin));
 
         var body = new StackPanel();
-        body.Children.Add(grid);
+        body.Children.Add(fields);
         body.Children.Add(_status);
         body.Children.Add(buttons);
         Content = body;
+
+        Opened += (_, _) =>
+        {
+            _longCitationBox.Focus();
+            _longCitationBox.SelectAll();
+        };
     }
 
     internal void SetForTests(CitationCategory category, string? longCitation, string? shortCitation)
@@ -379,23 +396,16 @@ internal sealed class MarkCitationDialog : FreeWDialogWindow
         return true;
     }
 
-    private static void AddLabeledRow(Grid grid, int row, string label, Control field)
+    private static void AddLabeledField(StackPanel panel, string label, Control field)
     {
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
         var text = new TextBlock
         {
             Text = label,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 6, 8, 0),
+            Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.LabelBottomMargin),
         };
-        Grid.SetRow(text, row);
-        Grid.SetColumn(text, 0);
-        grid.Children.Add(text);
-
-        Grid.SetRow(field, row);
-        Grid.SetColumn(field, 1);
-        grid.Children.Add(field);
+        field.Margin = new Thickness(0, 0, 0, MarkCitationDialogPlanner.FieldBottomMargin);
+        panel.Children.Add(text);
+        panel.Children.Add(field);
     }
 
     private static Button Button(string label, Action click, bool isDefault = false, bool isCancel = false)
