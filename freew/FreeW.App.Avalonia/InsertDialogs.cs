@@ -332,15 +332,24 @@ internal static class InsertDialogLayout
 {
     public static readonly AvaloniaCompactDialogChromeStyle ChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
-    public static void AddLabeledRow(Grid grid, int row, string label, Control field)
+    public static void AddLabeledRow(
+        Grid grid,
+        int row,
+        string label,
+        Control field,
+        double? rowHeight = null,
+        Thickness? labelMargin = null)
     {
-        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition
+        {
+            Height = rowHeight is { } height ? new GridLength(height) : GridLength.Auto,
+        });
 
         var lbl = new TextBlock
         {
             Text = label,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 6, 8, 0),
+            Margin = labelMargin ?? new Thickness(0, 6, 8, 0),
         };
         Grid.SetRow(lbl, row);
         Grid.SetColumn(lbl, 0);

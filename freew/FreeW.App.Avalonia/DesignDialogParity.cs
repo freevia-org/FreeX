@@ -12,6 +12,11 @@ namespace FreeW.App.Avalonia;
 /// <summary>Avalonia counterpart of WPF's Create New Theme Colors dialog.</summary>
 public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
 {
+    internal const double WpfWidthForTests = 440;
+    internal const double WpfLabelColumnWidthForTests = 190;
+    internal const double WpfColorRowHeightForTests = 29.4;
+    internal const double WpfButtonWidthForTests = 72;
+
     private readonly DocumentTheme _current;
     private readonly TextBox[] _colorBoxes;
     private readonly TextBox _nameBox;
@@ -24,11 +29,11 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
         ArgumentNullException.ThrowIfNull(current);
         _current = current;
         var state = CustomizeThemeColorsDialogPlanner.BuildInitialState(current);
-        _colorBoxes = state.ColorHexTexts.Select(text => MakeTextBox(text, 130)).ToArray();
-        _nameBox = MakeTextBox(state.NameText, 220);
+        _colorBoxes = state.ColorHexTexts.Select(text => MakeTextBox(text, 120)).ToArray();
+        _nameBox = MakeTextBox(state.NameText, 200);
 
         Title = CustomizeThemeColorsDialogPlanner.Title;
-        Width = 470;
+        Width = WpfWidthForTests;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -40,15 +45,36 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
             Text = CustomizeThemeColorsDialogPlanner.Hint,
             TextWrapping = TextWrapping.Wrap,
             Foreground = Brushes.Gray,
-            Margin = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 6),
         });
 
         var grid = CreateGrid();
         for (var index = 0; index < _colorBoxes.Length; index++)
-            InsertDialogLayout.AddLabeledRow(grid, index, CustomizeThemeColorsDialogPlanner.Slots[index].Label, _colorBoxes[index]);
-        InsertDialogLayout.AddLabeledRow(grid, _colorBoxes.Length, CustomizeThemeColorsDialogPlanner.NameLabel, _nameBox);
+            InsertDialogLayout.AddLabeledRow(
+                grid,
+                index,
+                CustomizeThemeColorsDialogPlanner.Slots[index].Label,
+                _colorBoxes[index],
+                WpfColorRowHeightForTests,
+                new Thickness(0, 0, 8, 0));
         content.Children.Add(grid);
+        content.Children.Add(new Border
+        {
+            Height = 1,
+            Background = Brushes.Gray,
+            Margin = new Thickness(0, 8, 0, 4),
+        });
+        var nameGrid = CreateGrid();
+        InsertDialogLayout.AddLabeledRow(
+            nameGrid,
+            0,
+            CustomizeThemeColorsDialogPlanner.NameLabel,
+            _nameBox,
+            WpfColorRowHeightForTests,
+            new Thickness(0, 0, 8, 0));
+        content.Children.Add(nameGrid);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, InsertDialogLayout.ChromeStyle, new Thickness(0, 8, 0, 0));
+        _status.IsVisible = false;
         content.Children.Add(_status);
         content.Children.Add(CreateActionRow());
         Content = content;
@@ -79,15 +105,21 @@ public sealed class CustomizeThemeColorsDialog : FreeWDialogWindow
 
     private StackPanel CreateActionRow()
     {
-        var ok = InsertDialogLayout.MakeButton("OK", (_, _) => Accept(closeOnSuccess: true));
-        var cancel = InsertDialogLayout.MakeButton("Cancel", (_, _) => Close());
+        var ok = new Button { Content = "OK", IsDefault = true };
+        AvaloniaCompactDialogChrome.ApplyButton(ok, InsertDialogLayout.ChromeStyle, WpfButtonWidthForTests, isDefault: true);
+        ok.Click += (_, _) => Accept(closeOnSuccess: true);
+
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        AvaloniaCompactDialogChrome.ApplyButton(cancel, InsertDialogLayout.ChromeStyle, WpfButtonWidthForTests);
+        cancel.Click += (_, _) => Close();
+
         return AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0));
     }
 
     private static Grid CreateGrid()
     {
         var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(205) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(WpfLabelColumnWidthForTests) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         return grid;
     }

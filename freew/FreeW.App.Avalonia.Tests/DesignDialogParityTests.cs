@@ -1,5 +1,7 @@
 using System.IO;
+using Avalonia.Controls;
 using Avalonia.Headless;
+using Avalonia.LogicalTree;
 using FreeW.App.Avalonia;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
@@ -57,6 +59,29 @@ public sealed class DesignDialogParityTests
             dialog.Result.Should().NotBeNull();
             dialog.Result!.Name.Should().Be("Office");
             dialog.Result.ColorScheme.Should().Be(DocumentTheme.Default.ColorScheme);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ThemeColorsDialog_UsesWpfGeometryAndActionSemantics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new CustomizeThemeColorsDialog(DocumentTheme.Default);
+
+            dialog.Width.Should().Be(CustomizeThemeColorsDialog.WpfWidthForTests);
+            var grids = dialog.GetLogicalDescendants().OfType<Grid>().ToArray();
+            grids.Should().Contain(grid => grid.RowDefinitions.Count == CustomizeThemeColorsDialogPlanner.Slots.Count);
+            grids.Should().Contain(grid => grid.RowDefinitions.Count == 1);
+            grids.Where(grid => grid.RowDefinitions.Count is 12 or 1)
+                .SelectMany(grid => grid.RowDefinitions)
+                .Should().OnlyContain(row => row.Height.Value == CustomizeThemeColorsDialog.WpfColorRowHeightForTests);
+
+            var buttons = dialog.GetLogicalDescendants().OfType<Button>().ToArray();
+            buttons.Select(button => button.Content?.ToString()).Should().Equal("OK", "Cancel");
+            buttons.Should().OnlyContain(button => button.MinWidth == CustomizeThemeColorsDialog.WpfButtonWidthForTests);
+            buttons.Single(button => button.IsDefault).Content.Should().Be("OK");
+            buttons.Single(button => button.IsCancel).Content.Should().Be("Cancel");
         }, CancellationToken.None);
     }
 
