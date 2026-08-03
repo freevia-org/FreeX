@@ -32,6 +32,48 @@ public sealed class SetCellShadingBordersCommandTests
         cell.TextDirection.Should().Be(CellTextDirection.Rotate270);
     }
 
+    [Fact]
+    public void CellAlignment_IsUndoableAndRestoresEachParagraphFormatting()
+    {
+        var (_, bus, table) = Make2x2();
+        var cell = table.Rows[0].Cells[0];
+        cell.VerticalAlignment = TableCellVerticalAlignment.Bottom;
+        cell.Paragraphs[0].Formatting = cell.Paragraphs[0].Formatting with
+        {
+            Alignment = TextAlignment.Left,
+            SpaceAfterPt = 7,
+        };
+        cell.Paragraphs.Add(new Paragraph("second")
+        {
+            Formatting = new ParagraphFormatting
+            {
+                Alignment = TextAlignment.Justify,
+                SpaceBeforePt = 5,
+            },
+        });
+        var firstBefore = cell.Paragraphs[0].Formatting;
+        var secondBefore = cell.Paragraphs[1].Formatting;
+
+        bus.Execute(new SetCellAlignmentCommand(
+            0,
+            0,
+            0,
+            TableCellVerticalAlignment.Center,
+            TextAlignment.Right));
+
+        cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
+        cell.Paragraphs.Should().OnlyContain(paragraph => paragraph.Formatting.Alignment == TextAlignment.Right);
+
+        bus.Undo().Should().BeTrue();
+        cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Bottom);
+        cell.Paragraphs[0].Formatting.Should().Be(firstBefore);
+        cell.Paragraphs[1].Formatting.Should().Be(secondBefore);
+
+        bus.Redo().Should().BeTrue();
+        cell.VerticalAlignment.Should().Be(TableCellVerticalAlignment.Center);
+        cell.Paragraphs.Should().OnlyContain(paragraph => paragraph.Formatting.Alignment == TextAlignment.Right);
+    }
+
     private sealed class Ctx(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document => document;

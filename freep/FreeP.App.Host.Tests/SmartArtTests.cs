@@ -3291,7 +3291,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_LeavesUnprovenMatrix1OnCachedFallback()
+    public void Reader_AdmitsMatrix1ToTheSharedBasicMatrixLayout()
     {
         var pptxPath = MakeSmartArtPptx(
             ["A", "B", "C", "D"],
@@ -3303,13 +3303,25 @@ public sealed class SmartArtTests : IDisposable
 
         smartArt.Data.Should().NotBeNull();
         smartArt.Data!.Family.Should().Be(SmartArtFamily.Matrix);
-        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "matrix1 has no FreeP fixture evidence and must retain the imported cache as authoritative");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "matrix1 is the native Basic Matrix layout and uses the shared four-quadrant plan");
         smartArt.FallbackShapes.Should().NotBeEmpty();
-        SlideCompositor.Compose(presentation, presentation.Slides[0])
+        var liveShapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
             .OfType<DrawOp.Shape>()
-            .Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
-            .Should().Contain("A");
+            .ToList();
+        liveShapes.Should().HaveCount(5, "the imported matrix1 should use the shared whole-plus-four-quadrant plan");
+        liveShapes.Where(shape => shape.Text is not null)
+            .Select(shape => shape.Text!.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C", "D");
+
+        var savedPath = Path.Combine(_tempDir, "matrix1-live-roundtrip.pptx");
+        PptxPackageWriter.Write(presentation, savedPath);
+        var reopened = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reopened.Data.Should().NotBeNull();
+        reopened.Data!.LayoutUniqueId.Should().EndWith("/matrix1");
+        reopened.Data.IsLiveLayoutSupported.Should().BeTrue();
     }
 
     [Fact]
