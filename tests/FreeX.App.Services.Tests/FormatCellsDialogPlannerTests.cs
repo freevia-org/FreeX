@@ -9,6 +9,18 @@ namespace FreeX.App.Services.Tests;
 public sealed class FormatCellsDialogPlannerTests
 {
     [Fact]
+    public void AlignmentLayout_UsesWpfDialogSpacingContract()
+    {
+        FormatCellsDialogAlignmentLayout.ContentInset.Should().Be(8);
+        FormatCellsDialogAlignmentLayout.LabelTopMargin.Should().Be(4);
+        FormatCellsDialogAlignmentLayout.LabelBottomMargin.Should().Be(2);
+        FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin.Should().Be(8);
+        FormatCellsDialogAlignmentLayout.CheckBoxTopMargin.Should().Be(8);
+        FormatCellsDialogAlignmentLayout.FollowupCheckBoxTopMargin.Should().Be(6);
+        FormatCellsDialogAlignmentLayout.ControlHeight.Should().Be(24);
+    }
+
+    [Fact]
     public void TryCreateResult_BuildsStyleDiffBorderSelectionAndMergeDecision()
     {
         var input = ValidInput() with

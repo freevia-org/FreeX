@@ -487,6 +487,54 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public async Task CaptureParitySurfaces_CapturesFormatCellsAlignmentTabWithoutRunningInteractionContract()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-capture-format-cells-alignment-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                window.Show();
+                window.Measure(new global::Avalonia.Size(1120, 720));
+                window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                window.UpdateLayout();
+
+                var results = await window.CaptureParitySurfacesAsync(
+                    outputDirectory,
+                    targetSurfaceId: "dialog.FormatCells.Alignment");
+
+                results.Should().HaveCount(7);
+                results.Should().OnlyContain(
+                    result => result.Captured,
+                    string.Join(Environment.NewLine, results.Select(result => $"{result.Id}: {result.Note}")));
+                results.Select(result => result.Id).Should().Equal(
+                    "dialog.FormatCells",
+                    "dialog.FormatCells.Number",
+                    "dialog.FormatCells.Alignment",
+                    "dialog.FormatCells.Font",
+                    "dialog.FormatCells.Border",
+                    "dialog.FormatCells.Fill",
+                    "dialog.FormatCells.Protection");
+                results.Should().Contain(result => result.Id == "dialog.FormatCells.Alignment");
+                foreach (var result in results)
+                    AssertCapturedPng(outputDirectory, result);
+                window.DialogInteractionContracts.Should().NotContainKey("dialog.FormatCells",
+                    "visual capture must not run the separate keyboard interaction contract");
+
+                window.Close();
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_CapturesGoToSpecialAtFixedSizeWithoutClipping()
     {
         var outputDirectory = Path.Combine(

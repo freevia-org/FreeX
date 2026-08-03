@@ -17372,12 +17372,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             "FormatCellsHorizontalAlignmentBox",
             CreateFormatCellsHorizontalAlignmentChoices(),
             currentHorizontalAlignment);
-        horizontalAlignmentBox.Width = 564;
+        horizontalAlignmentBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         var verticalAlignmentBox = CreateFormatCellsComboBox(
             "FormatCellsVerticalAlignmentBox",
             CreateFormatCellsVerticalAlignmentChoices(),
             currentVerticalAlignment);
-        verticalAlignmentBox.Width = 564;
+        verticalAlignmentBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         var wrapTextBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_WrapText"), "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
         var shrinkToFitBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_ShrinkToFit"), "FormatCellsShrinkToFitBox", currentShrinkToFit);
         var mergeCellsBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_MergeCells"), "FormatCellsMergeCellsBox", currentMergeCells);
@@ -17385,7 +17385,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = currentIndentLevel.ToString(CultureInfo.InvariantCulture),
             MinWidth = 100,
-            Width = 564,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetName(indentLevelBox, "Indent level");
         AutomationProperties.SetAutomationId(indentLevelBox, "FormatCellsIndentLevelBox");
@@ -17395,7 +17395,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Text = currentTextRotation.ToString(CultureInfo.InvariantCulture),
             MinWidth = 100,
-            Width = 564,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch,
         };
         AutomationProperties.SetName(textRotationBox, "Text rotation");
         AutomationProperties.SetAutomationId(textRotationBox, "FormatCellsTextRotationBox");
@@ -18177,23 +18177,59 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             UiText.Get("FormatCells_TabNumber"),
             "FormatCellsNumberTab",
             numberBodyGrid);
+        var alignmentBody = new StackPanel
+        {
+            Margin = new Thickness(FormatCellsDialogAlignmentLayout.ContentInset),
+            Spacing = 0,
+            Children =
+            {
+                CreateFormatCellsField(
+                    UiText.Get("FormatCells_HorizontalAlignment"),
+                    horizontalAlignmentBox,
+                    new Thickness(
+                        0,
+                        FormatCellsDialogAlignmentLayout.LabelTopMargin,
+                        0,
+                        FormatCellsDialogAlignmentLayout.LabelBottomMargin)),
+                CreateFormatCellsField(
+                    UiText.Get("FormatCells_VerticalAlignment"),
+                    verticalAlignmentBox,
+                    new Thickness(
+                        0,
+                        FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin,
+                        0,
+                        FormatCellsDialogAlignmentLayout.LabelBottomMargin)),
+                CreateFormatCellsCheckBoxRow(
+                    wrapTextBox,
+                    FormatCellsDialogAlignmentLayout.CheckBoxTopMargin),
+                CreateFormatCellsCheckBoxRow(
+                    shrinkToFitBox,
+                    FormatCellsDialogAlignmentLayout.FollowupCheckBoxTopMargin),
+                CreateFormatCellsCheckBoxRow(
+                    mergeCellsBox,
+                    FormatCellsDialogAlignmentLayout.FollowupCheckBoxTopMargin),
+                CreateFormatCellsField(
+                    UiText.Get("FormatCells_IndentLevel015"),
+                    indentLevelBox,
+                    new Thickness(
+                        0,
+                        FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin,
+                        0,
+                        FormatCellsDialogAlignmentLayout.LabelBottomMargin)),
+                CreateFormatCellsField(
+                    UiText.Get("FormatCells_TextRotation90To90Or255"),
+                    textRotationBox,
+                    new Thickness(
+                        0,
+                        FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin,
+                        0,
+                        FormatCellsDialogAlignmentLayout.LabelBottomMargin)),
+            },
+        };
         var alignmentTab = CreateFormatCellsTab(
             UiText.Get("FormatCells_TabAlignment"),
             "FormatCellsAlignmentTab",
-            new StackPanel
-            {
-                Spacing = 10,
-                Children =
-                {
-                    CreateFormatCellsField(UiText.Get("FormatCells_HorizontalAlignment"), horizontalAlignmentBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_VerticalAlignment"), verticalAlignmentBox),
-                    wrapTextBox,
-                    shrinkToFitBox,
-                    mergeCellsBox,
-                    CreateFormatCellsField(UiText.Get("FormatCells_IndentLevel015"), indentLevelBox),
-                    CreateFormatCellsField(UiText.Get("FormatCells_TextRotation90To90Or255"), textRotationBox),
-                },
-            });
+            alignmentBody);
         // Font tab: Windows shows Font NAME + Size as selectable lists side by side. The
         // lists drive the existing name/size text boxes (kept below for free entry + as the
         // value sink the result reads), preserving the FontName/FontSize wiring.
@@ -18705,6 +18741,30 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 control,
             },
         };
+
+    private static StackPanel CreateFormatCellsField(
+        string label,
+        Control control,
+        Thickness labelMargin) =>
+        new()
+        {
+            Spacing = 0,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(label),
+                    Margin = labelMargin,
+                },
+                control,
+            },
+        };
+
+    private static CheckBox CreateFormatCellsCheckBoxRow(CheckBox checkBox, double topMargin)
+    {
+        checkBox.Margin = new Thickness(0, topMargin, 0, 0);
+        return checkBox;
+    }
 
     private static ComboBox CreateFormatCellsComboBox<T>(
         string automationId,

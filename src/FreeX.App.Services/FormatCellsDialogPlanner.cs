@@ -122,6 +122,21 @@ public sealed record FormatCellsDialogResult(
     FormatCellsDialogBorderSelection BorderSelection,
     bool? MergeCells);
 
+/// <summary>
+/// Shared WPF-authority measurements for the Format Cells Alignment tab.
+/// Hosts consume these values instead of inventing platform-specific vertical spacing.
+/// </summary>
+public static class FormatCellsDialogAlignmentLayout
+{
+    public const double ContentInset = 8;
+    public const double LabelTopMargin = 4;
+    public const double LabelBottomMargin = 2;
+    public const double FollowupLabelTopMargin = 8;
+    public const double CheckBoxTopMargin = 8;
+    public const double FollowupCheckBoxTopMargin = 6;
+    public const double ControlHeight = 24;
+}
+
 public sealed record FormatCellsDialogFillPatternChoice(CellFillPatternStyle Style, string ResourceKey);
 
 public sealed record FormatCellsDialogFillPatternDisplayChoice(CellFillPatternStyle Style, string Label);
