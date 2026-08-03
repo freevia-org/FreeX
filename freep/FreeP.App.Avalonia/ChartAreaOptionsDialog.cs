@@ -22,7 +22,7 @@ internal sealed class ChartAreaOptionsDialog : Window
     private readonly CheckBox _noOutlineCheck;
     private readonly TextBox _widthBox;
 
-    internal ChartAreaOptionsDialog(EditingSession editor)
+    internal ChartAreaOptionsDialog(EditingSession editor, ChartAreaFormattingTarget? initialTarget = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _planner = ChartAreaOptionsPlanner.FromChart(editor.SelectedChart ?? throw new InvalidOperationException("No chart is currently selected."));
@@ -35,7 +35,7 @@ internal sealed class ChartAreaOptionsDialog : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF3, 0xF3));
 
-        _targetCombo = new ComboBox { ItemsSource = ChartAreaOptionsPlanner.TargetOptions.Select(x => x.Label).ToArray(), SelectedIndex = 0, MinWidth = 190 };
+        _targetCombo = new ComboBox { ItemsSource = ChartAreaOptionsPlanner.TargetOptions.Select(x => x.Label).ToArray(), SelectedIndex = initialTarget == ChartAreaFormattingTarget.PlotArea ? 1 : 0, MinWidth = 190 };
         _targetCombo.SelectionChanged += (_, _) => { _planner.SetTarget(SelectedTarget()); LoadControls(); };
         _fillBox = new TextBox { MinWidth = 190 };
         _fillTransparencyBox = new TextBox { MinWidth = 120 };
@@ -43,6 +43,7 @@ internal sealed class ChartAreaOptionsDialog : Window
         _outlineBox = new TextBox { MinWidth = 190 };
         _noOutlineCheck = new CheckBox { Content = surface.NoOutlineLabel };
         _widthBox = new TextBox { MinWidth = 120 };
+        _planner.SetTarget(SelectedTarget());
         LoadControls();
 
         var buttons = new StackPanel
