@@ -139,7 +139,7 @@ public sealed class LegalNoticesDialogVisualParityTests
                 scroll.Extent.Height.Should().BeGreaterThan(scroll.Viewport.Height);
                 first.VerticalContentAlignment.Should().Be(global::Avalonia.Layout.VerticalAlignment.Top);
                 first.Padding.Top.Should().Be(LegalNoticesDialogMetrics.TextPadding);
-                first.LineHeight.Should().Be(14.6);
+                first.LineHeight.Should().Be(15.0);
                 scroll.GetVisualDescendants().OfType<ScrollBar>()
                     .Single(bar => bar.Orientation == Orientation.Vertical)
                     .Bounds.Width.Should().Be(18);
@@ -183,6 +183,41 @@ public sealed class LegalNoticesDialogVisualParityTests
                 AutomationProperties.GetAutomationId(close).Should().Be("LegalNoticesCloseButton");
                 close.IsDefault.Should().BeTrue();
                 close.IsCancel.Should().BeTrue();
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Legal_notices_uses_distinct_short_and_overflow_authority_line_boxes()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new LegalNoticesDialog(
+            [
+                ("Short", "short notice"),
+                ("Long", string.Join("\n", Enumerable.Repeat("long notice content that remains scrollable", 90))),
+            ]);
+            var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
+            var textBoxes = dialog.GetLogicalDescendants().OfType<TextBox>().ToArray();
+            try
+            {
+                dialog.Show();
+                dialog.UpdateLayout();
+
+                textBoxes[0].LineHeight.Should().Be(14.6);
+                textBoxes[0].Padding.Top.Should().BeGreaterThanOrEqualTo(LegalNoticesDialogMetrics.TextPadding);
+
+                tabs.SelectedIndex = 1;
+                dialog.UpdateLayout();
+                textBoxes[1].LineHeight.Should().Be(15.0);
+                textBoxes[1].Padding.Top.Should().Be(LegalNoticesDialogMetrics.TextPadding);
+                textBoxes[1].GetVisualDescendants().OfType<ScrollViewer>().Single()
+                    .Extent.Height.Should().BeGreaterThan(textBoxes[1].Bounds.Height);
             }
             finally
             {

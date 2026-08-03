@@ -23,7 +23,8 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     // Avalonia's native multiline line box is taller than WPF's at the shared
     // 12 px Consolas size. Keep both short and overflowing notices on the
     // measured WPF-equivalent line box so long documents expose the same rows.
-    private const double DocumentLineHeightCompensation = 14.6;
+    private const double ShortDocumentLineHeightCompensation = 14.6;
+    private const double OverflowDocumentLineHeightCompensation = 15.0;
     private static readonly Regex NonAutomationIdCharacter =
         new("[^A-Za-z0-9]+", RegexOptions.Compiled);
 
@@ -226,7 +227,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             {
                 // Reserving the WPF-sized overflow estimate makes Auto expose its
                 // scrollbar lane; the realized line box remains the shared correction.
-                textBox.LineHeight = DocumentLineHeightCompensation;
+                textBox.LineHeight = OverflowDocumentLineHeightCompensation;
                 return;
             }
 
@@ -235,7 +236,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
                 presenter.DesiredSize.Height);
             // Preserve the native-layout inset while closing Avalonia's six-pixel
             // cumulative baseline shortfall across the short WPF authority document.
-            textBox.LineHeight = DocumentLineHeightCompensation;
+            textBox.LineHeight = ShortDocumentLineHeightCompensation;
             if (inset > 0)
             {
                 textBox.Padding = new Thickness(
