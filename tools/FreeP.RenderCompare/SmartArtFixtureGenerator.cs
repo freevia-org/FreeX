@@ -12,15 +12,17 @@ namespace FreeP.RenderCompare;
 /// <summary>
 /// Theme 17: Generates 14-smartart-live.pptx programmatically (pure XML, no COM required).
 ///
-/// Creates a 4-slide deck:
+/// Creates a 5-slide deck:
 ///   Slide 1 — Process:   Plan → Design → Build → Test → Deploy
 ///   Slide 2 — Hierarchy: CEO with VP Sales / VP Engineering / VP Marketing children
-///   Slide 3 — Cycle:     Idea → Plan → Execute → Review → Improve
-///   Slide 4 — List:      Requirement 1 through 4
+///   Slide 3 — Hierarchy3: CEO with the same reports, template leaves, and an orthogonal cached drawing
+///   Slide 4 — Cycle:     Idea → Plan → Execute → Review → Improve
+///   Slide 5 — List:      Requirement 1 through 4
 ///
 /// Each slide has a real dgm:dataModel (ptLst + parOf cxnLst) and a layout1.xml with
 /// the correct uniqueId so the FreeP live layout engine classifies and renders it.
-/// The dsp:drawing is empty (no cached fallback) so the live engine MUST be used.
+/// The hierarchy3 slide also carries the representative PowerPoint node-plus-edge
+/// dsp:drawing that exercises the bounded imported-cache admission contract.
 /// </summary>
 internal static class SmartArtFixtureGenerator
 {
@@ -78,6 +80,14 @@ internal static class SmartArtFixtureGenerator
                 LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
                 Nodes     = [("r","CEO"), ("c1","VP Sales"), ("c2","VP Engineering"), ("c3","VP Marketing")],
                 Connections = [("r","c1"), ("r","c2"), ("r","c3")]
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live — Hierarchy3",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3",
+                Nodes     = [("r","CEO"), ("c1","VP Sales"), ("c2","VP Engineering"), ("c3","VP Marketing")],
+                Connections = [("r","c1"), ("r","c2"), ("r","c3")],
+                HasHierarchy3CachedDrawing = true
             },
             new SlideSpec
             {
@@ -193,7 +203,7 @@ internal static class SmartArtFixtureGenerator
             WriteXml($"ppt/diagrams/layout{si}.xml", BuildLayoutXml(spec.LayoutUid));
             WriteXml($"ppt/diagrams/quickStyle{si}.xml", MakeSimpleDoc(Dgm + "styleDef"));
             WriteXml($"ppt/diagrams/colors{si}.xml",     MakeSimpleDoc(Dgm + "colorsDef"));
-            WriteXml($"ppt/diagrams/drawing{si}.xml",    BuildEmptyDrawing());
+            WriteXml($"ppt/diagrams/drawing{si}.xml",    BuildDrawingXml(spec));
 
             // data rels (points to drawing for dsp:drawing lookup)
             WriteXml($"ppt/diagrams/_rels/data{si}.xml.rels", MakeRels(
@@ -295,15 +305,18 @@ internal static class SmartArtFixtureGenerator
                 new[] { "Plan", "Design", "Build", "Test", "Deploy" });
             AddSmartArtSlide(app, presentation, 2, "SmartArt Live - Hierarchy", "Hierarch",
                 new[] { "CEO", "VP Sales", "VP Engineering", "VP Marketing" });
-            AddSmartArtSlide(app, presentation, 3, "SmartArt Live - Cycle", "Cycle",
+            AddSmartArtSlide(app, presentation, 3, "SmartArt Live - Hierarchy3", "Hierarch",
+                new[] { "CEO", "VP Sales", "VP Engineering", "VP Marketing" });
+            AddSmartArtSlide(app, presentation, 4, "SmartArt Live - Cycle", "Cycle",
                 new[] { "Idea", "Plan", "Execute", "Review", "Improve" });
-            AddSmartArtSlide(app, presentation, 4, "SmartArt Live - List", "List",
+            AddSmartArtSlide(app, presentation, 5, "SmartArt Live - List", "List",
                 new[] { "Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4" });
 
             if (File.Exists(outputPath))
                 File.Delete(outputPath);
 
             RetryCom(() => presentation.SaveAs(outputPath));
+            PatchPowerPointHierarchy3Identity(outputPath);
             Console.WriteLine($"  Written: {outputPath}");
         }
         finally
@@ -346,6 +359,47 @@ internal static class SmartArtFixtureGenerator
             var nodeIndex = i;
             RetryCom(() => nodes.Item(nodeIndex).TextFrame2.TextRange.Text = nodeTexts[nodeIndex - 1]);
         }
+    }
+
+    private static void PatchPowerPointHierarchy3Identity(string outputPath)
+    {
+        const string relationshipsNamespace = "http://schemas.openxmlformats.org/package/2006/relationships";
+        const string diagramLayoutRelationship = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout";
+
+        using var archive = ZipFile.Open(outputPath, ZipArchiveMode.Update);
+        var relsEntry = archive.GetEntry("ppt/slides/_rels/slide3.xml.rels")
+            ?? throw new InvalidDataException("PowerPoint SmartArt fixture is missing slide 3 relationships.");
+        XDocument rels;
+        using (var stream = relsEntry.Open())
+            rels = XDocument.Load(stream);
+
+        var target = rels.Root?.Elements(XNamespace.Get(relationshipsNamespace) + "Relationship")
+            .Where(element => (string?)element.Attribute("Type") == diagramLayoutRelationship)
+            .Select(element => (string?)element.Attribute("Target"))
+            .FirstOrDefault(targetValue => !string.IsNullOrWhiteSpace(targetValue));
+        if (target is null)
+            throw new InvalidDataException("PowerPoint SmartArt fixture slide 3 has no diagram layout relationship.");
+
+        var layoutPath = "ppt/slides/" + target.Replace("../", string.Empty, StringComparison.Ordinal)
+            .Replace('/', Path.DirectorySeparatorChar);
+        layoutPath = layoutPath.Replace("ppt/slides/diagrams", "ppt/diagrams", StringComparison.OrdinalIgnoreCase);
+        var layoutEntry = archive.GetEntry(layoutPath)
+            ?? throw new InvalidDataException($"PowerPoint SmartArt fixture is missing {layoutPath}.");
+        XDocument layout;
+        using (var stream = layoutEntry.Open())
+            layout = XDocument.Load(stream);
+        if (layout.Root is not null)
+        {
+            layout.Root.SetAttributeValue("uniqueId",
+                "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3");
+        }
+
+        using var layoutBytes = new MemoryStream();
+        layout.Save(layoutBytes);
+        layoutEntry.Delete();
+        var replacement = archive.CreateEntry(layoutPath, CompressionLevel.Optimal);
+        using var output = replacement.Open();
+        output.Write(layoutBytes.GetBuffer(), 0, checked((int)layoutBytes.Length));
     }
 
     private static dynamic FindSmartArtLayout(dynamic app, string keyword)
@@ -555,6 +609,113 @@ internal static class SmartArtFixtureGenerator
                 new XElement(Dsp + "spTree")));
     }
 
+    private static XDocument BuildDrawingXml(SlideSpec spec)
+    {
+        if (!spec.HasHierarchy3CachedDrawing)
+            return BuildEmptyDrawing();
+
+        var nodePositions = new (long x, long y, long cx, long cy)[]
+        {
+            (2359189, 480, 2757165, 1378582),
+            (2910622, 1723708, 2205732, 1378582),
+            (2910622, 3446936, 2205732, 1378582),
+            (5805645, 480, 2757165, 1378582)
+        };
+        var segmentPositions = new (long x, long y, long cx, long cy)[]
+        {
+            (2634905, 1379063, 275716, 1033936),
+            (2634905, 1379063, 275716, 2757165),
+            (6081362, 1379063, 275716, 1033936),
+            (6081362, 1379063, 275716, 2757165)
+        };
+        var templatePositions = new (long x, long y, long cx, long cy)[]
+        {
+            (6357078, 1723708, 2205732, 1378582),
+            (6357078, 3446936, 2205732, 1378582)
+        };
+
+        var nodeShapes = spec.Nodes.Select((node, index) =>
+            BuildDspShape(
+                id: (uint)(10 + index),
+                name: $"Hierarchy3 node {index + 1}",
+                text: node.text,
+                preset: "roundRect",
+                nodePositions[index]));
+        var connectorShapes = segmentPositions.Select((bounds, index) =>
+            BuildDspShape(
+                id: (uint)(20 + index),
+                name: $"Hierarchy3 connector {index + 1}",
+                text: string.Empty,
+                preset: null,
+                bounds));
+        var templateShapes = templatePositions.Select((bounds, index) =>
+            BuildDspShape(
+                id: (uint)(30 + index),
+                name: $"Hierarchy3 template {index + 1}",
+                text: string.Empty,
+                preset: "roundRect",
+                bounds));
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dsp + "spTree", nodeShapes.Concat(templateShapes).Concat(connectorShapes))));
+    }
+
+    private static XElement BuildDspShape(
+        uint id,
+        string name,
+        string text,
+        string? preset,
+        (long x, long y, long cx, long cy) bounds)
+    {
+        var geometry = preset is null
+            ? new XElement(A + "ln",
+                new XElement(A + "solidFill",
+                    new XElement(A + "srgbClr", new XAttribute("val", "0E4B66"))),
+                new XElement(A + "prstDash", new XAttribute("val", "solid")))
+            : new XElement(A + "prstGeom",
+                new XAttribute("prst", preset),
+                new XElement(A + "avLst"));
+
+        var shapeProperties = new List<object>
+        {
+            new XElement(A + "xfrm",
+                new XElement(A + "off", new XAttribute("x", bounds.x), new XAttribute("y", bounds.y)),
+                new XElement(A + "ext", new XAttribute("cx", bounds.cx), new XAttribute("cy", bounds.cy))),
+            geometry
+        };
+        if (preset is not null)
+        {
+            shapeProperties.Add(new XElement(A + "solidFill",
+                new XElement(A + "srgbClr", new XAttribute("val", "4472C4"))));
+            shapeProperties.Add(new XElement(A + "ln"));
+        }
+
+        var elements = new List<object>
+        {
+            new XElement(Dsp + "nvSpPr",
+                new XElement(Dsp + "cNvPr", new XAttribute("id", id), new XAttribute("name", name)),
+                new XElement(Dsp + "cNvSpPr"),
+                new XElement(Dsp + "nvPr")),
+            new XElement(Dsp + "spPr", shapeProperties)
+        };
+        if (!string.IsNullOrEmpty(text))
+        {
+            elements.Add(new XElement(Dsp + "txBody",
+                new XElement(A + "bodyPr"),
+                new XElement(A + "lstStyle"),
+                new XElement(A + "p",
+                    new XElement(A + "r",
+                        new XElement(A + "rPr", new XAttribute("lang", "en-US")),
+                        new XElement(A + "t", text)))));
+        }
+
+        return new XElement(Dsp + "sp", elements);
+    }
+
     // ── Theme with accent colors ──────────────────────────────────────────────
 
     private static XDocument BuildTheme()
@@ -665,5 +826,6 @@ internal static class SmartArtFixtureGenerator
         public string LayoutUid { get; init; } = string.Empty;
         public (string id, string text)[]   Nodes       { get; init; } = [];
         public (string src, string dst)[]   Connections { get; init; } = [];
+        public bool HasHierarchy3CachedDrawing { get; init; }
     }
 }

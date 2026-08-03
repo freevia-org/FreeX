@@ -2876,10 +2876,23 @@ public static class PptxPackageReader
         if (nodes.Count == 0)
             return false;
 
-        var expectedConnectorCount = nodes.Sum(node => node.Children.Count);
+        var visibleNodes = nodes
+            .Where(node => !string.IsNullOrWhiteSpace(node.Text))
+            .ToList();
+        if (visibleNodes.Count == 0)
+            return false;
+
+        var expectedConnectorCount = visibleNodes.Sum(node => node.Children.Count(child =>
+            !string.IsNullOrWhiteSpace(child.Text)));
         var nodeShapes = smart.FallbackShapes
             .Where(shape => shape.Kind == SlideShapeKind.AutoShape
-                && shape.AutoShapeKind != DrawingShapeKind.Line)
+                && shape.AutoShapeKind != DrawingShapeKind.Line
+                && !string.IsNullOrWhiteSpace(shape.PlainText))
+            .ToList();
+        var templateShapes = smart.FallbackShapes
+            .Where(shape => shape.Kind == SlideShapeKind.AutoShape
+                && shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle
+                && string.IsNullOrWhiteSpace(shape.PlainText))
             .ToList();
         var connectorShapes = smart.FallbackShapes
             .Where(shape => shape.Kind == SlideShapeKind.Connector
@@ -2889,19 +2902,31 @@ public static class PptxPackageReader
 
         // A hierarchy3 cache is safe to hand to the live planner only when its
         // entire visible drawing is the same node-and-edge contract the planner
-        // can regenerate. Any extra background, role, group, or picture keeps
+        // can regenerate. PowerPoint may represent one parent edge as either a
+        // single diagonal line or the four-segment orthogonal route observed in
+        // the corpus. Any extra background, role, group, or picture keeps
         // PowerPoint's cached drawing authoritative.
-        if (nodeShapes.Count != nodes.Count
-            || connectorShapes.Count != expectedConnectorCount
-            || nodeShapes.Count + connectorShapes.Count != smart.FallbackShapes.Count)
+        var hasSupportedConnectorGrammar = connectorShapes.Count == expectedConnectorCount
+            || (visibleNodes.Count == 4
+                && templateShapes.Count == 2
+                && connectorShapes.Count == 4);
+        if (nodeShapes.Count != visibleNodes.Count
+            || templateShapes.Count is not (0 or 2)
+            || !hasSupportedConnectorGrammar
+            || nodeShapes.Any(shape => shape.AutoShapeKind is not (DrawingShapeKind.Rectangle or DrawingShapeKind.RoundedRectangle))
+            || nodeShapes.Count + templateShapes.Count + connectorShapes.Count != smart.FallbackShapes.Count)
             return false;
 
-        for (var i = 0; i < nodes.Count; i++)
-        {
-            if (string.IsNullOrWhiteSpace(nodeShapes[i].PlainText)
-                || !string.Equals(nodeShapes[i].PlainText, nodes[i].Text, StringComparison.Ordinal))
-                return false;
-        }
+        if (smart.FallbackShapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        var cachedNodeTexts = nodeShapes.Select(shape => shape.PlainText)
+            .OrderBy(text => text, StringComparer.Ordinal);
+        var modelNodeTexts = visibleNodes.Select(node => node.Text)
+            .OrderBy(text => text, StringComparer.Ordinal);
+        if (!cachedNodeTexts.SequenceEqual(modelNodeTexts, StringComparer.Ordinal))
+            return false;
 
         return connectorShapes.All(shape => string.IsNullOrWhiteSpace(shape.PlainText));
     }

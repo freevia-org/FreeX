@@ -926,7 +926,7 @@ internal static class Program
         Console.WriteLine("      Generate a deterministic shared-planner presenter-ink deck for COM validation.");
         Console.WriteLine();
         Console.WriteLine("  --generate-smartart-fixture <outPath.pptx>");
-        Console.WriteLine("      Generate 14-smartart-live.pptx (4 slides: Process/Hierarchy/Cycle/List).");
+        Console.WriteLine("      Generate 14-smartart-live.pptx (5 slides: Process/Hierarchy/Hierarchy3/Cycle/List).");
         Console.WriteLine("      Pure XML — no PowerPoint COM required. Use with --compare for parity.");
     }
 

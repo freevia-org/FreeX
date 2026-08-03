@@ -696,7 +696,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ImportedSmartArtHierarchy3_PreservesNativeCache()
+    public void Reader_ImportedSmartArtHierarchy3_AdmitsObservedOrthogonalCacheToSharedLiveLayout()
     {
         var corpusPath = FindRenderCompareCorpusFile("14-smartart-live.pptx");
         var presentation = PptxPackageReader.Read(corpusPath);
@@ -707,9 +707,15 @@ public sealed class SmartArtTests : IDisposable
         smartArt.Data.Should().NotBeNull();
         smartArt.Data!.LayoutUniqueId.Should().EndWith("/hierarchy3");
         smartArt.Data.Family.Should().Be(SmartArtFamily.Hierarchy);
-        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "an imported hierarchy3 with a native dsp:drawing must use PowerPoint's cached drawing");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the real hierarchy3 cache has four visible node boxes, two empty template leaves, and four orthogonal connector segments");
         smartArt.FallbackShapes.Should().NotBeEmpty();
+        smartArt.FallbackShapes.Should().HaveCount(10,
+            "the corpus cache contains four node boxes, two empty template leaves, and four orthogonal connector segments");
+        smartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().Be(4);
+        smartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle
+            && string.IsNullOrWhiteSpace(shape.PlainText)).Should().Be(2);
 
         var boxes = smartArt.FallbackShapes
             .Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle
@@ -718,6 +724,27 @@ public sealed class SmartArtTests : IDisposable
         boxes.Keys.Should().Contain(["CEO", "VP Sales", "VP Engineering", "VP Marketing"]);
         boxes["VP Sales"].OffsetXEmu.Should().BeGreaterThan(boxes["CEO"].OffsetXEmu,
             "the imported PowerPoint cache owns the visible hierarchy geometry");
+
+        var live = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartArtShape.OffsetXEmu,
+            smartArtShape.OffsetYEmu,
+            smartArtShape.ExtentCxEmu,
+            smartArtShape.ExtentCyEmu,
+            presentation.Theme,
+            presentation.Slides[1].ColorMapOverride,
+            smartArt.QuickStyle,
+            smartArt.Colors);
+        live.Should().NotBeNull();
+        live!.Count.Should().Be(6,
+            "the shared hierarchy3 plan emits four editable boxes and one straight connector per modeled parent edge");
+
+        var composed = SlideCompositor.Compose(presentation, presentation.Slides[1])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+        composed.Count.Should().BeLessThan(smartArt.FallbackShapes.Count,
+            "the admitted live plan must replace the ten-shape cached orthogonal drawing");
     }
 
     [Fact]

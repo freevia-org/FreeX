@@ -19,4 +19,20 @@ public sealed class SmartArtDefaultLiveRendererContractTests
         source.Should().NotContain("SmartArtLayoutEngine.Layout(",
             "SmartArt geometry must remain shared with Avalonia through SlideCompositor");
     }
+
+    [Fact]
+    public void WpfHierarchy3Rendering_ConsumesTheSharedLivePlan()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("SlideCompositor.Compose(");
+        source.Should().NotContain("LayoutHierarchy3(");
+        source.Should().NotContain("SmartArtLayoutEngine.Layout(",
+            "hierarchy3 geometry must remain renderer-neutral");
+    }
 }

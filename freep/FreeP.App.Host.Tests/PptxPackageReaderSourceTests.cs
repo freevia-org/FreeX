@@ -142,6 +142,13 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("HasUnsupportedSmartArtShapeEffects")
             .And.Contain("string.IsNullOrWhiteSpace(shape.PlainText)");
 
+        ExtractMethod(source, "private static bool CanUseHierarchy3NodeAndConnectorCache(")
+            .Should()
+            .Contain("visibleNodes.Count == 4")
+            .And.Contain("connectorShapes.Count == 4")
+            .And.Contain("HasUnsupportedSmartArtShapeEffects")
+            .And.Contain("HasUnsupportedSmartArtDrawingEffects");
+
         ExtractMethod(source, "private static bool HasUnsupportedSmartArtShapeEffects(")
             .Should()
             .Contain("effects.HasOuterShadow")
