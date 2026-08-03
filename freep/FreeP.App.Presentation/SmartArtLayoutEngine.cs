@@ -4549,7 +4549,7 @@ public static class SmartArtLayoutEngine
             return false;
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
-        return string.Equals(id.Split('/').Last(), "basicmatrix", StringComparison.Ordinal);
+        return id.Split('/').Last() is "matrix1" or "basicmatrix";
     }
 
     private static bool IsGridMatrixLayout(string uniqueId)
