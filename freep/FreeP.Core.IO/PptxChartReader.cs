@@ -97,6 +97,11 @@ internal static class PptxChartReader
             : PptxColorReader.TryReadOutline(plotAreaSpPr.Element(A + "ln"), scheme);
 
         var serIdxMap = DetectChartTypeAndSeries(plotArea, shape, scheme);
+        shape.SeriesLinesSpecified = plotArea.Elements()
+            .Where(IsChartTypeElement)
+            .Any(chartType => chartType.Element(C + "serLines") is not null);
+        if (shape.ChartType == ChartType.OfPie)
+            shape.OfPieSeriesLinesSpecified = shape.SeriesLinesSpecified;
         ApplyPowerPointAutomaticTitleDefault(chartEl, shape);
 
         // Axes (catAx / dateAx = category axis; valAx = value axis)
@@ -198,6 +203,13 @@ internal static class PptxChartReader
 
         return shape;
     }
+
+    private static bool IsChartTypeElement(XElement element) => element.Name.LocalName is
+        "barChart" or "bar3DChart" or "lineChart" or "line3DChart" or
+        "pieChart" or "pie3DChart" or "ofPieChart" or "doughnutChart" or
+        "areaChart" or "area3DChart" or "scatterChart" or "bubbleChart" or
+        "stockChart" or "radarChart" or "surfaceChart" or "surface3DChart" or
+        "funnelChart" or "waterfallChart";
 
     private static int? ReadStyleId(XElement chartSpace)
     {
