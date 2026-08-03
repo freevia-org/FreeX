@@ -631,7 +631,11 @@ public sealed partial class MainWindow : Window
         if (_textOverlay is null) return;
         SlideCanvas.MouseRightButtonUp -= OnSlideCanvasMouseRightButtonUp;
         SlideCanvas.MouseRightButtonUp += OnSlideCanvasMouseRightButtonUp;
-        SlideCanvas.AttachEditing(Editor, _textOverlay, TryOpenOleInPlace);
+        SlideCanvas.AttachEditing(
+            Editor,
+            _textOverlay,
+            TryOpenOleInPlace,
+            OnChartPointDoubleClick);
         SlideCanvas.ApplyViewShowState(_viewShowState);
     }
 
@@ -4393,11 +4397,17 @@ public sealed partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    internal void OpenChartPointOptionsDialog()
+    private void OnChartPointDoubleClick(ChartPointHit hit)
+    {
+        Editor.Select(hit.ShapeId);
+        OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex);
+    }
+
+    internal void OpenChartPointOptionsDialog(int? seriesIndex = null, int? pointIndex = null)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
 
-        var dialog = new ChartPointOptionsDialog(Editor);
+        var dialog = new ChartPointOptionsDialog(Editor, seriesIndex, pointIndex);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

@@ -39,11 +39,18 @@ internal sealed class ChartPointOptionsDialog : Window
     private readonly TextBox _markerSizeBox;
     private readonly TextBox _explosionBox;
 
-    internal ChartPointOptionsDialog(EditingSession editor)
+    internal ChartPointOptionsDialog(
+        EditingSession editor,
+        int? initialSeriesIndex = null,
+        int? initialPointIndex = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart ?? throw new InvalidOperationException("No chart is currently selected.");
         _planner = ChartPointOptionsPlanner.FromChart(chart);
+        if (initialSeriesIndex is { } seriesIndex)
+            _planner.SetSeriesIndex(seriesIndex);
+        if (initialPointIndex is { } pointIndex)
+            _planner.SetPointIndex(pointIndex);
         var surface = ChartPointOptionsPlanner.BuildSurfacePlan();
 
         Title = surface.Title;

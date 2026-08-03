@@ -139,7 +139,8 @@ public sealed class SlideCanvas : FrameworkElement
     public void AttachEditing(
         EditingSession editor,
         Canvas textOverlay,
-        Func<SlideShape, bool>? tryOpenOleInPlace = null)
+        Func<SlideShape, bool>? tryOpenOleInPlace = null,
+        Action<ChartPointHit>? onChartPointDoubleClick = null)
     {
         var editPointsEnabled = _gestureHandler?.EditPointsEnabled ?? true;
         // Rebuilds replace the EditingSession. Dispose the previous handler first so its
@@ -149,7 +150,11 @@ public sealed class SlideCanvas : FrameworkElement
         ActiveTextEditShapeId = null;
         _textEditor      = null;
         _tableCellEditor = null;
-        _gestureHandler  = new CanvasGestureHandler(this, editor, tryOpenOleInPlace);
+        _gestureHandler  = new CanvasGestureHandler(
+            this,
+            editor,
+            tryOpenOleInPlace,
+            onChartPointDoubleClick);
         _gestureHandler.EditPointsEnabled = editPointsEnabled;
         ApplyViewShowState(_viewShowState);
         _textOverlay     = textOverlay;

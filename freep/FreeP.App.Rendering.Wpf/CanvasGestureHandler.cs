@@ -31,6 +31,7 @@ public sealed class CanvasGestureHandler : IDisposable
     private readonly SlideCanvas       _canvas;
     private readonly EditingSession    _editor;
     private readonly Func<SlideShape, bool>? _tryOpenOleInPlace;
+    private readonly Action<ChartPointHit>? _onChartPointDoubleClick;
     private readonly SelectionAdorner  _adorner;
     private readonly AdornerLayer?     _adornerLayer;
     private bool                       _disposed;
@@ -100,11 +101,13 @@ public sealed class CanvasGestureHandler : IDisposable
     public CanvasGestureHandler(
         SlideCanvas canvas,
         EditingSession editor,
-        Func<SlideShape, bool>? tryOpenOleInPlace = null)
+        Func<SlideShape, bool>? tryOpenOleInPlace = null,
+        Action<ChartPointHit>? onChartPointDoubleClick = null)
     {
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _tryOpenOleInPlace = tryOpenOleInPlace;
+        _onChartPointDoubleClick = onChartPointDoubleClick;
 
         // Add adorner to the adorner layer
         _adornerLayer = AdornerLayer.GetAdornerLayer(_canvas);
@@ -186,6 +189,18 @@ public sealed class CanvasGestureHandler : IDisposable
         if (e.ClickCount >= 2)
         {
             var slidePoint = xf.ScreenToSlide(pt.X, pt.Y);
+            if (_onChartPointDoubleClick is not null &&
+                ChartPointHitTester.TryHitTest(
+                    slide,
+                    _editor.Presentation,
+                    slidePoint.X,
+                    slidePoint.Y,
+                    out var chartPointHit))
+            {
+                _onChartPointDoubleClick(chartPointHit);
+                e.Handled = true;
+                return;
+            }
             var oleHitId = ShapeHitTester.HitTest(
                 slide,
                 _editor.Presentation,
