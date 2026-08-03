@@ -23,7 +23,9 @@ public static class FindReplaceDialogPlanner
     public const double ChooseFormatButtonWidth = 136;
     public const double FormatButtonMargin = 8;
     public const double AdjacentFormatButtonMargin = 6;
-    public const double TabHeight = 108;
+    // WPF's auto-sized tab host heights at the shared 720x430 evidence target.
+    public const double FindTabHeight = 74;
+    public const double ReplaceTabHeight = 108;
     public const double ResultsMinimumHeight = 120;
     public const double ResultsBottomMargin = 7;
     public const double ResultsHeaderHeight = 24;

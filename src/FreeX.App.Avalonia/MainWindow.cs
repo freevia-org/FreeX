@@ -14661,9 +14661,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Items = { findTabItem, replaceTabItem },
             SelectedIndex = replaceMode ? 1 : 0,
-            Height = FindReplaceDialogPlanner.TabHeight,
-            MinHeight = FindReplaceDialogPlanner.TabHeight,
-            MaxHeight = FindReplaceDialogPlanner.TabHeight,
+            Height = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
+            MinHeight = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
+            MaxHeight = replaceMode ? FindReplaceDialogPlanner.ReplaceTabHeight : FindReplaceDialogPlanner.FindTabHeight,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
@@ -14871,6 +14871,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         }
         tabs.SelectionChanged += (_, _) =>
         {
+            var tabHeight = OnReplaceTab()
+                ? FindReplaceDialogPlanner.ReplaceTabHeight
+                : FindReplaceDialogPlanner.FindTabHeight;
+            tabs.Height = tabHeight;
+            tabs.MinHeight = tabHeight;
+            tabs.MaxHeight = tabHeight;
             UpdateButtonVisibility();
             if (dialog.IsVisible)
                 Dispatcher.UIThread.Post(FocusSearchBox, DispatcherPriority.Input);

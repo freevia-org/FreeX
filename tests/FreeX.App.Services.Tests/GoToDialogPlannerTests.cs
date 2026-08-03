@@ -20,6 +20,8 @@ public sealed class GoToDialogPlannerTests
     {
         FindReplaceDialogPlanner.RootMargin.Should().Be(12);
         FindReplaceDialogPlanner.TabContentMargin.Should().Be(10);
+        FindReplaceDialogPlanner.FindTabHeight.Should().Be(74);
+        FindReplaceDialogPlanner.ReplaceTabHeight.Should().Be(108);
         FindReplaceDialogPlanner.FieldLabelColumnWidth.Should().Be(88);
         FindReplaceDialogPlanner.FieldMinWidth.Should().Be(260);
         FindReplaceDialogPlanner.FormatButtonWidth.Should().Be(84);
