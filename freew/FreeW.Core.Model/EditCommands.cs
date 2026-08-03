@@ -4063,6 +4063,174 @@ public sealed class RemoveFloatingRunCommand(int paragraphIndex, int runIndex) :
 }
 
 /// <summary>
+/// Give every row in a table the same height, snapshotting each row's prior height and height rule
+/// for undo. The target height is calculated by <see cref="TableLayoutOperations.DistributeRows"/>.
+/// </summary>
+public sealed class DistributeTableRowsCommand(int blockIndex) : IDocumentCommand
+{
+    private (double? HeightPt, TableRowHeightRule HeightRule)[]? _previous;
+    private bool _applied;
+
+    public string Label => "Distribute Rows";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetTable(context, out var table) || table.Rows.Count == 0)
+            return;
+
+        _previous = table.Rows.Select(row => (row.HeightPt, row.HeightRule)).ToArray();
+        _applied = TableLayoutOperations.DistributeRows(table);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || _previous is null || !TryGetTable(context, out var table))
+            return;
+
+        for (var i = 0; i < Math.Min(table.Rows.Count, _previous.Length); i++)
+        {
+            table.Rows[i].HeightPt = _previous[i].HeightPt;
+            table.Rows[i].HeightRule = _previous[i].HeightRule;
+        }
+        _applied = false;
+    }
+
+    private bool TryGetTable(IDocumentCommandContext context, out Table table)
+    {
+        table = null!;
+        return blockIndex >= 0
+            && blockIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[blockIndex] is Table resolved
+            && (table = resolved) is not null;
+    }
+}
+
+/// <summary>
+/// Give every table column the same width, snapshotting the prior grid and per-cell widths for undo.
+/// </summary>
+public sealed class DistributeTableColumnsCommand(int blockIndex) : IDocumentCommand
+{
+    private double[]? _previousGridWidths;
+    private double?[][]? _previousCellWidths;
+    private bool _applied;
+
+    public string Label => "Distribute Columns";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetTable(context, out var table) || table.ColumnCount == 0)
+            return;
+
+        CaptureWidths(table);
+        _applied = TableLayoutOperations.DistributeColumns(table);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetTable(context, out var table))
+            return;
+
+        RestoreWidths(table);
+        _applied = false;
+    }
+
+    private void CaptureWidths(Table table)
+    {
+        _previousGridWidths = [.. table.ColumnWidthsPt];
+        _previousCellWidths = table.Rows
+            .Select(row => row.Cells.Select(cell => cell.WidthPt).ToArray())
+            .ToArray();
+    }
+
+    private void RestoreWidths(Table table)
+    {
+        table.ColumnWidthsPt.Clear();
+        if (_previousGridWidths is not null)
+            table.ColumnWidthsPt.AddRange(_previousGridWidths);
+
+        if (_previousCellWidths is null)
+            return;
+        for (var rowIndex = 0; rowIndex < Math.Min(table.Rows.Count, _previousCellWidths.Length); rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            var widths = _previousCellWidths[rowIndex];
+            for (var cellIndex = 0; cellIndex < Math.Min(row.Cells.Count, widths.Length); cellIndex++)
+                row.Cells[cellIndex].WidthPt = widths[cellIndex];
+        }
+    }
+
+    private bool TryGetTable(IDocumentCommandContext context, out Table table)
+    {
+        table = null!;
+        return blockIndex >= 0
+            && blockIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[blockIndex] is Table resolved
+            && (table = resolved) is not null;
+    }
+}
+
+/// <summary>
+/// Apply a Word table AutoFit mode, snapshotting the mode and every width field that
+/// <see cref="TableLayoutOperations.SetAutoFit"/> can mutate for undo.
+/// </summary>
+public sealed class SetTableAutoFitCommand(int blockIndex, AutoFitMode mode) : IDocumentCommand
+{
+    private AutoFitMode _previousMode;
+    private double? _previousPreferredWidthPt;
+    private double[]? _previousGridWidths;
+    private double?[][]? _previousCellWidths;
+    private bool _applied;
+
+    public string Label => "AutoFit Table";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetTable(context, out var table))
+            return;
+
+        _previousMode = table.AutoFit;
+        _previousPreferredWidthPt = table.PreferredWidthPt;
+        _previousGridWidths = [.. table.ColumnWidthsPt];
+        _previousCellWidths = table.Rows
+            .Select(row => row.Cells.Select(cell => cell.WidthPt).ToArray())
+            .ToArray();
+        _applied = TableLayoutOperations.SetAutoFit(table, mode);
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetTable(context, out var table))
+            return;
+
+        table.AutoFit = _previousMode;
+        table.PreferredWidthPt = _previousPreferredWidthPt;
+        table.ColumnWidthsPt.Clear();
+        if (_previousGridWidths is not null)
+            table.ColumnWidthsPt.AddRange(_previousGridWidths);
+        if (_previousCellWidths is not null)
+        {
+            for (var rowIndex = 0; rowIndex < Math.Min(table.Rows.Count, _previousCellWidths.Length); rowIndex++)
+            {
+                var row = table.Rows[rowIndex];
+                var widths = _previousCellWidths[rowIndex];
+                for (var cellIndex = 0; cellIndex < Math.Min(row.Cells.Count, widths.Length); cellIndex++)
+                    row.Cells[cellIndex].WidthPt = widths[cellIndex];
+            }
+        }
+        _applied = false;
+    }
+
+    private bool TryGetTable(IDocumentCommandContext context, out Table table)
+    {
+        table = null!;
+        return blockIndex >= 0
+            && blockIndex < context.Document.Blocks.Count
+            && context.Document.Blocks[blockIndex] is Table resolved
+            && (table = resolved) is not null;
+    }
+}
+
+/// <summary>
 /// Replace the <see cref="TableFormatting"/> on the table at <paramref name="blockIndex"/>.
 /// The previous formatting is snapshot-ed for undo. Out-of-range block index or a block that
 /// is not a <see cref="Table"/> are silently ignored (no-op).
@@ -4393,26 +4561,10 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
         target.ShowLegend = source.ShowLegend;
         target.CategoryAxisTitle = source.CategoryAxisTitle;
         target.ValueAxisTitle = source.ValueAxisTitle;
-        target.WidthPt = source.WidthPt;
-        target.HeightPt = source.HeightPt;
-        target.RotationAngle = source.RotationAngle;
-        target.FlipH = source.FlipH;
-        target.FlipV = source.FlipV;
-        target.Placement = source.Placement is null
-            ? null
-            : new FloatingPlacement
-            {
-                Wrapping = source.Placement.Wrapping,
-                HorizontalOffsetPt = source.Placement.HorizontalOffsetPt,
-                VerticalOffsetPt = source.Placement.VerticalOffsetPt,
-                HorizontalAnchor = source.Placement.HorizontalAnchor,
-                VerticalAnchor = source.Placement.VerticalAnchor,
-                ZOrderIndex = source.Placement.ZOrderIndex,
-            };
-        target.StyleId = source.StyleId;
-        target.ColorSchemeId = source.ColorSchemeId;
-        target.QuickLayoutId = source.QuickLayoutId;
-        target.NativeVisualSettings = source.NativeVisualSettings;
+        if (source.WidthPt > 0)
+            target.WidthPt = source.WidthPt;
+        if (source.HeightPt > 0)
+            target.HeightPt = source.HeightPt;
         target.Categories.Clear();
         target.Categories.AddRange(source.Categories);
         target.Series.Clear();

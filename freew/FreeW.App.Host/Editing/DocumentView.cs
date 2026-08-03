@@ -1923,10 +1923,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
+            || _model.Blocks[blockIndex] is not ModelTable)
             return;
-        if (TableLayoutOperations.DistributeRows(table))
-            Render();
+        _commands.Execute(new DistributeTableRowsCommand(blockIndex));
+        Render();
     }
 
     /// <summary>
@@ -1939,10 +1939,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
+            || _model.Blocks[blockIndex] is not ModelTable)
             return;
-        if (TableLayoutOperations.DistributeColumns(table))
-            Render();
+        _commands.Execute(new DistributeTableColumnsCommand(blockIndex));
+        Render();
     }
 
     /// <summary>
@@ -1954,10 +1954,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
+            || _model.Blocks[blockIndex] is not ModelTable)
             return;
-        if (TableLayoutOperations.SetAutoFit(table, mode))
-            Render();
+        _commands.Execute(new SetTableAutoFitCommand(blockIndex, mode));
+        Render();
     }
 
     /// <summary>
@@ -2895,11 +2895,14 @@ public sealed class DocumentView : RichTextBox
         if (widthPt <= 0 || heightPt <= 0)
             return;
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
-        if (chart is null)
+        var location = SelectedChartLocation();
+        if (location.Chart is null)
             return;
-        chart.WidthPt = widthPt;
-        chart.HeightPt = heightPt;
+        _commands.Execute(new SetFloatingSizeCommand(
+            location.BlockIndex,
+            location.RunIndex,
+            widthPt,
+            heightPt));
         Render();
     }
 
@@ -2911,21 +2914,13 @@ public sealed class DocumentView : RichTextBox
     public void ReplaceSelectedChartData(Chart replacement)
     {
         CommitToModel();
-        var chart = SelectedChartLocation().Chart;
-        if (chart is null)
+        var location = SelectedChartLocation();
+        if (location.Chart is null)
             return;
-        chart.Kind = replacement.Kind;
-        chart.Title = replacement.Title;
-        chart.ShowLegend = replacement.ShowLegend;
-        chart.CategoryAxisTitle = replacement.CategoryAxisTitle;
-        chart.ValueAxisTitle = replacement.ValueAxisTitle;
-        chart.WidthPt = replacement.WidthPt > 0 ? replacement.WidthPt : chart.WidthPt;
-        chart.HeightPt = replacement.HeightPt > 0 ? replacement.HeightPt : chart.HeightPt;
-        chart.Categories.Clear();
-        chart.Categories.AddRange(replacement.Categories);
-        chart.Series.Clear();
-        foreach (var s in replacement.Series)
-            chart.Series.Add(s);
+        _commands.Execute(new ReplaceChartDataCommand(
+            location.BlockIndex,
+            location.RunIndex,
+            replacement));
         Render();
     }
 
@@ -3129,10 +3124,13 @@ public sealed class DocumentView : RichTextBox
     public void ApplySmartArtLayout(SmartArtLayoutPreset preset)
     {
         CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null) return;
-        smartArt.LayoutId = preset.Id;
-        smartArt.Kind = preset.Kind;
+        var location = SelectedSmartArtLocation();
+        if (location.SmartArt is null) return;
+        _commands.Execute(new SetSmartArtLayoutCommand(
+            location.BlockIndex,
+            location.RunIndex,
+            preset.Kind,
+            preset.Id));
         Render();
     }
 
@@ -3144,9 +3142,12 @@ public sealed class DocumentView : RichTextBox
     public void ApplySmartArtColorScheme(SmartArtColorScheme scheme)
     {
         CommitToModel();
-        var smartArt = SelectedSmartArtLocation().SmartArt;
-        if (smartArt is null) return;
-        smartArt.ColorSchemeId = scheme.Id;
+        var location = SelectedSmartArtLocation();
+        if (location.SmartArt is null) return;
+        _commands.Execute(new SetSmartArtColorCommand(
+            location.BlockIndex,
+            location.RunIndex,
+            scheme.Id));
         Render();
     }
 
@@ -3161,6 +3162,7 @@ public sealed class DocumentView : RichTextBox
         var location = SelectedSmartArtLocation();
         if (location.SmartArt is null) return;
         _commands.Execute(new SetSmartArtStyleCommand(location.BlockIndex, location.RunIndex, style.Id));
+        Render();
     }
 
     private void ExecuteSmartArtStructureCommand(SmartArtStructureOperation operation)

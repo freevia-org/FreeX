@@ -2236,26 +2236,26 @@ public sealed class DocumentView : Control
 
     public void DistributeTableRows()
     {
-        if (IsEditingLocked || CaretTable() is not { } table)
+        if (IsEditingLocked || _cellCaret is not { } caret || CaretTable() is null)
             return;
-        if (TableLayoutOperations.DistributeRows(table))
-            InvalidateLayoutAndVisual();
+        _bus.Execute(new DistributeTableRowsCommand(caret.TableBlock));
+        InvalidateLayoutAndVisual();
     }
 
     public void DistributeTableColumns()
     {
-        if (IsEditingLocked || CaretTable() is not { } table)
+        if (IsEditingLocked || _cellCaret is not { } caret || CaretTable() is null)
             return;
-        if (TableLayoutOperations.DistributeColumns(table))
-            InvalidateLayoutAndVisual();
+        _bus.Execute(new DistributeTableColumnsCommand(caret.TableBlock));
+        InvalidateLayoutAndVisual();
     }
 
     public void SetTableAutoFit(AutoFitMode mode)
     {
-        if (IsEditingLocked || CaretTable() is not { } table)
+        if (IsEditingLocked || _cellCaret is not { } caret || CaretTable() is null)
             return;
-        if (TableLayoutOperations.SetAutoFit(table, mode))
-            InvalidateLayoutAndVisual();
+        _bus.Execute(new SetTableAutoFitCommand(caret.TableBlock, mode));
+        InvalidateLayoutAndVisual();
     }
 
     public void SetCaretCellTextDirection(CellTextDirection direction)
