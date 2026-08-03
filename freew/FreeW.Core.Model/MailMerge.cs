@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -944,6 +945,28 @@ public static class MailMerge
     /// </summary>
     public const string MergeSequenceNumberField = "Merge Sequence #";
 
+    /// <summary>Native Word field-code instruction for <see cref="NextRecordField"/>.</summary>
+    public const string NextRecordInstruction = "NEXT";
+
+    /// <summary>Native Word field-code instruction for <see cref="MergeRecordNumberField"/>.</summary>
+    public const string MergeRecordNumberInstruction = "MERGEREC";
+
+    /// <summary>Native Word field-code instruction for <see cref="MergeSequenceNumberField"/>.</summary>
+    public const string MergeSequenceNumberInstruction = "MERGESEQ";
+
+    /// <summary>Maps FreeW's visible special-field label to Word's native field instruction.</summary>
+    public static bool TryGetNativeSpecialFieldInstruction(string fieldName, out string instruction)
+    {
+        instruction = fieldName.Trim() switch
+        {
+            var name when name.Equals(NextRecordField, StringComparison.OrdinalIgnoreCase) => NextRecordInstruction,
+            var name when name.Equals(MergeRecordNumberField, StringComparison.OrdinalIgnoreCase) => MergeRecordNumberInstruction,
+            var name when name.Equals(MergeSequenceNumberField, StringComparison.OrdinalIgnoreCase) => MergeSequenceNumberInstruction,
+            _ => string.Empty
+        };
+        return instruction.Length > 0;
+    }
+
     private static readonly string[] EmailFieldSynonyms =
     [
         "email",
@@ -1887,7 +1910,7 @@ public static class MailMerge
         int recordIndex)
     {
         var clone = DocumentMerge.CloneBlock(block);
-        TransformBlockText(clone, Resolve);
+        TransformBlockText(clone, Resolve, ResolveNativeSpecialField);
         return clone;
 
         string Resolve(string text)
@@ -1898,35 +1921,62 @@ public static class MailMerge
             state.SkipRecordRequested |= skipRecord;
             return resolved;
         }
+
+        void ResolveNativeSpecialField(Run run)
+        {
+            switch (run.ComplexField?.Keyword)
+            {
+                case NextRecordInstruction:
+                    run.Text = string.Empty;
+                    state.AdvanceRecordRequested = true;
+                    break;
+                case MergeRecordNumberInstruction:
+                    run.Text = recordIndex.ToString(CultureInfo.InvariantCulture);
+                    break;
+                case MergeSequenceNumberInstruction:
+                    run.Text = state.SequenceNumber.ToString(CultureInfo.InvariantCulture);
+                    break;
+            }
+        }
     }
 
-    private static void TransformBlockText(Block block, Func<string, string> transform)
+    private static void TransformBlockText(
+        Block block,
+        Func<string, string> transform,
+        Action<Run>? transformRun = null)
     {
         switch (block)
         {
             case Paragraph paragraph:
-                TransformParagraphText(paragraph, transform);
+                TransformParagraphText(paragraph, transform, transformRun);
                 break;
             case Table table:
                 foreach (var row in table.Rows)
                     foreach (var cell in row.Cells)
                         foreach (var paragraph in cell.Paragraphs)
-                            TransformParagraphText(paragraph, transform);
+                            TransformParagraphText(paragraph, transform, transformRun);
                 break;
         }
     }
 
-    private static void TransformParagraphText(Paragraph paragraph, Func<string, string> transform)
+    private static void TransformParagraphText(
+        Paragraph paragraph,
+        Func<string, string> transform,
+        Action<Run>? transformRun = null)
     {
         foreach (var run in paragraph.Runs)
-            TransformRunText(run, transform);
+            TransformRunText(run, transform, transformRun);
 
         if (paragraph.SectionBreak is { } section)
-            TransformSectionHeadersFootersText(section.HeadersFooters, transform);
+            TransformSectionHeadersFootersText(section.HeadersFooters, transform, transformRun);
     }
 
-    private static void TransformRunText(Run run, Func<string, string> transform)
+    private static void TransformRunText(
+        Run run,
+        Func<string, string> transform,
+        Action<Run>? transformRun = null)
     {
+        transformRun?.Invoke(run);
         if (run.Ruby is { } ruby)
         {
             TransformRubyFragments(ruby.BaseFragments, transform);
@@ -1938,7 +1988,7 @@ public static class MailMerge
         }
 
         if (run.Shape is { } shape)
-            TransformShapeText(shape, transform);
+            TransformShapeText(shape, transform, transformRun);
         if (run.WordArt is { } wordArt)
             wordArt.Text = transform(wordArt.Text);
         if (run.SmartArt is { } smartArt)
@@ -1946,7 +1996,7 @@ public static class MailMerge
         if (run.Chart is { } chart)
             TransformChartText(chart, transform);
         if (run.DrawingGroup is { } drawingGroup)
-            TransformDrawingGroupText(drawingGroup, transform);
+            TransformDrawingGroupText(drawingGroup, transform, transformRun);
     }
 
     private static void TransformRubyFragments(
@@ -1957,10 +2007,13 @@ public static class MailMerge
             fragments[index] = fragments[index] with { Text = transform(fragments[index].Text) };
     }
 
-    private static void TransformShapeText(Shape shape, Func<string, string> transform)
+    private static void TransformShapeText(
+        Shape shape,
+        Func<string, string> transform,
+        Action<Run>? transformRun = null)
     {
         foreach (var paragraph in shape.TextParagraphs)
-            TransformParagraphText(paragraph, transform);
+            TransformParagraphText(paragraph, transform, transformRun);
     }
 
     private static void TransformSmartArtText(SmartArt smartArt, Func<string, string> transform)
@@ -1991,14 +2044,17 @@ public static class MailMerge
                 series.Name = transform(series.Name);
     }
 
-    private static void TransformDrawingGroupText(DrawingGroup group, Func<string, string> transform)
+    private static void TransformDrawingGroupText(
+        DrawingGroup group,
+        Func<string, string> transform,
+        Action<Run>? transformRun = null)
     {
         foreach (var child in group.Children)
         {
             switch (child)
             {
                 case Shape shape:
-                    TransformShapeText(shape, transform);
+                    TransformShapeText(shape, transform, transformRun);
                     break;
                 case WordArt wordArt:
                     wordArt.Text = transform(wordArt.Text);
@@ -2010,7 +2066,7 @@ public static class MailMerge
                     TransformChartText(chart, transform);
                     break;
                 case DrawingGroup nested:
-                    TransformDrawingGroupText(nested, transform);
+                    TransformDrawingGroupText(nested, transform, transformRun);
                     break;
             }
         }
@@ -2018,7 +2074,8 @@ public static class MailMerge
 
     private static void TransformSectionHeadersFootersText(
         SectionHeadersFooters headersFooters,
-        Func<string, string> transform)
+        Func<string, string> transform,
+        Action<Run>? transformRun = null)
     {
         foreach (var headerFooter in new[]
                  {
@@ -2033,7 +2090,7 @@ public static class MailMerge
             if (headerFooter is null)
                 continue;
             foreach (var paragraph in headerFooter.Paragraphs)
-                TransformParagraphText(paragraph, transform);
+                TransformParagraphText(paragraph, transform, transformRun);
         }
     }
 

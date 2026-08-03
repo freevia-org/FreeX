@@ -82,6 +82,39 @@ public class ComplexFieldRoundTripTests
     }
 
     [Fact]
+    public void NativeMailMergeControlFields_EmitInstructionsAndRoundTripCachedLabels()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            $" {MailMerge.NextRecordInstruction} ",
+            $"{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            $" {MailMerge.MergeRecordNumberInstruction} ",
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            $" {MailMerge.MergeSequenceNumberInstruction} ",
+            $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}"));
+        doc.Blocks.Add(paragraph);
+
+        DocumentXml(doc).Descendants(W + "instrText").Select(element => element.Value).Should().Equal(
+            " NEXT ",
+            " MERGEREC ",
+            " MERGESEQ ");
+
+        var fields = RoundTrip(doc).Blocks.OfType<Paragraph>().Single().Runs;
+        fields.Select(run => run.ComplexField!.Keyword).Should().Equal(
+            MailMerge.NextRecordInstruction,
+            MailMerge.MergeRecordNumberInstruction,
+            MailMerge.MergeSequenceNumberInstruction);
+        fields.Select(run => run.Text).Should().Equal(
+            $"{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}",
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}",
+            $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}");
+    }
+
+    [Fact]
     public void ComplexField_PreservesUnmodelledInstructionVerbatim()
     {
         // A field FreeW does not specifically model (here a MERGEFIELD) must still round-trip its raw

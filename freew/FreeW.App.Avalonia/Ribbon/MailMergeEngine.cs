@@ -223,13 +223,13 @@ internal sealed class MailMergeEngine
     }
 
     public void InsertNextRecordField() =>
-        InsertRuleInstruction(MailMerge.NextRecordField);
+        InsertNativeSpecialField(MailMerge.NextRecordField);
 
     public void InsertMergeRecordNumberField() =>
-        InsertRuleInstruction(MailMerge.MergeRecordNumberField);
+        InsertNativeSpecialField(MailMerge.MergeRecordNumberField);
 
     public void InsertMergeSequenceNumberField() =>
-        InsertRuleInstruction(MailMerge.MergeSequenceNumberField);
+        InsertNativeSpecialField(MailMerge.MergeSequenceNumberField);
 
     public void InsertFillInRule()
     {
@@ -300,6 +300,16 @@ internal sealed class MailMergeEngine
     private void InsertRuleInstruction(string instruction)
     {
         _editor.InsertText($"{MailMerge.FieldOpen}{instruction}{MailMerge.FieldClose}");
+    }
+
+    private void InsertNativeSpecialField(string fieldName)
+    {
+        if (!MailMerge.TryGetNativeSpecialFieldInstruction(fieldName, out var instruction))
+            return;
+
+        _editor.InsertComplexField(
+            instruction,
+            $"{MailMerge.FieldOpen}{fieldName}{MailMerge.FieldClose}");
     }
 
     // ── Insert Merge Field ─────────────────────────────────────────────────────────

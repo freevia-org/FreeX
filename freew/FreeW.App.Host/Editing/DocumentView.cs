@@ -12539,7 +12539,10 @@ public sealed class DocumentView : RichTextBox
     /// not blank, and it serialises as the <c>w:fldChar</c>/<c>w:instrText</c> sequence so it round-trips
     /// and supports Alt+F9 / F9.
     /// </summary>
-    public void InsertComplexField(string instruction)
+    public void InsertComplexField(string instruction) =>
+        InsertComplexField(instruction, cachedResult: null);
+
+    public void InsertComplexField(string instruction, string? cachedResult)
     {
         Focus();
         if (string.IsNullOrWhiteSpace(instruction))
@@ -12548,7 +12551,11 @@ public sealed class DocumentView : RichTextBox
         // from a bare "PAGE".
         var normalized = " " + instruction.Trim() + " ";
         var field = new ComplexField(normalized);
-        var cached = ResolveFieldText(ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword), string.Empty, _model, CurrentFileName);
+        var cached = cachedResult ?? ResolveFieldText(
+            ComplexFieldDisplayPlanner.ResolveLiveKind(field.Keyword),
+            string.Empty,
+            _model,
+            CurrentFileName);
         var run = new ModelRun(cached) { ComplexField = field };
         InsertInlineAtCaret(BuildComplexFieldRun(run, _model));
     }

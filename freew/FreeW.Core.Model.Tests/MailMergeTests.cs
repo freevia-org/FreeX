@@ -1426,6 +1426,48 @@ public class MailMergeTests
     }
 
     [Fact]
+    public void MergeRecordWithRules_NativeSpecialFields_UpdateResultsAndPreserveInstructions()
+    {
+        var template = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            $" {MailMerge.NextRecordInstruction} ",
+            $"{MailMerge.FieldOpen}{MailMerge.NextRecordField}{MailMerge.FieldClose}"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            $" {MailMerge.MergeRecordNumberInstruction} ",
+            $"{MailMerge.FieldOpen}{MailMerge.MergeRecordNumberField}{MailMerge.FieldClose}"));
+        paragraph.Runs.Add(Run.ComplexFieldRun(
+            $" {MailMerge.MergeSequenceNumberInstruction} ",
+            $"{MailMerge.FieldOpen}{MailMerge.MergeSequenceNumberField}{MailMerge.FieldClose}"));
+        template.Blocks.Add(paragraph);
+        var state = new MergeState { SequenceNumber = 2 };
+
+        var merged = MailMerge.MergeRecordWithRules(
+            template,
+            new Dictionary<string, string>(),
+            state,
+            recordIndex: 4);
+
+        var fields = merged.Blocks.OfType<Paragraph>().Single().Runs;
+        fields.Select(run => run.ComplexField!.Keyword).Should().Equal(
+            MailMerge.NextRecordInstruction,
+            MailMerge.MergeRecordNumberInstruction,
+            MailMerge.MergeSequenceNumberInstruction);
+        fields.Select(run => run.Text).Should().Equal(string.Empty, "4", "2");
+        state.AdvanceRecordRequested.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(MailMerge.NextRecordField, MailMerge.NextRecordInstruction)]
+    [InlineData(MailMerge.MergeRecordNumberField, MailMerge.MergeRecordNumberInstruction)]
+    [InlineData(MailMerge.MergeSequenceNumberField, MailMerge.MergeSequenceNumberInstruction)]
+    public void TryGetNativeSpecialFieldInstruction_MapsVisibleLabels(string label, string expected)
+    {
+        MailMerge.TryGetNativeSpecialFieldInstruction(label, out var instruction).Should().BeTrue();
+        instruction.Should().Be(expected);
+    }
+
+    [Fact]
     public void MergeAllWithRules_NextRecordIf_AdvancesOnlyWhenConditionMatches()
     {
         var instruction = MergeRuleEvaluator.BuildNextRecordIfInstruction(
