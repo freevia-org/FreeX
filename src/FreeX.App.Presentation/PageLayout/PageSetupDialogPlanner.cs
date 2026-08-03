@@ -95,6 +95,10 @@ public sealed record PageSetupDialogSurfaceInput
     public int OrientationIndex { get; init; }
     public int PaperSizeIndex { get; init; }
     public string MarginsText { get; init; } = "";
+    public string? LeftMarginText { get; init; }
+    public string? RightMarginText { get; init; }
+    public string? TopMarginText { get; init; }
+    public string? BottomMarginText { get; init; }
     public string HeaderMarginText { get; init; } = "";
     public string FooterMarginText { get; init; } = "";
     public bool CenterHorizontally { get; init; }
@@ -156,6 +160,12 @@ public static class PageSetupDialogPlanner
 
     public const string OrientationBoxAutomationId = "PageSetupOrientationBox";
     public const string PaperSizeBoxAutomationId = "PageSetupPaperSizeBox";
+    public const string LeftMarginBoxAutomationId = "PageSetupLeftMarginBox";
+    public const string RightMarginBoxAutomationId = "PageSetupRightMarginBox";
+    public const string TopMarginBoxAutomationId = "PageSetupTopMarginBox";
+    public const string BottomMarginBoxAutomationId = "PageSetupBottomMarginBox";
+    public const string HeaderMarginBoxAutomationId = "PageSetupHeaderMarginBox";
+    public const string FooterMarginBoxAutomationId = "PageSetupFooterMarginBox";
     public const string HeaderPresetBoxAutomationId = "PageSetupHeaderPresetBox";
     public const string FooterPresetBoxAutomationId = "PageSetupFooterPresetBox";
     public const string PageOrderBoxAutomationId = "PageSetupPageOrderBox";
@@ -258,7 +268,16 @@ public static class PageSetupDialogPlanner
         {
             Orientation = OrientationChoices.ValueAt(input.OrientationIndex),
             PaperSize = PaperSizeChoices.ValueAt(input.PaperSizeIndex),
-            MarginsText = input.MarginsText,
+            MarginsText = input.LeftMarginText is not null &&
+                input.RightMarginText is not null &&
+                input.TopMarginText is not null &&
+                input.BottomMarginText is not null
+                    ? BuildMarginsText(new PageSetupMarginTextFields(
+                        input.LeftMarginText,
+                        input.RightMarginText,
+                        input.TopMarginText,
+                        input.BottomMarginText))
+                    : input.MarginsText,
             HeaderMarginText = input.HeaderMarginText,
             FooterMarginText = input.FooterMarginText,
             CenterHorizontally = input.CenterHorizontally,

@@ -496,16 +496,24 @@ public sealed partial class MainWindow
         AutomationProperties.SetHelpText(printQualityBox, UiText.Get("PageSetup_PrintQualityHelp"));
 
         // --- Margins tab ---
-        var marginsBox = new TextBox { Text = initial.MarginsText, MinWidth = 220 };
-        ApplyPageLayoutTextBoxChrome(marginsBox);
-        AutomationProperties.SetAutomationId(marginsBox, "PageSetupMarginsBox");
-        AutomationProperties.SetHelpText(marginsBox, UiText.Get("PageSetup_MarginsHelp"));
+        var leftMarginBox = new TextBox { Text = surface.Margins.Left, MinWidth = PageSetupDialogPlanner.FieldMinWidth };
+        ApplyPageLayoutTextBoxChrome(leftMarginBox);
+        AutomationProperties.SetAutomationId(leftMarginBox, PageSetupDialogPlanner.LeftMarginBoxAutomationId);
+        var rightMarginBox = new TextBox { Text = surface.Margins.Right, MinWidth = PageSetupDialogPlanner.FieldMinWidth };
+        ApplyPageLayoutTextBoxChrome(rightMarginBox);
+        AutomationProperties.SetAutomationId(rightMarginBox, PageSetupDialogPlanner.RightMarginBoxAutomationId);
+        var topMarginBox = new TextBox { Text = surface.Margins.Top, MinWidth = PageSetupDialogPlanner.FieldMinWidth };
+        ApplyPageLayoutTextBoxChrome(topMarginBox);
+        AutomationProperties.SetAutomationId(topMarginBox, PageSetupDialogPlanner.TopMarginBoxAutomationId);
+        var bottomMarginBox = new TextBox { Text = surface.Margins.Bottom, MinWidth = PageSetupDialogPlanner.FieldMinWidth };
+        ApplyPageLayoutTextBoxChrome(bottomMarginBox);
+        AutomationProperties.SetAutomationId(bottomMarginBox, PageSetupDialogPlanner.BottomMarginBoxAutomationId);
         var headerMarginBox = new TextBox { Text = surface.HeaderMarginText, MinWidth = 220 };
         ApplyPageLayoutTextBoxChrome(headerMarginBox);
-        AutomationProperties.SetAutomationId(headerMarginBox, "PageSetupHeaderMarginBox");
+        AutomationProperties.SetAutomationId(headerMarginBox, PageSetupDialogPlanner.HeaderMarginBoxAutomationId);
         var footerMarginBox = new TextBox { Text = surface.FooterMarginText, MinWidth = 220 };
         ApplyPageLayoutTextBoxChrome(footerMarginBox);
-        AutomationProperties.SetAutomationId(footerMarginBox, "PageSetupFooterMarginBox");
+        AutomationProperties.SetAutomationId(footerMarginBox, PageSetupDialogPlanner.FooterMarginBoxAutomationId);
         var centerHorizontallyCheck = new CheckBox
         {
             Content = StripDisplayMnemonic(UiText.Get("PageSetup_CenterHorizontally")),
@@ -802,7 +810,10 @@ public sealed partial class MainWindow
         {
             OrientationIndex = orientationBox.SelectedIndex,
             PaperSizeIndex = paperBox.SelectedIndex,
-            MarginsText = marginsBox.Text ?? "",
+            LeftMarginText = leftMarginBox.Text ?? "",
+            RightMarginText = rightMarginBox.Text ?? "",
+            TopMarginText = topMarginBox.Text ?? "",
+            BottomMarginText = bottomMarginBox.Text ?? "",
             HeaderMarginText = headerMarginBox.Text ?? "",
             FooterMarginText = footerMarginBox.Text ?? "",
             CenterHorizontally = centerHorizontallyCheck.IsChecked == true,
@@ -919,28 +930,57 @@ public sealed partial class MainWindow
             },
         };
 
+        var marginsGrid = new Grid
+        {
+            Margin = new Thickness(14),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
+        };
+
+        void AddMarginField(int row, string label, TextBox value)
+        {
+            var labelControl = PageSetupLabel(label);
+            labelControl.Margin = new Thickness(0, 0, 8, 8);
+            value.Margin = new Thickness(0, 0, 0, 8);
+            Grid.SetRow(labelControl, row);
+            Grid.SetColumn(labelControl, 0);
+            Grid.SetRow(value, row);
+            Grid.SetColumn(value, 1);
+            marginsGrid.Children.Add(labelControl);
+            marginsGrid.Children.Add(value);
+        }
+
+        AddMarginField(0, UiText.Get("PageSetup_Left"), leftMarginBox);
+        AddMarginField(1, UiText.Get("PageSetup_Right"), rightMarginBox);
+        AddMarginField(2, UiText.Get("PageSetup_Top"), topMarginBox);
+        AddMarginField(3, UiText.Get("PageSetup_Bottom"), bottomMarginBox);
+        AddMarginField(4, UiText.Get("PageSetup_HeaderMargin"), headerMarginBox);
+        AddMarginField(5, UiText.Get("PageSetup_FooterMargin"), footerMarginBox);
+
+        var centerOnPageLabel = new TextBlock
+        {
+            Text = UiText.Get("PageSetup_CenterOnPage"),
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(0, 6, 8, 4),
+        };
+        Grid.SetRow(centerOnPageLabel, 6);
+        Grid.SetColumn(centerOnPageLabel, 0);
+        Grid.SetRow(centerHorizontallyCheck, 6);
+        Grid.SetColumn(centerHorizontallyCheck, 1);
+        centerHorizontallyCheck.Margin = new Thickness(0, 4, 0, 4);
+        Grid.SetRow(centerVerticallyCheck, 7);
+        Grid.SetColumn(centerVerticallyCheck, 1);
+        centerVerticallyCheck.Margin = new Thickness(0, 0, 0, 4);
+        marginsGrid.Children.Add(centerOnPageLabel);
+        marginsGrid.Children.Add(centerHorizontallyCheck);
+        marginsGrid.Children.Add(centerVerticallyCheck);
+
         var marginsTab = new TabItem
         {
             Header = StripDisplayMnemonic(UiText.Get("PageSetup_MarginsTab")),
             Content = new ScrollViewer
             {
-                Content = new StackPanel
-                {
-                    Margin = new Thickness(14),
-                    Spacing = 8,
-                    Children =
-                    {
-                        PageSetupLabel(UiText.Get("PageSetup_MarginsLabel")),
-                        marginsBox,
-                        PageSetupLabel(UiText.Get("PageSetup_HeaderMargin")),
-                        headerMarginBox,
-                        PageSetupLabel(UiText.Get("PageSetup_FooterMargin")),
-                        footerMarginBox,
-                        new TextBlock { Text = UiText.Get("PageSetup_CenterOnPage"), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 6, 0, 0) },
-                        centerHorizontallyCheck,
-                        centerVerticallyCheck,
-                    },
-                },
+                Content = marginsGrid,
             },
         };
 
@@ -1142,11 +1182,11 @@ public sealed partial class MainWindow
             target switch
             {
                 PageSetupDialogFocusTarget.PaperSize => paperBox,
-                PageSetupDialogFocusTarget.Margins => marginsBox,
-                PageSetupDialogFocusTarget.LeftMargin => marginsBox,
-                PageSetupDialogFocusTarget.RightMargin => marginsBox,
-                PageSetupDialogFocusTarget.TopMargin => marginsBox,
-                PageSetupDialogFocusTarget.BottomMargin => marginsBox,
+                PageSetupDialogFocusTarget.Margins => leftMarginBox,
+                PageSetupDialogFocusTarget.LeftMargin => leftMarginBox,
+                PageSetupDialogFocusTarget.RightMargin => rightMarginBox,
+                PageSetupDialogFocusTarget.TopMargin => topMarginBox,
+                PageSetupDialogFocusTarget.BottomMargin => bottomMarginBox,
                 PageSetupDialogFocusTarget.HeaderMargin => headerMarginBox,
                 PageSetupDialogFocusTarget.FooterMargin => footerMarginBox,
                 PageSetupDialogFocusTarget.ScalePercent => scalePercentBox,
@@ -1175,8 +1215,11 @@ public sealed partial class MainWindow
         PageSetupDialogValidationFocusState CreateValidationFocusState() =>
             new()
             {
-                HasSeparateMarginFields = false,
-                MarginsText = marginsBox.Text ?? "",
+                HasSeparateMarginFields = true,
+                LeftMarginText = leftMarginBox.Text ?? "",
+                RightMarginText = rightMarginBox.Text ?? "",
+                TopMarginText = topMarginBox.Text ?? "",
+                BottomMarginText = bottomMarginBox.Text ?? "",
                 HeaderMarginText = headerMarginBox.Text ?? "",
                 FooterMarginText = footerMarginBox.Text ?? "",
                 ScalingMode = fitRadio.IsChecked == true

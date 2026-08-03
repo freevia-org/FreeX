@@ -56,4 +56,23 @@ public sealed class ParityDemoWorkbookFactoryTests
             for (uint col = 1; col <= 5; col++)
                 first.GetValue(row, col).Should().Be(second.GetValue(row, col), $"cell ({row},{col}) must be stable");
     }
+
+    [Fact]
+    public void Create_UsesTheSamePageSetupDefaultsForBothParityHosts()
+    {
+        var sheet = ParityDemoWorkbookFactory.Create().Sheets.Single();
+
+        sheet.PageOrientation.Should().Be(WorksheetPageOrientation.Landscape);
+        sheet.PaperSize.Should().Be(WorksheetPaperSize.Letter);
+        sheet.PageMargins.Should().Be(WorksheetPageMargins.Normal);
+        sheet.HeaderMargin.Should().Be(0.3);
+        sheet.FooterMargin.Should().Be(0.3);
+        sheet.ScaleToFit.Should().Be(new WorksheetScaleToFit(90, null, null));
+        sheet.PageOrder.Should().Be(WorksheetPageOrder.OverThenDown);
+        sheet.PrintArea.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 9, 7)));
+        sheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(1, 1));
+        sheet.PrintTitleColumns.Should().Be(new WorksheetRepeatRange(1, 1));
+    }
 }

@@ -139,6 +139,32 @@ public sealed class PageSetupDialogPlannerTests
     }
 
     [Fact]
+    public void BuildFields_ComposesSeparateMarginFieldsInWpfOrder()
+    {
+        var fields = PageSetupDialogPlanner.BuildFields(
+            new PageSetupDialogFields(),
+            new PageSetupDialogSurfaceInput
+            {
+                LeftMarginText = "0.7",
+                RightMarginText = "0.8",
+                TopMarginText = "0.9",
+                BottomMarginText = "1.0",
+            });
+
+        fields.MarginsText.Should().Be("0.7,0.8,0.9,1.0");
+    }
+
+    [Fact]
+    public void BuildFields_PreservesLegacyCombinedMarginsWhenSeparateFieldsAreUnavailable()
+    {
+        var fields = PageSetupDialogPlanner.BuildFields(
+            new PageSetupDialogFields(),
+            new PageSetupDialogSurfaceInput { MarginsText = "0.7,0.8,0.9,1" });
+
+        fields.MarginsText.Should().Be("0.7,0.8,0.9,1");
+    }
+
+    [Fact]
     public void PresetHelpers_ApplyHeaderAndFooterCenterChoices()
     {
         PageSetupDialogPlanner.ApplyHeaderPreset(

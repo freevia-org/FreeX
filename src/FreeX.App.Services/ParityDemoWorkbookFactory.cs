@@ -77,6 +77,18 @@ public static class ParityDemoWorkbookFactory
         }
 
         // Keep the Page Setup Header/Footer capture deterministic across WPF and Avalonia.
+        sheet.PageOrientation = WorksheetPageOrientation.Landscape;
+        sheet.PaperSize = WorksheetPaperSize.Letter;
+        sheet.PageMargins = WorksheetPageMargins.Normal;
+        sheet.HeaderMargin = 0.3;
+        sheet.FooterMargin = 0.3;
+        sheet.ScaleToFit = new WorksheetScaleToFit(90, null, null);
+        sheet.PageOrder = WorksheetPageOrder.OverThenDown;
+        sheet.PrintArea = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 9, 7));
+        sheet.PrintTitleRows = new WorksheetRepeatRange(1, 1);
+        sheet.PrintTitleColumns = new WorksheetRepeatRange(1, 1);
         sheet.PageHeader = new WorksheetHeaderFooter("", "Page Layout Tour", "");
         sheet.PageFooter = new WorksheetHeaderFooter("", "Page &[Page] of &[Pages]", "");
 
