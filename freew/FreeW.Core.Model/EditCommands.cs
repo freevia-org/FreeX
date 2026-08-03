@@ -4561,26 +4561,10 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
         target.ShowLegend = source.ShowLegend;
         target.CategoryAxisTitle = source.CategoryAxisTitle;
         target.ValueAxisTitle = source.ValueAxisTitle;
-        target.WidthPt = source.WidthPt;
-        target.HeightPt = source.HeightPt;
-        target.RotationAngle = source.RotationAngle;
-        target.FlipH = source.FlipH;
-        target.FlipV = source.FlipV;
-        target.Placement = source.Placement is null
-            ? null
-            : new FloatingPlacement
-            {
-                Wrapping = source.Placement.Wrapping,
-                HorizontalOffsetPt = source.Placement.HorizontalOffsetPt,
-                VerticalOffsetPt = source.Placement.VerticalOffsetPt,
-                HorizontalAnchor = source.Placement.HorizontalAnchor,
-                VerticalAnchor = source.Placement.VerticalAnchor,
-                ZOrderIndex = source.Placement.ZOrderIndex,
-            };
-        target.StyleId = source.StyleId;
-        target.ColorSchemeId = source.ColorSchemeId;
-        target.QuickLayoutId = source.QuickLayoutId;
-        target.NativeVisualSettings = source.NativeVisualSettings;
+        if (source.WidthPt > 0)
+            target.WidthPt = source.WidthPt;
+        if (source.HeightPt > 0)
+            target.HeightPt = source.HeightPt;
         target.Categories.Clear();
         target.Categories.AddRange(source.Categories);
         target.Series.Clear();

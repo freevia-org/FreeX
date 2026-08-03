@@ -178,12 +178,34 @@ public sealed class ChartEditCommandTests
     {
         var (_, bus, chart) = NewChartDoc();
         chart.Title = "Old";
+        chart.WidthPt = 420;
+        chart.HeightPt = 260;
+        chart.RotationAngle = 25;
+        chart.FlipH = true;
+        chart.StyleId = 7;
+        chart.ColorSchemeId = "mono-blue";
+        chart.QuickLayoutId = 4;
+        chart.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.InFront,
+            HorizontalOffsetPt = 18,
+            VerticalOffsetPt = 24,
+            ZOrderIndex = 5,
+        };
+        var placement = chart.Placement;
         var replacement = Chart.Create(
             ChartKind.Line,
             ["Jan", "Feb", "Mar"],
             [5.0, 6.0, 7.0],
             seriesName: "Revenue",
             title: "Monthly Revenue");
+        replacement.WidthPt = 0;
+        replacement.HeightPt = 0;
+        replacement.RotationAngle = 90;
+        replacement.StyleId = 2;
+        replacement.ColorSchemeId = "colorful-2";
+        replacement.QuickLayoutId = 8;
+        replacement.Placement = new FloatingPlacement { Wrapping = ImageWrapping.Behind };
 
         bus.Execute(new ReplaceChartDataCommand(0, 0, replacement));
 
@@ -193,6 +215,14 @@ public sealed class ChartEditCommandTests
         chart.Series.Should().ContainSingle();
         chart.Series[0].Name.Should().Be("Revenue");
         chart.Series[0].Values.Should().Equal(5.0, 6.0, 7.0);
+        chart.WidthPt.Should().Be(420);
+        chart.HeightPt.Should().Be(260);
+        chart.RotationAngle.Should().Be(25);
+        chart.FlipH.Should().BeTrue();
+        chart.StyleId.Should().Be(7);
+        chart.ColorSchemeId.Should().Be("mono-blue");
+        chart.QuickLayoutId.Should().Be(4);
+        chart.Placement.Should().BeSameAs(placement);
 
         bus.Undo().Should().BeTrue();
         chart.Kind.Should().Be(ChartKind.Column);
@@ -200,6 +230,8 @@ public sealed class ChartEditCommandTests
         chart.Categories.Should().Equal("Q1", "Q2");
         chart.Series[0].Name.Should().Be("Sales");
         chart.Series[0].Values.Should().Equal(1.0, 2.0);
+        chart.StyleId.Should().Be(7);
+        chart.Placement.Should().BeSameAs(placement);
 
         bus.Redo().Should().BeTrue();
         chart.Kind.Should().Be(ChartKind.Line);

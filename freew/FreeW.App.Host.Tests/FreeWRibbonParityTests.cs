@@ -1887,7 +1887,7 @@ public sealed class FreeWRibbonParityTests
     }
 
     [StaFact]
-    public void ChartDesign_SetSizeMutatesWidthAndHeight()
+    public void ChartDesign_SetSizeMutatesWidthAndHeightAndIsUndoable()
     {
         var editor = new DocumentView();
         editor.Model.Blocks.Clear();
@@ -1898,13 +1898,21 @@ public sealed class FreeWRibbonParityTests
             .FirstOrDefault(c => c is not null);
 
         chart.Should().NotBeNull();
+        var oldWidth = chart!.WidthPt;
+        var oldHeight = chart.HeightPt;
         editor.SetSelectedChartSize(400, 300);
-        chart!.WidthPt.Should().Be(400);
+        chart.WidthPt.Should().Be(400);
+        chart.HeightPt.Should().Be(300);
+        editor.Commands.Undo().Should().BeTrue();
+        chart.WidthPt.Should().Be(oldWidth);
+        chart.HeightPt.Should().Be(oldHeight);
+        editor.Commands.Redo().Should().BeTrue();
+        chart.WidthPt.Should().Be(400);
         chart.HeightPt.Should().Be(300);
     }
 
     [StaFact]
-    public void ChartDesign_ReplaceChartDataMutatesModel()
+    public void ChartDesign_ReplaceChartDataMutatesModelAndIsUndoable()
     {
         var editor = new DocumentView();
         editor.Model.Blocks.Clear();
@@ -1915,15 +1923,34 @@ public sealed class FreeWRibbonParityTests
             .FirstOrDefault(c => c is not null);
 
         chart.Should().NotBeNull();
+        chart!.StyleId = 7;
+        chart.ColorSchemeId = "mono-blue";
+        chart.RotationAngle = 20;
+        var oldCategories = chart.Categories.ToArray();
+        var oldValues = chart.Series[0].Values.ToArray();
 
         var replacement = Chart.Create(ChartKind.Bar, ["Jan", "Feb", "Mar"], [5.0, 6.0, 7.0], seriesName: "Revenue");
+        replacement.StyleId = 2;
+        replacement.RotationAngle = 90;
         editor.ReplaceSelectedChartData(replacement);
 
-        chart!.Kind.Should().Be(ChartKind.Bar);
+        chart.Kind.Should().Be(ChartKind.Bar);
         chart.Categories.Should().Equal("Jan", "Feb", "Mar");
         chart.Series.Should().HaveCount(1);
         chart.Series[0].Name.Should().Be("Revenue");
         chart.Series[0].Values.Should().Equal(5.0, 6.0, 7.0);
+        chart.StyleId.Should().Be(7);
+        chart.ColorSchemeId.Should().Be("mono-blue");
+        chart.RotationAngle.Should().Be(20);
+
+        editor.Commands.Undo().Should().BeTrue();
+        chart.Kind.Should().Be(ChartKind.Column);
+        chart.Categories.Should().Equal(oldCategories);
+        chart.Series[0].Values.Should().Equal(oldValues);
+        chart.StyleId.Should().Be(7);
+        editor.Commands.Redo().Should().BeTrue();
+        chart.Kind.Should().Be(ChartKind.Bar);
+        chart.Categories.Should().Equal("Jan", "Feb", "Mar");
     }
 
     [StaFact]
