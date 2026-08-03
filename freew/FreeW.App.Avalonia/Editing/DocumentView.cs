@@ -20901,7 +20901,7 @@ public sealed class DocumentView : Control
                     cellCaret.Row,
                     cellCaret.Col,
                     cellCaret.ParaIdx);
-                if (paragraph is null || !IsEditable(paragraph))
+                if (paragraph is null || !IsComplexFieldInsertable(paragraph))
                 {
                     _bus.AbortUndoGroup();
                     return;
@@ -20921,7 +20921,7 @@ public sealed class DocumentView : Control
             {
                 if (NormalizedSelection() is not null)
                     DeleteSelection();
-                if (CurrentParagraph() is not { } paragraph || !IsEditable(paragraph))
+                if (CurrentParagraph() is not { } paragraph || !IsComplexFieldInsertable(paragraph))
                 {
                     _bus.AbortUndoGroup();
                     return;
@@ -22866,6 +22866,12 @@ public sealed class DocumentView : Control
     /// <summary>Char-level editing only on paragraphs whose runs are all plain text (no images/fields/controls).</summary>
     private bool IsEditable(Paragraph paragraph) =>
         !IsEditingLocked && IsPlainTextEditable(paragraph);
+
+    private bool IsComplexFieldInsertable(Paragraph paragraph) =>
+        !IsEditingLocked
+        && paragraph.Runs.All(r => r.Image is null && r.Equation is null && r.FieldKind == RunFieldKind.None
+            && r.FootnoteId is null && r.EndnoteId is null && r.Control is null
+            && !IsFloatingDrawingRun(r));
 
     private static bool IsPlainTextEditable(Paragraph paragraph) =>
         // AV-COMMENT: a CommentId is a soft run mark (like a hyperlink) — it must NOT make the paragraph

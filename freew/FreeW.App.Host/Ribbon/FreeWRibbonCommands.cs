@@ -1893,8 +1893,8 @@ internal static class FreeWRibbonCommands
         registry.Register("freew.merge-address-block", new InsertAddressBlockCommand(editor, mergeSession));
         registry.Register("freew.merge-greeting-line", new InsertGreetingLineCommand(editor, mergeSession));
         registry.Register("freew.merge-match-fields", new MatchFieldsCommand(editor, mergeSession));
-        // Special merge fields: «Next Record» and «Merge Record #» (inserted as plain placeholders;
-        // the engine recognises them during substitution via SubstituteSpecial).
+        // Special merge fields use Word's native NEXT/MERGEREC/MERGESEQ instructions. Their cached
+        // result remains the familiar guillemet label until a merge evaluates the field.
         registry.Register("freew.merge-next-record", new InsertSpecialMergeFieldCommand(editor, MailMerge.NextRecordField));
         registry.Register("freew.merge-record-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeRecordNumberField));
         registry.Register("freew.merge-sequence-number", new InsertSpecialMergeFieldCommand(editor, MailMerge.MergeSequenceNumberField));
@@ -6382,13 +6382,20 @@ internal static class FreeWRibbonCommands
         }
     }
 
-    // Mailings > Rules (special fields): insert «Next Record» or «Merge Record #» as a plain placeholder.
-    // The engine's SubstituteSpecial path recognises these names and handles them at merge time.
+    // Mailings > Rules (special fields): insert a native Word field while retaining the familiar label.
     private sealed class InsertSpecialMergeFieldCommand(DocumentView editor, string fieldName) : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
         {
             editor.Focus();
+            if (MailMerge.TryGetNativeSpecialFieldInstruction(fieldName, out var instruction))
+            {
+                editor.InsertComplexField(
+                    instruction,
+                    $"{MailMerge.FieldOpen}{fieldName}{MailMerge.FieldClose}");
+                return;
+            }
+
             editor.InsertText($"{MailMerge.FieldOpen}{fieldName}{MailMerge.FieldClose}");
         }
     }

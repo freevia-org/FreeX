@@ -676,13 +676,22 @@ public sealed class MailingsTabTests
         Execute(registry, "freew.merge-rule-if");
         Execute(registry, "freew.merge-rule-skip-record-if");
         Execute(registry, "freew.merge-rule-next-record-if");
-        Execute(registry, "freew.merge-next-record");
-        Execute(registry, "freew.merge-record-number");
-        Execute(registry, "freew.merge-sequence-number");
         Execute(registry, "freew.merge-rule-fill-in");
         Execute(registry, "freew.merge-rule-ask");
         Execute(registry, "freew.merge-rule-set");
         Execute(registry, "freew.merge-rule-ref");
+        Execute(registry, "freew.merge-next-record");
+        Execute(registry, "freew.merge-record-number");
+        Execute(registry, "freew.merge-sequence-number");
+
+        NativeFields().Select(run => run.ComplexField!.Keyword).Should().BeEquivalentTo(
+            new[]
+            {
+                MailMerge.NextRecordInstruction,
+                MailMerge.MergeRecordNumberInstruction,
+                MailMerge.MergeSequenceNumberInstruction
+            },
+            "each special-field command must retain the previously inserted native fields");
 
         var text = PlainText(view.Document);
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildIfInstruction(
@@ -699,13 +708,24 @@ public sealed class MailingsTabTests
             condition.FieldName,
             condition.Operator,
             condition.Value)));
-        text.Should().Contain(Wrap(MailMerge.NextRecordField));
-        text.Should().Contain(Wrap(MailMerge.MergeRecordNumberField));
-        text.Should().Contain(Wrap(MailMerge.MergeSequenceNumberField));
+        var nativeFields = NativeFields();
+        nativeFields.ToDictionary(run => run.ComplexField!.Keyword, run => run.Text).Should().BeEquivalentTo(
+            new Dictionary<string, string>
+            {
+                [MailMerge.NextRecordInstruction] = Wrap(MailMerge.NextRecordField),
+                [MailMerge.MergeRecordNumberInstruction] = Wrap(MailMerge.MergeRecordNumberField),
+                [MailMerge.MergeSequenceNumberInstruction] = Wrap(MailMerge.MergeSequenceNumberField)
+            });
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildFillInInstruction("CustomerCode")));
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildAskInstruction("CustomerCode", "Enter code")));
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildSetInstruction("CustomerCode", "Enter code")));
         text.Should().Contain(Wrap(MergeRuleEvaluator.BuildRefInstruction("CustomerCode")));
+
+        List<Run> NativeFields() => view.Document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.ComplexField is not null)
+            .ToList();
     }
 
     [Fact]
