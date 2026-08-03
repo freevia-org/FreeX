@@ -271,6 +271,18 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartPointOptionsDialog_CanStartAtHitPoint()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartPointOptionsDialog(sess, initialSeriesIndex: 1, initialPointIndex: 2);
+
+        var options = dialog.BuildCommitPlanForTests();
+
+        options.SeriesIndex.Should().Be(1);
+        options.PointIndex.Should().Be(2);
+    }
+
+    [StaFact]
     public void ChartSeriesOptionsDialog_UsesScrollableBodyAndFixedActionRow()
     {
         var (sess, _) = MakeSession();
