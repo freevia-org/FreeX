@@ -122,6 +122,52 @@ public sealed class DataBoundContentControlRoundTripTests
         document.Paragraphs.Single().Runs.Single().Text.Should().Be("Updated display");
     }
 
+    [Theory]
+    [InlineData("true", true, "2611")]
+    [InlineData("1", true, "2611")]
+    [InlineData("false", false, "2610")]
+    [InlineData("0", false, "2610")]
+    public void BoundCheckBox_RefreshesBooleanStateAndAuthoredGlyph(
+        string storedValue,
+        bool expectedChecked,
+        string expectedGlyphCodePoint)
+    {
+        using var input = BuildPackage(
+            itemBytes: Encoding.UTF8.GetBytes(
+                $"<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>{storedValue}</name></root>"),
+            controlElement: "checkBox");
+
+        var document = DocxReader.Read(input);
+        var run = document.Paragraphs.Single().Runs.Single();
+
+        run.Control!.Checked.Should().Be(expectedChecked);
+        run.Text.Should().Be(char.ConvertFromUtf32(Convert.ToInt32(expectedGlyphCodePoint, 16)));
+
+        var saved = Write(document);
+        XNamespace w14 = "http://schemas.microsoft.com/office/word/2010/wordml";
+        var savedDocument = XDocument.Load(new MemoryStream(EntryBytes(saved, "word/document.xml")));
+        savedDocument.Descendants(w14 + "checked").Should().ContainSingle()
+            .Which.Attribute(w14 + "val")!.Value.Should().Be(expectedChecked ? "1" : "0");
+
+        var reopened = DocxReader.Read(new MemoryStream(saved));
+        reopened.Paragraphs.Single().Runs.Single().Control!.Checked.Should().Be(expectedChecked);
+    }
+
+    [Fact]
+    public void BoundCheckBox_InvalidBooleanPreservesSerializedStateAndDisplay()
+    {
+        using var input = BuildPackage(
+            itemBytes: Encoding.UTF8.GetBytes(
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?><root xmlns=\"urn:freew:test\"><name>yes</name></root>"),
+            controlElement: "checkBox");
+
+        var document = DocxReader.Read(input);
+        var run = document.Paragraphs.Single().Runs.Single();
+
+        run.Control!.Checked.Should().BeFalse();
+        run.Text.Should().Be("Original display value");
+    }
+
     [Fact]
     public void BoundBlockPlainTextControl_RefreshesDisplayedTextFromCustomXmlOnOpen()
     {
@@ -261,6 +307,17 @@ public sealed class DataBoundContentControlRoundTripTests
     {
         if (controlElement == "text")
             return "<w:text/>";
+
+        if (controlElement == "checkBox")
+        {
+            return """
+                <w14:checkbox xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
+                  <w14:checked w14:val="0"/>
+                  <w14:checkedState w14:val="2611" w14:font="Segoe UI Symbol"/>
+                  <w14:uncheckedState w14:val="2610" w14:font="Segoe UI Symbol"/>
+                </w14:checkbox>
+                """;
+        }
 
         var items = string.Concat((listItems ?? []).Select(item =>
             $"<w:listItem w:displayText=\"{item.DisplayText}\" w:value=\"{item.Value}\"/>"));
