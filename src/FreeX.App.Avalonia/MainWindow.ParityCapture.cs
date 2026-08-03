@@ -1555,7 +1555,7 @@ public sealed partial class MainWindow
             });
 
     private Task ShowAddWatchParityDialogAsync() =>
-        ShowAddWatchDialogAsync("Sheet1!$B$2");
+        ShowAddWatchDialogAsync(AddWatchDialogPlanner.ParitySelectedRangeText);
 
     private async Task ShowRenameSheetParityDialogAsync() =>
         await ShowRenameSheetDialogAsync(_session.ActiveSheet.Name);

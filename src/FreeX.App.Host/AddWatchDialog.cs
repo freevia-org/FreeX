@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using FreeX.App.Services;
 using Free.Shared.Shell.Wpf;
 
 namespace FreeX.App.Host;
@@ -11,24 +12,35 @@ public sealed class AddWatchDialog : DialogWindow
 
     public AddWatchDialog(string selectedRangeText)
     {
-        Title = UiText.Get("AddWatch_Title");
-        Width = 360;
-        Height = 170;
+        Title = UiText.Get(AddWatchDialogPlanner.TitleKey);
+        Width = AddWatchDialogPlanner.Width;
+        Height = AddWatchDialogPlanner.Height;
         ResizeMode = ResizeMode.NoResize;
 
-        var root = new DockPanel { Margin = new Thickness(12) };
+        var root = new DockPanel { Margin = new Thickness(AddWatchDialogPlanner.RootMargin) };
 
-        var add = new Button { Content = UiText.Get("AddWatch_AddButton"), Width = 76 };
-        AutomationProperties.SetName(add, UiText.Get("AddWatch_AddAutomationName"));
-        AutomationProperties.SetAutomationId(add, "AddWatchAddButton");
-        AutomationProperties.SetHelpText(add, UiText.Get("AddWatch_AddHelpText"));
+        var add = new Button
+        {
+            Content = UiText.Get(AddWatchDialogPlanner.AddButtonKey),
+            Width = AddWatchDialogPlanner.ButtonWidth
+        };
+        AutomationProperties.SetName(add, UiText.Get(AddWatchDialogPlanner.AddAutomationNameKey));
+        AutomationProperties.SetAutomationId(add, AddWatchDialogPlanner.AddButtonAutomationId);
+        AutomationProperties.SetHelpText(add, UiText.Get(AddWatchDialogPlanner.AddHelpTextKey));
         add.Click += (_, _) => DialogResult = true;
-        var cancel = new Button { Content = UiText.Cancel, Width = 76 };
-        AutomationProperties.SetName(cancel, UiText.Get("AddWatch_CancelAutomationName"));
-        AutomationProperties.SetAutomationId(cancel, "AddWatchCancelButton");
-        AutomationProperties.SetHelpText(cancel, UiText.Get("AddWatch_CancelHelpText"));
+        var cancel = new Button
+        {
+            Content = UiText.Get(AddWatchDialogPlanner.CancelButtonKey),
+            Width = AddWatchDialogPlanner.ButtonWidth
+        };
+        AutomationProperties.SetName(cancel, UiText.Get(AddWatchDialogPlanner.CancelAutomationNameKey));
+        AutomationProperties.SetAutomationId(cancel, AddWatchDialogPlanner.CancelButtonAutomationId);
+        AutomationProperties.SetHelpText(cancel, UiText.Get(AddWatchDialogPlanner.CancelHelpTextKey));
 
-        var buttons = DialogButtonRowFactory.Create(add, cancel, new Thickness(0, 12, 0, 0));
+        var buttons = DialogButtonRowFactory.Create(
+            add,
+            cancel,
+            new Thickness(0, AddWatchDialogPlanner.ActionRowTopMargin, 0, 0));
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
 
@@ -36,13 +48,13 @@ public sealed class AddWatchDialog : DialogWindow
         root.Children.Add(body);
         _rangeBox.Text = selectedRangeText;
         _rangeBox.IsReadOnly = true;
-        _rangeBox.Margin = new Thickness(0, 0, 0, 8);
-        AutomationProperties.SetName(_rangeBox, UiText.Get("AddWatch_SelectedRangeAutomationName"));
-        AutomationProperties.SetAutomationId(_rangeBox, "AddWatchSelectedRangeBox");
-        AutomationProperties.SetHelpText(_rangeBox, UiText.Get("AddWatch_SelectedRangeHelpText"));
+        _rangeBox.Margin = new Thickness(0, 0, 0, AddWatchDialogPlanner.RangeBottomMargin);
+        AutomationProperties.SetName(_rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeAutomationNameKey));
+        AutomationProperties.SetAutomationId(_rangeBox, AddWatchDialogPlanner.SelectedRangeAutomationId);
+        AutomationProperties.SetHelpText(_rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeHelpTextKey));
         body.Children.Add(new Label
         {
-            Content = UiText.Get("AddWatch_SelectedRangeLabel"),
+            Content = UiText.Get(AddWatchDialogPlanner.SelectedRangeLabelKey),
             Target = _rangeBox,
             Padding = new Thickness(0),
             FontWeight = FontWeights.SemiBold,
@@ -51,7 +63,7 @@ public sealed class AddWatchDialog : DialogWindow
         body.Children.Add(_rangeBox);
         body.Children.Add(new TextBlock
         {
-            Text = UiText.Get("AddWatch_BodyText"),
+            Text = UiText.Get(AddWatchDialogPlanner.BodyTextKey),
             TextWrapping = TextWrapping.Wrap,
             Foreground = SystemColors.GrayTextBrush
         });

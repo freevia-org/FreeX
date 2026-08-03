@@ -11,9 +11,18 @@ public sealed class AddWatchDialogPlannerTests
         AddWatchDialogPlanner.TitleKey.Should().Be("AddWatch_Title");
         AddWatchDialogPlanner.SelectedRangeLabelKey.Should().Be("AddWatch_SelectedRangeLabel");
         AddWatchDialogPlanner.BodyTextKey.Should().Be("AddWatch_BodyText");
+        AddWatchDialogPlanner.CancelButtonKey.Should().Be("Common_Cancel");
         AddWatchDialogPlanner.Width.Should().Be(360);
         AddWatchDialogPlanner.Height.Should().Be(170);
         AddWatchDialogPlanner.ButtonWidth.Should().Be(76);
+        AddWatchDialogPlanner.RootMargin.Should().Be(12);
+        AddWatchDialogPlanner.RangeBottomMargin.Should().Be(8);
+        AddWatchDialogPlanner.ActionRowTopMargin.Should().Be(12);
+        AddWatchDialogPlanner.ButtonMinWidth.Should().Be(84);
+        AddWatchDialogPlanner.AvaloniaRangeBottomMargin.Should().Be(11);
+        AddWatchDialogPlanner.AvaloniaActionRowTopMargin.Should().Be(14);
+        AddWatchDialogPlanner.AvaloniaWpfClientRightInset.Should().Be(16);
+        AddWatchDialogPlanner.ParitySelectedRangeText.Should().Be("Sheet1!$B$2");
         AddWatchDialogPlanner.DialogAutomationId.Should().Be("AddWatchDialog");
         AddWatchDialogPlanner.SelectedRangeAutomationId.Should().Be("AddWatchSelectedRangeBox");
         AddWatchDialogPlanner.AddButtonAutomationId.Should().Be("AddWatchAddButton");

@@ -35,6 +35,9 @@ public sealed partial class MainWindow
 
     private static AvaloniaCompactDialogChromeStyle RibbonMenuDialogChromeStyle => new(FormulaBarFontFamily);
 
+    private static AvaloniaCompactDialogChromeStyle AddWatchDialogChromeStyle =>
+        AvaloniaCompactDialogChrome.WindowsStyle;
+
     private static void ApplyRibbonMenuButtonChrome(Button button, double minWidth, bool isDefault = false)
         => AvaloniaCompactDialogChrome.ApplyButton(button, RibbonMenuDialogChromeStyle, minWidth, isDefault);
 
@@ -422,15 +425,20 @@ public sealed partial class MainWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, AddWatchDialogChromeStyle);
+        // WPF's Window content presenter measures this compact dialog at its desired height;
+        // keep the Avalonia action row at the same top-sized position instead of stretching it
+        // to the full 170-DIP capture frame.
+        dialog.VerticalContentAlignment = AvaloniaVerticalAlignment.Top;
         AutomationProperties.SetAutomationId(dialog, AddWatchDialogPlanner.DialogAutomationId);
 
         var rangeBox = new TextBox
         {
             Text = selectedRangeText,
             IsReadOnly = true,
-            Margin = new Thickness(0, 0, 0, 8),
+            Margin = new Thickness(0, 0, 0, AddWatchDialogPlanner.AvaloniaRangeBottomMargin),
         };
-        ApplyRibbonMenuTextBoxChrome(rangeBox);
+        AvaloniaCompactDialogChrome.ApplyTextBox(rangeBox, AddWatchDialogChromeStyle);
         AutomationProperties.SetName(rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeAutomationNameKey));
         AutomationProperties.SetAutomationId(rangeBox, AddWatchDialogPlanner.SelectedRangeAutomationId);
         AutomationProperties.SetHelpText(rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeHelpTextKey));
@@ -440,17 +448,26 @@ public sealed partial class MainWindow
             Content = UiText.Get(AddWatchDialogPlanner.AddButtonKey),
             IsDefault = true,
         };
-        ApplyRibbonMenuFixedButtonChrome(addButton, AddWatchDialogPlanner.ButtonWidth, isDefault: true);
+        addButton.Width = AddWatchDialogPlanner.ButtonWidth;
+        AvaloniaCompactDialogChrome.ApplyButton(
+            addButton,
+            AddWatchDialogChromeStyle,
+            AddWatchDialogPlanner.ButtonMinWidth,
+            isDefault: true);
         AutomationProperties.SetName(addButton, UiText.Get(AddWatchDialogPlanner.AddAutomationNameKey));
         AutomationProperties.SetAutomationId(addButton, AddWatchDialogPlanner.AddButtonAutomationId);
         AutomationProperties.SetHelpText(addButton, UiText.Get(AddWatchDialogPlanner.AddHelpTextKey));
 
         var cancelButton = new Button
         {
-            Content = UiText.Get("Common_Cancel"),
+            Content = UiText.Get(AddWatchDialogPlanner.CancelButtonKey),
             IsCancel = true,
         };
-        ApplyRibbonMenuFixedButtonChrome(cancelButton, AddWatchDialogPlanner.ButtonWidth);
+        cancelButton.Width = AddWatchDialogPlanner.ButtonWidth;
+        AvaloniaCompactDialogChrome.ApplyButton(
+            cancelButton,
+            AddWatchDialogChromeStyle,
+            AddWatchDialogPlanner.ButtonMinWidth);
         AutomationProperties.SetName(cancelButton, UiText.Get(AddWatchDialogPlanner.CancelAutomationNameKey));
         AutomationProperties.SetAutomationId(cancelButton, AddWatchDialogPlanner.CancelButtonAutomationId);
         AutomationProperties.SetHelpText(cancelButton, UiText.Get(AddWatchDialogPlanner.CancelHelpTextKey));
@@ -465,7 +482,7 @@ public sealed partial class MainWindow
 
         var buttons = AvaloniaCompactDialogChrome.CreateActionRow(
             [addButton, cancelButton],
-            new Thickness(0, 12, 0, 0));
+            new Thickness(0, AddWatchDialogPlanner.AvaloniaActionRowTopMargin, 0, 0));
 
         var body = new StackPanel
         {
@@ -473,11 +490,11 @@ public sealed partial class MainWindow
             {
                 new TextBlock
                 {
-                    Text = UiText.Get(AddWatchDialogPlanner.SelectedRangeLabelKey),
+                    Text = StripDisplayMnemonic(UiText.Get(AddWatchDialogPlanner.SelectedRangeLabelKey)),
                     FontWeight = FontWeight.SemiBold,
                     FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    Margin = new Thickness(0, 0, 0, 4),
+                    FontFamily = AddWatchDialogChromeStyle.FontFamily,
+                    Margin = new Thickness(0, 3, 0, 4),
                 },
                 rangeBox,
                 new TextBlock
@@ -485,19 +502,31 @@ public sealed partial class MainWindow
                     Text = UiText.Get(AddWatchDialogPlanner.BodyTextKey),
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 12,
-                    FontFamily = FormulaBarFontFamily,
-                    Foreground = Brushes.Gray,
+                    FontFamily = AddWatchDialogChromeStyle.FontFamily,
+                    Foreground = Brush(109, 109, 109),
                 },
             },
         };
 
-        var root = new DockPanel { Margin = new Thickness(12) };
+        var root = new DockPanel
+        {
+            Margin = new Thickness(
+                AddWatchDialogPlanner.RootMargin,
+                AddWatchDialogPlanner.RootMargin,
+                AddWatchDialogPlanner.RootMargin + AddWatchDialogPlanner.AvaloniaWpfClientRightInset,
+                AddWatchDialogPlanner.RootMargin),
+        };
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
         root.Children.Add(body);
         dialog.Content = root;
         dialog.Opened += (_, _) =>
         {
+            // ApplyWindow normalizes descendants first; restore the WPF button surface after that pass.
+            addButton.Background = Brushes.White;
+            addButton.CornerRadius = new CornerRadius(3);
+            cancelButton.Background = Brushes.White;
+            cancelButton.CornerRadius = new CornerRadius(3);
             rangeBox.Focus();
             rangeBox.SelectAll();
         };

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Services;
 using System.Windows.Automation;
 using System.Windows.Controls;
 
@@ -60,10 +61,14 @@ public sealed class WatchWindowDialogTests
 
         watchWindowSource.Should().NotContain("public sealed class AddWatchDialog");
         source.Should().Contain("public sealed class AddWatchDialog");
-        source.Should().Contain("Title = UiText.Get(\"AddWatch_Title\")");
-        source.Should().Contain("Content = UiText.Get(\"AddWatch_SelectedRangeLabel\")");
+        source.Should().Contain("Title = UiText.Get(AddWatchDialogPlanner.TitleKey)");
+        source.Should().Contain("Content = UiText.Get(AddWatchDialogPlanner.SelectedRangeLabelKey)");
         source.Should().Contain("Target = _rangeBox");
-        source.Should().Contain("Content = UiText.Get(\"AddWatch_AddButton\")");
+        source.Should().Contain("Content = UiText.Get(AddWatchDialogPlanner.AddButtonKey)");
+        source.Should().Contain("Width = AddWatchDialogPlanner.ButtonWidth");
+        source.Should().Contain("Width = AddWatchDialogPlanner.Width");
+        source.Should().Contain("Height = AddWatchDialogPlanner.Height");
+        source.Should().Contain("new Thickness(AddWatchDialogPlanner.RootMargin)");
         UiText.Get("AddWatch_Title").Should().Be("Add Watch");
         UiText.Get("AddWatch_SelectedRangeLabel").Should().Be("Selected _range:");
     }
@@ -73,9 +78,9 @@ public sealed class WatchWindowDialogTests
     {
         var source = ReadAddWatchSource();
 
-        source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(\"AddWatch_SelectedRangeAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, \"AddWatchSelectedRangeBox\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, UiText.Get(\"AddWatch_SelectedRangeHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(_rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeAutomationNameKey));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(_rangeBox, AddWatchDialogPlanner.SelectedRangeAutomationId);");
+        source.Should().Contain("AutomationProperties.SetHelpText(_rangeBox, UiText.Get(AddWatchDialogPlanner.SelectedRangeHelpTextKey));");
         UiText.Get("AddWatch_SelectedRangeAutomationName").Should().Be("Selected range");
     }
 
@@ -84,14 +89,29 @@ public sealed class WatchWindowDialogTests
     {
         var source = ReadAddWatchSource();
 
-        source.Should().Contain("AutomationProperties.SetName(add, UiText.Get(\"AddWatch_AddAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(add, \"AddWatchAddButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(add, UiText.Get(\"AddWatch_AddHelpText\"));");
-        source.Should().Contain("var cancel = new Button { Content = UiText.Cancel, Width = 76 };");
-        source.Should().Contain("DialogButtonRowFactory.Create(add, cancel, new Thickness(0, 12, 0, 0));");
-        source.Should().Contain("AutomationProperties.SetName(cancel, UiText.Get(\"AddWatch_CancelAutomationName\"));");
-        source.Should().Contain("AutomationProperties.SetAutomationId(cancel, \"AddWatchCancelButton\");");
-        source.Should().Contain("AutomationProperties.SetHelpText(cancel, UiText.Get(\"AddWatch_CancelHelpText\"));");
+        source.Should().Contain("AutomationProperties.SetName(add, UiText.Get(AddWatchDialogPlanner.AddAutomationNameKey));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(add, AddWatchDialogPlanner.AddButtonAutomationId);");
+        source.Should().Contain("AutomationProperties.SetHelpText(add, UiText.Get(AddWatchDialogPlanner.AddHelpTextKey));");
+        source.Should().Contain("Content = UiText.Get(AddWatchDialogPlanner.CancelButtonKey)");
+        source.Should().Contain("new Thickness(0, AddWatchDialogPlanner.ActionRowTopMargin, 0, 0)");
+        source.Should().Contain("AutomationProperties.SetName(cancel, UiText.Get(AddWatchDialogPlanner.CancelAutomationNameKey));");
+        source.Should().Contain("AutomationProperties.SetAutomationId(cancel, AddWatchDialogPlanner.CancelButtonAutomationId);");
+        source.Should().Contain("AutomationProperties.SetHelpText(cancel, UiText.Get(AddWatchDialogPlanner.CancelHelpTextKey));");
+    }
+
+    [Fact]
+    public void AddWatchDialog_UsesPlannerForSharedWpfGeometryAndMetadata()
+    {
+        var source = ReadAddWatchSource();
+
+        source.Should().NotContain("Width = 360");
+        source.Should().NotContain("Height = 170");
+        source.Should().NotContain("new Thickness(12)");
+        source.Should().NotContain("Width = 76");
+        source.Should().NotContain("\"AddWatchAddButton\"");
+        source.Should().NotContain("\"AddWatchCancelButton\"");
+        source.Should().Contain("AddWatchDialogPlanner.RangeBottomMargin");
+        source.Should().Contain("AddWatchDialogPlanner.ActionRowTopMargin");
         UiText.Get("AddWatch_AddAutomationName").Should().Be("Add");
     }
 

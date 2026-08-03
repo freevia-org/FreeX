@@ -5,6 +5,30 @@ namespace FreeX.App.Services.Tests;
 public sealed class AvaloniaShellSourceTests
 {
     [Fact]
+    public void AddWatchParityCapture_UsesSharedFixtureAndStripsAvaloniaLabelMnemonic()
+    {
+        var avaloniaCaptureSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var avaloniaDialogSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Avalonia", "MainWindow.RibbonMenuDialogs.cs"));
+        var wpfCaptureSource = File.ReadAllText(RepositoryFileLocator.Find(
+            "src", "FreeX.App.Host", "ParityCapture.cs"));
+
+        avaloniaCaptureSource.Should().Contain(
+            "ShowAddWatchDialogAsync(AddWatchDialogPlanner.ParitySelectedRangeText)");
+        wpfCaptureSource.Should().Contain(
+            "new AddWatchDialog(AddWatchDialogPlanner.ParitySelectedRangeText)");
+        avaloniaDialogSource.Should().Contain(
+            "Text = StripDisplayMnemonic(UiText.Get(AddWatchDialogPlanner.SelectedRangeLabelKey))");
+        avaloniaDialogSource.Should().NotContain(
+            "Text = UiText.Get(AddWatchDialogPlanner.SelectedRangeLabelKey)");
+        avaloniaDialogSource.Should().Contain(
+            "AddWatchDialogPlanner.ButtonMinWidth");
+        avaloniaDialogSource.Should().Contain(
+            "Content = UiText.Get(AddWatchDialogPlanner.CancelButtonKey)");
+    }
+
+    [Fact]
     public void App_WiresMacOsFileActivationToMainWindowOpenPipeline()
     {
         var appSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "App.cs"));
