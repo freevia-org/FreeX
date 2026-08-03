@@ -731,10 +731,10 @@ public sealed partial class MainWindow : Window
         {
             case ChartSubtargetKind.Point:
                 Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
-                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
                 break;
             case ChartSubtargetKind.Series:
-                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                Add("Format Data Series...", () => OpenChartSeriesOptionsDialog(hit.SeriesIndex));
                 break;
             case ChartSubtargetKind.CategoryAxis:
                 Add("Format Category Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Category));
@@ -4444,11 +4444,13 @@ public sealed partial class MainWindow : Window
         dialog.ShowDialog();
     }
 
-    internal void OpenChartSeriesOptionsDialog()
+    internal void OpenChartSeriesOptionsDialog() => OpenChartSeriesOptionsDialog(null);
+
+    internal void OpenChartSeriesOptionsDialog(int? initialSeriesIndex)
     {
         if (!Editor.CanEditSelectedChartFormatting) return;
 
-        var dialog = new ChartSeriesOptionsDialog(Editor);
+        var dialog = new ChartSeriesOptionsDialog(Editor, initialSeriesIndex);
         if (IsVisible)
             dialog.Owner = this;
         dialog.ShowDialog();

@@ -181,6 +181,15 @@ public sealed class ChartDataDialogTests : IDisposable
     }
 
     [StaFact]
+    public void ChartSeriesOptionsDialog_CanStartAtRequestedSeries()
+    {
+        var (sess, _) = MakeSession();
+        var dialog = new ChartSeriesOptionsDialog(sess, initialSeriesIndex: 1);
+
+        dialog.BuildCommitPlanForTests().SeriesIndex.Should().Be(1);
+    }
+
+    [StaFact]
     public void ChartAxisOptionsDialog_CanStartAtRequestedAxis()
     {
         var (sess, _) = MakeSession();
