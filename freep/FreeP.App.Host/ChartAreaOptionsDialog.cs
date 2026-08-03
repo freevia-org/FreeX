@@ -20,7 +20,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
     private readonly CheckBox _noOutlineCheck;
     private readonly TextBox _widthBox;
 
-    public ChartAreaOptionsDialog(EditingSession editor)
+    public ChartAreaOptionsDialog(EditingSession editor, ChartAreaFormattingTarget? initialTarget = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         _planner = ChartAreaOptionsPlanner.FromChart(editor.SelectedChart ?? throw new InvalidOperationException("No chart is currently selected."));
@@ -51,7 +51,7 @@ public sealed class ChartAreaOptionsDialog : DialogWindow
         _outlineBox = new TextBox { MinWidth = 190 };
         _noOutlineCheck = new CheckBox { Content = surface.NoOutlineLabel };
         _widthBox = new TextBox { MinWidth = 120 };
-        _targetCombo.SelectedIndex = 0;
+        _targetCombo.SelectedIndex = initialTarget == ChartAreaFormattingTarget.PlotArea ? 1 : 0;
         LoadControls();
 
         var ok = new Button { Content = surface.OkLabel, IsDefault = true, MinWidth = 80, Margin = new Thickness(4) };
