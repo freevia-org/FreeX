@@ -67,9 +67,8 @@ namespace FreeP.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow : Window
 {
-    // Avalonia-only compensations for the WPF Reading Order pane geometry.
-    private const double ReadingOrderScrollbarGutter = 16;
-    private const double ReadingOrderActionButtonMinHeight = 27;
+    // Avalonia text metrics place the action row two pixels above WPF without this compensation.
+    private const double ReadingOrderActionTopCompensation = 2;
 
     private const string DefaultTitle = "FreeP";
     private static readonly SisterAppFileTextSpec FileText = SisterAppFileTextPlanner.Presentation;
@@ -2026,33 +2025,39 @@ public sealed partial class MainWindow : Window
         };
         _readingOrderMoveEarlierButton = new Button
         {
-            MinWidth = 94,
-            MinHeight = ReadingOrderActionButtonMinHeight,
-            FontSize = 12,
-            Padding = new Thickness(10, 4),
-            Margin = new Thickness(0, 0, 8, 0),
+            Width = PresentationReadingOrderPaneVisualMetrics.MoveEarlierButtonWidth,
+            Height = PresentationReadingOrderPaneVisualMetrics.ActionButtonHeight,
+            FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
+            Padding = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonVerticalPadding),
+            Margin = new Thickness(0, 0, PresentationReadingOrderPaneVisualMetrics.ActionButtonGap, 0),
         };
         _readingOrderMoveLaterButton = new Button
         {
-            MinWidth = 84,
-            MinHeight = ReadingOrderActionButtonMinHeight,
-            FontSize = 12,
-            Padding = new Thickness(10, 4),
+            Width = PresentationReadingOrderPaneVisualMetrics.MoveLaterButtonWidth,
+            Height = PresentationReadingOrderPaneVisualMetrics.ActionButtonHeight,
+            FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
+            Padding = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonVerticalPadding),
         };
         _readingOrderMoveEarlierButton.Click += (_, _) => ApplyReadingOrderMoveEarlier();
         _readingOrderMoveLaterButton.Click += (_, _) => ApplyReadingOrderMoveLater();
         _readingOrderPaneItemsPanel = new StackPanel
         {
             Orientation = Orientation.Vertical,
-            // Avalonia's default scrollbar overlays the content; reserve the WPF scrollbar gutter.
-            Margin = new Thickness(0, 0, ReadingOrderScrollbarGutter, 0),
         };
 
         var actionPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(12, 0, 12, 8),
+            Margin = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                ReadingOrderActionTopCompensation,
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                PresentationReadingOrderPaneVisualMetrics.MessageBottomMargin - ReadingOrderActionTopCompensation),
             Children =
             {
                 _readingOrderMoveEarlierButton,
@@ -2074,16 +2079,18 @@ public sealed partial class MainWindow : Window
 
         var panel = new DockPanel();
         panel.Children.Add(header);
-        panel.Children.Add(new ScrollViewer
+        var itemsScroll = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             Content = _readingOrderPaneItemsPanel,
-        });
+        };
+        itemsScroll.SetValue(ScrollViewer.AllowAutoHideProperty, false);
+        panel.Children.Add(itemsScroll);
 
         return new Border
         {
-            Width = 320,
+            Width = PresentationReadingOrderPaneVisualMetrics.PaneWidth,
             IsVisible = false,
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
@@ -8267,28 +8274,28 @@ public sealed partial class MainWindow : Window
                 new TextBlock
                 {
                     Text = $"{item.ReadingOrderIndex + 1}. {item.ShapeName}",
-                    FontSize = 12,
+                    FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
                     FontWeight = FontWeight.SemiBold,
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = $"{item.ShapeTypeLabel} - depth {item.NestingDepth}",
-                    FontSize = 12,
+                    FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = item.AccessibilitySummary,
-                    FontSize = 12,
+                    FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
                     TextWrapping = TextWrapping.Wrap,
                 },
                 new TextBlock
                 {
                     Text = BuildReadingOrderAltTextLine(item),
-                    FontSize = 12,
+                    FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
                     Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
                     TextWrapping = TextWrapping.Wrap,
                 },
@@ -8300,10 +8307,10 @@ public sealed partial class MainWindow : Window
             panel.Children.Insert(1, new TextBlock
             {
                 Text = "Selected item",
-                FontSize = 12,
+                FontSize = PresentationReadingOrderPaneVisualMetrics.BodyFontSize,
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 FontWeight = FontWeight.SemiBold,
-                Margin = new Thickness(0, 2, 0, 0),
+                Margin = new Thickness(0, PresentationReadingOrderPaneVisualMetrics.SelectedItemTopInset, 0, 0),
             });
         }
 
@@ -8317,9 +8324,13 @@ public sealed partial class MainWindow : Window
                 ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
                 : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(10),
-            Margin = new Thickness(12, 0, 12, 10),
+            CornerRadius = new CornerRadius(PresentationReadingOrderPaneVisualMetrics.CardCornerRadius),
+            Padding = new Thickness(PresentationReadingOrderPaneVisualMetrics.CardPadding),
+            Margin = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                0,
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                PresentationReadingOrderPaneVisualMetrics.CardBottomMargin),
             Child = panel,
         };
 

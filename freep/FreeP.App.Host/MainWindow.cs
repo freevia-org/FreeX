@@ -1537,26 +1537,42 @@ public sealed partial class MainWindow : Window
         _readingOrderPaneHeading = new TextBlock
         {
             Text = "Reading Order",
-            FontSize = 15,
+            FontSize = PresentationReadingOrderPaneVisualMetrics.HeadingFontSize,
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(12, 12, 12, 4),
+            Margin = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                PresentationReadingOrderPaneVisualMetrics.HeadingTopMargin,
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                PresentationReadingOrderPaneVisualMetrics.HeadingBottomMargin),
         };
         _readingOrderPaneMessage = new TextBlock
         {
             TextWrapping = TextWrapping.Wrap,
             Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
-            Margin = new Thickness(12, 0, 12, 8),
+            Margin = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                0,
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                PresentationReadingOrderPaneVisualMetrics.MessageBottomMargin),
         };
         _readingOrderMoveEarlierButton = new Button
         {
-            MinWidth = 94,
-            Padding = new Thickness(10, 4, 10, 4),
-            Margin = new Thickness(0, 0, 8, 0),
+            MinWidth = PresentationReadingOrderPaneVisualMetrics.MoveEarlierButtonWidth,
+            Padding = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonVerticalPadding,
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonVerticalPadding),
+            Margin = new Thickness(0, 0, PresentationReadingOrderPaneVisualMetrics.ActionButtonGap, 0),
         };
         _readingOrderMoveLaterButton = new Button
         {
-            MinWidth = 84,
-            Padding = new Thickness(10, 4, 10, 4),
+            MinWidth = PresentationReadingOrderPaneVisualMetrics.MoveLaterButtonWidth,
+            Padding = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonVerticalPadding,
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonHorizontalPadding,
+                PresentationReadingOrderPaneVisualMetrics.ActionButtonVerticalPadding),
         };
         _readingOrderMoveEarlierButton.Click += (_, _) => ApplyReadingOrderMoveEarlier();
         _readingOrderMoveLaterButton.Click += (_, _) => ApplyReadingOrderMoveLater();
@@ -1569,7 +1585,11 @@ public sealed partial class MainWindow : Window
         {
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(12, 0, 12, 8),
+            Margin = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                0,
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                PresentationReadingOrderPaneVisualMetrics.MessageBottomMargin),
         };
         actionPanel.Children.Add(_readingOrderMoveEarlierButton);
         actionPanel.Children.Add(_readingOrderMoveLaterButton);
@@ -1590,7 +1610,7 @@ public sealed partial class MainWindow : Window
 
         return new Border
         {
-            Width = 320,
+            Width = PresentationReadingOrderPaneVisualMetrics.PaneWidth,
             Visibility = Visibility.Collapsed,
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
@@ -3724,7 +3744,7 @@ public sealed partial class MainWindow : Window
                 Text = "Selected item",
                 Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A)),
                 FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 2, 0, 0),
+                Margin = new Thickness(0, PresentationReadingOrderPaneVisualMetrics.SelectedItemTopInset, 0, 0),
             });
         }
 
@@ -3737,9 +3757,13 @@ public sealed partial class MainWindow : Window
                 ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
                 : new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(10),
-            Margin = new Thickness(12, 0, 12, 10),
+            CornerRadius = new CornerRadius(PresentationReadingOrderPaneVisualMetrics.CardCornerRadius),
+            Padding = new Thickness(PresentationReadingOrderPaneVisualMetrics.CardPadding),
+            Margin = new Thickness(
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                0,
+                PresentationReadingOrderPaneVisualMetrics.ContentSideMargin,
+                PresentationReadingOrderPaneVisualMetrics.CardBottomMargin),
             Child = panel,
         };
 

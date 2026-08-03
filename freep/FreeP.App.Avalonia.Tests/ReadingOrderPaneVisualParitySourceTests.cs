@@ -1,15 +1,18 @@
+using FreeP.App.Compositor;
+
 namespace FreeP.App.Avalonia.Tests;
 
 public sealed class ReadingOrderPaneVisualParitySourceTests
 {
     [Fact]
-    public void Avalonia_compensation_constants_match_the_measured_variant()
+    public void Shared_geometry_matches_the_Wpf_authority()
     {
-        var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
-        var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
-
-        source.Should().Contain("private const double ReadingOrderScrollbarGutter = 16;");
-        source.Should().Contain("private const double ReadingOrderActionButtonMinHeight = 27;");
+        PresentationReadingOrderPaneVisualMetrics.PaneWidth.Should().Be(320);
+        PresentationReadingOrderPaneVisualMetrics.MoveEarlierButtonWidth.Should().Be(94);
+        PresentationReadingOrderPaneVisualMetrics.MoveLaterButtonWidth.Should().Be(84);
+        PresentationReadingOrderPaneVisualMetrics.ActionButtonHeight.Should().Be(27);
+        PresentationReadingOrderPaneVisualMetrics.CardPadding.Should().Be(10);
+        PresentationReadingOrderPaneVisualMetrics.CardBottomMargin.Should().Be(10);
     }
 
     [Fact]
@@ -17,6 +20,7 @@ public sealed class ReadingOrderPaneVisualParitySourceTests
     {
         var repo = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+        var wpfSource = File.ReadAllText(Path.Combine(repo, "freep", "FreeP.App.Host", "MainWindow.cs"));
         var methodStart = source.IndexOf(
             "private Control BuildReadingOrderItemCard",
             StringComparison.Ordinal);
@@ -29,11 +33,12 @@ public sealed class ReadingOrderPaneVisualParitySourceTests
         methodEnd.Should().BeGreaterThan(methodStart);
         var method = source[methodStart..methodEnd];
 
-        source.Should().Contain(
-            "Margin = new Thickness(0, 0, ReadingOrderScrollbarGutter, 0)");
+        source.Should().Contain("itemsScroll.SetValue(ScrollViewer.AllowAutoHideProperty, false)");
         method.Should().Contain("Spacing = 2");
-        source.Should().Contain(
-            "MinHeight = ReadingOrderActionButtonMinHeight");
+        source.Should().Contain("Height = PresentationReadingOrderPaneVisualMetrics.ActionButtonHeight");
+        source.Should().Contain("Width = PresentationReadingOrderPaneVisualMetrics.MoveEarlierButtonWidth");
+        wpfSource.Should().Contain("MinWidth = PresentationReadingOrderPaneVisualMetrics.MoveEarlierButtonWidth");
+        wpfSource.Should().Contain("Width = PresentationReadingOrderPaneVisualMetrics.PaneWidth");
     }
 
     [Fact]
@@ -49,6 +54,5 @@ public sealed class ReadingOrderPaneVisualParitySourceTests
 
         report.Should().Contain("review.reading-order-pane.seeded");
         report.Should().Contain("320x578/320x578");
-        report.Should().Contain("changed 18.60 %");
     }
 }
