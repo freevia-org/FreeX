@@ -2680,6 +2680,16 @@ public static class PptxPackageReader
         foreach (var rootId in roots)
             data.Nodes.Add(BuildNode(rootId, 0));
 
+        if (IsCycle2Layout(layoutUniqueId)
+            && smart.FallbackShapes.Count > 0
+            && !CanUseCycle2NodeAndArrowCache(smart, data))
+        {
+            // cycle2 is live only for the exact ellipse-plus-arrow drawing
+            // grammar modeled by the shared planner. Preserve richer imported
+            // caches until the authoring path explicitly regenerates them.
+            data.IsLiveLayoutSupported = false;
+        }
+
         return data;
 
         string ReadSmartArtParagraphText(XElement paragraph)
@@ -2811,6 +2821,15 @@ public static class PptxPackageReader
         return id.Split('/').Last() == "hierarchy3";
     }
 
+    private static bool IsCycle2Layout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return id.Split('/').Last() == "cycle2";
+    }
+
     private static bool CanUseSimpleNodeCache(SmartArtShape smart, SmartArtData data)
     {
         var nodes = FlattenSmartArtNodes(data);
@@ -2868,6 +2887,42 @@ public static class PptxPackageReader
         }
 
         return connectorShapes.All(shape => string.IsNullOrWhiteSpace(shape.PlainText));
+    }
+
+    private static bool CanUseCycle2NodeAndArrowCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsCycle2Layout(data.LayoutUniqueId))
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        if (nodes.Count is < 2 or > 7)
+            return false;
+
+        var nodeShapes = smart.FallbackShapes
+            .Where(shape => shape.Kind == SlideShapeKind.AutoShape
+                && shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .ToList();
+        var arrowShapes = smart.FallbackShapes
+            .Where(shape => shape.Kind == SlideShapeKind.AutoShape
+                && shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .ToList();
+
+        // The repository's native cycle2 package evidence is exactly one ellipse
+        // per data node plus one empty right-arrow transition per node. Any extra
+        // role, connector, or picture leaves the imported drawing authoritative.
+        if (nodeShapes.Count != nodes.Count
+            || arrowShapes.Count != nodes.Count
+            || nodeShapes.Count + arrowShapes.Count != smart.FallbackShapes.Count)
+            return false;
+
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(nodeShapes[i].PlainText)
+                || !string.Equals(nodeShapes[i].PlainText, nodes[i].Text, StringComparison.Ordinal))
+                return false;
+        }
+
+        return arrowShapes.All(shape => string.IsNullOrWhiteSpace(shape.PlainText));
     }
 
     private static List<(string? ModelId, ImagePart Picture)> ReadSmartArtDrawingPictures(SmartArtShape smart, ZipArchive archive)

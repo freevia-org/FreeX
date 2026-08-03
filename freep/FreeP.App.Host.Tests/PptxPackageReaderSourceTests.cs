@@ -115,6 +115,13 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("horizontalhierarchy")
             .And.Contain("hierarchy3")
             .And.Contain("increasingcircleprocess");
+
+        ExtractMethod(source, "private static bool CanUseCycle2NodeAndArrowCache(")
+            .Should()
+            .Contain("DrawingShapeKind.Ellipse")
+            .And.Contain("DrawingShapeKind.RightArrow")
+            .And.Contain("nodeShapes.Count + arrowShapes.Count != smart.FallbackShapes.Count")
+            .And.Contain("string.IsNullOrWhiteSpace(shape.PlainText)");
     }
 
     [Fact]

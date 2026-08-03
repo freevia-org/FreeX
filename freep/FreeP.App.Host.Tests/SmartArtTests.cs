@@ -703,8 +703,17 @@ public sealed class SmartArtTests : IDisposable
         smartArt.Data.Should().NotBeNull();
         smartArt.Data!.Family.Should().Be(SmartArtFamily.Cycle);
         smartArt.Data.LayoutUniqueId.Should().EndWith("/cycle2");
+        smartArt.FallbackShapes.Should().HaveCount(10,
+            "the real PowerPoint cycle2 cache contains five ellipse nodes and five transition arrows");
+        smartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Should().Be(5);
+        smartArt.FallbackShapes.Count(shape => shape.AutoShapeKind == DrawingShapeKind.RightArrow)
+            .Should().Be(5);
+        smartArt.FallbackShapes.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Select(shape => shape.PlainText)
+            .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
         smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
-            "cycle2 is now admitted only after the shared ellipse-ring geometry exists");
+            "cycle2 is admitted only for the repository-proven ellipse-plus-arrow cache contract");
         smartArt.Data.Nodes.Select(node => node.Text)
             .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
 
@@ -728,6 +737,27 @@ public sealed class SmartArtTests : IDisposable
         reopenedSmartArt.Data.IsLiveLayoutSupported.Should().BeTrue();
         reopenedSmartArt.Data.Nodes.Select(node => node.Text)
             .Should().Equal("Idea", "Plan", "Execute", "Review", "Improve");
+    }
+
+    [Fact]
+    public void Reader_Cycle2_WithUnmodeledCacheRole_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Idea", "Plan"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/cycle2",
+            groupedListUnmodeledRole: true);
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/cycle2");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "an imported cycle2 cache with an extra visible role is outside the proven planner contract");
+        smartArt.FallbackShapes.Should().HaveCount(3);
+        smartArt.FallbackShapes.Should().Contain(shape => string.IsNullOrEmpty(shape.PlainText),
+            "the extra cached role must remain available to the fallback compositor");
     }
 
     [Fact]
