@@ -75,6 +75,16 @@ public static class HyperlinkDialogPlanner
     public const double Height = 300;
     public const double MinWidth = 520;
     public const double MinHeight = 300;
+    public const double DialogMargin = 16;
+    public const double LinkTypeColumnWidth = 170;
+    public const double LinkTypeColumnGap = 12;
+    public const double LabelColumnWidth = 110;
+    public const double FieldHeight = 24;
+    public const double FieldBottomMargin = 8;
+    public const double ButtonGap = 8;
+    public const double SecondaryButtonWidth = 96;
+    public const double ActionButtonWidth = 72;
+    public const double LinkTypeListHeight = 96;
 
     public static HyperlinkDialogPlan Plan(
         string target,

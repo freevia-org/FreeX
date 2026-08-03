@@ -1527,10 +1527,17 @@ public sealed partial class MainWindow
             initialLocationText: "Sheet1!$H$2:$H$5");
 
     private Task ShowInsertHyperlinkParityDialogAsync() =>
-        ShowWithParitySelectionAsync(
-            new CellAddress(_session.ActiveSheet.Id, 2, 2),
-            new CellAddress(_session.ActiveSheet.Id, 2, 2),
-            async () => { await ShowInsertHyperlinkInputDialogAsync(); });
+        ShowInsertHyperlinkParityDialogCoreAsync();
+
+    private async Task ShowInsertHyperlinkParityDialogCoreAsync()
+    {
+        var address = new CellAddress(_session.ActiveSheet.Id, 2, 2);
+        HyperlinkDialogParityFixture.Seed(_session.ActiveSheet, address);
+        await ShowWithParitySelectionAsync(address, address, async () =>
+        {
+            await ShowInsertHyperlinkInputDialogAsync();
+        });
+    }
 
     private Task ShowEvaluateFormulaParityDialogAsync() =>
         ShowEvaluateFormulaDialogAsync(CreateFormulaEvaluationSummary(_session.ActiveSheet.Id));

@@ -46,8 +46,12 @@ public sealed class HyperlinkDialog : Window
         ShowInTaskbar = false;
 
         var root = new DockPanel { Margin = new Thickness(16) };
-        var linkTypePanel = new StackPanel { Width = 170, Margin = new Thickness(0, 0, 12, 0) };
-        _linkTypes.Width = 170;
+        var linkTypePanel = new StackPanel
+        {
+            Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
+            Margin = new Thickness(0, 0, HyperlinkDialogPlanner.LinkTypeColumnGap, 0)
+        };
+        _linkTypes.Width = HyperlinkDialogPlanner.LinkTypeColumnWidth;
         _linkTypes.ItemsSource = new[]
         {
             UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"),
@@ -82,16 +86,16 @@ public sealed class HyperlinkDialog : Window
         AutomationProperties.SetAutomationId(_bookmarkButton, "HyperlinkBookmarkButton");
         AutomationProperties.SetHelpText(_bookmarkButton, UiText.Get("Hyperlink_ChooseABookmarkDefinedNameOrCellReferenceInThisWorkbook"));
         var buttonRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
-        _screenTipButton.Width = 96;
-        _screenTipButton.Margin = new Thickness(0, 0, 8, 0);
-        _bookmarkButton.Width = 96;
+        _screenTipButton.Width = HyperlinkDialogPlanner.SecondaryButtonWidth;
+        _screenTipButton.Margin = new Thickness(0, 0, HyperlinkDialogPlanner.ButtonGap, 0);
+        _bookmarkButton.Width = HyperlinkDialogPlanner.SecondaryButtonWidth;
         buttonRow.Children.Add(_screenTipButton);
         buttonRow.Children.Add(_bookmarkButton);
         grid.Children.Add(buttonRow);
         Grid.SetRow(buttonRow, 2);
         Grid.SetColumn(buttonRow, 1);
 
-        grid.Children.Add(DialogButtonRowFactory.Create(Accept, 72));
+        grid.Children.Add(DialogButtonRowFactory.Create(Accept, HyperlinkDialogPlanner.ActionButtonWidth));
         Grid.SetRow(grid.Children[^1], 3);
         Grid.SetColumnSpan(grid.Children[^1], 2);
         root.Children.Add(grid);
@@ -244,7 +248,7 @@ public sealed class HyperlinkDialog : Window
         for (var index = 0; index < inputRows; index++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         return grid;
     }
@@ -257,14 +261,14 @@ public sealed class HyperlinkDialog : Window
             Target = box,
             Padding = new Thickness(0),
             VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 8, 8)
+            Margin = new Thickness(0, 0, HyperlinkDialogPlanner.ButtonGap, HyperlinkDialogPlanner.FieldBottomMargin)
         };
         grid.Children.Add(labelControl);
         Grid.SetRow(labelControl, row);
         Grid.SetColumn(labelControl, 0);
 
         box.Text = value;
-        box.Margin = new Thickness(0, 0, 0, 8);
+        box.Margin = new Thickness(0, 0, 0, HyperlinkDialogPlanner.FieldBottomMargin);
         grid.Children.Add(box);
         Grid.SetRow(box, row);
         Grid.SetColumn(box, 1);

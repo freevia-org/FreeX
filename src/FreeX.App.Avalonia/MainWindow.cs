@@ -16155,8 +16155,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             Height = HyperlinkDialogPlanner.Height,
             MinWidth = HyperlinkDialogPlanner.MinWidth,
             MinHeight = HyperlinkDialogPlanner.MinHeight,
+            CanResize = false,
+            Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
+            FontFamily = FormulaBarFontFamily,
+            FontSize = 12,
         };
         AutomationProperties.SetAutomationId(dialog, "HyperlinkCompactDialog");
 
@@ -16164,8 +16168,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             ItemsSource = linkTypeChoices,
             SelectedItem = selectedLinkType,
-            MinWidth = 168,
-            Width = 168,
+            MinWidth = HyperlinkDialogPlanner.LinkTypeColumnWidth,
+            Width = HyperlinkDialogPlanner.LinkTypeColumnWidth,
+            Height = HyperlinkDialogPlanner.LinkTypeListHeight,
         };
         AutomationProperties.SetName(linkTypeBox, UiText.Get("Hyperlink_LinkTo2"));
         AutomationProperties.SetAutomationId(linkTypeBox, "HyperlinkLinkTypeBox");
@@ -16173,7 +16178,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var displayBox = new TextBox
         {
             Text = prefill.DisplayText,
-            MinWidth = 280,
         };
         AutomationProperties.SetName(displayBox, UiText.Get("Hyperlink_TextToDisplay"));
         AutomationProperties.SetAutomationId(displayBox, "HyperlinkDisplayTextBox");
@@ -16183,7 +16187,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var targetBox = new TextBox
         {
             Text = prefill.Target,
-            MinWidth = 280,
         };
         AutomationProperties.SetAutomationId(targetBox, "HyperlinkTargetTextBox");
         ApplyDialogTextBoxChrome(targetBox);
@@ -16194,7 +16197,6 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var screenTipBox = new TextBox
         {
             Text = prefill.ScreenTip,
-            MinWidth = 280,
         };
         AutomationProperties.SetName(screenTipBox, UiText.Get("Hyperlink_ScreenTipTextLabel"));
         AutomationProperties.SetAutomationId(screenTipBox, "HyperlinkScreenTipTextBox");
@@ -16203,20 +16205,19 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var bookmarkBox = new TextBox
         {
             Text = prefill.Bookmark,
-            MinWidth = 280,
         };
         AutomationProperties.SetName(bookmarkBox, UiText.Get("Hyperlink_BookmarkOrCellReferenceLabel"));
         AutomationProperties.SetAutomationId(bookmarkBox, "HyperlinkBookmarkTextBox");
         ApplyDialogTextBoxChrome(bookmarkBox);
 
         var screenTipButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_ScreenTip")) };
-        ApplyDialogButtonChrome(screenTipButton, width: 96);
+        ApplyDialogButtonChrome(screenTipButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
         AutomationProperties.SetName(screenTipButton, "ScreenTip");
         AutomationProperties.SetAutomationId(screenTipButton, "HyperlinkScreenTipButton");
         AutomationProperties.SetHelpText(screenTipButton, "Set the ScreenTip text shown when hovering the hyperlink.");
 
         var bookmarkButton = new Button { Content = StripDisplayMnemonic(UiText.Get("Hyperlink_Bookmark")) };
-        ApplyDialogButtonChrome(bookmarkButton, width: 96);
+        ApplyDialogButtonChrome(bookmarkButton, width: HyperlinkDialogPlanner.SecondaryButtonWidth);
         AutomationProperties.SetName(bookmarkButton, "Bookmark");
         AutomationProperties.SetAutomationId(bookmarkButton, "HyperlinkBookmarkButton");
         AutomationProperties.SetHelpText(bookmarkButton, "Choose a bookmark or cell reference within the destination.");
@@ -16225,13 +16226,14 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             MinHeight = 20,
             Foreground = Brush(143, 74, 18),
+            IsVisible = false,
         };
         AutomationProperties.SetAutomationId(validationText, "HyperlinkValidationText");
 
         var okButton = new Button
         {
             Content = UiText.Get("Common_Ok"),
-            MinWidth = 84,
+            MinWidth = HyperlinkDialogPlanner.ActionButtonWidth,
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(okButton, "HyperlinkOkButton");
@@ -16240,7 +16242,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_Cancel"),
-            MinWidth = 84,
+            MinWidth = HyperlinkDialogPlanner.ActionButtonWidth,
             Padding = new Thickness(10, 4),
         };
         AutomationProperties.SetAutomationId(cancelButton, "HyperlinkCancelButton");
@@ -16271,6 +16273,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                     out var validationError))
             {
                 validationText.Text = GetHyperlinkValidationErrorText(validationError);
+                validationText.IsVisible = true;
                 targetBox.Focus();
                 targetBox.SelectAll();
                 return;
@@ -16320,9 +16323,8 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var buttonRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
+            Spacing = HyperlinkDialogPlanner.ButtonGap,
             HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-            Margin = new Thickness(0, 12, 0, 0),
             Children =
             {
                 okButton,
@@ -16330,16 +16332,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             },
         };
 
-        // Left "Link to:" category column. The label docks to the top and the category
-        // list fills the remaining vertical space so the column spans the dialog body,
-        // matching the Windows "Insert Hyperlink" layout.
-        var linkToLabel = new TextBlock { Text = UiText.Get("Hyperlink_LinkTo2") + ":", Margin = new Thickness(0, 0, 0, 4) };
-        DockPanel.SetDock(linkToLabel, Dock.Top);
-        linkTypeBox.VerticalAlignment = AvaloniaVerticalAlignment.Stretch;
-        var linkToColumn = new DockPanel
+        // Keep the category column and detail grid aligned with the WPF dialog:
+        // labels share a fixed column with their editors instead of stacking above them.
+        var linkToLabel = new TextBlock
         {
-            LastChildFill = true,
-            VerticalAlignment = AvaloniaVerticalAlignment.Stretch,
+            Text = UiText.Get("Hyperlink_LinkTo2") + ":",
+            Margin = new Thickness(0, 0, 0, HyperlinkDialogPlanner.FieldBottomMargin),
+        };
+        var linkToColumn = new StackPanel
+        {
+            VerticalAlignment = AvaloniaVerticalAlignment.Top,
             Children =
             {
                 linkToLabel,
@@ -16348,50 +16350,67 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
 
         // Right detail area: "Text to display" + "Address" + screen-tip/bookmark fields,
-        // arranged as label/field rows like the Windows dialog's right region.
+        // arranged as the WPF label/editor rows.
         targetBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
         displayBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
+        targetBox.Height = HyperlinkDialogPlanner.FieldHeight;
+        displayBox.Height = HyperlinkDialogPlanner.FieldHeight;
 
         // ScreenTip... + Bookmark... sit on one right-aligned row beneath the Address
         // field (as buttons, not inline fields), matching the Windows dialog.
         var hyperlinkButtonsRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            Spacing = HyperlinkDialogPlanner.ButtonGap,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+            Margin = new Thickness(0, 0, 0, 12),
             Children = { screenTipButton, bookmarkButton },
         };
 
-        var detailArea = new StackPanel
+        var detailArea = new AvaloniaGrid
         {
-            Spacing = 10,
-            Children =
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions
             {
-                CreateHyperlinkField(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Hyperlink_TextToDisplay")) }, displayBox),
-                CreateHyperlinkField(targetLabel, targetBox),
-                hyperlinkButtonsRow,
+                new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LabelColumnWidth) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
             },
         };
+        AddHyperlinkFieldRow(detailArea, 0, UiText.Get("Hyperlink_TextToDisplay"), displayBox);
+        AddHyperlinkFieldRow(detailArea, 1, targetLabel, targetBox);
+        detailArea.Children.Add(hyperlinkButtonsRow);
+        AvaloniaGrid.SetRow(hyperlinkButtonsRow, 2);
+        AvaloniaGrid.SetColumn(hyperlinkButtonsRow, 1);
+        detailArea.Children.Add(buttonRow);
+        AvaloniaGrid.SetRow(buttonRow, 3);
+        AvaloniaGrid.SetColumn(buttonRow, 1);
 
         var bodyGrid = new AvaloniaGrid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnDefinitions = new ColumnDefinitions
+            {
+                new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnWidth) },
+                new ColumnDefinition { Width = new GridLength(HyperlinkDialogPlanner.LinkTypeColumnGap) },
+                new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+            },
         };
         bodyGrid.Children.Add(linkToColumn);
         AvaloniaGrid.SetColumn(linkToColumn, 0);
-        detailArea.Margin = new Thickness(16, 0, 0, 0);
+        detailArea.Margin = new Thickness(
+            HyperlinkDialogPlanner.DialogMargin,
+            HyperlinkDialogPlanner.DialogMargin,
+            HyperlinkDialogPlanner.DialogMargin,
+            0);
         bodyGrid.Children.Add(detailArea);
-        AvaloniaGrid.SetColumn(detailArea, 1);
+        AvaloniaGrid.SetColumn(detailArea, 2);
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(16),
-            Spacing = 8,
+            Margin = new Thickness(HyperlinkDialogPlanner.DialogMargin),
             Children =
             {
                 bodyGrid,
                 validationText,
-                buttonRow,
             },
         };
         dialog.Opened += (_, _) =>
@@ -16477,21 +16496,27 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
     private static SortDialogComboItem<HyperlinkTargetKind>[] CreateHyperlinkTypeChoices() =>
     [
         new(UiText.Get("Hyperlink_LinkTypeExistingFileOrWebPage"), HyperlinkTargetKind.ExistingFileOrWebPage),
-        new(UiText.Get("Hyperlink_LinkTypePlaceInThisDocument"), HyperlinkTargetKind.PlaceInThisDocument),
         new(UiText.Get("Hyperlink_LinkTypeCreateNewDocument"), HyperlinkTargetKind.CreateNewDocument),
+        new(UiText.Get("Hyperlink_LinkTypePlaceInThisDocument"), HyperlinkTargetKind.PlaceInThisDocument),
         new(UiText.Get("Hyperlink_LinkTypeEmailAddress"), HyperlinkTargetKind.EmailAddress),
     ];
 
-    private static StackPanel CreateHyperlinkField(Control label, Control control) =>
-        new()
-        {
-            Spacing = 4,
-            Children =
-            {
-                label,
-                control,
-            },
-        };
+    private static void AddHyperlinkFieldRow(AvaloniaGrid grid, int row, string label, Control control) =>
+        AddHyperlinkFieldRow(grid, row, new TextBlock { Text = StripDisplayMnemonic(label) }, control);
+
+    private static void AddHyperlinkFieldRow(AvaloniaGrid grid, int row, Control label, Control control)
+    {
+        label.VerticalAlignment = AvaloniaVerticalAlignment.Center;
+        label.Margin = new Thickness(0, 0, HyperlinkDialogPlanner.ButtonGap, HyperlinkDialogPlanner.FieldBottomMargin);
+        grid.Children.Add(label);
+        AvaloniaGrid.SetRow(label, row);
+        AvaloniaGrid.SetColumn(label, 0);
+
+        control.Margin = new Thickness(0, 0, 0, HyperlinkDialogPlanner.FieldBottomMargin);
+        grid.Children.Add(control);
+        AvaloniaGrid.SetRow(control, row);
+        AvaloniaGrid.SetColumn(control, 1);
+    }
 
     private static string StripDisplayMnemonic(string text) =>
         (text ?? string.Empty).Replace("_", string.Empty, StringComparison.Ordinal);

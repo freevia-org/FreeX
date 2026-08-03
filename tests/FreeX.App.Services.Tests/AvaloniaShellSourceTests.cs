@@ -2459,6 +2459,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_RegistersExistingShellDialogsForParityCapture()
     {
         var parityCaptureSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ParityCapture.cs"));
+        var hyperlinkSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var drawingFormatSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.DrawingFormatDialogs.cs"));
         var pictureShapeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
         var selectionPaneSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.SelectionPane.cs"));
@@ -2526,7 +2527,13 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("(\"dialog.AccessibilityChecker\", () => ShowAccessibilityCheckerParityDialogAsync()),");
 
         parityCaptureSource.Should().Contain("private Task ShowInsertHyperlinkParityDialogAsync()");
-        parityCaptureSource.Should().Contain("async () => { await ShowInsertHyperlinkInputDialogAsync(); }");
+        parityCaptureSource.Should().Contain("HyperlinkDialogParityFixture.Seed(_session.ActiveSheet, address);");
+        parityCaptureSource.Should().Contain("private async Task ShowInsertHyperlinkParityDialogCoreAsync()");
+        hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.LinkTypeColumnWidth");
+        hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.LabelColumnWidth");
+        hyperlinkSource.Should().Contain("HyperlinkDialogPlanner.ActionButtonWidth");
+        hyperlinkSource.Should().Contain("new(UiText.Get(\"Hyperlink_LinkTypeCreateNewDocument\"), HyperlinkTargetKind.CreateNewDocument)");
+        hyperlinkSource.Should().Contain("new(UiText.Get(\"Hyperlink_LinkTypePlaceInThisDocument\"), HyperlinkTargetKind.PlaceInThisDocument)");
         parityCaptureSource.Should().Contain("private Task ShowEvaluateFormulaParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowEvaluateFormulaDialogAsync");
         parityCaptureSource.Should().Contain("CreateFormulaEvaluationSummary(_session.ActiveSheet.Id)");

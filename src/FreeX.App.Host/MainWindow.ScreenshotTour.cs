@@ -8505,7 +8505,7 @@ public partial class MainWindow
 
             captures.Add(await CaptureInsertObjectsLinksDialogAsync(
                 outputDir,
-                new HyperlinkDialog("https://freex.example/insert-objects", "FreeX visual evidence") { Owner = this },
+                new HyperlinkDialog(HyperlinkDialogParityFixture.Target, HyperlinkDialogParityFixture.DisplayText) { Owner = this },
                 "freex_insert_hyperlink_dialog_address_focus",
                 "hyperlink-dialog-address-focus",
                 "Insert Hyperlink dialog opened with the address box as the initial focused/select-all target.",
@@ -8760,9 +8760,9 @@ public partial class MainWindow
         ExecuteInsertObjectsLinksTourCommand(new SetHyperlinkCommand(
             sheetId,
             new CellAddress(sheetId, 2, 2),
-            "https://freex.example/insert-objects",
+            HyperlinkDialogParityFixture.Target,
             "FreeX hyperlink",
-            new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage, "FreeX visual evidence", "")), "Insert Hyperlink");
+            new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage, HyperlinkDialogParityFixture.DisplayText, "")), "Insert Hyperlink");
         ExecuteInsertObjectsLinksTourCommand(
             DrawingInsertionPlanner.BuildShapeCommand(sheetId, new CellAddress(sheetId, 4, 2), DrawingShapeKind.Rectangle),
             "Insert Shape");

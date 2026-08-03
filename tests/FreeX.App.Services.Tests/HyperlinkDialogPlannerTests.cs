@@ -16,6 +16,36 @@ public sealed class HyperlinkDialogPlannerTests
     }
 
     [Fact]
+    public void PresentationMetrics_MatchWpfHyperlinkDialogConsumers()
+    {
+        HyperlinkDialogPlanner.DialogMargin.Should().Be(16);
+        HyperlinkDialogPlanner.LinkTypeColumnWidth.Should().Be(170);
+        HyperlinkDialogPlanner.LinkTypeColumnGap.Should().Be(12);
+        HyperlinkDialogPlanner.LabelColumnWidth.Should().Be(110);
+        HyperlinkDialogPlanner.FieldHeight.Should().Be(24);
+        HyperlinkDialogPlanner.FieldBottomMargin.Should().Be(8);
+        HyperlinkDialogPlanner.ButtonGap.Should().Be(8);
+        HyperlinkDialogPlanner.SecondaryButtonWidth.Should().Be(96);
+        HyperlinkDialogPlanner.ActionButtonWidth.Should().Be(72);
+        HyperlinkDialogPlanner.LinkTypeListHeight.Should().Be(96);
+    }
+
+    [Fact]
+    public void ParityFixture_SeedsTheAuthoritativeDialogContent()
+    {
+        var sheetId = SheetId.New();
+        var address = new CellAddress(sheetId, 2, 2);
+        var sheet = new Sheet(sheetId, "Sheet1");
+
+        HyperlinkDialogParityFixture.Seed(sheet, address);
+
+        sheet.GetCell(address)?.Value.Should().Be(new TextValue(HyperlinkDialogParityFixture.DisplayText));
+        sheet.Hyperlinks[address].Should().Be(HyperlinkDialogParityFixture.Target);
+        sheet.HyperlinkMetadata[address].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage));
+    }
+
+    [Fact]
     public void Plan_UsesTargetAsDisplayTextWhenLabelIsBlank()
     {
         var plan = HyperlinkDialogPlanner.Plan("https://example.test", " ");

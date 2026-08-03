@@ -176,6 +176,9 @@ public sealed partial class ObjectDialogTests
         source.Should().Contain("BookmarkDialog");
         source.Should().Contain("_screenTipButton.Click +=");
         source.Should().Contain("_bookmarkButton.Click +=");
+        source.Should().Contain("HyperlinkDialogPlanner.LinkTypeColumnWidth");
+        source.Should().Contain("HyperlinkDialogPlanner.LabelColumnWidth");
+        source.Should().Contain("HyperlinkDialogPlanner.ActionButtonWidth");
     }
 
     [Fact]
