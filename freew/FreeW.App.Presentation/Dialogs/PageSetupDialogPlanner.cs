@@ -134,6 +134,10 @@ public static class PageSetupDialogPlanner
 {
     public static PageSetupDialogPresentationMetrics PresentationMetrics { get; } = new();
 
+    // The visual harness must seed both hosts with the same explicit section-start
+    // value. Production entry points retain their NextPage default independently.
+    public const SectionBreakKind VisualHarnessSectionStart = SectionBreakKind.NextPage;
+
     public const string Title = "Page Setup";
     public const string MarginsSectionLabel = "Margins (points)";
     public const string TopMarginLabel = "Top (pt):";

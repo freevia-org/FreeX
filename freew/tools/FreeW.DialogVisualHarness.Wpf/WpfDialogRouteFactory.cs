@@ -253,6 +253,7 @@ internal static class WpfDialogRouteFactory
             if (type == typeof(string)) return state == "populated" ? "Sample text" : string.Empty;
             if (type == typeof(FreeWOptions)) return new FreeWOptions();
             if (type == typeof(PageSettings)) return new PageSettings();
+            if (type == typeof(SectionBreakKind)) return PageSetupDialogPlanner.VisualHarnessSectionStart;
             if (type == typeof(TextDocument)) return new TextDocument();
             if (type == typeof(DocumentView)) return new DocumentView();
             if (type.FullName == "Free.Shared.Opc.DocumentProperties") return Activator.CreateInstance(type);

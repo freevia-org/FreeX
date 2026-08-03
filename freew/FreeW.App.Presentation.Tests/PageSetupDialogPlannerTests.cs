@@ -13,6 +13,14 @@ public sealed class PageSetupDialogPlannerTests
     }
 
     [Fact]
+    public void VisualHarnessSectionStart_is_an_explicit_shared_seed()
+    {
+        PageSetupDialogPlanner.VisualHarnessSectionStart.Should().Be(SectionBreakKind.NextPage);
+        PageSetupDialogPlanner.SectionStartNames[(int)PageSetupDialogPlanner.VisualHarnessSectionStart]
+            .Should().Be("New page");
+    }
+
+    [Fact]
     public void PresentationMetrics_DescribeSharedWpfAuthorityGeometryAndValidationPolicy()
     {
         var metrics = PageSetupDialogPlanner.PresentationMetrics;

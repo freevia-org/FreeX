@@ -164,7 +164,9 @@ internal static class AvaloniaDialogRouteFactory
         if (routeId == "options")
             return (Window)Activator.CreateInstance(assembly.GetType("FreeW.App.Avalonia.OptionsDialog", true)!, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [new FreeWOptions()], null)!;
         if (routeId == "page-setup")
-            return new PageSetupDialog(new PageSettings());
+            return new PageSetupDialog(
+                new PageSettings(),
+                sectionStart: PageSetupDialogPlanner.VisualHarnessSectionStart);
 
         var typeName = routeId switch
         {

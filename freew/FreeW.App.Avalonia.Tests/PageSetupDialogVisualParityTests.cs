@@ -14,6 +14,20 @@ public sealed class PageSetupDialogVisualParityTests
     private static readonly HeadlessUnitTestSession Session =
         HeadlessUnitTestSession.GetOrStartForAssembly(typeof(FreeWHeadlessApp).Assembly);
 
+    [Fact]
+    public void Harness_routes_use_the_same_explicit_page_setup_section_seed()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var avaloniaFactory = File.ReadAllText(Path.Combine(
+            root, "freew", "tools", "FreeW.DialogVisualHarness.Avalonia", "AvaloniaDialogRouteFactory.cs"));
+        var wpfFactory = File.ReadAllText(Path.Combine(
+            root, "freew", "tools", "FreeW.DialogVisualHarness.Wpf", "WpfDialogRouteFactory.cs"));
+
+        avaloniaFactory.Should().Contain("sectionStart: PageSetupDialogPlanner.VisualHarnessSectionStart");
+        wpfFactory.Should().Contain("type == typeof(SectionBreakKind)");
+        wpfFactory.Should().Contain("PageSetupDialogPlanner.VisualHarnessSectionStart");
+    }
+
     [Theory]
     [InlineData(PageSetupDialogTab.Margins, 0)]
     [InlineData(PageSetupDialogTab.Paper, 1)]

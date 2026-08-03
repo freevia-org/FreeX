@@ -53,7 +53,10 @@ public sealed class PageSetupDialog : FreeWDialogWindow
     private bool _lineNumbersRequested;
     private bool _bordersRequested;
 
-    public PageSetupDialog(PageSettings current, PageSetupDialogTab initialTab = PageSetupDialogTab.Margins)
+    public PageSetupDialog(
+        PageSettings current,
+        PageSetupDialogTab initialTab = PageSetupDialogTab.Margins,
+        SectionBreakKind sectionStart = SectionBreakKind.NextPage)
     {
         ArgumentNullException.ThrowIfNull(current);
         var metrics = PageSetupDialogPlanner.PresentationMetrics;
@@ -62,7 +65,7 @@ public sealed class PageSetupDialog : FreeWDialogWindow
 
         var state = PageSetupDialogPlanner.BuildInitialState(
             current,
-            SectionBreakKind.NextPage,
+            sectionStart,
             PageSetupDialogPlanner.HostPaperOptions,
             validation.GeometryMode,
             DialogCulture);
