@@ -1111,6 +1111,165 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void EqArray_SeparatorsAlignOddMarkersAndKeepHeterogeneousRowsRenderable()
+    {
+        var node = ParseOmml(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>b</m:t></m:r><m:aln/><m:r><m:t>c</m:t></m:r><m:aln/><m:r><m:t>d</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>long</m:t></m:r><m:aln/><m:r><m:t>b2</m:t></m:r><m:aln/><m:r><m:t>c2</m:t></m:r><m:aln/><m:r><m:t>tail</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>short</m:t></m:r><m:aln/><m:r><m:t>end</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var root = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+        var array = Assert.IsType<MathBox.Container>(root.Children[0]);
+        var first = Assert.IsType<MathBox.Container>(array.Children[0]);
+        var second = Assert.IsType<MathBox.Container>(array.Children[1]);
+        var firstMarkerX = first.X + first.Children[1].X;
+        var secondMarkerX = second.X + second.Children[1].X;
+
+        firstMarkerX.Should().BeApproximately(secondMarkerX, 0.01,
+            "odd markers remain shared alignment points even when later rows have fewer separator columns");
+        array.Metrics.Width.Should().BeGreaterThan(0);
+        array.Children.Should().HaveCount(3);
+        MathBoxRenderPlanner.Plan(root, 0, 0, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should()
+            .Contain(new[] { "a", "long", "short", "tail" });
+    }
+
+    [Fact]
+    public void EqArray_SingleComplexChildMarkersUseDirectRowBoundary()
+    {
+        var node = ParseOmml(
+            "<m:eqArr>" +
+            "<m:e><m:aln/><m:f><m:num><m:e><m:r><m:t>1</m:t></m:r></m:e></m:num>" +
+            "<m:den><m:e><m:r><m:t>x</m:t></m:r></m:e></m:den></m:f><m:aln/></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.IsType<MathNode.Frac>(eqArray.Rows[0]);
+        var array = Assert.IsType<MathBox.Container>(
+            MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt).Children[0]);
+        var row = Assert.IsType<MathBox.Container>(array.Children[0]);
+
+        row.Children.Should().HaveCount(1,
+            "a fraction is one direct m:e child even though its rendered MathBox is a container");
+        MathBoxRenderPlanner.Plan(
+                new MathBox.Container
+                {
+                    Children = { array }
+                },
+                0,
+                0,
+                SrgbColor.Black,
+                "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should()
+            .Contain(new[] { "1", "x" });
+    }
+
+    [Fact]
+    public void EqArray_OpposingAlignmentSplitsExpandColumnWithoutOverlappingRows()
+    {
+        var rows = new MathNode[]
+        {
+            new MathNode.Row(new MathNode[] { Run("WWWWWW"), Run("x"), Run("tail1") }),
+            new MathNode.Row(new MathNode[] { Run("x"), Run("WWWWWW"), Run("tail2") })
+        };
+        var markerColumns = new IReadOnlyList<MathNode.EqArray.Marker>[]
+        {
+            new MathNode.EqArray.Marker[]
+            {
+                new(1, MathNode.EqArray.MarkerKind.AlignmentPoint),
+                new(2, MathNode.EqArray.MarkerKind.ColumnSeparator)
+            },
+            new MathNode.EqArray.Marker[]
+            {
+                new(1, MathNode.EqArray.MarkerKind.AlignmentPoint),
+                new(2, MathNode.EqArray.MarkerKind.ColumnSeparator)
+            }
+        };
+        var node = new MathNode.EqArray(rows, markerColumns: markerColumns);
+
+        var array = Assert.IsType<MathBox.Container>(
+            MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt).Children[0]);
+        array.Metrics.Width.Should().BeGreaterThan(0);
+        var alignedFirst = Assert.IsType<MathBox.Container>(array.Children[0]).Children[1].X;
+        var alignedSecond = Assert.IsType<MathBox.Container>(array.Children[1]).Children[1].X;
+        alignedFirst.Should().BeApproximately(alignedSecond, 0.01,
+            "opposing alignment splits must still resolve one shared alignment coordinate");
+        foreach (var row in array.Children.OfType<MathBox.Container>())
+        {
+            var right = row.Children
+                .Select(child => child.X + child.Metrics.Width)
+                .DefaultIfEmpty()
+                .Max();
+            right.Should().BeLessThanOrEqualTo(array.Metrics.Width + 0.01,
+                "opposing left/right alignment splits must size the column from max-left plus max-right");
+        }
+    }
+
+    [Fact]
+    public void EqArray_NestedMaxDistributionDoesNotConsumeOuterParagraphWidth()
+    {
+        var node = ParseOmml(
+            "<m:eqArr>" +
+            "<m:e><m:eqArr><m:eqArrPr><m:maxDist/></m:eqArrPr>" +
+            "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>b</m:t></m:r><m:aln/><m:r><m:t>c</m:t></m:r></m:e>" +
+            "</m:eqArr></m:e>" +
+            "</m:eqArr>");
+
+        var outer = Assert.IsType<MathBox.Container>(
+            MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 240).Children[0]);
+        var outerRow = Assert.IsType<MathBox.Container>(outer.Children[0]);
+        var nested = Assert.IsType<MathBox.Container>(outerRow.Children[0]);
+
+        nested.Metrics.Width.Should().BeLessThan(240,
+            "only an equation array with a known immediate containing width may apply maxDist");
+    }
+
+    [Fact]
+    public void EqArray_MaxDistributionUsesContainingWidthAndObjectDistributionUsesSeparators()
+    {
+        static MathNode ParseArray(string properties) => OmmlParser.Parse(
+            "<m:oMath xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\"><m:eqArr>" +
+            properties +
+            "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>b</m:t></m:r><m:aln/><m:r><m:t>c</m:t></m:r><m:aln/><m:r><m:t>d</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>long</m:t></m:r><m:aln/><m:r><m:t>b2</m:t></m:r><m:aln/><m:r><m:t>c2</m:t></m:r><m:aln/><m:r><m:t>tail</m:t></m:r></m:e>" +
+            "</m:eqArr></m:oMath>",
+            "FALLBACK");
+
+        var natural = MathLayoutEngine.Layout(ParseArray("<m:eqArrPr/>"), "Cambria Math", FontSizePt);
+        var maxMargins = MathLayoutEngine.Layout(
+            ParseArray("<m:eqArrPr><m:maxDist/></m:eqArrPr>"),
+            "Cambria Math",
+            FontSizePt,
+            paragraphWidthDip: 240);
+        var maxColumns = MathLayoutEngine.Layout(
+            ParseArray("<m:eqArrPr><m:maxDist/><m:objDist/></m:eqArrPr>"),
+            "Cambria Math",
+            FontSizePt,
+            paragraphWidthDip: 240);
+
+        natural.Metrics.Width.Should().BeLessThan(240);
+        maxMargins.Metrics.Width.Should().BeApproximately(240, 0.01);
+        maxColumns.Metrics.Width.Should().BeApproximately(240, 0.01);
+
+        var marginGlyphs = MathBoxRenderPlanner.Plan(maxMargins, 0, 0, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToArray();
+        var columnGlyphs = MathBoxRenderPlanner.Plan(maxColumns, 0, 0, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToArray();
+        marginGlyphs.First().X.Should().BeGreaterThan(columnGlyphs.First().X,
+            "maxDist without objDist distributes space into the leading margin");
+        columnGlyphs.Last().X.Should().BeGreaterThan(marginGlyphs.Last().X,
+            "objDist moves the extra width into the explicit column separator");
+    }
+
+    [Fact]
     public void OMathPara_MultipleEquations_AlignsRunPointsAndLeftAlignsUnmarkedRows()
     {
         var node = ParseOmmlParagraph(

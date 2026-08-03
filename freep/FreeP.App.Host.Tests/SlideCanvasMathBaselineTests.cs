@@ -1610,6 +1610,42 @@ public sealed class SlideCanvasMathBaselineTests
         act.Should().NotThrow();
     }
 
+    [StaFact]
+    public void RenderParaWithMath_EqArrayDistribution_UsesSharedRenderPlan()
+    {
+        var mathNode = ParseOmml(
+            "<m:eqArr>" +
+            "<m:eqArrPr><m:maxDist/><m:objDist/></m:eqArrPr>" +
+            "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>b</m:t></m:r><m:aln/><m:r><m:t>c</m:t></m:r><m:aln/><m:r><m:t>d</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>long</m:t></m:r><m:aln/><m:r><m:t>b2</m:t></m:r><m:aln/><m:r><m:t>c2</m:t></m:r><m:aln/><m:r><m:t>tail</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0, paragraphWidthDip: 240);
+        var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Contain(new[] { "a", "long", "tail" });
+        mathBox.Metrics.Width.Should().BeApproximately(240, 0.01);
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "E = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox }
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
     private static string MatrixOmml(string matrixProperties = "") =>
         "<m:m>" +
         (string.IsNullOrEmpty(matrixProperties) ? "" : $"<m:mPr>{matrixProperties}</m:mPr>") +

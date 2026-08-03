@@ -1734,6 +1734,47 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_EqArrayDistribution_UsesSharedRenderPlan()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:eqArr>" +
+                    "<m:eqArrPr><m:maxDist/><m:objDist/></m:eqArrPr>" +
+                    "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>b</m:t></m:r><m:aln/><m:r><m:t>c</m:t></m:r><m:aln/><m:r><m:t>d</m:t></m:r></m:e>" +
+                    "<m:e><m:r><m:t>long</m:t></m:r><m:aln/><m:r><m:t>b2</m:t></m:r><m:aln/><m:r><m:t>c2</m:t></m:r><m:aln/><m:r><m:t>tail</m:t></m:r></m:e>" +
+                    "</m:eqArr>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0, paragraphWidthDip: 240);
+                var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToList();
+
+                glyphs.Select(g => g.Text).Should().Contain(new[] { "a", "long", "tail" });
+                mathBox.Metrics.Width.Should().BeApproximately(240, 0.01);
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "E = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox }
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(320, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must consume the same maxDist/objDist MathBox render plan as WPF");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_MathFont_UsesSharedGlyphFontPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

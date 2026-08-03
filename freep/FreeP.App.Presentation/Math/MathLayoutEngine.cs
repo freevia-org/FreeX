@@ -25,7 +25,8 @@ public static class MathLayoutEngine
     private const double TwipsPerDip = 15.0;
     private readonly record struct LayoutOptions(
         bool SmallFraction,
-        double? InterEquationSpacingDip = null);
+        double? InterEquationSpacingDip = null,
+        double? AvailableWidthDip = null);
 
     // ── Public entry ──────────────────────────────────────────────────────
 
@@ -159,14 +160,17 @@ public static class MathLayoutEngine
         double fontSizePt,
         double? paragraphWidthDip = null)
     {
+        var options = new LayoutOptions(
+            node is MathNode.MathParagraph paragraphWithDefaults && paragraphWithDefaults.SmallFraction == true,
+            AvailableWidthDip: paragraphWidthDip);
         var box = node is MathNode.MathParagraph paragraph
             ? LayoutMathParagraph(
                 paragraph,
                 fontFamily,
                 fontSizePt,
                 paragraphWidthDip,
-                new LayoutOptions(paragraph.SmallFraction == true))
-            : LayoutNode(node, fontFamily, fontSizePt);
+                options)
+            : LayoutNode(node, fontFamily, fontSizePt, options);
         var root = new MathBox.Container();
         root.Children.Add(box);
         box.X = 0; box.Y = 0;
@@ -254,6 +258,7 @@ public static class MathLayoutEngine
         var contentOptions = options with
         {
             SmallFraction = paragraph.SmallFraction ?? options.SmallFraction,
+            AvailableWidthDip = paragraphWidthDip is > 0 ? contentWidthDip : null,
             InterEquationSpacingDip = paragraph.UsesInterEquationSpacing &&
                 paragraph.InterSpacingTwips.HasValue
                     ? TwipsToDip(paragraph.InterSpacingTwips.Value)
@@ -1647,6 +1652,9 @@ public static class MathLayoutEngine
             eqArray.RowSpacing,
             em * 0.20);
 
+        if (eqArray.ColumnSeparatorColumns.Any(columns => columns.Count > 0))
+            return LayoutEqArrayWithColumnSeparators(eqArray, fontFamily, fontSizePt, options, rowGap, em);
+
         if (eqArray.AlignmentPointColumns.Any(columns => columns.Count > 1))
             return LayoutEqArrayWithMultipleAlignmentPoints(eqArray, fontFamily, fontSizePt, options, rowGap, em);
 
@@ -1666,7 +1674,11 @@ public static class MathLayoutEngine
         for (int i = 0; i < eqArray.Rows.Count; i++)
         {
             var row = eqArray.Rows[i];
-            var rowBox = LayoutNode(row, fontFamily, fontSizePt, options);
+            var rowBox = LayoutNode(
+                row,
+                fontFamily,
+                fontSizePt,
+                options with { AvailableWidthDip = null });
             var alignmentOffset = GetEqArrayAlignmentOffset(row, rowBox, eqArray.GetAlignmentPointIndex(i));
             rows.Add(rowBox);
             alignmentOffsets.Add(alignmentOffset);
@@ -1720,6 +1732,249 @@ public static class MathLayoutEngine
         return container;
     }
 
+    private static MathBox LayoutEqArrayWithColumnSeparators(
+        MathNode.EqArray eqArray,
+        string fontFamily,
+        double fontSizePt,
+        LayoutOptions options,
+        double rowGap,
+        double em)
+    {
+        if (eqArray.Rows.Count == 0)
+            return MakeGlyph("", fontFamily, fontSizePt, false);
+
+        var rows = new List<MathBox.Container>(eqArray.Rows.Count);
+        var rowSegments = new List<IReadOnlyList<EqArraySegment>>(eqArray.Rows.Count);
+        var rowAscents = new double[eqArray.Rows.Count];
+        var rowDescents = new double[eqArray.Rows.Count];
+        var naturalColumnWidths = new List<double>();
+        var maximumSegmentWidths = new List<double>();
+        var maximumAlignmentLefts = new List<double>();
+        var maximumAlignmentRights = new List<double>();
+        var columnCount = 1;
+        var totalHeight = 0.0;
+
+        for (var rowIndex = 0; rowIndex < eqArray.Rows.Count; rowIndex++)
+        {
+            // The containing width belongs to this array only. Do not let a
+            // nested m:eqArr consume the outer paragraph width as its own.
+            var sourceRow = eqArray.Rows[rowIndex];
+            var rowBox = LayoutNode(
+                sourceRow,
+                fontFamily,
+                fontSizePt,
+                options with { AvailableWidthDip = null });
+            var rowContainer = sourceRow is MathNode.Row && rowBox is MathBox.Container container
+                ? container
+                : WrapMathBoxForEquationArrayRow(rowBox);
+            var segments = BuildEqArraySegments(rowContainer, eqArray.GetMarkers(rowIndex));
+
+            rows.Add(rowContainer);
+            rowSegments.Add(segments);
+            columnCount = Math.Max(columnCount, segments.Count);
+            rowAscents[rowIndex] = rowContainer.Metrics.Ascent;
+            rowDescents[rowIndex] = rowContainer.Metrics.Descent;
+            totalHeight += rowContainer.Metrics.Height;
+
+            while (naturalColumnWidths.Count < segments.Count)
+            {
+                naturalColumnWidths.Add(0);
+                maximumSegmentWidths.Add(0);
+                maximumAlignmentLefts.Add(0);
+                maximumAlignmentRights.Add(0);
+            }
+
+            for (var column = 0; column < segments.Count; column++)
+            {
+                var segment = segments[column];
+                maximumSegmentWidths[column] = Math.Max(maximumSegmentWidths[column], segment.Width);
+                if (segment.AlignmentOffset.HasValue)
+                {
+                    maximumAlignmentLefts[column] = Math.Max(
+                        maximumAlignmentLefts[column], segment.AlignmentOffset.Value);
+                    maximumAlignmentRights[column] = Math.Max(
+                        maximumAlignmentRights[column],
+                        segment.Width - segment.AlignmentOffset.Value);
+                }
+            }
+        }
+
+        while (naturalColumnWidths.Count < columnCount)
+        {
+            naturalColumnWidths.Add(0);
+            maximumSegmentWidths.Add(0);
+            maximumAlignmentLefts.Add(0);
+            maximumAlignmentRights.Add(0);
+        }
+
+        for (var column = 0; column < columnCount; column++)
+        {
+            var alignedColumnWidth = maximumAlignmentLefts[column] + maximumAlignmentRights[column];
+            naturalColumnWidths[column] = maximumAlignmentLefts[column] > 0 || maximumAlignmentRights[column] > 0
+                ? Math.Max(maximumSegmentWidths[column], alignedColumnWidth)
+                : maximumSegmentWidths[column];
+        }
+
+        totalHeight += rowGap * Math.Max(0, rows.Count - 1);
+        var naturalWidth = naturalColumnWidths.Sum();
+        var hasFiniteTarget = eqArray.MaxDistribution &&
+            options.AvailableWidthDip.HasValue &&
+            options.AvailableWidthDip.Value > 0 &&
+            double.IsFinite(options.AvailableWidthDip.Value);
+        var targetWidth = hasFiniteTarget
+            ? Math.Max(naturalWidth, options.AvailableWidthDip!.Value)
+            : naturalWidth;
+        var extraWidth = Math.Max(0, targetWidth - naturalWidth);
+        var useObjectDistribution = eqArray.ObjectDistribution && columnCount > 1;
+        var gapCount = useObjectDistribution
+            ? columnCount - 1
+            : columnCount + 1;
+        var gap = hasFiniteTarget && gapCount > 0 ? extraWidth / gapCount : 0;
+        var leadingGap = hasFiniteTarget ? gap : 0;
+        var betweenGap = hasFiniteTarget ? gap : 0;
+        var trailingGap = hasFiniteTarget && !useObjectDistribution ? gap : 0;
+        if (hasFiniteTarget && useObjectDistribution)
+            leadingGap = trailingGap = 0;
+
+        var columnStarts = new double[columnCount];
+        var nextColumnX = leadingGap;
+        for (var column = 0; column < columnCount; column++)
+        {
+            columnStarts[column] = nextColumnX;
+            nextColumnX += naturalColumnWidths[column];
+            if (column < columnCount - 1)
+                nextColumnX += betweenGap;
+        }
+
+        var alignedWidth = naturalWidth + leadingGap + trailingGap +
+            betweenGap * Math.Max(0, columnCount - 1);
+        var ascent = ResolveStackedArrayAscent(
+            ToMathArrayBaseJustification(eqArray.BaseJustification),
+            rowAscents,
+            rowDescents,
+            rowGap,
+            totalHeight,
+            em);
+        var result = new MathBox.Container
+        {
+            Metrics =
+            {
+                Width = Math.Max(naturalWidth, alignedWidth),
+                Height = totalHeight,
+                Ascent = ascent
+            }
+        };
+
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            var rowBox = rows[rowIndex];
+            var segments = rowSegments[rowIndex];
+            for (var column = 0; column < segments.Count; column++)
+            {
+                var segment = segments[column];
+                var localX = columnStarts[column];
+                if (segment.AlignmentOffset.HasValue)
+                {
+                    localX = PlaceRowChildren(rowBox, segment.Start, segment.AlignmentIndex, localX);
+                    localX = Math.Max(
+                        localX,
+                        columnStarts[column] + maximumAlignmentLefts[column]);
+                    PlaceRowChildren(rowBox, segment.AlignmentIndex, segment.End, localX);
+                }
+                else
+                {
+                    PlaceRowChildren(rowBox, segment.Start, segment.End, localX);
+                }
+            }
+
+            var hasMarkers = eqArray.GetMarkers(rowIndex).Count > 0;
+            rowBox.X = hasMarkers || eqArray.AlignRowsLeft
+                ? 0
+                : (result.Metrics.Width - rowBox.Metrics.Width) / 2.0;
+            rowBox.Y = rowIndex == 0
+                ? 0
+                : result.Children[rowIndex - 1].Y +
+                    result.Children[rowIndex - 1].Metrics.Height + rowGap;
+            var contentRight = rowBox.Children
+                .Select(child => child.X + child.Metrics.Width)
+                .DefaultIfEmpty()
+                .Max();
+            rowBox.Metrics.Width = hasMarkers
+                ? Math.Max(rowBox.Metrics.Width, Math.Max(alignedWidth, contentRight))
+                : rowBox.Metrics.Width;
+            result.Children.Add(rowBox);
+        }
+
+        return result;
+    }
+
+    private readonly record struct EqArraySegment(
+        int Start,
+        int End,
+        int AlignmentIndex,
+        double Width,
+        double? AlignmentOffset);
+
+    private static MathBox.Container WrapMathBoxForEquationArrayRow(MathBox rowBox)
+    {
+        var container = new MathBox.Container
+        {
+            Metrics =
+            {
+                Width = rowBox.Metrics.Width,
+                Height = rowBox.Metrics.Height,
+                Ascent = rowBox.Metrics.Ascent
+            }
+        };
+        rowBox.X = 0;
+        rowBox.Y = 0;
+        container.Children.Add(rowBox);
+        return container;
+    }
+
+    private static IReadOnlyList<EqArraySegment> BuildEqArraySegments(
+        MathBox.Container row,
+        IReadOnlyList<MathNode.EqArray.Marker> markers)
+    {
+        var segments = new List<EqArraySegment>();
+        var start = 0;
+        var alignmentIndex = -1;
+        foreach (var marker in markers)
+        {
+            var index = Math.Clamp(marker.ChildIndex, start, row.Children.Count);
+            if (marker.Kind == MathNode.EqArray.MarkerKind.AlignmentPoint)
+            {
+                alignmentIndex = index;
+                continue;
+            }
+
+            segments.Add(CreateEqArraySegment(row, start, index, alignmentIndex));
+            start = index;
+            alignmentIndex = -1;
+        }
+
+        segments.Add(CreateEqArraySegment(row, start, row.Children.Count, alignmentIndex));
+        return segments;
+    }
+
+    private static EqArraySegment CreateEqArraySegment(
+        MathBox.Container row,
+        int start,
+        int end,
+        int alignmentIndex)
+    {
+        var width = MeasureRowChildren(row, start, end);
+        double? alignmentOffset = alignmentIndex >= start
+            ? MeasureRowChildren(row, start, alignmentIndex)
+            : null;
+        return new EqArraySegment(
+            start,
+            end,
+            alignmentIndex < 0 ? start : alignmentIndex,
+            width,
+            alignmentOffset);
+    }
+
     private static MathBox LayoutEqArrayWithMultipleAlignmentPoints(
         MathNode.EqArray eqArray,
         string fontFamily,
@@ -1746,7 +2001,11 @@ public static class MathLayoutEngine
         for (var i = 0; i < eqArray.Rows.Count; i++)
         {
             var row = eqArray.Rows[i];
-            var rowBox = LayoutNode(row, fontFamily, fontSizePt, options);
+            var rowBox = LayoutNode(
+                row,
+                fontFamily,
+                fontSizePt,
+                options with { AvailableWidthDip = null });
             var columns = eqArray.GetAlignmentPointColumns(i);
             rows.Add(rowBox);
             rowColumns.Add(columns);

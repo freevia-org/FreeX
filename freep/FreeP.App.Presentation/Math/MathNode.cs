@@ -619,6 +619,14 @@ public abstract class MathNode
     /// </summary>
     public sealed class EqArray : MathNode
     {
+        public enum MarkerKind
+        {
+            AlignmentPoint,
+            ColumnSeparator
+        }
+
+        public readonly record struct Marker(int ChildIndex, MarkerKind Kind);
+
         public enum EqArrayBaseJustification
         {
             Top,
@@ -662,6 +670,21 @@ public abstract class MathNode
         public IReadOnlyList<IReadOnlyList<int>> AlignmentPointColumns { get; }
 
         /// <summary>
+        /// All direct equation-array markers in source order. OMML treats odd
+        /// markers as alignment points and even markers as column separators.
+        /// </summary>
+        public IReadOnlyList<IReadOnlyList<Marker>> MarkerColumns { get; }
+
+        /// <summary>Direct-child positions of the column separators in each row.</summary>
+        public IReadOnlyList<IReadOnlyList<int>> ColumnSeparatorColumns { get; }
+
+        /// <summary>True when m:eqArrPr/m:maxDist is explicitly enabled.</summary>
+        public bool MaxDistribution { get; }
+
+        /// <summary>True when m:eqArrPr/m:objDist is explicitly enabled.</summary>
+        public bool ObjectDistribution { get; }
+
+        /// <summary>
         /// True only for the equation array synthesized from a multi-equation
         /// m:oMathPara. Its unmarked rows are left-aligned within the group;
         /// authored m:eqArr keeps its existing centered-row default.
@@ -675,20 +698,44 @@ public abstract class MathNode
             EqArraySpacingRule? rowSpacingRule = null,
             int? rowSpacing = null,
             bool alignRowsLeft = false,
-            IReadOnlyList<IReadOnlyList<int>>? alignmentPointColumns = null)
+            IReadOnlyList<IReadOnlyList<int>>? alignmentPointColumns = null,
+            IReadOnlyList<IReadOnlyList<Marker>>? markerColumns = null,
+            bool maxDistribution = false,
+            bool objectDistribution = false)
         {
             Rows = rows;
-            AlignmentPointIndices = alignmentPointIndices ?? System.Array.Empty<int?>();
             BaseJustification = baseJustification;
             RowSpacingRule = rowSpacingRule;
             RowSpacing = rowSpacing;
             AlignRowsLeft = alignRowsLeft;
-            AlignmentPointColumns = alignmentPointColumns
-                ?? AlignmentPointIndices
-                    .Select(index => index.HasValue
-                        ? (IReadOnlyList<int>)new[] { index.Value }
-                        : Array.Empty<int>())
+            MarkerColumns = markerColumns
+                ?? (alignmentPointColumns
+                    ?? (alignmentPointIndices ?? System.Array.Empty<int?>())
+                        .Select(index => index.HasValue
+                            ? (IReadOnlyList<int>)new[] { index.Value }
+                            : Array.Empty<int>())
+                        .ToArray())
+                    .Select(indices => (IReadOnlyList<Marker>)indices
+                        .Select(index => new Marker(index, MarkerKind.AlignmentPoint))
+                        .ToArray())
                     .ToArray();
+            AlignmentPointColumns = MarkerColumns
+                .Select(markers => (IReadOnlyList<int>)markers
+                    .Where(marker => marker.Kind == MarkerKind.AlignmentPoint)
+                    .Select(marker => marker.ChildIndex)
+                    .ToArray())
+                .ToArray();
+            ColumnSeparatorColumns = MarkerColumns
+                .Select(markers => (IReadOnlyList<int>)markers
+                    .Where(marker => marker.Kind == MarkerKind.ColumnSeparator)
+                    .Select(marker => marker.ChildIndex)
+                    .ToArray())
+                .ToArray();
+            AlignmentPointIndices = AlignmentPointColumns
+                .Select(columns => columns.Count > 0 ? (int?)columns[0] : null)
+                .ToArray();
+            MaxDistribution = maxDistribution;
+            ObjectDistribution = objectDistribution;
         }
 
         public int? GetAlignmentPointIndex(int rowIndex) =>
@@ -700,6 +747,11 @@ public abstract class MathNode
             rowIndex >= 0 && rowIndex < AlignmentPointColumns.Count
                 ? AlignmentPointColumns[rowIndex]
                 : Array.Empty<int>();
+
+        public IReadOnlyList<Marker> GetMarkers(int rowIndex) =>
+            rowIndex >= 0 && rowIndex < MarkerColumns.Count
+                ? MarkerColumns[rowIndex]
+                : Array.Empty<Marker>();
     }
 
     // ── Row (horizontal sequence) ────────────────────────────────────────────

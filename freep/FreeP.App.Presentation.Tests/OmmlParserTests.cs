@@ -923,9 +923,150 @@ public sealed class OmmlParserTests
             "</m:eqArr>");
 
         var eqArray = Assert.IsType<MathNode.EqArray>(node);
-        Assert.Equal(new[] { 1, 2 }, eqArray.AlignmentPointColumns[0]);
-        Assert.Equal(new[] { 1, 2 }, eqArray.AlignmentPointColumns[1]);
+        Assert.Equal(new[] { 1 }, eqArray.AlignmentPointColumns[0]);
+        Assert.Equal(new[] { 1 }, eqArray.AlignmentPointColumns[1]);
+        Assert.Equal(new[] { 2 }, eqArray.ColumnSeparatorColumns[0]);
+        Assert.Equal(new[] { 2 }, eqArray.ColumnSeparatorColumns[1]);
+        Assert.Equal(
+            new[]
+            {
+                new MathNode.EqArray.Marker(1, MathNode.EqArray.MarkerKind.AlignmentPoint),
+                new MathNode.EqArray.Marker(2, MathNode.EqArray.MarkerKind.ColumnSeparator)
+            },
+            eqArray.MarkerColumns[0]);
         Assert.Equal(new int?[] { 1, 1 }, eqArray.AlignmentPointIndices);
+    }
+
+    [Fact]
+    public void Parse_EqArray_RunAlignmentMarkerStaysBeforeAndRendersItsRun()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:rPr><m:aln/></m:rPr><m:t>x</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        var row = Assert.IsType<MathNode.Run>(eqArray.Rows[0]);
+        Assert.Equal("x", row.Text);
+        Assert.True(row.IsAlignmentPoint);
+        Assert.Equal(
+            new MathNode.EqArray.Marker(0, MathNode.EqArray.MarkerKind.AlignmentPoint),
+            Assert.Single(eqArray.MarkerColumns[0]));
+        Assert.Equal(0, eqArray.AlignmentPointIndices[0]);
+    }
+
+    [Fact]
+    public void Parse_EqArray_HeterogeneousRowsKeepSeparatorMarkersScopedPerRow()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>b</m:t></m:r><m:aln/><m:r><m:t>c</m:t></m:r><m:aln/><m:r><m:t>d</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>wide</m:t></m:r><m:aln/><m:r><m:t>tail</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(
+            new[]
+            {
+                new MathNode.EqArray.Marker(1, MathNode.EqArray.MarkerKind.AlignmentPoint),
+                new MathNode.EqArray.Marker(2, MathNode.EqArray.MarkerKind.ColumnSeparator),
+                new MathNode.EqArray.Marker(3, MathNode.EqArray.MarkerKind.AlignmentPoint)
+            },
+            eqArray.MarkerColumns[0]);
+        Assert.Equal(
+            new[]
+            {
+                new MathNode.EqArray.Marker(1, MathNode.EqArray.MarkerKind.AlignmentPoint)
+            },
+            eqArray.MarkerColumns[1]);
+        Assert.Equal(new[] { 1, 3 }, eqArray.AlignmentPointColumns[0]);
+        Assert.Equal(new[] { 2 }, eqArray.ColumnSeparatorColumns[0]);
+        Assert.Equal(new[] { 1 }, eqArray.AlignmentPointColumns[1]);
+    }
+
+    [Fact]
+    public void Parse_EqArray_TextAmpersandsBecomeOddAlignmentAndEvenSeparatorMarkers()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>a&amp;b&amp;c&amp;d</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        var row = Assert.IsType<MathNode.Row>(eqArray.Rows[0]);
+        Assert.Equal(new[] { "a", "b", "c", "d" },
+            row.Children.Cast<MathNode.Run>().Select(run => run.Text));
+        Assert.Equal(new[] { 1, 3 }, eqArray.AlignmentPointColumns[0]);
+        Assert.Equal(new[] { 2 }, eqArray.ColumnSeparatorColumns[0]);
+        Assert.Equal(
+            new[]
+            {
+                new MathNode.EqArray.Marker(1, MathNode.EqArray.MarkerKind.AlignmentPoint),
+                new MathNode.EqArray.Marker(2, MathNode.EqArray.MarkerKind.ColumnSeparator),
+                new MathNode.EqArray.Marker(3, MathNode.EqArray.MarkerKind.AlignmentPoint)
+            },
+            eqArray.MarkerColumns[0]);
+    }
+
+    [Fact]
+    public void Parse_EqArrayDistributionPropertiesUseDocumentedOnOffDefaults()
+    {
+        static MathNode.EqArray ParseWithProperties(string properties)
+        {
+            var node = OmmlParser.Parse(
+                "<m:oMath xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\"><m:eqArr>" +
+                properties +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "</m:eqArr></m:oMath>",
+                "FALLBACK");
+            return Assert.IsType<MathNode.EqArray>(node);
+        }
+
+        Assert.False(ParseWithProperties("").MaxDistribution);
+        Assert.False(ParseWithProperties("").ObjectDistribution);
+        Assert.False(ParseWithProperties("<m:eqArrPr/>").MaxDistribution);
+        Assert.False(ParseWithProperties("<m:eqArrPr/>").ObjectDistribution);
+        Assert.True(ParseWithProperties("<m:eqArrPr><m:maxDist/></m:eqArrPr>").MaxDistribution);
+        Assert.True(ParseWithProperties("<m:eqArrPr><m:objDist/></m:eqArrPr>").ObjectDistribution);
+        Assert.False(ParseWithProperties("<m:eqArrPr><m:maxDist m:val=\"0\"/><m:objDist m:val=\"false\"/></m:eqArrPr>").MaxDistribution);
+        Assert.False(ParseWithProperties("<m:eqArrPr><m:maxDist m:val=\"bogus\"/><m:objDist m:val=\"bogus\"/></m:eqArrPr>").MaxDistribution);
+        Assert.False(ParseWithProperties("<m:eqArrPr><m:maxDist m:val=\"bogus\"/><m:objDist m:val=\"bogus\"/></m:eqArrPr>").ObjectDistribution);
+    }
+
+    [Fact]
+    public void EqArray_ExplicitMarkerMetadataWinsOverLegacyAlignmentIndex()
+    {
+        var markerColumns = new IReadOnlyList<MathNode.EqArray.Marker>[]
+        {
+            new MathNode.EqArray.Marker[]
+            {
+                new(0, MathNode.EqArray.MarkerKind.ColumnSeparator)
+            }
+        };
+        var eqArray = new MathNode.EqArray(
+            new MathNode[] { new MathNode.Run("x") },
+            alignmentPointIndices: new int?[] { 99 },
+            markerColumns: markerColumns);
+
+        Assert.Null(eqArray.AlignmentPointIndices[0]);
+        Assert.Empty(eqArray.AlignmentPointColumns[0]);
+        Assert.Equal(new[] { 0 }, eqArray.ColumnSeparatorColumns[0]);
+    }
+
+    [Fact]
+    public void EqArray_ComputedAlignmentColumnsWinOverConflictingLegacyIndices()
+    {
+        var alignmentColumns = new IReadOnlyList<int>[]
+        {
+            new[] { 2 }
+        };
+        var eqArray = new MathNode.EqArray(
+            new MathNode[] { new MathNode.Run("x") },
+            alignmentPointIndices: new int?[] { 99 },
+            alignmentPointColumns: alignmentColumns);
+
+        Assert.Equal(new[] { 2 }, eqArray.AlignmentPointColumns[0]);
+        Assert.Equal(2, eqArray.AlignmentPointIndices[0]);
     }
 
     [Fact]

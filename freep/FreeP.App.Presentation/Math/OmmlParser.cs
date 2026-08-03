@@ -1104,13 +1104,19 @@ public static class OmmlParser
         var rows = new List<MathNode>();
         var alignmentPointIndices = new List<int?>();
         var alignmentPointColumns = new List<IReadOnlyList<int>>();
+        var markerColumns = new List<IReadOnlyList<MathNode.EqArray.Marker>>();
         foreach (var eEl in el.Elements(M + "e"))
         {
-            var (row, alignmentPointIndicesForRow) = ParseEqArrayRow(eEl, inheritedProperties);
+            var (row, markersForRow) = ParseEqArrayRow(eEl, inheritedProperties);
             rows.Add(row);
+            markerColumns.Add(markersForRow);
+            var alignmentPointIndicesForRow = markersForRow
+                .Where(marker => marker.Kind == MathNode.EqArray.MarkerKind.AlignmentPoint)
+                .Select(marker => marker.ChildIndex)
+                .ToArray();
             alignmentPointColumns.Add(alignmentPointIndicesForRow);
             alignmentPointIndices.Add(
-                alignmentPointIndicesForRow.Count > 0
+                alignmentPointIndicesForRow.Length > 0
                     ? alignmentPointIndicesForRow[0]
                     : null);
         }
@@ -1121,7 +1127,10 @@ public static class OmmlParser
             ParseEqArrayBaseJustification(eqArrPr),
             ParseEqArraySpacingRule(eqArrPr),
             ParseEqArrayIntValue(eqArrPr, "rSp"),
-            alignmentPointColumns: alignmentPointColumns);
+            alignmentPointColumns: alignmentPointColumns,
+            markerColumns: markerColumns,
+            maxDistribution: ParseEqArrayOnOff(eqArrPr, "maxDist"),
+            objectDistribution: ParseEqArrayOnOff(eqArrPr, "objDist"));
     }
 
     private static MathNode.EqArray.EqArrayBaseJustification ParseEqArrayBaseJustification(XElement? eqArrPr)
@@ -1157,18 +1166,28 @@ public static class OmmlParser
             : null;
     }
 
-    private static (MathNode Row, IReadOnlyList<int> AlignmentPointIndices) ParseEqArrayRow(
+    private static bool ParseEqArrayOnOff(XElement? eqArrPr, string localName)
+    {
+        var element = eqArrPr?.Element(M + localName);
+        if (element is null)
+            return false;
+
+        var value = ReadVal(element)?.Trim().ToLowerInvariant();
+        return value is null or "" or "1" or "true" or "on";
+    }
+
+    private static (MathNode Row, IReadOnlyList<MathNode.EqArray.Marker> Markers) ParseEqArrayRow(
         XElement eEl,
         MathNode.MathProperties inheritedProperties)
     {
         var children = new List<MathNode>();
-        var alignmentPointIndices = new List<int>();
+        var markers = new List<MathNode.EqArray.Marker>();
 
         foreach (var child in eEl.Elements())
         {
             if (IsEquationArrayAlignmentMarker(child))
             {
-                alignmentPointIndices.Add(children.Count);
+                AddEquationArrayMarker(markers, children.Count);
                 continue;
             }
 
@@ -1176,8 +1195,12 @@ public static class OmmlParser
             if (node is not null)
             {
                 if (IsAlignmentPointNode(node))
-                    alignmentPointIndices.Add(children.Count);
-                children.Add(node);
+                    AddEquationArrayMarker(markers, children.Count);
+
+                if (node is MathNode.Run run && run.Text.Contains('&'))
+                    AppendEquationArrayRunSegments(run, children, markers);
+                else
+                    children.Add(node);
             }
         }
 
@@ -1185,7 +1208,41 @@ public static class OmmlParser
             ? children[0]
             : new MathNode.Row(children);
 
-        return (row, alignmentPointIndices);
+        return (row, markers);
+    }
+
+    private static void AppendEquationArrayRunSegments(
+        MathNode.Run run,
+        List<MathNode> children,
+        List<MathNode.EqArray.Marker> markers)
+    {
+        var segments = run.Text.Split('&');
+        for (var segmentIndex = 0; segmentIndex < segments.Length; segmentIndex++)
+        {
+            if (segmentIndex > 0)
+                AddEquationArrayMarker(markers, children.Count);
+
+            if (segments[segmentIndex].Length > 0)
+            {
+                children.Add(new MathNode.Run(
+                    segments[segmentIndex],
+                    run.IsItalic,
+                    run.IsBold,
+                    run.Alphabet,
+                    run.IsLiteral,
+                    isAlignmentPoint: segmentIndex == 0 && run.IsAlignmentPoint));
+            }
+        }
+    }
+
+    private static void AddEquationArrayMarker(
+        List<MathNode.EqArray.Marker> markers,
+        int childIndex)
+    {
+        var kind = (markers.Count % 2) == 0
+            ? MathNode.EqArray.MarkerKind.AlignmentPoint
+            : MathNode.EqArray.MarkerKind.ColumnSeparator;
+        markers.Add(new MathNode.EqArray.Marker(childIndex, kind));
     }
 
     private static bool IsEquationArrayAlignmentMarker(XElement element) =>
