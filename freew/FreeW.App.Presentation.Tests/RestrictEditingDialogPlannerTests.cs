@@ -18,6 +18,24 @@ public sealed class RestrictEditingDialogPlannerTests
     }
 
     [Fact]
+    public void Presentation_matches_the_WPF_authority_action_and_geometry_contract()
+    {
+        var presentation = RestrictEditingDialogPlanner.Presentation;
+
+        presentation.DialogWidth.Should().Be(360);
+        presentation.ContentMargin.Should().Be(14);
+        presentation.RadioButtonHeight.Should().Be(16);
+        presentation.TextBoxHeight.Should().Be(20);
+        presentation.ShowStatusText.Should().BeFalse();
+        presentation.DefaultButtonText.Should().BeNull();
+        presentation.InitialFocusTarget.Should().Be("first-mode");
+        presentation.ActionButtonOrder.Should().Equal(
+            RestrictEditingDialogPlanner.StartButtonText,
+            RestrictEditingDialogPlanner.StopButtonText,
+            RestrictEditingDialogPlanner.CancelButtonText);
+    }
+
+    [Fact]
     public void BuildPlan_normalizes_unprotected_state_to_read_only_start_workflow()
     {
         var plan = RestrictEditingDialogPlanner.BuildPlan(ProtectionSettings.Unprotected);

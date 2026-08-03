@@ -11,7 +11,12 @@ namespace FreeW.App.Avalonia;
 
 internal sealed class RestrictEditingDialog : FreeWDialogWindow
 {
-    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
+    private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle =
+        AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            CompactRadioButtonHeight = RestrictEditingDialogPlanner.Presentation.RadioButtonHeight,
+            TextBoxHeight = RestrictEditingDialogPlanner.Presentation.TextBoxHeight,
+        };
     private readonly ProtectionSettings _currentProtection;
     private readonly RestrictEditingDialogPlan _plan;
     private readonly RadioButton[] _radios;
@@ -34,9 +39,10 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
         _currentProtection = current;
         _plan = RestrictEditingDialogPlanner.BuildPlan(current);
         _askPassword = askPassword ?? throw new ArgumentNullException(nameof(askPassword));
+        var presentation = RestrictEditingDialogPlanner.Presentation;
 
         Title = RestrictEditingDialogPlanner.Title;
-        Width = 380;
+        Width = presentation.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         CanResize = false;
@@ -44,14 +50,14 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
 
         var body = new StackPanel
         {
-            Margin = new Thickness(16, 14, 16, 0),
-            Spacing = 6,
+            Margin = new Thickness(presentation.ContentMargin),
         };
 
         body.Children.Add(new TextBlock
         {
             Text = RestrictEditingDialogPlanner.RestrictionPrompt,
             TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, presentation.PromptBottomMargin),
         });
 
         _radios = new RadioButton[RestrictEditingDialogPlanner.ModeOptions.Count];
@@ -64,28 +70,27 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
                 GroupName = "RestrictEditingMode",
                 IsChecked = i == _plan.SelectedModeIndex,
                 IsEnabled = _plan.CanStartProtection,
+                Margin = new Thickness(0, presentation.ModeOptionVerticalMargin, 0, presentation.ModeOptionVerticalMargin),
             };
-            AvaloniaCompactDialogChrome.ApplyRadioButton(radio, DialogChromeStyle);
+            AvaloniaCompactDialogChrome.ApplyCompactRadioButton(radio, DialogChromeStyle);
             _radios[i] = radio;
             body.Children.Add(radio);
         }
 
-        body.Children.Add(new TextBlock
-        {
-            Text = _plan.StatusText,
-            Foreground = Brushes.Gray,
-            FontSize = 11,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 0),
-        });
+        if (presentation.ShowStatusText)
+            body.Children.Add(new TextBlock { Text = _plan.StatusText });
 
         if (_plan.ShowStartPasswordFields)
         {
-            body.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 2) });
+            body.Children.Add(new Separator
+            {
+                Margin = new Thickness(0, presentation.PasswordSeparatorTopMargin, 0, presentation.PasswordSeparatorBottomMargin)
+            });
             body.Children.Add(new TextBlock
             {
                 Text = RestrictEditingDialogPlanner.OptionalPasswordPrompt,
                 TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, presentation.PasswordPromptBottomMargin),
             });
             AddPasswordField(body, RestrictEditingDialogPlanner.PasswordLabel, _passwordBox);
             AddPasswordField(body, RestrictEditingDialogPlanner.ConfirmLabel, _confirmBox);
@@ -97,29 +102,51 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
         var start = new Button
         {
             Content = RestrictEditingDialogPlanner.StartButtonText,
-            IsDefault = _plan.CanStartProtection,
+            IsDefault = presentation.DefaultButtonText == RestrictEditingDialogPlanner.StartButtonText,
             IsEnabled = _plan.CanStartProtection,
+            Margin = new Thickness(0, presentation.StartActionTopMargin, 0, presentation.ActionButtonBottomMargin),
+            HorizontalAlignment = HorizontalAlignment.Left,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(start, DialogChromeStyle, minWidth: 190, isDefault: _plan.CanStartProtection);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            start,
+            DialogChromeStyle,
+            minWidth: 200,
+            isDefault: presentation.DefaultButtonText == RestrictEditingDialogPlanner.StartButtonText);
         start.Click += (_, _) => StartProtection();
 
         var stop = new Button
         {
             Content = RestrictEditingDialogPlanner.StopButtonText,
-            IsDefault = !_plan.CanStartProtection,
+            IsDefault = presentation.DefaultButtonText == RestrictEditingDialogPlanner.StopButtonText,
             IsEnabled = _plan.CanStopProtection,
+            Margin = new Thickness(0, 0, 0, presentation.ActionButtonBottomMargin),
+            HorizontalAlignment = HorizontalAlignment.Left,
         };
-        AvaloniaCompactDialogChrome.ApplyButton(stop, DialogChromeStyle, minWidth: 150, isDefault: !_plan.CanStartProtection);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            stop,
+            DialogChromeStyle,
+            minWidth: 180,
+            isDefault: presentation.DefaultButtonText == RestrictEditingDialogPlanner.StopButtonText);
         stop.Click += async (_, _) => await StopProtectionAsync();
 
         var cancel = new Button { Content = RestrictEditingDialogPlanner.CancelButtonText, IsCancel = true };
         AvaloniaCompactDialogChrome.ApplyButton(cancel, DialogChromeStyle, minWidth: 72);
         cancel.Click += (_, _) => Close();
 
-        var buttons = AvaloniaCompactDialogChrome.CreateActionRow([start, stop, cancel], new Thickness(16, 12, 16, 14));
-        DockPanel.SetDock(buttons, Dock.Bottom);
-        Content = new DockPanel { LastChildFill = true, Children = { buttons, body } };
-        Opened += (_, _) => _radios[0].Focus();
+        cancel.Margin = new Thickness(0, presentation.CancelActionTopMargin, 0, 0);
+        cancel.HorizontalAlignment = HorizontalAlignment.Right;
+        body.Children.Add(start);
+        body.Children.Add(stop);
+        body.Children.Add(cancel);
+        Content = body;
+        Opened += (_, _) =>
+        {
+            // FreeWDialogWindow reapplies the default compact chrome to descendants on Opened;
+            // restore the WPF authority input height after that host-wide pass.
+            AvaloniaCompactDialogChrome.ApplyTextBox(_passwordBox, DialogChromeStyle);
+            AvaloniaCompactDialogChrome.ApplyTextBox(_confirmBox, DialogChromeStyle);
+            _radios[0].Focus();
+        };
     }
 
     private void StartProtection()
@@ -190,7 +217,7 @@ internal sealed class RestrictEditingDialog : FreeWDialogWindow
     {
         var box = new TextBox
         {
-            Width = 190,
+            MinWidth = 180,
             PasswordChar = '*',
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(box, DialogChromeStyle);

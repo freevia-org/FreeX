@@ -21,9 +21,11 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
     private RestrictEditingDialog(Window? owner, ProtectionSettings current)
     {
+        var presentation = RestrictEditingDialogPlanner.Presentation;
+
         Owner = owner;
         Title = RestrictEditingDialogPlanner.Title;
-        Width = 360;
+        Width = presentation.DialogWidth;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
@@ -34,12 +36,12 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         _passwordBox = new PasswordBox { MinWidth = 180 };
         _confirmBox = new PasswordBox { MinWidth = 180 };
 
-        var panel = new StackPanel { Margin = new Thickness(14) };
+        var panel = new StackPanel { Margin = new Thickness(presentation.ContentMargin) };
         panel.Children.Add(new TextBlock
         {
             Text = RestrictEditingDialogPlanner.RestrictionPrompt,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 0, 0, 8)
+            Margin = new Thickness(0, 0, 0, presentation.PromptBottomMargin)
         });
 
         _radios = new RadioButton[RestrictEditingDialogPlanner.ModeOptions.Count];
@@ -49,7 +51,7 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             _radios[i] = new RadioButton
             {
                 Content = option.Label,
-                Margin = new Thickness(0, 3, 0, 3),
+                Margin = new Thickness(0, presentation.ModeOptionVerticalMargin, 0, presentation.ModeOptionVerticalMargin),
                 IsChecked = i == _plan.SelectedModeIndex
             };
             panel.Children.Add(_radios[i]);
@@ -57,12 +59,15 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
 
         if (_plan.ShowStartPasswordFields)
         {
-            panel.Children.Add(new Separator { Margin = new Thickness(0, 10, 0, 6) });
+            panel.Children.Add(new Separator
+            {
+                Margin = new Thickness(0, presentation.PasswordSeparatorTopMargin, 0, presentation.PasswordSeparatorBottomMargin)
+            });
             panel.Children.Add(new TextBlock
             {
                 Text = RestrictEditingDialogPlanner.OptionalPasswordPrompt,
                 TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 4)
+                Margin = new Thickness(0, 0, 0, presentation.PasswordPromptBottomMargin)
             });
             panel.Children.Add(new TextBlock { Text = RestrictEditingDialogPlanner.PasswordLabel, Margin = new Thickness(0, 0, 0, 2) });
             panel.Children.Add(_passwordBox);
@@ -74,9 +79,10 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         {
             Content = RestrictEditingDialogPlanner.StartButtonText,
             MinWidth = 200,
-            Margin = new Thickness(0, 14, 0, 4),
+            Margin = new Thickness(0, presentation.StartActionTopMargin, 0, presentation.ActionButtonBottomMargin),
             HorizontalAlignment = HorizontalAlignment.Left,
-            IsEnabled = _plan.CanStartProtection
+            IsEnabled = _plan.CanStartProtection,
+            IsDefault = presentation.DefaultButtonText == RestrictEditingDialogPlanner.StartButtonText
         };
         enforce.Click += (_, _) => Enforce();
         panel.Children.Add(enforce);
@@ -85,9 +91,10 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
         {
             Content = RestrictEditingDialogPlanner.StopButtonText,
             MinWidth = 180,
-            Margin = new Thickness(0, 0, 0, 4),
+            Margin = new Thickness(0, 0, 0, presentation.ActionButtonBottomMargin),
             HorizontalAlignment = HorizontalAlignment.Left,
-            IsEnabled = _plan.CanStopProtection
+            IsEnabled = _plan.CanStopProtection,
+            IsDefault = presentation.DefaultButtonText == RestrictEditingDialogPlanner.StopButtonText
         };
         stop.Click += (_, _) => StopProtection();
         panel.Children.Add(stop);
@@ -97,7 +104,7 @@ internal sealed class RestrictEditingDialog : Free.Shared.Ribbon.Wpf.DialogWindo
             Content = RestrictEditingDialogPlanner.CancelButtonText,
             MinWidth = 72,
             IsCancel = true,
-            Margin = new Thickness(0, 8, 0, 0),
+            Margin = new Thickness(0, presentation.CancelActionTopMargin, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Right
         };
         panel.Children.Add(cancel);

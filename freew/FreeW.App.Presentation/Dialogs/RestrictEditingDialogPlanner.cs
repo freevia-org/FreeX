@@ -14,6 +14,24 @@ public sealed record RestrictEditingDialogPlan(
     bool ShowStopPasswordField,
     string StatusText);
 
+public sealed record RestrictEditingDialogPresentationPlan(
+    int DialogWidth,
+    int ContentMargin,
+    int PromptBottomMargin,
+    int ModeOptionVerticalMargin,
+    int RadioButtonHeight,
+    int TextBoxHeight,
+    int PasswordSeparatorTopMargin,
+    int PasswordSeparatorBottomMargin,
+    int PasswordPromptBottomMargin,
+    int StartActionTopMargin,
+    int ActionButtonBottomMargin,
+    int CancelActionTopMargin,
+    bool ShowStatusText,
+    string? DefaultButtonText,
+    string InitialFocusTarget,
+    IReadOnlyList<string> ActionButtonOrder);
+
 public static class RestrictEditingDialogPlanner
 {
     public const string Title = "Restrict Editing";
@@ -27,6 +45,24 @@ public static class RestrictEditingDialogPlanner
     public const string StopPasswordPrompt = "Enter the password to remove protection:";
     public const string PasswordMismatchMessage = "The passwords do not match. Please re-enter.";
     public const string IncorrectPasswordMessage = "Incorrect password. Protection has not been removed.";
+
+    public static readonly RestrictEditingDialogPresentationPlan Presentation = new(
+        DialogWidth: 360,
+        ContentMargin: 14,
+        PromptBottomMargin: 8,
+        ModeOptionVerticalMargin: 3,
+        RadioButtonHeight: 16,
+        TextBoxHeight: 20,
+        PasswordSeparatorTopMargin: 10,
+        PasswordSeparatorBottomMargin: 6,
+        PasswordPromptBottomMargin: 4,
+        StartActionTopMargin: 14,
+        ActionButtonBottomMargin: 4,
+        CancelActionTopMargin: 8,
+        ShowStatusText: false,
+        DefaultButtonText: null,
+        InitialFocusTarget: "first-mode",
+        ActionButtonOrder: [StartButtonText, StopButtonText, CancelButtonText]);
 
     public static readonly IReadOnlyList<RestrictEditingModeOption> ModeOptions =
     [
