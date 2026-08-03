@@ -83,6 +83,91 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public void LinuxParityCaptureHarness_UsesBoundedForegroundContainerContract()
+    {
+        var source = ReadLinuxParityCaptureHarnessSource();
+
+        source.Should().Contain("--entrypoint /bin/bash");
+        source.Should().Contain("$Image /work/container-run.sh");
+        source.Should().Contain("timeout --signal=TERM --kill-after=5s");
+        source.Should().Contain("capture_validated=true");
+        source.Should().Contain("docker stop --time 5 $name");
+        source.Should().Contain("docker rm -f $name");
+        source.Should().NotContain("$Image bash /work/container-run.sh");
+    }
+
+    [Fact]
+    public void LinuxParityCaptureHarness_RejectsUnsafeSurfaceIdsBeforeBashExpansion()
+    {
+        var source = ReadLinuxParityCaptureHarnessSource();
+
+        source.Should().Contain("$SurfaceId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$'");
+        source.Should().Contain("$validatedSurfaceId = $SurfaceId");
+        source.Should().Contain("$targetPngFileName = \"$validatedSurfaceId.png\"");
+        source.Should().Contain("$runScript = $runScript.Replace('__SURFACE__', $validatedSurfaceId)");
+        source.Should().Contain("$runScript = $runScript.Replace('__TARGET_PNG__', $targetPngFileName)");
+        source.Should().Contain("rm -f /work/manifest.json /work/__TARGET_PNG__ /work/run-result.txt");
+        source.Should().NotContain("rm -f /work/manifest.json /work/dialog.GoalSeekStatus.png");
+    }
+
+    [Fact]
+    public void LinuxParityCaptureHarness_RequiresExactValidationResultMarkers()
+    {
+        var source = ReadLinuxParityCaptureHarnessSource();
+
+        source.Should().Contain("$resultLines -contains \"app_exit=0\"");
+        source.Should().Contain("$resultLines -contains \"capture_validated=true\"");
+        source.Should().Contain("Capture container did not report app_exit=0 and capture_validated=true.");
+        source.Should().Contain("if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf))");
+    }
+
+    [Fact]
+    public async Task TargetedGoalSeekStatusCapture_WritesNonBlank380x190Png()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-goalseek-status-capture-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    window.Measure(new global::Avalonia.Size(1120, 720));
+                    window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
+                    window.UpdateLayout();
+
+                    var results = await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        targetSurfaceId: "dialog.GoalSeekStatus");
+
+                    results.Should().ContainSingle(result => result.Id == "dialog.GoalSeekStatus");
+                    var result = results.Single();
+                    result.Captured.Should().BeTrue(result.Note);
+
+                    var pngPath = Path.Combine(outputDirectory, result.PngFileName);
+                    AssertCapturedPng(outputDirectory, result);
+                    ReadPngDimensions(pngPath).Should().Be((380, 190));
+                    new FileInfo(pngPath).Length.Should().BeGreaterThan(1000,
+                        "the targeted dialog PNG must contain rendered content, not only a minimal blank frame");
+                }
+                finally
+                {
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public void InteractionDialogRoutes_MapEveryAuthoritativeCatalogRow()
     {
         var catalog = InteractionSurfaceCatalog.Dialogs;
@@ -796,6 +881,16 @@ public sealed class ParityCaptureTests
         }
 
         return starts;
+    }
+
+    private static string ReadLinuxParityCaptureHarnessSource()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+
+        directory.Should().NotBeNull("the test output should remain inside the repository");
+        return File.ReadAllText(Path.Combine(directory!.FullName, "tools", "Run-LinuxParityCapture.ps1"));
     }
 
     private static void TryDeleteDirectory(string path)
