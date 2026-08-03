@@ -59,6 +59,55 @@ public sealed class OmmlMathDefaultsParityTests
         thrown.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Avalonia_DefJc_UsesSharedInheritedParagraphPlan()
+    {
+        Exception? thrown = null;
+        await Session.Dispatch(() =>
+        {
+            try
+            {
+                var node = OmmlParser.ParsePowerPoint(
+                    "<m:oMathPara xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\">" +
+                    "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>",
+                    "x",
+                    new MathNode.MathProperties(
+                        DefaultJustification: MathNode.MathParagraphJustification.Right));
+                var natural = MathLayoutEngine.Layout(
+                    ((MathNode.MathParagraph)node).Content, "Cambria Math", 18.0);
+                var layout = MathLayoutEngine.Layout(node, "Cambria Math", 18.0, paragraphWidthDip: 180);
+                var glyph = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Single();
+
+                glyph.X.Should().BeApproximately(10 + 180 - natural.Metrics.Width, 0.01);
+
+                var paragraph = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun
+                        {
+                            Text = "x",
+                            FontFamily = "Cambria Math",
+                            MathLayout = layout,
+                            Color = SrgbColor.Black,
+                        },
+                    },
+                };
+                var bitmap = new RenderTargetBitmap(new PixelSize(320, 120));
+                using DrawingContext drawingContext = bitmap.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(drawingContext, paragraph, 10, 20);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+        }, CancellationToken.None);
+
+        thrown.Should().BeNull();
+    }
+
     private static ResolvedRun ComposeMathRun(
         OmmlMathProperties documentDefaults,
         string localProperties)

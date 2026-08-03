@@ -2083,12 +2083,31 @@ public static class SlideCompositor
                 => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinarySubtraction.MinusMinus,
             _ => (FreeP.App.Compositor.MathLayout.MathNode.MathParagraphBinarySubtraction?)null,
         };
+        var defaultJustification = properties.DefaultJustification switch
+        {
+            var value when string.Equals(value, "left", StringComparison.OrdinalIgnoreCase)
+                => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphJustification.Left,
+            var value when string.Equals(value, "right", StringComparison.OrdinalIgnoreCase)
+                => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphJustification.Right,
+            var value when string.Equals(value, "center", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "centre", StringComparison.OrdinalIgnoreCase)
+                => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphJustification.Center,
+            var value when string.Equals(value, "centerGroup", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "center-group", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "centreGroup", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "centre-group", StringComparison.OrdinalIgnoreCase)
+                => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphJustification.CenterGroup,
+            var value when !string.IsNullOrWhiteSpace(value)
+                => FreeP.App.Compositor.MathLayout.MathNode.MathParagraphJustification.CenterGroup,
+            _ => (FreeP.App.Compositor.MathLayout.MathNode.MathParagraphJustification?)null,
+        };
 
         return new FreeP.App.Compositor.MathLayout.MathNode.MathProperties(
             binaryBreak,
             binarySubtraction,
             string.IsNullOrWhiteSpace(properties.MathFontFamily) ? null : properties.MathFontFamily,
-            properties.SmallFraction);
+            properties.SmallFraction,
+            defaultJustification);
     }
 
     // ─── Wave 19A: auto-number formatter ────────────────────────────────────────────────────

@@ -36,6 +36,42 @@ public sealed class OmmlMathDefaultsParityTests
         SlideCanvas.RenderParaWithMath(drawingContext, paragraph, 10, 20);
     }
 
+    [StaFact]
+    public void Wpf_DefJc_UsesSharedInheritedParagraphPlan()
+    {
+        var node = OmmlParser.ParsePowerPoint(
+            "<m:oMathPara xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\">" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>",
+            "x",
+            new MathNode.MathProperties(
+                DefaultJustification: MathNode.MathParagraphJustification.Right));
+        var natural = MathLayoutEngine.Layout(
+            ((MathNode.MathParagraph)node).Content, "Cambria Math", 18.0);
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", 18.0, paragraphWidthDip: 180);
+        var glyph = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        glyph.X.Should().BeApproximately(10 + 180 - natural.Metrics.Width, 0.01);
+
+        var paragraph = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun
+                {
+                    Text = "x",
+                    FontFamily = "Cambria Math",
+                    MathLayout = layout,
+                    Color = SrgbColor.Black,
+                },
+            },
+        };
+        var visual = new DrawingVisual();
+        using var drawingContext = visual.RenderOpen();
+        SlideCanvas.RenderParaWithMath(drawingContext, paragraph, 10, 20);
+    }
+
     private static ResolvedRun ComposeMathRun(
         OmmlMathProperties documentDefaults,
         string localProperties)

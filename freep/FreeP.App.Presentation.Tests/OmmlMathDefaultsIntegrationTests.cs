@@ -32,13 +32,38 @@ public sealed class OmmlMathDefaultsIntegrationTests
             "<m:brkBin m:val=\"repeat\"/>" +
             "<m:brkBinSub m:val=\"-+\"/>" +
             "<m:smallFrac/>" +
+            "<m:defJc m:val=\"right\"/>" +
             "</m:mathPr>");
 
         package.Position = 0;
         var presentation = PptxPackageReader.Read(package);
 
         presentation.DocumentMathProperties.Should().Be(
-            new OmmlMathProperties("repeat", "-+", "Arial", true));
+            new OmmlMathProperties("repeat", "-+", "Arial", true, "right"));
+    }
+
+    [Theory]
+    [InlineData("left", "left")]
+    [InlineData("right", "right")]
+    [InlineData("center", "center")]
+    [InlineData("centerGroup", "centerGroup")]
+    [InlineData("", "centerGroup")]
+    public void Reader_PropagatesDefaultJustificationFromRelatedSettingsPart(
+        string value,
+        string expected)
+    {
+        using var package = WriteMathPackage();
+        var defJc = string.IsNullOrEmpty(value)
+            ? "<m:defJc/>"
+            : "<m:defJc m:val=\"" + value + "\"/>";
+        AddRelatedSettingsPart(package,
+            "<m:mathPr xmlns:m=\"" + MathNamespace + "\">" + defJc + "</m:mathPr>");
+
+        package.Position = 0;
+        var presentation = PptxPackageReader.Read(package);
+
+        presentation.DocumentMathProperties.Should().Be(
+            new OmmlMathProperties(DefaultJustification: expected));
     }
 
     [Theory]
@@ -83,7 +108,8 @@ public sealed class OmmlMathDefaultsIntegrationTests
         presentation.DocumentMathProperties = new OmmlMathProperties(
             BinaryBreak: "repeat",
             BinarySubtraction: "-+",
-            MathFontFamily: "Arial");
+            MathFontFamily: "Arial",
+            DefaultJustification: "right");
 
         var slide = presentation.Slides[0];
         slide.Shapes.Clear();
@@ -152,6 +178,7 @@ public sealed class OmmlMathDefaultsIntegrationTests
 
         paragraph.BinaryBreak.Should().Be(MathNode.MathParagraphBinaryBreak.Before);
         paragraph.BinarySubtraction.Should().Be(MathNode.MathParagraphBinarySubtraction.MinusMinus);
+        paragraph.Justification.Should().Be(MathNode.MathParagraphJustification.CenterGroup);
     }
 
     private static MemoryStream WriteMathPackage()

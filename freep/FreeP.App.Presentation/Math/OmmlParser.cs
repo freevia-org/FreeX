@@ -131,7 +131,7 @@ public static class OmmlParser
 
         return new MathNode.MathParagraph(
             content,
-            ParseMathParagraphJustification(paragraphProperties),
+            ParseMathParagraphJustification(paragraphProperties, resolvedProperties.DefaultJustification),
             ParseMathParagraphBinaryBreak(paragraphProperties, resolvedProperties),
             ParseMathParagraphBinarySubtraction(paragraphProperties, resolvedProperties),
             resolvedProperties.MathFontFamily,
@@ -161,7 +161,8 @@ public static class OmmlParser
             ParseBinaryBreakOverride(mathProperties),
             ParseBinarySubtractionOverride(mathProperties),
             string.IsNullOrWhiteSpace(mathFont) ? null : mathFont,
-            ParseSmallFractionOverride(mathProperties));
+            ParseSmallFractionOverride(mathProperties),
+            ParseDefaultJustificationOverride(mathProperties));
     }
 
     private static bool? ParseSmallFractionOverride(XElement mathProperties)
@@ -181,6 +182,22 @@ public static class OmmlParser
             "0" or "false" or "off" => false,
             _ => true
         };
+    }
+
+    private static MathNode.MathParagraphJustification? ParseDefaultJustificationOverride(
+        XElement mathProperties)
+    {
+        var element = mathProperties.Element(M + "defJc");
+        if (element is null)
+            return null;
+
+        // ECMA-376 makes centerGroup the default for both an omitted val and
+        // a val-less m:defJc. Invalid authored values are also kept on the
+        // safe, existing centered behavior rather than changing layout.
+        var value = ReadVal(element);
+        return ParseJustificationValue(
+            value,
+            MathNode.MathParagraphJustification.CenterGroup);
     }
 
     private static MathNode.MathParagraphBinaryBreak? ParseBinaryBreakOverride(XElement mathProperties)
@@ -218,15 +235,33 @@ public static class OmmlParser
             ? new MathNode.MathRoot(content, properties)
             : content;
 
-    private static MathNode.MathParagraphJustification ParseMathParagraphJustification(XElement? paragraphProperties)
+    private static MathNode.MathParagraphJustification ParseMathParagraphJustification(
+        XElement? paragraphProperties,
+        MathNode.MathParagraphJustification? defaultJustification)
     {
-        var val = ReadVal(paragraphProperties?.Element(M + "jc"));
-        return val switch
+        var element = paragraphProperties?.Element(M + "jc");
+        if (element is null)
+            return defaultJustification ?? MathNode.MathParagraphJustification.CenterGroup;
+
+        var value = ReadVal(element);
+        return string.IsNullOrWhiteSpace(value)
+            ? MathNode.MathParagraphJustification.CenterGroup
+            : ParseJustificationValue(value, MathNode.MathParagraphJustification.Center);
+    }
+
+    private static MathNode.MathParagraphJustification ParseJustificationValue(
+        string? value,
+        MathNode.MathParagraphJustification fallback)
+    {
+        var normalized = value?.Trim().ToLowerInvariant();
+        return normalized switch
         {
             "left" => MathNode.MathParagraphJustification.Left,
             "right" => MathNode.MathParagraphJustification.Right,
-            "centerGroup" or "center-group" => MathNode.MathParagraphJustification.CenterGroup,
-            _ => MathNode.MathParagraphJustification.Center
+            "center" or "centre" => MathNode.MathParagraphJustification.Center,
+            "centergroup" or "center-group" or "centre-group" or "centregroup" =>
+                MathNode.MathParagraphJustification.CenterGroup,
+            _ => fallback
         };
     }
 

@@ -22,13 +22,15 @@ public abstract class MathNode
         MathParagraphBinaryBreak? BinaryBreak = null,
         MathParagraphBinarySubtraction? BinarySubtraction = null,
         string? MathFontFamily = null,
-        bool? SmallFraction = null)
+        bool? SmallFraction = null,
+        MathParagraphJustification? DefaultJustification = null)
     {
         public bool HasValues =>
             BinaryBreak.HasValue ||
             BinarySubtraction.HasValue ||
             !string.IsNullOrWhiteSpace(MathFontFamily) ||
-            SmallFraction.HasValue;
+            SmallFraction.HasValue ||
+            DefaultJustification.HasValue;
 
         public MathProperties Overlay(MathProperties? overriding) => overriding is null
             ? this
@@ -36,7 +38,8 @@ public abstract class MathNode
                 overriding.BinaryBreak ?? BinaryBreak,
                 overriding.BinarySubtraction ?? BinarySubtraction,
                 overriding.MathFontFamily ?? MathFontFamily,
-                overriding.SmallFraction ?? SmallFraction);
+                overriding.SmallFraction ?? SmallFraction,
+                overriding.DefaultJustification ?? DefaultJustification);
     }
 
     /// <summary>Math alphabet requested by <c>m:rPr/m:scr</c>.</summary>

@@ -4956,7 +4956,19 @@ public static class PptxPackageReader
             BinaryBreak: ReadValue(mathProperties.Element(M + "brkBin")),
             BinarySubtraction: ReadValue(mathProperties.Element(M + "brkBinSub")),
             MathFontFamily: ReadValue(mathProperties.Element(M + "mathFont")),
-            SmallFraction: ReadOnOffValue(mathProperties.Element(M + "smallFrac")));
+            SmallFraction: ReadOnOffValue(mathProperties.Element(M + "smallFrac")),
+            DefaultJustification: ReadDefaultJustificationValue(mathProperties.Element(M + "defJc")));
+    }
+
+    private static string? ReadDefaultJustificationValue(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        var value = element.Attribute(M + "val")?.Value
+            ?? element.Attribute("val")?.Value
+            ?? element.Value;
+        return string.IsNullOrWhiteSpace(value) ? "centerGroup" : value.Trim();
     }
 
     private static bool? ReadOnOffValue(XElement? element)

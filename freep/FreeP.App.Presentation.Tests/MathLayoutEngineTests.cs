@@ -2233,6 +2233,42 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlParagraphDefJc_RightAlignsContentWhenLocalJcIsAbsent()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:defJc m:val=\"right\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+        var natural = MathLayoutEngine.Layout(((MathNode.MathParagraph)node).Content, "Cambria Math", FontSizePt);
+        var aligned = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 180);
+
+        var glyph = MathBoxRenderPlanner.Plan(aligned, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        Assert.Equal(MathNode.MathParagraphJustification.Right,
+            Assert.IsType<MathNode.MathParagraph>(node).Justification);
+        glyph.X.Should().BeApproximately(10 + 180 - natural.Metrics.Width, 0.01);
+    }
+
+    [Fact]
+    public void OmmlParagraphBareDefJc_UsesCenterGroupPlanWithoutChangingCenteredGeometry()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:defJc/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>xy</m:t></m:r></m:oMath>");
+
+        var natural = MathLayoutEngine.Layout(((MathNode.MathParagraph)node).Content, "Cambria Math", FontSizePt);
+        var aligned = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 200);
+        var glyph = MathBoxRenderPlanner.Plan(aligned, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        Assert.Equal(MathNode.MathParagraphJustification.CenterGroup,
+            Assert.IsType<MathNode.MathParagraph>(node).Justification);
+        glyph.X.Should().BeApproximately(10 + (200 - natural.Metrics.Width) / 2.0, 0.01);
+    }
+
+    [Fact]
     public void OmmlParagraphMathFont_UsesEquationWideFontInSharedGlyphPlan()
     {
         var node = ParseOmmlParagraph(
