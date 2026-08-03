@@ -327,15 +327,26 @@ public sealed class ChartTests : IDisposable
     {
         var chart = BuildColumnChart();
         chart.SeriesLinesSpecified = true;
+        chart.SeriesLineStyle = new ChartLineStyle
+        {
+            Color = new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
+            WidthPt = 2.25,
+            Dash = OutlineDash.Dash,
+        };
 
         var path = WriteToPptx(BuildPresWithChart(chart));
         using (var archive = ZipFile.OpenRead(path))
         {
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
-            chartDoc.Descendants(ChartNs + "barChart")
+            var seriesLines = chartDoc.Descendants(ChartNs + "barChart")
                 .Single()
-                .Element(ChartNs + "serLines")
-                .Should().NotBeNull();
+                .Element(ChartNs + "serLines");
+            seriesLines.Should().NotBeNull();
+            var line = seriesLines!.Element(ChartNs + "spPr")?.Element(DrawingNs + "ln");
+            line.Should().NotBeNull();
+            line!.Attribute("w")?.Value.Should().Be("28575");
+            line.Element(DrawingNs + "solidFill").Should().NotBeNull();
+            line.Element(DrawingNs + "prstDash")?.Attribute("val")?.Value.Should().Be("dash");
         }
 
         var reopened = PptxPackageReader.Read(path);
@@ -345,6 +356,10 @@ public sealed class ChartTests : IDisposable
 
         roundTripped.SeriesLinesSpecified.Should().BeTrue();
         roundTripped.OfPieSeriesLinesSpecified.Should().BeFalse();
+        roundTripped.SeriesLineStyle.Should().NotBeNull();
+        roundTripped.SeriesLineStyle!.Color!.Resolved.Should().Be(SrgbColor.FromRgb(0xC00000));
+        roundTripped.SeriesLineStyle.WidthPt.Should().BeApproximately(2.25, 0.001);
+        roundTripped.SeriesLineStyle.Dash.Should().Be(OutlineDash.Dash);
     }
 
     [Fact]
