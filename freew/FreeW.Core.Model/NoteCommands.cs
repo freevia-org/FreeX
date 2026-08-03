@@ -1,5 +1,69 @@
 namespace FreeW.Core.Model;
 
+/// <summary>
+/// Inserts one footnote or endnote and its reference marker into a body paragraph as a single undoable
+/// edit. The marker is inserted at the requested plain-text offset, splitting a formatted run when
+/// necessary.
+/// </summary>
+public sealed class InsertNoteCommand(
+    int id,
+    bool footnote,
+    string text,
+    int paragraphIndex,
+    int textOffset) : IDocumentCommand
+{
+    private Run[]? _previousRuns;
+    private bool _applied;
+
+    public string Label => footnote ? "Insert Footnote" : "Insert Endnote";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (paragraphIndex < 0
+            || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph paragraph
+            || NoteExists(context.Document))
+        {
+            return;
+        }
+
+        _previousRuns = [.. paragraph.Runs];
+        if (footnote)
+            context.Document.Footnotes[id] = new Footnote(id, text ?? string.Empty);
+        else
+            context.Document.Endnotes[id] = new Endnote(id, text ?? string.Empty);
+
+        var marker = footnote ? Run.FootnoteReference(id) : Run.EndnoteReference(id);
+        RevisionEditPlanner.InsertRunAtOffset(paragraph, textOffset, marker);
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied
+            || _previousRuns is null
+            || paragraphIndex < 0
+            || paragraphIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[paragraphIndex] is not Paragraph paragraph)
+        {
+            return;
+        }
+
+        if (footnote)
+            context.Document.Footnotes.Remove(id);
+        else
+            context.Document.Endnotes.Remove(id);
+
+        paragraph.Runs.Clear();
+        paragraph.Runs.AddRange(_previousRuns);
+        _previousRuns = null;
+        _applied = false;
+    }
+
+    private bool NoteExists(TextDocument document) =>
+        footnote ? document.Footnotes.ContainsKey(id) : document.Endnotes.ContainsKey(id);
+}
+
 /// <summary>Replaces the rich paragraph content of one footnote or endnote.</summary>
 public sealed class ReplaceNoteContentCommand(
     int id,

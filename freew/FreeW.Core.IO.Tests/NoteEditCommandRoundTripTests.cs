@@ -11,6 +11,31 @@ public sealed class NoteEditCommandRoundTripTests
     }
 
     [Fact]
+    public void InsertedFootnote_RoundTripsMarkerPositionAndNotePart()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("before after"));
+        var bus = new DocumentCommandBus(new Context(document));
+        bus.Execute(new InsertNoteCommand(1, footnote: true, "inserted note", 0, 7));
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        var package = stream.ToArray();
+        using (var archive = new ZipArchive(new MemoryStream(package), ZipArchiveMode.Read))
+        {
+            ReadEntry(archive, "word/document.xml").Should().Contain("w:footnoteReference w:id=\"1\"");
+            ReadEntry(archive, "word/footnotes.xml").Should().Contain("inserted note");
+        }
+
+        var reopened = DocxReader.Read(new MemoryStream(package));
+        reopened.Footnotes[1].PlainText.Should().Be("inserted note");
+        var runs = ((Paragraph)reopened.Blocks[0]).Runs;
+        runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        runs[1].FootnoteId.Should().Be(1);
+    }
+
+    [Fact]
     public void EditedFootnoteAndEndnote_RoundTripInPackageAndReopenedModel()
     {
         var document = TextDocument.CreateEmpty();

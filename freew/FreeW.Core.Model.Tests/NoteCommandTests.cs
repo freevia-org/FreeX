@@ -8,6 +8,53 @@ public sealed class NoteCommandTests
     }
 
     [Fact]
+    public void InsertNote_InsertsAtTextOffset_SplitsFormatting_AndUndoRedo()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var original = new Run("before after")
+        {
+            Formatting = RunFormatting.Default with { Bold = true },
+        };
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(original);
+        document.Blocks.Add(paragraph);
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new InsertNoteCommand(1, footnote: true, "note text", 0, 7));
+
+        document.Footnotes[1].PlainText.Should().Be("note text");
+        paragraph.Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        paragraph.Runs[0].Formatting.Bold.Should().BeTrue();
+        paragraph.Runs[1].FootnoteId.Should().Be(1);
+        paragraph.Runs[1].Formatting.VerticalAlign.Should().Be(VerticalAlign.Superscript);
+        paragraph.Runs[2].Formatting.Bold.Should().BeTrue();
+
+        bus.Undo().Should().BeTrue();
+        document.Footnotes.Should().NotContainKey(1);
+        paragraph.Runs.Should().ContainSingle().Which.Should().BeSameAs(original);
+
+        bus.Redo().Should().BeTrue();
+        document.Footnotes[1].PlainText.Should().Be("note text");
+        paragraph.Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+    }
+
+    [Fact]
+    public void InsertNote_DoesNotOverwriteAnExistingNoteId()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("body"));
+        document.Endnotes[2] = new Endnote(2, "existing");
+        var bus = new DocumentCommandBus(new Context(document));
+
+        bus.Execute(new InsertNoteCommand(2, footnote: false, "replacement", 0, 2));
+
+        document.Endnotes[2].PlainText.Should().Be("existing");
+        ((Paragraph)document.Blocks[0]).Runs.Should().NotContain(run => run.EndnoteId == 2);
+    }
+
+    [Fact]
     public void ReplaceNoteContent_PreservesRichParagraphs_AndUndoRedo()
     {
         var document = TextDocument.CreateEmpty();

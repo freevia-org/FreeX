@@ -2,42 +2,6 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia.Editing;
 
-/// <summary>
-/// AV-REF: Create a footnote or endnote in the document's note store with a single seed paragraph of
-/// <paramref name="text"/> (an empty paragraph when blank, ready for the user to type). Undo removes the
-/// note again. The matching superscript reference run is inserted separately (via
-/// <see cref="InsertObjectRunCommand"/>) and the pair is wrapped in one undo group by the caller, so a
-/// single Ctrl+Z reverts the whole "Insert Footnote/Endnote".
-///
-/// <para>
-/// A note id is allocated by the caller from <see cref="TextDocument.NextFootnoteId"/> /
-/// <see cref="TextDocument.NextEndnoteId"/>; this command just commits the note under that id. Revert
-/// removes the keyed entry so re-applying (redo) re-adds it deterministically.
-/// </para>
-/// </summary>
-internal sealed class AddNoteCommand(int id, string text, bool footnote) : IDocumentCommand
-{
-    public string Label => footnote ? "Insert Footnote" : "Insert Endnote";
-
-    public void Apply(IDocumentCommandContext context)
-    {
-        var doc = context.Document;
-        if (footnote)
-            doc.Footnotes[id] = new Footnote(id, text);
-        else
-            doc.Endnotes[id] = new Endnote(id, text);
-    }
-
-    public void Revert(IDocumentCommandContext context)
-    {
-        var doc = context.Document;
-        if (footnote)
-            doc.Footnotes.Remove(id);
-        else
-            doc.Endnotes.Remove(id);
-    }
-}
-
 internal sealed class SetNoteNumberingOptionsCommand(
     NoteNumberFormat footnoteFormat,
     int footnoteStartAt,

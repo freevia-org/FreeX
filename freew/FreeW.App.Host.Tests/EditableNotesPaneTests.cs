@@ -11,6 +11,31 @@ namespace FreeW.App.Host.Tests;
 /// </summary>
 public sealed class EditableNotesPaneTests
 {
+    [StaFact]
+    public void InsertFootnote_UsesCaretOffset_AndUndoRedoRestoresOneEdit()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("before after"));
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.MoveCaretToBlockForTest(0, 7);
+
+        view.InsertFootnote("note text");
+
+        var paragraph = (Paragraph)view.Model.Blocks[0];
+        paragraph.Runs.Select(run => run.Text).Should().Equal("before ", "1", "after");
+        paragraph.Runs[1].FootnoteId.Should().Be(1);
+        view.Model.Footnotes[1].PlainText.Should().Be("note text");
+
+        view.Undo();
+        view.Model.Footnotes.Should().BeEmpty();
+        ((Paragraph)view.Model.Blocks[0]).PlainText.Should().Be("before after");
+
+        view.Redo();
+        view.Model.Footnotes[1].PlainText.Should().Be("note text");
+        ((Paragraph)view.Model.Blocks[0]).Runs.Should().Contain(run => run.FootnoteId == 1);
+    }
     // ── Phase 1A: Notes pane backing — DeleteFootnote / DeleteEndnote ─────────────────────────────
 
     /// <summary>

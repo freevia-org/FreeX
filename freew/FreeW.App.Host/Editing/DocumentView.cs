@@ -14862,6 +14862,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertFootnote(string text)
     {
+        if (TryInsertNoteThroughCommand(text, footnote: true))
+            return;
+
         CommitToModel();
 
         var id = _model.NextFootnoteId();
@@ -14891,6 +14894,9 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     public void InsertEndnote(string text)
     {
+        if (TryInsertNoteThroughCommand(text, footnote: false))
+            return;
+
         CommitToModel();
 
         var id = _model.NextEndnoteId();
@@ -14910,6 +14916,46 @@ public sealed class DocumentView : RichTextBox
 
         CommitToModel();
         Render();
+    }
+
+    private bool TryInsertNoteThroughCommand(string text, bool footnote)
+    {
+        if (!TryGetCurrentBodyCaretTarget(out var paragraphIndex, out var textOffset))
+            return false;
+
+        CommitToModel();
+        if (paragraphIndex < 0
+            || paragraphIndex >= _model.Blocks.Count
+            || _model.Blocks[paragraphIndex] is not ModelParagraph)
+        {
+            return false;
+        }
+
+        var id = footnote ? _model.NextFootnoteId() : _model.NextEndnoteId();
+        _commands.Execute(new InsertNoteCommand(id, footnote, text ?? string.Empty, paragraphIndex, textOffset));
+        var markerLength = id.ToString(System.Globalization.CultureInfo.InvariantCulture).Length;
+        PlaceCaretAtModelTextOffset(paragraphIndex, textOffset + markerLength);
+        return true;
+    }
+
+    private bool TryGetCurrentBodyCaretTarget(out int paragraphIndex, out int textOffset)
+    {
+        paragraphIndex = -1;
+        textOffset = 0;
+        var paragraph = CaretPosition?.Paragraph;
+        if (paragraph is null || CaretPosition is null)
+            return false;
+
+        var indexOf = new Dictionary<WpfParagraph, int>();
+        var visibleIndex = 0;
+        foreach (var block in Document.Blocks)
+            NumberLeafBlocks(block, indexOf, ref visibleIndex);
+        if (!indexOf.TryGetValue(paragraph, out var mappedIndex))
+            return false;
+
+        paragraphIndex = ModelIndexFromVisible(mappedIndex);
+        textOffset = OffsetInParagraph(paragraph, CaretPosition);
+        return true;
     }
 
     /// <summary>

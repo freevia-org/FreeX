@@ -19855,24 +19855,26 @@ public sealed class DocumentView : Control
         return true;
     }
 
-    // Shared footnote/endnote insert: create the note in the model store and append the matching
-    // reference run to the caret's host paragraph, grouped for a single undo.
+    // Shared footnote/endnote insert: create the note and place its marker at the caret offset. The
+    // host-paragraph creation fallback and note insertion share one undo group.
     private void InsertNote(string text, bool footnote)
     {
+        _bus.BeginUndoGroup();
         var hostIndex = ResolveReferenceHostBlock();
         if (hostIndex < 0)
+        {
+            _bus.AbortUndoGroup();
             return;
+        }
 
-        _bus.BeginUndoGroup();
         var id = footnote ? _doc.NextFootnoteId() : _doc.NextEndnoteId();
-        // Seed the note's content store (an empty note when no text is supplied, ready for the user to type).
-        _bus.Execute(new AddNoteCommand(id, text ?? string.Empty, footnote));
         var marker = footnote ? Run.FootnoteReference(id) : Run.EndnoteReference(id);
-        _bus.Execute(new InsertObjectRunCommand(hostIndex, marker));
+        var offset = Math.Clamp(ReferenceInsertionOffset(hostIndex), 0, BlockLength(hostIndex));
+        _bus.Execute(new InsertNoteCommand(id, footnote, text ?? string.Empty, hostIndex, offset));
         _bus.CommitUndoGroup(footnote ? "Insert Footnote" : "Insert Endnote");
 
         _cellCaret = null;
-        _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
+        _caret = new DocPosition(hostIndex, offset + marker.Text.Length);
         _selectionAnchor = _caret;
     }
 
