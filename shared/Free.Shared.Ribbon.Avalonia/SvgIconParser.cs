@@ -61,6 +61,12 @@ internal static class SvgIconParser
         TryParseFile(filePath, monochromeBrush: null);
 
     public static DrawingImage? TryParseFile(string filePath, IBrush? monochromeBrush)
+        => TryParseFile(filePath, monochromeBrush, includeViewBoxBounds: true);
+
+    internal static DrawingImage? TryParseFile(
+        string filePath,
+        IBrush? monochromeBrush,
+        bool includeViewBoxBounds)
     {
         try
         {
@@ -81,7 +87,7 @@ internal static class SvgIconParser
 
             // A transparent backing rect over the full viewBox pins the drawing's bounds to the design
             // square so Uniform stretch scales consistently regardless of the painted content extent.
-            if (viewBox is { } box)
+            if (includeViewBoxBounds && viewBox is { } box)
             {
                 var backing = new GeometryDrawing
                 {

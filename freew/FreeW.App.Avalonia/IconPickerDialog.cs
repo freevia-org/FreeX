@@ -27,10 +27,6 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
 
     private const int ThumbSize = 54;
     private const int IconSize = 38;
-    // WPF draws the shared SVG viewport into the thumbnail bitmap. The Avalonia drawing host keeps
-    // the source geometry at its natural viewport scale, so this explicit authority scale keeps the
-    // painted stroke envelope aligned without changing the 54px tile hit target.
-    private const double SvgViewportScale = IconSize / 32d;
     private const int TilesPerRow = 8;
     private const double DialogWidth = TilesPerRow * (ThumbSize + 4) + 32;
 
@@ -176,7 +172,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
         {
             try
             {
-                drawing = SvgIconRasterizer.LoadFile(entry.Path);
+                drawing = SvgIconRasterizer.LoadFileToPaintedBounds(entry.Path);
             }
             catch
             {
@@ -192,9 +188,7 @@ internal sealed class IconPickerDialog : FreeWDialogWindow
                 Source = drawing,
                 Width = IconSize,
                 Height = IconSize,
-                Stretch = Stretch.Uniform,
-                RenderTransform = new ScaleTransform(SvgViewportScale, SvgViewportScale),
-                RenderTransformOrigin = new RelativePoint(0.5, 0.5, RelativeUnit.Relative),
+                Stretch = Stretch.Fill,
             };
     }
 

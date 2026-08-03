@@ -40,10 +40,14 @@ public sealed class IconPickerDialogVisualParityTests
                 image.Width.Should().Be(38);
                 image.Height.Should().Be(38);
                 image.Source.Should().BeOfType<DrawingImage>();
-                image.RenderTransform.Should().BeOfType<ScaleTransform>();
-                ((ScaleTransform)image.RenderTransform!).ScaleX.Should().Be(38d / 32d);
-                ((ScaleTransform)image.RenderTransform!).ScaleY.Should().Be(38d / 32d);
+                image.Stretch.Should().Be(Stretch.Fill);
+                image.RenderTransform.Should().BeNull();
             }
+            var firstDrawing = (DrawingImage)((Image)((Border)tiles.Children[0]).Child!).Source!;
+            var firstGroup = firstDrawing.Drawing.Should().BeOfType<DrawingGroup>().Subject;
+            var firstStroke = firstGroup.Children[0].Should().BeOfType<GeometryDrawing>().Subject;
+            firstStroke.Geometry.Should().BeOfType<LineGeometry>();
+            firstStroke.Pen.Should().NotBeNull();
             actions.Select(button => button.Content?.ToString()).Should().Equal("OK", "Cancel");
             actions.Single(button => button.IsDefault).Content.Should().Be("OK");
             actions.Single(button => button.IsCancel).Content.Should().Be("Cancel");

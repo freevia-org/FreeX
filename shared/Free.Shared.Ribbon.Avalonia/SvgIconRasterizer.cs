@@ -16,6 +16,18 @@ public static class SvgIconRasterizer
             ?? throw new InvalidDataException($"The selected SVG cannot be rendered: {path}");
     }
 
+    /// <summary>
+    /// Loads an SVG using only its painted bounds. WPF's thumbnail rasterizer draws a
+    /// <c>DrawingImage</c> into the requested bitmap rectangle, so narrow artwork is
+    /// expanded to that rectangle instead of retaining transparent viewBox margins.
+    /// </summary>
+    public static DrawingImage LoadFileToPaintedBounds(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        return SvgIconParser.TryParseFile(path, monochromeBrush: null, includeViewBoxBounds: false)
+            ?? throw new InvalidDataException($"The selected SVG cannot be rendered: {path}");
+    }
+
     public static byte[] RasterizeFileToPng(string path, int pixelSize = 128)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
