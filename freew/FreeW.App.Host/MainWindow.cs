@@ -1765,7 +1765,7 @@ public sealed class MainWindow : Window
         if (content is not null)
         {
             foreach (var para in content)
-                wrapper.Blocks.Add(para);
+                wrapper.Blocks.Add(DocumentMerge.CloneBlock(para));
         }
         if (wrapper.Blocks.Count == 0)
             wrapper.Blocks.Add(new Paragraph());
@@ -1782,23 +1782,10 @@ public sealed class MainWindow : Window
 
         _notesSubEditor.CommitToModel();
 
-        // Copy the edited blocks back into the note Content list.
-        if (active.IsFootnote && _editor.Model.Footnotes.TryGetValue(active.Id, out var fn))
-        {
-            fn.Content.Clear();
-            foreach (var block in _notesSubEditor.Model.Blocks.OfType<Paragraph>())
-                fn.Content.Add(block);
-        }
-        else if (!active.IsFootnote && _editor.Model.Endnotes.TryGetValue(active.Id, out var en))
-        {
-            en.Content.Clear();
-            foreach (var block in _notesSubEditor.Model.Blocks.OfType<Paragraph>())
-                en.Content.Add(block);
-        }
-
-        // Re-render the main editor so marker tooltips reflect the new text (no-op page-settings
-        // commit triggers CommitToModel + Render inside ApplyPageSettings).
-        _editor.ApplyPageSettings(_ => { });
+        var paragraphs = _notesSubEditor.Model.Blocks.OfType<Paragraph>()
+            .Select(paragraph => (Paragraph)DocumentMerge.CloneBlock(paragraph))
+            .ToArray();
+        _editor.ReplaceNoteContent(active.Id, active.IsFootnote, paragraphs);
         _file.MarkDirty();
         RefreshNotesPane();
     }

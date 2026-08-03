@@ -41,6 +41,15 @@ public sealed class EditableNotesPaneTests
         paragraph.Runs.Should()
             .Contain(r => r.Text == "before " || r.Text == " after",
                 "non-marker runs must survive");
+
+        view.CanUndo.Should().BeTrue("deleting a note must be one undoable document edit");
+        view.Undo();
+        view.Model.Footnotes[1].PlainText.Should().Be("The footnote body");
+        view.Model.Blocks.OfType<Paragraph>().First().Runs.Should()
+            .Contain(r => r.FootnoteId == 1, "undo must restore the reference marker");
+
+        view.Redo();
+        view.Model.Footnotes.Should().NotContainKey(1);
     }
 
     /// <summary>DeleteEndnote mirrors DeleteFootnote but for the endnote dict and endnote markers.</summary>
@@ -92,7 +101,7 @@ public sealed class EditableNotesPaneTests
         wrapper.DefaultRun = doc.DefaultRun;
         wrapper.Blocks.Clear();
         foreach (var para in doc.Footnotes[1].Content)
-            wrapper.Blocks.Add(para);
+            wrapper.Blocks.Add(DocumentMerge.CloneBlock(para));
 
         var subEditor = new DocumentView();
         subEditor.LoadModel(wrapper);
@@ -112,6 +121,31 @@ public sealed class EditableNotesPaneTests
 
         note.PlainText.Should().Be("edited text",
             "applying sub-editor content must update note.PlainText");
+    }
+
+    [StaFact]
+    public void ReplaceNoteContent_IsUndoableAndPreservesRichParagraphs()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Footnotes[1] = new Footnote(1, "original text");
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var edited = new Paragraph();
+        edited.Runs.Add(new Run("edited text")
+        {
+            Formatting = RunFormatting.Default with { Bold = true },
+        });
+        view.ReplaceNoteContent(1, footnote: true, [edited, new Paragraph("more")]);
+
+        view.Model.Footnotes[1].PlainText.Should().Be("edited text\nmore");
+        view.Model.Footnotes[1].Content[0].Runs.Single().Formatting.Bold.Should().BeTrue();
+        view.CanUndo.Should().BeTrue();
+
+        view.Undo();
+        view.Model.Footnotes[1].PlainText.Should().Be("original text");
+        view.Redo();
+        view.Model.Footnotes[1].PlainText.Should().Be("edited text\nmore");
     }
 
     /// <summary>

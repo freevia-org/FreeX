@@ -14919,10 +14919,7 @@ public sealed class DocumentView : RichTextBox
     public void DeleteFootnote(int id)
     {
         CommitToModel();
-        _model.Footnotes.Remove(id);
-        StripNoteMarker(id, footnote: true);
-        CommitToModel();
-        Render();
+        _commands.Execute(new DeleteNoteCommand(id, footnote: true));
     }
 
     /// <summary>
@@ -14932,25 +14929,15 @@ public sealed class DocumentView : RichTextBox
     public void DeleteEndnote(int id)
     {
         CommitToModel();
-        _model.Endnotes.Remove(id);
-        StripNoteMarker(id, footnote: false);
-        CommitToModel();
-        Render();
+        _commands.Execute(new DeleteNoteCommand(id, footnote: false));
     }
 
-    private void StripNoteMarker(int id, bool footnote)
+    /// <summary>Replaces a note's rich content as one undoable edit.</summary>
+    public void ReplaceNoteContent(int id, bool footnote, IReadOnlyList<ModelParagraph> paragraphs)
     {
-        var toRemove = new List<WpfRun>();
-        foreach (var run in NoteMarkers(footnote))
-        {
-            var markerId = footnote
-                ? (run.Tag as FootnoteMarker)?.FootnoteId
-                : (run.Tag as EndnoteMarker)?.EndnoteId;
-            if (markerId == id)
-                toRemove.Add(run);
-        }
-        foreach (var run in toRemove)
-            run.ContentStart.Paragraph?.Inlines.Remove(run);
+        ArgumentNullException.ThrowIfNull(paragraphs);
+        CommitToModel();
+        _commands.Execute(new ReplaceNoteContentCommand(id, footnote, paragraphs));
     }
 
     /// <summary>Moves the caret to the next footnote reference marker in visible document order.</summary>
