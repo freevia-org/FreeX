@@ -573,6 +573,8 @@ public sealed class ChartScenePlan
     public IReadOnlyList<ChartLineSegmentPrimitive> DataLabelLeaderLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     /// <summary>PowerPoint pie-of-pie/bar-of-pie series connectors between the two plots.</summary>
     public IReadOnlyList<ChartLineSegmentPrimitive> OfPieSeriesLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
+    /// <summary>PowerPoint series lines between adjacent points in stacked bar charts.</summary>
+    public IReadOnlyList<ChartLineSegmentPrimitive> SeriesLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     /// <summary>Vertical line-chart connectors from each point to the category axis.</summary>
     public IReadOnlyList<ChartLineSegmentPrimitive> DropLines { get; init; } = Array.Empty<ChartLineSegmentPrimitive>();
     /// <summary>Filled intervals between the first two line-series points.</summary>
@@ -1682,6 +1684,7 @@ public static partial class ChartRenderPlanner
         var ofPieSeriesLines = chart.ChartType == ChartType.OfPie
             ? BuildOfPieSeriesLines(chart, ofPieSecondaryType, pieSlices, ofPieSecondarySlices, rectangles)
             : Array.Empty<ChartLineSegmentPrimitive>();
+        var seriesLines = BuildSeriesLines(chart, geometryKind, rectangles);
 
         return new ChartScenePlan
         {
@@ -1709,6 +1712,7 @@ public static partial class ChartRenderPlanner
                 dataLabels,
                 geometryKind == ChartSceneGeometryKind.Pie ? pieSlices : doughnutSlices),
             OfPieSeriesLines = ofPieSeriesLines,
+            SeriesLines = seriesLines,
             DropLines = dropLines,
             UpDownBars = upDownBars,
             WaterfallConnectorLines = waterfallConnectorLines,
@@ -1922,6 +1926,60 @@ public static partial class ChartRenderPlanner
                 elbow,
                 labelAnchor,
                 stroke));
+        }
+
+        return lines;
+    }
+
+    private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSeriesLines(
+        ChartShape chart,
+        ChartSceneGeometryKind geometryKind,
+        IReadOnlyList<ChartRectPrimitive> rectangles)
+    {
+        if (!chart.SeriesLinesSpecified ||
+            chart.ChartType is not (
+                ChartType.ColumnStacked or
+                ChartType.ColumnStacked100 or
+                ChartType.BarStacked or
+                ChartType.BarStacked100) ||
+            rectangles.Count == 0)
+        {
+            return Array.Empty<ChartLineSegmentPrimitive>();
+        }
+
+        var stroke = new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 220, Thickness: 0.8);
+        var lines = new List<ChartLineSegmentPrimitive>();
+        foreach (var series in rectangles.GroupBy(rectangle => rectangle.SeriesIndex))
+        {
+            var points = series.OrderBy(rectangle => rectangle.CategoryIndex).ToArray();
+            for (int index = 1; index < points.Length; index++)
+            {
+                var previous = points[index - 1];
+                var current = points[index];
+                if (current.CategoryIndex != previous.CategoryIndex + 1)
+                    continue;
+
+                ChartPlanPoint start;
+                ChartPlanPoint end;
+                if (geometryKind == ChartSceneGeometryKind.Bar)
+                {
+                    start = new ChartPlanPoint(previous.Bounds.Right, previous.Bounds.Y);
+                    end = new ChartPlanPoint(current.Bounds.Right, current.Bounds.Bottom);
+                }
+                else
+                {
+                    start = new ChartPlanPoint(previous.Bounds.Right, previous.Bounds.Y);
+                    end = new ChartPlanPoint(current.Bounds.X, current.Bounds.Y);
+                }
+
+                lines.Add(new ChartLineSegmentPrimitive(
+                    previous.SeriesIndex,
+                    previous.CategoryIndex,
+                    current.CategoryIndex,
+                    start,
+                    end,
+                    stroke));
+            }
         }
 
         return lines;
