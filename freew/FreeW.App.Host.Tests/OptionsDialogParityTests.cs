@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Free.Shared.Shell;
 using FreeW.App.Host;
 using FreeW.App.Presentation.Options;
@@ -36,5 +37,62 @@ public sealed class OptionsDialogParityTests
             dialog.Close();
             owner.Close();
         }
+    }
+
+    [StaFact]
+    public void Wpf_autocorrect_table_realizes_declared_star_columns_across_available_width()
+    {
+        var owner = new Window();
+        owner.Show();
+        var dialog = new OptionsDialog(owner, new FreeWOptions
+        {
+            AutoCorrect = new AutoCorrectOptions
+            {
+                ReplaceText = true,
+                Replacements = [new AutoCorrectReplacement("(tm)", "™")],
+            },
+        });
+        try
+        {
+            var declaredTable = (DataGrid)typeof(OptionsDialog)
+                .GetField("_replacements", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(dialog)!;
+            declaredTable.Columns[0].Width.UnitType.Should().Be(DataGridLengthUnitType.Star);
+            declaredTable.Columns[0].Width.Value.Should().Be(1);
+            declaredTable.Columns[1].Width.UnitType.Should().Be(DataGridLengthUnitType.Star);
+            declaredTable.Columns[1].Width.Value.Should().Be(2);
+
+            dialog.Show();
+            dialog.UpdateLayout();
+            var tabs = FindVisualChildren<TabControl>(dialog).Single();
+            tabs.SelectedIndex = 1;
+            dialog.UpdateLayout();
+
+            var table = FindVisualChildren<DataGrid>(dialog).Single();
+            table.HorizontalScrollBarVisibility.Should().Be(ScrollBarVisibility.Disabled);
+            table.ActualWidth.Should().BeGreaterThan(300);
+            table.Columns.Should().HaveCount(2);
+            table.Columns[0].ActualWidth.Should().BeGreaterThan(80);
+            table.Columns[1].ActualWidth.Should().BeGreaterThan(160);
+            (table.Columns[1].ActualWidth / table.Columns[0].ActualWidth).Should().BeApproximately(2, 0.05);
+
+            FindVisualChildren<TextBlock>(table).Select(text => text.Text)
+                .Should().Contain("(tm)")
+                .And.Contain("™");
+        }
+        finally
+        {
+            dialog.Close();
+            owner.Close();
+        }
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T value)
+            yield return value;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            foreach (var child in FindVisualChildren<T>(VisualTreeHelper.GetChild(root, i)))
+                yield return child;
     }
 }

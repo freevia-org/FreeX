@@ -71,6 +71,44 @@ public sealed class OptionsDialogVisualParityTests
     }
 
     [Fact]
+    public async Task Options_realizes_replacement_editors_in_one_to_two_viewport_geometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new OptionsDialog(new FreeWOptions
+            {
+                AutoCorrect = new AutoCorrectOptions
+                {
+                    ReplaceText = true,
+                    Replacements = [new AutoCorrectReplacement("(tm)", "™")],
+                },
+            });
+            try
+            {
+                dialog.Show();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+                var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
+                tabs.SelectedIndex = 1;
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var grid = GetField<Grid>(dialog, "_replacementGrid");
+                var editors = dialog.ReplacementEditorsForTest;
+                grid.Bounds.Width.Should().BeGreaterThan(300);
+                editors.Should().HaveCount(2);
+                editors[0].Replace.Bounds.Width.Should().BeGreaterThan(80);
+                editors[0].With.Bounds.Width.Should().BeGreaterThan(160);
+                (editors[0].With.Bounds.Width / editors[0].Replace.Bounds.Width).Should().BeApproximately(2, 0.05);
+                editors[0].Replace.Text.Should().Be("(tm)");
+                editors[0].With.Text.Should().Be("™");
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task Options_selects_the_recent_files_field_on_open_and_commits_grid_rows()
     {
         await Session.Dispatch(() =>
