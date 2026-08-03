@@ -6586,6 +6586,39 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_basic_matrix_shape_composes_shared_whole_and_quadrant_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Matrix,
+                "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix",
+                ["People", "Process", "Platform", "Proof", "Unused"]);
+            window.Editor.CurrentSlide!.Shapes.Clear();
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(5, "Avalonia consumes the shared Basic Matrix whole and four quadrants");
+        liveShapes.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("People", "Process", "Platform", "Proof");
+        liveShapes.Where(op => op.Text is null)
+            .Should().ContainSingle("Basic Matrix emits one whole diamond and no relationship connectors");
+        liveShapes.Select(op => op.BoundsDip.X).Distinct().Should().HaveCount(3,
+            "the whole is centered between the two quadrant columns");
+        liveShapes.Select(op => op.BoundsDip.Y).Distinct().Should().HaveCount(3,
+            "the whole is centered between the two quadrant rows");
+    }
+
+    [Fact]
     public async Task SmartArt_funnel_process_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];

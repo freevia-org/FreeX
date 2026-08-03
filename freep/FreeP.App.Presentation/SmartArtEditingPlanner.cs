@@ -1597,6 +1597,7 @@ public static class SmartArtEditingPlanner
             DrawingShapeKind.RoundedRectangle => "roundRect",
             DrawingShapeKind.Chevron => "chevron",
             DrawingShapeKind.Triangle => "triangle",
+            DrawingShapeKind.Diamond => "diamond",
             DrawingShapeKind.Trapezoid => "trapezoid",
             DrawingShapeKind.Chord => "chord",
             _ => "rect"

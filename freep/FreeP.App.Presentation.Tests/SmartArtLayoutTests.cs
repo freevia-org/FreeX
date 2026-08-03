@@ -2101,7 +2101,7 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void BasicMatrix_ReturnsLiveQuadrantBoxesWithoutConnectors()
+    public void BasicMatrix_ReturnsWholeDiamondAndQuadrantBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.Matrix, "People", "Process", "Platform", "Proof");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
@@ -2109,13 +2109,22 @@ public sealed class SmartArtLayoutTests
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         shapes.Should().NotBeNull("basicMatrix is a bounded shared matrix-family layout");
-        shapes!.Should().HaveCount(4, "one shared quadrant shape should be emitted per matrix node");
-        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Rectangle,
-            "the matrix planner emits quadrant boxes without connector ops");
+        shapes!.Should().HaveCount(5, "one shared whole plus one quadrant should be emitted per matrix node");
+        shapes[0].AutoShapeKind.Should().Be(DrawingShapeKind.Diamond);
+        shapes[0].Name.Should().Be("SmartArt_BasicMatrix_Whole");
+        shapes[0].TextBody.Should().BeNull("the whole is a relationship-to-whole visual, not an authored node");
+        shapes.Skip(1).Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle,
+            "Basic Matrix uses rounded quadrant cells without connector ops");
+        shapes.Should().NotContain(shape => shape.Kind == SlideShapeKind.Connector);
 
-        var boxes = shapes.ToList();
+        var boxes = shapes.Skip(1).ToList();
         boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal("People", "Process", "Platform", "Proof");
+        boxes.Select(s => s.Name).Should().Equal(
+            "SmartArt_BasicMatrix_Quadrant_TopLeft_1",
+            "SmartArt_BasicMatrix_Quadrant_TopRight_2",
+            "SmartArt_BasicMatrix_Quadrant_BottomLeft_3",
+            "SmartArt_BasicMatrix_Quadrant_BottomRight_4");
 
         boxes[1].OffsetXEmu.Should().BeGreaterThan(boxes[0].OffsetXEmu,
             "the second quadrant should be to the right of the first");
@@ -2185,22 +2194,20 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void Matrix_MoreThanFourNodes_ContinuesWithLiveRows()
+    public void BasicMatrix_MoreThanFourNodes_OmitsUnusedRowsFromTheLivePlan()
     {
         var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D", "E", "F");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        result.Should().NotBeNull("matrix editing should remain live when the node count grows beyond one quadrant");
-        result!.Should().HaveCount(6);
-        result.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle);
+        result.Should().NotBeNull("Basic Matrix remains live while unused nodes stay editable");
+        result!.Should().HaveCount(5);
+        result[0].AutoShapeKind.Should().Be(DrawingShapeKind.Diamond);
+        result.Skip(1).Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle);
+        result.Skip(1).Select(shape => shape.PlainText).Should().Equal("A", "B", "C", "D");
 
-        result.Select(shape => shape.OffsetXEmu).Distinct().Should().HaveCount(2,
-            "larger matrices continue in two aligned columns");
-        result.Select(shape => shape.OffsetYEmu).Distinct().Should().HaveCount(3,
-            "six nodes continue into three live rows");
-        foreach (var shape in result)
+        foreach (var shape in result.Skip(1))
         {
             shape.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
             shape.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
@@ -2209,30 +2216,37 @@ public sealed class SmartArtLayoutTests
         }
     }
 
-    [Theory]
-    [InlineData(5, 2, 3)]
-    [InlineData(6, 2, 3)]
-    [InlineData(7, 2, 4)]
-    [InlineData(9, 2, 5)]
-    public void BasicMatrix_PreservesDeterministicTwoColumnRowMajorGrid(
-        int nodeCount, int expectedColumns, int expectedRows)
+    [Fact]
+    public void BasicMatrix_UsesFirstFourLevelOneNodesAndKeepsUnusedNodesEditable()
     {
-        var nodeTexts = Enumerable.Range(0, nodeCount).Select(i => $"Node {i + 1}").ToArray();
+        var nodeTexts = Enumerable.Range(0, 9).Select(i => $"Node {i + 1}").ToArray();
         var data = MakeData(SmartArtFamily.Matrix, nodeTexts);
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
+        data.Nodes[0].Children.Add(new SmartArtNode
+        {
+            ModelId = "child",
+            Text = "Level 2 child",
+            Level = 1
+        });
 
         var result = SmartArtLayoutEngine.Layout(
             data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         result.Should().NotBeNull();
         var boxes = result!.ToList();
-        boxes.Should().HaveCount(nodeCount);
-        boxes.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Rectangle);
-        boxes.Select(shape => shape.PlainText).Should().Equal(nodeTexts);
-        boxes.Select(shape => shape.OffsetXEmu).Distinct().Should().HaveCount(expectedColumns);
-        boxes.Select(shape => shape.OffsetYEmu).Distinct().Should().HaveCount(expectedRows);
+        boxes.Should().HaveCount(5);
+        boxes[0].AutoShapeKind.Should().Be(DrawingShapeKind.Diamond);
+        boxes.Skip(1).Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle);
+        boxes.Skip(1).Select(shape => shape.PlainText).Should().Equal(nodeTexts[..4]);
+        boxes.Skip(1).Select(shape => shape.Name).Should().Equal(
+            "SmartArt_BasicMatrix_Quadrant_TopLeft_1",
+            "SmartArt_BasicMatrix_Quadrant_TopRight_2",
+            "SmartArt_BasicMatrix_Quadrant_BottomLeft_3",
+            "SmartArt_BasicMatrix_Quadrant_BottomRight_4");
+        data.Nodes.Should().HaveCount(9, "unused Level 1 nodes remain in the editing model");
+        data.Nodes[0].Children.Should().ContainSingle("Level 2 nodes remain editable but are not Basic Matrix quadrants");
 
-        for (var i = 0; i < boxes.Count; i++)
+        for (var i = 1; i < boxes.Count; i++)
         {
             var shape = boxes[i];
             shape.TextBody.Should().NotBeNull();
@@ -2243,12 +2257,13 @@ public sealed class SmartArtLayoutTests
             (shape.OffsetXEmu + shape.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
             (shape.OffsetYEmu + shape.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
 
-            var row = i / expectedColumns;
-            var column = i % expectedColumns;
+            var quadrantIndex = i - 1;
+            var row = quadrantIndex / 2;
+            var column = quadrantIndex % 2;
             if (column > 0)
                 shape.OffsetXEmu.Should().BeGreaterThan(boxes[i - 1].OffsetXEmu + boxes[i - 1].ExtentCxEmu);
             if (row > 0)
-                shape.OffsetYEmu.Should().BeGreaterThan(boxes[i - expectedColumns].OffsetYEmu + boxes[i - expectedColumns].ExtentCyEmu);
+                shape.OffsetYEmu.Should().BeGreaterThan(boxes[i - 2].OffsetYEmu + boxes[i - 2].ExtentCyEmu);
         }
     }
 
@@ -4613,13 +4628,14 @@ public sealed class SmartArtLayoutTests
         var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
 
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
-        shapeOps.Should().HaveCount(4, "basicMatrix should render four live quadrant ops");
-        shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
-            .Should().Contain(["North", "East", "South", "West"]);
+        shapeOps.Should().HaveCount(5, "basicMatrix should render one whole and four live quadrant ops");
+        shapeOps.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("North", "East", "South", "West");
         shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().NotContain("Cached matrix fallback");
         shapeOps.Where(op => op.Text is null)
-            .Should().BeEmpty("matrix SmartArt emits quadrant boxes only, with no connector DrawOps");
+            .Should().ContainSingle("Basic Matrix emits one background whole and no connector DrawOps");
     }
 
     [Theory]
@@ -4672,12 +4688,15 @@ public sealed class SmartArtLayoutTests
             .OfType<DrawOp.Shape>()
             .ToList();
 
-        shapeOps.Should().HaveCount(nodeCount);
-        shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
-            .Should().Equal(nodeTexts);
+        shapeOps.Should().HaveCount(5);
+        shapeOps.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodeTexts[..4]);
         shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().NotContain("Cached matrix fallback");
-        shapeOps.Should().OnlyContain(op => op.Text != null && op.BoundsDip.Width > 0 && op.BoundsDip.Height > 0);
+        shapeOps.Where(op => op.Text is null)
+            .Should().ContainSingle("Basic Matrix emits one whole shape and no connectors");
+        shapeOps.Should().OnlyContain(op => op.BoundsDip.Width > 0 && op.BoundsDip.Height > 0);
     }
 
     [Fact]

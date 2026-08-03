@@ -1769,14 +1769,14 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia consume ordinary shared slide shape ops emitted by the SmartArt matrix-family layout planner; no renderer-local SmartArt policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-smartart-basic-matrix-2026-07-13.md"
+                "docs/parity/freep-smartart-basic-matrix-wave115-20260803.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "basicMatrix and matrix1 use the bounded shared matrix-family live-layout path for parsed nodes in deterministic two-column row-major rectangles, retaining the four-node quadrant geometry; larger inputs continue into additional rows. Unsupported matrix siblings, PowerPoint-authoritative visual baselines, and broader SmartArt authoring/editing remain deferred.")
+            RemainingWork: "basicMatrix alone uses the dedicated shared Basic Matrix plan: the first four model top-level (Level == 0, PowerPoint Level 1) nodes render as stable row-major rounded quadrants over a neutral whole diamond, with no connectors; unused top-level and child nodes remain editable but are omitted from the four-idea layout. matrix1 has no fixture evidence and remains on cached fallback. Unsupported matrix siblings, PowerPoint-authoritative visual baselines, richer SmartArt effects, and broader SmartArt authoring/editing remain deferred.")
         ,
         new(
             EvidenceId: "freep.smartart.titled-matrix",

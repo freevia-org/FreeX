@@ -3077,7 +3077,29 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void ReaderWriter_PreservesNineNodeBasicMatrixOrderAndLiveRendering()
+    public void Reader_LeavesUnprovenMatrix1OnCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["A", "B", "C", "D"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/matrix1");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.Family.Should().Be(SmartArtFamily.Matrix);
+        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "matrix1 has no FreeP fixture evidence and must retain the imported cache as authoritative");
+        smartArt.FallbackShapes.Should().NotBeEmpty();
+        SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain("A");
+    }
+
+    [Fact]
+    public void ReaderWriter_PreservesBasicMatrixSemanticsAndRegeneratesItsFiveShapeCache()
     {
         var nodeTexts = Enumerable.Range(0, 9).Select(i => $"Node {i + 1}").ToArray();
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -3086,8 +3108,9 @@ public sealed class SmartArtTests : IDisposable
             parOfConnections: []);
 
         var presentation = PptxPackageReader.Read(pptxPath);
-        var smartArt = presentation.Slides[0].Shapes
-            .First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var smartArtShape = presentation.Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartArtShape.SmartArt!;
 
         smartArt.Data.Should().NotBeNull();
         smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
@@ -3097,13 +3120,45 @@ public sealed class SmartArtTests : IDisposable
             .Skip(1)
             .OfType<DrawOp.Shape>()
             .ToList();
-        liveShapes.Should().HaveCount(9);
-        liveShapes.Select(shape => shape.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
-            .Should().Equal(nodeTexts);
+        liveShapes.Should().HaveCount(5, "Basic Matrix renders one whole plus its first four Level 1 ideas");
+        liveShapes.Where(shape => shape.Text is not null)
+            .Select(shape => shape.Text!.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal(nodeTexts[..4]);
+        liveShapes.Where(shape => shape.Text is null)
+            .Should().ContainSingle("the whole is a background diamond and Basic Matrix has no connectors");
 
         smartArt.Data.Nodes[^1].Text = "Node 9 edited";
         SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        var cache = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            smartArtShape.OffsetXEmu,
+            smartArtShape.OffsetYEmu,
+            smartArtShape.ExtentCxEmu,
+            smartArtShape.ExtentCyEmu,
+            presentation.Theme!);
+        cache.Applied.Should().BeTrue(cache.Message);
+        cache.ShapeCount.Should().Be(5);
         var savedPath = WriteToPptx(presentation);
+
+        using (var archive = ZipFile.OpenRead(savedPath))
+        {
+            var entry = archive.GetEntry("ppt/diagrams/drawing1.xml");
+            entry.Should().NotBeNull();
+            using var reader = new StreamReader(entry!.Open(), Encoding.UTF8);
+            var document = XDocument.Parse(reader.ReadToEnd());
+            var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+            var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+            document.Descendants(dsp + "sp").Should().HaveCount(5);
+            document.Descendants(dsp + "cxnSp").Should().BeEmpty();
+            document.Descendants(dsp + "sp")
+                .Select(element => element.Descendants(a + "prstGeom").Attributes("prst").FirstOrDefault()?.Value)
+                .Should().Contain("diamond");
+            document.Descendants(dsp + "cNvPr").Select(element => (string?)element.Attribute("name"))
+                .Should().Contain("SmartArt_BasicMatrix_Whole")
+                .And.Contain("SmartArt_BasicMatrix_Quadrant_TopLeft_1")
+                .And.Contain("SmartArt_BasicMatrix_Quadrant_BottomRight_4");
+        }
+
         var reopened = PptxPackageReader.Read(savedPath)
             .Slides[0].Shapes.First(shape => shape.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
@@ -3111,6 +3166,10 @@ public sealed class SmartArtTests : IDisposable
         reopened.Data!.IsLiveLayoutSupported.Should().BeTrue();
         reopened.Data.Nodes.Select(node => node.Text).Should().Equal(
             nodeTexts[..^1].Append("Node 9 edited"));
+        reopened.FallbackShapes.Should().HaveCount(5);
+        reopened.FallbackShapes.Select(shape => shape.PlainText)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().Equal(nodeTexts[..4]);
     }
 
     [Fact]

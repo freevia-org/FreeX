@@ -184,6 +184,9 @@ public static class SmartArtLayoutEngine
         if (IsInvertedPyramidLayout(data.LayoutUniqueId))
             return LayoutInvertedPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsBasicMatrixLayout(data.LayoutUniqueId))
+            return LayoutBasicMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan, theme);
+
         if (IsTitledMatrixLayout(data.LayoutUniqueId))
             return LayoutTitledMatrix(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -1820,8 +1823,81 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
+    /// Basic Matrix shows the first four model top-level (Level == 0, PowerPoint
+    /// Level-1) ideas as quadrants belonging to
+    /// one whole. The small diamond is the whole, rendered first so the rounded
+    /// quadrant cells sit above it. Level-2 nodes and later Level-1 nodes remain
+    /// in the editable data model, but are intentionally not rendered by this
+    /// four-idea layout. No connectors are emitted: the shared diamond provides
+    /// the relationship-to-whole visual without implying directional flow.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutBasicMatrix(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan,
+        PresentationTheme theme)
+    {
+        var components = nodes
+            .Where(node => node.Level == 0)
+            .Take(4)
+            .ToList();
+        if (components.Count == 0)
+            return null;
+
+        long padX = Math.Max((long)(fcx * OuterPaddingFrac), 1L);
+        long padY = Math.Max((long)(fcy * OuterPaddingFrac), 1L);
+        long gapX = Math.Max((long)(fcx * 0.055), 1L);
+        long gapY = Math.Max((long)(fcy * 0.055), 1L);
+        long availableW = Math.Max(fcx - (2 * padX) - gapX, 1L);
+        long availableH = Math.Max(fcy - (2 * padY) - gapY, 1L);
+        long cellW = Math.Max(availableW / 2, 1L);
+        long cellH = Math.Max(availableH / 2, 1L);
+
+        var shapes = new List<SlideShape>(components.Count + 1);
+        var wholeStyle = stylePlan.GetNodeStyle(0, 0, SmartArtFamily.Matrix);
+        long wholeSize = Math.Max((long)(Math.Min(cellW, cellH) * 0.52), 1L);
+        var whole = MakeBox(
+            700,
+            string.Empty,
+            wholeStyle,
+            fx + (fcx - wholeSize) / 2,
+            fy + (fcy - wholeSize) / 2,
+            wholeSize,
+            wholeSize,
+            NodeFontSizePt,
+            DrawingShapeKind.Diamond);
+        whole.Name = "SmartArt_BasicMatrix_Whole";
+        whole.TextBody = null;
+        whole.Fill = new ShapeFill.Solid(
+            new ThemeAwareColor(SmartArtStylePlanner.ResolveNeutralConnector(theme)));
+        shapes.Add(whole);
+
+        string[] roles = ["TopLeft", "TopRight", "BottomLeft", "BottomRight"];
+        for (var index = 0; index < components.Count; index++)
+        {
+            var row = index / 2;
+            var column = index % 2;
+            var shape = MakeBox(
+                (uint)(701 + index),
+                components[index].Text,
+                stylePlan.GetNodeStyle(index, components[index].Level, SmartArtFamily.Matrix),
+                fx + padX + column * (cellW + gapX),
+                fy + padY + row * (cellH + gapY),
+                cellW,
+                cellH,
+                NodeFontSizePt,
+                DrawingShapeKind.RoundedRectangle);
+            shape.Name = $"SmartArt_BasicMatrix_Quadrant_{roles[index]}_{index + 1}";
+            shapes.Add(shape);
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
     /// Grid Matrix is a four-component, two-axis layout rather than an unlimited list grid.
-    /// PowerPoint renders only the first four Level 1 entries in row-major quadrants and leaves
+    /// PowerPoint renders only the first four model top-level (Level == 0, PowerPoint
+    /// Level-1) entries in row-major quadrants and leaves
     /// later text available in the text pane. The centered square envelope also preserves the
     /// native layout's behavior when a wide graphic frame has unused horizontal space.
     /// </summary>
@@ -4302,6 +4378,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "titledmatrix", StringComparison.Ordinal);
+    }
+
+    private static bool IsBasicMatrixLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "basicmatrix", StringComparison.Ordinal);
     }
 
     private static bool IsGridMatrixLayout(string uniqueId)
