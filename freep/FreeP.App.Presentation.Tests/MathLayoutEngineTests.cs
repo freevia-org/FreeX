@@ -2236,7 +2236,7 @@ public sealed class MathLayoutEngineTests
     public void OmmlParagraphDefJc_RightAlignsContentWhenLocalJcIsAbsent()
     {
         var node = ParseOmmlParagraph(
-            "<m:mathPr><m:defJc m:val=\"right\"/></m:mathPr>" +
+            "<m:mathPr><m:dispDef/><m:defJc m:val=\"right\"/></m:mathPr>" +
             "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
         var natural = MathLayoutEngine.Layout(((MathNode.MathParagraph)node).Content, "Cambria Math", FontSizePt);
         var aligned = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 180);
@@ -2254,7 +2254,7 @@ public sealed class MathLayoutEngineTests
     public void OmmlParagraphBareDefJc_UsesCenterGroupPlanWithoutChangingCenteredGeometry()
     {
         var node = ParseOmmlParagraph(
-            "<m:mathPr><m:defJc/></m:mathPr>" +
+            "<m:mathPr><m:dispDef/><m:defJc/></m:mathPr>" +
             "<m:oMath><m:r><m:t>xy</m:t></m:r></m:oMath>");
 
         var natural = MathLayoutEngine.Layout(((MathNode.MathParagraph)node).Content, "Cambria Math", FontSizePt);

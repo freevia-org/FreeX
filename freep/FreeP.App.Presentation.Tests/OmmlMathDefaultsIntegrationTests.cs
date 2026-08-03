@@ -32,6 +32,7 @@ public sealed class OmmlMathDefaultsIntegrationTests
             "<m:brkBin m:val=\"repeat\"/>" +
             "<m:brkBinSub m:val=\"-+\"/>" +
             "<m:smallFrac/>" +
+            "<m:dispDef/>" +
             "<m:defJc m:val=\"right\"/>" +
             "</m:mathPr>");
 
@@ -39,7 +40,13 @@ public sealed class OmmlMathDefaultsIntegrationTests
         var presentation = PptxPackageReader.Read(package);
 
         presentation.DocumentMathProperties.Should().Be(
-            new OmmlMathProperties("repeat", "-+", "Arial", true, "right"));
+            new OmmlMathProperties(
+                BinaryBreak: "repeat",
+                BinarySubtraction: "-+",
+                MathFontFamily: "Arial",
+                SmallFraction: true,
+                DefaultJustification: "right",
+                DisplayDefaults: true));
     }
 
     [Theory]
@@ -57,13 +64,13 @@ public sealed class OmmlMathDefaultsIntegrationTests
             ? "<m:defJc/>"
             : "<m:defJc m:val=\"" + value + "\"/>";
         AddRelatedSettingsPart(package,
-            "<m:mathPr xmlns:m=\"" + MathNamespace + "\">" + defJc + "</m:mathPr>");
+            "<m:mathPr xmlns:m=\"" + MathNamespace + "\"><m:dispDef/>" + defJc + "</m:mathPr>");
 
         package.Position = 0;
         var presentation = PptxPackageReader.Read(package);
 
         presentation.DocumentMathProperties.Should().Be(
-            new OmmlMathProperties(DefaultJustification: expected));
+            new OmmlMathProperties(DefaultJustification: expected, DisplayDefaults: true));
     }
 
     [Fact]
@@ -103,6 +110,43 @@ public sealed class OmmlMathDefaultsIntegrationTests
 
         presentation.DocumentMathProperties.Should().Be(
             new OmmlMathProperties(SmallFraction: expected));
+    }
+
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("true", true)]
+    [InlineData("on", true)]
+    [InlineData("0", false)]
+    [InlineData("false", false)]
+    [InlineData("off", false)]
+    [InlineData("bogus", true)]
+    public void Reader_PropagatesDisplayDefaultsCtOnOffFromRelatedSettingsPart(
+        string value,
+        bool expected)
+    {
+        using var package = WriteMathPackage();
+        AddRelatedSettingsPart(package,
+            "<m:mathPr xmlns:m=\"" + MathNamespace + "\"><m:dispDef m:val=\"" + value + "\"/></m:mathPr>");
+
+        package.Position = 0;
+        var presentation = PptxPackageReader.Read(package);
+
+        presentation.DocumentMathProperties.Should().Be(
+            new OmmlMathProperties(DisplayDefaults: expected));
+    }
+
+    [Fact]
+    public void Reader_LeavesAbsentDisplayDefaultsUnassigned()
+    {
+        using var package = WriteMathPackage();
+        AddRelatedSettingsPart(package,
+            "<m:mathPr xmlns:m=\"" + MathNamespace + "\"><m:defJc m:val=\"right\"/></m:mathPr>");
+
+        package.Position = 0;
+        var presentation = PptxPackageReader.Read(package);
+
+        presentation.DocumentMathProperties.Should().Be(
+            new OmmlMathProperties(DefaultJustification: "right"));
     }
 
     [Fact]

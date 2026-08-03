@@ -132,7 +132,11 @@ public static class OmmlParser
 
         return new MathNode.MathParagraph(
             content,
-            ParseMathParagraphJustification(paragraphProperties, resolvedProperties.DefaultJustification),
+            ParseMathParagraphJustification(
+                paragraphProperties,
+                resolvedProperties.DisplayDefaults == true
+                    ? resolvedProperties.DefaultJustification
+                    : null),
             ParseMathParagraphBinaryBreak(paragraphProperties, resolvedProperties),
             ParseMathParagraphBinarySubtraction(paragraphProperties, resolvedProperties),
             resolvedProperties.MathFontFamily,
@@ -169,7 +173,8 @@ public static class OmmlParser
                 MathNode.MathLimitLocation.SubSup),
             ParseLimitLocationOverride(
                 mathProperties.Element(M + "naryLim"),
-                MathNode.MathLimitLocation.UndOvr));
+                MathNode.MathLimitLocation.UndOvr),
+            ParseDisplayDefaultsOverride(mathProperties));
     }
 
     private static MathNode.MathLimitLocation? ParseLimitLocationOverride(
@@ -225,6 +230,28 @@ public static class OmmlParser
         return ParseJustificationValue(
             value,
             MathNode.MathParagraphJustification.CenterGroup);
+    }
+
+    private static bool? ParseDisplayDefaultsOverride(XElement mathProperties) =>
+        ParseOnOffOverride(mathProperties.Element(M + "dispDef"));
+
+    private static bool? ParseOnOffOverride(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        var value = ReadVal(element);
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "0" or "false" or "off" => false,
+            // CT_OnOff uses true for a val-less element. Keep malformed
+            // authored values on the same conservative fallback as the
+            // parser's existing OMML binary properties.
+            _ => true,
+        };
     }
 
     private static MathNode.MathParagraphBinaryBreak? ParseBinaryBreakOverride(XElement mathProperties)

@@ -18,6 +18,12 @@ public abstract class MathNode
     /// Nullable values distinguish omitted properties from explicit values so
     /// inheritance can be resolved one property at a time.
     /// </summary>
+    /// <summary>
+    /// Immutable parser context for inherited <c>m:mathPr</c> properties.
+    /// <c>DisplayDefaults</c> is null when <c>m:dispDef</c> is absent; only an
+    /// explicit true value enables display-default-dependent properties such
+    /// as <c>m:defJc</c>.
+    /// </summary>
     public sealed record MathProperties(
         MathParagraphBinaryBreak? BinaryBreak = null,
         MathParagraphBinarySubtraction? BinarySubtraction = null,
@@ -25,7 +31,8 @@ public abstract class MathNode
         bool? SmallFraction = null,
         MathParagraphJustification? DefaultJustification = null,
         MathLimitLocation? IntegralLimitLocation = null,
-        MathLimitLocation? NaryLimitLocation = null)
+        MathLimitLocation? NaryLimitLocation = null,
+        bool? DisplayDefaults = null)
     {
         public bool HasValues =>
             BinaryBreak.HasValue ||
@@ -34,7 +41,8 @@ public abstract class MathNode
             SmallFraction.HasValue ||
             DefaultJustification.HasValue ||
             IntegralLimitLocation.HasValue ||
-            NaryLimitLocation.HasValue;
+            NaryLimitLocation.HasValue ||
+            DisplayDefaults.HasValue;
 
         public MathProperties Overlay(MathProperties? overriding) => overriding is null
             ? this
@@ -45,7 +53,8 @@ public abstract class MathNode
                 overriding.SmallFraction ?? SmallFraction,
                 overriding.DefaultJustification ?? DefaultJustification,
                 overriding.IntegralLimitLocation ?? IntegralLimitLocation,
-                overriding.NaryLimitLocation ?? NaryLimitLocation);
+                overriding.NaryLimitLocation ?? NaryLimitLocation,
+                overriding.DisplayDefaults ?? DisplayDefaults);
     }
 
     /// <summary>OMML's two legal limit placements for n-ary operators.</summary>

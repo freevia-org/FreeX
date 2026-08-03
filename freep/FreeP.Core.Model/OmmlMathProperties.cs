@@ -5,7 +5,9 @@ namespace FreeP.Core.Model;
 /// shared parser and layout engine. A null member means that the source did
 /// not author that property; <see cref="DefaultJustification"/> retains the
 /// authored <c>m:defJc</c> value so the shared parser can apply its Open XML
-/// default and precedence rules. Limit-location values remain strings at the
+/// default and precedence rules. <see cref="DisplayDefaults"/> is nullable so
+/// an absent <c>m:dispDef</c> remains distinct from an authored CT_OnOff value.
+/// Limit-location values remain strings at the
 /// package boundary so malformed authored values remain observable until the
 /// shared parser applies the schema fallback.
 /// </summary>
@@ -16,7 +18,8 @@ public sealed record OmmlMathProperties(
     bool? SmallFraction = null,
     string? DefaultJustification = null,
     string? IntegralLimitLocation = null,
-    string? NaryLimitLocation = null)
+    string? NaryLimitLocation = null,
+    bool? DisplayDefaults = null)
 {
     public bool HasValues =>
         !string.IsNullOrWhiteSpace(BinaryBreak) ||
@@ -25,7 +28,8 @@ public sealed record OmmlMathProperties(
         SmallFraction.HasValue ||
         !string.IsNullOrWhiteSpace(DefaultJustification) ||
         !string.IsNullOrWhiteSpace(IntegralLimitLocation) ||
-        !string.IsNullOrWhiteSpace(NaryLimitLocation);
+        !string.IsNullOrWhiteSpace(NaryLimitLocation) ||
+        DisplayDefaults.HasValue;
 
     /// <summary>
     /// Applies authored values from <paramref name="overriding"/> one property
@@ -40,5 +44,6 @@ public sealed record OmmlMathProperties(
             overriding.SmallFraction ?? SmallFraction,
             overriding.DefaultJustification ?? DefaultJustification,
             overriding.IntegralLimitLocation ?? IntegralLimitLocation,
-            overriding.NaryLimitLocation ?? NaryLimitLocation);
+            overriding.NaryLimitLocation ?? NaryLimitLocation,
+            overriding.DisplayDefaults ?? DisplayDefaults);
 }

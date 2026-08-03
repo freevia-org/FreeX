@@ -44,7 +44,8 @@ public sealed class OmmlMathDefaultsParityTests
             "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>",
             "x",
             new MathNode.MathProperties(
-                DefaultJustification: MathNode.MathParagraphJustification.Right));
+                DefaultJustification: MathNode.MathParagraphJustification.Right,
+                DisplayDefaults: true));
         var natural = MathLayoutEngine.Layout(
             ((MathNode.MathParagraph)node).Content, "Cambria Math", 18.0);
         var layout = MathLayoutEngine.Layout(node, "Cambria Math", 18.0, paragraphWidthDip: 180);
@@ -70,6 +71,40 @@ public sealed class OmmlMathDefaultsParityTests
         var visual = new DrawingVisual();
         using var drawingContext = visual.RenderOpen();
         SlideCanvas.RenderParaWithMath(drawingContext, paragraph, 10, 20);
+    }
+
+    [StaFact]
+    public void Wpf_AbsentDispDef_IgnoresDefJcAndKeepsParagraphDefaults()
+    {
+        var node = OmmlParser.ParsePowerPoint(
+            "<m:oMathPara xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\">" +
+            "<m:mathPr><m:defJc m:val=\"right\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>",
+            "x");
+        var natural = MathLayoutEngine.Layout(
+            ((MathNode.MathParagraph)node).Content, "Cambria Math", 18.0);
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", 18.0, paragraphWidthDip: 180);
+        var glyph = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        glyph.X.Should().BeApproximately(10 + (180 - natural.Metrics.Width) / 2.0, 0.01);
+
+        var visual = new DrawingVisual();
+        using var drawingContext = visual.RenderOpen();
+        SlideCanvas.RenderParaWithMath(drawingContext, new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun
+                {
+                    Text = "x",
+                    FontFamily = "Cambria Math",
+                    MathLayout = layout,
+                    Color = SrgbColor.Black,
+                },
+            },
+        }, 10, 20);
     }
 
     [StaFact]

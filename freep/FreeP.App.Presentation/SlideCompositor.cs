@@ -2132,7 +2132,8 @@ public static class SlideCompositor
             properties.SmallFraction,
             defaultJustification,
             integralLimitLocation,
-            naryLimitLocation);
+            naryLimitLocation,
+            properties.DisplayDefaults);
     }
 
     // ─── Wave 19A: auto-number formatter ────────────────────────────────────────────────────

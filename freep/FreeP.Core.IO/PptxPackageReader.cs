@@ -4963,7 +4963,8 @@ public static class PptxPackageReader
                 defaultValue: "subSup"),
             NaryLimitLocation: ReadLimitLocationValue(
                 mathProperties.Element(M + "naryLim"),
-                defaultValue: "undOvr"));
+                defaultValue: "undOvr"),
+            DisplayDefaults: ReadOnOffValue(mathProperties.Element(M + "dispDef")));
     }
 
     private static string? ReadLimitLocationValue(XElement? element, string defaultValue)

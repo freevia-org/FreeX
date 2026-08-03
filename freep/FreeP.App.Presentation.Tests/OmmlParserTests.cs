@@ -1523,7 +1523,7 @@ public sealed class OmmlParserTests
         MathNode.MathParagraphJustification expected)
     {
         var node = ParseParagraph(
-            $"<m:mathPr><m:defJc m:val=\"{val}\"/></m:mathPr>" +
+            $"<m:mathPr><m:dispDef/><m:defJc m:val=\"{val}\"/></m:mathPr>" +
             "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
 
         var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
@@ -1534,7 +1534,7 @@ public sealed class OmmlParserTests
     public void OMathPara_BareDefJc_DefaultsToCenterGroup()
     {
         var node = ParseParagraph(
-            "<m:mathPr><m:defJc/></m:mathPr>" +
+            "<m:mathPr><m:dispDef/><m:defJc/></m:mathPr>" +
             "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
 
         Assert.Equal(
@@ -1546,7 +1546,7 @@ public sealed class OmmlParserTests
     public void OMathPara_BareLocalJc_OverridesDefJcWithCenterGroup()
     {
         var node = ParseParagraph(
-            "<m:mathPr><m:defJc m:val=\"right\"/></m:mathPr>" +
+            "<m:mathPr><m:dispDef/><m:defJc m:val=\"right\"/></m:mathPr>" +
             "<m:oMathParaPr><m:jc/></m:oMathParaPr>" +
             "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
 
@@ -1559,7 +1559,7 @@ public sealed class OmmlParserTests
     public void OMathPara_LocalJcOverridesInheritedDefJc()
     {
         var node = ParseParagraph(
-            "<m:mathPr><m:defJc m:val=\"right\"/></m:mathPr>" +
+            "<m:mathPr><m:dispDef/><m:defJc m:val=\"right\"/></m:mathPr>" +
             "<m:oMathParaPr><m:jc m:val=\"left\"/></m:oMathParaPr>" +
             "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
 
@@ -1575,7 +1575,49 @@ public sealed class OmmlParserTests
             $"<m:oMathPara xmlns:m=\"{M}\"><m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>",
             "FALLBACK",
             new MathNode.MathProperties(
-                DefaultJustification: MathNode.MathParagraphJustification.Right));
+                DefaultJustification: MathNode.MathParagraphJustification.Right,
+                DisplayDefaults: true));
+
+        Assert.Equal(
+            MathNode.MathParagraphJustification.Right,
+            Assert.IsType<MathNode.MathParagraph>(node).Justification);
+    }
+
+    [Theory]
+    [InlineData("", MathNode.MathParagraphJustification.CenterGroup)]
+    [InlineData("0", MathNode.MathParagraphJustification.CenterGroup)]
+    [InlineData("false", MathNode.MathParagraphJustification.CenterGroup)]
+    [InlineData("off", MathNode.MathParagraphJustification.CenterGroup)]
+    [InlineData("1", MathNode.MathParagraphJustification.Right)]
+    [InlineData("true", MathNode.MathParagraphJustification.Right)]
+    [InlineData("on", MathNode.MathParagraphJustification.Right)]
+    [InlineData("bogus", MathNode.MathParagraphJustification.Right)]
+    public void OMathPara_DispDefControlsDefJcWithAbsentAndInvalidValues(
+        string dispDefValue,
+        MathNode.MathParagraphJustification expected)
+    {
+        var dispDef = string.IsNullOrEmpty(dispDefValue)
+            ? string.Empty
+            : $"<m:dispDef m:val=\"{dispDefValue}\"/>";
+        var node = ParseParagraph(
+            $"<m:mathPr>{dispDef}<m:defJc m:val=\"right\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        Assert.Equal(
+            expected,
+            Assert.IsType<MathNode.MathParagraph>(node).Justification);
+    }
+
+    [Fact]
+    public void OMathPara_DispDefOverlaysIndependentlyFromInheritedDefJc()
+    {
+        var node = OmmlParser.Parse(
+            $"<m:oMathPara xmlns:m=\"{M}\"><m:mathPr><m:dispDef/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>",
+            "FALLBACK",
+            new MathNode.MathProperties(
+                DefaultJustification: MathNode.MathParagraphJustification.Right,
+                DisplayDefaults: false));
 
         Assert.Equal(
             MathNode.MathParagraphJustification.Right,
