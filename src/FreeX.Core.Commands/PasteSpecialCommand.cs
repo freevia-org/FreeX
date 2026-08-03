@@ -29,8 +29,16 @@ public readonly record struct PasteSpecialOptions(
     bool SkipBlanks = false,
     PasteSpecialContentKind ContentKind = PasteSpecialContentKind.Default);
 
-public sealed class PasteSpecialCellsCommand : IWorkbookCommand
+public sealed class PasteSpecialCellsCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: mirrors PasteCellsCommand's rationale -- the undo snapshot
+    // holds a full Cell clone plus style, rich-text runs, hyperlink/metadata and phonetic guide PER
+    // DESTINATION CELL (see BuildDestinationCells/Apply below). A tiled paste-special (the source
+    // block repeated to fill a larger selection) can produce far more destination cells than
+    // _sourceCells alone, so _tiledDestinations.Count -- known at construction time -- is used when
+    // present.
+    private const int BytesPerCell = 300;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _sourceRange;
     private readonly IReadOnlyList<(CellAddress Address, Cell Cell)> _sourceCells;
@@ -44,6 +52,10 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly, bool HadRichTextRuns, IReadOnlyList<CellTextRun>? OldRichTextRuns, bool HadHyperlink, string? OldHyperlink, bool HadHyperlinkMetadata, HyperlinkMetadata? OldHyperlinkMetadata, bool HadPhoneticGuide, CellPhoneticGuide? OldPhoneticGuide)>? _snapshot;
 
     public string Label => "Paste Special";
+
+    /// <inheritdoc/>
+    public int EstimatedBytes =>
+        (int)Math.Min((long)(_tiledDestinations?.Count ?? _sourceCells.Count) * BytesPerCell, int.MaxValue);
 
     public PasteSpecialCellsCommand(
         SheetId sheetId,

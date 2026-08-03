@@ -116,7 +116,15 @@ public class UndoRedoStack<TCommand, TPayload>
 
     private void TrimUndoStack()
     {
-        while (_undoStack.Count > _maxDepth || (_undoStack.Count > 0 && _undoStackBytes > _maxBytes))
+        // The byte-budget check (`_undoStackBytes > _maxBytes`) only evicts an OLDER entry to make
+        // room -- it must never evict the sole remaining (most-recently-pushed) entry on its own,
+        // or a single command whose own estimate already exceeds the whole budget (e.g. a large
+        // Sort/Paste/RemoveSheet -- see IEstimatesMemory implementers) would be silently discarded
+        // the instant it is pushed, leaving CanUndo() false right after the user's own action with
+        // no warning. `Count > 1` gates that branch so it only ever removes an entry that is NOT the
+        // newest. The depth cap (`Count > _maxDepth`) is a separate, unrelated limit and is left free
+        // to trim down to the newest entry as before.
+        while (_undoStack.Count > _maxDepth || (_undoStack.Count > 1 && _undoStackBytes > _maxBytes))
         {
             var first = _undoStack.First!.Value;
             _undoStack.RemoveFirst();

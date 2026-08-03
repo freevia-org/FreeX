@@ -15,8 +15,17 @@ namespace FreeX.Core.Commands;
 /// formulas need to be rewritten to keep pointing at the source, because the source range is left
 /// in place -- so undo only needs to restore the destination cells.
 /// </summary>
-public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: CaptureCellSnapshots below captures a full CellSnapshot
+    // (Cell clone + style + comment + author + shown-flag + threaded comment + hyperlink/metadata +
+    // rich text + phonetic guide -- even richer than PasteCellsCommand's shape, see the CellSnapshot
+    // record) for EVERY destination cell, so its footprint scales with _sourceRange.CellCount, not a
+    // flat per-command constant. Without this, CommandBus's 50 MB undo byte-budget bills every copy
+    // at the 200-byte IEstimatesMemory default regardless of size, so a large copy/paste-drag never
+    // trips the budget and only the 100-entry depth cap bounds the undo stack.
+    private const int BytesPerCell = 400;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _sourceRange;
     private readonly CellAddress _destination;
@@ -30,6 +39,9 @@ public sealed class CopyRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     public string Label => "Copy Cells";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min(_sourceRange.CellCount * BytesPerCell, int.MaxValue);
 
     public CopyRangeCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination)
     {

@@ -29866,6 +29866,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
                 targetPath,
                 existingIdentity: _session.CurrentFileAccessIdentity);
             using var fileAccess = await _workbookFileAccessService.BeginAccessAsync(StorageProvider, fileAccessIdentity);
+            // R120-corewriter-persist-saving-window-view-1: reconcile THIS view's own per-window
+            // view state (zoom/view-mode/gridlines/headings/show-formulas/freeze/split) onto the
+            // shared Sheet fields before the writer reads them, so a save from THIS view persists
+            // what THIS view is displaying rather than whichever sibling view last touched those
+            // shared fields. Must run synchronously, before the workbook is handed off below.
+            _session.ReconcileViewStateForSave();
             var saveWarnings = await _saveService.SaveAsync(
                 targetPath,
                 target.Adapter,

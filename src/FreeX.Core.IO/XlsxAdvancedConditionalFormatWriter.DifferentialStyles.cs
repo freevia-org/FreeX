@@ -88,7 +88,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     style.FontSize != def.FontSize && IsSupportedFontSize(style.FontSize)
                         ? new XElement(workbookNs + "sz", new XAttribute("val", style.FontSize.ToString(CultureInfo.InvariantCulture)))
                         : null,
-                    style.FontColor != def.FontColor ? new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(style.FontColor))) : null,
+                    style.FontColor != def.FontColor ? ToDifferentialColorXml(workbookNs, "color", style.FontColor, style.FontThemeColor) : null,
                     style.FontName != def.FontName ? new XElement(workbookNs + "name", new XAttribute("val", style.FontName)) : null)
                 : null,
             style.NumberFormat != def.NumberFormat
@@ -105,15 +105,15 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                         new XAttribute("patternType", ToPatternType(style.FillPatternStyle)),
                         style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid
                             ? style.FillColor is { } fill
-                                ? new XElement(workbookNs + "fgColor", new XAttribute("rgb", ToArgb(fill)))
+                                ? ToDifferentialColorXml(workbookNs, "fgColor", fill, style.FillThemeColor)
                                 : null
                             : style.FillPatternColor is { } pattern
-                                ? new XElement(workbookNs + "fgColor", new XAttribute("rgb", ToArgb(pattern)))
+                                ? ToDifferentialColorXml(workbookNs, "fgColor", pattern, style.FillPatternThemeColor)
                                 : null,
                         style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid
                             ? new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))
                             : style.FillColor is { } background
-                                ? new XElement(workbookNs + "bgColor", new XAttribute("rgb", ToArgb(background)))
+                                ? ToDifferentialColorXml(workbookNs, "bgColor", background, style.FillThemeColor)
                                 : new XElement(workbookNs + "bgColor", new XAttribute("indexed", "64"))))
                 : null,
             HasDifferentialBorder(style)
@@ -374,10 +374,34 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         if (border.Style != BorderStyle.None)
         {
             element.SetAttributeValue("style", ToDifferentialBorderStyle(border.Style));
-            element.Add(new XElement(workbookNs + "color", new XAttribute("rgb", ToArgb(border.Color))));
+            element.Add(ToDifferentialColorXml(workbookNs, "color", border.Color, border.ThemeColor));
         }
 
         return element;
+    }
+
+    // Emits a theme-referenced <color theme="N" tint="T"/> when themeColor is present (preserving the
+    // workbook theme link so the color keeps following theme changes and round-trips instead of baking
+    // to a flat rgb), mirroring the color-scale/data-bar ToColorXml(..., CfColorStopSource?) overload in
+    // XlsxAdvancedConditionalFormatWriter.cs (R87) and the border theme-color writer in
+    // XlsxClosedXmlCellMapper.ToXLColor (R80). Falls back to a plain rgb= color otherwise.
+    private static XElement ToDifferentialColorXml(
+        XNamespace workbookNs,
+        string elementName,
+        CellColor color,
+        WorkbookThemeColorReference? themeColor)
+    {
+        if (themeColor is { } t)
+        {
+            var element = new XElement(
+                workbookNs + elementName,
+                new XAttribute("theme", XlsxColorReader.ThemeColorIndex(t.Slot).ToString(CultureInfo.InvariantCulture)));
+            if (Math.Abs(t.Tint) >= 0.000001)
+                element.SetAttributeValue("tint", t.Tint.ToString("G17", CultureInfo.InvariantCulture));
+            return element;
+        }
+
+        return new XElement(workbookNs + elementName, new XAttribute("rgb", ToArgb(color)));
     }
 
     private static string ToDifferentialBorderStyle(BorderStyle style) =>

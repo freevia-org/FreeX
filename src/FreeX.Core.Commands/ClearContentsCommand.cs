@@ -2,8 +2,16 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-public sealed class ClearContentsCommand : IWorkbookCommand
+public sealed class ClearContentsCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: the undo snapshot holds a Cell clone plus style (plus
+    // companion hyperlink/rich-text/phonetic-guide dictionary entries) for every occupied cell in
+    // _range, scaling with _range.CellCount, not a flat per-command constant. Without this,
+    // CommandBus's 50 MB undo byte-budget bills every Clear Contents at the 200-byte
+    // IEstimatesMemory default regardless of size, so clearing a huge range never trips the budget
+    // and only the 100-entry depth cap bounds the undo stack.
+    private const int BytesPerCell = 300;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     // R38-commands-cut-move-2-3: true only when this ClearContentsCommand is the tail end of a
@@ -22,6 +30,9 @@ public sealed class ClearContentsCommand : IWorkbookCommand
     private List<GridRange>? _mergedRegionsSnapshot;
 
     public string Label => "Clear Contents";
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min(_range.CellCount * BytesPerCell, int.MaxValue);
 
     public ClearContentsCommand(SheetId sheetId, GridRange range, bool isCutSource = false)
     {

@@ -455,7 +455,7 @@ public sealed class ConditionalFormatRuleBuilderTests
         var rules = new List<ConditionalFormat> { RuleAt(sheet, 0, 0, 1, 1) };
 
         ConditionalFormatManageModel.BuildMoveCommand(
-            sheet, rules, Guid.NewGuid(), ConditionalFormatRuleMoveDirection.Up).Should().BeNull();
+            sheet, rules, scope: null, Guid.NewGuid(), ConditionalFormatRuleMoveDirection.Up).Should().BeNull();
     }
 
     [Fact]
@@ -467,7 +467,7 @@ public sealed class ConditionalFormatRuleBuilderTests
         var rules = new List<ConditionalFormat> { first };
 
         ConditionalFormatManageModel.BuildMoveCommand(
-            sheet, rules, first.Id, ConditionalFormatRuleMoveDirection.Up).Should().BeNull();
+            sheet, rules, scope: null, first.Id, ConditionalFormatRuleMoveDirection.Up).Should().BeNull();
     }
 
     [Fact]
@@ -482,7 +482,7 @@ public sealed class ConditionalFormatRuleBuilderTests
         session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, second));
 
         var moveCommand = ConditionalFormatManageModel.BuildMoveCommand(
-            sheetId, session.ActiveSheet.ConditionalFormats, second.Id, ConditionalFormatRuleMoveDirection.Up);
+            sheetId, session.ActiveSheet.ConditionalFormats, scope: null, second.Id, ConditionalFormatRuleMoveDirection.Up);
         moveCommand.Should().NotBeNull();
         session.ExecuteReviewCommand(moveCommand!).Success.Should().BeTrue();
 

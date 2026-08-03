@@ -3,8 +3,20 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
-public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: _snapshot below is only the base per-cell record (Cell
+    // clone + style), but Apply also captures a companion Dictionary snapshot (comment, author,
+    // shown-flag, threaded comment, hyperlink, hyperlink metadata, rich text, phonetic guide,
+    // sparkline) keyed by the SAME affected-cell set -- so the command's true retained footprint
+    // per cell is comparable to CopyRangeCommand/PasteCellsCommand's single richer record, just
+    // spread across more collections. Estimated from _snapshot.Count (the affected-cell count,
+    // known only once Apply has captured it) so a large cut+paste-drag or Fill-via-cut actually
+    // counts against CommandBus's 50 MB undo byte-budget instead of the flat 200-byte
+    // IEstimatesMemory default. _snapshot is null before Apply runs, in which case CommandBus never
+    // actually queries this (EstimateBytes is only called after Apply pushes the command).
+    private const int BytesPerCell = 400;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _sourceRange;
     private readonly CellAddress _destination;
@@ -83,6 +95,11 @@ public sealed class MoveRangeCommand : IWorkbookCommand, IAffectedCellsCommand
     public string Label => "Move Cells";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => _snapshot is null
+        ? 0
+        : (int)Math.Min((long)_snapshot.Count * BytesPerCell, int.MaxValue);
 
     public MoveRangeCommand(SheetId sheetId, GridRange sourceRange, CellAddress destination)
     {

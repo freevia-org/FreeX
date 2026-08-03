@@ -23,7 +23,9 @@ namespace FreeX.App.Avalonia;
 ///   - home.mergeCells   ("Merge Cells")    -> merge the selection into one region, NO re-centering.
 ///   - home.mergeAcross  ("Merge Across")   -> merge each selected ROW into one cell, row by row.
 ///   - home.unmerge      ("Unmerge Cells")  -> wired to the existing <see cref="UnmergeSelectedRange"/>.
-///   - home.pasteSpecial ("Paste Special...") -> a radio-option dialog (All / Values / Formulas / Formats)
+///   - home.pasteSpecial ("Paste Special...") -> an Excel-parity dialog exposing the full content-kind
+///                                               radio set, composable Skip Blanks/Transpose/Keep Source
+///                                               Column Widths checkboxes, and a math Operation group,
 ///                                               layered on top of the existing clipboard paste model.
 ///
 /// Everything here reuses the established shell glue: command construction via the
@@ -196,16 +198,23 @@ public sealed partial class MainWindow
     }
 
     /// <summary>
-    /// "Paste Special..." (home.pasteSpecial). Opens a Windows-style dialog with radio options for the
-    /// content kind to paste, then defers to the existing clipboard paste pipeline
-    /// (<see cref="PasteSpecialClipboardTextAsync"/> -> <c>WorkbookSession.PasteSpecialClipboardAtActiveCell</c>).
+    /// "Paste Special..." (home.pasteSpecial). Opens an Excel-parity dialog: a full content-kind radio
+    /// group, composable Skip Blanks / Transpose / Keep Source Column Widths checkboxes, a math Operation
+    /// group (None/Add/Subtract/Multiply/Divide) and a Paste Link button -- matching WPF's
+    /// <see cref="FreeX.App.Host.PasteSpecialDialog"/> and real Excel's single unified Paste Special
+    /// dialog.
     ///
-    /// Scope: the shell clipboard model is text-backed, so the dialog surfaces the subset of Paste Special
-    /// options that the text round-trip can honor faithfully:
-    ///   All / Values / Formulas / Formats. These map to <see cref="PasteCellsMode"/> directly.
-    /// The richer content kinds (e.g. "Values and Number Formats", Transpose, math Operations, Skip Blanks)
-    /// remain available through the Paste split-button's Paste Special submenu and are intentionally not
-    /// duplicated here to keep the ribbon dialog focused, matching the primary Excel radio set.
+    /// R120: previously this ribbon-triggered dialog exposed only All / Values / Formulas / Formats; the
+    /// richer content kinds (All Except Borders, All Merging Conditional Formats, Formulas/Values and
+    /// Number Formats, Values and Source Formatting, Column Widths, Comments and Notes, Validation, Text,
+    /// Unicode Text, Picture, Linked Picture, Paste Link, Skip Blanks, Transpose, the math Operations) were
+    /// reachable only through the Paste split-button's Paste Special submenu (<see cref="CreatePasteSpecialMenuItems"/>),
+    /// never from this ribbon button. Every option below dispatches through those SAME already-wired
+    /// execution methods (<see cref="PasteSpecialClipboardTextAsync"/>, <see cref="PasteCommentsFromClipboardAsync"/>,
+    /// <see cref="PasteDataValidationFromClipboardAsync"/>, <see cref="PasteColumnWidthsFromClipboardAsync"/>,
+    /// <see cref="PasteSpecialExternalTextFromClipboardAsync"/>, <see cref="PastePictureFromClipboardAsync"/>,
+    /// <see cref="PasteLinkFromClipboardAsync"/>) -- no new paste behaviour is introduced, only a single
+    /// consolidated surface for what the shell already does.
     /// </summary>
     private async Task ShowPasteSpecialDialogAsync()
     {
@@ -222,23 +231,146 @@ public sealed partial class MainWindow
             return;
         }
 
-        await PasteSpecialClipboardTextAsync(selection.Mode, default, selection.Label);
+        var option = selection.Option;
+        switch (option.Kind)
+        {
+            case PasteSpecialDialogActionKind.Comments:
+                await PasteCommentsFromClipboardAsync(option.Label);
+                return;
+            case PasteSpecialDialogActionKind.Validation:
+                await PasteDataValidationFromClipboardAsync(option.Label);
+                return;
+            case PasteSpecialDialogActionKind.ColumnWidths:
+                await PasteColumnWidthsFromClipboardAsync(option.Label);
+                return;
+            case PasteSpecialDialogActionKind.Text:
+            case PasteSpecialDialogActionKind.UnicodeText:
+                await PasteSpecialExternalTextFromClipboardAsync(option.Label);
+                return;
+            case PasteSpecialDialogActionKind.Picture:
+                await PastePictureFromClipboardAsync(option.Label, linkedPicture: false);
+                return;
+            case PasteSpecialDialogActionKind.LinkedPicture:
+                await PastePictureFromClipboardAsync(option.Label, linkedPicture: true);
+                return;
+            case PasteSpecialDialogActionKind.Link:
+                await PasteLinkFromClipboardAsync(option.Label);
+                return;
+            default:
+                var pasteOptions = new PasteSpecialOptions(
+                    Transpose: selection.Transpose,
+                    Operation: selection.Operation,
+                    SkipBlanks: selection.SkipBlanks,
+                    ContentKind: option.ContentKind);
+                await PasteSpecialClipboardTextAsync(option.Mode, pasteOptions, option.Label, selection.KeepSourceColumnWidths);
+                return;
+        }
     }
 
-    private sealed record PasteSpecialModeChoice(PasteCellsMode Mode, string Label);
+    /// <summary>
+    /// Which existing execution method a content-kind radio in the ribbon's Paste Special dialog routes
+    /// to. <see cref="Cells"/> is the composable family (goes through <see cref="PasteSpecialClipboardTextAsync"/>
+    /// together with the Skip Blanks/Transpose/Keep Source Column Widths checkboxes and the Operation
+    /// group); every other member is a fixed, non-composable action mirroring one submenu item in
+    /// <see cref="CreatePasteSpecialMenuItems"/>.
+    /// </summary>
+    internal enum PasteSpecialDialogActionKind
+    {
+        Cells,
+        Comments,
+        Validation,
+        ColumnWidths,
+        Text,
+        UnicodeText,
+        Picture,
+        LinkedPicture,
+        Link,
+    }
+
+    internal sealed record PasteSpecialDialogOption(
+        string Label,
+        string AutomationId,
+        PasteSpecialDialogActionKind Kind,
+        PasteCellsMode Mode = PasteCellsMode.All,
+        PasteSpecialContentKind ContentKind = PasteSpecialContentKind.Default);
+
+    internal sealed record PasteSpecialDialogSelection(
+        PasteSpecialDialogOption Option,
+        bool SkipBlanks,
+        bool Transpose,
+        bool KeepSourceColumnWidths,
+        PasteSpecialOperation Operation);
 
     /// <summary>
-    /// Shows the Paste Special radio dialog and returns the selected mode, or <c>null</c> if cancelled.
+    /// Test-only hook (matching the established SmokeProbe convention used by
+    /// <c>ShowFormatCellsInputDialogAsync</c>/<c>ShowFindDialogAsync</c>/etc. in MainWindow.cs) exposing
+    /// the real, production content-kind radios / checkboxes / operation radios / footer buttons of the
+    /// ribbon's Paste Special dialog so a headless test can drive them directly -- the OS clipboard itself
+    /// (<c>IClipboard</c>) is <c>[NotClientImplementable]</c> so cannot be doubled in a headless test (see
+    /// the R66/R68 rationale on <see cref="TryGetClipboardTextAsync"/>), but this probe fires from the
+    /// dialog's own <c>Opened</c> event, before any clipboard access happens, so it can still exercise the
+    /// real dialog end-to-end for everything up to (and including) the OK-click selection decision.
     /// </summary>
-    private async Task<PasteSpecialModeChoice?> PromptPasteSpecialModeAsync()
+    internal sealed record PasteSpecialDialogSmokeProbe(
+        Window Dialog,
+        IReadOnlyList<RadioButton> ContentRadios,
+        CheckBox SkipBlanksBox,
+        CheckBox TransposeBox,
+        CheckBox KeepColumnWidthsBox,
+        IReadOnlyList<RadioButton> OperationRadios,
+        Button PasteLinkButton,
+        Button OkButton,
+        Button CancelButton);
+
+    /// <summary>
+    /// The content-kind radio list for the ribbon's Paste Special dialog, in the same order as (and
+    /// covering every entry of) the Paste split-button's Paste Special submenu built by
+    /// <see cref="CreatePasteSpecialMenuItems"/>, minus the Transpose / Skip Blanks / the four math
+    /// Operation entries there -- this dialog exposes those as composable checkboxes and an Operation
+    /// group instead (see <see cref="PromptPasteSpecialModeAsync"/>), so they can be combined with any
+    /// <see cref="PasteSpecialDialogActionKind.Cells"/> content kind, matching Excel and
+    /// <see cref="FreeX.App.Host.PasteSpecialDialog"/>.
+    /// </summary>
+    private static readonly PasteSpecialDialogOption[] PasteSpecialDialogOptions =
+    [
+        new("All", "PasteSpecialAllRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All),
+        new("Values", "PasteSpecialValuesRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Values),
+        new("Formulas", "PasteSpecialFormulasRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Formulas),
+        new("Formats", "PasteSpecialFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.Formats),
+        new("Comments and Notes", "PasteSpecialCommentsRadio", PasteSpecialDialogActionKind.Comments),
+        new("Validation", "PasteSpecialValidationRadio", PasteSpecialDialogActionKind.Validation),
+        new("All Except Borders", "PasteSpecialAllExceptBordersRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.AllExceptBorders),
+        new("All Merging Conditional Formats", "PasteSpecialAllMergingConditionalFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.AllMergingConditionalFormats),
+        new("Column Widths", "PasteSpecialColumnWidthsRadio", PasteSpecialDialogActionKind.ColumnWidths),
+        new("Formulas and Number Formats", "PasteSpecialFormulasAndNumberFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.FormulasAndNumberFormats),
+        new("Values and Number Formats", "PasteSpecialValuesAndNumberFormatsRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.ValuesAndNumberFormats),
+        new("Values and Source Formatting", "PasteSpecialValuesAndSourceFormattingRadio", PasteSpecialDialogActionKind.Cells, PasteCellsMode.All, PasteSpecialContentKind.ValuesAndSourceFormatting),
+        new("Text", "PasteSpecialTextRadio", PasteSpecialDialogActionKind.Text),
+        new("Unicode Text", "PasteSpecialUnicodeTextRadio", PasteSpecialDialogActionKind.UnicodeText),
+        new("Picture", "PasteSpecialPictureRadio", PasteSpecialDialogActionKind.Picture),
+        new("Linked Picture", "PasteSpecialLinkedPictureRadio", PasteSpecialDialogActionKind.LinkedPicture),
+    ];
+
+    private static readonly PasteSpecialDialogOption PasteSpecialPasteLinkOption =
+        new("Paste Link", "PasteSpecialPasteLinkButton", PasteSpecialDialogActionKind.Link);
+
+    /// <summary>
+    /// Shows the Paste Special dialog and returns the selected content kind plus checkbox/operation state,
+    /// or <c>null</c> if cancelled. The "Paste Link" footer button (matching WPF/Excel) closes the dialog
+    /// with a dedicated <see cref="PasteSpecialDialogActionKind.Link"/> selection regardless of which
+    /// content-kind radio is checked, mirroring <see cref="CreatePasteSpecialMenuItems"/>'s standalone
+    /// "Paste Link" submenu entry.
+    /// </summary>
+    internal async Task<PasteSpecialDialogSelection?> PromptPasteSpecialModeAsync(
+        Action<PasteSpecialDialogSmokeProbe>? launchSmokeProbe = null)
     {
-        PasteSpecialModeChoice? result = null;
+        PasteSpecialDialogSelection? result = null;
 
         var dialog = new Window
         {
             Title = UiText.Get("TableLoc_PasteSpecialTitle"),
-            Width = 320,
-            Height = 260,
+            Width = 420,
+            Height = 600,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
         };
@@ -258,24 +390,16 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         });
 
-        var options = new (PasteCellsMode Mode, string Label, string AutomationId)[]
-        {
-            (PasteCellsMode.All, UiText.Get("TableLoc_PasteSpecialAll"), "PasteSpecialAllRadio"),
-            (PasteCellsMode.Values, UiText.Get("TableLoc_PasteSpecialValues"), "PasteSpecialValuesRadio"),
-            (PasteCellsMode.Formulas, UiText.Get("TableLoc_PasteSpecialFormulas"), "PasteSpecialFormulasRadio"),
-            (PasteCellsMode.Formats, UiText.Get("TableLoc_PasteSpecialFormats"), "PasteSpecialFormatsRadio"),
-        };
-
         var radios = new List<RadioButton>();
-        var optionsPanel = new StackPanel { Spacing = 6 };
-        foreach (var option in options)
+        var optionsPanel = new StackPanel { Spacing = 4 };
+        foreach (var option in PasteSpecialDialogOptions)
         {
             var radio = new RadioButton
             {
                 Content = option.Label,
                 GroupName = "PasteSpecialMode",
-                IsChecked = option.Mode == PasteCellsMode.All,
-                Tag = option.Mode,
+                IsChecked = option == PasteSpecialDialogOptions[0],
+                Tag = option,
             };
             ApplyDataOpsRadioButtonChrome(radio);
             AutomationProperties.SetAutomationId(radio, option.AutomationId);
@@ -283,7 +407,87 @@ public sealed partial class MainWindow
             optionsPanel.Children.Add(radio);
         }
 
-        root.Children.Add(optionsPanel);
+        root.Children.Add(new ScrollViewer
+        {
+            MaxHeight = 230,
+            Content = optionsPanel,
+        });
+
+        var skipBlanksBox = new CheckBox { Content = "Skip Blanks" };
+        ApplyDataOpsCheckBoxChrome(skipBlanksBox);
+        AutomationProperties.SetAutomationId(skipBlanksBox, "PasteSpecialSkipBlanksBox");
+
+        var transposeBox = new CheckBox { Content = "Transpose" };
+        ApplyDataOpsCheckBoxChrome(transposeBox);
+        AutomationProperties.SetAutomationId(transposeBox, "PasteSpecialTransposeBox");
+
+        var keepColumnWidthsBox = new CheckBox { Content = "Keep Source Column Widths" };
+        ApplyDataOpsCheckBoxChrome(keepColumnWidthsBox);
+        AutomationProperties.SetAutomationId(keepColumnWidthsBox, "PasteSpecialKeepColumnWidthsBox");
+
+        var checkboxPanel = new StackPanel { Spacing = 4 };
+        checkboxPanel.Children.Add(skipBlanksBox);
+        checkboxPanel.Children.Add(transposeBox);
+        checkboxPanel.Children.Add(keepColumnWidthsBox);
+        root.Children.Add(checkboxPanel);
+
+        root.Children.Add(new TextBlock
+        {
+            Text = "Operation",
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+        });
+
+        var operationChoices = new (PasteSpecialOperation Operation, string Label, string AutomationId)[]
+        {
+            (PasteSpecialOperation.None, "None", "PasteSpecialOperationNoneRadio"),
+            (PasteSpecialOperation.Add, "Add", "PasteSpecialOperationAddRadio"),
+            (PasteSpecialOperation.Subtract, "Subtract", "PasteSpecialOperationSubtractRadio"),
+            (PasteSpecialOperation.Multiply, "Multiply", "PasteSpecialOperationMultiplyRadio"),
+            (PasteSpecialOperation.Divide, "Divide", "PasteSpecialOperationDivideRadio"),
+        };
+
+        var operationRadios = new List<RadioButton>();
+        var operationGrid = new Grid();
+        operationGrid.ColumnDefinitions.Add(new ColumnDefinition());
+        operationGrid.ColumnDefinitions.Add(new ColumnDefinition());
+        for (var i = 0; i < 3; i++)
+            operationGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        for (var i = 0; i < operationChoices.Length; i++)
+        {
+            var choice = operationChoices[i];
+            var radio = new RadioButton
+            {
+                Content = choice.Label,
+                GroupName = "PasteSpecialOperation",
+                IsChecked = choice.Operation == PasteSpecialOperation.None,
+                Tag = choice.Operation,
+            };
+            ApplyDataOpsRadioButtonChrome(radio);
+            AutomationProperties.SetAutomationId(radio, choice.AutomationId);
+            Grid.SetRow(radio, i / 2);
+            Grid.SetColumn(radio, i % 2);
+            operationRadios.Add(radio);
+            operationGrid.Children.Add(radio);
+        }
+
+        root.Children.Add(operationGrid);
+
+        var pasteLinkButton = new Button
+        {
+            Content = "Paste Link",
+            MinWidth = 82,
+        };
+        ApplyDataOpsButtonChrome(pasteLinkButton);
+        AutomationProperties.SetAutomationId(pasteLinkButton, "PasteSpecialPasteLinkButton");
+        pasteLinkButton.Click += (_, _) =>
+        {
+            result = new PasteSpecialDialogSelection(
+                PasteSpecialPasteLinkOption, SkipBlanks: false, Transpose: false, KeepSourceColumnWidths: false, Operation: PasteSpecialOperation.None);
+            dialog.Close();
+        };
 
         var okButton = new Button
         {
@@ -296,10 +500,18 @@ public sealed partial class MainWindow
         okButton.Click += (_, _) =>
         {
             var selected = radios.FirstOrDefault(r => r.IsChecked == true);
-            if (selected?.Tag is PasteCellsMode mode)
+            if (selected?.Tag is PasteSpecialDialogOption option)
             {
-                var label = options.First(o => o.Mode == mode).Label;
-                result = new PasteSpecialModeChoice(mode, label);
+                var operation = PasteSpecialOperation.None;
+                if (operationRadios.FirstOrDefault(r => r.IsChecked == true) is { Tag: PasteSpecialOperation selectedOperation })
+                    operation = selectedOperation;
+
+                result = new PasteSpecialDialogSelection(
+                    option,
+                    SkipBlanks: skipBlanksBox.IsChecked == true,
+                    Transpose: transposeBox.IsChecked == true,
+                    KeepSourceColumnWidths: keepColumnWidthsBox.IsChecked == true,
+                    Operation: operation);
             }
 
             dialog.Close();
@@ -326,12 +538,24 @@ public sealed partial class MainWindow
             Spacing = 8,
             Margin = new Thickness(0, 8, 0, 0),
         };
+        buttonRow.Children.Add(pasteLinkButton);
         buttonRow.Children.Add(okButton);
         buttonRow.Children.Add(cancelButton);
         root.Children.Add(buttonRow);
 
         dialog.Content = root;
         dialog.Opened += (_, _) => okButton.Focus();
+        if (launchSmokeProbe is not null)
+        {
+            dialog.Opened += (_, _) =>
+            {
+                RunLaunchSmokeDialogProbe(
+                    dialog,
+                    () => launchSmokeProbe(new PasteSpecialDialogSmokeProbe(
+                        dialog, radios, skipBlanksBox, transposeBox, keepColumnWidthsBox, operationRadios, pasteLinkButton, okButton, cancelButton)));
+            };
+        }
+
         await dialog.ShowDialog(this);
         return result;
     }

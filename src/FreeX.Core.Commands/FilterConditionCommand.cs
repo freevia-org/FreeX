@@ -410,3 +410,100 @@ internal static class FilterCriterionAutoFilterModelBuilder
     private static string FormatDate(DateOnly date) =>
         date.ToDateTime(TimeOnly.MinValue).ToOADate().ToString(CultureInfo.InvariantCulture);
 }
+
+/// <summary>
+/// R120-avalonia-datatools-reapply-1: the inverse of <see cref="FilterCriterionAutoFilterModelBuilder"/>
+/// -- rebuilds a live <see cref="IFilterCriterion"/> from the persisted
+/// <see cref="WorksheetAutoFilterCustomFilterModel"/> list a worksheet's AutoFilter column carries
+/// (<c>&lt;customFilters&gt;</c>), so a shell's Data &gt; Reapply can re-run a Custom AutoFilter
+/// condition (wildcard text, numeric/date comparison, or an AND/OR pair of those) purely from durable
+/// worksheet metadata instead of needing an in-session record of the exact criterion object that
+/// applied it.
+/// </summary>
+public static class CustomFilterModelReconstructor
+{
+    public static IFilterCriterion? Reconstruct(
+        IReadOnlyList<WorksheetAutoFilterCustomFilterModel> filters,
+        bool useAnd)
+    {
+        if (filters.Count is 0 or > 2)
+            return null;
+
+        var built = new IFilterCriterion[filters.Count];
+        for (var i = 0; i < filters.Count; i++)
+        {
+            if (filters[i].Value is not { } value)
+                return null;
+
+            built[i] = new PersistedCustomFilterCriterion(filters[i].Operator, value);
+        }
+
+        return built.Length == 1
+            ? built[0]
+            : new CompositeFilterCriterion(built[0], built[1], useAnd);
+    }
+}
+
+/// <summary>
+/// Re-evaluates a persisted (Operator, Value) &lt;customFilter&gt; pair against the CURRENT value of a
+/// cell, dispatching on that value's own runtime <see cref="ScalarValue"/> type rather than on any type
+/// recorded at the moment the criterion was first applied -- the persisted model keeps no such record
+/// (<see cref="FilterCriterionAutoFilterModelBuilder"/> formats a number/date threshold into the same
+/// plain numeric string either way), so the cell's own type is the only faithful signal left.
+///
+/// This exactly reproduces every forward mapping in <see cref="FilterCriterionAutoFilterModelBuilder"/>:
+/// <list type="bullet">
+/// <item>A comparison operator (greaterThan/greaterThanOrEqual/lessThan/lessThanOrEqual) only ever came
+/// from a Number/Date criterion, so it is evaluated numerically against a
+/// <see cref="NumberValue"/> cell, or against a <see cref="DateTimeValue"/> cell using the same
+/// day-precision OADate serial <see cref="FilterCriterionAutoFilterModelBuilder"/> persisted the
+/// threshold as -- and never matches any other cell type, mirroring
+/// NumberGreaterThanFilterCriterion/DateAfterFilterCriterion (etc.) only ever matching their own type.</item>
+/// <item>A null/"notEqual" operator additionally covers the Text family (Contains/Begins/Ends/Equals),
+/// whose <c>Matches</c> methods all compare <see cref="FilterValueFormatter.ToText"/> of ANY cell type
+/// against the (possibly wildcarded) pattern -- reproduced here the same way once the numeric/date
+/// interpretation above does not apply (Value fails to parse, or the cell isn't Number/DateTimeValue).</item>
+/// </list>
+/// </summary>
+internal sealed record PersistedCustomFilterCriterion(string? Operator, string Value) : IFilterCriterion
+{
+    public bool Matches(ScalarValue value)
+    {
+        var isNotEqual = string.Equals(Operator, "notEqual", StringComparison.OrdinalIgnoreCase);
+
+        if (double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var threshold))
+        {
+            switch (value)
+            {
+                case NumberValue number:
+                    return CompareNumeric(number.Value, threshold, Operator);
+                case DateTimeValue date:
+                    var cellSerial = DateOnly
+                        .FromDateTime(date.ToDateTime())
+                        .ToDateTime(TimeOnly.MinValue)
+                        .ToOADate();
+                    return CompareNumeric(cellSerial, threshold, Operator);
+            }
+        }
+
+        // Comparison operators never originated from a Text-family criterion (see
+        // FilterCriterionAutoFilterModelBuilder.BuildSingle), so once Number/DateTimeValue has been
+        // ruled out above, only a null/notEqual operator can still faithfully match here.
+        if (Operator is not null && !isNotEqual)
+            return false;
+
+        var text = FilterValueFormatter.ToText(value);
+        var matched = FilterWildcard.IsMatch(text, Value, anchorStart: true, anchorEnd: true);
+        return isNotEqual ? !matched : matched;
+    }
+
+    private static bool CompareNumeric(double actual, double threshold, string? op) => op switch
+    {
+        "greaterThan" => actual > threshold,
+        "greaterThanOrEqual" => actual >= threshold,
+        "lessThan" => actual < threshold,
+        "lessThanOrEqual" => actual <= threshold,
+        "notEqual" => Math.Abs(actual - threshold) >= double.Epsilon,
+        _ => Math.Abs(actual - threshold) < double.Epsilon,
+    };
+}

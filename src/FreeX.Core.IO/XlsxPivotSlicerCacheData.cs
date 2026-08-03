@@ -93,6 +93,17 @@ internal static class XlsxPivotSlicerCacheData
     // owning cache's id to stamp the tabular slicer cache's required pivotCacheId attribute
     // (R83-io-slicer-tabular-pivotcacheid), and only this resolution knows which cache the field's shared
     // items actually came from (bound cache first, then a name-only fallback scan).
+    //
+    // R120: the name-only fallback scan is reserved STRICTLY for the case where boundCache itself could
+    // not be resolved at all (SourcePivotTableName absent/stale on the slicer model). Once boundCache
+    // resolves successfully, it is authoritative for this slicer -- even when its own field carries no
+    // enumerated SharedItems (the standard OOXML shape for a purely numeric pivot field, where Excel
+    // writes only containsNumber/minValue/maxValue on <sharedItems> and omits per-value <n> children).
+    // Widening the search to every OTHER cache in that case would return an unrelated cache/field pair
+    // that merely happens to share the field NAME, and the caller would then stamp that wrong cache's
+    // CacheId as the tabular element's pivotCacheId while the sibling <x14:pivotTables> element still
+    // (correctly) names the originally-bound pivot table -- an internally self-contradictory
+    // slicerCacheDefinition that real Excel can flag for repair on open.
     public static (PivotCacheModel Cache, PivotCacheFieldModel Field)? ResolveSlicerSharedItemsField(
         Workbook workbook,
         SlicerModel slicer)
@@ -107,15 +118,17 @@ internal static class XlsxPivotSlicerCacheData
             var boundField = boundCache.Fields.FirstOrDefault(field =>
                 string.Equals(field.Name, sourceFieldName, StringComparison.OrdinalIgnoreCase) &&
                 field.SharedItems is { Count: > 0 });
-            if (boundField is not null)
-                return (boundCache, boundField);
+
+            // Whether or not a shared-items-bearing field was found, boundCache is the slicer's actual
+            // binding: never fall through to the cross-cache scan below once it has resolved. Returning
+            // null here (rather than scanning) is what BuildPivotSlicerCacheDataElement already treats as
+            // "no native <data> element to author" -- correct for a numeric field with no enumerated
+            // items, matching what happens when no cache anywhere has shared items for this name.
+            return boundField is not null ? (boundCache, boundField) : null;
         }
 
         foreach (var cache in workbook.PivotCaches)
         {
-            if (ReferenceEquals(cache, boundCache))
-                continue;
-
             foreach (var field in cache.Fields)
             {
                 if (string.Equals(field.Name, sourceFieldName, StringComparison.OrdinalIgnoreCase) &&

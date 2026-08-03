@@ -166,25 +166,44 @@ public static class ConditionalFormatManageModel
             : null;
 
     /// <summary>
-    /// Moves a rule up or down in priority order (swapping it with its neighbour) within a rule
-    /// list, returning the reprioritized result. Returns <c>null</c> when the move is a no-op (rule
-    /// absent, or already at the boundary in the requested direction).
+    /// Moves a rule up or down (swapping it with its neighbour) within a rule list, returning the
+    /// reprioritized result. Returns <c>null</c> when the move is a no-op (rule absent, or already at
+    /// the boundary in the requested direction).
     /// </summary>
+    /// <param name="rules">The full (unfiltered) working copy.</param>
+    /// <param name="scope">
+    /// The same scope filter passed to <see cref="BuildList"/> for the currently displayed list, or
+    /// <c>null</c> to show/move within every rule. "Neighbour" is computed within this filtered
+    /// subset — matching what the user actually sees in the dialog's list — not within the full
+    /// unfiltered priority order, so a hidden rule (one whose range doesn't overlap <paramref
+    /// name="scope"/>) is never silently swapped in front of/behind the moved rule. Only the two
+    /// swapped rules' priorities change; every other rule (including hidden ones) keeps its relative
+    /// order untouched.
+    /// </param>
     public static List<ConditionalFormat>? MoveInWorkingCopy(
         IReadOnlyList<ConditionalFormat> rules,
+        GridRange? scope,
         Guid ruleId,
         ConditionalFormatRuleMoveDirection direction)
     {
         ArgumentNullException.ThrowIfNull(rules);
 
         var ordered = rules.OrderBy(rule => rule.Priority).ToList();
-        var index = IndexOf(ordered, ruleId);
-        if (index < 0)
+        var visible = scope is not { } sel
+            ? ordered
+            : ordered.Where(rule => rule.AllRanges.Any(range => RangesOverlap(range, sel))).ToList();
+
+        var visibleIndex = IndexOf(visible, ruleId);
+        if (visibleIndex < 0)
             return null;
 
-        var target = direction == ConditionalFormatRuleMoveDirection.Up ? index - 1 : index + 1;
-        if (target < 0 || target >= ordered.Count)
+        var visibleTarget = direction == ConditionalFormatRuleMoveDirection.Up ? visibleIndex - 1 : visibleIndex + 1;
+        if (visibleTarget < 0 || visibleTarget >= visible.Count)
             return null;
+
+        var targetId = visible[visibleTarget].Id;
+        var index = IndexOf(ordered, ruleId);
+        var target = IndexOf(ordered, targetId);
 
         (ordered[index], ordered[target]) = (ordered[target], ordered[index]);
         Reprioritize(ordered);
@@ -192,16 +211,17 @@ public static class ConditionalFormatManageModel
     }
 
     /// <summary>
-    /// The command that moves a rule up or down in priority order (swapping it with its neighbour),
-    /// then replaces all rules atomically. Returns <c>null</c> when the move is a no-op (rule absent,
-    /// or already at the boundary in the requested direction).
+    /// The command that moves a rule up or down (swapping it with its displayed-scope neighbour, see
+    /// <see cref="MoveInWorkingCopy"/>), then replaces all rules atomically. Returns <c>null</c> when
+    /// the move is a no-op (rule absent, or already at the boundary in the requested direction).
     /// </summary>
     public static ReplaceAllConditionalFormatsCommand? BuildMoveCommand(
         SheetId sheetId,
         IReadOnlyList<ConditionalFormat> sheetRules,
+        GridRange? scope,
         Guid ruleId,
         ConditionalFormatRuleMoveDirection direction) =>
-        MoveInWorkingCopy(sheetRules, ruleId, direction) is { } ordered
+        MoveInWorkingCopy(sheetRules, scope, ruleId, direction) is { } ordered
             ? new ReplaceAllConditionalFormatsCommand(sheetId, ordered)
             : null;
 

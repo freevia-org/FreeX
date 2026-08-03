@@ -586,8 +586,15 @@ public sealed partial class MainWindowSourceHygieneTests
         adoptWorkbookAsInitial.Should().NotContain("RefreshToolbar();");
         adoptWorkbookAsInitial.Should().NotContain("RefreshStatusBar();");
 
+        // R120-app-newwindow-copies-selection: this used to pin
+        // SetActiveCell(new CellAddress(_currentSheetId, 1, 1)) -- i.e. it asserted the DEFECT that
+        // View > New Window always opened the sibling at A1 instead of copying the invoking
+        // window's active cell/selection the way Excel does. The selection seeding now goes
+        // through ApplyAdoptedWorksheetSelection(). This test's actual subject is unchanged: the
+        // adopt path must not duplicate the toolbar/status refreshes that SetActiveCell and the
+        // subsequent UpdateViewport already perform.
         var adoptSharedWorkbook = ExtractMethodSource(multiWindowSource, "private void AdoptSharedWorkbook()");
-        adoptSharedWorkbook.Should().Contain("SetActiveCell(new CellAddress(_currentSheetId, 1, 1));");
+        adoptSharedWorkbook.Should().Contain("ApplyAdoptedWorksheetSelection();");
         adoptSharedWorkbook.Should().NotContain("RefreshToolbar();");
         adoptSharedWorkbook.Should().NotContain("RefreshStatusBar();");
 

@@ -16703,6 +16703,9 @@ Continue saving?</value>
   <data name="MainWindowMessage_SaveChangesBeforeClosingWorkbook" xml:space="preserve">
     <value>Save changes before closing this workbook?</value>
   </data>
+  <data name="MainWindowMessage_FinishSaveOrOpenBeforeClosing" xml:space="preserve">
+    <value>Please wait for the current save or open to finish before closing this workbook.</value>
+  </data>
   <data name="MainWindowMessage_ChartSelectBeforeCommand" xml:space="preserve">
     <value>Insert or select a chart before using this command.</value>
   </data>

@@ -155,4 +155,80 @@ public class SurfaceComparerTests
         result.Passed.Should().BeFalse("grid.main is present on Windows but absent on Linux");
         result.HardRegressions.Should().ContainSingle(r => r.Id == "grid.main");
     }
+
+    // R120: neither production capture path (src/FreeX.App.Host/ParityCapture.cs:227/235 and
+    // src/FreeX.App.Avalonia/MainWindow.ParityCapture.cs:320/327) ever emits kind:"grid" for
+    // grid.demo/grid.sheetTabsOverflow — both explicitly tag them kind:"screen". Before the fix,
+    // SeverityOf("screen") fell into the Chrome bucket (a prior commit swept "screen" in alongside
+    // legitimately-chrome kinds like static-tab/overlay), so the hard fidelity gate could never
+    // fail on a real grid-rendering regression. "screen" must resolve to Hard, same as "grid".
+    [Fact]
+    public void R120_SeverityOf_screen_is_hard_not_chrome()
+    {
+        SurfaceComparer.SeverityOf("screen").Should().Be(DiffSeverity.Hard);
+        SurfaceComparer.SeverityOf("SCREEN").Should().Be(DiffSeverity.Hard);
+    }
+
+    // R120: build the manifest fixture exactly the way the real capture code builds it — explicit
+    // Kind="screen" for the grid.* id, not the null-Kind id-prefix-derivation the other fixtures in
+    // this file use. This is the production shape SurfaceComparer.Pair actually sees.
+    [Fact]
+    public void R120_Pair_resolves_production_style_grid_demo_screen_kind_to_hard_severity()
+    {
+        var win = new CaptureManifest
+        {
+            Platform = "windows", Shell = "wpf",
+            Surfaces = { S("grid.demo", kind: "screen"), S("tab.Home", kind: "tab") },
+        };
+        var lin = new CaptureManifest
+        {
+            Platform = "linux", Shell = "avalonia",
+            Surfaces = { S("grid.demo", kind: "screen"), S("tab.Home", kind: "tab") },
+        };
+
+        var pairs = SurfaceComparer.Pair(win, lin);
+
+        var gridDemo = pairs.Single(p => p.Id == "grid.demo");
+        gridDemo.Kind.Should().Be("screen");
+        gridDemo.Severity.Should().Be(DiffSeverity.Hard, "grid.demo is the fidelity-critical grid surface, tagged kind=\"screen\" in production");
+
+        // Sibling/no-regression: a genuinely chrome surface tagged the same way it is in
+        // production (static ribbon tab) must stay Chrome, never gate-failing.
+        var tabHome = pairs.Single(p => p.Id == "tab.Home");
+        tabHome.Severity.Should().Be(DiffSeverity.Chrome, "tab.* surfaces are expected-by-design chrome differences, not a fidelity regression");
+    }
+
+    // R120 (end-to-end, mirrors the actual gate): a production-shaped manifest pair (explicit
+    // Kind="screen" on grid.demo, exactly as ParityCapture.cs/MainWindow.ParityCapture.cs emit it)
+    // whose two PNGs decode to drastically different pixels must fail ParityComparison.Passed and
+    // appear in HardRegressions — this is the CLI gate's actual exit-code decision (Program.cs:125).
+    [Fact]
+    public void R120_ParityEngine_fails_gate_for_production_tagged_grid_surface_regression()
+    {
+        var win = new CaptureManifest
+        {
+            Platform = "windows", Shell = "wpf",
+            Surfaces = { S("grid.demo", kind: "screen", png: "win-grid.png") },
+        };
+        var lin = new CaptureManifest
+        {
+            Platform = "linux", Shell = "avalonia",
+            Surfaces = { S("grid.demo", kind: "screen", png: "lin-grid.png") },
+        };
+
+        // A fully-white 2x2 image vs a fully-black 2x2 image (both fully OPAQUE, alpha=0xFF —
+        // an all-zero byte including alpha would be transparent and composite to white on both
+        // sides, masking the diff): 100% mean-pixel-diff.
+        var white = new PixelImage(2, 2, Enumerable.Repeat((byte)0xFF, 16).ToArray());
+        var black = new PixelImage(2, 2, Enumerable.Range(0, 4).SelectMany(_ => new byte[] { 0x00, 0x00, 0x00, 0xFF }).ToArray());
+
+        var engine = new ParityComparisonEngine(
+            decode: path => path.Contains("win-grid") ? white : black,
+            exists: _ => true);
+
+        var result = engine.Compare(win, lin, winDir: null, linDir: null, imagesDir: null, hardThreshold: 5.0);
+
+        result.Passed.Should().BeFalse("grid.demo diverges far above the 5% hard threshold");
+        result.HardRegressions.Should().ContainSingle(r => r.Id == "grid.demo");
+    }
 }

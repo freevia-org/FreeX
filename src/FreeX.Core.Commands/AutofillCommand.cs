@@ -10,8 +10,13 @@ namespace FreeX.Core.Commands;
 /// the fill handle inward instead of extending it), the cells beyond the shrunk boundary are
 /// cleared instead, matching Excel.
 /// </summary>
-public sealed class AutofillCommand : IWorkbookCommand
+public sealed class AutofillCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: mirrors FillCellsCommand's rationale -- the undo snapshot
+    // holds a Cell clone plus style, hyperlink/metadata, rich-text runs and phonetic guide PER FILL
+    // TARGET (see Apply below), scaling with _fillRange.CellCount, not a flat per-command constant.
+    private const int BytesPerCell = 300;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _sourceRange;
     private readonly GridRange _fillRange;
@@ -24,6 +29,9 @@ public sealed class AutofillCommand : IWorkbookCommand
     private List<GridRange>? _createdMergedRegions;
 
     public string Label => "Autofill";
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min(_fillRange.CellCount * BytesPerCell, int.MaxValue);
 
     /// <param name="ctrlHeld">
     /// True when the user held Ctrl while releasing the fill-handle drag. Excel uses Ctrl to flip

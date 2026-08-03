@@ -1360,6 +1360,13 @@ public partial class MainWindow
             _windowRegistry?.BroadcastSaveInProgress(this, inProgress: true);
             _operationProgressFileName = System.IO.Path.GetFileName(target.Path);
             ShowSaveProgress(CreateSaveProgress("preparing", TimeSpan.Zero, 1));
+            // R120-corewriter-persist-saving-window-view-1: reconcile THIS window's own
+            // per-window view state (zoom/view-mode/gridlines/headings/rulers/show-formulas/
+            // freeze/split) onto the shared Sheet fields before the writer reads them, so a save
+            // from THIS window persists what THIS window is displaying rather than whichever
+            // "New Window" sibling last touched those shared fields. Must run synchronously,
+            // before any of the workbook is handed off for background serialization below.
+            ReconcileViewStateForSave();
             var progress = new Progress<SaveProgressUpdate>(
                 update => ShowSaveProgress(update.Title, update.Detail, update.Percent));
             var saveWarnings = await new SaveWorkbookWriter().SaveAsync(

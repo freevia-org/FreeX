@@ -1515,7 +1515,25 @@ public sealed partial class XlsxFileAdapter
                 // A brand-new formula typed into a cell that was blank (or style-only) in the loaded
                 // source falls back to full-save via this reason. The source calcChain.xml predates the
                 // new formula cell and simply omits it, so it must not survive unmodified either.
-                or "change_inserted_cell";
+                or "change_inserted_cell"
+                // r120: the structured-table sibling of change_inserted_cell above. A brand-new cell
+                // landing inside any table's range (e.g. Excel auto-extending a calculated column's
+                // formula into a newly added table row) is diverted to this reason BEFORE the
+                // HasFormula check that would otherwise route it to change_inserted_cell -- so a new
+                // formula cell reached this way used to keep invalidatesCalcChain = false and ship the
+                // stale source calcChain.xml (which predates the cell and omits it) unmodified, exactly
+                // the defect class change_inserted_cell was fixed for.
+                or "change_table_inserted_cell"
+                // r120: an existing table cell gaining (or changing) a formula -- e.g. typing a formula
+                // into a data-body cell, or editing a calculated column -- is unconditionally diverted to
+                // this reason (formulaChanged/cell.HasFormula are each independently sufficient to trip
+                // it) before the general formula-text-change handling that would otherwise route a
+                // literal-to-formula conversion to change_inserted_cell/change_formula_text. The same
+                // missing-calcChain-entry risk applies whenever the edit adds formula membership the
+                // source calcChain.xml predates, so this reason must invalidate too; a pure style-only
+                // table-cell edit also routes here and gets the same conservative treatment already
+                // extended to change_sheet_identity_or_style_only_cells above.
+                or "change_table_cell";
 
         private static bool ChangesInvalidateCalcChain(IEnumerable<XlsxCellValuePatch> changes) =>
             changes.Any(change =>

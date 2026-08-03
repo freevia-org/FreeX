@@ -16,8 +16,19 @@ public enum DeleteCellsShiftDirection
     Up
 }
 
-public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: _capturedCells below retains a full (Address, Cell) pair
+    // for every occupied cell shifted by the insert (see CellShiftCapture/CaptureCells), plus
+    // several companion per-cell dictionary snapshots (comments, hyperlinks, rich text, phonetic
+    // guides) keyed by the same set -- one of the richest undo snapshot shapes in the codebase.
+    // Estimated from _capturedCells.Count, known only once Apply has captured it (this command's
+    // affected-cell count depends on how many cells are actually occupied in the shifted band, not
+    // just the requested insert range). _capturedCells is null before Apply runs, in which case
+    // CommandBus never actually queries this (EstimateBytes is only called after Apply pushes the
+    // command).
+    private const int BytesPerCell = 400;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly InsertCellsShiftDirection _direction;
@@ -62,6 +73,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     public string Label => "Insert Cells";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => _capturedCells is null
+        ? 0
+        : (int)Math.Min((long)_capturedCells.Count * BytesPerCell, int.MaxValue);
 
     public InsertCellsCommand(SheetId sheetId, GridRange range, InsertCellsShiftDirection direction)
     {
@@ -1722,8 +1738,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     }
 }
 
-public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: see InsertCellsCommand's field of the same name/rationale --
+    // _capturedCells here covers both the shifted-back survivors and the restored-deleted cells in
+    // one unified capture, one of the richest undo snapshot shapes in the codebase.
+    private const int BytesPerCell = 400;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly DeleteCellsShiftDirection _direction;
@@ -1763,6 +1784,11 @@ public sealed class DeleteCellsCommand : IWorkbookCommand, IAffectedCellsCommand
     public string Label => "Delete Cells";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => _capturedCells is null
+        ? 0
+        : (int)Math.Min((long)_capturedCells.Count * BytesPerCell, int.MaxValue);
 
     public DeleteCellsCommand(SheetId sheetId, GridRange range, DeleteCellsShiftDirection direction)
     {

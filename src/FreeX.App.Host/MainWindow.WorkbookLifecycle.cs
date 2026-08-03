@@ -103,6 +103,27 @@ public partial class MainWindow
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
     {
+        // A Save/Save-As or File>Open may still be running on a background thread while the
+        // workbook happens to read as clean at this instant (a brand-new Book1, or a workbook
+        // that was already saved and hasn't been re-edited since) -- MarkWorkbookSaved() (open)
+        // and the save-completion dirty handling in SaveWorkbookToTargetAsync only run deep
+        // inside the awaited body, AFTER the write/read completes. Without this guard the
+        // dirty-gate fast path below would let PrepareActiveWorkbookForFinalClose() run and the
+        // window close immediately while that save/open Task is still in flight -- and under the
+        // default WPF ShutdownMode.OnLastWindowClose, closing the last window shuts the whole
+        // process down mid-I/O. Mirrors the Avalonia shell's own
+        // `if (_isOpening || _isSaving) { e.Cancel = true; ... }` guard in its MainWindow_Closing
+        // (R120-app-host-close-during-save-open).
+        if (_isSavingFile || _isOpeningFile)
+        {
+            e.Cancel = true;
+            ShowOwnedMessage(
+                UiText.Get("MainWindowMessage_FinishSaveOrOpenBeforeClosing"),
+                UiText.Get("MainWindowMessage_SaveChangesTitle"),
+                MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         // A sibling "New Window" view keeps the document (and its dirty state) alive, so closing
         // this view must not prompt to save — only the document's last view prompts (Excel parity).
         if (_suppressClosePrompt || !_workbookDirty || DocumentSharedWithOtherWindows())

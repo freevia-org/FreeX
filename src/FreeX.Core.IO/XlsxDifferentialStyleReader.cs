@@ -116,13 +116,18 @@ internal static class XlsxDifferentialStyleReader
             if (!string.IsNullOrWhiteSpace(fontName))
                 style.FontName = fontName;
 
-            if (TryReadColor(font.Element(workbookNs + "color"), theme, indexedColors, out var fontColor))
+            if (TryReadColor(font.Element(workbookNs + "color"), theme, indexedColors, out var fontColor, out var fontThemeColor))
             {
                 style.FontColor = fontColor;
                 // Record that this dxf explicitly specified a font color (even black) separately
                 // from the plain FontColor above, which cannot distinguish an explicit black choice
                 // from "never mentioned". See CellStyle.DxfFontColor.
                 style.DxfFontColor = fontColor;
+                // Preserve the theme link (R120-cf-theme-color-1: a CF rule's font color picked from
+                // the theme gallery must keep following theme changes, not just the RGB Excel baked
+                // in at author time) so ViewportConditionalFormatEvaluator/writer can re-resolve or
+                // round-trip it, mirroring FontThemeColor on the plain (non-CF) style path.
+                style.FontThemeColor = fontThemeColor;
             }
         }
 
@@ -132,14 +137,23 @@ internal static class XlsxDifferentialStyleReader
         if (patternFill is not null)
         {
             style.FillPatternStyle = FromPatternType(patternFill.Attribute("patternType")?.Value);
-            if (TryReadColor(patternFill.Element(workbookNs + "bgColor"), theme, indexedColors, out var backgroundColor))
+            if (TryReadColor(patternFill.Element(workbookNs + "bgColor"), theme, indexedColors, out var backgroundColor, out var backgroundThemeColor))
+            {
                 style.FillColor = backgroundColor;
-            if (TryReadColor(patternFill.Element(workbookNs + "fgColor"), theme, indexedColors, out var foregroundColor))
+                style.FillThemeColor = backgroundThemeColor;
+            }
+            if (TryReadColor(patternFill.Element(workbookNs + "fgColor"), theme, indexedColors, out var foregroundColor, out var foregroundThemeColor))
             {
                 if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
+                {
                     style.FillColor = foregroundColor;
+                    style.FillThemeColor = foregroundThemeColor;
+                }
                 else
+                {
                     style.FillPatternColor = foregroundColor;
+                    style.FillPatternThemeColor = foregroundThemeColor;
+                }
             }
         }
 
@@ -247,24 +261,31 @@ internal static class XlsxDifferentialStyleReader
         if (style == BorderStyle.None)
             return default;
 
-        return new CellBorder(
-            style,
-            TryReadColor(edge.Element(workbookNs + "color"), theme, indexedColors, out var color) ? color : CellColor.Black);
+        var hasColor = TryReadColor(edge.Element(workbookNs + "color"), theme, indexedColors, out var color, out var themeColor);
+        return new CellBorder(style, hasColor ? color : CellColor.Black, themeColor);
     }
 
     // Resolves a dxf color element the same way the normal (non-conditional-format) style path does:
     // literal rgb first, then theme (with tint) when a theme/indexedColors context is supplied, then the
     // legacy indexed palette. Falls back to the rgb-only 2-arg reader when no theme context is available
     // (e.g. the stylesheet metadata preserver's dxf-equivalence comparison, which doesn't need resolved
-    // colors — only that both sides are read identically).
+    // colors — only that both sides are read identically). Also returns the theme slot+tint via
+    // themeColorReference (null for sRGB/indexed colors) so callers can preserve the theme link instead of
+    // only keeping the baked RGB -- see CellStyle.FontThemeColor/FillThemeColor/FillPatternThemeColor and
+    // CellBorder.ThemeColor (R120-cf-theme-color-1).
     private static bool TryReadColor(
         XElement? element,
         WorkbookTheme? theme,
         WorkbookIndexedColorPalette? indexedColors,
-        out CellColor color) =>
-        theme is not null && indexedColors is not null
-            ? XlsxColorReader.TryReadCellColor(element, theme, indexedColors, out color)
-            : XlsxColorReader.TryReadCellColor(element, out color);
+        out CellColor color,
+        out WorkbookThemeColorReference? themeColorReference)
+    {
+        if (theme is not null && indexedColors is not null)
+            return XlsxColorReader.TryReadCellColorWithThemeReference(element, theme, indexedColors, out color, out themeColorReference);
+
+        themeColorReference = null;
+        return XlsxColorReader.TryReadCellColor(element, out color);
+    }
 
     private static bool IsSupportedFontSize(double fontSize) =>
         fontSize >= 1 && fontSize <= 409;

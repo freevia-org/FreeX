@@ -5,8 +5,14 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Inserts <paramref name="count"/> blank columns before <paramref name="beforeCol"/>.</summary>
-public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: mirrors InsertRowsCommand's rationale -- _movedSnapshot
+    // below retains a CellStateSnapshot for every occupied cell shifted right by the insert, plus
+    // several companion per-cell dictionary snapshots. Estimated from _movedSnapshot.Count, known
+    // only once Apply has captured it.
+    private const int BytesPerCell = 400;
+
     private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
     private readonly uint _beforeCol;
@@ -63,6 +69,11 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     public string Label => $"Insert {_count} Column(s)";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => _movedSnapshot is null
+        ? 0
+        : (int)Math.Min((long)_movedSnapshot.Count * BytesPerCell, int.MaxValue);
 
     public InsertColumnsCommand(SheetId sheetId, uint beforeCol, uint count = 1)
     {
@@ -524,8 +535,15 @@ public sealed class InsertColumnsCommand : IWorkbookCommand, IAffectedCellsComma
 }
 
 /// <summary>Deletes <paramref name="count"/> columns starting at <paramref name="startCol"/>.</summary>
-public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: mirrors DeleteRowsCommand's rationale -- _deletedSnapshot/
+    // _shiftedSnapshot below each retain a CellStateSnapshot for every occupied cell in the deleted
+    // column band plus every occupied cell shifted left of it, plus several companion per-cell
+    // dictionary snapshots. Estimated from the two snapshots' combined count, known only once Apply
+    // has captured them.
+    private const int BytesPerCell = 400;
+
     private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
     private readonly uint _startCol;
@@ -585,6 +603,10 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand, IAffectedCellsComma
     public string Label => $"Delete {_count} Column(s)";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes =>
+        (int)Math.Min(((long)(_deletedSnapshot?.Count ?? 0) + (_shiftedSnapshot?.Count ?? 0)) * BytesPerCell, int.MaxValue);
 
     public DeleteColumnsCommand(SheetId sheetId, uint startCol, uint count = 1)
     {

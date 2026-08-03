@@ -85,6 +85,16 @@ public sealed class WorksheetViewStateStore
     /// <summary>Records this window's own view-mode/zoom change for a sheet.</summary>
     public void Set(SheetId sheetId, WorksheetViewStateSnapshot snapshot) => _bySheet[sheetId] = snapshot;
 
+    /// <summary>
+    /// Every sheet this window has rendered (and therefore has its own remembered view-state
+    /// snapshot for), keyed by sheet id. Used by the WPF host's save path
+    /// (R120-corewriter-persist-saving-window-view-1) to reconcile this window's own view onto the
+    /// shared <see cref="Sheet"/> fields immediately before serialization, so Ctrl+S from THIS
+    /// window persists what THIS window is actually displaying rather than whatever a sibling
+    /// "New Window" last left in the shared model.
+    /// </summary>
+    public IReadOnlyDictionary<SheetId, WorksheetViewStateSnapshot> Snapshots => _bySheet;
+
     /// <summary>Drops a sheet's remembered view state (e.g. when the sheet is deleted).</summary>
     public void Remove(SheetId sheetId) => _bySheet.Remove(sheetId);
 

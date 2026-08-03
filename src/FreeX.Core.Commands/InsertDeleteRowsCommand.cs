@@ -5,8 +5,14 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Inserts <paramref name="count"/> blank rows before <paramref name="beforeRow"/>.</summary>
-public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: mirrors DeleteRowsCommand's rationale -- _movedSnapshot
+    // below retains a CellStateSnapshot for every occupied cell shifted down by the insert, plus
+    // several companion per-cell dictionary snapshots. Estimated from _movedSnapshot.Count, known
+    // only once Apply has captured it.
+    private const int BytesPerCell = 400;
+
     private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
     private readonly uint _beforeRow;
@@ -60,6 +66,11 @@ public sealed class InsertRowsCommand : IWorkbookCommand, IAffectedCellsCommand
     public string Label => $"Insert {_count} Row(s)";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => _movedSnapshot is null
+        ? 0
+        : (int)Math.Min((long)_movedSnapshot.Count * BytesPerCell, int.MaxValue);
 
     public InsertRowsCommand(SheetId sheetId, uint beforeRow, uint count = 1)
     {

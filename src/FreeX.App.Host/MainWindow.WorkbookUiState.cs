@@ -188,11 +188,26 @@ public partial class MainWindow
         // whole point of selecting that option. Passing skipDataTableBodyCells: true only for
         // AutomaticExceptDataTables is what actually implements the carve-out, mirroring
         // WorkbookCellEditService.RecalculateIfAutomatic exactly.
+        //
+        // R120-app-host-manual-mode-fresh-formula-recalc: this switch's Manual branch used to be
+        // `_ => null`, so every one of this method's ~40 call sites -- the single choke point every
+        // ordinary cell edit across the shell recalculates through -- silently skipped evaluating a
+        // brand-new formula in Manual mode. Real Excel always computes a newly typed/edited formula
+        // once on entry regardless of calculation mode; only propagation to cells that depend on a
+        // changed PRECEDENT is what Manual mode defers until the next F9. Delegating to
+        // RecalculateFreshlyEnteredFormulasOnce (below) mirrors
+        // FreeX.App.Services.WorkbookCellEditService.ApplyHistoryOutcome's
+        // `RecalculateIfAutomatic(...) ?? RecalculateFreshlyEnteredFormulasOnce(...)` fallback
+        // exactly, restricted here to the subset of changedCells that already hold a formula (a
+        // precedent-only edit into a cell some other, untouched formula depends on must still leave
+        // that other formula stale). Putting the fallback inside this one choke point -- rather than
+        // adding it to each of the ~40 call sites -- is what makes it apply everywhere at once.
         RecalcReport? report = _workbook.CalculationMode switch
         {
             WorkbookCalculationMode.Automatic => _recalcEngine.Recalculate(_workbook, changedCells),
             WorkbookCalculationMode.AutomaticExceptDataTables =>
                 _recalcEngine.Recalculate(_workbook, changedCells, skipDataTableBodyCells: true),
+            WorkbookCalculationMode.Manual => RecalculateFreshlyEnteredFormulasOnce(changedCells),
             _ => null
         };
         if (report is not null)
@@ -219,6 +234,28 @@ public partial class MainWindow
             // reason.
             RefreshLinkedPicturesAffectedBy(report.RecalculatedCells);
         }
+    }
+
+    /// <summary>
+    /// Manual-calculation-mode counterpart to the Automatic/AutomaticExceptDataTables branches
+    /// above, mirroring <see cref="FreeX.App.Services.WorkbookCellEditService.RecalculateFreshlyEnteredFormulasOnce"/>
+    /// (R120-app-host-manual-mode-fresh-formula-recalc). Restricts the recalculation to the subset
+    /// of <paramref name="changedCells"/> that currently hold a formula -- i.e. the cell(s) the user
+    /// just typed or edited -- so a precedent-only edit into a plain-value cell that some other,
+    /// untouched formula depends on correctly leaves that other formula stale until the next F9,
+    /// exactly as Manual mode intends. Returns null (matching the switch's "nothing to do"
+    /// contract) when none of the changed cells hold a formula.
+    /// </summary>
+    private RecalcReport? RecalculateFreshlyEnteredFormulasOnce(IReadOnlyList<CellAddress> changedCells)
+    {
+        List<CellAddress>? enteredFormulaCells = null;
+        foreach (var address in changedCells)
+        {
+            if (_workbook.GetSheet(address.Sheet)?.GetCell(address)?.HasFormula == true)
+                (enteredFormulaCells ??= []).Add(address);
+        }
+
+        return enteredFormulaCells is null ? null : _recalcEngine.Recalculate(_workbook, enteredFormulaCells);
     }
 
     private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)

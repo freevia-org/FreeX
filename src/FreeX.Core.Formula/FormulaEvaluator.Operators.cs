@@ -19,6 +19,17 @@ public sealed partial class FormulaEvaluator
         if (left is ErrorValue errL) return errL;
         if (right is ErrorValue errR) return errR;
 
+        // A parenthesized-union (multi-area) reference used directly as a scalar/concat/compare
+        // operand is not something Excel can reduce -- Excel returns #VALUE! for e.g.
+        // ="X"&(A1:A2,B1:B2) or =(A1:A2,B1:B2)=5 rather than operating on the union's identity.
+        // Arithmetic operators never reach here with a UnionValue operand still unresolved to an
+        // error (TryEvaluateNumericScalar/CoerceToNumber's default arms already turn an
+        // unrecognized operand type into ErrorValue.Value before this switch), but Concat/Compare
+        // have no such per-type coercion helper, so this is the single choke point that catches
+        // every operator uniformly instead of patching ValueToString/CompareValues/TypeOrder
+        // individually (R120).
+        if (left is UnionValue || right is UnionValue) return ErrorValue.Value;
+
         return node.Operator switch
         {
             BinaryOperator.Add => ArithOp(left, right, ArithmeticKind.Add),

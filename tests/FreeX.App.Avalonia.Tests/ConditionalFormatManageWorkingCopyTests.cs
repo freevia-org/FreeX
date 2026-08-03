@@ -114,12 +114,95 @@ public sealed class ConditionalFormatManageWorkingCopyTests
         second.Priority = 2;
         var source = new List<ConditionalFormat> { first, second };
 
-        var result = ConditionalFormatManageModel.MoveInWorkingCopy(source, second.Id, ConditionalFormatRuleMoveDirection.Up);
+        var result = ConditionalFormatManageModel.MoveInWorkingCopy(source, scope: null, second.Id, ConditionalFormatRuleMoveDirection.Up);
 
         result.Should().NotBeNull();
         result![0].Id.Should().Be(second.Id);
         source[0].Id.Should().Be(first.Id, "moving in the working copy must not reorder the source list");
         source[1].Id.Should().Be(second.Id);
+    }
+
+    // ── R120: Move Up/Down must reorder against the FILTERED/displayed list, not the full
+    //          unfiltered priority order, or a Move click silently reprioritizes a hidden rule the
+    //          user never saw instead of the visible neighbour the user meant to swap with. ──────
+
+    /// <summary>
+    /// Reproduces the reported scenario exactly: RuleA (A1:A10, priority 1) and RuleC (A1:A10,
+    /// StopIfTrue, priority 3) both show for a selection of A1; RuleB (A5:A5 only, priority 2) does
+    /// not, since its range doesn't overlap the single-cell selection. The user selects RuleC (the
+    /// bottom of the two-item VISIBLE list) and clicks Move Up, expecting it to swap with RuleA — the
+    /// only rule they can see above it. Through the real command path (BuildMoveCommand ->
+    /// ReplaceAllConditionalFormatsCommand -> session), RuleC must end up above RuleA, and RuleB —
+    /// never shown to the user — must keep its unrelated priority slot rather than being silently
+    /// swapped in.
+    /// </summary>
+    [Fact]
+    public void R120_MoveInWorkingCopy_FilteredScope_SwapsWithVisibleNeighbour_NotHiddenFullListNeighbour()
+    {
+        var session = CreateSession();
+        var sheetId = session.ActiveSheet.Id;
+        var wholeColumn = RangeAt(sheetId, 0, 0, 9, 0); // A1:A10
+        var a5Only = RangeAt(sheetId, 4, 0, 4, 0); // A5:A5 only
+
+        var ruleA = ConditionalFormatRuleBuilder.Build(new CfRuleInput { RuleType = CfRuleType.DataBar }, wholeColumn);
+        var ruleB = ConditionalFormatRuleBuilder.Build(new CfRuleInput { RuleType = CfRuleType.IconSet }, a5Only);
+        var ruleC = ConditionalFormatRuleBuilder.Build(new CfRuleInput { RuleType = CfRuleType.ColorScale }, wholeColumn);
+        ruleC.StopIfTrue = true;
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, ruleA));
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, ruleB));
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, ruleC));
+
+        // Sanity: seeded in the reported priority order (A=1, B=2, C=3) before any move.
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleA.Id).Priority.Should().Be(1);
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleB.Id).Priority.Should().Be(2);
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleC.Id).Priority.Should().Be(3);
+
+        // The dialog's default "Current Selection" scope, with the user's selection collapsed to A1.
+        var selection = RangeAt(sheetId, 0, 0, 0, 0);
+
+        var moveCommand = ConditionalFormatManageModel.BuildMoveCommand(
+            sheetId, session.ActiveSheet.ConditionalFormats, selection, ruleC.Id, ConditionalFormatRuleMoveDirection.Up);
+        moveCommand.Should().NotBeNull("RuleC has a visible neighbour (RuleA) above it in the A1-filtered list");
+        session.ExecuteReviewCommand(moveCommand!).Success.Should().BeTrue();
+
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleC.Id).Priority.Should().Be(
+            1, "RuleC must move above RuleA, the rule the user actually sees adjacent to it in the filtered list");
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleA.Id).Priority.Should().Be(
+            3, "RuleA (the swapped visible neighbour) takes RuleC's old slot");
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleB.Id).Priority.Should().Be(
+            2, "RuleB was never shown to the user for this scope, so a Move click must not touch its priority at all");
+    }
+
+    /// <summary>
+    /// No-regression sibling: with no scope filter (e.g. "This Worksheet"), every rule is visible, so
+    /// the filtered-neighbour computation must degenerate back to the original full-list adjacent
+    /// swap — Move Up on RuleC in an unfiltered 3-rule list still swaps it with its immediate
+    /// full-list neighbour RuleB, exactly as before this fix.
+    /// </summary>
+    [Fact]
+    public void R120_MoveInWorkingCopy_NoScope_StillSwapsWithFullListAdjacentNeighbour()
+    {
+        var session = CreateSession();
+        var sheetId = session.ActiveSheet.Id;
+        var wholeColumn = RangeAt(sheetId, 0, 0, 9, 0);
+        var a5Only = RangeAt(sheetId, 4, 0, 4, 0);
+
+        var ruleA = ConditionalFormatRuleBuilder.Build(new CfRuleInput { RuleType = CfRuleType.DataBar }, wholeColumn);
+        var ruleB = ConditionalFormatRuleBuilder.Build(new CfRuleInput { RuleType = CfRuleType.IconSet }, a5Only);
+        var ruleC = ConditionalFormatRuleBuilder.Build(new CfRuleInput { RuleType = CfRuleType.ColorScale }, wholeColumn);
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, ruleA));
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, ruleB));
+        session.ExecuteReviewCommand(ConditionalFormatRuleBuilder.ToApplyCommand(sheetId, ruleC));
+
+        var moveCommand = ConditionalFormatManageModel.BuildMoveCommand(
+            sheetId, session.ActiveSheet.ConditionalFormats, scope: null, ruleC.Id, ConditionalFormatRuleMoveDirection.Up);
+        moveCommand.Should().NotBeNull();
+        session.ExecuteReviewCommand(moveCommand!).Success.Should().BeTrue();
+
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleC.Id).Priority.Should().Be(2);
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleB.Id).Priority.Should().Be(3);
+        session.ActiveSheet.ConditionalFormats.Single(r => r.Id == ruleA.Id).Priority.Should().Be(
+            1, "RuleA is untouched since it was never adjacent to the moved rule");
     }
 
     [Fact]
@@ -219,7 +302,7 @@ public sealed class ConditionalFormatManageWorkingCopyTests
         var workingRules = ConditionalFormatManageModel.CloneAll(session.ActiveSheet.ConditionalFormats);
         var afterDelete = ConditionalFormatManageModel.DeleteFromWorkingCopy(workingRules, rule.Id);
         afterDelete.Should().NotBeNull();
-        var afterMove = ConditionalFormatManageModel.MoveInWorkingCopy(afterDelete!, another.Id, ConditionalFormatRuleMoveDirection.Down);
+        var afterMove = ConditionalFormatManageModel.MoveInWorkingCopy(afterDelete!, scope: null, another.Id, ConditionalFormatRuleMoveDirection.Down);
         afterMove.Should().NotBeNull();
 
         // Cancel: the working copy (afterMove) is simply discarded — no command built, no command executed.

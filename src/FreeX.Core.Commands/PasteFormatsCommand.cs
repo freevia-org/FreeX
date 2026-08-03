@@ -5,13 +5,22 @@ namespace FreeX.Core.Commands;
 /// <summary>
 /// Pastes cell formatting without changing existing values or formulas.
 /// </summary>
-public sealed class PasteFormatsCommand : IWorkbookCommand
+public sealed class PasteFormatsCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: the undo snapshot holds a full Cell clone plus style PER
+    // FORMATTED CELL (see Apply below), scaling with _formats.Count, not a flat per-command
+    // constant. Without this, CommandBus's 50 MB undo byte-budget bills every Paste Formats at the
+    // 200-byte IEstimatesMemory default regardless of size.
+    private const int BytesPerCell = 300;
+
     private readonly SheetId _sheetId;
     private readonly IReadOnlyList<(CellAddress Address, StyleId StyleId)> _formats;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
 
     public string Label => _formats.Count == 1 ? "Paste Format" : $"Paste {_formats.Count} Formats";
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min((long)_formats.Count * BytesPerCell, int.MaxValue);
 
     public PasteFormatsCommand(SheetId sheetId, IReadOnlyList<(CellAddress Address, StyleId StyleId)> formats)
     {

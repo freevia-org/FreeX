@@ -140,24 +140,25 @@ public sealed class CreateStructuredTableCommand : IWorkbookCommand
         return next;
     }
 
+    // R120: auto-naming must land in the SAME unified namespace RenameStructuredTableCommand
+    // validates against (StructuredTableDesignCommandHelpers.ValidateTableName), not merely scan
+    // sheet.StructuredTables in isolation. A workbook-global or sheet-scoped defined name called
+    // "Table1" is entirely legal to create today (Workbook.ValidateNamedRangeName never reserves
+    // the "TableN" pattern), and before this fix the very first "Insert Table" in that workbook
+    // would silently hand out the identical "Table1" identifier to the new table with zero
+    // collision check -- producing a workbook.xml where <definedNames> and the table part's
+    // <table name="Table1"/> both carry the same name, a state real Excel treats as needing
+    // repair. Routing through ValidateTableName here means any defined-name surface it already
+    // checks (workbook-global/sheet-scoped named ranges AND named formulas, plus every other
+    // live table) is honored by auto-naming for free, and stays honored if that helper ever grows
+    // another check -- a single shared decision point instead of two independent name scans that
+    // could drift apart.
     private static string NextTableName(Workbook workbook)
     {
         for (var index = 1; index <= 10000; index++)
         {
             var name = $"Table{index.ToString(CultureInfo.InvariantCulture)}";
-            var isUsed = false;
-            foreach (var otherSheet in workbook.Sheets)
-            {
-                if (otherSheet.StructuredTables.Any(table =>
-                        string.Equals(table.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(table.DisplayName, name, StringComparison.OrdinalIgnoreCase)))
-                {
-                    isUsed = true;
-                    break;
-                }
-            }
-
-            if (!isUsed)
+            if (StructuredTableDesignCommandHelpers.ValidateTableName(workbook, name) is null)
                 return name;
         }
 

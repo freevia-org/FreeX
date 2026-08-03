@@ -897,7 +897,21 @@ public static class StructuredTableDesignCommandHelpers
             return "Table name is invalid: use letters, numbers, underscores, and periods; start with a letter or underscore.";
         if (CellAddress.TryParse(normalizedName, SheetId.New(), out _) || IsR1C1Reference(normalizedName))
             return "Table name is invalid: it cannot look like a cell reference.";
+        // Table names and defined names (named ranges AND named formulas/constants, both
+        // workbook-global and sheet-scoped) share a single unified namespace in Excel: Name
+        // Manager's "New Name" refuses a name already used by a table, and Excel's own table
+        // auto-namer likewise skips any identifier already taken by a defined name. Checking only
+        // the workbook-global NamedRanges dictionary (the pre-existing check below) missed three
+        // of the four defined-name surfaces -- a table could still be silently created or renamed
+        // to collide with a workbook-global named FORMULA/constant, or with any SHEET-SCOPED named
+        // range or formula, producing the same corrupt-on-repair state real Excel refuses to write.
         if (workbook.NamedRanges.Keys.Any(existing => string.Equals(existing, normalizedName, StringComparison.OrdinalIgnoreCase)))
+            return $"A named range named '{normalizedName}' already exists.";
+        if (workbook.NamedFormulas.Keys.Any(existing => string.Equals(existing, normalizedName, StringComparison.OrdinalIgnoreCase)))
+            return $"A named range named '{normalizedName}' already exists.";
+        if (workbook.ScopedNamedRanges.Keys.Any(key => string.Equals(key.Name, normalizedName, StringComparison.OrdinalIgnoreCase)))
+            return $"A named range named '{normalizedName}' already exists.";
+        if (workbook.ScopedNamedFormulas.Keys.Any(key => string.Equals(key.Name, normalizedName, StringComparison.OrdinalIgnoreCase)))
             return $"A named range named '{normalizedName}' already exists.";
 
         foreach (var sheet in workbook.Sheets)

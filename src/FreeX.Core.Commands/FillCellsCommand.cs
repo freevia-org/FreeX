@@ -11,8 +11,16 @@ public enum FillCellsDirection
     Left
 }
 
-public sealed class FillCellsCommand : IWorkbookCommand
+public sealed class FillCellsCommand : IWorkbookCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: the undo snapshot holds a Cell clone plus style, hyperlink/
+    // metadata, rich-text runs and phonetic guide PER FILL TARGET (see Apply below) -- this is
+    // exactly the "fill a whole column" scenario the R119 fix (PasteCellsCommand et al.) was meant
+    // to cover but missed. Without this, CommandBus's 50 MB undo byte-budget bills every fill at the
+    // 200-byte IEstimatesMemory default regardless of size, so a large Fill Down never trips the
+    // budget and only the 100-entry depth cap bounds the undo stack.
+    private const int BytesPerCell = 300;
+
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private readonly FillCellsDirection _direction;
@@ -29,6 +37,9 @@ public sealed class FillCellsCommand : IWorkbookCommand
         FillCellsDirection.Left => "Fill Left",
         _ => "Fill"
     };
+
+    /// <inheritdoc/>
+    public int EstimatedBytes => (int)Math.Min(_range.CellCount * BytesPerCell, int.MaxValue);
 
     public FillCellsCommand(SheetId sheetId, GridRange range, FillCellsDirection direction)
     {

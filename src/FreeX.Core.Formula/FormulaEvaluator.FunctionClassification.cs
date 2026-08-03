@@ -254,6 +254,19 @@ public sealed partial class FormulaEvaluator
     //    Before this fix a union data_array/bins_array matched neither Frequency's
     //    "is RangeValue"/"TryCellNumber" branches and silently contributed nothing (an empty
     //    data set / zero bins) instead of erroring or computing the right answer.
+    //
+    // R120 addition:
+    //  - TEXTJOIN: its per-argument FlattenTextjoinArgument (BuiltInFunctions.TextAdvanced.cs)
+    //    special-cases only RangeValue -- anything else (including a raw UnionValue) falls to the
+    //    `else { text.Add(ToText(value)); }` branch, and ToText has no UnionValue case either, so
+    //    it fell to its `_ => v.ToString()` default and embedded the literal .NET record dump
+    //    (e.g. "UnionValue { Areas = System.Collections.Generic.List`1[...] }") into the joined
+    //    text instead of every cell across the union's areas. TEXTJOIN only ever flattens each of
+    //    its text arguments into a bag of strings in row-major order (never indexes 2-D shape),
+    //    the exact same shape contract as DEVSQ/COUNTBLANK above, so it is safe to materialize
+    //    here -- each variadic text argument position is checked independently by the per-argument
+    //    expansion loop in FormulaEvaluator.Functions.cs, so a union in any one of TEXTJOIN's
+    //    delimiter/ignore_empty/text* positions is handled without needing per-function code.
     private static readonly HashSet<string> UnionMaterializableRangeFunctions = new(StringComparer.OrdinalIgnoreCase)
     {
         "LARGE", "SMALL", "RANK", "RANK.EQ", "RANK.AVG",
@@ -262,7 +275,8 @@ public sealed partial class FormulaEvaluator
         "TRIMMEAN",
         "PERCENTRANK", "PERCENTRANK.INC", "PERCENTRANK.EXC",
         "COUNTBLANK",
-        "DEVSQ", "FREQUENCY"
+        "DEVSQ", "FREQUENCY",
+        "TEXTJOIN"
     };
 
     private static bool IsUnionMaterializableRangeFunction(string name) =>

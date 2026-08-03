@@ -21,6 +21,17 @@ using AvaloniaGrid = Avalonia.Controls.Grid;
 
 namespace FreeX.App.Avalonia;
 
+/// <summary>
+/// One entry in the Manage Rules dialog's scope ComboBox (Sheet / Table / Selection), mirroring the
+/// WPF host's <c>ComboBoxItem</c> with a <c>ManageConditionalFormatScopeOption</c> tag. The ComboBox
+/// renders <see cref="Label"/> via <see cref="ToString"/>; <see cref="Range"/> (null for "This
+/// Worksheet") is what the dialog actually filters by.
+/// </summary>
+internal sealed record ManageConditionalFormatScopeItem(string Label, ManageConditionalFormatScope Scope, GridRange? Range)
+{
+    public override string ToString() => Label;
+}
+
 public sealed partial class MainWindow
 {
     private static AvaloniaCompactDialogChromeStyle ConditionalFormatDialogChromeStyle => new(FormulaBarFontFamily);
@@ -104,8 +115,9 @@ public sealed partial class MainWindow
         Button CancelButton);
 
     /// <summary>Controls the Manage Rules dialog exposes to the launch-smoke probe.</summary>
-    private sealed record ManageConditionalFormatsDialogSmokeProbe(
+    internal sealed record ManageConditionalFormatsDialogSmokeProbe(
         Window Dialog,
+        ComboBox ScopeBox,
         ListBox ListBox,
         TextBox AppliesToBox,
         Button NewButton,
@@ -1027,7 +1039,7 @@ public sealed partial class MainWindow
     /// mirroring the Windows host's manager (which buffers edits in a private
     /// <c>ObservableCollection&lt;ConditionalFormat&gt;</c>).
     /// </summary>
-    private async Task ShowManageConditionalFormatsDialogAsync(
+    internal async Task ShowManageConditionalFormatsDialogAsync(
         Action<ManageConditionalFormatsDialogSmokeProbe>? launchSmokeProbe)
     {
         if (!TryCommitPendingFormulaEdit())
@@ -1114,25 +1126,35 @@ public sealed partial class MainWindow
         AvaloniaGrid.SetColumn(appliesToPicker, 1);
         appliesToRow.Children.Add(appliesToPicker);
 
+        // Shared with the WPF host: builds Sheet/Table/Selection options, adding "This Table"
+        // only when the current selection sits inside a structured table (FindSelectionTableRange).
+        var scopePlan = ManageConditionalFormatsPlanner.CreateDialogPlan(_session.ActiveSheet, _session.SelectedRange);
+        var scopeItems = scopePlan.ScopeOptions
+            .Select(option => new ManageConditionalFormatScopeItem(
+                UiText.Get(option.LabelKey).Replace("_", string.Empty, StringComparison.Ordinal),
+                option.Scope,
+                option.Range))
+            .ToArray();
+
         var scopeBox = new ComboBox
         {
             MinWidth = 160,
-            ItemsSource = new[]
-            {
-                UiText.Get("ManageConditionalFormats_ScopeThisWorksheet").Replace("_", string.Empty, StringComparison.Ordinal),
-                UiText.Get("ManageConditionalFormats_ScopeCurrentSelection").Replace("_", string.Empty, StringComparison.Ordinal),
-            },
-            SelectedIndex = 1,
+            ItemsSource = scopeItems,
+            SelectedIndex = Math.Max(0, Array.FindIndex(scopeItems, item => item.Scope == scopePlan.DefaultScope)),
             VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center,
         };
         ApplyCfComboBoxChrome(scopeBox);
         AutomationProperties.SetAutomationId(scopeBox, "ManageConditionalFormatsScopeBox");
         AutomationProperties.SetName(scopeBox, UiText.Get("ManageConditionalFormats_ShowFormattingRulesFor").Replace("_", string.Empty, StringComparison.Ordinal));
 
+        // The scope filter shared by BuildList (what the listBox shows) and MoveInWorkingCopy (what
+        // "neighbour" means for Move Up/Down) — a single source of truth so the toolbar can never act
+        // on a different subset than the one the user is looking at.
+        GridRange? CurrentScope() => scopeBox.SelectedItem is ManageConditionalFormatScopeItem { Range: { } range } ? range : null;
+
         void Reload(Guid? selectId = null)
         {
-            var selection = _session.SelectedRange;
-            GridRange? scope = scopeBox.SelectedIndex == 1 ? selection : null;
+            var scope = CurrentScope();
             var items = ConditionalFormatManageModel.BuildList(workingRules, scope);
             listBox.ItemsSource = items;
             emptyText.IsVisible = items.Count == 0;
@@ -1272,7 +1294,7 @@ public sealed partial class MainWindow
             if (listBox.SelectedItem is not ConditionalFormatRuleListItem item)
                 return;
 
-            var updated = ConditionalFormatManageModel.MoveInWorkingCopy(workingRules, item.Id, direction);
+            var updated = ConditionalFormatManageModel.MoveInWorkingCopy(workingRules, CurrentScope(), item.Id, direction);
             if (updated is null)
                 return;
 
@@ -1454,6 +1476,7 @@ public sealed partial class MainWindow
                     dialog,
                     () => launchSmokeProbe(new ManageConditionalFormatsDialogSmokeProbe(
                         dialog,
+                        scopeBox,
                         listBox,
                         appliesToBox,
                         newButton,

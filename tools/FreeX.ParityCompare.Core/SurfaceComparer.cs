@@ -11,14 +11,18 @@ public enum SurfacePresence
 /// <summary>
 /// How a surface's visual diff should be interpreted.
 /// <c>grid.*</c> surfaces are a hard fidelity metric (both shells render the same document
-/// model the same way). <c>tab.*</c> and <c>backstage.*</c> are chrome — expected to differ
-/// between WPF and Avalonia by design (different title-bar, Linux compact toolbar row, backstage
-/// rail vs dialog layout) — compared and shown, never gate-failing. Dialog surfaces are
-/// informational: diff is shown but not gate-failing either.
+/// model the same way) — both production capture paths (WPF <c>ParityCapture.cs</c> and Avalonia
+/// <c>MainWindow.ParityCapture.cs</c>) tag these with the literal kind <c>"screen"</c> (a
+/// whole-window screenshot of the live shell over the seeded demo workbook), so kind
+/// <c>"screen"</c> is also Hard — it is content-bearing, not chrome. <c>tab.*</c> and
+/// <c>backstage.*</c> are chrome — expected to differ between WPF and Avalonia by design
+/// (different title-bar, Linux compact toolbar row, backstage rail vs dialog layout) — compared
+/// and shown, never gate-failing. Dialog surfaces are informational: diff is shown but not
+/// gate-failing either.
 /// </summary>
 public enum DiffSeverity
 {
-    /// <summary>grid.* — diff is a real fidelity signal; exceeding the threshold fails the gate.</summary>
+    /// <summary>grid.* (kind "grid" or "screen") — diff is a real fidelity signal; exceeding the threshold fails the gate.</summary>
     Hard,
     /// <summary>tab.* and backstage.* — chrome differences expected by design; informational only.</summary>
     Chrome,
@@ -108,12 +112,17 @@ public static class SurfaceComparer
 
     public static DiffSeverity SeverityOf(string kind) =>
         kind.Equals("grid", StringComparison.OrdinalIgnoreCase)
+            // "screen" is the kind literal both production capture paths (WPF ParityCapture.cs and
+            // Avalonia MainWindow.ParityCapture.cs) actually emit for grid.demo/grid.sheetTabsOverflow
+            // — the whole-window captures of the live shell over the seeded demo workbook. It is
+            // content-bearing, not decorative chrome: it must classify as Hard alongside "grid" or the
+            // fidelity gate can never fail on a real grid-rendering regression (see R120 regression test).
+            || kind.Equals("screen", StringComparison.OrdinalIgnoreCase)
             ? DiffSeverity.Hard
             : kind.Equals("tab", StringComparison.OrdinalIgnoreCase)
               || kind.Equals("ribbon-tab", StringComparison.OrdinalIgnoreCase)
               || kind.Equals("static-tab", StringComparison.OrdinalIgnoreCase)
               || kind.Equals("contextual-tab", StringComparison.OrdinalIgnoreCase)
-              || kind.Equals("screen", StringComparison.OrdinalIgnoreCase)
               || kind.Equals("overlay", StringComparison.OrdinalIgnoreCase)
               || kind.Equals("backstage", StringComparison.OrdinalIgnoreCase)
                 ? DiffSeverity.Chrome

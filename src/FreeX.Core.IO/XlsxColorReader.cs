@@ -326,4 +326,29 @@ public static class XlsxColorReader
         };
         return themeIndex is >= 0 and <= 11;
     }
+
+    /// <summary>
+    /// Inverse of the theme-index-to-slot mapping above -- the single source of truth for turning a
+    /// <see cref="WorkbookThemeColorReference"/> (as preserved on <see cref="CellStyle"/>/<see cref="CellBorder"/>)
+    /// back into the raw OOXML &lt;color theme="N"/&gt; index so writers that build &lt;color&gt; XML directly
+    /// (not through ClosedXML) can round-trip a theme-referenced color without duplicating this table
+    /// (R120-cf-theme-color-1: used by the conditional-format differential-style writer).
+    /// </summary>
+    public static int ThemeColorIndex(WorkbookThemeColorSlot slot) =>
+        slot switch
+        {
+            WorkbookThemeColorSlot.Light1 => 0,
+            WorkbookThemeColorSlot.Dark1 => 1,
+            WorkbookThemeColorSlot.Light2 => 2,
+            WorkbookThemeColorSlot.Dark2 => 3,
+            WorkbookThemeColorSlot.Accent1 => 4,
+            WorkbookThemeColorSlot.Accent2 => 5,
+            WorkbookThemeColorSlot.Accent3 => 6,
+            WorkbookThemeColorSlot.Accent4 => 7,
+            WorkbookThemeColorSlot.Accent5 => 8,
+            WorkbookThemeColorSlot.Accent6 => 9,
+            WorkbookThemeColorSlot.Hyperlink => 10,
+            WorkbookThemeColorSlot.FollowedHyperlink => 11,
+            _ => 1
+        };
 }

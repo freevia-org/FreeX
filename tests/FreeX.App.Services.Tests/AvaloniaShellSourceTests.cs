@@ -5542,7 +5542,7 @@ public sealed class AvaloniaShellSourceTests
 
         // Launch-smoke probe wiring for both dialogs.
         cfSource.Should().Contain("private sealed record ConditionalFormatRuleDialogSmokeProbe(");
-        cfSource.Should().Contain("private sealed record ManageConditionalFormatsDialogSmokeProbe(");
+        cfSource.Should().Contain("internal sealed record ManageConditionalFormatsDialogSmokeProbe(");
         windowSource.Should().Contain("HasLaunchSmokeDialog(probe.Dialog, \"New Formatting Rule\")");
         windowSource.Should().Contain("width: ConditionalFormatDialogCatalog.RuleEditorCaptureWidth");
         windowSource.Should().Contain("height: ConditionalFormatDialogCatalog.RuleEditorCaptureHeight");

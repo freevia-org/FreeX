@@ -469,6 +469,65 @@ public sealed class WorkbookSession : IDisposable
         _viewFrozenColsOverrides[ActiveSheet.Id] = ActiveSheet.FrozenCols;
     }
 
+    /// <summary>
+    /// Reconciles this view's own per-window overrides (zoom, view mode, gridlines, headings,
+    /// show-formulas, freeze panes, split) onto the shared <see cref="Sheet"/> fields for every
+    /// sheet this view has diverged on, immediately before this view serializes the workbook
+    /// (R120-corewriter-persist-saving-window-view-1). <see cref="Sheet.ZoomPercent"/>/
+    /// <see cref="Sheet.ViewMode"/>/<see cref="Sheet.ShowGridlines"/>/<see cref="Sheet.ShowHeadings"/>/
+    /// <see cref="Sheet.ShowFormulas"/>/<see cref="Sheet.FrozenRows"/>/<see cref="Sheet.FrozenCols"/>/
+    /// <see cref="Sheet.SplitRow"/>/<see cref="Sheet.SplitColumn"/> are one shared field per sheet,
+    /// mutated in place by whichever sibling view's command last executed -- the <c>_view*Overrides</c>
+    /// caches above exist so THIS view keeps displaying its own remembered value even after a
+    /// sibling view changes those shared fields, but every writer (e.g. <c>XlsxWorksheetViewWriter</c>)
+    /// still only ever reads the shared fields directly. Without this reconciliation, saving from a
+    /// view whose own state has diverged from the shared fields would silently persist whichever
+    /// sibling view last touched them instead of this view's own -- the same bug
+    /// <see cref="WorksheetViewStateStore"/>'s WPF-host counterpart exists to fix. Only sheets
+    /// present in one of the override caches are touched; a sheet this view never diverged on keeps
+    /// its already-correct shared value untouched. (<see cref="Sheet.ShowRulers"/> is intentionally
+    /// excluded -- unlike the WPF host, this shell has no per-view Show Rulers override to begin
+    /// with; see <see cref="SetShowRulers"/>'s remarks.)
+    /// </summary>
+    public void ReconcileViewStateForSave()
+    {
+        var sheetIds = new HashSet<SheetId>();
+        sheetIds.UnionWith(_viewZoomOverrides.Keys);
+        sheetIds.UnionWith(_viewModeOverrides.Keys);
+        sheetIds.UnionWith(_viewShowGridlinesOverrides.Keys);
+        sheetIds.UnionWith(_viewShowHeadingsOverrides.Keys);
+        sheetIds.UnionWith(_viewShowFormulasOverrides.Keys);
+        sheetIds.UnionWith(_viewFrozenRowsOverrides.Keys);
+        sheetIds.UnionWith(_viewFrozenColsOverrides.Keys);
+        sheetIds.UnionWith(_viewSplitRowOverrides.Keys);
+        sheetIds.UnionWith(_viewSplitColOverrides.Keys);
+
+        foreach (var sheetId in sheetIds)
+        {
+            if (Workbook.GetSheet(sheetId) is not { } sheet)
+                continue;
+
+            if (_viewZoomOverrides.TryGetValue(sheetId, out var zoom))
+                sheet.ZoomPercent = zoom;
+            if (_viewModeOverrides.TryGetValue(sheetId, out var viewMode))
+                sheet.ViewMode = viewMode;
+            if (_viewShowGridlinesOverrides.TryGetValue(sheetId, out var showGridlines))
+                sheet.ShowGridlines = showGridlines;
+            if (_viewShowHeadingsOverrides.TryGetValue(sheetId, out var showHeadings))
+                sheet.ShowHeadings = showHeadings;
+            if (_viewShowFormulasOverrides.TryGetValue(sheetId, out var showFormulas))
+                sheet.ShowFormulas = showFormulas;
+            if (_viewFrozenRowsOverrides.TryGetValue(sheetId, out var frozenRows))
+                sheet.FrozenRows = frozenRows;
+            if (_viewFrozenColsOverrides.TryGetValue(sheetId, out var frozenCols))
+                sheet.FrozenCols = frozenCols;
+            if (_viewSplitRowOverrides.TryGetValue(sheetId, out var splitRow))
+                sheet.SplitRow = splitRow;
+            if (_viewSplitColOverrides.TryGetValue(sheetId, out var splitCol))
+                sheet.SplitColumn = splitCol;
+        }
+    }
+
     public Workbook Workbook { get; }
 
     /// <summary>

@@ -175,7 +175,11 @@ public sealed class App : Application
     /// are provably INDEPENDENT documents (different <c>Workbook.Id</c>/<see cref="AutosaveSidecar.DocumentId"/>),
     /// e.g. a sibling window that was detached via File &gt; Open or File &gt; New
     /// (<c>MainWindow.cs</c>'s <c>ReplaceSession</c> call sites) before the crash — each of those is
-    /// offered on its own, never silently discarded in favor of another. The first accepted candidate
+    /// offered on its own, never silently discarded in favor of another. Candidates whose original
+    /// on-disk file was saved more recently than the snapshot are then dropped (see
+    /// <see cref="FilterCandidatesWithNewerOriginal"/>), so recovery never offers to silently
+    /// overwrite a newer manual save with stale snapshot content (R120, porting the WPF host's
+    /// R74-services-autosave-recovery-4-1 fix). The first accepted candidate
     /// is restored into <paramref name="mainWindow"/>; any further accepted candidates are restored
     /// into freshly opened windows so accepting more than one recovery never overwrites another.
     /// Declined or unreadable candidates are deleted so they are never re-offered. Must never throw —
@@ -188,7 +192,8 @@ public sealed class App : Application
             // This process's OWN just-started coordinator has not written a snapshot yet at this
             // point in startup, so every candidate here necessarily belongs to a previous launch —
             // no self-recovery filtering is needed.
-            var candidates = DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates());
+            var candidates = FilterCandidatesWithNewerOriginal(
+                DeduplicateCandidatesByDocument(snapshotStore.EnumerateCandidates()));
             if (candidates.Count == 0)
                 return;
 
@@ -309,6 +314,64 @@ public sealed class App : Application
         }
 
         return ordered.Select(key => newestByDocument[key]).ToList();
+    }
+
+    /// <summary>
+    /// Drops any candidate whose ORIGINAL on-disk file was saved more recently than the crash
+    /// snapshot itself (R120-avalonia-startup-recovery-newer-original-1, porting the WPF host's
+    /// <c>FilterCandidatesWithNewerOriginal</c>/R74-services-autosave-recovery-4-1 verbatim in
+    /// behavior). This happens when the user saved the document normally after the crash that
+    /// produced the snapshot (e.g. reopened the file by hand and saved over it, or another
+    /// window/session saved it) — offering that snapshot would let the user unknowingly clobber
+    /// their own newer manual save with stale recovered content. Excel never offers recovery in
+    /// this situation. A candidate whose original file is missing (never saved, moved, or deleted)
+    /// or whose on-disk timestamp is older than or equal to the snapshot is unaffected and still
+    /// offered exactly as before. Filtered candidates are deleted outright rather than left on disk
+    /// to be silently re-checked (and re-skipped) forever — their content is already superseded by
+    /// the newer file on disk, so nothing of value would be recovered by keeping them.
+    /// </summary>
+    private static IReadOnlyList<AutosaveRecoveryCandidate> FilterCandidatesWithNewerOriginal(
+        IReadOnlyList<AutosaveRecoveryCandidate> candidates)
+    {
+        if (candidates.Count == 0)
+            return candidates;
+
+        List<AutosaveRecoveryCandidate>? kept = null;
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var candidate = candidates[i];
+            if (IsOriginalNewerThanSnapshot(candidate))
+            {
+                kept ??= new List<AutosaveRecoveryCandidate>(candidates.Take(i));
+                try { AutosaveSnapshotStore.DeleteCandidate(candidate); } catch { /* best-effort */ }
+                continue;
+            }
+
+            kept?.Add(candidate);
+        }
+
+        return kept ?? candidates;
+    }
+
+    private static bool IsOriginalNewerThanSnapshot(AutosaveRecoveryCandidate candidate)
+    {
+        var originalPath = candidate.Sidecar.OriginalFilePath;
+        if (string.IsNullOrWhiteSpace(originalPath))
+            return false;
+
+        try
+        {
+            if (!File.Exists(originalPath))
+                return false;
+
+            var originalWriteTimeUtc = File.GetLastWriteTimeUtc(originalPath);
+            return originalWriteTimeUtc > GetCandidateTimestamp(candidate).UtcDateTime;
+        }
+        catch
+        {
+            // If the original's timestamp cannot be determined, do not block recovery on it.
+            return false;
+        }
     }
 
     /// <summary>

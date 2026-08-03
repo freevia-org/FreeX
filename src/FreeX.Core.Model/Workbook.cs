@@ -617,6 +617,23 @@ public sealed class Workbook
         if (CellAddress.TryParse(name, SheetId.New(), out _) || IsR1C1Reference(name))
             return "Named range name is invalid: it cannot look like a cell reference.";
 
+        // Table names and defined names share one unified namespace in Excel (see the mirrored
+        // check in StructuredTableDesignCommandHelpers.ValidateTableName): Name Manager's "New
+        // Name"/"Edit Name" refuses any text already used by a table on ANY sheet, regardless of
+        // whether the new defined name would be workbook-global or sheet-scoped. Without this,
+        // DefineNamedRangeCommand/DefineNamedFormulaCommand (the only validation this method's
+        // callers perform) would happily create a defined name identical to an existing table's
+        // Name/DisplayName, leaving workbook.xml's <definedNames> and a table part's
+        // <table name="..."/> carrying the same identifier -- a state real Excel treats as
+        // needing repair on open.
+        foreach (var sheet in _sheets)
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (string.Equals(table.Name, name, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(table.DisplayName, name, StringComparison.OrdinalIgnoreCase))
+                return $"A table named '{name}' already exists.";
+        }
+
         return null;
     }
 

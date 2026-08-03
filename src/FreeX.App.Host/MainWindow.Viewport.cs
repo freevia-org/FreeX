@@ -392,6 +392,45 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Pushes this window's own remembered view-mode/zoom/display-toggle/Freeze-Panes/Split state
+    /// (<see cref="_worksheetViewStates"/>) back onto the shared <see cref="Sheet"/> fields for
+    /// every sheet this window has ever rendered, immediately before this window serializes the
+    /// workbook (R120-corewriter-persist-saving-window-view-1).
+    /// <para>
+    /// <see cref="Sheet.ZoomPercent"/>/<see cref="Sheet.ViewMode"/>/<see cref="Sheet.ShowGridlines"/>/
+    /// <see cref="Sheet.ShowHeadings"/>/<see cref="Sheet.ShowRulers"/>/<see cref="Sheet.ShowFormulas"/>/
+    /// <see cref="Sheet.FrozenRows"/>/<see cref="Sheet.FrozenCols"/>/<see cref="Sheet.SplitRow"/>/
+    /// <see cref="Sheet.SplitColumn"/> are one shared field per sheet, mutated in place by whichever
+    /// window's command last executed -- <see cref="WorksheetViewStateStore"/> exists so each open
+    /// "New Window" sibling keeps displaying its own remembered value even after a sibling changes
+    /// those shared fields, but <c>XlsxWorksheetViewWriter</c> (and every other writer) still only
+    /// ever reads the shared fields. Without this reconciliation, Ctrl+S from a window whose own
+    /// view has diverged from the shared fields would silently persist whichever sibling window's
+    /// view last touched them instead of this window's own. Call this once, right before handing
+    /// the workbook to <c>SaveWorkbookWriter</c>/<c>WorkbookSaveService</c>.
+    /// </para>
+    /// </summary>
+    private void ReconcileViewStateForSave()
+    {
+        foreach (var (sheetId, snapshot) in _worksheetViewStates.Snapshots)
+        {
+            if (_workbook.GetSheet(sheetId) is not { } sheet)
+                continue;
+
+            sheet.ViewMode = snapshot.ViewMode;
+            sheet.ZoomPercent = snapshot.ZoomPercent;
+            sheet.ShowGridlines = snapshot.ShowGridlines;
+            sheet.ShowHeadings = snapshot.ShowHeadings;
+            sheet.ShowRulers = snapshot.ShowRulers;
+            sheet.ShowFormulas = snapshot.ShowFormulas;
+            sheet.FrozenRows = snapshot.FrozenRows;
+            sheet.FrozenCols = snapshot.FrozenCols;
+            sheet.SplitRow = snapshot.SplitRow;
+            sheet.SplitColumn = snapshot.SplitColumn;
+        }
+    }
+
+    /// <summary>
     /// This window's own effective view-origin for <paramref name="sheet"/> (Excel "New Window"
     /// independence for Freeze Panes -- R89-freeze-split-per-window-1): resolves the
     /// scrollbar-to-worksheet-index mapping against THIS window's effective frozen-row/column

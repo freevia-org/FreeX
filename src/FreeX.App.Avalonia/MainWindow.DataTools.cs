@@ -57,16 +57,8 @@ public sealed partial class MainWindow
                 if (column.ColumnId < 0 || (uint)column.ColumnId >= filterRange.ColCount)
                     continue;
 
-                // Only plain value filters carry a directly replayable allowed-value set; richer
-                // criteria (custom/dynamic/color/top-10) are not reconstructable from the model here.
-                if (column.Values.Count == 0)
-                    continue;
-
-                commands.Add(new FilterCommand(
-                    sheetId,
-                    filterRange,
-                    (uint)column.ColumnId,
-                    column.Values));
+                if (TryBuildAutoFilterColumnReapplyCommand(sheetId, filterRange, column) is { } columnCommand)
+                    commands.Add(columnCommand);
             }
         }
 
@@ -121,6 +113,107 @@ public sealed partial class MainWindow
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// R120-avalonia-datatools-reapply-1: builds the ONE live command that replays a single AutoFilter
+    /// column's currently-active criterion against the sheet's current data, dispatching on whichever
+    /// of the persisted <see cref="WorksheetAutoFilterColumnModel"/> fields is populated -- mirrors
+    /// WPF's <c>_activeAutoFilterColumnFactories</c> (MainWindow.DataFilterCommands.cs) replaying
+    /// value-list, Top 10/Above-Average, custom-condition, and color criteria alike, except this reads
+    /// durable worksheet metadata instead of an in-session factory. Excel allows only one active
+    /// criterion per column, so at most one branch below should ever apply to any real column; returns
+    /// null (skip the column) for a button-only column with nothing to filter, or one whose criterion
+    /// this shell has no live command for (an icon-set filter, the default date-grouped Year/Month/Day
+    /// checklist, or unrecognized native-only filter data -- see
+    /// XlsxWorksheetAutoFilterMaterializer.BuildFilters' identical "unsupported" bucket for the same
+    /// two cases at file-load time).
+    /// </summary>
+    private static IWorkbookCommand? TryBuildAutoFilterColumnReapplyCommand(
+        SheetId sheetId,
+        GridRange filterRange,
+        WorksheetAutoFilterColumnModel column)
+    {
+        var columnOffset = (uint)column.ColumnId;
+
+        // R120-avalonia-datatools-reapply-1: a plain value-list filter's allowed set may include an
+        // allowed blank, represented (mirroring FilterCommand.SplitBlankSentinel) as a literal ""
+        // sentinel appended to the non-blank allowed values -- omitting it here (as the previous
+        // implementation did) would silently stop allowing blanks through on Reapply.
+        if (column.Values.Count > 0 || column.IncludeBlank)
+        {
+            var allowedValues = column.IncludeBlank && !column.Values.Contains("")
+                ? [.. column.Values, ""]
+                : column.Values;
+            return new FilterCommand(sheetId, filterRange, columnOffset, allowedValues);
+        }
+
+        if (column.Top10 is { } top10)
+        {
+            var count = (uint)Math.Max(0, top10.Value ?? 10);
+            return top10.Percent
+                ? TopBottomFilterCommand.Percent(sheetId, filterRange, columnOffset, count, top10.Top)
+                : new TopBottomFilterCommand(sheetId, filterRange, columnOffset, count, top10.Top);
+        }
+
+        if (column.DynamicFilter is { } dynamicFilter && TryGetAverageDirection(dynamicFilter, out var above))
+            return new AverageFilterCommand(sheetId, filterRange, columnOffset, above);
+
+        if (column.ColorFilter is { } colorFilter)
+            return TryBuildColorFilterReapplyCommand(sheetId, filterRange, columnOffset, colorFilter);
+
+        if (column.CustomFilters.Count > 0 &&
+            CustomFilterModelReconstructor.Reconstruct(column.CustomFilters, column.CustomFiltersAnd) is { } criterion)
+        {
+            return new FilterConditionCommand(sheetId, filterRange, columnOffset, criterion);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// FreeX only ever writes a "dynamicFilter" for Above/Below Average (AverageFilterCommand) -- any
+    /// other dynamicFilter type (e.g. a native file's "today"/"nextMonth"/quarter-relative filter) has
+    /// no live command here, mirroring XlsxWorksheetAutoFilterMaterializer.IsAverageDynamicFilter's
+    /// identical load-time gate.
+    /// </summary>
+    private static bool TryGetAverageDirection(WorksheetAutoFilterDynamicFilterModel dynamicFilter, out bool above)
+    {
+        above = true;
+        if (string.Equals(dynamicFilter.Type, "aboveAverage", StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (string.Equals(dynamicFilter.Type, "belowAverage", StringComparison.OrdinalIgnoreCase))
+        {
+            above = false;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Mirrors the exact (CellColor, Color) shapes CellFillColorFilterCommand/CellNoFillColorFilterCommand/
+    /// CellFontColorFilterCommand persist (FreeX.Core.Commands/FilterCommand.cs) back into the matching
+    /// live command. CellColor:false with a null Color ("no font color") has no dedicated command --
+    /// Excel's AutoFilter color checklist never offers it as a font-color option -- so that shape is
+    /// left unsupported like any other native-only filter kind.
+    /// </summary>
+    private static IWorkbookCommand? TryBuildColorFilterReapplyCommand(
+        SheetId sheetId,
+        GridRange filterRange,
+        uint columnOffset,
+        WorksheetAutoFilterColorFilterModel colorFilter)
+    {
+        if (colorFilter.CellColor)
+        {
+            return colorFilter.Color is { } fillColor
+                ? new CellFillColorFilterCommand(sheetId, filterRange, columnOffset, fillColor)
+                : new CellNoFillColorFilterCommand(sheetId, filterRange, columnOffset);
+        }
+
+        return colorFilter.Color is { } fontColor
+            ? new CellFontColorFilterCommand(sheetId, filterRange, columnOffset, fontColor)
+            : null;
     }
 
     // ── Circle Invalid Data / Clear Validation Circles ───────────────────────────

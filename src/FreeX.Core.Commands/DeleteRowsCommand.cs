@@ -5,8 +5,20 @@ using FreeX.Core.Model;
 namespace FreeX.Core.Commands;
 
 /// <summary>Deletes <paramref name="count"/> rows starting at <paramref name="startRow"/>.</summary>
-public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
+public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand, IEstimatesMemory
 {
+    // R120-commands-undo-byte-budget-2: _deletedSnapshot/_shiftedSnapshot below each retain a
+    // CellStateSnapshot (value, formula text, cached AST, style, array-mode metadata) for EVERY
+    // occupied cell in the deleted row band PLUS every occupied cell shifted up below it -- plus
+    // several companion per-cell dictionary snapshots (comments, hyperlinks, rich text, phonetic
+    // guides, DV/CF rule ranges) -- the richest undo snapshot shape in the codebase (see the
+    // defect's own description). Estimated from the two snapshots' combined count, known only once
+    // Apply has captured them (this command's affected-cell count depends on how many cells are
+    // actually occupied, not just _count rows). Both are null before Apply runs, in which case
+    // CommandBus never actually queries this (EstimateBytes is only called after Apply pushes the
+    // command).
+    private const int BytesPerCell = 400;
+
     private const uint FullSnapshotCapacityThreshold = 32;
     private readonly SheetId _sheetId;
     private readonly uint _startRow;
@@ -65,6 +77,10 @@ public sealed class DeleteRowsCommand : IWorkbookCommand, IAffectedCellsCommand
     public string Label => $"Delete {_count} Row(s)";
 
     public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
+
+    /// <inheritdoc/>
+    public int EstimatedBytes =>
+        (int)Math.Min(((long)(_deletedSnapshot?.Count ?? 0) + (_shiftedSnapshot?.Count ?? 0)) * BytesPerCell, int.MaxValue);
 
     public DeleteRowsCommand(SheetId sheetId, uint startRow, uint count = 1)
     {

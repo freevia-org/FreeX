@@ -28,6 +28,14 @@ public static class CellEntryParser
 
         if (text.StartsWith("=", StringComparison.Ordinal))
         {
+            // Real Excel's formula bar refuses to leave edit mode for a formula longer than its
+            // documented 8,192-character limit, rejecting the entry outright rather than
+            // committing (or silently truncating) the oversized text. Checked against the raw
+            // typed text (before any R1C1-to-A1 conversion) since that's what the user actually
+            // typed and what Excel's own formula-bar length check would see
+            // (R120-formula-entry-nesting-length-validation).
+            FormulaEvaluator.ValidateFormulaEntryLength(text);
+
             var formula = text[1..];
             if (useR1C1ReferenceStyle)
                 formula = FormulaReferenceStyleService.ToA1(formula, address);
@@ -42,7 +50,32 @@ public static class CellEntryParser
             // FormulaParseException catches exist for the DIFFERENT case of a cell whose formula
             // text was already committed (e.g. loaded from a file whose formula this parser can't
             // handle, such as an external-workbook reference), not for a fresh interactive entry.
-            FormulaEvaluator.ParseFormula(formula);
+            var parsedFormula = FormulaEvaluator.ParseFormula(formula);
+
+            // Real Excel additionally refuses to leave edit mode for a well-known built-in
+            // function called with the wrong number of arguments -- e.g. "=IF(A1>0)" (1 argument;
+            // IF requires 2 or 3) or "=LEFT(\"x\",1,2,3)" (4 arguments; LEFT allows at most 2) --
+            // even though that text is otherwise syntactically valid. Excel's entry-time compiler
+            // checks the argument count against the function's known signature and pops its
+            // "too few/too many arguments" dialog instead of committing. FreeX previously enforced
+            // this arity only during recalculation (see FormulaEvaluator
+            // .ValidateBuiltInFunctionArity's own doc comment for the exact call sites), silently
+            // committing the malformed shape and only ever surfacing it later as a #VALUE!.
+            // Walking the freshly parsed AST here rejects it at entry instead, matching Excel
+            // (R120-formula-entry-arity-validation).
+            FormulaEvaluator.ValidateBuiltInFunctionArity(parsedFormula);
+
+            // Real Excel also refuses to leave edit mode for a formula whose deepest chain of one
+            // function nested inside another exceeds its documented 64-level function-nesting
+            // limit (e.g. 100 nested IF() calls), popping its "too many levels of nesting" error
+            // instead of committing. The parser's own EnterNesting/EnterParseFrame checks
+            // (FormulaSafetyLimits.MaxParseNesting/MaxParseDepth = 256/512) are purely internal
+            // recursion/stack-depth DoS guards -- much larger than Excel's real limit and not a
+            // substitute for it -- so a formula built with, say, 100 nested IFs sailed through
+            // those unchallenged even though real Excel's formula bar would reject that exact text
+            // at entry. Walking the already-parsed AST here closes that gap
+            // (R120-formula-entry-nesting-length-validation).
+            FormulaEvaluator.ValidateFunctionNestingDepth(parsedFormula);
 
             return Cell.FromFormula(formula);
         }

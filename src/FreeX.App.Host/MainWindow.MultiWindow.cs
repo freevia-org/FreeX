@@ -93,7 +93,7 @@ public partial class MainWindow
         _currentSheetId = ResolveAdoptedSheetId();
         InvalidateNavigationCaches();
         UpdateTitleBar();
-        SetActiveCell(new CellAddress(_currentSheetId, 1, 1));
+        ApplyAdoptedWorksheetSelection();
         RefreshSheetTabs();
         UpdateViewport();
         // Do NOT call MarkWorkbookSaved here.  WorkbookDocumentState is now a shared
@@ -144,6 +144,40 @@ public partial class MainWindow
         }
 
         return _workbook.Sheets.Count > 0 ? _workbook.Sheets[0].Id : _currentSheetId;
+    }
+
+    /// <summary>
+    /// Seeds this newly-adopted secondary window's active cell/selection from the invoking
+    /// window's current state (<see cref="_newWindowSourceHint"/>), matching Excel's View &gt; New
+    /// Window, which opens the new window as a live duplicate of the invoking window -- same
+    /// sheet, same active cell, same selection -- rather than resetting to A1 (R120-multiwindow
+    /// -new-window-selection). Falls back to the shared Sheet's ActiveRow/ActiveCol -- the same
+    /// fallback <see cref="ApplyOpenedWorksheetViewState"/> uses for File &gt; Open -- when no
+    /// usable source hint is available (e.g. the invoking window has since closed, or moved to a
+    /// different document/sheet before this window finished loading).
+    /// </summary>
+    private void ApplyAdoptedWorksheetSelection()
+    {
+        if (_newWindowSourceHint is { } source &&
+            source.DocumentId == _workbook.Id &&
+            source._currentSheetId == _currentSheetId &&
+            source._selectionAnchor is { } sourceAnchor &&
+            source._selectionCursor is { } sourceCursor &&
+            source.SheetGrid.SelectedRange is { } sourceRange)
+        {
+            var snapshot = new WorksheetSelectionSnapshot(
+                sourceAnchor, sourceCursor, sourceRange, source.SheetGrid.SelectedRanges);
+            ApplyWorksheetSelectionSnapshot(snapshot);
+            return;
+        }
+
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        var activeRow = sheet?.ActiveRow ?? 1;
+        var activeCol = sheet?.ActiveCol ?? 1;
+        SetActiveCell(new CellAddress(
+            _currentSheetId,
+            Math.Clamp(activeRow, 1u, CellAddress.MaxRow),
+            Math.Clamp(activeCol, 1u, CellAddress.MaxCol)));
     }
 
     // ── IWorkbookWindow (driven by WorkbookWindowRegistry) ────────────────────
