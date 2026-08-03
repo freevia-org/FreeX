@@ -31,6 +31,32 @@ public sealed class ChartSubtargetHitTesterTests
     }
 
     [Fact]
+    public void TryHitTest_PreservesAxisTitleTarget()
+    {
+        var chart = new ChartShape
+        {
+            CategoryAxis = { Title = "Quarter" },
+            ChartType = ChartType.ColumnClustered,
+            Categories = { "Q1", "Q2" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+        var (presentation, slide, _) = AddChart(chart, 320, 220);
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 320, 220));
+        var title = scene.AxisTitles.Single(axisTitle => axisTitle.AxisKind == ChartAxisKind.Category);
+
+        ChartSubtargetHitTester.TryHitTest(
+            slide,
+            presentation,
+            40 + title.Label.Bounds.X + title.Label.Bounds.Width / 2,
+            30 + title.Label.Bounds.Y + title.Label.Bounds.Height / 2,
+            out var hit).Should().BeTrue();
+        hit.Kind.Should().Be(ChartSubtargetKind.AxisTitle);
+        hit.AxisKind.Should().Be(ChartAxisKind.Category);
+    }
+
+    [Fact]
     public void TryHitTest_ResolvesPlotAreaWhenNoSeriesIsUnderPointer()
     {
         var chart = new ChartShape { ChartType = ChartType.LineMarkers, Categories = { "Q1", "Q2" } };

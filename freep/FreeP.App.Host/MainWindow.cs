@@ -743,6 +743,8 @@ public sealed partial class MainWindow : Window
                 Add("Format Value Axis...", () => OpenChartAxisOptionsDialog(ChartAxisKind.Value));
                 break;
             case ChartSubtargetKind.AxisTitle:
+                Add("Format Axis...", () => OpenChartAxisOptionsDialog(hit.AxisKind ?? ChartAxisKind.Value));
+                break;
             case ChartSubtargetKind.Title:
             case ChartSubtargetKind.Legend:
                 Add("Format Chart Text...", OpenChartTextOptionsDialog);
