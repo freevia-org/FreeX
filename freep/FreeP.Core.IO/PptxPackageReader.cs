@@ -4955,7 +4955,26 @@ public static class PptxPackageReader
         return new OmmlMathProperties(
             BinaryBreak: ReadValue(mathProperties.Element(M + "brkBin")),
             BinarySubtraction: ReadValue(mathProperties.Element(M + "brkBinSub")),
-            MathFontFamily: ReadValue(mathProperties.Element(M + "mathFont")));
+            MathFontFamily: ReadValue(mathProperties.Element(M + "mathFont")),
+            SmallFraction: ReadOnOffValue(mathProperties.Element(M + "smallFrac")));
+    }
+
+    private static bool? ReadOnOffValue(XElement? element)
+    {
+        if (element is null)
+            return null;
+
+        var value = element.Attribute(M + "val")?.Value
+            ?? element.Attribute("val")?.Value
+            ?? element.Value;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "0" or "false" or "off" => false,
+            _ => true
+        };
     }
 
     private static Run ReadFieldRun(XElement fldEl, PresentationColorScheme scheme)

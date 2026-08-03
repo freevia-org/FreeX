@@ -134,7 +134,8 @@ public static class OmmlParser
             ParseMathParagraphJustification(paragraphProperties),
             ParseMathParagraphBinaryBreak(paragraphProperties, resolvedProperties),
             ParseMathParagraphBinarySubtraction(paragraphProperties, resolvedProperties),
-            resolvedProperties.MathFontFamily);
+            resolvedProperties.MathFontFamily,
+            resolvedProperties.SmallFraction);
     }
 
     private static MathNode.MathProperties ParseInheritedMathProperties(XElement mathRoot)
@@ -159,7 +160,27 @@ public static class OmmlParser
         return new MathNode.MathProperties(
             ParseBinaryBreakOverride(mathProperties),
             ParseBinarySubtractionOverride(mathProperties),
-            string.IsNullOrWhiteSpace(mathFont) ? null : mathFont);
+            string.IsNullOrWhiteSpace(mathFont) ? null : mathFont,
+            ParseSmallFractionOverride(mathProperties));
+    }
+
+    private static bool? ParseSmallFractionOverride(XElement mathProperties)
+    {
+        var element = mathProperties.Element(M + "smallFrac");
+        if (element is null)
+            return null;
+
+        var value = element.Attribute(M + "val")?.Value
+            ?? element.Attribute("val")?.Value
+            ?? element.Value;
+        if (string.IsNullOrWhiteSpace(value))
+            return true;
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "0" or "false" or "off" => false,
+            _ => true
+        };
     }
 
     private static MathNode.MathParagraphBinaryBreak? ParseBinaryBreakOverride(XElement mathProperties)

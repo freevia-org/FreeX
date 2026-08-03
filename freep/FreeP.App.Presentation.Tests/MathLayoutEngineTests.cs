@@ -1444,6 +1444,48 @@ public sealed class MathLayoutEngineTests
             "the default bar fraction must still draw exactly one HRule (no regression)");
     }
 
+    [Theory]
+    [InlineData(MathNode.FracType.Bar, 0.85)]
+    [InlineData(MathNode.FracType.NoBar, 0.85)]
+    [InlineData(MathNode.FracType.Linear, 1.00)]
+    [InlineData(MathNode.FracType.Skewed, 0.85)]
+    public void Frac_SmallFraction_UsesScriptSizeForNumeratorAndDenominator(
+        MathNode.FracType type,
+        double defaultChildScale)
+    {
+        var fraction = new MathNode.Frac(Run("a"), Run("b"), type);
+        var normal = MathLayoutEngine.Layout(fraction, "Cambria Math", FontSizePt);
+        var small = MathLayoutEngine.Layout(
+            new MathNode.MathRoot(
+                fraction,
+                new MathNode.MathProperties(SmallFraction: true)),
+            "Cambria Math",
+            FontSizePt);
+        var explicitlyOff = MathLayoutEngine.Layout(
+            new MathNode.MathRoot(
+                fraction,
+                new MathNode.MathProperties(SmallFraction: false)),
+            "Cambria Math",
+            FontSizePt);
+
+        var normalGlyphs = AllGlyphs(normal).Cast<MathBox.Glyph>().ToDictionary(g => g.Text);
+        var smallGlyphs = AllGlyphs(small).Cast<MathBox.Glyph>().ToDictionary(g => g.Text);
+        var offGlyphs = AllGlyphs(explicitlyOff).Cast<MathBox.Glyph>().ToDictionary(g => g.Text);
+
+        normalGlyphs["a"].FontSizePt.Should().BeApproximately(FontSizePt * defaultChildScale, 0.001);
+        normalGlyphs["b"].FontSizePt.Should().BeApproximately(FontSizePt * defaultChildScale, 0.001);
+        offGlyphs["a"].FontSizePt.Should().BeApproximately(normalGlyphs["a"].FontSizePt, 0.001);
+        offGlyphs["b"].FontSizePt.Should().BeApproximately(normalGlyphs["b"].FontSizePt, 0.001);
+        smallGlyphs["a"].FontSizePt.Should().BeApproximately(FontSizePt * 0.70, 0.001);
+        smallGlyphs["b"].FontSizePt.Should().BeApproximately(FontSizePt * 0.70, 0.001);
+
+        if (type == MathNode.FracType.Linear)
+        {
+            smallGlyphs["/"].FontSizePt.Should().BeApproximately(FontSizePt, 0.001,
+                "smallFrac changes numerator/denominator script content but keeps the inline slash readable");
+        }
+    }
+
     [Fact]
     public void Frac_NoBarType_HasNoHRule_ButKeepsStackedNumDen()
     {

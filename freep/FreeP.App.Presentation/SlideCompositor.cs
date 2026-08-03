@@ -2087,7 +2087,8 @@ public static class SlideCompositor
         return new FreeP.App.Compositor.MathLayout.MathNode.MathProperties(
             binaryBreak,
             binarySubtraction,
-            string.IsNullOrWhiteSpace(properties.MathFontFamily) ? null : properties.MathFontFamily);
+            string.IsNullOrWhiteSpace(properties.MathFontFamily) ? null : properties.MathFontFamily,
+            properties.SmallFraction);
     }
 
     // ─── Wave 19A: auto-number formatter ────────────────────────────────────────────────────

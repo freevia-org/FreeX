@@ -204,6 +204,45 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_SmallFraction_UsesSharedReducedFractionPlan()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:mathPr><m:smallFrac/></m:mathPr>" +
+                    "<m:f><m:num><m:r><m:t>a</m:t></m:r></m:num><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f>" +
+                    "<m:f><m:fPr><m:type m:val=\"lin\"/></m:fPr><m:num><m:r><m:t>c</m:t></m:r></m:num><m:den><m:r><m:t>d</m:t></m:r></m:den></m:f>" +
+                    "<m:f><m:fPr><m:type m:val=\"skw\"/></m:fPr><m:num><m:r><m:t>e</m:t></m:r></m:num><m:den><m:r><m:t>f</m:t></m:r></m:den></m:f>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+
+                ops.OfType<MathDrawOp.DrawGlyph>()
+                    .Where(g => g.Text is "a" or "b" or "c" or "d" or "e" or "f")
+                    .Should().OnlyContain(g => Math.Abs(g.FontSizePt - 12.6) < 0.001);
+                ops.OfType<MathDrawOp.DrawGlyph>().Single(g => g.Text == "/").FontSizePt
+                    .Should().BeApproximately(18.0, 0.001);
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+                var rtb = new RenderTargetBitmap(new PixelSize(340, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must consume the same reduced shared MathBox plan as WPF");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_Matrix_UsesSharedMathBoxPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

@@ -55,6 +55,45 @@ public sealed class OmmlParserTests
         Assert.Equal("STIX Two Math", authoredRoot.Properties.MathFontFamily);
     }
 
+    [Fact]
+    public void SmallFraction_UsesCtOnOffSemantics_AndPropertyByPropertyInheritance()
+    {
+        var absent = Parse("<m:r><m:t>x</m:t></m:r>");
+        Assert.IsType<MathNode.Run>(absent);
+
+        var bare = Assert.IsType<MathNode.MathRoot>(Parse(
+            "<m:mathPr><m:smallFrac/></m:mathPr><m:r><m:t>x</m:t></m:r>"));
+        Assert.True(bare.Properties.SmallFraction);
+
+        foreach (var value in new[] { "1", "true", "on", "yes" })
+        {
+            var enabled = Assert.IsType<MathNode.MathRoot>(Parse(
+                $"<m:mathPr><m:smallFrac m:val=\"{value}\"/></m:mathPr><m:r><m:t>x</m:t></m:r>"));
+            Assert.True(enabled.Properties.SmallFraction);
+        }
+
+        foreach (var value in new[] { "0", "false", "off" })
+        {
+            var disabled = Assert.IsType<MathNode.MathRoot>(Parse(
+                $"<m:mathPr><m:smallFrac m:val=\"{value}\"/></m:mathPr><m:r><m:t>x</m:t></m:r>"));
+            Assert.False(disabled.Properties.SmallFraction);
+        }
+
+        var inherited = Assert.IsType<MathNode.MathRoot>(OmmlParser.Parse(
+            $"<m:oMath xmlns:m=\"{M}\"><m:r><m:t>x</m:t></m:r></m:oMath>",
+            "FALLBACK",
+            new MathNode.MathProperties(SmallFraction: true)));
+        Assert.True(inherited.Properties.SmallFraction);
+
+        var overridden = Assert.IsType<MathNode.MathRoot>(OmmlParser.Parse(
+            $"<m:oMath xmlns:m=\"{M}\"><m:mathPr><m:smallFrac m:val=\"0\"/></m:mathPr>" +
+            "<m:r><m:t>x</m:t></m:r></m:oMath>",
+            "FALLBACK",
+            new MathNode.MathProperties(SmallFraction: true)));
+        Assert.False(overridden.Properties.SmallFraction,
+            "an explicit false must override the document default rather than coalescing as absent");
+    }
+
     // ── HA1: m:nary limLoc default ────────────────────────────────────────
 
     [Fact]

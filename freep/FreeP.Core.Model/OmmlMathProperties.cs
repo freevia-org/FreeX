@@ -8,12 +8,14 @@ namespace FreeP.Core.Model;
 public sealed record OmmlMathProperties(
     string? BinaryBreak = null,
     string? BinarySubtraction = null,
-    string? MathFontFamily = null)
+    string? MathFontFamily = null,
+    bool? SmallFraction = null)
 {
     public bool HasValues =>
         !string.IsNullOrWhiteSpace(BinaryBreak) ||
         !string.IsNullOrWhiteSpace(BinarySubtraction) ||
-        !string.IsNullOrWhiteSpace(MathFontFamily);
+        !string.IsNullOrWhiteSpace(MathFontFamily) ||
+        SmallFraction.HasValue;
 
     /// <summary>
     /// Applies authored values from <paramref name="overriding"/> one property
@@ -24,5 +26,6 @@ public sealed record OmmlMathProperties(
         : new OmmlMathProperties(
             overriding.BinaryBreak ?? BinaryBreak,
             overriding.BinarySubtraction ?? BinarySubtraction,
-            overriding.MathFontFamily ?? MathFontFamily);
+            overriding.MathFontFamily ?? MathFontFamily,
+            overriding.SmallFraction ?? SmallFraction);
 }

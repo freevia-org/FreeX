@@ -31,13 +31,36 @@ public sealed class OmmlMathDefaultsIntegrationTests
             "<m:mathFont m:val=\"Arial\"/>" +
             "<m:brkBin m:val=\"repeat\"/>" +
             "<m:brkBinSub m:val=\"-+\"/>" +
+            "<m:smallFrac/>" +
             "</m:mathPr>");
 
         package.Position = 0;
         var presentation = PptxPackageReader.Read(package);
 
         presentation.DocumentMathProperties.Should().Be(
-            new OmmlMathProperties("repeat", "-+", "Arial"));
+            new OmmlMathProperties("repeat", "-+", "Arial", true));
+    }
+
+    [Theory]
+    [InlineData("1", true)]
+    [InlineData("true", true)]
+    [InlineData("on", true)]
+    [InlineData("0", false)]
+    [InlineData("false", false)]
+    [InlineData("off", false)]
+    public void Reader_PropagatesSmallFractionCtOnOffFromRelatedSettingsPart(
+        string value,
+        bool expected)
+    {
+        using var package = WriteMathPackage();
+        AddRelatedSettingsPart(package,
+            "<m:mathPr xmlns:m=\"" + MathNamespace + "\"><m:smallFrac m:val=\"" + value + "\"/></m:mathPr>");
+
+        package.Position = 0;
+        var presentation = PptxPackageReader.Read(package);
+
+        presentation.DocumentMathProperties.Should().Be(
+            new OmmlMathProperties(SmallFraction: expected));
     }
 
     [Fact]

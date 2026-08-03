@@ -22,6 +22,7 @@ namespace FreeP.App.Compositor.MathLayout;
 public static class MathLayoutEngine
 {
     private const string MatrixPlaceholderGlyph = "\u25A1";
+    private readonly record struct LayoutOptions(bool SmallFraction);
 
     // ── Public entry ──────────────────────────────────────────────────────
 
@@ -156,7 +157,12 @@ public static class MathLayoutEngine
         double? paragraphWidthDip = null)
     {
         var box = node is MathNode.MathParagraph paragraph
-            ? LayoutMathParagraph(paragraph, fontFamily, fontSizePt, paragraphWidthDip)
+            ? LayoutMathParagraph(
+                paragraph,
+                fontFamily,
+                fontSizePt,
+                paragraphWidthDip,
+                new LayoutOptions(paragraph.SmallFraction == true))
             : LayoutNode(node, fontFamily, fontSizePt);
         var root = new MathBox.Container();
         root.Children.Add(box);
@@ -169,7 +175,11 @@ public static class MathLayoutEngine
 
     // ── Node dispatcher ───────────────────────────────────────────────────
 
-    private static MathBox LayoutNode(MathNode node, string fontFamily, double fontSizePt)
+    private static MathBox LayoutNode(
+        MathNode node,
+        string fontFamily,
+        double fontSizePt,
+        LayoutOptions options = default)
     {
         return node switch
         {
@@ -178,29 +188,30 @@ public static class MathLayoutEngine
                 string.IsNullOrWhiteSpace(root.Properties.MathFontFamily)
                     ? fontFamily
                     : root.Properties.MathFontFamily!,
-                fontSizePt),
+                fontSizePt,
+                options with { SmallFraction = root.Properties.SmallFraction ?? options.SmallFraction }),
             MathNode.Run     r  => LayoutRun(r, fontFamily, fontSizePt),
-            MathNode.Frac    f  => LayoutFrac(f, fontFamily, fontSizePt),
-            MathNode.Sup     s  => LayoutSup(s, fontFamily, fontSizePt),
-            MathNode.Sub     s  => LayoutSub(s, fontFamily, fontSizePt),
-            MathNode.SubSup  ss => LayoutSubSup(ss, fontFamily, fontSizePt),
-            MathNode.PreSubSup ps => LayoutPreSubSup(ps, fontFamily, fontSizePt),
-            MathNode.Rad     r  => LayoutRad(r, fontFamily, fontSizePt),
-            MathNode.Nary    n  => LayoutNary(n, fontFamily, fontSizePt),
-            MathNode.Limit   l  => LayoutLimit(l, fontFamily, fontSizePt),
-            MathNode.Func    fn => LayoutFunc(fn, fontFamily, fontSizePt),
-            MathNode.Delim   d  => LayoutDelim(d, fontFamily, fontSizePt),
-            MathNode.Acc     a  => LayoutAcc(a, fontFamily, fontSizePt),
-            MathNode.Bar     b  => LayoutBar(b, fontFamily, fontSizePt),
-            MathNode.Box     bx => LayoutBox(bx, fontFamily, fontSizePt),
-            MathNode.ArgSize arg => LayoutArgSize(arg, fontFamily, fontSizePt),
-            MathNode.Phantom ph => LayoutPhantom(ph, fontFamily, fontSizePt),
-            MathNode.BorderBox bb => LayoutBorderBox(bb, fontFamily, fontSizePt),
-            MathNode.GroupChr g => LayoutGroupChr(g, fontFamily, fontSizePt),
-            MathNode.Matrix  m  => LayoutMatrix(m, fontFamily, fontSizePt),
-            MathNode.EqArray e  => LayoutEqArray(e, fontFamily, fontSizePt),
-            MathNode.MathParagraph p => LayoutMathParagraph(p, fontFamily, fontSizePt, paragraphWidthDip: null),
-            MathNode.Row     rw => LayoutRow(rw.Children, fontFamily, fontSizePt),
+            MathNode.Frac    f  => LayoutFrac(f, fontFamily, fontSizePt, options),
+            MathNode.Sup     s  => LayoutSup(s, fontFamily, fontSizePt, options),
+            MathNode.Sub     s  => LayoutSub(s, fontFamily, fontSizePt, options),
+            MathNode.SubSup  ss => LayoutSubSup(ss, fontFamily, fontSizePt, options),
+            MathNode.PreSubSup ps => LayoutPreSubSup(ps, fontFamily, fontSizePt, options),
+            MathNode.Rad     r  => LayoutRad(r, fontFamily, fontSizePt, options),
+            MathNode.Nary    n  => LayoutNary(n, fontFamily, fontSizePt, options),
+            MathNode.Limit   l  => LayoutLimit(l, fontFamily, fontSizePt, options),
+            MathNode.Func    fn => LayoutFunc(fn, fontFamily, fontSizePt, options),
+            MathNode.Delim   d  => LayoutDelim(d, fontFamily, fontSizePt, options),
+            MathNode.Acc     a  => LayoutAcc(a, fontFamily, fontSizePt, options),
+            MathNode.Bar     b  => LayoutBar(b, fontFamily, fontSizePt, options),
+            MathNode.Box     bx => LayoutBox(bx, fontFamily, fontSizePt, options),
+            MathNode.ArgSize arg => LayoutArgSize(arg, fontFamily, fontSizePt, options),
+            MathNode.Phantom ph => LayoutPhantom(ph, fontFamily, fontSizePt, options),
+            MathNode.BorderBox bb => LayoutBorderBox(bb, fontFamily, fontSizePt, options),
+            MathNode.GroupChr g => LayoutGroupChr(g, fontFamily, fontSizePt, options),
+            MathNode.Matrix  m  => LayoutMatrix(m, fontFamily, fontSizePt, options),
+            MathNode.EqArray e  => LayoutEqArray(e, fontFamily, fontSizePt, options),
+            MathNode.MathParagraph p => LayoutMathParagraph(p, fontFamily, fontSizePt, paragraphWidthDip: null, options),
+            MathNode.Row     rw => LayoutRow(rw.Children, fontFamily, fontSizePt, options),
             MathNode.Unknown u  => LayoutFallback(u.FallbackText, fontFamily, fontSizePt),
             _                   => LayoutFallback("?", fontFamily, fontSizePt)
         };
@@ -210,7 +221,8 @@ public static class MathLayoutEngine
         MathNode.MathParagraph paragraph,
         string fontFamily,
         double fontSizePt,
-        double? paragraphWidthDip)
+        double? paragraphWidthDip,
+        LayoutOptions options)
     {
         var effectiveFontFamily = string.IsNullOrWhiteSpace(paragraph.MathFontFamily)
             ? fontFamily
@@ -222,9 +234,14 @@ public static class MathLayoutEngine
                 paragraph.BinaryBreak,
                 paragraph.BinarySubtraction,
                 effectiveFontFamily,
-                fontSizePt)
+                fontSizePt,
+                options)
             : paragraph.Content;
-        var contentBox = LayoutNode(content, effectiveFontFamily, fontSizePt);
+        var contentBox = LayoutNode(
+            content,
+            effectiveFontFamily,
+            fontSizePt,
+            options with { SmallFraction = paragraph.SmallFraction ?? options.SmallFraction });
         var width = paragraphWidthDip.HasValue && paragraphWidthDip.Value > contentBox.Metrics.Width
             ? paragraphWidthDip.Value
             : contentBox.Metrics.Width;
@@ -252,12 +269,13 @@ public static class MathLayoutEngine
         MathNode.MathParagraphBinaryBreak binaryBreak,
         MathNode.MathParagraphBinarySubtraction binarySubtraction,
         string fontFamily,
-        double fontSizePt)
+        double fontSizePt,
+        LayoutOptions options)
     {
         if (content is not MathNode.Row row || row.Children.Count < 2)
             return content;
 
-        var naturalLayout = LayoutRow(row.Children, fontFamily, fontSizePt);
+        var naturalLayout = LayoutRow(row.Children, fontFamily, fontSizePt, options);
         if (naturalLayout.Metrics.Width <= availableWidth)
             return content;
 
@@ -266,7 +284,7 @@ public static class MathLayoutEngine
         foreach (var child in row.Children)
         {
             current.Add(child);
-            var currentLayout = LayoutRow(current, fontFamily, fontSizePt);
+            var currentLayout = LayoutRow(current, fontFamily, fontSizePt, options);
             if (currentLayout.Metrics.Width <= availableWidth)
                 continue;
 
@@ -410,14 +428,18 @@ public static class MathLayoutEngine
 
     // ── Fraction layout ───────────────────────────────────────────────────
 
-    private static MathBox LayoutFrac(MathNode.Frac frac, string fontFamily, double fontSizePt)
+    private static MathBox LayoutFrac(
+        MathNode.Frac frac,
+        string fontFamily,
+        double fontSizePt,
+        LayoutOptions options)
     {
         return frac.Type switch
         {
-            MathNode.FracType.Linear => LayoutFracLinear(frac, fontFamily, fontSizePt),
-            MathNode.FracType.Skewed => LayoutFracSkewed(frac, fontFamily, fontSizePt),
-            MathNode.FracType.NoBar  => LayoutFracStacked(frac, fontFamily, fontSizePt, drawBar: false),
-            _                        => LayoutFracStacked(frac, fontFamily, fontSizePt, drawBar: true),
+            MathNode.FracType.Linear => LayoutFracLinear(frac, fontFamily, fontSizePt, options),
+            MathNode.FracType.Skewed => LayoutFracSkewed(frac, fontFamily, fontSizePt, options),
+            MathNode.FracType.NoBar  => LayoutFracStacked(frac, fontFamily, fontSizePt, drawBar: false, options),
+            _                        => LayoutFracStacked(frac, fontFamily, fontSizePt, drawBar: true, options),
         };
     }
 
@@ -426,13 +448,18 @@ public static class MathLayoutEngine
     /// types: numerator over denominator, centered on the math axis. "bar" additionally
     /// draws the horizontal rule; "noBar" omits it but keeps identical spacing/centering.
     /// </summary>
-    private static MathBox LayoutFracStacked(MathNode.Frac frac, string fontFamily, double fontSizePt, bool drawBar)
+    private static MathBox LayoutFracStacked(
+        MathNode.Frac frac,
+        string fontFamily,
+        double fontSizePt,
+        bool drawBar,
+        LayoutOptions options)
     {
         double em = Em(fontSizePt);
-        double childSizePt = fontSizePt * 0.85; // numerator/denominator slightly smaller
+        double childSizePt = fontSizePt * (options.SmallFraction ? 0.70 : 0.85);
 
-        var numBox = LayoutNode(frac.Numerator, fontFamily, childSizePt);
-        var denBox = LayoutNode(frac.Denominator, fontFamily, childSizePt);
+        var numBox = LayoutNode(frac.Numerator, fontFamily, childSizePt, options);
+        var denBox = LayoutNode(frac.Denominator, fontFamily, childSizePt, options);
 
         // Fraction bar is on the math axis = 0.45 em above baseline
         double mathAxisAboveBaseline = em * 0.45;
@@ -501,14 +528,21 @@ public static class MathLayoutEngine
     /// Linear fraction layout ("lin", and the "skw" approximation): numerator,
     /// slash, denominator, all inline on the baseline — not stacked.
     /// </summary>
-    private static MathBox LayoutFracLinear(MathNode.Frac frac, string fontFamily, double fontSizePt)
+    private static MathBox LayoutFracLinear(
+        MathNode.Frac frac,
+        string fontFamily,
+        double fontSizePt,
+        LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double gap = em * 0.08;
 
-        var numBox   = LayoutNode(frac.Numerator, fontFamily, fontSizePt);
+        // m:smallFrac uses script-size numerator/denominator content. The
+        // slash remains full-size so the inline operator stays legible.
+        var childSizePt = fontSizePt * (options.SmallFraction ? 0.70 : 1.0);
+        var numBox   = LayoutNode(frac.Numerator, fontFamily, childSizePt, options);
         var slashBox = MakeGlyph("/", fontFamily, fontSizePt, isItalic: false);
-        var denBox   = LayoutNode(frac.Denominator, fontFamily, fontSizePt);
+        var denBox   = LayoutNode(frac.Denominator, fontFamily, childSizePt, options);
 
         // Common baseline = max ascent across the three inline boxes
         double ascent = Math.Max(numBox.Metrics.Ascent, Math.Max(slashBox.Metrics.Ascent, denBox.Metrics.Ascent));
@@ -544,16 +578,20 @@ public static class MathLayoutEngine
     /// Skewed fraction layout ("skw"): numerator above-left, denominator
     /// below-right, with a renderer-neutral diagonal line between them.
     /// </summary>
-    private static MathBox LayoutFracSkewed(MathNode.Frac frac, string fontFamily, double fontSizePt)
+    private static MathBox LayoutFracSkewed(
+        MathNode.Frac frac,
+        string fontFamily,
+        double fontSizePt,
+        LayoutOptions options)
     {
         double em = Em(fontSizePt);
-        double childSizePt = fontSizePt * 0.85;
+        double childSizePt = fontSizePt * (options.SmallFraction ? 0.70 : 0.85);
         double gapX = em * 0.10;
         double gapY = em * 0.06;
         double lineThickness = Math.Max(1.0, em * 0.06);
 
-        var numBox = LayoutNode(frac.Numerator, fontFamily, childSizePt);
-        var denBox = LayoutNode(frac.Denominator, fontFamily, childSizePt);
+        var numBox = LayoutNode(frac.Numerator, fontFamily, childSizePt, options);
+        var denBox = LayoutNode(frac.Denominator, fontFamily, childSizePt, options);
 
         double diagonalW = Math.Max(em * 0.42, Math.Min(em * 0.72, Math.Max(numBox.Metrics.Width, denBox.Metrics.Width) * 0.55));
         double denY = numBox.Metrics.Height * 0.62 + gapY;
@@ -606,13 +644,13 @@ public static class MathLayoutEngine
 
     // ── Superscript layout ────────────────────────────────────────────────
 
-    private static MathBox LayoutSup(MathNode.Sup sup, string fontFamily, double fontSizePt)
+    private static MathBox LayoutSup(MathNode.Sup sup, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double scriptSizePt = fontSizePt * 0.70;
 
-        var baseBox   = LayoutNode(sup.Base, fontFamily, fontSizePt);
-        var scriptBox = LayoutNode(sup.Script, fontFamily, scriptSizePt);
+        var baseBox   = LayoutNode(sup.Base, fontFamily, fontSizePt, options);
+        var scriptBox = LayoutNode(sup.Script, fontFamily, scriptSizePt, options);
 
         // Superscript raised: top of script = baseline - shiftUp
         // Shift up = 0.40 em
@@ -650,13 +688,13 @@ public static class MathLayoutEngine
 
     // ── Subscript layout ──────────────────────────────────────────────────
 
-    private static MathBox LayoutSub(MathNode.Sub sub, string fontFamily, double fontSizePt)
+    private static MathBox LayoutSub(MathNode.Sub sub, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double scriptSizePt = fontSizePt * 0.70;
 
-        var baseBox   = LayoutNode(sub.Base, fontFamily, fontSizePt);
-        var scriptBox = LayoutNode(sub.Script, fontFamily, scriptSizePt);
+        var baseBox   = LayoutNode(sub.Base, fontFamily, fontSizePt, options);
+        var scriptBox = LayoutNode(sub.Script, fontFamily, scriptSizePt, options);
 
         // Subscript lowered: top of script at baseline + shiftDown
         double shiftDown = em * 0.25;
@@ -685,14 +723,14 @@ public static class MathLayoutEngine
 
     // ── Sub+Sup layout ────────────────────────────────────────────────────
 
-    private static MathBox LayoutSubSup(MathNode.SubSup ss, string fontFamily, double fontSizePt)
+    private static MathBox LayoutSubSup(MathNode.SubSup ss, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double scriptSizePt = fontSizePt * 0.70;
 
-        var baseBox = LayoutNode(ss.Base, fontFamily, fontSizePt);
-        var subBox  = LayoutNode(ss.Sub,  fontFamily, scriptSizePt);
-        var supBox  = LayoutNode(ss.Sup,  fontFamily, scriptSizePt);
+        var baseBox = LayoutNode(ss.Base, fontFamily, fontSizePt, options);
+        var subBox  = LayoutNode(ss.Sub,  fontFamily, scriptSizePt, options);
+        var supBox  = LayoutNode(ss.Sup,  fontFamily, scriptSizePt, options);
 
         double baseline = baseBox.Metrics.Ascent;
 
@@ -741,14 +779,14 @@ public static class MathLayoutEngine
             ? scriptX + scriptW - scriptBoxWidth
             : scriptX;
 
-    private static MathBox LayoutPreSubSup(MathNode.PreSubSup ps, string fontFamily, double fontSizePt)
+    private static MathBox LayoutPreSubSup(MathNode.PreSubSup ps, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double scriptSizePt = fontSizePt * 0.70;
 
-        var baseBox = LayoutNode(ps.Base, fontFamily, fontSizePt);
-        var subBox  = LayoutNode(ps.Sub,  fontFamily, scriptSizePt);
-        var supBox  = LayoutNode(ps.Sup,  fontFamily, scriptSizePt);
+        var baseBox = LayoutNode(ps.Base, fontFamily, fontSizePt, options);
+        var subBox  = LayoutNode(ps.Sub,  fontFamily, scriptSizePt, options);
+        var supBox  = LayoutNode(ps.Sup,  fontFamily, scriptSizePt, options);
 
         double baseline = baseBox.Metrics.Ascent;
         double supY = baseline - em * 0.40 - supBox.Metrics.Ascent;
@@ -783,11 +821,11 @@ public static class MathLayoutEngine
         return container;
     }
 
-    private static MathBox LayoutRad(MathNode.Rad rad, string fontFamily, double fontSizePt)
+    private static MathBox LayoutRad(MathNode.Rad rad, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
 
-        var radicand = LayoutNode(rad.Radicand, fontFamily, fontSizePt);
+        var radicand = LayoutNode(rad.Radicand, fontFamily, fontSizePt, options);
 
         double overlineClearance = em * 0.10;
         double overlineThick = em * 0.07;
@@ -797,7 +835,7 @@ public static class MathLayoutEngine
         MathBox? degBox = null;
         if (rad.Degree is not null)
         {
-            degBox = LayoutNode(rad.Degree, fontFamily, fontSizePt * 0.65);
+            degBox = LayoutNode(rad.Degree, fontFamily, fontSizePt * 0.65, options);
         }
 
         // The radical sign height = radicand height + clearance + overline
@@ -861,18 +899,18 @@ public static class MathLayoutEngine
 
     // ── N-ary (? ? ?) layout ─────────────────────────────────────────────
 
-    private static MathBox LayoutNary(MathNode.Nary nary, string fontFamily, double fontSizePt)
+    private static MathBox LayoutNary(MathNode.Nary nary, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double limSizePt  = fontSizePt * 0.65;  // limit labels
 
-        var operandBox = LayoutNode(nary.Operand, fontFamily, fontSizePt);
+        var operandBox = LayoutNode(nary.Operand, fontFamily, fontSizePt, options);
         double opSizePt = ResolveNaryOperatorSizePt(fontSizePt, operandBox, nary.GrowOperator);
         var opBox = MakeGlyph(nary.OperatorChar, fontFamily, opSizePt, isItalic: false);
         MathBox? subLimBox = nary.SubLimit is not null
-            ? LayoutNode(nary.SubLimit, fontFamily, limSizePt) : null;
+            ? LayoutNode(nary.SubLimit, fontFamily, limSizePt, options) : null;
         MathBox? supLimBox = nary.SupLimit is not null
-            ? LayoutNode(nary.SupLimit, fontFamily, limSizePt) : null;
+            ? LayoutNode(nary.SupLimit, fontFamily, limSizePt, options) : null;
 
         double opColW = opBox.Metrics.Width;
         if (subLimBox is not null) opColW = Math.Max(opColW, subLimBox.Metrics.Width);
@@ -1018,14 +1056,14 @@ public static class MathLayoutEngine
         return Math.Max(defaultOperatorSizePt, operandHeightPt);
     }
 
-    private static MathBox LayoutLimit(MathNode.Limit limit, string fontFamily, double fontSizePt)
+    private static MathBox LayoutLimit(MathNode.Limit limit, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double limitSizePt = fontSizePt * 0.70;
         double gap = em * 0.06;
 
-        var baseBox = LayoutNode(limit.Base, fontFamily, fontSizePt);
-        var limitBox = LayoutNode(limit.LimitValue, fontFamily, limitSizePt);
+        var baseBox = LayoutNode(limit.Base, fontFamily, fontSizePt, options);
+        var limitBox = LayoutNode(limit.LimitValue, fontFamily, limitSizePt, options);
 
         double totalW = Math.Max(baseBox.Metrics.Width, limitBox.Metrics.Width);
         double totalH = baseBox.Metrics.Height + gap + limitBox.Metrics.Height;
@@ -1059,11 +1097,11 @@ public static class MathLayoutEngine
         return c;
     }
 
-    private static MathBox LayoutFunc(MathNode.Func func, string fontFamily, double fontSizePt)
+    private static MathBox LayoutFunc(MathNode.Func func, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
-        var nameBox = LayoutNode(func.FunctionName, fontFamily, fontSizePt);
-        var argBox  = LayoutNode(func.Argument, fontFamily, fontSizePt);
+        var nameBox = LayoutNode(func.FunctionName, fontFamily, fontSizePt, options);
+        var argBox  = LayoutNode(func.Argument, fontFamily, fontSizePt, options);
 
         double gap = em * 0.08;
         double totalW = nameBox.Metrics.Width + gap + argBox.Metrics.Width;
@@ -1088,7 +1126,7 @@ public static class MathLayoutEngine
 
     // ── Delimiter layout ──────────────────────────────────────────────────
 
-    private static MathBox LayoutDelim(MathNode.Delim delim, string fontFamily, double fontSizePt)
+    private static MathBox LayoutDelim(MathNode.Delim delim, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
 
@@ -1103,7 +1141,7 @@ public static class MathLayoutEngine
         double sepGap = em * 0.15;
         var innerBoxes = new List<MathBox>();
         foreach (var el in delim.Elements)
-            innerBoxes.Add(LayoutNode(el, fontFamily, fontSizePt));
+            innerBoxes.Add(LayoutNode(el, fontFamily, fontSizePt, options));
 
         // Compute inner dimensions
         double innerW = 0, innerH = 0, innerAscent = 0;
@@ -1194,10 +1232,10 @@ public static class MathLayoutEngine
 
     // ── Accent layout ─────────────────────────────────────────────────────
 
-    private static MathBox LayoutAcc(MathNode.Acc acc, string fontFamily, double fontSizePt)
+    private static MathBox LayoutAcc(MathNode.Acc acc, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
-        var baseBox = LayoutNode(acc.Base, fontFamily, fontSizePt);
+        var baseBox = LayoutNode(acc.Base, fontFamily, fontSizePt, options);
 
         // Accent placed above: use HRule-style overline for bar (̄) or a glyph for others
         double accentH = em * 0.25;
@@ -1246,10 +1284,10 @@ public static class MathLayoutEngine
 
     // ── Bar layout ────────────────────────────────────────────────────────
 
-    private static MathBox LayoutBar(MathNode.Bar bar, string fontFamily, double fontSizePt)
+    private static MathBox LayoutBar(MathNode.Bar bar, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
-        var baseBox = LayoutNode(bar.Base, fontFamily, fontSizePt);
+        var baseBox = LayoutNode(bar.Base, fontFamily, fontSizePt, options);
 
         double barThick = em * 0.07;
         double gap = em * 0.05;
@@ -1290,9 +1328,9 @@ public static class MathLayoutEngine
 
     // ── GroupChr layout ───────────────────────────────────────────────────
 
-    private static MathBox LayoutBox(MathNode.Box box, string fontFamily, double fontSizePt)
+    private static MathBox LayoutBox(MathNode.Box box, string fontFamily, double fontSizePt, LayoutOptions options)
     {
-        var baseBox = LayoutNode(box.Base, fontFamily, fontSizePt);
+        var baseBox = LayoutNode(box.Base, fontFamily, fontSizePt, options);
 
         var c = new MathBox.Container();
         c.Metrics.Width = baseBox.Metrics.Width;
@@ -1306,15 +1344,15 @@ public static class MathLayoutEngine
         return c;
     }
 
-    private static MathBox LayoutArgSize(MathNode.ArgSize argSize, string fontFamily, double fontSizePt)
+    private static MathBox LayoutArgSize(MathNode.ArgSize argSize, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         var scale = Math.Pow(0.70, -argSize.Adjustment);
-        return LayoutNode(argSize.Base, fontFamily, fontSizePt * scale);
+        return LayoutNode(argSize.Base, fontFamily, fontSizePt * scale, options);
     }
 
-    private static MathBox LayoutPhantom(MathNode.Phantom phantom, string fontFamily, double fontSizePt)
+    private static MathBox LayoutPhantom(MathNode.Phantom phantom, string fontFamily, double fontSizePt, LayoutOptions options)
     {
-        var baseBox = LayoutNode(phantom.Base, fontFamily, fontSizePt);
+        var baseBox = LayoutNode(phantom.Base, fontFamily, fontSizePt, options);
 
         double naturalDescent = Math.Max(0, baseBox.Metrics.Height - baseBox.Metrics.Ascent);
         double reportedAscent = phantom.ZeroAscent ? 0 : baseBox.Metrics.Ascent;
@@ -1335,14 +1373,14 @@ public static class MathLayoutEngine
         return c;
     }
 
-    private static MathBox LayoutBorderBox(MathNode.BorderBox borderBox, string fontFamily, double fontSizePt)
+    private static MathBox LayoutBorderBox(MathNode.BorderBox borderBox, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double thickness = Math.Max(1.0, em * 0.06);
         double padding = em * 0.18;
         double inset = thickness + padding;
 
-        var baseBox = LayoutNode(borderBox.Base, fontFamily, fontSizePt);
+        var baseBox = LayoutNode(borderBox.Base, fontFamily, fontSizePt, options);
         double totalW = baseBox.Metrics.Width + inset * 2.0;
         double totalH = baseBox.Metrics.Height + inset * 2.0;
         double left = thickness / 2.0;
@@ -1403,10 +1441,10 @@ public static class MathLayoutEngine
         container.Children.Add(line);
     }
 
-    private static MathBox LayoutGroupChr(MathNode.GroupChr gc, string fontFamily, double fontSizePt)
+    private static MathBox LayoutGroupChr(MathNode.GroupChr gc, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
-        var baseBox = LayoutNode(gc.Base, fontFamily, fontSizePt);
+        var baseBox = LayoutNode(gc.Base, fontFamily, fontSizePt, options);
 
         // Group char placed above or below. PowerPoint-authored braces grow
         // toward the grouped expression width; approximate that in the shared
@@ -1472,7 +1510,7 @@ public static class MathLayoutEngine
 
     // ── Matrix layout ─────────────────────────────────────────────────────
 
-    private static MathBox LayoutEqArray(MathNode.EqArray eqArray, string fontFamily, double fontSizePt)
+    private static MathBox LayoutEqArray(MathNode.EqArray eqArray, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double rowGap = ResolveMathArrayGap(
@@ -1496,7 +1534,7 @@ public static class MathLayoutEngine
         for (int i = 0; i < eqArray.Rows.Count; i++)
         {
             var row = eqArray.Rows[i];
-            var rowBox = LayoutNode(row, fontFamily, fontSizePt);
+            var rowBox = LayoutNode(row, fontFamily, fontSizePt, options);
             var alignmentOffset = GetEqArrayAlignmentOffset(row, rowBox, eqArray.GetAlignmentPointIndex(i));
             rows.Add(rowBox);
             alignmentOffsets.Add(alignmentOffset);
@@ -1568,7 +1606,7 @@ public static class MathLayoutEngine
         return index > 0 ? rowBox.Metrics.Width : 0;
     }
 
-    private static MathBox LayoutMatrix(MathNode.Matrix matrix, string fontFamily, double fontSizePt)
+    private static MathBox LayoutMatrix(MathNode.Matrix matrix, string fontFamily, double fontSizePt, LayoutOptions options)
     {
         double em = Em(fontSizePt);
         double cellGapH = ResolveMathArrayGap(
@@ -1594,7 +1632,7 @@ public static class MathLayoutEngine
         {
             cells[r] = new MathBox[colCount];
             for (int c = 0; c < colCount && c < matrix.Rows[r].Count; c++)
-                cells[r][c] = LayoutMatrixCell(matrix.Rows[r][c], matrix.HidePlaceholders, fontFamily, fontSizePt);
+                cells[r][c] = LayoutMatrixCell(matrix.Rows[r][c], matrix.HidePlaceholders, fontFamily, fontSizePt, options);
         }
 
         // Per-column width
@@ -1764,12 +1802,13 @@ public static class MathLayoutEngine
         MathNode cell,
         bool hidePlaceholders,
         string fontFamily,
-        double fontSizePt)
+        double fontSizePt,
+        LayoutOptions options)
     {
         if (!hidePlaceholders && IsEmptyMatrixCell(cell))
             return MakeGlyph(MatrixPlaceholderGlyph, fontFamily, fontSizePt * 0.85, isItalic: false);
 
-        return LayoutNode(cell, fontFamily, fontSizePt);
+        return LayoutNode(cell, fontFamily, fontSizePt, options);
     }
 
     private static bool IsEmptyMatrixCell(MathNode cell) =>
@@ -1800,7 +1839,11 @@ public static class MathLayoutEngine
 
     // ── Row layout (horizontal sequence) ──────────────────────────────────
 
-    private static MathBox LayoutRow(IReadOnlyList<MathNode> nodes, string fontFamily, double fontSizePt)
+    private static MathBox LayoutRow(
+        IReadOnlyList<MathNode> nodes,
+        string fontFamily,
+        double fontSizePt,
+        LayoutOptions options)
     {
         double em = Em(fontSizePt);
 
@@ -1809,7 +1852,7 @@ public static class MathLayoutEngine
 
         var boxes = new List<MathBox>(nodes.Count);
         foreach (var node in nodes)
-            boxes.Add(LayoutNode(node, fontFamily, fontSizePt));
+            boxes.Add(LayoutNode(node, fontFamily, fontSizePt, options));
 
         // Align all on a common baseline (max ascent)
         double ascent = 0;

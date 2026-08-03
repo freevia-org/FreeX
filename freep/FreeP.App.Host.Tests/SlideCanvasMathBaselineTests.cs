@@ -184,6 +184,40 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_SmallFraction_UsesSharedReducedFractionPlan()
+    {
+        var mathNode = ParseOmml(
+            "<m:mathPr><m:smallFrac/></m:mathPr>" +
+            "<m:f><m:num><m:r><m:t>a</m:t></m:r></m:num><m:den><m:r><m:t>b</m:t></m:r></m:den></m:f>" +
+            "<m:f><m:fPr><m:type m:val=\"lin\"/></m:fPr><m:num><m:r><m:t>c</m:t></m:r></m:num><m:den><m:r><m:t>d</m:t></m:r></m:den></m:f>" +
+            "<m:f><m:fPr><m:type m:val=\"skw\"/></m:fPr><m:num><m:r><m:t>e</m:t></m:r></m:num><m:den><m:r><m:t>f</m:t></m:r></m:den></m:f>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+
+        ops.OfType<MathDrawOp.DrawGlyph>()
+            .Where(g => g.Text is "a" or "b" or "c" or "d" or "e" or "f")
+            .Should().OnlyContain(g => Math.Abs(g.FontSizePt - 12.6) < 0.001);
+        ops.OfType<MathDrawOp.DrawGlyph>().Single(g => g.Text == "/").FontSizePt
+            .Should().BeApproximately(18.0, 0.001);
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow("WPF must consume the same reduced shared MathBox plan as Avalonia");
+    }
+
+    [StaFact]
     public void RenderParaWithMath_Matrix_UsesSharedMathBoxPlan_DoesNotThrow()
     {
         var matrix = new MathNode.Matrix(

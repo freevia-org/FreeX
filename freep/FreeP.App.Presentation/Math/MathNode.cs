@@ -21,19 +21,22 @@ public abstract class MathNode
     public sealed record MathProperties(
         MathParagraphBinaryBreak? BinaryBreak = null,
         MathParagraphBinarySubtraction? BinarySubtraction = null,
-        string? MathFontFamily = null)
+        string? MathFontFamily = null,
+        bool? SmallFraction = null)
     {
         public bool HasValues =>
             BinaryBreak.HasValue ||
             BinarySubtraction.HasValue ||
-            !string.IsNullOrWhiteSpace(MathFontFamily);
+            !string.IsNullOrWhiteSpace(MathFontFamily) ||
+            SmallFraction.HasValue;
 
         public MathProperties Overlay(MathProperties? overriding) => overriding is null
             ? this
             : new MathProperties(
                 overriding.BinaryBreak ?? BinaryBreak,
                 overriding.BinarySubtraction ?? BinarySubtraction,
-                overriding.MathFontFamily ?? MathFontFamily);
+                overriding.MathFontFamily ?? MathFontFamily,
+                overriding.SmallFraction ?? SmallFraction);
     }
 
     /// <summary>Math alphabet requested by <c>m:rPr/m:scr</c>.</summary>
@@ -668,18 +671,23 @@ public abstract class MathNode
         /// <summary>Optional equation-wide font from <c>m:mathPr/m:mathFont</c>.</summary>
         public string? MathFontFamily { get; }
 
+        /// <summary>Resolved <c>m:mathPr/m:smallFrac</c> setting.</summary>
+        public bool? SmallFraction { get; }
+
         public MathParagraph(
             MathNode content,
             MathParagraphJustification justification,
             MathParagraphBinaryBreak binaryBreak = MathParagraphBinaryBreak.Before,
             MathParagraphBinarySubtraction binarySubtraction = MathParagraphBinarySubtraction.MinusMinus,
-            string? mathFontFamily = null)
+            string? mathFontFamily = null,
+            bool? smallFraction = null)
         {
             Content = content;
             Justification = justification;
             BinaryBreak = binaryBreak;
             BinarySubtraction = binarySubtraction;
             MathFontFamily = mathFontFamily;
+            SmallFraction = smallFraction;
         }
     }
 
