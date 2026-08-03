@@ -1398,7 +1398,7 @@ internal static class FreeWAvaloniaRibbonCommands
             if (context.SelectedValue is not { Length: > 0 } value)
                 return;
 
-            editor.Document.BibliographyStyle = Citations.ParseStyle(value, editor.Document.BibliographyStyle);
+            editor.ApplyCitationStyle(Citations.ParseStyle(value, editor.Document.BibliographyStyle));
         }
 
         public RibbonCommandState GetState() =>

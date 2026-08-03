@@ -15766,6 +15766,16 @@ public sealed class DocumentView : RichTextBox
         set => _model.BibliographyStyle = value;
     }
 
+    public void ApplyCitationStyle(CitationStyle style)
+    {
+        CommitToModel();
+        if (_model.BibliographyStyle == style)
+            return;
+
+        _commands.Execute(new ApplyCitationStyleCommand(style));
+        Render();
+    }
+
     /// <summary>The document's bibliographic sources (Insert &gt; Citation reads/writes this list).</summary>
     public IReadOnlyList<Source> Sources
     {

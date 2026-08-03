@@ -116,4 +116,38 @@ public sealed class CitationEditorTests
             .Select(paragraph => paragraph.PlainText)
             .Should().NotContain("Smith. (2024). A Work.");
     }
+
+    [StaFact]
+    public void ApplyCitationStyle_RefreshesExistingFieldAndBibliography_Undoably()
+    {
+        var source = new Source
+        {
+            Tag = "Sm24",
+            Author = "Smith",
+            Title = "A Work",
+            Year = "2024",
+            Publisher = "Press"
+        };
+        var model = TextDocument.CreateEmpty();
+        model.Blocks.Clear();
+        model.Sources.Add(source);
+        model.Blocks.Add(new Paragraph { Runs = { Run.ComplexFieldRun(" CITATION Sm24 ", "(Smith, 2024)") } });
+        model.Blocks.AddRange(Citations.BuildBibliography(model, CitationStyle.Apa));
+        var view = new DocumentView();
+        view.LoadModel(model);
+
+        view.ApplyCitationStyle(CitationStyle.Ieee);
+
+        view.Model.BibliographyStyle.Should().Be(CitationStyle.Ieee);
+        view.Model.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "CITATION").Text.Should().Be("[1]");
+        view.Model.Blocks.Where(Citations.IsBibliographyParagraph)
+            .Select(block => ((Paragraph)block).PlainText)
+            .Should().Equal("References", "[1] Smith, \"A Work,\" Press, 2024.");
+
+        view.Commands.Undo().Should().BeTrue();
+        view.Model.BibliographyStyle.Should().Be(CitationStyle.Apa);
+        view.Model.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "CITATION").Text.Should().Be("(Smith, 2024)");
+    }
 }

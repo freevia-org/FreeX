@@ -1123,6 +1123,40 @@ public sealed class ReferencesTabTests
     }
 
     [Fact]
+    public void Citation_style_command_refreshes_existing_citation_and_bibliography_undoably()
+    {
+        var source = new Source
+        {
+            Tag = "Sm24",
+            Author = "Smith",
+            Title = "A Work",
+            Year = "2024",
+            Publisher = "Press"
+        };
+        var view = ViewWith(new Paragraph
+        {
+            Runs = { Run.ComplexFieldRun(" CITATION Sm24 ", "(Smith, 2024)") }
+        });
+        view.Document.Sources.Add(source);
+        view.Document.Blocks.AddRange(Citations.BuildBibliography(view.Document, CitationStyle.Apa));
+        var registry = FreeWRibbon.BuildRegistry(view, NoopCallbacks());
+
+        Execute(registry, "freew.citation-style", RibbonCommandContext.ForSelectedValue("IEEE"));
+
+        view.Document.BibliographyStyle.Should().Be(CitationStyle.Ieee);
+        view.Document.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "CITATION").Text.Should().Be("[1]");
+        view.Document.Blocks.Where(Citations.IsBibliographyParagraph)
+            .Select(block => ((Paragraph)block).PlainText)
+            .Should().Equal("References", "[1] Smith, \"A Work,\" Press, 2024.");
+
+        view.Undo();
+        view.Document.BibliographyStyle.Should().Be(CitationStyle.Apa);
+        view.Document.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.ComplexField?.Keyword == "CITATION").Text.Should().Be("(Smith, 2024)");
+    }
+
+    [Fact]
     public void References_dialog_commands_noop_without_shell_callbacks()
     {
         var view = ViewWith(
