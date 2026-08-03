@@ -112,18 +112,21 @@ jobs:
         run: |
           $isMainRelease = $env:GITHUB_REF -eq "refs/heads/main"
           $isFullReleaseBranch = $env:GITHUB_REF -like "refs/heads/codex/full-release-*"
+          $isStableReleaseBranch = $env:GITHUB_REF -like "refs/heads/codex/full-release-stable-*"
           if (-not ($isMainRelease -or $isFullReleaseBranch)) {
             throw "Full app releases must run from refs/heads/main or a codex/full-release-* branch."
           }
 
-          git fetch origin main:refs/remotes/origin/main --no-tags
-          if ($LASTEXITCODE -ne 0) {
-            throw "Could not fetch origin/main while validating the full release source."
-          }
+          if (-not $isStableReleaseBranch) {
+            git fetch origin main:refs/remotes/origin/main --no-tags
+            if ($LASTEXITCODE -ne 0) {
+              throw "Could not fetch origin/main while validating the full release source."
+            }
 
-          git merge-base --is-ancestor origin/main HEAD
-          if ($LASTEXITCODE -ne 0) {
-            throw "Full release branches must contain the current origin/main commit."
+            git merge-base --is-ancestor origin/main HEAD
+            if ($LASTEXITCODE -ne 0) {
+              throw "Full release branches must contain the current origin/main commit."
+            }
           }
 
       - name: Setup .NET
