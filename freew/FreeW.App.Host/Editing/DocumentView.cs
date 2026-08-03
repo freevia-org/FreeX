@@ -2036,57 +2036,41 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Set (or clear, when <paramref name="colorHex"/> is null/empty) the background shading of the
-    /// table cell containing the caret. Commits pending edits, mutates the model cell directly, and
-    /// re-renders so the fill shows immediately and round-trips through save. No-op outside a table.
+    /// table cell containing the caret as one undoable edit. No-op outside a table.
     /// </summary>
     public void SetCaretCellShading(string? colorHex)
     {
         CommitToModel();
         var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (blockIndex < 0)
             return;
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-            return;
-        var cells = table.Rows[rowIndex].Cells;
-        if (columnIndex < 0 || columnIndex >= cells.Count)
-            return;
-        cells[columnIndex].ShadingColorHex = string.IsNullOrEmpty(colorHex) ? null : colorHex;
-        Render();
+        _commands.Execute(new SetCellShadingCommand(blockIndex, rowIndex, columnIndex, colorHex));
     }
 
     /// <summary>
     /// Set (or clear, when <paramref name="borders"/> is null) the per-edge cell borders on the table cell
-    /// containing the caret. Commits pending edits, mutates the model cell directly, and re-renders so the
-    /// borders show immediately and round-trip through save. No-op outside a table.
+    /// containing the caret as one undoable edit. No-op outside a table.
     /// </summary>
     public void SetCaretCellBorders(CellBorders? borders)
     {
         CommitToModel();
         var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (blockIndex < 0)
             return;
-        if (rowIndex < 0 || rowIndex >= table.Rows.Count)
-            return;
-        var cells = table.Rows[rowIndex].Cells;
-        if (columnIndex < 0 || columnIndex >= cells.Count)
-            return;
-        cells[columnIndex].Borders = borders;
-        Render();
+        _commands.Execute(new SetCellBorderPayloadCommand(blockIndex, rowIndex, columnIndex, borders));
     }
 
     /// <summary>
-    /// Set the text direction on the table cell containing the caret. Commits pending edits, mutates the
-    /// model cell directly, and re-renders so the rotated text shows immediately and round-trips through
-    /// save (mirroring <see cref="SetSelectedShapeTextDirection"/>). No-op outside a table.
+    /// Set the text direction on the table cell containing the caret as one undoable edit. No-op outside a
+    /// table.
     /// </summary>
     public void SetCaretCellTextDirection(CellTextDirection direction)
     {
         CommitToModel();
         var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (blockIndex < 0)
             return;
-        if (TableLayoutOperations.SetCellTextDirection(table, rowIndex, columnIndex, direction))
-            Render();
+        _commands.Execute(new SetCellTextDirectionCommand(blockIndex, rowIndex, columnIndex, direction));
     }
 
     /// <summary>
@@ -2135,8 +2119,8 @@ public sealed class DocumentView : RichTextBox
     public bool ViewGridlines { get; set; }
 
     /// <summary>
-    /// Apply <paramref name="update"/> to the formatting of the table containing the caret (direct model
-    /// set + re-render), mirroring <see cref="SetCaretCellShading"/>. No-op outside a table.
+    /// Apply <paramref name="update"/> to the formatting of the table containing the caret as one undoable
+    /// edit. No-op outside a table.
     /// </summary>
     private void UpdateCaretTableFormatting(Func<TableFormatting, TableFormatting> update)
     {
@@ -2144,8 +2128,7 @@ public sealed class DocumentView : RichTextBox
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
             return;
-        if (TableLayoutOperations.UpdateFormatting(table, update))
-            Render();
+        _commands.Execute(new SetTableFormattingCommand(blockIndex, update(table.Formatting)));
     }
 
     /// <summary>
@@ -12433,9 +12416,7 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Apply the values from the Table Properties dialog onto the caret's table / current row / current cell
-    /// (direct model set + re-render, mirroring <see cref="SetCaretCellShading"/>). Table-level properties go
-    /// on the table; row-level properties on the caret's row; cell-level properties on the caret's cell.
-    /// No-op outside a table.
+    /// as one undoable edit. No-op outside a table.
     /// </summary>
     public void ApplyTableProperties(TablePropertiesValues values)
     {
@@ -12452,24 +12433,18 @@ public sealed class DocumentView : RichTextBox
     private (int BlockIndex, string? PriorStyleId, string? PriorBorderColorHex, bool PriorBorders)? _tableStyleSnapshot;
 
     /// <summary>
-    /// Apply a catalog table style to the table at the caret: sets <see cref="Table.TableStyleId"/> and
-    /// adjusts <see cref="TableFormatting.Borders"/> to match the style definition, then re-renders. The
-    /// change is direct (no undo bus) like <see cref="ApplyTableProperties"/>; the gallery calls it on
-    /// click after reverting any live preview.
+    /// Apply a catalog table style to the table at the caret as one undoable edit after the gallery reverts
+    /// any live preview.
     /// </summary>
     public void ApplyTableStyle(DocumentTableStyle style)
     {
         ArgumentNullException.ThrowIfNull(style);
         CommitToModel();
         var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
             return;
 
-        table.TableStyleId = style.WordStyleId;
-        // Apply the style's border intent; the tblLook toggles (HeaderRow/BandedRows/etc.) are left
-        // unchanged so the user's Table Style Options selections continue to drive the active regions.
-        table.Formatting = table.Formatting with { Borders = style.Borders };
-        Render();
+        _commands.Execute(new ApplyTableStyleCommand(blockIndex, style));
     }
 
     /// <summary>

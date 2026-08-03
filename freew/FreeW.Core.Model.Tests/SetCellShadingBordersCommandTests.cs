@@ -7,6 +7,31 @@ namespace FreeW.Core.Model.Tests;
 /// </summary>
 public sealed class SetCellShadingBordersCommandTests
 {
+    [Fact]
+    public void CellBorderPayloadAndTextDirection_AreUndoableAndRedoable()
+    {
+        var (_, bus, table) = Make2x2();
+        var cell = table.Rows[0].Cells[0];
+        var borders = new CellBorders
+        {
+            Top = new CellBorderEdge(BorderLineStyle.Double, "#123456", 1.5),
+        };
+
+        bus.Execute(new SetCellBorderPayloadCommand(0, 0, 0, borders));
+        cell.Borders.Should().BeSameAs(borders);
+        bus.Undo().Should().BeTrue();
+        cell.Borders.Should().BeNull();
+        bus.Redo().Should().BeTrue();
+        cell.Borders.Should().BeSameAs(borders);
+
+        bus.Execute(new SetCellTextDirectionCommand(0, 0, 0, CellTextDirection.Rotate270));
+        cell.TextDirection.Should().Be(CellTextDirection.Rotate270);
+        bus.Undo().Should().BeTrue();
+        cell.TextDirection.Should().Be(CellTextDirection.Horizontal);
+        bus.Redo().Should().BeTrue();
+        cell.TextDirection.Should().Be(CellTextDirection.Rotate270);
+    }
+
     private sealed class Ctx(TextDocument document) : IDocumentCommandContext
     {
         public TextDocument Document => document;

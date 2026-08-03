@@ -93,6 +93,51 @@ public sealed class TableStyleGalleryTests
         editor.CommitToModel();
         var table = editor.Model.Blocks.OfType<Table>().First();
         table.TableStyleId.Should().Be("GridTable1Light");
+
+        editor.CanUndo.Should().BeTrue();
+        editor.Undo();
+        table = editor.Model.Blocks.OfType<Table>().First();
+        table.TableStyleId.Should().BeNull();
+        table.Formatting.HeaderRow.Should().BeTrue();
+        table.Formatting.BandedRows.Should().BeTrue();
+
+        editor.Redo();
+        editor.Model.Blocks.OfType<Table>().First().TableStyleId.Should().Be("GridTable1Light");
+    }
+
+    [StaFact]
+    public void CellFormattingAndTableOptions_AreUndoable()
+    {
+        var editor = new DocumentView();
+        editor.LoadModel(TableModel());
+
+        PlaceCaretInFirstCell(editor);
+        editor.SetCaretCellShading("#123456");
+        editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0].ShadingColorHex.Should().Be("#123456");
+        editor.Undo();
+        editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0].ShadingColorHex.Should().BeNull();
+
+        PlaceCaretInFirstCell(editor);
+        var borders = new CellBorders { Top = new CellBorderEdge(BorderLineStyle.Double, "#123456", 1.5) };
+        editor.SetCaretCellBorders(borders);
+        editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0].Borders.Should().BeSameAs(borders);
+        editor.Undo();
+        editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0].Borders.Should().BeNull();
+
+        PlaceCaretInFirstCell(editor);
+        editor.SetCaretCellTextDirection(CellTextDirection.Rotate270);
+        editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0].TextDirection
+            .Should().Be(CellTextDirection.Rotate270);
+        editor.Undo();
+        editor.Model.Blocks.OfType<Table>().First().Rows[0].Cells[0].TextDirection
+            .Should().Be(CellTextDirection.Horizontal);
+
+        PlaceCaretInFirstCell(editor);
+        var beforeHeader = editor.Model.Blocks.OfType<Table>().First().Formatting.HeaderRow;
+        editor.ToggleTableHeaderRow();
+        editor.Model.Blocks.OfType<Table>().First().Formatting.HeaderRow.Should().Be(!beforeHeader);
+        editor.Undo();
+        editor.Model.Blocks.OfType<Table>().First().Formatting.HeaderRow.Should().Be(beforeHeader);
     }
 
     [StaFact]

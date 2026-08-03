@@ -340,6 +340,25 @@ public sealed class TableContextualTabTests
     }
 
     [Fact]
+    public async Task CellTextDirection_IsUndoable()
+    {
+        await Session.Dispatch(() =>
+        {
+            var (view, index, table) = MakeTableView();
+            view.PlaceCaretInCell(index, row: 0, col: 0, paraIdx: 0, offset: 0);
+
+            view.SetCaretCellTextDirection(CellTextDirection.Rotate270);
+            table.Rows[0].Cells[0].TextDirection.Should().Be(CellTextDirection.Rotate270);
+            view.CanUndo.Should().BeTrue();
+
+            view.Undo();
+            table.Rows[0].Cells[0].TextDirection.Should().Be(CellTextDirection.Horizontal);
+            view.Redo();
+            table.Rows[0].Cells[0].TextDirection.Should().Be(CellTextDirection.Rotate270);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ToggleBandedRows_sets_BandedRows_flag()
     {
         bool? bandedAfter = null;

@@ -2267,8 +2267,8 @@ public sealed class DocumentView : Control
             return;
 
         var cellIndex = GridColumnToCellIndex(table.Rows[cc.Row], cc.Col);
-        if (TableLayoutOperations.SetCellTextDirection(table, cc.Row, cellIndex, direction))
-            InvalidateLayoutAndVisual();
+        if (cellIndex >= 0)
+            _bus.Execute(new SetCellTextDirectionCommand(cc.TableBlock, cc.Row, cellIndex, direction));
     }
 
     public (Table Table, int RowIndex, int ColumnIndex)? CaretTableCell()
