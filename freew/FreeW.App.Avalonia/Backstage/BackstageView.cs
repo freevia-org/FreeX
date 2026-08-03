@@ -40,6 +40,8 @@ internal sealed class BackstageView : Window
     private static readonly IBrush TileBorderBrush = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xE5));
     private static readonly IBrush TileInnerBorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE6, 0xEF));
     private static readonly IBrush SeparatorBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD));
+    private static readonly IBrush WpfScrollTrackBrush = new SolidColorBrush(Color.FromRgb(0xF0, 0xF0, 0xF0));
+    private static readonly IBrush WpfScrollThumbBrush = new SolidColorBrush(Color.FromRgb(0xCD, 0xCD, 0xCD));
     private static readonly AvaloniaBackstageChromeStyle BackstageChromeStyle = new(PrimaryInk, SecondaryInk)
     {
         SeparatorBrush = SeparatorBrush,
@@ -330,7 +332,7 @@ internal sealed class BackstageView : Window
         tabs.SelectionChanged += (_, _) => Refresh(searchBox.Text);
         Refresh(filter: null);
 
-        return CreateScroll(content);
+        return CreateScroll(content, matchWpfScrollBar: true);
     }
 
     // ── Save As pane ─────────────────────────────────────────────────────────
@@ -1179,12 +1181,13 @@ internal sealed class BackstageView : Window
         grid.Children.Add(valueBlock);
     }
 
-    private static ScrollViewer CreateScroll(Control child)
+    private static ScrollViewer CreateScroll(Control child, bool matchWpfScrollBar = false)
     {
         var scroll = new ScrollViewer
         {
             Content = child,
             Padding = new Thickness(0),
+            Margin = matchWpfScrollBar ? new Thickness(0, 0, 1, 0) : new Thickness(0),
             FontFamily = BackstageFontFamily,
             FontSize = 12,
             HorizontalContentAlignment = HorizontalAlignment.Left,
@@ -1194,6 +1197,49 @@ internal sealed class BackstageView : Window
         };
         scroll.SetValue(ScrollViewer.AllowAutoHideProperty, false);
         TextOptions.SetTextRenderingMode(scroll, TextRenderingMode.Antialias);
+        if (matchWpfScrollBar)
+        {
+            // The WPF Backstage pane reserves a 17-DIP scrollbar lane one pixel
+            // inside the right edge. Match its track/thumb palette and geometry
+            // on this route without changing the shared Avalonia scrollbar theme.
+            scroll.Styles.Add(new Style(selector => selector
+                .OfType<ScrollBar>()
+                .Class(":vertical"))
+            {
+                Setters =
+                {
+                    new Setter(Layoutable.WidthProperty, 17d),
+                    new Setter(Layoutable.MinWidthProperty, 17d),
+                    new Setter(Layoutable.MaxWidthProperty, 17d),
+                    new Setter(TemplatedControl.BackgroundProperty, WpfScrollTrackBrush),
+                },
+            });
+            scroll.Styles.Add(new Style(selector => selector
+                .OfType<ScrollBar>()
+                .Class(":vertical")
+                .Template()
+                .OfType<global::Avalonia.Controls.Shapes.Rectangle>()
+                .Name("TrackRect"))
+            {
+                Setters = { new Setter(global::Avalonia.Controls.Shapes.Shape.FillProperty, WpfScrollTrackBrush) },
+            });
+            scroll.Styles.Add(new Style(selector => selector
+                .OfType<ScrollBar>()
+                .Class(":vertical")
+                .Template()
+                .OfType<Thumb>())
+            {
+                Setters =
+                {
+                    new Setter(Layoutable.WidthProperty, 17d),
+                    new Setter(Layoutable.MinWidthProperty, 17d),
+                    new Setter(Layoutable.MaxWidthProperty, 17d),
+                    new Setter(TemplatedControl.BackgroundProperty, WpfScrollThumbBrush),
+                    new Setter(TemplatedControl.BorderBrushProperty, WpfScrollThumbBrush),
+                    new Setter(TemplatedControl.BorderThicknessProperty, new Thickness(0)),
+                },
+            });
+        }
         return scroll;
     }
 

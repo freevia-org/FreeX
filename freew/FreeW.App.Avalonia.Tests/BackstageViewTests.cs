@@ -403,6 +403,7 @@ public class BackstageViewTests
                 .Single(scroll => scroll.Content is StackPanel panel && panel.MaxWidth == 720);
 
             pane.Padding.Should().Be(new Thickness(0));
+            pane.Margin.Should().Be(new Thickness(0, 0, 1, 0));
             pane.GetValue(ScrollViewer.AllowAutoHideProperty).Should().BeFalse();
             pane.HorizontalContentAlignment.Should().Be(HorizontalAlignment.Left);
             pane.VerticalContentAlignment.Should().Be(VerticalAlignment.Top);
