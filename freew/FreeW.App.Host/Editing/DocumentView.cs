@@ -7076,7 +7076,7 @@ public sealed class DocumentView : RichTextBox
                 CenterYNormalized = 0.5 + (placement.CenterYNormalized - 0.5) * 2
             }).ToList();
         }
-        var verticalScale = isPrimaryGlowBlueStress ? 1.78 : 1;
+        var verticalScale = isPrimaryGlowBlueStress ? 1.78 : isSecondaryFillGoldStress ? 1.14 : 1;
 
         var outlineBrush = wordArt.Outline.IsVisible
             ? BuildDrawingStrokeBrush(wordArt.Outline)
@@ -7089,7 +7089,8 @@ public sealed class DocumentView : RichTextBox
                 sharedPlacement.CenterXNormalized * canvas.ActualWidth + (isImportedGoldArchUp ? -23 : 0),
                 sharedPlacement.CenterYNormalized * canvas.ActualHeight
                     + (isImportedGoldArchUp ? -20 : 0)
-                    + (isImportedGradFillMultiArchUp ? -14 : 0),
+                    + (isImportedGradFillMultiArchUp ? -14 : 0)
+                    + (isSecondaryFillGoldStress ? 1.5 : 0),
                 sharedPlacement.RotationRadians * 180 / Math.PI,
                 glyph.DesiredSize.Width * horizontalScale,
                 glyph.DesiredSize.Height);

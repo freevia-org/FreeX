@@ -750,7 +750,11 @@ public sealed class FloatingObjectRenderTests
         materialLayer.Height.Should().BeApproximately(root.ActualHeight + 13, 0.01);
         Canvas.GetLeft(materialLayer).Should().Be(-1);
         Canvas.GetTop(materialLayer).Should().Be(-6);
-        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
+        var glyphs = root.Children.OfType<TextBlock>().ToList();
+        glyphs.Should().HaveCount(wordArt.Text.Length);
+        glyphs.Select(glyph => ((TransformGroup)glyph.RenderTransform).Children
+                .OfType<ScaleTransform>().Single().ScaleY)
+            .Should().OnlyContain(scale => Math.Abs(scale - 1.14) < 0.001);
     }
 
     [StaFact]
