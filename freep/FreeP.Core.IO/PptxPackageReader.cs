@@ -4965,11 +4965,13 @@ public static class PptxPackageReader
                 mathProperties.Element(M + "naryLim"),
                 defaultValue: "undOvr"),
             DisplayDefaults: ReadOnOffValue(mathProperties.Element(M + "dispDef")),
-            LeftMargin: ReadTwipsMarginValue(mathProperties.Element(M + "lMargin")),
-            RightMargin: ReadTwipsMarginValue(mathProperties.Element(M + "rMargin")));
+            LeftMargin: ReadTwipsMeasureValue(mathProperties.Element(M + "lMargin")),
+            RightMargin: ReadTwipsMeasureValue(mathProperties.Element(M + "rMargin")),
+            WrapIndent: ReadTwipsMeasureValue(mathProperties.Element(M + "wrapIndent")),
+            WrapRight: ReadOnOffValue(mathProperties.Element(M + "wrapRight")));
     }
 
-    private static string? ReadTwipsMarginValue(XElement? element)
+    private static string? ReadTwipsMeasureValue(XElement? element)
     {
         if (element is null)
             return null;
@@ -4977,7 +4979,8 @@ public static class PptxPackageReader
         var value = element.Attribute(M + "val")?.Value
             ?? element.Attribute("val")?.Value
             ?? element.Value;
-        // A present val-less CT_TwipsMeasure defaults to 1440 twips.
+        // A present val-less CT_TwipsMeasure defaults to 1440 twips. This is
+        // shared by lMargin, rMargin, and wrapIndent at the package boundary.
         return string.IsNullOrWhiteSpace(value) ? "1440" : value.Trim();
     }
 

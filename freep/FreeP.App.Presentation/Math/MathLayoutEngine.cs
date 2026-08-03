@@ -211,6 +211,13 @@ public static class MathLayoutEngine
             MathNode.GroupChr g => LayoutGroupChr(g, fontFamily, fontSizePt, options),
             MathNode.Matrix  m  => LayoutMatrix(m, fontFamily, fontSizePt, options),
             MathNode.EqArray e  => LayoutEqArray(e, fontFamily, fontSizePt, options),
+            MathNode.WrappedParagraph w => LayoutWrappedParagraph(
+                w,
+                double.PositiveInfinity,
+                MathNode.MathParagraphJustification.Left,
+                fontFamily,
+                fontSizePt,
+                options),
             MathNode.MathParagraph p => LayoutMathParagraph(p, fontFamily, fontSizePt, paragraphWidthDip: null, options),
             MathNode.Row     rw => LayoutRow(rw.Children, fontFamily, fontSizePt, options),
             MathNode.Unknown u  => LayoutFallback(u.FallbackText, fontFamily, fontSizePt),
@@ -238,13 +245,21 @@ public static class MathLayoutEngine
                 paragraph.BinarySubtraction,
                 effectiveFontFamily,
                 fontSizePt,
-                options)
+                options,
+                paragraph.WrapIndentTwips,
+                paragraph.WrapRight)
             : paragraph.Content;
-        var contentBox = LayoutNode(
-            content,
-            effectiveFontFamily,
-            fontSizePt,
-            options with { SmallFraction = paragraph.SmallFraction ?? options.SmallFraction });
+        var contentOptions = options with { SmallFraction = paragraph.SmallFraction ?? options.SmallFraction };
+        var contentBox = content is MathNode.WrappedParagraph wrapped && paragraphWidthDip is > 0
+            ? LayoutWrappedParagraph(
+                wrapped,
+                contentWidthDip,
+                paragraph.Justification,
+                effectiveFontFamily,
+                fontSizePt,
+                contentOptions)
+            : LayoutNode(content, effectiveFontFamily, fontSizePt, contentOptions);
+        var hasWrappedContinuationLines = content is MathNode.WrappedParagraph;
         var width = paragraphWidthDip is > 0
             ? Math.Max(paragraphWidthDip.Value, leftMarginDip + contentBox.Metrics.Width + rightMarginDip)
             : leftMarginDip + contentBox.Metrics.Width + rightMarginDip;
@@ -252,14 +267,16 @@ public static class MathLayoutEngine
         var alignmentWidthDip = paragraphWidthDip is > 0
             ? contentWidthDip
             : contentBox.Metrics.Width;
-        contentBox.X = paragraph.Justification switch
-        {
-            MathNode.MathParagraphJustification.Right => leftMarginDip +
-                Math.Max(0, alignmentWidthDip - contentBox.Metrics.Width),
-            MathNode.MathParagraphJustification.Center or MathNode.MathParagraphJustification.CenterGroup =>
-                leftMarginDip + Math.Max(0, (alignmentWidthDip - contentBox.Metrics.Width) / 2.0),
-            _ => leftMarginDip
-        };
+        contentBox.X = hasWrappedContinuationLines
+            ? leftMarginDip
+            : paragraph.Justification switch
+            {
+                MathNode.MathParagraphJustification.Right => leftMarginDip +
+                    Math.Max(0, alignmentWidthDip - contentBox.Metrics.Width),
+                MathNode.MathParagraphJustification.Center or MathNode.MathParagraphJustification.CenterGroup =>
+                    leftMarginDip + Math.Max(0, (alignmentWidthDip - contentBox.Metrics.Width) / 2.0),
+                _ => leftMarginDip
+            };
         contentBox.Y = 0;
 
         var container = new MathBox.Container();
@@ -267,6 +284,75 @@ public static class MathLayoutEngine
         container.Metrics.Width = width;
         container.Metrics.Height = contentBox.Metrics.Height;
         container.Metrics.Ascent = contentBox.Metrics.Ascent;
+        return container;
+    }
+
+    private static MathBox LayoutWrappedParagraph(
+        MathNode.WrappedParagraph paragraph,
+        double availableWidthDip,
+        MathNode.MathParagraphJustification firstLineJustification,
+        string fontFamily,
+        double fontSizePt,
+        LayoutOptions options)
+    {
+        if (paragraph.Rows.Count == 0)
+            return MakeGlyph(string.Empty, fontFamily, fontSizePt, false);
+
+        double em = Em(fontSizePt);
+        double rowGap = em * 0.20;
+        var rows = new List<MathBox>(paragraph.Rows.Count);
+        double maxRowWidth = 0;
+        double totalHeight = 0;
+        var rowAscents = new double[paragraph.Rows.Count];
+        var rowDescents = new double[paragraph.Rows.Count];
+
+        foreach (var row in paragraph.Rows)
+        {
+            var rowBox = LayoutNode(row, fontFamily, fontSizePt, options);
+            rows.Add(rowBox);
+            maxRowWidth = Math.Max(maxRowWidth, rowBox.Metrics.Width);
+            totalHeight += rowBox.Metrics.Height;
+        }
+
+        totalHeight += rowGap * Math.Max(0, rows.Count - 1);
+        var width = double.IsFinite(availableWidthDip) && availableWidthDip > 0
+            ? availableWidthDip
+            : maxRowWidth;
+        double continuationIndentDip = TwipsToDip(paragraph.WrapIndentTwips);
+        double maxRight = 0;
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var rowBox = rows[i];
+            rowAscents[i] = rowBox.Metrics.Ascent;
+            rowDescents[i] = rowBox.Metrics.Descent;
+            var x = i == 0
+                ? firstLineJustification switch
+                {
+                    MathNode.MathParagraphJustification.Right => Math.Max(0, width - rowBox.Metrics.Width),
+                    MathNode.MathParagraphJustification.Center or MathNode.MathParagraphJustification.CenterGroup =>
+                        Math.Max(0, (width - rowBox.Metrics.Width) / 2.0),
+                    _ => 0
+                }
+                : paragraph.WrapRight
+                    ? Math.Max(0, width - rowBox.Metrics.Width)
+                    : continuationIndentDip;
+            rowBox.X = x;
+            rowBox.Y = i == 0 ? 0 : rows[i - 1].Y + rows[i - 1].Metrics.Height + rowGap;
+            maxRight = Math.Max(maxRight, x + rowBox.Metrics.Width);
+        }
+
+        var container = new MathBox.Container();
+        container.Children.AddRange(rows);
+        container.Metrics.Width = Math.Max(width, maxRight);
+        container.Metrics.Height = totalHeight;
+        container.Metrics.Ascent = ResolveStackedArrayAscent(
+            MathArrayBaseJustification.Center,
+            rowAscents,
+            rowDescents,
+            rowGap,
+            totalHeight,
+            em);
         return container;
     }
 
@@ -302,7 +388,9 @@ public static class MathLayoutEngine
         MathNode.MathParagraphBinarySubtraction binarySubtraction,
         string fontFamily,
         double fontSizePt,
-        LayoutOptions options)
+        LayoutOptions options,
+        int wrapIndentTwips,
+        bool wrapRight)
     {
         if (content is not MathNode.Row row || row.Children.Count < 2)
             return content;
@@ -360,7 +448,7 @@ public static class MathLayoutEngine
             return content;
 
         rows.Add(CreateParagraphRow(current));
-        return new MathNode.EqArray(rows);
+        return new MathNode.WrappedParagraph(rows, wrapIndentTwips, wrapRight);
     }
 
     private static int FindLastBinaryOperator(IReadOnlyList<MathNode> nodes)

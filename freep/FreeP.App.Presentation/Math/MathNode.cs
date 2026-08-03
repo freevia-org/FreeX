@@ -34,7 +34,9 @@ public abstract class MathNode
         MathLimitLocation? NaryLimitLocation = null,
         bool? DisplayDefaults = null,
         int? LeftMarginTwips = null,
-        int? RightMarginTwips = null)
+        int? RightMarginTwips = null,
+        int? WrapIndentTwips = null,
+        bool? WrapRight = null)
     {
         public bool HasValues =>
             BinaryBreak.HasValue ||
@@ -46,7 +48,9 @@ public abstract class MathNode
             NaryLimitLocation.HasValue ||
             DisplayDefaults.HasValue ||
             LeftMarginTwips.HasValue ||
-            RightMarginTwips.HasValue;
+            RightMarginTwips.HasValue ||
+            WrapIndentTwips.HasValue ||
+            WrapRight.HasValue;
 
         public MathProperties Overlay(MathProperties? overriding) => overriding is null
             ? this
@@ -60,7 +64,9 @@ public abstract class MathNode
                 overriding.NaryLimitLocation ?? NaryLimitLocation,
                 overriding.DisplayDefaults ?? DisplayDefaults,
                 overriding.LeftMarginTwips ?? LeftMarginTwips,
-                overriding.RightMarginTwips ?? RightMarginTwips);
+                overriding.RightMarginTwips ?? RightMarginTwips,
+                overriding.WrapIndentTwips ?? WrapIndentTwips,
+                overriding.WrapRight ?? WrapRight);
     }
 
     /// <summary>OMML's two legal limit placements for n-ary operators.</summary>
@@ -711,6 +717,12 @@ public abstract class MathNode
         /// <summary>Effective right math margin in twips; null means no margin.</summary>
         public int? RightMarginTwips { get; }
 
+        /// <summary>Effective wrapped-line indent in twips. Disabled display defaults resolve to zero.</summary>
+        public int WrapIndentTwips { get; }
+
+        /// <summary>True when wrapped continuation lines are right aligned.</summary>
+        public bool WrapRight { get; }
+
         public MathParagraph(
             MathNode content,
             MathParagraphJustification justification,
@@ -719,7 +731,10 @@ public abstract class MathNode
             string? mathFontFamily = null,
             bool? smallFraction = null,
             int? leftMarginTwips = null,
-            int? rightMarginTwips = null)
+            int? rightMarginTwips = null,
+            int? wrapIndentTwips = null,
+            bool? wrapRight = null,
+            bool wrapPropertiesEnabled = true)
         {
             Content = content;
             Justification = justification;
@@ -729,6 +744,31 @@ public abstract class MathNode
             SmallFraction = smallFraction;
             LeftMarginTwips = leftMarginTwips;
             RightMarginTwips = rightMarginTwips;
+            WrapIndentTwips = wrapPropertiesEnabled ? Math.Max(0, wrapIndentTwips ?? 1440) : 0;
+            WrapRight = wrapPropertiesEnabled && wrapRight == true;
+        }
+    }
+
+    /// <summary>
+    /// Renderer-neutral continuation lines produced by automatic binary-operator
+    /// wrapping in an <c>m:oMathPara</c>. This remains distinct from authored
+    /// <see cref="EqArray"/> so wrap-only indentation never changes equation-array
+    /// alignment or spacing semantics.
+    /// </summary>
+    public sealed class WrappedParagraph : MathNode
+    {
+        public IReadOnlyList<MathNode> Rows { get; }
+        public int WrapIndentTwips { get; }
+        public bool WrapRight { get; }
+
+        public WrappedParagraph(
+            IReadOnlyList<MathNode> rows,
+            int wrapIndentTwips,
+            bool wrapRight)
+        {
+            Rows = rows;
+            WrapIndentTwips = Math.Max(0, wrapIndentTwips);
+            WrapRight = wrapRight;
         }
     }
 

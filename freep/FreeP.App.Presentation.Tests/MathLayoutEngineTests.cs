@@ -2467,4 +2467,135 @@ public sealed class MathLayoutEngineTests
         glyph.X.Should().BeApproximately(0, 0.01);
         layout.Metrics.Width.Should().BeApproximately(200, 0.01);
     }
+
+    [Fact]
+    public void OmmlParagraph_WrapIndentAbsentUses1440TwipsForContinuationLines()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:dispDef/><m:defJc m:val=\"left\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>y</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>z</m:t></m:r></m:oMath>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 60);
+
+        var wrapped = Assert.IsType<MathBox.Container>(
+            Assert.IsType<MathBox.Container>(layout.Children[0]).Children[0]);
+        wrapped.Children.Should().HaveCount(2);
+        wrapped.Children[1].X.Should().BeApproximately(1440 / 15.0, 0.01,
+            "the absent m:wrapIndent element still has the Open XML one-inch effective default");
+    }
+
+    [Fact]
+    public void OmmlParagraph_WrapIndentExplicitValueIndentsOnlyContinuationLines()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:dispDef/><m:defJc m:val=\"left\"/>" +
+            "<m:wrapIndent m:val=\"15\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>y</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>z</m:t></m:r></m:oMath>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 60);
+
+        var wrapped = Assert.IsType<MathBox.Container>(
+            Assert.IsType<MathBox.Container>(layout.Children[0]).Children[0]);
+        wrapped.Children[0].X.Should().Be(0);
+        wrapped.Children[1].X.Should().BeApproximately(1, 0.01);
+    }
+
+    [Theory]
+    [InlineData("<m:dispDef m:val=\"off\"/>")]
+    [InlineData("")]
+    public void OmmlParagraph_WrapPropertiesAreIgnoredWhenDisplayDefaultsAreDisabledOrAbsent(
+        string displayDefaults)
+    {
+        var node = ParseOmmlParagraph(
+            $"<m:mathPr>{displayDefaults}<m:wrapIndent m:val=\"720\"/><m:wrapRight/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>y</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>z</m:t></m:r></m:oMath>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 60);
+
+        var wrapped = Assert.IsType<MathBox.Container>(
+            Assert.IsType<MathBox.Container>(layout.Children[0]).Children[0]);
+        wrapped.Children.Should().HaveCount(2);
+        wrapped.Children[1].X.Should().BeApproximately(0, 0.01,
+            "dispDef off or absent must suppress both the authored indent and right-alignment behavior");
+    }
+
+    [Fact]
+    public void OmmlParagraph_NormalContinuationIndentStaysWithinAvailableWidth()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:dispDef/><m:defJc m:val=\"left\"/>" +
+            "<m:wrapIndent m:val=\"15\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>y</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>z</m:t></m:r></m:oMath>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 60);
+
+        var wrapped = Assert.IsType<MathBox.Container>(
+            Assert.IsType<MathBox.Container>(layout.Children[0]).Children[0]);
+        var continuation = wrapped.Children[1];
+        (continuation.X + continuation.Metrics.Width).Should().BeLessThanOrEqualTo(60.01,
+            "a continuation indent should stay inside the paragraph width when the authored indent fits");
+        layout.Metrics.Width.Should().BeApproximately(60, 0.01);
+    }
+
+    [Fact]
+    public void OmmlParagraph_WrapRightValuelessRightAlignsContinuationLines()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:dispDef/><m:defJc m:val=\"left\"/><m:wrapRight/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>y</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>z</m:t></m:r></m:oMath>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 60);
+
+        var wrapped = Assert.IsType<MathBox.Container>(
+            Assert.IsType<MathBox.Container>(layout.Children[0]).Children[0]);
+        var continuation = wrapped.Children[1];
+        continuation.X.Should().BeApproximately(
+            60 - continuation.Metrics.Width,
+            0.01,
+            "m:wrapRight is true when present without m:val and right-aligns continuation lines");
+        continuation.X.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void OmmlParagraph_WrapIndentOverflowPreservesContinuationOffsetInMeasuredWidth()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:mathPr><m:dispDef/><m:defJc m:val=\"left\"/>" +
+            "<m:wrapIndent m:val=\"2000\"/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>y</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>z</m:t></m:r></m:oMath>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 40);
+
+        var wrapped = Assert.IsType<MathBox.Container>(
+            Assert.IsType<MathBox.Container>(layout.Children[0]).Children[0]);
+        layout.Metrics.Width.Should().BeGreaterThan(40,
+            "a continuation indent that cannot fit must remain visible in renderer-neutral measured width");
+        wrapped.Children[1].X.Should().BeApproximately(2000 / 15.0, 0.01);
+    }
+
+    [Fact]
+    public void AuthoredEqArrayLayoutRemainsDistinctFromWrappedContinuationLayout()
+    {
+        var eqArray = new MathNode.EqArray(new MathNode[]
+        {
+            new MathNode.Row(new MathNode[] { Run("x"), Run("+"), Run("y") }),
+            new MathNode.Row(new MathNode[] { Run("z") }),
+        });
+
+        var layout = MathLayoutEngine.Layout(eqArray, "Cambria Math", FontSizePt);
+        var rows = Assert.IsType<MathBox.Container>(layout.Children[0]);
+
+        rows.Children.Should().HaveCount(2);
+        rows.Children[1].X.Should().BeGreaterThan(0,
+            "ordinary authored m:eqArr rows keep their existing centered equation-array alignment");
+        layout.Metrics.Width.Should().BeApproximately(
+            ((MathBox)rows.Children[0]).Metrics.Width,
+            0.01);
+    }
 }

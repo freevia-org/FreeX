@@ -2165,7 +2165,9 @@ public static class SlideCompositor
             naryLimitLocation,
             properties.DisplayDefaults,
             ParseMargin(properties.LeftMargin),
-            ParseMargin(properties.RightMargin));
+            ParseMargin(properties.RightMargin),
+            ParseMargin(properties.WrapIndent),
+            properties.WrapRight);
     }
 
     // ─── Wave 19A: auto-number formatter ────────────────────────────────────────────────────

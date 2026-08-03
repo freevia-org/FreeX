@@ -143,7 +143,10 @@ public static class OmmlParser
             resolvedProperties.MathFontFamily,
             resolvedProperties.SmallFraction,
             resolvedProperties.DisplayDefaults == true ? resolvedProperties.LeftMarginTwips : null,
-            resolvedProperties.DisplayDefaults == true ? resolvedProperties.RightMarginTwips : null);
+            resolvedProperties.DisplayDefaults == true ? resolvedProperties.RightMarginTwips : null,
+            resolvedProperties.WrapIndentTwips,
+            resolvedProperties.WrapRight,
+            wrapPropertiesEnabled: resolvedProperties.DisplayDefaults == true);
     }
 
     private static MathNode.MathProperties ParseInheritedMathProperties(XElement mathRoot)
@@ -178,11 +181,13 @@ public static class OmmlParser
                 mathProperties.Element(M + "naryLim"),
                 MathNode.MathLimitLocation.UndOvr),
             ParseDisplayDefaultsOverride(mathProperties),
-            ParseTwipsMarginOverride(mathProperties.Element(M + "lMargin")),
-            ParseTwipsMarginOverride(mathProperties.Element(M + "rMargin")));
+            ParseTwipsMeasureOverride(mathProperties.Element(M + "lMargin")),
+            ParseTwipsMeasureOverride(mathProperties.Element(M + "rMargin")),
+            ParseTwipsMeasureOverride(mathProperties.Element(M + "wrapIndent")),
+            ParseOnOffOverride(mathProperties.Element(M + "wrapRight")));
     }
 
-    private static int? ParseTwipsMarginOverride(XElement? element)
+    private static int? ParseTwipsMeasureOverride(XElement? element)
     {
         if (element is null)
             return null;

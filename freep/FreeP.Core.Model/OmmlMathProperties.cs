@@ -10,10 +10,12 @@ namespace FreeP.Core.Model;
 /// Limit-location values remain strings at the
 /// package boundary so malformed authored values remain observable until the
 /// shared parser applies the schema fallback.
-/// <c>LeftMargin</c> and <c>RightMargin</c> retain the authored twips text for
+/// <c>LeftMargin</c>, <c>RightMargin</c>, and <c>WrapIndent</c> retain the authored
+/// twips text for
 /// <c>m:lMargin</c>/<c>m:rMargin</c>; a null value means that the element was
 /// absent, while a present val-less element is normalized to <c>1440</c> by
-/// the package reader.
+/// the package reader. <c>WrapRight</c> preserves the authored CT_OnOff value;
+/// null means that the element was absent.
 /// </summary>
 public sealed record OmmlMathProperties(
     string? BinaryBreak = null,
@@ -25,7 +27,9 @@ public sealed record OmmlMathProperties(
     string? NaryLimitLocation = null,
     bool? DisplayDefaults = null,
     string? LeftMargin = null,
-    string? RightMargin = null)
+    string? RightMargin = null,
+    string? WrapIndent = null,
+    bool? WrapRight = null)
 {
     public bool HasValues =>
         !string.IsNullOrWhiteSpace(BinaryBreak) ||
@@ -37,7 +41,9 @@ public sealed record OmmlMathProperties(
         !string.IsNullOrWhiteSpace(NaryLimitLocation) ||
         DisplayDefaults.HasValue ||
         !string.IsNullOrWhiteSpace(LeftMargin) ||
-        !string.IsNullOrWhiteSpace(RightMargin);
+        !string.IsNullOrWhiteSpace(RightMargin) ||
+        !string.IsNullOrWhiteSpace(WrapIndent) ||
+        WrapRight.HasValue;
 
     /// <summary>
     /// Applies authored values from <paramref name="overriding"/> one property
@@ -55,5 +61,7 @@ public sealed record OmmlMathProperties(
             overriding.NaryLimitLocation ?? NaryLimitLocation,
             overriding.DisplayDefaults ?? DisplayDefaults,
             overriding.LeftMargin ?? LeftMargin,
-            overriding.RightMargin ?? RightMargin);
+            overriding.RightMargin ?? RightMargin,
+            overriding.WrapIndent ?? WrapIndent,
+            overriding.WrapRight ?? WrapRight);
 }

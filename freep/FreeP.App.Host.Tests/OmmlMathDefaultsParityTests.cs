@@ -162,6 +162,39 @@ public sealed class OmmlMathDefaultsParityTests
             20);
     }
 
+    [StaFact]
+    public void Wpf_DocumentMathWrapPropertiesUseSharedContinuationPlan()
+    {
+        var run = ComposeMathRun(
+            new OmmlMathProperties(DisplayDefaults: true, WrapIndent: "15", WrapRight: true),
+            "<m:mathPr><m:defJc m:val=\"left\"/></m:mathPr>",
+            "<m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>y</m:t></m:r><m:r><m:t>+</m:t></m:r>" +
+            "<m:r><m:t>z</m:t></m:r>");
+        var layout = MathLayoutEngine.Layout(run.MathLayout is not null
+                ? OmmlParser.ParsePowerPoint(
+                    "<m:oMathPara xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\"><m:mathPr><m:dispDef/><m:defJc m:val=\"left\"/></m:mathPr>" +
+                    "<m:oMath><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r><m:r><m:t>y</m:t></m:r><m:r><m:t>+</m:t></m:r><m:r><m:t>z</m:t></m:r></m:oMath></m:oMathPara>",
+                    "x",
+                    new MathNode.MathProperties(DisplayDefaults: true, WrapIndentTwips: 15, WrapRight: true))
+                : throw new InvalidOperationException(),
+            "Cambria Math",
+            18.0,
+            paragraphWidthDip: 60);
+        var wrapped = Assert.IsType<MathBox.Container>(
+            Assert.IsType<MathBox.Container>(layout.Children[0]).Children[0]);
+        wrapped.Children.Should().HaveCount(2);
+        wrapped.Children[1].X.Should().BeApproximately(60 - wrapped.Children[1].Metrics.Width, 0.01);
+
+        var visual = new DrawingVisual();
+        using var drawingContext = visual.RenderOpen();
+        SlideCanvas.RenderParaWithMath(
+            drawingContext,
+            new ResolvedParagraph { Runs = new[] { run } },
+            10,
+            20);
+    }
+
     private static ResolvedRun ComposeMathRun(
         OmmlMathProperties documentDefaults,
         string localProperties,

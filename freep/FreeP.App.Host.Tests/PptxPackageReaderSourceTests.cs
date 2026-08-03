@@ -47,6 +47,24 @@ public sealed class PptxPackageReaderSourceTests
     }
 
     [Fact]
+    public void DocumentMathProperties_ReadWrapIndentAndWrapRightWithOpenXmlDefaults()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageReader.cs"));
+
+        ExtractMethod(source, "private static OmmlMathProperties? ReadOmmlMathProperties(")
+            .Should()
+            .Contain("WrapIndent: ReadTwipsMeasureValue(mathProperties.Element(M + \"wrapIndent\"))")
+            .And.Contain("WrapRight: ReadOnOffValue(mathProperties.Element(M + \"wrapRight\"))");
+        ExtractMethod(source, "private static string? ReadTwipsMeasureValue(")
+            .Should()
+            .Contain("return string.IsNullOrWhiteSpace(value) ? \"1440\" : value.Trim();");
+    }
+
+    [Fact]
     public void CorePropertiesRead_UsesSharedOpcDocumentPropertiesHelper()
     {
         var source = File.ReadAllText(Path.Combine(

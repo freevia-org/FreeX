@@ -1767,4 +1767,47 @@ public sealed class OmmlParserTests
         Assert.Equal(0, paragraph.LeftMarginTwips);
         Assert.Equal(0, paragraph.RightMarginTwips);
     }
+
+    [Theory]
+    [InlineData("<m:dispDef/>", "", 1440, false)]
+    [InlineData("<m:dispDef/>", "<m:wrapIndent/>", 1440, false)]
+    [InlineData("<m:dispDef/>", "<m:wrapIndent m:val=\"720\"/>", 720, false)]
+    [InlineData("<m:dispDef/>", "<m:wrapIndent m:val=\"bogus\"/>", 0, false)]
+    [InlineData("<m:dispDef/>", "<m:wrapRight/>", 1440, true)]
+    [InlineData("<m:dispDef/>", "<m:wrapRight m:val=\"false\"/>", 1440, false)]
+    [InlineData("<m:dispDef/>", "<m:wrapRight m:val=\"bogus\"/>", 1440, true)]
+    [InlineData("<m:dispDef m:val=\"off\"/>", "<m:wrapIndent m:val=\"720\"/><m:wrapRight/>", 0, false)]
+    [InlineData("", "<m:wrapIndent m:val=\"720\"/><m:wrapRight/>", 0, false)]
+    public void OMathPara_WrapPropertiesUseAuthorityDefaultsAndDispDefGate(
+        string displayDefaults,
+        string values,
+        int expectedIndent,
+        bool expectedRight)
+    {
+        var node = ParseParagraph(
+            $"<m:mathPr>{displayDefaults}{values}</m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(expectedIndent, paragraph.WrapIndentTwips);
+        Assert.Equal(expectedRight, paragraph.WrapRight);
+    }
+
+    [Fact]
+    public void OMathPara_WrapPropertiesOverlayDocumentDefaultsPropertyByProperty()
+    {
+        var node = OmmlParser.Parse(
+            $"<m:oMathPara xmlns:m=\"{M}\"><m:mathPr><m:dispDef/>" +
+            "<m:wrapRight/></m:mathPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath></m:oMathPara>",
+            "FALLBACK",
+            new MathNode.MathProperties(
+                DisplayDefaults: true,
+                WrapIndentTwips: 720,
+                WrapRight: false));
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(720, paragraph.WrapIndentTwips);
+        Assert.True(paragraph.WrapRight);
+    }
 }
