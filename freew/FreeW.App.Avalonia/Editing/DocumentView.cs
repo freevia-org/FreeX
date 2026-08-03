@@ -20486,6 +20486,16 @@ public sealed class DocumentView : Control
         ApplyGeneratedReferencePlan(plan, "Update Bibliography", adjustCaretForInsert: false);
     }
 
+    public void ApplyCitationStyle(CitationStyle style)
+    {
+        if (_doc.BibliographyStyle == style)
+            return;
+
+        _bus.Execute(new ApplyCitationStyleCommand(style));
+        InvalidateLayoutAndVisual();
+        Focus();
+    }
+
     public void ReplaceSources(IReadOnlyList<Source> sources)
     {
         ArgumentNullException.ThrowIfNull(sources);
