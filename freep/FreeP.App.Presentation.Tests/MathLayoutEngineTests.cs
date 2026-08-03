@@ -1049,8 +1049,8 @@ public sealed class MathLayoutEngineTests
     {
         var node = ParseOmml(
             "<m:eqArr>" +
-            "<m:e><m:r><m:t>mmmm</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=1</m:t></m:r></m:e></m:box></m:e>" +
-            "<m:e><m:r><m:t>x</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=22</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>mmmm</m:t></m:r><m:box><m:boxPr><m:opEmu/><m:aln/></m:boxPr><m:e><m:r><m:t>=1</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:box><m:boxPr><m:opEmu/><m:aln/></m:boxPr><m:e><m:r><m:t>=22</m:t></m:r></m:e></m:box></m:e>" +
             "<m:e><m:r><m:t>center</m:t></m:r></m:e>" +
             "</m:eqArr>");
 
@@ -1076,6 +1076,39 @@ public sealed class MathLayoutEngineTests
         glyphs.Select(g => g.Text).Should().Equal(new[] { "mmmm", "=1", "x", "=22", "center" });
         glyphs.Single(g => g.Text == "=1").X.Should().BeApproximately(glyphs.Single(g => g.Text == "=22").X, 0.01,
             "boxed aligned terms should reach WPF and Avalonia at the same shared draw-plan X coordinate");
+    }
+
+    [Fact]
+    public void OMathPara_MultipleEquations_AlignsRunPointsAndLeftAlignsUnmarkedRows()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:oMath><m:r><m:t>mmmm</m:t></m:r>" +
+            "<m:r><m:rPr><m:aln/></m:rPr><m:t>=1</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r>" +
+            "<m:r><m:rPr><m:aln/></m:rPr><m:t>=22</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>tail</m:t></m:r></m:oMath>");
+
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 240);
+        var paragraphBox = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        var equations = Assert.IsType<MathBox.Container>(paragraphBox.Children[0]);
+        var firstRow = Assert.IsType<MathBox.Container>(equations.Children[0]);
+        var secondRow = Assert.IsType<MathBox.Container>(equations.Children[1]);
+        var unmarkedRow = equations.Children[2];
+
+        var firstMarkerX = firstRow.X + firstRow.Children[1].X;
+        var secondMarkerX = secondRow.X + secondRow.Children[1].X;
+        firstMarkerX.Should().BeApproximately(secondMarkerX, 0.01,
+            "m:rPr/m:aln points in separate display equations must share one neutral alignment coordinate");
+        unmarkedRow.X.Should().BeApproximately(firstRow.X, 0.01,
+            "centerGroup keeps unmarked display equations left-aligned within the centered group");
+
+        var glyphs = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToArray();
+        glyphs.Single(g => g.Text == "=1").X.Should().BeApproximately(
+            glyphs.Single(g => g.Text == "=22").X,
+            0.01,
+            "the renderer-neutral draw plan must preserve the shared equation alignment point");
     }
 
     [Fact]

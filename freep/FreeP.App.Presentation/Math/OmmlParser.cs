@@ -123,12 +123,18 @@ public static class OmmlParser
                 oMath,
                 resolvedProperties.Overlay(ParseMathProperties(oMath.Element(M + "mathPr")))))
             .ToArray();
+        var alignmentPointIndices = oMathNodes
+            .Select(GetAlignmentPointIndex)
+            .ToArray();
 
         var content = oMathNodes.Length switch
         {
             0 => ParseRow(paragraph, resolvedProperties),
             1 => oMathNodes[0],
-            _ => new MathNode.Row(oMathNodes)
+            _ => new MathNode.EqArray(
+                oMathNodes,
+                alignmentPointIndices,
+                alignRowsLeft: true)
         };
 
         return new MathNode.MathParagraph(
@@ -512,10 +518,11 @@ public static class OmmlParser
 
         var alphabet = ParseMathAlphabet(ReadVal(rPr?.Element(M + "scr")));
         var isLiteral = IsOnOffOn(rPr?.Element(M + "lit"));
+        var isAlignmentPoint = IsOnOffOn(rPr?.Element(M + "aln"));
         if (isLiteral && !hasExplicitStyle && alphabet is MathNode.MathAlphabet.Default or MathNode.MathAlphabet.Roman)
             isItalic = false;
 
-        return new MathNode.Run(text, isItalic, isBold, alphabet, isLiteral);
+        return new MathNode.Run(text, isItalic, isBold, alphabet, isLiteral, isAlignmentPoint);
     }
 
     private static MathNode.MathAlphabet ParseMathAlphabet(string? value)
@@ -711,7 +718,8 @@ public static class OmmlParser
                 isItalic: false,
                 isBold: run.IsBold,
                 alphabet: run.Alphabet,
-                isLiteral: run.IsLiteral),
+                isLiteral: run.IsLiteral,
+                isAlignmentPoint: run.IsAlignmentPoint),
             MathNode.Row row => new MathNode.Row(row.Children.Select(NormalizeFunctionName).ToArray()),
             MathNode.Sup sup => new MathNode.Sup(
                 NormalizeFunctionName(sup.Base),
@@ -730,7 +738,8 @@ public static class OmmlParser
                 limit.IsUpper),
             MathNode.Box box => new MathNode.Box(
                 NormalizeFunctionName(box.Base),
-                box.OperatorEmulator),
+                box.OperatorEmulator,
+                box.IsAlignmentPoint),
             MathNode.ArgSize argSize => new MathNode.ArgSize(
                 NormalizeFunctionName(argSize.Base),
                 argSize.Adjustment),
@@ -814,7 +823,8 @@ public static class OmmlParser
         var eEl = el.Element(M + "e");
         return new MathNode.Box(
             eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl, inheritedProperties),
-            operatorEmulator: IsOnOffOn(boxPr?.Element(M + "opEmu")));
+            operatorEmulator: IsOnOffOn(boxPr?.Element(M + "opEmu")),
+            isAlignmentPoint: IsOnOffOn(boxPr?.Element(M + "aln")));
     }
 
     private static MathNode ParsePhantom(XElement el, MathNode.MathProperties inheritedProperties)
@@ -1141,12 +1151,13 @@ public static class OmmlParser
                 continue;
             }
 
-            if (TryReadBoxAlignmentMarker(child))
-                alignmentPointIndex ??= children.Count;
-
             var node = ParseElement(child, inheritedProperties);
             if (node is not null)
+            {
+                if (!alignmentPointIndex.HasValue && IsAlignmentPointNode(node))
+                    alignmentPointIndex = children.Count;
                 children.Add(node);
+            }
         }
 
         var row = children.Count == 1
@@ -1159,9 +1170,30 @@ public static class OmmlParser
     private static bool IsEquationArrayAlignmentMarker(XElement element) =>
         element.Name == M + "aln";
 
-    private static bool TryReadBoxAlignmentMarker(XElement element) =>
-        element.Name == M + "box" &&
-        element.Element(M + "boxPr")?.Element(M + "aln") is not null;
+    private static int? GetAlignmentPointIndex(MathNode node)
+    {
+        if (IsAlignmentPointNode(node))
+            return 0;
+
+        if (node is not MathNode.Row row)
+            return null;
+
+        for (var i = 0; i < row.Children.Count; i++)
+        {
+            if (IsAlignmentPointNode(row.Children[i]))
+                return i;
+        }
+
+        return null;
+    }
+
+    private static bool IsAlignmentPointNode(MathNode node) =>
+        node switch
+        {
+            MathNode.Run run => run.IsAlignmentPoint,
+            MathNode.Box box => box.OperatorEmulator && box.IsAlignmentPoint,
+            _ => false,
+        };
 
     private static MathNode ParseUnknown(XElement el)
     {

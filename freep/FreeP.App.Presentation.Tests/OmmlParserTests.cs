@@ -895,8 +895,8 @@ public sealed class OmmlParserTests
     {
         var node = Parse(
             "<m:eqArr>" +
-            "<m:e><m:r><m:t>x</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=1</m:t></m:r></m:e></m:box></m:e>" +
-            "<m:e><m:r><m:t>wide</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=2</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:box><m:boxPr><m:opEmu/><m:aln/></m:boxPr><m:e><m:r><m:t>=1</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>wide</m:t></m:r><m:box><m:boxPr><m:opEmu/><m:aln/></m:boxPr><m:e><m:r><m:t>=2</m:t></m:r></m:e></m:box></m:e>" +
             "</m:eqArr>");
 
         var eqArray = Assert.IsType<MathNode.EqArray>(node);
@@ -1509,6 +1509,38 @@ public sealed class OmmlParserTests
         var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
         Assert.Equal(MathNode.MathParagraphJustification.CenterGroup, paragraph.Justification);
         Assert.Equal("x", Assert.IsType<MathNode.Run>(paragraph.Content).Text);
+    }
+
+    [Fact]
+    public void OMathPara_MultipleEquations_PreservesRunAlignmentPointsAsSharedRows()
+    {
+        var node = ParseParagraph(
+            "<m:oMath><m:r><m:t>mmmm</m:t></m:r>" +
+            "<m:r><m:rPr><m:aln/></m:rPr><m:t>=1</m:t></m:r></m:oMath>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r>" +
+            "<m:r><m:rPr><m:aln m:val=\"true\"/></m:rPr><m:t>=22</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        var equations = Assert.IsType<MathNode.EqArray>(paragraph.Content);
+        Assert.True(equations.AlignRowsLeft);
+        Assert.Equal(new int?[] { 1, 1 }, equations.AlignmentPointIndices);
+        Assert.True(Assert.IsType<MathNode.Run>(
+            Assert.IsType<MathNode.Row>(equations.Rows[0]).Children[1]).IsAlignmentPoint);
+        Assert.True(Assert.IsType<MathNode.Run>(
+            Assert.IsType<MathNode.Row>(equations.Rows[1]).Children[1]).IsAlignmentPoint);
+    }
+
+    [Fact]
+    public void AlignmentPoints_RespectCtOnOffFalseForRunsAndBoxes()
+    {
+        var runNode = Parse(
+            "<m:r><m:rPr><m:aln m:val=\"0\"/></m:rPr><m:t>x</m:t></m:r>");
+        Assert.False(Assert.IsType<MathNode.Run>(runNode).IsAlignmentPoint);
+
+        var boxNode = Parse(
+            "<m:box><m:boxPr><m:aln m:val=\"off\"/></m:boxPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e></m:box>");
+        Assert.False(Assert.IsType<MathNode.Box>(boxNode).IsAlignmentPoint);
     }
 
     [Theory]

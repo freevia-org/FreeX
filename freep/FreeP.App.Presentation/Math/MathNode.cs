@@ -111,6 +111,9 @@ public abstract class MathNode
         /// <summary>Requested math alphabet for ASCII letter/digit remapping.</summary>
         public MathAlphabet Alphabet { get; }
 
+        /// <summary>True when m:rPr/m:aln marks this run as an alignment point.</summary>
+        public bool IsAlignmentPoint { get; }
+
         /// <summary>
         /// When m:rPr/m:nor is absent the run uses the math italic style.
         /// When m:nor is set, or when m:lit is set without an explicit visual
@@ -121,13 +124,15 @@ public abstract class MathNode
             bool isItalic = true,
             bool isBold = false,
             MathAlphabet alphabet = MathAlphabet.Default,
-            bool isLiteral = false)
+            bool isLiteral = false,
+            bool isAlignmentPoint = false)
         {
             Text = text;
             IsItalic = isItalic;
             IsBold = isBold;
             Alphabet = alphabet;
             IsLiteral = isLiteral;
+            IsAlignmentPoint = isAlignmentPoint;
         }
     }
 
@@ -394,10 +399,17 @@ public abstract class MathNode
         /// <summary>True when <c>m:boxPr/m:opEmu</c> makes the wrapped expression behave as one operator.</summary>
         public bool OperatorEmulator { get; }
 
-        public Box(MathNode @base, bool operatorEmulator = false)
+        /// <summary>True when m:boxPr/m:aln marks this box as an alignment point.</summary>
+        public bool IsAlignmentPoint { get; }
+
+        public Box(
+            MathNode @base,
+            bool operatorEmulator = false,
+            bool isAlignmentPoint = false)
         {
             Base = @base;
             OperatorEmulator = operatorEmulator;
+            IsAlignmentPoint = isAlignmentPoint;
         }
     }
 
@@ -638,18 +650,27 @@ public abstract class MathNode
         /// <summary>Optional row-spacing value from m:eqArrPr/m:rSp.</summary>
         public int? RowSpacing { get; }
 
+        /// <summary>
+        /// True only for the equation array synthesized from a multi-equation
+        /// m:oMathPara. Its unmarked rows are left-aligned within the group;
+        /// authored m:eqArr keeps its existing centered-row default.
+        /// </summary>
+        public bool AlignRowsLeft { get; }
+
         public EqArray(
             IReadOnlyList<MathNode> rows,
             IReadOnlyList<int?>? alignmentPointIndices = null,
             EqArrayBaseJustification baseJustification = EqArrayBaseJustification.Center,
             EqArraySpacingRule? rowSpacingRule = null,
-            int? rowSpacing = null)
+            int? rowSpacing = null,
+            bool alignRowsLeft = false)
         {
             Rows = rows;
             AlignmentPointIndices = alignmentPointIndices ?? System.Array.Empty<int?>();
             BaseJustification = baseJustification;
             RowSpacingRule = rowSpacingRule;
             RowSpacing = rowSpacing;
+            AlignRowsLeft = alignRowsLeft;
         }
 
         public int? GetAlignmentPointIndex(int rowIndex) =>

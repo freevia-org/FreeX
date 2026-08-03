@@ -1350,8 +1350,8 @@ public sealed class SlideCanvasMathBaselineTests
     {
         var mathNode = ParseOmml(
             "<m:eqArr>" +
-            "<m:e><m:r><m:t>mmmm</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=1</m:t></m:r></m:e></m:box></m:e>" +
-            "<m:e><m:r><m:t>x</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=22</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>mmmm</m:t></m:r><m:box><m:boxPr><m:opEmu/><m:aln/></m:boxPr><m:e><m:r><m:t>=1</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:box><m:boxPr><m:opEmu/><m:aln/></m:boxPr><m:e><m:r><m:t>=22</m:t></m:r></m:e></m:box></m:e>" +
             "</m:eqArr>");
         var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
         var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")

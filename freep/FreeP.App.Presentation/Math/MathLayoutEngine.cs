@@ -1697,7 +1697,9 @@ public static class MathLayoutEngine
             var alignmentOffset = alignmentOffsets[i];
             rowBox.X = alignmentOffset.HasValue
                 ? sharedAlignmentX - alignmentOffset.Value
-                : (totalW - rowBox.Metrics.Width) / 2.0;
+                : eqArray.AlignRowsLeft
+                    ? alignmentOriginX
+                    : (totalW - rowBox.Metrics.Width) / 2.0;
             rowBox.Y = y;
             container.Children.Add(rowBox);
             y += rowBox.Metrics.Height + rowGap;
