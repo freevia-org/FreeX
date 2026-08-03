@@ -394,7 +394,8 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         insertSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, InsertObjectDialogChromeStyle, width, isDefault);");
         insertSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, InsertObjectDialogChromeStyle);");
         insertSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(checkBox, InsertObjectDialogChromeStyle);");
-        insertSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);");
+        insertSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
+        insertSource.Should().Contain("CreateTableDialogPlanner.ActionRowTopMargin");
 
         moreColorsSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle MoreColorsDialogChromeStyle => new(FormulaBarFontFamily);");
         moreColorsSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, MoreColorsDialogChromeStyle, width, isDefault);");
