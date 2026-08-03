@@ -97,18 +97,27 @@ public sealed partial class MainWindow
             Title = UiText.Format("TableLoc_TtcWizardTitle", 1, 3),
             Width = TextToColumnsParityDialogWidth,
             Height = TextToColumnsParityDialogHeight,
-            MinWidth = TextToColumnsParityDialogWidth,
-            MinHeight = TextToColumnsParityDialogHeight,
+            MinWidth = TextToColumnsParityFixture.MinimumWindowWidth,
+            MinHeight = TextToColumnsParityFixture.MinimumWindowHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "TextToColumnsDialog");
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, DataOpsDialogChromeStyle);
 
         var delimitedButton = new RadioButton { Content = UiText.Get("TableLoc_TtcDelimited"), IsChecked = true, GroupName = "TtcMode" };
         ApplyDataOpsRadioButtonChrome(delimitedButton);
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(delimitedButton, DataOpsDialogChromeStyle);
+        delimitedButton.Height = 20;
+        delimitedButton.MinHeight = 20;
+        delimitedButton.MaxHeight = 20;
         AutomationProperties.SetAutomationId(delimitedButton, "TextToColumnsDelimitedButton");
         var fixedWidthButton = new RadioButton { Content = UiText.Get("TableLoc_TtcFixedWidth"), GroupName = "TtcMode" };
         ApplyDataOpsRadioButtonChrome(fixedWidthButton);
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(fixedWidthButton, DataOpsDialogChromeStyle);
+        fixedWidthButton.Height = 20;
+        fixedWidthButton.MinHeight = 20;
+        fixedWidthButton.MaxHeight = 20;
         AutomationProperties.SetAutomationId(fixedWidthButton, "TextToColumnsFixedWidthButton");
 
         var tabBox = new CheckBox { Content = UiText.Get("TableLoc_TtcDelimTab") };
@@ -188,7 +197,8 @@ public sealed partial class MainWindow
         {
             BorderBrush = HeaderForeground,
             BorderThickness = new Thickness(1),
-            MinHeight = 120,
+            Height = 88,
+            MinHeight = 88,
             Padding = new Thickness(0),
         };
         AutomationProperties.SetAutomationId(previewHost, "TextToColumnsPreviewGrid");
@@ -197,7 +207,8 @@ public sealed partial class MainWindow
         {
             BorderBrush = HeaderForeground,
             BorderThickness = new Thickness(1),
-            MinHeight = 120,
+            Height = 88,
+            MinHeight = 88,
             Padding = new Thickness(0),
         };
         AutomationProperties.SetAutomationId(previewHost1, "TextToColumnsPreviewGrid1");
@@ -269,7 +280,10 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var preview = TextToColumnsPlanner.Preview(sources, options);
+            var preview = TextToColumnsPlanner.Preview(
+                sources,
+                options,
+                TextToColumnsParityFixture.PreviewRowLimit);
             previewColumnCount = Math.Max(1, preview.ColumnCount);
             statusText.Text = UiText.Format("TableLoc_TtcSplittingStatus", sources.Count, previewColumnCount);
 
@@ -344,16 +358,16 @@ public sealed partial class MainWindow
         };
 
         // WPF wizard navigation: [< Back][Next >][Finish][Cancel]
-        var backButton = new Button { Content = UiText.Get("TableLoc_TtcBack"), MinWidth = 84, IsEnabled = false };
+        var backButton = new Button { Content = UiText.Get("TableLoc_TtcBack"), MinWidth = 72, IsEnabled = false };
         ApplyDataOpsButtonChrome(backButton);
         AutomationProperties.SetAutomationId(backButton, "TextToColumnsBackButton");
-        var nextButton = new Button { Content = UiText.Get("TableLoc_TtcNext"), MinWidth = 84 };
+        var nextButton = new Button { Content = UiText.Get("TableLoc_TtcNext"), MinWidth = 72 };
         ApplyDataOpsButtonChrome(nextButton);
         AutomationProperties.SetAutomationId(nextButton, "TextToColumnsNextButton");
-        var applyButton = new Button { Content = UiText.Get("TableLoc_TtcFinish"), IsDefault = true, MinWidth = 84 };
+        var applyButton = new Button { Content = UiText.Get("TableLoc_TtcFinish"), IsDefault = true, MinWidth = 72 };
         ApplyDataOpsButtonChrome(applyButton, isDefault: true);
         AutomationProperties.SetAutomationId(applyButton, "TextToColumnsApplyButton");
-        var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 84 };
+        var cancelButton = new Button { Content = UiText.Get("TableLoc_Cancel"), IsCancel = true, MinWidth = 72 };
         ApplyDataOpsButtonChrome(cancelButton);
         AutomationProperties.SetAutomationId(cancelButton, "TextToColumnsCancelButton");
 
@@ -596,10 +610,22 @@ public sealed partial class MainWindow
             Margin = new Thickness(0, 8, 0, 0),
         };
 
+        var originalDataTypeGroup = new GroupBox
+        {
+            Header = UiText.Get("TableLoc_TtcOriginalDataType"),
+            Padding = new Thickness(8, 2),
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = new StackPanel
+            {
+                Children = { delimitedButton, fixedWidthButton },
+            },
+        };
+        AvaloniaCompactDialogChrome.ApplyGroupBox(originalDataTypeGroup);
+
         // Step 1: Choose the file type / original data type + preview (assigns forward-declared var)
         step1Content = new StackPanel
         {
-            Spacing = 8,
+            Spacing = 0,
             Children =
             {
                 new TextBlock
@@ -608,30 +634,17 @@ public sealed partial class MainWindow
                     TextWrapping = TextWrapping.Wrap,
                     FontSize = 12,
                     FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 0, 0, 11),
                 },
-                new Border
+                originalDataTypeGroup,
+                new TextBlock
                 {
-                    BorderBrush = Brush(171, 173, 179),
-                    BorderThickness = new Thickness(1),
-                    Padding = new Thickness(8),
-                    Child = new StackPanel
-                    {
-                        Spacing = 6,
-                        Children =
-                        {
-                            new TextBlock
-                            {
-                                Text = UiText.Get("TableLoc_TtcOriginalDataType"),
-                                FontWeight = FontWeight.SemiBold,
-                                FontSize = 12,
-                                FontFamily = FormulaBarFontFamily,
-                            },
-                            delimitedButton,
-                            fixedWidthButton,
-                        },
-                    },
+                    Text = UiText.Get("TableLoc_TtcPreviewLabel"),
+                    FontWeight = FontWeight.SemiBold,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 9, 0, 7),
                 },
-                new TextBlock { Text = UiText.Get("TableLoc_TtcPreviewLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 previewHost1,
             },
         };
@@ -655,7 +668,14 @@ public sealed partial class MainWindow
                 treatConsecutiveBox,
                 qualifierRow,
                 breaksRow,
-                new TextBlock { Text = UiText.Get("TableLoc_TtcPreviewLabel"), FontWeight = FontWeight.SemiBold, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new TextBlock
+                {
+                    Text = UiText.Get("TableLoc_TtcPreviewLabel"),
+                    FontWeight = FontWeight.SemiBold,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                    Margin = new Thickness(0, 9, 0, 7),
+                },
                 previewHost,
             },
         };
@@ -678,12 +698,12 @@ public sealed partial class MainWindow
         // WPF wizard nav button order: [< Back][Next >][Finish][Cancel]
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [backButton, nextButton, applyButton, cancelButton],
-            new Thickness(0, 10, 0, 0));
+            new Thickness(0, 12, 0, 0));
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
         dialog.Content = new DockPanel
         {
-            Margin = new Thickness(16),
+            Margin = new Thickness(12),
             Children =
             {
                 buttonRow,
@@ -691,7 +711,7 @@ public sealed partial class MainWindow
                 {
                     Content = new StackPanel
                     {
-                        Spacing = 8,
+                        Spacing = 0,
                         Children =
                         {
                             wizardStepHeader,
@@ -780,9 +800,13 @@ public sealed partial class MainWindow
         int columnCount,
         IReadOnlyDictionary<int, TextToColumnsColumnFormat> columnFormats)
     {
-        var grid = new AvaloniaGrid { Margin = new Thickness(1) };
+        var grid = new AvaloniaGrid
+        {
+            Width = 140 + Math.Max(0, columnCount - 1) * 100,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
         for (var c = 0; c < columnCount; c++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(c == 0 ? 140 : 100, GridUnitType.Pixel));
 
         grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         for (var r = 0; r < preview.SampleRows.Count; r++)
@@ -826,9 +850,9 @@ public sealed partial class MainWindow
     {
         var border = new Border
         {
-            BorderBrush = HeaderForeground,
+            BorderBrush = Brush(214, 214, 214),
             BorderThickness = new Thickness(0, 0, 1, 1),
-            Padding = new Thickness(6, 3),
+            Padding = new Thickness(6, 2.5),
             Child = new TextBlock
             {
                 Text = text,
@@ -836,6 +860,7 @@ public sealed partial class MainWindow
                 Foreground = isSkipped ? HeaderForeground : Brushes.Black,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 FontSize = 12,
+                TextAlignment = isHeader ? TextAlignment.Center : TextAlignment.Left,
             },
         };
 

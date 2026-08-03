@@ -28,6 +28,7 @@ using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Protection;
 using FreeX.App.Presentation.SlicerTimeline;
 using FreeX.App.Presentation.SparklineUI;
+using FreeX.App.Presentation.TextToColumns;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -76,8 +77,8 @@ public sealed partial class MainWindow
     private const int ForecastSheetParityDialogHeight = 150;
     private const int SubtotalParityDialogWidth = 380;
     private const int SubtotalParityDialogHeight = 390;
-    private const int TextToColumnsParityDialogWidth = 500;
-    private const int TextToColumnsParityDialogHeight = 430;
+    private const int TextToColumnsParityDialogWidth = (int)TextToColumnsParityFixture.WindowWidth;
+    private const int TextToColumnsParityDialogHeight = (int)TextToColumnsParityFixture.WindowHeight;
     private static readonly FontFamily ParityNarrowUiFontFamily =
         new("Segoe UI, Arial Narrow, Aptos Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, DejaVu Sans Condensed, Arial, Liberation Sans, sans-serif");
     private static readonly IBrush ParityBackstageSidebarBrush = Brush(0x10, 0x25, 0x3A);
@@ -1144,15 +1145,8 @@ public sealed partial class MainWindow
     private Task ShowTextToColumnsParityDialogAsync()
     {
         var sheet = _session.ActiveSheet;
-        var samples = new[]
-        {
-            "North,Widget,120",
-            "South,Gadget,85",
-            "East,Sprocket,200",
-            "West,Gizmo,64",
-        };
-        for (var i = 0; i < samples.Length; i++)
-            sheet.SetCell(new CellAddress(sheet.Id, (uint)(2 + i), 6), Cell.FromValue(new TextValue(samples[i])));
+        for (var i = 0; i < TextToColumnsParityFixture.SampleRows.Count; i++)
+            sheet.SetCell(new CellAddress(sheet.Id, (uint)(2 + i), 6), Cell.FromValue(new TextValue(TextToColumnsParityFixture.SampleRows[i])));
 
         return ShowWithParitySelectionAsync(
             new CellAddress(sheet.Id, 2, 6),

@@ -18,6 +18,7 @@ using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Protection;
 using FreeX.App.Presentation.ScenarioManager;
 using FreeX.App.Presentation.SparklineUI;
+using FreeX.App.Presentation.TextToColumns;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -612,6 +613,13 @@ internal static class ParityCapture
                 CaptureDialog(results, "dialog.EvaluateFormula", outDir, () =>
                     new EvaluateFormulaDialog(EvaluateFormulaDialogPlanner.CreateParitySummary(sheet.Id)));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.TextToColumns", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.TextToColumns", outDir, () =>
+                    new TextToColumnsDialog(
+                        TextToColumnsParityFixture.SampleRows,
+                        new CellAddress(sheet.Id, 2, 6)));
+            }
             else if (string.Equals(targetSurfaceId, "dialog.ScenarioManager", StringComparison.Ordinal))
             {
                 ScenarioManagerParityFixture.Seed(workbook, sheet.Id);
@@ -637,7 +645,7 @@ internal static class ParityCapture
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.EvaluateFormula, dialog.ScenarioManager, and the targeted Options tabs.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.GoToSpecial, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, dialog.PivotTableOptions, dialog.PageSetup, dialog.HeaderFooterDialog, dialog.Consolidate, dialog.ErrorChecking, dialog.EvaluateFormula, dialog.TextToColumns, dialog.ScenarioManager, and the targeted Options tabs.");
             }
 
             return;
@@ -678,7 +686,7 @@ internal static class ParityCapture
 
         CaptureDialog(results, "dialog.TextToColumns", outDir, () =>
             new TextToColumnsDialog(
-                ["North,Widget,120", "South,Gadget,85", "East,Sprocket,200"],
+                TextToColumnsParityFixture.SampleRows,
                 new CellAddress(sheet.Id, 2, 6)));
 
         CaptureDialog(results, "dialog.AdvancedFilter", outDir, () =>
@@ -1260,6 +1268,8 @@ internal static class ParityCapture
             "dialog.Zoom" => (ZoomDialogPlanner.Width, ZoomDialogPlanner.Height),
             "dialog.EvaluateFormula" =>
                 (EvaluateFormulaDialogPlanner.Width, EvaluateFormulaDialogPlanner.Height),
+            "dialog.TextToColumns" =>
+                (TextToColumnsParityFixture.WindowWidth, TextToColumnsParityFixture.WindowHeight),
             _ => (0, 0)
         };
 

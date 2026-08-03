@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using FreeX.App.Presentation.TextToColumns;
 
 namespace FreeX.App.Host;
 
@@ -101,7 +102,7 @@ public sealed partial class TextToColumnsDialog
     {
         var rows = previewRows?
             .Where(row => !string.IsNullOrWhiteSpace(row))
-            .Take(3)
+            .Take(TextToColumnsParityFixture.PreviewRowLimit)
             .ToList() ?? [];
 
         return rows.Count == 0

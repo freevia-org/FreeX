@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using FreeX.App.Presentation.TextToColumns;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -12,10 +13,10 @@ public sealed record TextToColumnsRangeSelectionRequest(
 
 public sealed partial class TextToColumnsDialog : Window
 {
-    private const double DialogDefaultWidth = 560d;
-    private const double DialogDefaultHeight = 560d;
-    private const double DialogMinimumWidth = 520d;
-    private const double DialogMinimumHeight = 500d;
+    private const double DialogDefaultWidth = TextToColumnsParityFixture.WindowWidth;
+    private const double DialogDefaultHeight = TextToColumnsParityFixture.WindowHeight;
+    private const double DialogMinimumWidth = TextToColumnsParityFixture.MinimumWindowWidth;
+    private const double DialogMinimumHeight = TextToColumnsParityFixture.MinimumWindowHeight;
 
     private static readonly string[] DateColumnFormatLabels = ["MDY", "DMY", "YMD", "MYD", "DYM", "YDM"];
 
