@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Opc;
 using Free.Shared.Shell.Avalonia;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
@@ -14,6 +15,7 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = AvaloniaCompactDialogChrome.WindowsStyle;
 
     private readonly DocumentProperties _properties;
+    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Properties;
     private readonly TextBox _title = new() { MinWidth = 280 };
     private readonly TextBox _author = new() { MinWidth = 280 };
     private readonly TextBox _subject = new() { MinWidth = 280 };
@@ -51,7 +53,7 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
             Margin = new Thickness(16, 12, 16, 8),
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
         };
-        AddRow(grid, 0, "Title:", _title, "DocumentPropertiesTitle");
+        AddRow(grid, 0, "Title:", _title, FocusPlan.InitialFocusTargetAutomationId);
         AddRow(grid, 1, "Author:", _author, "DocumentPropertiesAuthor");
         AddRow(grid, 2, "Subject:", _subject, "DocumentPropertiesSubject");
         AddRow(grid, 3, "Keywords:", _keywords, "DocumentPropertiesKeywords");
@@ -77,7 +79,15 @@ internal sealed class PropertiesDialog : FreeWDialogWindow
             },
         };
 
-        Opened += (_, _) => _title.Focus();
+        Opened += (_, _) => FocusTitle();
+    }
+
+    private void FocusTitle()
+    {
+        if (FocusPlan.SelectAllOnFocus)
+            AvaloniaCompactDialogChrome.FocusAndSelect(_title);
+        else
+            _title.Focus();
     }
 
     private void Commit()

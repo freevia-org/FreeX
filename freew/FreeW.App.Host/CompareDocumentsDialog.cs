@@ -1,7 +1,9 @@
 using System;
 using System.IO;
+using System.Windows.Automation;
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -50,6 +52,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly RadioButton _radioOriginal;
     private readonly RadioButton _radioRevised;
     private readonly Expander _moreExpander;
+    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
 
     private Result? _result;
 
@@ -71,6 +74,7 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
             MinWidth = 220,
             MaxWidth = 260
         };
+        AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTargetAutomationId);
 
         // ---- Comparison Settings (all on by default, matching Word) ----
         _chkInsertions  = MakeCheckBox("Insertions and deletions", true);
@@ -137,7 +141,15 @@ internal sealed class CompareDocumentsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         grid.Children.Add(buttons);
 
         Content = grid;
-        DialogFocus.FocusAndSelect(_authorBox);
+        Loaded += (_, _) => FocusAuthor();
+    }
+
+    private void FocusAuthor()
+    {
+        if (FocusPlan.SelectAllOnFocus)
+            DialogFocus.FocusAndSelect(_authorBox);
+        else
+            DialogFocus.Focus(_authorBox);
     }
 
     private static CheckBox MakeCheckBox(string label, bool isChecked) =>

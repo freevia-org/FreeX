@@ -57,6 +57,34 @@ public sealed class SharedPresentationBoundarySourceGuardTests
     }
 
     [Fact]
+    public void Focus_routes_consume_shared_targets_and_keep_WPF_keyboard_hooks()
+    {
+        var wpfSources = new[]
+        {
+            ReadSource("freew", "FreeW.App.Host", "CompareDocumentsDialog.cs"),
+            ReadSource("freew", "FreeW.App.Host", "PropertiesDialog.cs"),
+            ReadSource("freew", "FreeW.App.Host", "TableFormulaDialog.cs"),
+            ReadSource("freew", "FreeW.App.Host", "ZoomDialog.cs"),
+        };
+        var avaloniaSources = new[]
+        {
+            ReadSource("freew", "FreeW.App.Avalonia", "ReviewCompareCombineDialogs.cs"),
+            ReadSource("freew", "FreeW.App.Avalonia", "PropertiesDialog.cs"),
+            ReadSource("freew", "FreeW.App.Avalonia", "TableDialogs.cs"),
+            ReadSource("freew", "FreeW.App.Avalonia", "ZoomDialog.cs"),
+        };
+
+        foreach (var source in wpfSources.Concat(avaloniaSources))
+        {
+            source.Should().Contain("FreeWDialogFocusPlanner");
+            source.Should().Contain("FocusPlan.SelectAllOnFocus");
+        }
+
+        wpfSources.Should().OnlyContain(source => source.Contains("FocusAndSelect", StringComparison.Ordinal));
+        avaloniaSources.Should().OnlyContain(source => source.Contains("FocusAndSelect", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void PlatformDocumentViews_ConsumeSharedReviewDisplayStateTransitions()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");

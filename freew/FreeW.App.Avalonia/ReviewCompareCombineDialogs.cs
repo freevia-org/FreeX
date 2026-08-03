@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Presentation.Ribbon;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
@@ -40,6 +41,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         TextWrapping = TextWrapping.Wrap,
         IsVisible = false,
     };
+    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.CompareDocuments;
 
     public CompareDocumentsDialogResult? Result { get; private set; }
 
@@ -63,7 +65,7 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
         ApplyRadioChrome(_showNew, _showOriginal, _showRevised);
 
         AutomationProperties.SetAutomationId(this, "CompareDocumentsDialog");
-        AutomationProperties.SetAutomationId(_authorBox, "CompareDocumentsAuthorBox");
+        AutomationProperties.SetAutomationId(_authorBox, FocusPlan.InitialFocusTargetAutomationId);
         AutomationProperties.SetAutomationId(_validation, "CompareDocumentsValidationText");
 
         var grid = DialogGrid(rows: 7);
@@ -197,8 +199,10 @@ internal sealed class CompareDocumentsDialog : FreeWDialogWindow
 
     private void FocusAuthor()
     {
-        _authorBox.Focus();
-        _authorBox.SelectAll();
+        if (FocusPlan.SelectAllOnFocus)
+            AvaloniaCompactDialogChrome.FocusAndSelect(_authorBox);
+        else
+            _authorBox.Focus();
     }
 
     private static CheckBox MakeCheckBox(string content, bool isChecked) =>

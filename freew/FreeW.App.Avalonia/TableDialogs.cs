@@ -22,6 +22,7 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
     private readonly ComboBox _format;
     private readonly ComboBox _function;
     private readonly TextBlock _validation = new();
+    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.TableFormula;
 
     public TableFormulaField? Result { get; private set; }
 
@@ -51,7 +52,7 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
             _function.Items.Add(function);
         _function.SelectionChanged += (_, _) => PasteSelectedFunction();
 
-        ApplyInputChrome(_formula, "TableFormulaFormulaBox");
+        ApplyInputChrome(_formula, FocusPlan.InitialFocusTargetAutomationId);
         ApplyComboChrome(_format, "TableFormulaNumberFormatBox");
         ApplyComboChrome(_function, "TableFormulaPasteFunctionBox");
         AvaloniaCompactDialogChrome.ApplyValidationStatus(
@@ -135,8 +136,10 @@ internal sealed class TableFormulaDialog : FreeWDialogWindow
 
     private void FocusFormula()
     {
-        _formula.Focus();
-        _formula.SelectAll();
+        if (FocusPlan.SelectAllOnFocus)
+            AvaloniaCompactDialogChrome.FocusAndSelect(_formula);
+        else
+            _formula.Focus();
     }
 
     private static TextBlock Label(string text, double top = 0) =>

@@ -1,6 +1,8 @@
+using System.Windows.Automation;
 using System.Windows;
 using System.Windows.Controls;
 using Free.Shared.Opc;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -26,6 +28,7 @@ internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         TextWrapping = TextWrapping.Wrap,
         VerticalScrollBarVisibility = ScrollBarVisibility.Auto
     };
+    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Properties;
 
     public PropertiesDialog(Window owner, DocumentProperties properties)
     {
@@ -43,6 +46,7 @@ internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _subject.Text = properties.Subject ?? string.Empty;
         _keywords.Text = properties.Keywords ?? string.Empty;
         _comments.Text = properties.Comments ?? string.Empty;
+        AutomationProperties.SetAutomationId(_title, FocusPlan.InitialFocusTargetAutomationId);
 
         var grid = new Grid { Margin = new Thickness(14) };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -64,6 +68,15 @@ internal sealed class PropertiesDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         outer.Children.Add(grid);
         outer.Children.Add(buttons);
         Content = outer;
+        Loaded += (_, _) => FocusTitle();
+    }
+
+    private void FocusTitle()
+    {
+        if (FocusPlan.SelectAllOnFocus)
+            DialogFocus.FocusAndSelect(_title);
+        else
+            DialogFocus.Focus(_title);
     }
 
     private void Commit()

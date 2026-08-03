@@ -1,3 +1,4 @@
+using System.Windows.Automation;
 using System.Windows;
 using System.Windows.Controls;
 using FreeW.App.Presentation.Dialogs;
@@ -19,6 +20,7 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly TextBox _formula;
     private readonly ComboBox _format;
     private TableFormulaField? _result;
+    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.TableFormula;
 
     private TableFormulaDialog(Window? owner, TableFormulaDialogInitialState initialState)
     {
@@ -34,6 +36,7 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.FormulaLabel, Margin = new Thickness(0, 0, 0, 4) });
         _formula = new TextBox { Text = initialState.FormulaText };
+        AutomationProperties.SetAutomationId(_formula, FocusPlan.InitialFocusTargetAutomationId);
         panel.Children.Add(_formula);
 
         panel.Children.Add(new TextBlock { Text = TableFormulaDialogPlanner.NumberFormatLabel, Margin = new Thickness(0, 10, 0, 4) });
@@ -65,7 +68,15 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Accept, buttonWidth: 72, rowMargin: new Thickness(0, 14, 0, 0)));
 
         Content = panel;
-        Loaded += (_, _) => DialogFocus.FocusAndSelect(_formula);
+        Loaded += (_, _) => FocusFormula();
+    }
+
+    private void FocusFormula()
+    {
+        if (FocusPlan.SelectAllOnFocus)
+            DialogFocus.FocusAndSelect(_formula);
+        else
+            DialogFocus.Focus(_formula);
     }
 
     private void Accept()
@@ -76,7 +87,7 @@ internal sealed class TableFormulaDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 out var errorMessage))
         {
             DialogMessageHelper.ShowWarning(this, errorMessage ?? TableFormulaDialogPlanner.ValidationMessage, TableFormulaDialogPlanner.Title);
-            DialogFocus.FocusAndSelect(_formula);
+            FocusFormula();
             return;
         }
 

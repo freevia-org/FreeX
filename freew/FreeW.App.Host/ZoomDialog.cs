@@ -27,6 +27,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private readonly ZoomDialogFitFactors _fitFactors;
     private double? _result;
+    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Zoom;
 
     private ZoomDialog(Window? owner, double currentFactor, double pageWidthFactor, double textWidthFactor, double wholePageFactor)
     {
@@ -43,11 +44,11 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var plan = ZoomDialogPlanner.Build(currentFactor);
         _percentBox.Text = plan.CustomPercentText;
         AutomationProperties.SetName(_percentBox, "Custom zoom percent");
-        AutomationProperties.SetAutomationId(_percentBox, "ZoomCustomPercentBox");
+        AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTargetAutomationId);
         _percentBox.GotKeyboardFocus += (_, _) => _customButton.IsChecked = true;
 
         Content = BuildContent(plan);
-        DialogFocus.FocusAndSelect(_percentBox);
+        Loaded += (_, _) => FocusPercent();
     }
 
     // The radio column: the fixed presets, then the page-relative fits, then the custom % row. The button
@@ -109,7 +110,7 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         {
             DialogMessageHelper.ShowWarning(this, ResolveValidationError(error), Title);
             _customButton.IsChecked = true;
-            DialogFocus.FocusAndSelect(_percentBox);
+            FocusPercent();
             return;
         }
 
@@ -146,6 +147,14 @@ internal sealed class ZoomDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             ZoomDialogValidationError.WholePercentRequired => "Enter a whole zoom percentage.",
             _ => "Enter a whole zoom percentage."
         };
+
+    private void FocusPercent()
+    {
+        if (FocusPlan.SelectAllOnFocus)
+            DialogFocus.FocusAndSelect(_percentBox);
+        else
+            DialogFocus.Focus(_percentBox);
+    }
 
     /// <summary>
     /// Show the Zoom dialog seeded with the current zoom and the host-computed fit factors (Page width /

@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -39,6 +40,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
     };
     private readonly TextBlock _status = new();
     private readonly List<(RadioButton Button, int Percent)> _presetButtons = [];
+    private static readonly DialogFocusPlan FocusPlan = FreeWDialogFocusPlanner.Zoom;
 
     /// <summary>The scale the user accepted (1.0 == 100%), or <c>null</c> if cancelled.</summary>
     public double? Result { get; private set; }
@@ -53,6 +55,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         ShowInTaskbar = false;
 
         AvaloniaCompactDialogChrome.ApplyTextBox(_percentBox, DialogChromeStyle);
+        AutomationProperties.SetAutomationId(_percentBox, FocusPlan.InitialFocusTargetAutomationId);
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
         var plan = ZoomDialogPlanner.Build(currentScale);
@@ -110,6 +113,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
             LastChildFill = true,
             Children = { buttons, new StackPanel { Children = { presets, _status } } },
         };
+        Opened += (_, _) => FocusPercent();
     }
 
     /// <summary>
@@ -135,7 +139,7 @@ internal sealed class ZoomDialog : FreeWDialogWindow
             _status.Text = ZoomDialogPlanner.ValidationMessageFor(error);
             _status.IsVisible = true;
             _customButton.IsChecked = true;
-            _percentBox.Focus();
+            FocusPercent();
             return;
         }
 
@@ -181,5 +185,13 @@ internal sealed class ZoomDialog : FreeWDialogWindow
         };
         AvaloniaCompactDialogChrome.ApplyRadioButton(button, DialogChromeStyle);
         return button;
+    }
+
+    private void FocusPercent()
+    {
+        if (FocusPlan.SelectAllOnFocus)
+            AvaloniaCompactDialogChrome.FocusAndSelect(_percentBox);
+        else
+            _percentBox.Focus();
     }
 }
