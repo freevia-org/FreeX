@@ -481,7 +481,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyComboBox(cb, DrawingDialogChromeStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(cb, DrawingDialogChromeStyle);");
         source.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([resetButton, ok, cancel], new Thickness(0, 8, 0, 0))");
-        source.Should().Contain("DrawingDialogChromeStyle with { ButtonPadding = new Thickness(8, 1) }");
+        source.Should().Contain("DrawingDialogChromeStyle with { ButtonHeight = 22, ButtonPadding = new Thickness(8, 1) }");
 
         AssertNoLocalButtonChrome(source);
         AssertNoLocalTextBoxChrome(source, "tb");

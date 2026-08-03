@@ -26,6 +26,7 @@ public sealed class PptxPackageRetentionTests
         "13-wordart.pptx",
         "14-smartart-live.pptx",
         "15-picture-crop.pptx",
+        "15-smartart-grouped-list.pptx",
         "16-bg-tabs-vtext.pptx",
         "17-bullets-autofit.pptx",
         "18-chart-types.pptx",

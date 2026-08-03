@@ -1195,6 +1195,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.scripted-function-name",
             "freep.omml.border-box-side-strike-lines",
             "freep.smartart.continuous-block-process",
+            "freep.smartart.grouped-list-import-bands",
             "freep.smartart.basic-process",
             "freep.smartart.basic-timeline",
             "freep.smartart.step-down-process",
