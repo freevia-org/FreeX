@@ -447,10 +447,11 @@ internal static class PptxChartWriter
         if (chart.SeriesLinesSpecified && chart.ChartType != ChartType.OfPie)
         {
             var lastSeries = chartType.Elements(C + "ser").LastOrDefault();
+            var seriesLines = BuildSeriesLinesEl(chart);
             if (lastSeries is not null)
-                lastSeries.AddAfterSelf(new XElement(C + "serLines"));
+                lastSeries.AddAfterSelf(seriesLines);
             else
-                chartType.AddFirst(new XElement(C + "serLines"));
+                chartType.AddFirst(seriesLines);
         }
 
         return chartType;
@@ -474,6 +475,14 @@ internal static class PptxChartWriter
             chart.BarGapWidthPercent is { } gapWidth
                 ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(gapWidth, 0, 500)))
                 : null);
+
+    private static XElement BuildSeriesLinesEl(ChartShape chart)
+    {
+        var spPr = chart.SeriesLineStyle is null
+            ? null
+            : new XElement(C + "spPr", BuildLineStyleEl(chart.SeriesLineStyle));
+        return new XElement(C + "serLines", spPr);
+    }
 
     private static XElement BuildBarChartEl(ChartShape chart, List<XElement> seriesEls, bool isBar,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId)

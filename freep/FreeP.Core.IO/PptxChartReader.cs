@@ -97,9 +97,14 @@ internal static class PptxChartReader
             : PptxColorReader.TryReadOutline(plotAreaSpPr.Element(A + "ln"), scheme);
 
         var serIdxMap = DetectChartTypeAndSeries(plotArea, shape, scheme);
-        shape.SeriesLinesSpecified = plotArea.Elements()
+        var seriesLines = plotArea.Elements()
             .Where(IsChartTypeElement)
-            .Any(chartType => chartType.Element(C + "serLines") is not null);
+            .Select(chartType => chartType.Element(C + "serLines"))
+            .FirstOrDefault(element => element is not null);
+        shape.SeriesLinesSpecified = seriesLines is not null;
+        shape.SeriesLineStyle = seriesLines is null
+            ? null
+            : ReadLineStyle(seriesLines.Element(C + "spPr")?.Element(A + "ln"), scheme);
         shape.LeaderLinesSpecified = plotArea.Elements()
             .Where(IsChartTypeElement)
             .Any(chartType => chartType.Element(C + "leaderLines") is not null);

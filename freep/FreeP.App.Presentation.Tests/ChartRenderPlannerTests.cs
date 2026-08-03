@@ -226,6 +226,34 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_UsesAuthoredSeriesLineStroke()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnStacked,
+            SeriesLinesSpecified = true,
+            SeriesLineStyle = new ChartLineStyle
+            {
+                Color = new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
+                WidthPt = 2.25,
+                Dash = OutlineDash.Dash,
+            },
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20, 15 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.SeriesLines.Should().NotBeEmpty();
+        scene.SeriesLines.Should().OnlyContain(line =>
+            line.Stroke.Color == SrgbColor.FromRgb(0xC00000)
+            && Math.Abs(line.Stroke.Thickness - 3.0) < 0.001
+            && line.Stroke.Dash == OutlineDash.Dash);
+    }
+
+    [Fact]
     public void BuildScenePlan_DoesNotEmitGenericSeriesLinesForClusteredCharts()
     {
         var chart = new ChartShape

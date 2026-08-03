@@ -663,6 +663,12 @@ public sealed class ChartShape
     public bool SeriesLinesSpecified { get; set; }
 
     /// <summary>
+    /// Authored <c>c:serLines/c:spPr/a:ln</c> style for stacked-chart series
+    /// connectors. Null preserves the chart-family default stroke.
+    /// </summary>
+    public ChartLineStyle? SeriesLineStyle { get; set; }
+
+    /// <summary>
     /// Whether a pie-family chart explicitly included the chart-level
     /// <c>leaderLines</c> element. This is distinct from the data-label
     /// <c>showLeaderLines</c> option, which is the older modeled route.
