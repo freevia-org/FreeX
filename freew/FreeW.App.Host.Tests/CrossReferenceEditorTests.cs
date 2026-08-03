@@ -71,6 +71,16 @@ public sealed class CrossReferenceEditorTests
         field.Text.Should().Be("Chapter One");
         field.CrossReference!.Target.Should().Be("_Ref3");
         ((Paragraph)view.Model.Blocks[0]).BookmarkNames.Should().Equal("chapter", "_Ref2", "_Ref3");
+
+        view.Undo();
+        ((Paragraph)view.Model.Blocks[0]).BookmarkNames.Should().Equal("chapter", "_Ref2");
+        view.Model.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Should().NotContain(run => run.CrossReference != null);
+
+        view.Redo();
+        ((Paragraph)view.Model.Blocks[0]).BookmarkNames.Should().Equal("chapter", "_Ref2", "_Ref3");
+        InsertedField(view).CrossReference!.Target.Should().Be("_Ref3");
     }
 
     [StaFact]

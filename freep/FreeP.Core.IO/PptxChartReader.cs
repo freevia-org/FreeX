@@ -100,6 +100,9 @@ internal static class PptxChartReader
         shape.SeriesLinesSpecified = plotArea.Elements()
             .Where(IsChartTypeElement)
             .Any(chartType => chartType.Element(C + "serLines") is not null);
+        shape.LeaderLinesSpecified = plotArea.Elements()
+            .Where(IsChartTypeElement)
+            .Any(chartType => chartType.Element(C + "leaderLines") is not null);
         if (shape.ChartType == ChartType.OfPie)
             shape.OfPieSeriesLinesSpecified = shape.SeriesLinesSpecified;
         ApplyPowerPointAutomaticTitleDefault(chartEl, shape);

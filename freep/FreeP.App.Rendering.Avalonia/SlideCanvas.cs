@@ -1444,6 +1444,7 @@ public sealed class SlideCanvas : Control
                 ToRect(primitive.Bounds));
         }
 
+        RenderDropLines(dc, scene.SeriesLines);
         foreach (var connector in scene.WaterfallConnectorLines)
             dc.DrawLine(ToPen(connector.Stroke), ToPoint(connector.Start), ToPoint(connector.End));
     }
@@ -1628,6 +1629,8 @@ public sealed class SlideCanvas : Control
                 primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
                 ToRect(primitive.Bounds));
         }
+
+        RenderDropLines(dc, scene.SeriesLines);
     }
 
     private static void RenderProjectedThreeDBarFrame(DrawingContext dc, ChartScenePlan scene)

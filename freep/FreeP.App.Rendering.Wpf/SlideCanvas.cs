@@ -1366,6 +1366,7 @@ public sealed class SlideCanvas : FrameworkElement
                 ToRect(primitive.Bounds));
         }
 
+        RenderDropLines(dc, scene.SeriesLines);
         foreach (var connector in scene.WaterfallConnectorLines)
             dc.DrawLine(ToPen(connector.Stroke), ToPoint(connector.Start), ToPoint(connector.End));
     }
@@ -1484,6 +1485,8 @@ public sealed class SlideCanvas : FrameworkElement
                 primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
                 ToRect(primitive.Bounds));
         }
+
+        RenderDropLines(dc, scene.SeriesLines);
     }
 
     // ── Line chart ────────────────────────────────────────────────────────────

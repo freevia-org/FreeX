@@ -81,6 +81,7 @@ public sealed class ChartTests : IDisposable
         chart.ShowDataLabelsOverMaximum = true;
         chart.ShowDropLines = true;
         chart.ShowUpDownBars = true;
+        chart.LeaderLinesSpecified = true;
         chart.UpDownBarGapWidthPercent = 180;
         chart.UpBarFill = new ShapeFill.Solid(new SrgbColor(0x11, 0x22, 0x33));
         chart.DownBarFill = new ShapeFill.Solid(new SrgbColor(0xAA, 0xBB, 0xCC));
@@ -115,6 +116,7 @@ public sealed class ChartTests : IDisposable
         clonedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
         clonedChart.ShowDropLines.Should().BeTrue();
         clonedChart.ShowUpDownBars.Should().BeTrue();
+        clonedChart.LeaderLinesSpecified.Should().BeTrue();
         clonedChart.UpDownBarGapWidthPercent.Should().Be(180);
         clonedChart.UpBarFill.Should().Be(chart.UpBarFill);
         clonedChart.DownBarFill.Should().Be(chart.DownBarFill);
@@ -1024,6 +1026,28 @@ public sealed class ChartTests : IDisposable
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Pie);
         rt.FirstSliceAngleDegrees.Should().Be(270);
+    }
+
+    [Fact]
+    public void RoundTrip_PieChart_NativeLeaderLinesPreservedInPackageAndModel()
+    {
+        var chart = BuildPieChart();
+        chart.LeaderLinesSpecified = true;
+        chart.DataLabels = new ChartDataLabels { ShowPercent = true };
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(ChartNs + "pieChart")
+                .Single()
+                .Element(ChartNs + "leaderLines")
+                .Should().NotBeNull();
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.LeaderLinesSpecified.Should().BeTrue();
     }
 
     [Theory]
