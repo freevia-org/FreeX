@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -14,7 +15,6 @@ namespace Free.Shared.Shell.Wpf;
 public sealed class BackstagePaneComposer
 {
     private const string DirtySuffix = "  (unsaved changes)";
-    private const string NotSavedYetText = "Not saved yet";
 
     private readonly BackstageVisualKit _kit;
 
@@ -29,15 +29,15 @@ public sealed class BackstagePaneComposer
         ArgumentNullException.ThrowIfNull(spec);
 
         var panel = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        panel.Children.Add(_kit.HeadingText("Info"));
+        panel.Children.Add(_kit.HeadingText(BackstageInfoPaneText.Title));
         panel.Children.Add(_kit.Field(
             spec.DocumentKindLabel,
             spec.DisplayName + (spec.IsDirty ? DirtySuffix : string.Empty)));
-        panel.Children.Add(_kit.Field("Location", spec.Location ?? NotSavedYetText));
+        panel.Children.Add(_kit.Field(BackstageInfoPaneText.LocationLabel, spec.Location ?? BackstageInfoPaneText.NotSavedYet));
 
         if (spec.Properties.Count > 0)
         {
-            panel.Children.Add(_kit.SubHeading("Properties"));
+            panel.Children.Add(_kit.SubHeading(BackstageInfoPaneText.PropertiesHeading));
             AddFields(panel, spec.Properties);
         }
 
@@ -50,7 +50,7 @@ public sealed class BackstagePaneComposer
 
         if (spec.Statistics.Count > 0)
         {
-            panel.Children.Add(_kit.SubHeading("Statistics"));
+            panel.Children.Add(_kit.SubHeading(BackstageInfoPaneText.StatisticsHeading));
             AddFields(panel, spec.Statistics);
         }
 
@@ -251,6 +251,10 @@ public sealed class BackstagePaneComposer
             Margin = new Thickness(0, 0, 0, 10)
         };
         button.Click += (_, _) => action.Invoke();
+        // The action label is the shared semantic contract. Keep it on the
+        // button even though the visual content is a two-line StackPanel so
+        // accessibility clients and the parity harness see the same action.
+        AutomationProperties.SetName(button, action.Label);
 
         var stack = new StackPanel();
         stack.Children.Add(new TextBlock
@@ -281,6 +285,7 @@ public sealed class BackstagePaneComposer
         var row = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
         var button = _kit.LinkButton(action.Label, action.Invoke);
         button.FontSize = 14;
+        AutomationProperties.SetName(button, action.Label);
         row.Children.Add(button);
 
         if (!string.IsNullOrWhiteSpace(action.Description))

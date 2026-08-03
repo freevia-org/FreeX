@@ -101,7 +101,6 @@ internal sealed class BackstageView : UserControl
     {
         _editor.CommitToModel();
         var model = _editor.Model;
-        var stats = WordCount.Of(model);
         var properties = model.Properties;
         var safetySurface = BackstagePaneSurfacePlanner.BuildInfoPane(
             [],
@@ -121,12 +120,7 @@ internal sealed class BackstageView : UserControl
                 properties.Author,
                 properties.Subject,
                 properties.Keywords),
-            Statistics:
-            [
-                new("Words", stats.Words.ToString()),
-                new("Characters", stats.CharactersWithSpaces.ToString()),
-                new("Paragraphs", stats.Paragraphs.ToString()),
-            ],
+            Statistics: BackstageInfoStatisticsPlanner.Build(model),
             EditPropertiesText: "Edit document properties\u2026",
             EditProperties: _backstage.HideThen(_actions.EditProperties),
             ActionGroups: ToActionGroups(safetySurface.SafetyGroups))));

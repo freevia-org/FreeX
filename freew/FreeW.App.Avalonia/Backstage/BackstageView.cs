@@ -481,7 +481,7 @@ internal sealed class BackstageView : Window
                 document.Properties.Author,
                 document.Properties.Subject,
                 document.Properties.Keywords),
-            Statistics: BuildInfoDocumentStatistics(),
+            Statistics: BackstageInfoStatisticsPlanner.Build(document),
             EditPropertiesText: "Edit document properties\u2026",
             EditProperties: DismissThen(_callbacks.EditProperties),
             ActionGroups: ToInfoActionGroups(safetyGroups)));
@@ -494,7 +494,7 @@ internal sealed class BackstageView : Window
         ArgumentNullException.ThrowIfNull(plan);
 
         var content = new StackPanel { MaxWidth = 640, HorizontalAlignment = HorizontalAlignment.Left };
-        content.Children.Add(CreateHeading(BackstageViewTextResources.Info.Title));
+        content.Children.Add(CreateHeading(BackstageInfoPaneText.Title));
 
         var documentGrid = CreateDetailGrid();
         AddDetailRow(
@@ -504,14 +504,14 @@ internal sealed class BackstageView : Window
             "InfoDocumentName");
         AddDetailRow(
             documentGrid,
-            BackstageViewTextResources.PathLabel,
-            plan.Location ?? BackstageViewTextResources.NotSavedValue,
+            BackstageInfoPaneText.LocationLabel,
+            plan.Location ?? BackstageInfoPaneText.NotSavedYet,
             "InfoDocumentPath");
         content.Children.Add(documentGrid);
 
         if (plan.Properties.Count > 0)
         {
-            content.Children.Add(CreateSectionHeader(BackstageViewTextResources.DocumentPropertiesSection));
+            content.Children.Add(CreateSectionHeader(BackstageInfoPaneText.PropertiesHeading));
             var propsGrid = CreateDetailGrid();
             foreach (var field in plan.Properties)
                 AddDetailRow(propsGrid, field.Label, field.Value, $"InfoProperty_{field.Label}");
@@ -528,7 +528,7 @@ internal sealed class BackstageView : Window
 
         if (plan.Statistics.Count > 0)
         {
-            content.Children.Add(CreateSectionHeader("Statistics"));
+            content.Children.Add(CreateSectionHeader(BackstageInfoPaneText.StatisticsHeading));
             var statsGrid = CreateDetailGrid();
             foreach (var field in plan.Statistics)
                 AddDetailRow(statsGrid, field.Label, field.Value, $"InfoStatistic_{field.Label}");
@@ -889,29 +889,6 @@ internal sealed class BackstageView : Window
             });
         }
         return stack;
-    }
-
-    private IReadOnlyList<BackstageFieldRow> BuildInfoDocumentStatistics()
-    {
-        var fields = new List<BackstageFieldRow>();
-
-        if (_callbacks.CurrentPath is { } path && File.Exists(path))
-        {
-            try
-            {
-                var info = new FileInfo(path);
-                fields.Add(new BackstageFieldRow(
-                    BackstageViewTextResources.SizeLabel,
-                    FormatFileSize(info.Length)));
-                fields.Add(new BackstageFieldRow(
-                    BackstageViewTextResources.ModifiedLabel,
-                    info.LastWriteTime.ToString("g")));
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-
-        return fields;
     }
 
     private IReadOnlyList<BackstageActionGroup> ToInfoActionGroups(
@@ -1381,13 +1358,6 @@ internal sealed class BackstageView : Window
         if (string.IsNullOrWhiteSpace(baseName))
             baseName = "Document";
         return baseName + normalized;
-    }
-
-    private static string FormatFileSize(long bytes)
-    {
-        if (bytes < 1024) return $"{bytes} B";
-        if (bytes < 1024 * 1024) return $"{bytes / 1024.0:0.#} KB";
-        return $"{bytes / (1024.0 * 1024.0):0.##} MB";
     }
 
     private static string PrintEvidenceKindLabel(BackstagePrintEvidenceKind kind) => kind switch

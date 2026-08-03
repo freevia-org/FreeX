@@ -43,6 +43,7 @@ public sealed class SharedBackstageInfoPlanDedupTests
         var sharedInfo = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell", "BackstageInfoPaneSpec.cs"));
         var sharedPlanner = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell", "SisterBackstageInfoPanePlanner.cs"));
         var wpfComposer = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell.Wpf", "BackstagePaneComposer.cs"));
+        var wpfView = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "Backstage", "BackstageView.cs"));
         var avaloniaView = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Avalonia", "Backstage", "BackstageView.cs"));
 
         File.Exists(Path.Combine(root, "shared", "Free.Shared.Shell.Wpf", "BackstageCorePropertiesPlanner.cs")).Should().BeFalse();
@@ -53,6 +54,8 @@ public sealed class SharedBackstageInfoPlanDedupTests
         wpfComposer.Should().NotContain("public sealed record BackstageInfoPaneSpec");
         avaloniaView.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
         avaloniaView.Should().Contain("BackstageInfoPaneSpec plan");
+        wpfView.Should().Contain("BackstageInfoStatisticsPlanner.Build(model)");
+        avaloniaView.Should().Contain("BackstageInfoStatisticsPlanner.Build(document)");
         avaloniaView.Should().NotContain("BackstagePaneSurfacePlanner.BuildInfoPane(");
     }
 

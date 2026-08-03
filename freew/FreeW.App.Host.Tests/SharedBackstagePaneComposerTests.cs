@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -516,15 +517,15 @@ public sealed class SharedBackstagePaneComposerTests
             EditProperties: () => edited = true));
 
         Texts(pane).Should().Contain([
-            "Info",
+            BackstageInfoPaneText.Title,
             "Document",
             "Report  (unsaved changes)",
-            "Location",
-            "Not saved yet",
-            "Properties",
+            BackstageInfoPaneText.LocationLabel,
+            BackstageInfoPaneText.NotSavedYet,
+            BackstageInfoPaneText.PropertiesHeading,
             "Title",
             "Budget",
-            "Statistics",
+            BackstageInfoPaneText.StatisticsHeading,
             "Words",
             "123",
         ]);
@@ -565,6 +566,7 @@ public sealed class SharedBackstagePaneComposerTests
 
         var action = Descendants<Button>(pane).Single();
         action.Content.Should().NotBeNull();
+        AutomationProperties.GetName(action).Should().Be("Mark as Final");
         action.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
         invoked.Should().BeTrue();

@@ -454,6 +454,38 @@ public class BackstageViewTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task BackstageView_Info_uses_shared_text_and_action_semantics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var view = new BackstageView(BuildTestCallbacks());
+            view.TryActivateEntry("Info").Should().BeTrue();
+
+            var text = view.GetLogicalDescendants()
+                .OfType<TextBlock>()
+                .Select(block => block.Text)
+                .ToArray();
+            text.Should().Contain([
+                BackstageInfoPaneText.Title,
+                BackstageInfoPaneText.LocationLabel,
+                BackstageInfoPaneText.NotSavedYet,
+                BackstageInfoPaneText.PropertiesHeading,
+                BackstageInfoPaneText.StatisticsHeading]);
+
+            var buttons = view.GetLogicalDescendants()
+                .OfType<Button>()
+                .Where(button => (AutomationProperties.GetAutomationId(button) ?? string.Empty)
+                    .StartsWith("BackstageAction_", StringComparison.Ordinal))
+                .ToArray();
+            buttons.Select(AutomationProperties.GetName).Should().Equal(
+                "Mark as Final",
+                "Restrict Editing",
+                "Inspect Document",
+                "Check Accessibility");
+        }, CancellationToken.None);
+    }
+
     // ── Planner output assertions ──────────────────────────────────────────────
 
     [Fact]

@@ -206,6 +206,21 @@ public sealed class BackstagePaneSurfacePlannerTests
     }
 
     [Fact]
+    public void BackstageInfoStatisticsPlanner_UsesOneSharedDocumentSummary()
+    {
+        var document = new TextDocument();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("One two"));
+        document.Blocks.Add(new Paragraph("Three"));
+
+        BackstageInfoStatisticsPlanner.Build(document)
+            .Should().Equal(
+                new BackstageFieldRow("Words", "3"),
+                new BackstageFieldRow("Characters", "12"),
+                new BackstageFieldRow("Paragraphs", "2"));
+    }
+
+    [Fact]
     public void BuildInfoPane_UsesDocumentStateForSafetyActionText()
     {
         var document = new TextDocument
