@@ -215,13 +215,11 @@ internal sealed class OptionsDialog : FreeWDialogWindow
 
     private void BuildReplacementTable()
     {
-        _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(20)));
-        _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(20)));
         _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(1, GridUnitType.Star)));
+        _replacementGrid.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(2, GridUnitType.Star)));
         _replacementGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
         _replacementGrid.Children.Add(HeaderCell("Replace", 0));
         _replacementGrid.Children.Add(HeaderCell("With", 1));
-        _replacementGrid.Children.Add(HeaderCell(string.Empty, 2));
 
         OptionsDialogPlanner.TryParseAutoCorrectReplacements(
             _surface.AutoCorrect.ReplacementsText,
@@ -240,12 +238,6 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         _replacements.BorderBrush = new SolidColorBrush(Color.FromRgb(171, 173, 179));
         _replacements.BorderThickness = new Thickness(1);
         _replacements.ClipToBounds = true;
-        _replacements.SizeChanged += (_, _) =>
-        {
-            var viewportWidth = _replacements.Bounds.Width - 20;
-            if (viewportWidth > 0)
-                _replacementGrid.Width = viewportWidth;
-        };
     }
 
     private void AddReplacementRow(string replace = "", string with = "")
@@ -267,14 +259,6 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         Grid.SetColumn(row.With, 1);
         _replacementGrid.Children.Add(row.Replace);
         _replacementGrid.Children.Add(row.With);
-        var filler = new Border
-        {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(171, 173, 179)),
-            BorderThickness = new Thickness(0, 0, 1, 1),
-        };
-        Grid.SetRow(filler, rowIndex);
-        Grid.SetColumn(filler, 2);
-        _replacementGrid.Children.Add(filler);
         _replacementEditors.Add(row);
 
         row.Replace.TextChanged += ReplacementChanged;
