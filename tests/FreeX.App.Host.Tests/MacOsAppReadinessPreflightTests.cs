@@ -375,7 +375,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("HasNativeFlashFillMenuItem &&");
         script.Should().Contain("native_flash_fill_menu_item=");
         script.Should().Contain("new NativeMenuAvailabilityContext(");
-        script.Should().Contain("_session.SortSelectedRange(ascending)");
+        script.Should().Contain("private void SortSelectedRange(bool ascending)");
         script.Should().Contain("HasNativeSortAscendingMenuItem: HasNativeMenuItem(_sortAscendingMenuItem, NativeMenuItemId.SortAscending)");
         script.Should().Contain("HasNativeSortDescendingMenuItem: HasNativeMenuItem(_sortDescendingMenuItem, NativeMenuItemId.SortDescending)");
         script.Should().Contain("HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, NativeMenuItemId.AdvancedFilter)");
@@ -387,7 +387,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("NativeMenuItemId.Subtotal => _subtotalMenuItem,");
         script.Should().Contain("_subtotalMenuItem.Click += async (_, _) => await ShowSubtotalDialogAsync();");
         script.Should().Contain("private async Task ShowSubtotalDialogAsync()");
-        script.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync()");
+        script.Should().Contain("private async Task<SubtotalDialogResult?> ShowSubtotalInputDialogAsync(");
         script.Should().Contain("_session.ExecuteSubtotalOptions(selection.Options!)");
         script.Should().Contain("_session.RemoveSelectedRangeSubtotals()");
         script.Should().Contain("SubtotalDialogPlanner.TryCreateResult(");
@@ -395,7 +395,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("AutomationProperties.SetAutomationId(dialog, `\"SubtotalCompactDialog`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(groupColumnBox, `\"SubtotalGroupColumnBox`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(functionBox, `\"SubtotalFunctionBox`\");");
-        script.Should().Contain("AutomationProperties.SetAutomationId(columnsPanel, `\"SubtotalColumnsPanel`\");");
+        script.Should().Contain("AutomationProperties.SetAutomationId(columnsList, `\"SubtotalColumnsPanel`\");");
         script.Should().Contain("AutomationProperties.SetAutomationId(removeAllButton, `\"SubtotalRemoveAllButton`\");");
         script.Should().Contain("HasNativeSubtotalMenuItem: HasNativeMenuItem(_subtotalMenuItem, NativeMenuItemId.Subtotal)");
         script.Should().Contain("HasNativeSubtotalMenuItem &&");
@@ -659,8 +659,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FontName: normalFont ? normalStyle.FontName : ReadChangedFormatCellsText(currentFontName, fontNameBox)");
         script.Should().Contain("FontColor: normalFont ? normalStyle.FontColor : (fontColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
         script.Should().Contain("SelectFormatCellsColor(fontColorBox, normal.FontColor)");
-        script.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillPatternStyle, fillPatternStyleBox)");
-        script.Should().Contain("FillPatternColor: clearFill ? null : (fillPatternColorBox.SelectedItem as FormatCellsColorChoice)?.Color");
+        script.Should().Contain("FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox)");
+        script.Should().Contain("FillPatternColor: clearFill ? null : fillEditor.PatternColor");
         script.Should().Contain("CellFillPatternStyle? FillPatternStyle = null");
         script.Should().Contain("CellColor? FillPatternColor = null");
         script.Should().Contain("FillPatternStyle: request.ClearFill ? null : request.FillPatternStyle");
@@ -802,9 +802,9 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("private async Task<string?> ShowRenameSheetDialogAsync(string currentName)");
         script.Should().Contain("AutomationProperties.SetAutomationId(nameBox, `\"RenameSheetNameBox`\");");
         script.Should().Contain("var validationError = _session.Workbook.ValidateSheetName(proposedName, _session.ActiveSheet.Id);");
-        script.Should().Contain("button.PointerPressed += (_, args) => SelectSheetFromPointer(tab.Id, args);");
-        script.Should().Contain("private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args)");
-        script.Should().Contain("if (!args.GetCurrentPoint(this).Properties.IsLeftButtonPressed)");
+        script.Should().Contain("(_, args) => BeginSheetTabPointer(tab.Id, args),");
+        script.Should().Contain("private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args)");
+        script.Should().Contain("if (!point.Properties.IsLeftButtonPressed)");
         script.Should().Contain("var selectRange = modifiers.HasFlag(KeyModifiers.Shift);");
         script.Should().Contain("var toggle = modifiers.HasFlag(KeyModifiers.Control) || modifiers.HasFlag(KeyModifiers.Meta);");
         script.Should().Contain("args.Handled = true;");
@@ -855,7 +855,6 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("CellBorderPreset.NoBorder");
         script.Should().Contain("public static StyleDiff Plan(");
         script.Should().Contain("public static bool RequiresPerCellPlanning(CellBorderPreset preset)");
-        script.Should().Contain("public int ZoomPercent => ActiveSheet.ZoomPercent;");
         script.Should().Contain("public WorkbookCellEditResult SetZoomPercent(int zoomPercent)");
         script.Should().Contain("new SetWorksheetZoomCommand(ActiveSheet.Id, zoomPercent)");
         script.Should().Contain("public WorkbookCellEditResult SetActiveSheetTabColor(CellColor? color)");
@@ -869,7 +868,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new RemoveSheetCommand(sheetId)");
         script.Should().Contain("public GridRange SelectCurrentRegionOrAll()");
         script.Should().Contain("OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl");
-        script.Should().Contain("AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)");
+        script.Should().Contain("AppHelpInfo.BuildAboutText(");
+        script.Should().Contain("AppHelpInfo.AvaloniaPlatformSummary");
         script.Should().Contain("var documents = LegalNoticeProvider.GetDocuments();");
         script.Should().Contain("public sealed class RecentFilesStore");
         script.Should().Contain("public static class AtomicFileWriter");
@@ -2510,6 +2510,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     case WorkbookShortcutRoute.FlashFill:
                     private void SortSelectedRange(bool ascending)
                     _session.SortSelectedRange(ascending)
+                    QuickAnalysisSelectionReader.Describe(_session.ActiveSheet, range).HasHeaderRow
+                    new CoreSortKey(0, ascending)
+                    new SortOptions(CaseSensitive: false, LeftToRight: false)
                     private void FlashFillSelectedRange()
                     _session.FlashFillSelectedRange()
                     var hasNativeDataMenu = HasNativeTopLevelMenu(NativeMenuTopLevelId.Data);
@@ -2599,7 +2602,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetAutomationId(dialog, "SubtotalCompactDialog");
                     AutomationProperties.SetAutomationId(groupColumnBox, "SubtotalGroupColumnBox");
                     AutomationProperties.SetAutomationId(functionBox, "SubtotalFunctionBox");
-                    AutomationProperties.SetAutomationId(columnsPanel, "SubtotalColumnsPanel");
+                    AutomationProperties.SetAutomationId(columnsList, "SubtotalColumnsPanel");
                     AutomationProperties.SetAutomationId(removeAllButton, "SubtotalRemoveAllButton");
                     HasNativeAdvancedFilterMenuItem: HasNativeMenuItem(_advancedFilterMenuItem, "Advanced Filter...", requireGesture: false)
                     HasNativeRemoveDuplicatesMenuItem: HasNativeMenuItem(_removeDuplicatesMenuItem, "Remove Duplicates...", requireGesture: false)
@@ -3183,7 +3186,13 @@ public sealed class MacOsAppReadinessPreflightTests
                 private Button? FindSheetTabButton(SheetId sheetId) => button.Tag is SheetId tag &&
                     tag == sheetId ? new() : null;
                 private bool HasSheetTabButton(Func<Button, bool> predicate) => true;
-                private void SelectSheetFromPointer(SheetId sheetId, PointerPressedEventArgs args) { }
+                (_, args) => BeginSheetTabPointer(tab.Id, args),
+                if (args.ClickCount >= 2) { }
+                InputElement.PointerPressedEvent,
+                private void BeginSheetTabPointer(SheetId sheetId, PointerPressedEventArgs args) { }
+                if (!point.Properties.IsLeftButtonPressed) { }
+                if (SelectSheetForContextCommand(sheetId)) { }
+                _ = RenameActiveSheetAsync();
                 private NativeMenu CreateNativeSheetTabColorMenu() => new();
                 private NativeMenuItem CreateNativeSheetTabColorSwatchMenuItem(CellColorSwatch swatch) => new();
                 private void ApplyActiveSheetTabColor(CellColor? color) { }
@@ -3191,6 +3200,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 private void UngroupSheets() { }
                 private void ToggleShowGridlines() { }
                 private void ToggleShowHeadings() { }
+                var showHeadings = _session.IsShowingHeadings;
                 private void ZoomIn() => ApplyZoomPercent(_session.ZoomPercent + StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom In failed.");
                 private void ZoomOut() => ApplyZoomPercent(_session.ZoomPercent - StatusBarZoomSliderPlanner.ZoomStepPercent, "Zoom Out failed.");
                 private void ZoomTo100Percent() => ApplyZoomPercent(100, "100% Zoom failed.");
@@ -3239,6 +3249,40 @@ public sealed class MacOsAppReadinessPreflightTests
                     ExternalImageClipboardPictureCount: externalImageClipboardPictures.Length;
                     ExternalImageClipboardPicturePngByteCount: externalImageClipboardPictures.Sum(static picture => picture.ImageBytes!.Length);
                     return new();
+                }
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/AboutDialog.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal sealed class AboutDialog
+            {
+                private readonly string _aboutText = AppHelpInfo.BuildAboutText(
+                    AppHelpInfo.GetVersionText(typeof(AboutDialog).Assembly),
+                    AppHelpInfo.AvaloniaPlatformSummary);
+            }
+            """);
+
+        WriteFile(
+            root,
+            "src/FreeX.App.Avalonia/FormatCellsFillEditor.cs",
+            """
+            namespace FreeX.App.Avalonia;
+
+            internal sealed class FormatCellsFillEditor
+            {
+                private static void PreserveSourceContract()
+                {
+                    FillPatternStyle: clearFill ? null : ReadChangedFormatCellsValue(currentFillStyle.FillPatternStyle, fillPatternStyleBox);
+                    FillPatternColor: clearFill ? null : fillEditor.PatternColor;
+                    getText("FormatCells_PatternStyle"),
+                    getText("FormatCells_PatternColor2"),
+                    private static IReadOnlyList<FormatCellsNullableChoice<CellFillPatternStyle>> CreateFormatCellsFillPatternStyleChoices();
+                    CellFillPatternStyle.DarkTrellis;
                 }
             }
             """);

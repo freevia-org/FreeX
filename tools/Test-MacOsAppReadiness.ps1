@@ -1216,7 +1216,7 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\MainWindow.cs"
             AdditionalPathPattern = "MainWindow*.cs"
-            AdditionalPaths = @("FormatCellsFillEditor.cs")
+            AdditionalPaths = @("AboutDialog.cs", "FormatCellsFillEditor.cs")
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
                 "using FreeX.Core.Calc;",
@@ -2115,7 +2115,8 @@ function Test-SourceWiring {
                 "[NativeMenuTopLevelId.Window] = windowMenu,",
                 "[NativeMenuTopLevelId.Help] = helpMenu,",
                 "TopLevel.GetTopLevel(this)?.Launcher",
-                "AppHelpInfo.BuildAboutText(versionText, PlatformAboutSummary)",
+                "AppHelpInfo.BuildAboutText(",
+                "AppHelpInfo.AvaloniaPlatformSummary",
                 "var documents = LegalNoticeProvider.GetDocuments();",
                 "ItemsSource = documents.Select(CreateLegalNoticeTabItem).ToList(),",
                 "AutomationProperties.SetAutomationId(tabControl, `"LegalNoticesSectionTabs`");",
