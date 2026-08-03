@@ -12384,13 +12384,34 @@ public sealed class DocumentView : RichTextBox
     public void InsertTableFormula(TableFormulaField formula)
     {
         Focus();
+        if (!TryGetCurrentTableCellCaretTarget(
+                out var blockIndex,
+                out var rowIndex,
+                out var columnIndex,
+                out var paragraphIndex,
+                out var textOffset))
+        {
+            return;
+        }
+
         CommitToModel();
-        var (blockIndex, rowIndex, columnIndex) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
             return;
 
-        var run = TableLayoutOperations.BuildFormulaRun(table, rowIndex, columnIndex, formula);
-        InsertInlineAtCaret(BuildTableFormulaRun(run, _model));
+        var command = new InsertTableCellFormulaCommand(
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            textOffset,
+            formula);
+        _commands.Execute(command);
+        PlaceCaretAtTableCellTextOffset(
+            blockIndex,
+            rowIndex,
+            columnIndex,
+            paragraphIndex,
+            textOffset + command.InsertedTextLength);
     }
 
     /// <summary>

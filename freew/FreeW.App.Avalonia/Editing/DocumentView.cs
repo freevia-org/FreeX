@@ -2335,11 +2335,16 @@ public sealed class DocumentView : Control
         if (cellIndex < 0)
             return;
 
-        var run = TableLayoutOperations.BuildFormulaRun(table, cc.Row, cellIndex, formula);
         var targetOffset = cc.Offset;
-        _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, paragraph =>
-            InsertRunAtOffset(paragraph, targetOffset, run)));
-        var newOffset = targetOffset + run.Text.Length;
+        var command = new InsertTableCellFormulaCommand(
+            cc.TableBlock,
+            cc.Row,
+            cellIndex,
+            cc.ParaIdx,
+            targetOffset,
+            formula);
+        _bus.Execute(command);
+        var newOffset = targetOffset + command.InsertedTextLength;
         _cellCaret = cc with { Offset = newOffset };
         _cellAnchor = _cellCaret;
         _caret = new DocPosition(cc.TableBlock, FindCellGlyphOffset(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, newOffset));
