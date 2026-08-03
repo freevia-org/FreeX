@@ -39,6 +39,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
     private readonly Border _replacements = new()
     {
         Height = OptionsDialogPlanner.ReplacementTableHeight,
+        Margin = new Thickness(0, 6, 0, 0),
         VerticalAlignment = VerticalAlignment.Top
     };
     private readonly Grid _replacementGrid = new();
@@ -78,7 +79,10 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
         var tabs = new TabControl { Margin = new Thickness(OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, OptionsDialogPlanner.TabMargin, 0) };
-        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
+            tabs,
+            DialogChromeStyle,
+            contentPaneMargin: new Thickness(-12, -1, -12, 0));
         tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });
@@ -179,10 +183,10 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         var panel = new StackPanel
         {
             Margin = new Thickness(
+                OptionsDialogPlanner.ContentMargin + 2,
                 OptionsDialogPlanner.ContentMargin,
-                OptionsDialogPlanner.ContentMargin,
-                OptionsDialogPlanner.ContentMargin,
-                OptionsDialogPlanner.ContentBottomMargin)
+                OptionsDialogPlanner.ContentMargin + 2,
+                OptionsDialogPlanner.ContentBottomMargin + 3)
         };
         panel.Children.Add(_correctTwoInitialCaps);
         panel.Children.Add(_capitalizeDayNames);
@@ -200,7 +204,7 @@ internal sealed class OptionsDialog : FreeWDialogWindow
             FontSize = OptionsDialogPlanner.HelpTextFontSize,
             Foreground = Brushes.Gray,
             TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 0),
+            Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin + 2, 0, 0),
         });
 
         void SyncReplacements() => _replacements.IsEnabled = _replaceText.IsChecked == true;
@@ -243,9 +247,12 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         row.With.Text = with;
         AvaloniaCompactDialogChrome.ApplyTextBox(row.Replace, DialogChromeStyle);
         AvaloniaCompactDialogChrome.ApplyTextBox(row.With, DialogChromeStyle);
+        var gridlineBrush = new SolidColorBrush(Color.FromRgb(171, 173, 179));
+        row.Replace.BorderBrush = gridlineBrush;
+        row.With.BorderBrush = gridlineBrush;
 
         var rowIndex = _replacementGrid.RowDefinitions.Count;
-        _replacementGrid.RowDefinitions.Add(new RowDefinition(new GridLength(24)));
+        _replacementGrid.RowDefinitions.Add(new RowDefinition(new GridLength(20)));
         Grid.SetRow(row.Replace, rowIndex);
         Grid.SetColumn(row.Replace, 0);
         Grid.SetRow(row.With, rowIndex);
@@ -351,6 +358,9 @@ internal sealed class OptionsDialog : FreeWDialogWindow
         box.IsChecked = spec.IsChecked;
         box.Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0);
         AvaloniaCompactDialogChrome.ApplyCompactCheckBox(box, DialogChromeStyle);
+        box.Height = 16;
+        box.MinHeight = 16;
+        box.MaxHeight = 16;
     }
 
     private CheckBox ToggleFor(OptionsDialogToggleKind kind) =>

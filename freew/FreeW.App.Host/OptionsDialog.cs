@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FreeW.App.Presentation.Options;
 using FreeW.Core.Model;
 
@@ -57,6 +58,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         CanUserAddRows = true,
         CanUserDeleteRows = true,
         HeadersVisibility = DataGridHeadersVisibility.Column,
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         Height = OptionsDialogPlanner.ReplacementTableHeight,
         Margin = new Thickness(0, 6, 0, 0),
     };
@@ -206,10 +208,13 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             Width = new DataGridLength(2, DataGridLengthUnitType.Star),
         });
         _replacements.ItemsSource = _replacementRows;
+        _replacements.Loaded += (_, _) => TryApplyReplacementColumnWidths(_replacements);
+        _replacements.SizeChanged += (_, _) => TryApplyReplacementColumnWidths(_replacements);
+        _replacements.LayoutUpdated += RealizeReplacementColumnsAfterMeasure;
 
         var toggles = new[] { _correctTwoInitialCaps, _capitalizeDayNames, _replaceText };
 
-        var panel = new StackPanel
+        var panel = new Grid
         {
             Margin = new Thickness(
                 OptionsDialogPlanner.ContentMargin,
@@ -217,19 +222,30 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 OptionsDialogPlanner.ContentMargin,
                 OptionsDialogPlanner.ContentBottomMargin)
         };
+        panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        void AddPanelRow(FrameworkElement child)
+        {
+            var row = panel.RowDefinitions.Count;
+            panel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            Grid.SetRow(child, row);
+            Grid.SetColumn(child, 0);
+            panel.Children.Add(child);
+        }
+
         foreach (var box in toggles)
         {
             box.Margin = new Thickness(0, OptionsDialogPlanner.ToggleTopMargin, 0, 0);
-            panel.Children.Add(box);
+            AddPanelRow(box);
         }
-        panel.Children.Add(new TextBlock
+        AddPanelRow(new TextBlock
         {
             Text = _surface.AutoCorrect.ReplacementsLabel,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, OptionsDialogPlanner.SectionHeaderTopMargin, 0, 0),
         });
-        panel.Children.Add(_replacements);
-        panel.Children.Add(new TextBlock
+        AddPanelRow(_replacements);
+        AddPanelRow(new TextBlock
         {
             Text = _surface.AutoCorrect.ReplacementsHelpText,
             FontSize = OptionsDialogPlanner.HelpTextFontSize,
@@ -290,6 +306,33 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Result = OptionsDialogPlanner.BuildResult(
             cap, format, _uiLanguage.Text, _autoCorrectEnabled.IsChecked == true, autoFormat, autoCorrect);
         DialogResult = true;
+    }
+
+    // WPF can settle star columns at MinWidth while a DataGrid is measured inside a size-to-content dialog.
+    // Realize the declared 1:2 weights against the current viewport once it is available, and again only
+    // when the table is resized. The post-measure hook removes itself after the first successful pass.
+    private void RealizeReplacementColumnsAfterMeasure(object? sender, EventArgs e)
+    {
+        if (TryApplyReplacementColumnWidths(_replacements))
+            _replacements.LayoutUpdated -= RealizeReplacementColumnsAfterMeasure;
+    }
+
+    private static bool TryApplyReplacementColumnWidths(DataGrid table)
+    {
+        if (table.Columns.Count != 2 || table.ActualWidth <= 0)
+            return false;
+
+        var viewport = FindVisualChildren<ScrollViewer>(table).FirstOrDefault()?.ViewportWidth ?? table.ActualWidth;
+        if (viewport <= 0)
+            return false;
+
+        var firstWidth = viewport / 3;
+        var secondWidth = viewport * 2 / 3;
+        if (Math.Abs(table.Columns[0].ActualWidth - firstWidth) > 0.5)
+            table.Columns[0].Width = new DataGridLength(firstWidth, DataGridLengthUnitType.Pixel);
+        if (Math.Abs(table.Columns[1].ActualWidth - secondWidth) > 0.5)
+            table.Columns[1].Width = new DataGridLength(secondWidth, DataGridLengthUnitType.Pixel);
+        return true;
     }
 
     // A mutable two-property row backing the AutoCorrect replace-table DataGrid (DataGrid edits need a
@@ -368,4 +411,14 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetColumn(stack, 1);
         grid.Children.Add(stack);
     }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root is T value)
+            yield return value;
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+            foreach (var child in FindVisualChildren<T>(VisualTreeHelper.GetChild(root, i)))
+                yield return child;
+    }
+
 }

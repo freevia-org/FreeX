@@ -69,7 +69,9 @@ public sealed class SmartArtTests : IDisposable
         string? layoutUniqueId = null,
         bool groupedListUnmodeledRole = false,
         bool includeNodeOuterShadow = false,
-        bool cycle2NodeAndArrowCache = false)
+        bool cycle2NodeAndArrowCache = false,
+        bool relationship1NodeAndEllipseCache = false,
+        long? relationship1HorizontalStepEmu = null)
     {
         var path = Path.Combine(_tempDir, $"smartart_{Guid.NewGuid():N}.pptx");
 
@@ -126,10 +128,12 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(dspNs + "cNvSpPr")),
                 new XElement(dspNs + "spPr",
                     new XElement(aNs + "xfrm",
-                        new XElement(aNs + "off", new XAttribute("x", (idx - 1) * 914400L), new XAttribute("y", "457200")),
-                        new XElement(aNs + "ext", new XAttribute("cx", "914400"), new XAttribute("cy", "457200"))),
+                        new XElement(aNs + "off", new XAttribute("x", relationship1NodeAndEllipseCache
+                            ? 1_522_800L + nodeIndex * (relationship1HorizontalStepEmu ?? 1_392_000L)
+                            : (idx - 1) * 914400L), new XAttribute("y", relationship1NodeAndEllipseCache ? 1_672_400L : 457200L)),
+                        new XElement(aNs + "ext", new XAttribute("cx", relationship1NodeAndEllipseCache ? 2_400_000L : 914400L), new XAttribute("cy", relationship1NodeAndEllipseCache ? 2_400_000L : 457200L))),
                     new XElement(aNs + "prstGeom",
-                        new XAttribute("prst", cycle2NodeAndArrowCache ? "ellipse" : "rect"),
+                        new XAttribute("prst", cycle2NodeAndArrowCache || relationship1NodeAndEllipseCache ? "ellipse" : "rect"),
                         new XElement(aNs + "avLst")),
                     new XElement(aNs + "solidFill",
                         new XElement(aNs + "srgbClr", new XAttribute("val", "4472C4"))),
@@ -4090,6 +4094,104 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeTrue(
             "relationship1 now has bounded shared overlapping-ellipse geometry");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C");
+    }
+
+    [Fact]
+    public void Reader_ImportedRelationship1_AdmitsExactNodeEllipseCache()
+    {
+        var presentation = PptxPackageReader.Read(
+            FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"));
+        var relationship = presentation.Slides[6].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        relationship.Data.Should().NotBeNull();
+        relationship.Data!.LayoutUniqueId.Should().EndWith("/relationship1");
+        relationship.Data.Family.Should().Be(SmartArtFamily.Relationship);
+        relationship.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the checked-in relationship1 cache is exactly one ordered overlapping ellipse per node");
+        relationship.FallbackShapes.Should().HaveCount(3);
+        relationship.FallbackShapes.Should().OnlyContain(shape =>
+            shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+
+        var live = SmartArtLayoutEngine.Layout(
+            relationship.Data,
+            0,
+            0,
+            8_229_600,
+            5_744_800,
+            presentation.Theme);
+        live.Should().NotBeNull();
+        live!.Should().HaveCount(3);
+        live.Should().OnlyContain(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        live.Select(shape => shape.PlainText).Should().Equal("Audience", "Need", "Offer");
+    }
+
+    [Fact]
+    public void Reader_Relationship1_WithExtraRole_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Audience", "Need", "Offer"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+            relationship1NodeAndEllipseCache: true,
+            groupedListUnmodeledRole: true);
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "an extra relationship role is outside the exact node-only cache grammar");
+    }
+
+    [Fact]
+    public void Reader_Relationship1_WithUnsupportedGeometry_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Audience", "Need", "Offer"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+            relationship1NodeAndEllipseCache: false);
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "non-ellipse relationship geometry must remain on cached fallback");
+    }
+
+    [Fact]
+    public void Reader_Relationship1_WithWrongOverlapRatio_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Audience", "Need", "Offer"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+            relationship1NodeAndEllipseCache: true,
+            relationship1HorizontalStepEmu: 1_500_000L);
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "a materially different relationship overlap ratio must remain on cached fallback");
+    }
+
+    [Fact]
+    public void Reader_Relationship1_WithAuthoredEffects_PreservesCachedFallback()
+    {
+        var pptxPath = MakeSmartArtPptx(
+            ["Audience", "Need", "Offer"],
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+            relationship1NodeAndEllipseCache: true,
+            includeNodeOuterShadow: true);
+
+        var smartArt = PptxPackageReader.Read(pptxPath).Slides[0].Shapes
+            .First(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "relationship1 shape effects are outside the exact shared node grammar");
     }
 
     [Fact]

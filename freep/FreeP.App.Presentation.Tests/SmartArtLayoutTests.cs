@@ -2817,6 +2817,54 @@ public sealed class SmartArtLayoutTests
         result[1].OffsetXEmu.Should().BeLessThan(result[0].OffsetXEmu + result[0].ExtentCxEmu);
     }
 
+    [Fact]
+    public void BasicRelationship_UnsupportedImportedCacheUsesFallback()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/relationship1";
+        data.IsLiveLayoutSupported = false;
+
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.FallbackShapes.Add(new SlideShape
+        {
+            Id = 12,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph { Runs = { new Run { Text = "Cached relationship fallback" } } }
+                }
+            }
+        });
+
+        var presentation = PresentationModel.CreateEmpty();
+        presentation.Slides[0].Shapes.Clear();
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 65,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smartArt
+        });
+
+        var shapeOps = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .Skip(1)
+            .OfType<DrawOp.Shape>()
+            .ToList();
+
+        shapeOps.Should().ContainSingle();
+        shapeOps[0].Text!.Paragraphs[0].Runs[0].Text.Should().Be("Cached relationship fallback");
+    }
+
     [Theory]
     [InlineData(4)]
     [InlineData(8)]

@@ -30,7 +30,13 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
-    private static AvaloniaCompactDialogChromeStyle SparklineDialogChromeStyle => new(FormulaBarFontFamily);
+    private static AvaloniaCompactDialogChromeStyle SparklineDialogChromeStyle =>
+        new(FormulaBarFontFamily)
+        {
+            ButtonHeight = 20,
+            ButtonPadding = new Thickness(12, 0),
+            ComboBoxHeight = 22,
+        };
 
     /// <summary>
     /// Insert ▸ Sparklines entry point. Edits the sparkline anchored at the active cell if one exists,
@@ -96,6 +102,9 @@ public sealed partial class MainWindow
 
         var typeBox = BuildKindComboBox("SparklineTypeBox", kind);
         typeBox.Width = 333;
+        // Fluent's combo template contributes an eight-pixel leading/trailing inset on this
+        // compact surface; offset the control so its visible field matches the WPF client lane.
+        typeBox.Margin = new Thickness(-1, 0, 0, 0);
         ApplySparklineComboBoxChrome(typeBox);
 
         // Explicit Width+Height (rather than SizeToContent.WidthAndHeight) keeps the dialog as compact as
@@ -145,14 +154,41 @@ public sealed partial class MainWindow
             }
         };
 
-        var content = new StackPanel { Spacing = 8, Margin = new Thickness(16) };
-        content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_DataRange")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
+        var content = new StackPanel
+        {
+            Spacing = 0,
+            Margin = new Thickness(16),
+            Width = 333,
+            HorizontalAlignment = AvaloniaHorizontalAlignment.Left,
+        };
+        content.Children.Add(new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("Sparkline_DataRange")),
+            Foreground = HeaderForeground,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 3, 0, 1),
+        });
         content.Children.Add(BuildSparklineRangeRow(dataRangeBox, selectDataRangeButton));
-        content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_LocationRange")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
+        content.Children.Add(new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("Sparkline_LocationRange")),
+            Foreground = HeaderForeground,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 3, 0, 1),
+        });
         content.Children.Add(BuildSparklineRangeRow(locationBox, selectLocationRangeButton));
-        content.Children.Add(new TextBlock { Text = StripDisplayMnemonic(UiText.Get("Sparkline_SparklineType")), Foreground = HeaderForeground, FontSize = 12, FontFamily = FormulaBarFontFamily });
+        content.Children.Add(new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("Sparkline_SparklineType")),
+            Foreground = HeaderForeground,
+            FontSize = 12,
+            FontFamily = FormulaBarFontFamily,
+            Margin = new Thickness(0, 3, 0, 1),
+        });
         content.Children.Add(typeBox);
-        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
+        content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 16, 0, 0)));
         dialog.Content = content;
         AttachDialogRangePicker(dialog, selectDataRangeButton, dataRangeBox, "range.sparklines.data-range");
         AttachDialogRangePicker(dialog, selectLocationRangeButton, locationBox, "range.sparklines.location-range");
@@ -373,7 +409,9 @@ public sealed partial class MainWindow
                 new ColumnDefinition { Width = GridLength.Auto },
             },
         };
-        pickerButton.Margin = new Thickness(6, 0, 0, 0);
+        pickerButton.Margin = new Thickness(5, 0, 0, 0);
+        row.Margin = new Thickness(0, 0, 0, 13);
+        row.ClipToBounds = true;
         Grid.SetColumn(rangeBox, 0);
         Grid.SetColumn(pickerButton, 1);
         row.Children.Add(rangeBox);

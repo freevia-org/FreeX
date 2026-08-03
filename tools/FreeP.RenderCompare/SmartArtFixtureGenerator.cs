@@ -18,6 +18,7 @@ namespace FreeP.RenderCompare;
 ///   Slide 3 — Hierarchy3: CEO with the same reports, template leaves, and an orthogonal cached drawing
 ///   Slide 4 — Cycle:     Idea → Plan → Execute → Review → Improve
 ///   Slide 5 — List:      Requirement 1 through 4
+///   Slide 7 — Relationship1: Audience / Need / Offer overlapping ellipses
 ///
 /// Each slide has a real dgm:dataModel (ptLst + parOf cxnLst) and a layout1.xml with
 /// the correct uniqueId so the FreeP live layout engine classifies and renders it.
@@ -110,6 +111,14 @@ internal static class SmartArtFixtureGenerator
                 Nodes     = [("g1","Plan"), ("g1a","Scope"), ("g1b","Schedule"), ("g2","Build"), ("g2a","Implement"), ("g2b","Verify")],
                 Connections = [("g1","g1a"), ("g1","g1b"), ("g2","g2a"), ("g2","g2b")],
                 HasGroupedListCachedDrawing = true
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live - Relationship1",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
+                Nodes     = [("rel1","Audience"), ("rel2","Need"), ("rel3","Offer")],
+                Connections = [],
+                HasBasicRelationshipCachedDrawing = true
             }
         };
 
@@ -321,6 +330,8 @@ internal static class SmartArtFixtureGenerator
                 new[] { "Idea", "Plan", "Execute", "Review", "Improve" });
             AddSmartArtSlide(app, presentation, 5, "SmartArt Live - List", "List",
                 new[] { "Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4" });
+            AddSmartArtSlide(app, presentation, 6, "SmartArt Live - Relationship1", "Relationship",
+                new[] { "Audience", "Need", "Offer" });
 
             if (File.Exists(outputPath))
                 File.Delete(outputPath);
@@ -624,6 +635,9 @@ internal static class SmartArtFixtureGenerator
         if (spec.HasGroupedListCachedDrawing)
             return BuildGroupedListDrawingXml(spec);
 
+        if (spec.HasBasicRelationshipCachedDrawing)
+            return BuildBasicRelationshipDrawingXml(spec);
+
         if (!spec.HasHierarchy3CachedDrawing)
             return BuildEmptyDrawing();
 
@@ -725,6 +739,28 @@ internal static class SmartArtFixtureGenerator
                     (groupX, childStartY + childIndex * (childHeight + gapY), groupWidth, childHeight)));
             }
         }
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dsp + "spTree", elements)));
+    }
+
+    private static XDocument BuildBasicRelationshipDrawingXml(SlideSpec spec)
+    {
+        const long diameter = 2_400_000;
+        const long step = 1_392_000;
+        const long left = 1_522_800;
+        const long top = 1_672_400;
+
+        var elements = spec.Nodes.Select((node, index) => BuildDspShape(
+            (uint)(70 + index),
+            $"Relationship1 node {index + 1}",
+            node.text,
+            "ellipse",
+            (left + index * step, top, diameter, diameter)));
 
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -898,5 +934,6 @@ internal static class SmartArtFixtureGenerator
         public (string src, string dst)[]   Connections { get; init; } = [];
         public bool HasHierarchy3CachedDrawing { get; init; }
         public bool HasGroupedListCachedDrawing { get; init; }
+        public bool HasBasicRelationshipCachedDrawing { get; init; }
     }
 }

@@ -49,8 +49,10 @@ public sealed class AvaloniaCompactDialogChromeClusterASourceTests
         spellingSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow(");
         spellingSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([okButton])");
 
-        sparklineSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SparklineDialogChromeStyle => new(FormulaBarFontFamily);");
-        sparklineSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0))");
+        sparklineSource.Should().Contain("private static AvaloniaCompactDialogChromeStyle SparklineDialogChromeStyle =>");
+        sparklineSource.Should().Contain("ButtonHeight = 20,");
+        sparklineSource.Should().Contain("ComboBoxHeight = 22,");
+        sparklineSource.Should().Contain("AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 16, 0, 0))");
         sparklineSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyCheckBox(box, SparklineDialogChromeStyle);");
         sparklineSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyButton(button, SparklineDialogChromeStyle, width, isDefault);");
         sparklineSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyTextBox(textBox, SparklineDialogChromeStyle);");
@@ -59,6 +61,11 @@ public sealed class AvaloniaCompactDialogChromeClusterASourceTests
         sparklineSource.Should().Contain("ApplySparklineButtonChrome(selectDataRangeButton, 132);");
         sparklineSource.Should().Contain("ApplySparklineButtonChrome(selectLocationRangeButton, 152);");
         sparklineSource.Should().Contain("typeBox.Width = 333;");
+        sparklineSource.Should().Contain("typeBox.Margin = new Thickness(-1, 0, 0, 0);");
+        sparklineSource.Should().Contain("HorizontalAlignment = AvaloniaHorizontalAlignment.Left,");
+        sparklineSource.Should().Contain("Margin = new Thickness(0, 3, 0, 1),");
+        sparklineSource.Should().Contain("row.Margin = new Thickness(0, 0, 0, 13);");
+        sparklineSource.Should().Contain("row.ClipToBounds = true;");
         sparklineSource.Should().Contain("ApplySparklineButtonChrome(ok, 72, isDefault: true);");
         sparklineSource.Should().Contain("ApplySparklineButtonChrome(cancel, 72);");
         sparklineSource.Should().Contain("button.CornerRadius = new CornerRadius(0);");

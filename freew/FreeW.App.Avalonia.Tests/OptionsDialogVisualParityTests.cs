@@ -41,7 +41,11 @@ public sealed class OptionsDialogVisualParityTests
                 scroller.HorizontalScrollBarVisibility.Should().Be(ScrollBarVisibility.Disabled);
                 var grid = GetField<Grid>(dialog, "_replacementGrid");
                 scroller.Content.Should().BeSameAs(grid);
-                grid.ColumnDefinitions.Count.Should().Be(2);
+                grid.ColumnDefinitions.Count.Should().Be(2, "the WPF DataGrid declares two replacement columns");
+                grid.ColumnDefinitions[0].Width.IsStar.Should().BeTrue();
+                grid.ColumnDefinitions[0].Width.Value.Should().Be(1);
+                grid.ColumnDefinitions[1].Width.IsStar.Should().BeTrue();
+                grid.ColumnDefinitions[1].Width.Value.Should().Be(2);
                 grid.RowDefinitions.Count.Should().Be(3, "the WPF DataGrid has one populated row plus its blank add row");
                 dialog.ReplacementEditorsForTest.Should().HaveCount(2);
 
@@ -58,6 +62,44 @@ public sealed class OptionsDialogVisualParityTests
                 buttons[1].IsDefault.Should().BeFalse();
                 buttons.Select(AutomationProperties.GetName)
                     .Should().OnlyContain(name => !string.IsNullOrWhiteSpace(name));
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task Options_realizes_replacement_editors_in_one_to_two_viewport_geometry()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new OptionsDialog(new FreeWOptions
+            {
+                AutoCorrect = new AutoCorrectOptions
+                {
+                    ReplaceText = true,
+                    Replacements = [new AutoCorrectReplacement("(tm)", "™")],
+                },
+            });
+            try
+            {
+                dialog.Show();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Loaded);
+                var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
+                tabs.SelectedIndex = 1;
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+                var grid = GetField<Grid>(dialog, "_replacementGrid");
+                var editors = dialog.ReplacementEditorsForTest;
+                grid.Bounds.Width.Should().BeGreaterThan(300);
+                editors.Should().HaveCount(2);
+                editors[0].Replace.Bounds.Width.Should().BeGreaterThan(80);
+                editors[0].With.Bounds.Width.Should().BeGreaterThan(160);
+                (editors[0].With.Bounds.Width / editors[0].Replace.Bounds.Width).Should().BeApproximately(2, 0.05);
+                editors[0].Replace.Text.Should().Be("(tm)");
+                editors[0].With.Text.Should().Be("™");
             }
             finally
             {
