@@ -641,7 +641,7 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_SmartArt_IncreasingCircleProcess_AdmitsDedicatedLiveLayout()
+    public void Reader_SmartArt_IncreasingCircleProcess_UnprovenCachePreservesFallback()
     {
         var pptxPath = MakeSmartArtPptx(
             ["Phase A", "Phase B", "Phase C"],
@@ -654,8 +654,8 @@ public sealed class SmartArtTests : IDisposable
 
         smartArt.Data.Should().NotBeNull();
         smartArt.Data!.Family.Should().Be(SmartArtFamily.Process);
-        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
-            "the shared layout engine has dedicated Increasing Circle Process geometry");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "a synthetic cache without the audited seven-shape grammar must remain on fallback");
     }
 
     [Fact]
@@ -853,6 +853,55 @@ public sealed class SmartArtTests : IDisposable
         smartArt.Data!.IsLiveLayoutSupported.Should().BeFalse(
             "a non-square generic rectangle cache is outside the proven Grid Matrix grammar");
         smartArt.FallbackShapes.Should().HaveCount(4);
+    }
+
+    [Fact]
+    public void Reader_ImportedIncreasingCircleProcess_AdmitsExactGrowingEllipseAndLineCache()
+    {
+        var presentation = PptxPackageReader.Read(
+            FindRenderCompareCorpusFile("15-smartart-grouped-list.pptx"));
+        var smartShape = presentation.Slides[8].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt);
+        var smartArt = smartShape.SmartArt!;
+
+        smartArt.Data.Should().NotBeNull();
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/increasingCircleProcess");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "the checked-in cache is exactly four ordered growing ellipse nodes plus three empty line roles");
+        smartArt.FallbackShapes.Should().HaveCount(7);
+        smartArt.FallbackShapes.Take(4).Should().OnlyContain(shape =>
+            shape.AutoShapeKind == DrawingShapeKind.Ellipse);
+        smartArt.FallbackShapes.Skip(4).Should().OnlyContain(shape =>
+            shape.AutoShapeKind == DrawingShapeKind.Line
+            && string.IsNullOrWhiteSpace(shape.PlainText));
+
+        var live = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            smartShape.OffsetXEmu,
+            smartShape.OffsetYEmu,
+            smartShape.ExtentCxEmu,
+            smartShape.ExtentCyEmu,
+            presentation.Theme);
+        live.Should().NotBeNull();
+        live!.Count.Should().Be(7);
+        live.Where(shape => shape.AutoShapeKind == DrawingShapeKind.Ellipse)
+            .Select(shape => shape.ExtentCxEmu)
+            .Should().BeInAscendingOrder();
+    }
+
+    [Fact]
+    public void Reader_ImportedIncreasingCircleProcess_RichPowerPointCacheRemainsCached()
+    {
+        var presentation = PptxPackageReader.Read(
+            FindRenderCompareCorpusFile("14-smartart-live.pptx"));
+        var smartArt = presentation.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.LayoutUniqueId.Should().EndWith("/IncreasingCircleProcess");
+        smartArt.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "the richer PowerPoint background/chord/rectangle cache is outside the seven-shape grammar");
+        smartArt.FallbackShapes.Should().HaveCount(12);
     }
 
     [Fact]

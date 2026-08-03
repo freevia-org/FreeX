@@ -10,7 +10,7 @@ using System.Xml.Linq;
 namespace FreeP.RenderCompare;
 
 /// <summary>
-/// Theme 17: Generates 14-smartart-live.pptx programmatically (pure XML, no COM required).
+/// Theme 17: Generates 15-smartart-grouped-list.pptx programmatically (pure XML, no COM required).
 ///
 /// Creates a 6-slide deck:
 ///   Slide 1 — Process:   Plan → Design → Build → Test → Deploy
@@ -19,6 +19,7 @@ namespace FreeP.RenderCompare;
 ///   Slide 4 — Cycle:     Idea → Plan → Execute → Review → Improve
 ///   Slide 5 — List:      Requirement 1 through 4
 ///   Slide 7 — Relationship1: Audience / Need / Offer overlapping ellipses
+///   Slide 9 — Increasing Circle Process: four growing ellipse nodes and line roles
 ///
 /// Each slide has a real dgm:dataModel (ptLst + parOf cxnLst) and a layout1.xml with
 /// the correct uniqueId so the FreeP live layout engine classifies and renders it.
@@ -65,7 +66,7 @@ internal static class SmartArtFixtureGenerator
             return;
         }
 
-        // Define the 6 slides
+        // Define the nine deterministic slides.
         var slides = new[]
         {
             new SlideSpec
@@ -127,6 +128,14 @@ internal static class SmartArtFixtureGenerator
                 Nodes     = [("grid1","Axis"), ("grid2","Speed"), ("grid3","Quality"), ("grid4","Cost")],
                 Connections = [],
                 HasGridMatrixCachedDrawing = true
+            },
+            new SlideSpec
+            {
+                Title     = "SmartArt Live - Increasing Circle Process",
+                LayoutUid = "urn:microsoft.com/office/officeart/2005/8/layout/increasingCircleProcess",
+                Nodes     = [("inc1","Phase A"), ("inc2","Phase B"), ("inc3","Phase C"), ("inc4","Phase D")],
+                Connections = [("inc1","inc2"), ("inc2","inc3"), ("inc3","inc4")],
+                HasIncreasingCircleProcessCachedDrawing = true
             }
         };
 
@@ -649,6 +658,9 @@ internal static class SmartArtFixtureGenerator
         if (spec.HasGridMatrixCachedDrawing)
             return BuildGridMatrixDrawingXml(spec);
 
+        if (spec.HasIncreasingCircleProcessCachedDrawing)
+            return BuildIncreasingCircleProcessDrawingXml(spec);
+
         if (!spec.HasHierarchy3CachedDrawing)
             return BuildEmptyDrawing();
 
@@ -806,6 +818,74 @@ internal static class SmartArtFixtureGenerator
             node.text,
             "rect",
             (positions[index].Item1, positions[index].Item2, cellSize, cellSize)));
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dsp + "spTree", elements)));
+    }
+
+    private static XDocument BuildIncreasingCircleProcessDrawingXml(SlideSpec spec)
+    {
+        const long frameCx = 8_229_600;
+        const long frameCy = 5_744_800;
+        const double minimumScale = 0.52;
+        var padX = Math.Max((long)(frameCx * 0.04), 1L);
+        var padY = Math.Max((long)(frameCy * 0.04), 1L);
+        var innerW = Math.Max(frameCx - 2 * padX, 1L);
+        var innerH = Math.Max(frameCy - 2 * padY, 1L);
+        var gap = Math.Max((long)(innerW * 0.025), 1L);
+        var normalizedDiameterSum = Enumerable.Range(0, spec.Nodes.Length)
+            .Select(index => minimumScale
+                + (1.0 - minimumScale) * index / Math.Max(spec.Nodes.Length - 1, 1))
+            .Sum();
+        var maxDiameter = Math.Max(
+            Math.Min((long)(innerH * 0.62),
+                (long)((innerW - (spec.Nodes.Length - 1) * gap) / normalizedDiameterSum)),
+            1L);
+        var diameters = Enumerable.Range(0, spec.Nodes.Length)
+            .Select(index => Math.Max((long)(maxDiameter *
+                (minimumScale
+                    + (1.0 - minimumScale) * index / Math.Max(spec.Nodes.Length - 1, 1))), 1L))
+            .ToArray();
+        var baseline = padY + innerH;
+        var positions = new (long x, long y, long diameter)[spec.Nodes.Length];
+        var currentX = padX;
+        for (var index = 0; index < positions.Length; index++)
+        {
+            positions[index] = (currentX, baseline - diameters[index], diameters[index]);
+            currentX += diameters[index] + gap;
+        }
+
+        var elements = new List<XElement>();
+        for (var index = 0; index < spec.Nodes.Length; index++)
+        {
+            var position = positions[index];
+            elements.Add(BuildDspShape(
+                (uint)(90 + index),
+                $"IncreasingCircleProcess node {index + 1}",
+                spec.Nodes[index].text,
+                "ellipse",
+                (position.x, position.y, position.diameter, position.diameter)));
+        }
+
+        for (var index = 0; index < positions.Length - 1; index++)
+        {
+            var current = positions[index];
+            var next = positions[index + 1];
+            var fromX = current.x + current.diameter;
+            var toX = next.x;
+            var fromY = current.y + current.diameter / 2;
+            var toY = next.y + next.diameter / 2;
+            elements.Add(BuildDspShape(
+                (uint)(100 + index),
+                $"IncreasingCircleProcess connector {index + 1}",
+                string.Empty,
+                null,
+                (fromX, Math.Min(fromY, toY), toX - fromX, Math.Abs(toY - fromY))));
+        }
 
         return new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
@@ -981,5 +1061,6 @@ internal static class SmartArtFixtureGenerator
         public bool HasGroupedListCachedDrawing { get; init; }
         public bool HasBasicRelationshipCachedDrawing { get; init; }
         public bool HasGridMatrixCachedDrawing { get; init; }
+        public bool HasIncreasingCircleProcessCachedDrawing { get; init; }
     }
 }

@@ -6586,6 +6586,37 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_increasing_circle_process_shape_composes_shared_growth_and_connector_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Process,
+                "urn:microsoft.com/office/officeart/2005/8/layout/increasingCircleProcess",
+                ["A", "B", "C", "D"]);
+            window.Editor.CurrentSlide!.Shapes.Clear();
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(7);
+        liveShapes.Where(op => op.Text is not null)
+            .Should().HaveCount(4);
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3);
+        liveShapes.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("A", "B", "C", "D");
+    }
+
+    [Fact]
     public async Task SmartArt_basic_matrix_shape_composes_shared_whole_and_quadrant_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];

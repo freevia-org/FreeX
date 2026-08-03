@@ -96,6 +96,35 @@ public sealed class SmartArtFixtureEvidenceTests
             .Should().HaveCount(4);
     }
 
+    [Fact]
+    public void IncreasingCircleProcessFixtureContainsTheAuditedGrowingEllipseGrammar()
+    {
+        var root = FindRepositoryRoot();
+        var path = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "15-smartart-grouped-list.pptx");
+
+        using var archive = ZipFile.OpenRead(path);
+        var layout = ReadXml(archive, "ppt/diagrams/layout9.xml");
+        var drawing = ReadXml(archive, "ppt/diagrams/drawing9.xml");
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+        layout.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/increasingCircleProcess");
+        var shapes = drawing.Descendants(dsp + "sp").ToList();
+        shapes.Should().HaveCount(7);
+        shapes.Take(4).Select(shape => (string?)shape.Descendants(a + "prstGeom")
+                .Single().Attribute("prst"))
+            .Should().OnlyContain(value => value == "ellipse");
+        shapes.Skip(4).Should().OnlyContain(shape => shape.Descendants(a + "ln").Any());
+        shapes.Take(4).Select(shape => long.Parse(shape.Descendants(a + "ext").Single().Attribute("cx")!.Value))
+            .Should().BeInAscendingOrder();
+        drawing.Descendants(a + "t").Select(element => element.Value)
+            .Should().Equal("Phase A", "Phase B", "Phase C", "Phase D");
+        ReadXml(archive, "ppt/diagrams/data9.xml")
+            .Descendants(dgm + "pt")
+            .Should().HaveCount(4);
+    }
+
     private static XDocument ReadXml(ZipArchive archive, string path)
     {
         var entry = archive.GetEntry(path);

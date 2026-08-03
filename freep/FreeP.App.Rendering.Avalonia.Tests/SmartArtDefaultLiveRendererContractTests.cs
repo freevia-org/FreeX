@@ -83,4 +83,20 @@ public sealed class SmartArtDefaultLiveRendererContractTests
         source.Should().NotContain("SmartArtLayoutEngine.Layout(",
             "gridMatrix geometry must remain renderer-neutral");
     }
+
+    [Fact]
+    public void AvaloniaIncreasingCircleProcessRendering_ConsumesTheSharedLivePlan()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx");
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("SlideCompositor.Compose(");
+        source.Should().NotContain("LayoutIncreasingCircleProcess(");
+        source.Should().NotContain("SmartArtLayoutEngine.Layout(",
+            "increasingCircleProcess geometry must remain renderer-neutral");
+    }
 }

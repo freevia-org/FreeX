@@ -1426,6 +1426,29 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "The deterministic gridMatrix package admits only four ordered, distinct, non-empty rectangle nodes with equal square cells and the shared planner's 2.5% gap signature, without unsupported effects or extra roles. Missing, duplicate, ambiguous, non-square, wrongly spaced, effect-bearing, picture-bearing, or otherwise unproven Grid Matrix caches remain on cached drawing fallback; exact PowerPoint cell metrics, effects, text fitting, and wider matrix-family import parity remain deferred."),
         new(
+            EvidenceId: "freep.smartart.increasing-circle-process-import-growth",
+            Area: "SmartArt increasingCircleProcess imported growing-ellipse live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume the same shared increasingCircleProcess ellipse-and-line plan through SlideCompositor; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/avalonia-parity-wave135-freep-smartart-depth-20260804.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
+                "freep/FreeP.App.Presentation/SlideCompositor.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Presentation.Tests/PptxRepairCorpusValidityTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SmartArtDefaultLiveRendererContractTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs",
+                "tools/FreeP.RenderCompare.Tests/SmartArtFixtureEvidenceTests.cs",
+                "tools/FreeP.RenderCompare/SmartArtFixtureGenerator.cs"
+            ],
+            RemainingWork: "The checked-in fixture admits only four ordered distinct non-empty ellipse nodes with strictly growing square diameters on one baseline, equal positive gaps, and three empty line roles, without unsupported effects or extra roles. Malformed, ambiguous, effectful, picture-bearing, richer PowerPoint background/chord/rectangle, or otherwise unproven increasingCircleProcess caches remain on cached drawing fallback; exact PowerPoint role geometry, effects, text fitting, and broader process-family import parity remain deferred."),
+        new(
             EvidenceId: "freep.smartart.basic-process",
             Area: "SmartArt basic process live layout",
             Status: "shared-render-planner-evidence",

@@ -375,7 +375,7 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
-    public void SmartArtLiveCorpus_AdmitsIncreasingCircleProcessToLiveLayout()
+    public void SmartArtLiveCorpus_PreservesRichIncreasingCircleProcessCache()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
         var presentation = PptxPackageReader.Read(deckPath);
@@ -383,8 +383,8 @@ public sealed class PptxRepairCorpusValidityTests
             .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
             .SmartArt!;
 
-        increasingCircleProcess.Data!.IsLiveLayoutSupported.Should().BeTrue(
-            "the imported increasingCircleProcess layout is admitted to the shared live authoring engine");
+        increasingCircleProcess.Data!.IsLiveLayoutSupported.Should().BeFalse(
+            "the richer PowerPoint background/chord/rectangle cache is outside the bounded live grammar");
         increasingCircleProcess.FallbackShapes.Should().NotBeEmpty();
 
         var shapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
@@ -397,8 +397,30 @@ public sealed class PptxRepairCorpusValidityTests
             .Where(fill => fill.Color == SrgbColor.FromRgb(0xCCD2D8))
             .ToArray();
 
-        backgroundEllipses.Should().BeEmpty(
-            "the admitted live layout owns the increasing-circle nodes instead of replaying cached background-role ellipses");
+        backgroundEllipses.Should().NotBeEmpty(
+            "the richer imported cache remains authoritative instead of claiming the smaller live grammar");
+    }
+
+    [Fact]
+    public void SmartArtLiveCorpus_AdmitsIncreasingCircleProcessFixtureToSharedLiveLayout()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "15-smartart-grouped-list.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var slide = presentation.Slides[8];
+        var smartArt = slide.Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        smartArt.Data!.IsLiveLayoutSupported.Should().BeTrue();
+        smartArt.FallbackShapes.Should().HaveCount(7);
+
+        var shapes = SlideCompositor.Compose(presentation, slide)
+            .OfType<DrawOp.Shape>()
+            .ToArray();
+        shapes.Where(shape => shape.Text is not null)
+            .Select(shape => shape.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().ContainInOrder("Phase A", "Phase B", "Phase C", "Phase D");
+        shapes.Where(shape => shape.Text is null).Should().HaveCount(3);
     }
 
     [Fact]

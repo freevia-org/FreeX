@@ -2724,6 +2724,16 @@ public static class PptxPackageReader
             data.IsLiveLayoutSupported = false;
         }
 
+        if (IsIncreasingCircleProcessLayout(layoutUniqueId)
+            && smart.FallbackShapes.Count > 0
+            && !CanUseIncreasingCircleProcessCache(smart, data))
+        {
+            // increasingCircleProcess is live only for the exact ordered growing
+            // ellipse-and-line grammar reproduced by the shared planner. Preserve
+            // richer imported caches, including PowerPoint background roles.
+            data.IsLiveLayoutSupported = false;
+        }
+
         return data;
 
         string ReadSmartArtParagraphText(XElement paragraph)
@@ -3202,6 +3212,97 @@ public static class PptxPackageReader
         var gridSize = 2 * cellSize + gap;
         var expectedGap = (long)(gridSize * 0.025);
         return Math.Abs(gap - expectedGap) <= 1;
+    }
+
+    private static bool CanUseIncreasingCircleProcessCache(SmartArtShape smart, SmartArtData data)
+    {
+        if (!IsIncreasingCircleProcessLayout(data.LayoutUniqueId))
+            return false;
+
+        var nodes = FlattenSmartArtNodes(data);
+        var shapes = smart.FallbackShapes;
+        if (nodes.Count != 4 || shapes.Count != 7)
+            return false;
+
+        if (shapes.Any(HasUnsupportedSmartArtShapeEffects)
+            || HasUnsupportedSmartArtDrawingEffects(smart))
+            return false;
+
+        var nodeShapes = shapes.Take(4).ToArray();
+        var connectorShapes = shapes.Skip(4).ToArray();
+        if (nodeShapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape
+                || shape.AutoShapeKind != DrawingShapeKind.Ellipse
+                || string.IsNullOrWhiteSpace(shape.PlainText))
+            || connectorShapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape
+                || shape.AutoShapeKind != DrawingShapeKind.Line
+                || !string.IsNullOrWhiteSpace(shape.PlainText)
+                || shape.ExtentCxEmu <= 0
+                || shape.ExtentCyEmu <= 0))
+            return false;
+
+        if (!nodeShapes.Select(shape => shape.PlainText)
+            .SequenceEqual(nodes.Select(node => node.Text), StringComparer.Ordinal)
+            || nodeShapes.Select(shape => shape.PlainText)
+                .Distinct(StringComparer.Ordinal)
+                .Count() != nodes.Count)
+            return false;
+
+        var diameter = nodeShapes[^1].ExtentCxEmu;
+        if (diameter <= 0
+            || nodeShapes.Any(shape => shape.ExtentCxEmu != shape.ExtentCyEmu)
+            || !nodeShapes.Select(shape => shape.ExtentCxEmu)
+                .SequenceEqual(nodeShapes.Select(shape => shape.ExtentCxEmu).OrderBy(value => value)))
+            return false;
+
+        const double minimumScale = 0.52;
+        for (var index = 0; index < nodeShapes.Length; index++)
+        {
+            var expectedDiameter = (long)(diameter *
+                (minimumScale + (1.0 - minimumScale) * index / (nodeShapes.Length - 1)));
+            if (nodeShapes[index].ExtentCxEmu != expectedDiameter)
+                return false;
+
+            if (index > 0)
+            {
+                var previous = nodeShapes[index - 1];
+                var current = nodeShapes[index];
+                if (current.OffsetXEmu <= previous.OffsetXEmu
+                    || current.OffsetYEmu + current.ExtentCyEmu
+                        != previous.OffsetYEmu + previous.ExtentCyEmu)
+                    return false;
+            }
+        }
+
+        var gap = nodeShapes[1].OffsetXEmu
+            - (nodeShapes[0].OffsetXEmu + nodeShapes[0].ExtentCxEmu);
+        if (gap <= 0
+            || !nodeShapes.Skip(1).Zip(nodeShapes,
+                (current, previous) => current.OffsetXEmu
+                    - (previous.OffsetXEmu + previous.ExtentCxEmu))
+                .All(candidateGap => candidateGap == gap))
+            return false;
+
+        for (var index = 0; index < connectorShapes.Length; index++)
+        {
+            var current = nodeShapes[index];
+            var next = nodeShapes[index + 1];
+            var connector = connectorShapes[index];
+            var currentCenterY = current.OffsetYEmu + current.ExtentCyEmu / 2;
+            var nextCenterY = next.OffsetYEmu + next.ExtentCyEmu / 2;
+            if (connector.OffsetXEmu != current.OffsetXEmu + current.ExtentCxEmu
+                || connector.ExtentCxEmu != gap
+                || connector.OffsetYEmu != Math.Min(currentCenterY, nextCenterY)
+                || connector.ExtentCyEmu != Math.Abs(nextCenterY - currentCenterY))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsIncreasingCircleProcessLayout(string uniqueId)
+    {
+        var id = uniqueId.Replace('\\', '/').Trim();
+        return id.EndsWith("/increasingCircleProcess", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool CanUseDefaultListStaggeredCache(SmartArtShape smart, SmartArtData data)

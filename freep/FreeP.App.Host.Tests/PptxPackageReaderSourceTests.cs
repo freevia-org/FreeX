@@ -149,6 +149,16 @@ public sealed class PptxPackageReaderSourceTests
             .And.Contain("HasUnsupportedSmartArtShapeEffects")
             .And.Contain("HasUnsupportedSmartArtDrawingEffects");
 
+        ExtractMethod(source, "private static bool CanUseIncreasingCircleProcessCache(")
+            .Should()
+            .Contain("nodes.Count != 4")
+            .And.Contain("shapes.Count != 7")
+            .And.Contain("DrawingShapeKind.Ellipse")
+            .And.Contain("DrawingShapeKind.Line")
+            .And.Contain("minimumScale = 0.52")
+            .And.Contain("HasUnsupportedSmartArtShapeEffects")
+            .And.Contain("HasUnsupportedSmartArtDrawingEffects");
+
         ExtractMethod(source, "private static bool CanUseGridMatrixCache(")
             .Should()
             .Contain("nodes.Count != 4")
