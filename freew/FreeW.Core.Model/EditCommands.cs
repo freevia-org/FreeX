@@ -969,6 +969,102 @@ public sealed class SetCellShadingCommand(
     }
 }
 
+/// <summary>Replaces the complete per-edge border payload of one table cell and restores it on undo.</summary>
+public sealed class SetCellBorderPayloadCommand(
+    int blockIndex,
+    int rowIndex,
+    int colIndex,
+    CellBorders? borders) : IDocumentCommand
+{
+    private CellBorders? _previous;
+    private bool _applied;
+
+    public string Label => "Set Cell Borders";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetCell(context, out var cell))
+            return;
+        _previous = cell.Borders;
+        cell.Borders = borders;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetCell(context, out var cell))
+            return;
+        cell.Borders = _previous;
+        _applied = false;
+    }
+
+    private bool TryGetCell(IDocumentCommandContext context, out TableCell cell)
+    {
+        cell = null!;
+        if (blockIndex < 0
+            || blockIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[blockIndex] is not Table table
+            || rowIndex < 0
+            || rowIndex >= table.Rows.Count
+            || colIndex < 0
+            || colIndex >= table.Rows[rowIndex].Cells.Count)
+        {
+            return false;
+        }
+
+        cell = table.Rows[rowIndex].Cells[colIndex];
+        return true;
+    }
+}
+
+/// <summary>Sets one table cell's text direction and restores the prior source token on undo.</summary>
+public sealed class SetCellTextDirectionCommand(
+    int blockIndex,
+    int rowIndex,
+    int colIndex,
+    CellTextDirection direction) : IDocumentCommand
+{
+    private CellTextDirection _previous;
+    private bool _applied;
+
+    public string Label => "Set Cell Text Direction";
+
+    public void Apply(IDocumentCommandContext context)
+    {
+        if (!TryGetCell(context, out var cell))
+            return;
+        _previous = cell.TextDirection;
+        cell.TextDirection = direction;
+        _applied = true;
+    }
+
+    public void Revert(IDocumentCommandContext context)
+    {
+        if (!_applied || !TryGetCell(context, out var cell))
+            return;
+        cell.TextDirection = _previous;
+        _applied = false;
+    }
+
+    private bool TryGetCell(IDocumentCommandContext context, out TableCell cell)
+    {
+        cell = null!;
+        if (blockIndex < 0
+            || blockIndex >= context.Document.Blocks.Count
+            || context.Document.Blocks[blockIndex] is not Table table
+            || rowIndex < 0
+            || rowIndex >= table.Rows.Count
+            || colIndex < 0
+            || colIndex >= table.Rows[rowIndex].Cells.Count)
+        {
+            return false;
+        }
+
+        cell = table.Rows[rowIndex].Cells[colIndex];
+        return true;
+    }
+}
+
 /// <summary>
 /// Set the vertical alignment and all paragraphs' horizontal alignment of a single table cell.
 /// <para><paramref name="verticalAlignment"/> maps to <c>tc/tcPr/w:vAlign</c>; each paragraph's
