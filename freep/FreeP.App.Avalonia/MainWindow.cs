@@ -2276,6 +2276,17 @@ public sealed partial class MainWindow : Window
         var shape = hitId.HasValue
             ? ShapeTreeLookup.Find(slide, hitId.Value)
             : null;
+        if (shape?.Kind == SlideShapeKind.Chart && shape.Chart is not null &&
+            ChartSubtargetHitTester.TryHitTest(slide, Editor.Presentation, slidePoint.X, slidePoint.Y, out var chartHit))
+        {
+            Editor.Select(shape.Id);
+            var chartMenu = BuildChartContextMenu(chartHit);
+            _slideCanvas.ContextMenu = chartMenu;
+            chartMenu.Open(_slideCanvas);
+            e.Handled = true;
+            return;
+        }
+
         if (shape?.Kind != SlideShapeKind.Table || shape.Table is null)
             return;
 
@@ -2288,6 +2299,49 @@ public sealed partial class MainWindow : Window
         _slideCanvas.ContextMenu = menu;
         menu.Open(_slideCanvas);
         e.Handled = true;
+    }
+
+    private ContextMenu BuildChartContextMenu(ChartSubtargetHit hit)
+    {
+        var menu = new ContextMenu();
+        void Add(string header, Action action)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => action();
+            menu.Items.Add(item);
+        }
+
+        switch (hit.Kind)
+        {
+            case ChartSubtargetKind.Point:
+                Add("Format Data Point...", () => OpenChartPointOptionsDialog(hit.SeriesIndex, hit.PointIndex));
+                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                break;
+            case ChartSubtargetKind.Series:
+                Add("Format Data Series...", OpenChartSeriesOptionsDialog);
+                break;
+            case ChartSubtargetKind.CategoryAxis:
+                Add("Format Category Axis...", OpenChartAxisOptionsDialog);
+                break;
+            case ChartSubtargetKind.ValueAxis:
+                Add("Format Value Axis...", OpenChartAxisOptionsDialog);
+                break;
+            case ChartSubtargetKind.AxisTitle:
+            case ChartSubtargetKind.Title:
+            case ChartSubtargetKind.Legend:
+                Add("Format Chart Text...", OpenChartTextOptionsDialog);
+                break;
+            case ChartSubtargetKind.PlotArea:
+                Add("Format Plot Area...", OpenChartAreaOptionsDialog);
+                break;
+            default:
+                Add("Format Chart Area...", OpenChartAreaOptionsDialog);
+                break;
+        }
+
+        menu.Items.Add(new Separator());
+        Add("Chart Options...", OpenChartDisplayOptionsDialog);
+        return menu;
     }
 
     private ContextMenu BuildTableContextMenu(SlideShape shape)
