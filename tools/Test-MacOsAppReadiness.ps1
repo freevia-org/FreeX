@@ -1216,7 +1216,12 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\MainWindow.cs"
             AdditionalPathPattern = "MainWindow*.cs"
-            AdditionalPaths = @("AboutDialog.cs", "FormatCellsFillEditor.cs")
+            AdditionalPaths = @(
+                "AboutDialog.cs",
+                "LegalNoticesDialog.cs",
+                "FormatCellsFillEditor.cs",
+                "..\..\shared\Free.Shared.Shell.Avalonia\AvaloniaLegalNoticesDialog.cs"
+            )
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
                 "using FreeX.Core.Calc;",
@@ -2117,9 +2122,9 @@ function Test-SourceWiring {
                 "TopLevel.GetTopLevel(this)?.Launcher",
                 "AppHelpInfo.BuildAboutText(",
                 "AppHelpInfo.AvaloniaPlatformSummary",
-                "var documents = LegalNoticeProvider.GetDocuments();",
-                "ItemsSource = documents.Select(CreateLegalNoticeTabItem).ToList(),",
-                "AutomationProperties.SetAutomationId(tabControl, `"LegalNoticesSectionTabs`");",
+                "internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog",
+                "LegalNoticeProvider.GetDocuments()",
+                "AutomationProperties.SetAutomationId(_tabControl, `"LegalNoticesSectionTabs`");",
                 "internal MacOsLaunchSmokeSnapshot CreateLaunchSmokeSnapshot()",
                 "HasNativeWindowMenu: hasNativeWindowMenu",
                 "HasNativeMinimizeWindowMenuItem: HasNativeMenuItem(_minimizeWindowMenuItem, NativeMenuItemId.MinimizeWindow)",

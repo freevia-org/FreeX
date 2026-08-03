@@ -174,10 +174,12 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
             new[] { "src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs" },
             new[] { "src", "FreeX.App.Avalonia", "MainWindow.Symbol.cs" },
             new[] { "freew", "FreeW.App.Avalonia", "OptionsDialog.cs" },
+            new[] { "shared", "Free.Shared.Shell.Avalonia", "AvaloniaLegalNoticesDialog.cs" },
         };
         var source = string.Join(Environment.NewLine, paths.Select(path => File.ReadAllText(RepoFile(path))));
 
-        CountOccurrences(source, "new TabControl").Should().Be(11);
+        CountOccurrences(source, "new TabControl").Should().Be(10);
+        source.Should().Contain("private readonly TabControl _tabControl = new();");
         CountOccurrences(source, "AvaloniaCompactDialogChrome.ApplyClassicTabChrome(").Should().Be(11);
         source.Should().NotContain("private static void ApplyClassicTabChrome");
     }

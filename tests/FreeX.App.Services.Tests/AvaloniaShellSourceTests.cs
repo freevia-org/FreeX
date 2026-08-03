@@ -573,6 +573,10 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeFileMenuToSharedOpenSavePipeline()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var legalNoticesAdapterSource = File.ReadAllText(
+            RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "LegalNoticesDialog.cs"));
+        var sharedLegalNoticesSource = File.ReadAllText(
+            RepositoryFileLocator.Find("shared", "Free.Shared.Shell.Avalonia", "AvaloniaLegalNoticesDialog.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var workflowSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.BackstageWorkflow.cs"));
         var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
@@ -1008,10 +1012,11 @@ public sealed class AvaloniaShellSourceTests
         aboutSource.Should().Contain("textAutomationId: \"AboutFreeXText\"");
         aboutSource.Should().Contain("okAutomationId: \"AboutFreeXOkButton\"");
         source.Should().Contain("private async Task ShowLegalNoticesDialogAsync()");
-        source.Should().Contain("var documents = LegalNoticeProvider.GetDocuments();");
-        source.Should().Contain("ItemsSource = documents.Select(CreateLegalNoticeTabItem).ToList(),");
-        source.Should().Contain("AutomationProperties.SetAutomationId(tabControl, \"LegalNoticesSectionTabs\");");
-        source.Should().Contain("private static TabItem CreateLegalNoticeTabItem(LegalNoticeDocument document)");
+        source.Should().Contain("var dialog = new LegalNoticesDialog();");
+        legalNoticesAdapterSource.Should().Contain("internal sealed class LegalNoticesDialog : AvaloniaLegalNoticesDialog");
+        legalNoticesAdapterSource.Should().Contain("LegalNoticeProvider.GetDocuments()");
+        sharedLegalNoticesSource.Should().Contain("AutomationProperties.SetAutomationId(_tabControl, \"LegalNoticesSectionTabs\");");
+        sharedLegalNoticesSource.Should().Contain("AvaloniaCompactDialogChrome.ApplyClassicTabChrome(");
         source.Should().Contain("await dialog.ShowDialog(this);");
     }
 
