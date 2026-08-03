@@ -8,6 +8,15 @@ public static class ZoomDialogPlanner
 {
     public const double Width = 300;
     public const double Height = 240;
+    public const double OuterPadding = 12;
+    public const double MagnificationGroupPadding = 8;
+    public const double MagnificationGroupBottomMargin = 12;
+    public const double PresetColumnWidth = 96;
+    public const double PresetItemBottomMargin = 4;
+    public const double FitSelectionBottomMargin = 10;
+    public const double CustomPercentBoxWidth = 72;
+    public const double CustomPercentBoxHeight = 24;
+    public const double ActionButtonWidth = 72;
 
     private static readonly int[] PresetValues = [400, 200, 100, 75, 50, 25];
 

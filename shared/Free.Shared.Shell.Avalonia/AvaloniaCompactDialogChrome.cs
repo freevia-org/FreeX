@@ -21,6 +21,7 @@ public sealed record AvaloniaCompactDialogChromeStyle(FontFamily FontFamily)
     public double? TextBoxHeight { get; init; }
     public double? ComboBoxHeight { get; init; }
     public double? TabHeight { get; init; }
+    public double CompactRadioButtonHeight { get; init; } = 20;
     public double ButtonHeight { get; init; } = 26;
     public double FontSize { get; init; } = 12;
     public Thickness ButtonPadding { get; init; } = new(12, 3);
@@ -546,9 +547,9 @@ public static class AvaloniaCompactDialogChrome
         ArgumentNullException.ThrowIfNull(style);
 
         ApplyRadioButton(radioButton, style);
-        radioButton.Height = 20;
-        radioButton.MinHeight = 20;
-        radioButton.MaxHeight = 20;
+        radioButton.Height = style.CompactRadioButtonHeight;
+        radioButton.MinHeight = style.CompactRadioButtonHeight;
+        radioButton.MaxHeight = style.CompactRadioButtonHeight;
         radioButton.Padding = new Thickness(0);
         radioButton.Foreground = DialogForegroundBrush;
         radioButton.Template = new FuncControlTemplate<RadioButton>((control, _) =>

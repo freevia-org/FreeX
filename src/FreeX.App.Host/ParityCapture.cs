@@ -1268,6 +1268,7 @@ internal static class ParityCapture
         {
             "dialog.ScenarioManager" =>
                 (ScenarioManagerDialogLayout.DialogWidth, ScenarioManagerDialogLayout.DialogHeight),
+            "dialog.Zoom" => (ZoomDialogPlanner.Width, ZoomDialogPlanner.Height),
             _ => (0, 0)
         };
 
@@ -1599,8 +1600,11 @@ internal static class ParityCapture
         dialog.UpdateLayout();
         PumpDispatcher();
 
-        var nonClientWidth = Math.Max(0, dialog.ActualWidth - content.ActualWidth);
-        var nonClientHeight = Math.Max(0, dialog.ActualHeight - content.ActualHeight);
+        // FrameworkElement.ActualWidth/ActualHeight exclude Margin, while the dialog client contract includes it.
+        var clientContentWidth = content.ActualWidth + content.Margin.Left + content.Margin.Right;
+        var clientContentHeight = content.ActualHeight + content.Margin.Top + content.Margin.Bottom;
+        var nonClientWidth = Math.Max(0, dialog.ActualWidth - clientContentWidth);
+        var nonClientHeight = Math.Max(0, dialog.ActualHeight - clientContentHeight);
         var outerWidth = size.Width + nonClientWidth;
         var outerHeight = size.Height + nonClientHeight;
 
@@ -1614,8 +1618,10 @@ internal static class ParityCapture
         PumpDispatcher();
 
         // Correct a possible fractional-DIP/DPI rounding residual after WPF has applied its native chrome.
-        outerWidth += size.Width - content.ActualWidth;
-        outerHeight += size.Height - content.ActualHeight;
+        clientContentWidth = content.ActualWidth + content.Margin.Left + content.Margin.Right;
+        clientContentHeight = content.ActualHeight + content.Margin.Top + content.Margin.Bottom;
+        outerWidth += size.Width - clientContentWidth;
+        outerHeight += size.Height - clientContentHeight;
         dialog.Width = outerWidth;
         dialog.Height = outerHeight;
         dialog.MinWidth = outerWidth;

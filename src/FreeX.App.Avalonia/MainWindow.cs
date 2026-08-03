@@ -13909,18 +13909,32 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };
+        var zoomDialogChrome = AvaloniaCompactDialogChrome.WindowsStyle with
+        {
+            ControlHeight = 20,
+            CompactRadioButtonHeight = 16,
+            TextBoxHeight = ZoomDialogPlanner.CustomPercentBoxHeight,
+            ButtonHeight = 22,
+            ButtonPadding = new Thickness(10, 1),
+        };
+        AvaloniaCompactDialogChrome.ApplyWindow(dialog, zoomDialogChrome);
         AutomationProperties.SetAutomationId(dialog, "ZoomDialog");
 
         var presetButtons = new List<RadioButton>();
-        var presetPanel = new StackPanel { Spacing = 6 };
-        foreach (var zoom in ZoomDialogPlanner.Presets)
+        var presetPanel = new StackPanel { Spacing = 0 };
+        for (var index = 0; index < ZoomDialogPlanner.Presets.Count; index++)
         {
+            var zoom = ZoomDialogPlanner.Presets[index];
             var button = new RadioButton
             {
                 Content = $"{zoom}%",
                 GroupName = "ZoomDialogOptions",
                 IsChecked = currentZoom == zoom,
+                Margin = new Thickness(0, 0, 0, index < ZoomDialogPlanner.Presets.Count - 1
+                    ? ZoomDialogPlanner.PresetItemBottomMargin
+                    : 0),
             };
+            AvaloniaCompactDialogChrome.ApplyCompactRadioButton(button, zoomDialogChrome);
             AutomationProperties.SetAutomationId(button, $"ZoomPreset{zoom}Button");
             presetButtons.Add(button);
             presetPanel.Children.Add(button);
@@ -13930,7 +13944,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         {
             Content = "Fit selection",
             GroupName = "ZoomDialogOptions",
+            Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.FitSelectionBottomMargin),
         };
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(fitSelectionButton, zoomDialogChrome);
         AutomationProperties.SetAutomationId(fitSelectionButton, "ZoomFitSelectionButton");
 
         var customButton = new RadioButton
@@ -13939,14 +13955,16 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             GroupName = "ZoomDialogOptions",
             IsChecked = !presetButtons.Any(button => button.IsChecked == true),
         };
+        AvaloniaCompactDialogChrome.ApplyCompactRadioButton(customButton, zoomDialogChrome);
         AutomationProperties.SetAutomationId(customButton, "ZoomCustomButton");
 
         var customBox = new TextBox
         {
             Text = currentZoom.ToString(CultureInfo.InvariantCulture),
-            Width = 58,
+            Width = ZoomDialogPlanner.CustomPercentBoxWidth,
             HorizontalContentAlignment = AvaloniaHorizontalAlignment.Right,
         };
+        AvaloniaCompactDialogChrome.ApplyTextBox(customBox, zoomDialogChrome);
         AutomationProperties.SetAutomationId(customBox, "ZoomCustomPercentBox");
         AutomationProperties.SetName(customBox, "Custom zoom percentage");
 
@@ -13963,7 +13981,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var okButton = new Button
         {
             Content = "OK",
-            Width = 75,
+            Width = ZoomDialogPlanner.ActionButtonWidth,
             IsDefault = true,
         };
         AutomationProperties.SetAutomationId(okButton, "ZoomOkButton");
@@ -13971,7 +13989,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var cancelButton = new Button
         {
             Content = "Cancel",
-            Width = 75,
+            Width = ZoomDialogPlanner.ActionButtonWidth,
             IsCancel = true,
         };
         AutomationProperties.SetAutomationId(cancelButton, "ZoomCancelButton");
@@ -14032,37 +14050,62 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         var customRow = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 6,
             Children =
             {
                 customButton,
                 customBox,
-                new TextBlock { Text = "%", VerticalAlignment = AvaloniaVerticalAlignment.Center },
+                new TextBlock
+                {
+                    Text = "%",
+                    Margin = new Thickness(4, 0, 0, 0),
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                },
             },
         };
 
-        var buttonRow = new StackPanel
+        var choices = new AvaloniaGrid
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+            ColumnDefinitions = new ColumnDefinitions(
+                $"{ZoomDialogPlanner.PresetColumnWidth},*"),
+        };
+        choices.Children.Add(presetPanel);
+        var customChoices = new StackPanel
+        {
             Children =
             {
-                okButton,
-                cancelButton,
+                fitSelectionButton,
+                customRow,
             },
         };
+        AvaloniaGrid.SetColumn(customChoices, 1);
+        choices.Children.Add(customChoices);
+
+        var magnificationGroup = new GroupBox
+        {
+            Header = "Magnification",
+            Padding = new Thickness(ZoomDialogPlanner.MagnificationGroupPadding),
+            Margin = new Thickness(0, 0, 0, ZoomDialogPlanner.MagnificationGroupBottomMargin),
+            Content = choices,
+        };
+        AvaloniaCompactDialogChrome.ApplyGroupBox(magnificationGroup, zoomDialogChrome);
+
+        AvaloniaCompactDialogChrome.ApplyButton(
+            okButton,
+            zoomDialogChrome,
+            ZoomDialogPlanner.ActionButtonWidth,
+            isDefault: true);
+        AvaloniaCompactDialogChrome.ApplyButton(
+            cancelButton,
+            zoomDialogChrome,
+            ZoomDialogPlanner.ActionButtonWidth);
+        var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([okButton, cancelButton]);
 
         dialog.Content = new StackPanel
         {
-            Margin = new Thickness(16),
-            Spacing = 10,
+            Margin = new Thickness(ZoomDialogPlanner.OuterPadding),
             Children =
             {
-                new TextBlock { Text = "Magnification" },
-                presetPanel,
-                fitSelectionButton,
-                customRow,
+                magnificationGroup,
                 errorText,
                 buttonRow,
             },
