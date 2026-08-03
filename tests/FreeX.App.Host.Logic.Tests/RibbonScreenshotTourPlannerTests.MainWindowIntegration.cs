@@ -605,7 +605,7 @@ public sealed partial class RibbonScreenshotTourPlannerTests
         source.Should().Contain("FREEX_INSERT_OBJECTS_LINKS_TOUR");
         source.Should().Contain("insert-objects-links-tour");
         source.Should().Contain("EnsureInsertObjectsLinksTourContext");
-        source.Should().Contain("new HyperlinkDialog(\"https://freex.example/insert-objects\"");
+        source.Should().Contain("new HyperlinkDialog(HyperlinkDialogParityFixture.Target, HyperlinkDialogParityFixture.DisplayText)");
         source.Should().Contain("freex_insert_hyperlink_dialog_address_focus");
         source.Should().Contain("new SymbolPickerDialog");
         source.Should().Contain("freex_insert_symbol_picker_opened");
