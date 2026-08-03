@@ -54,7 +54,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
     private readonly ComboBox _markerCombo;
     private readonly TextBox _markerSizeBox;
 
-    public ChartSeriesOptionsDialog(EditingSession editor)
+    public ChartSeriesOptionsDialog(EditingSession editor, int? initialSeriesIndex = null)
     {
         _editor = editor ?? throw new ArgumentNullException(nameof(editor));
         var chart = editor.SelectedChart
@@ -68,11 +68,17 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
 
+        var selectedSeriesIndex = initialSeriesIndex ?? _planner.SeriesIndex;
+        if (_planner.SeriesOptions.Count > 0)
+            selectedSeriesIndex = Math.Clamp(selectedSeriesIndex, 0, _planner.SeriesOptions.Count - 1);
+        else
+            selectedSeriesIndex = 0;
+
         _seriesCombo = new ComboBox
         {
             ItemsSource = _planner.SeriesOptions,
             DisplayMemberPath = nameof(ChartSeriesOption.Label),
-            SelectedIndex = _planner.SeriesIndex,
+            SelectedIndex = selectedSeriesIndex,
             MinWidth = 200,
         };
         _seriesCombo.SelectionChanged += (_, _) =>
@@ -83,6 +89,7 @@ public sealed class ChartSeriesOptionsDialog : Free.Shared.Ribbon.Wpf.DialogWind
                 LoadControls();
             }
         };
+        _planner.SetSeriesIndex(_seriesCombo.SelectedIndex);
         _smoothLineCheck = new CheckBox { Content = surface.SmoothLineLabel };
         _secondaryAxisCheck = new CheckBox { Content = surface.SecondaryAxisLabel };
         _invertIfNegativeCheck = new CheckBox { Content = surface.InvertIfNegativeLabel };

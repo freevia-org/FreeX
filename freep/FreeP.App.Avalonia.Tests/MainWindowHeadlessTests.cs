@@ -8046,6 +8046,26 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ChartSeriesOptionsDialog_can_start_at_requested_series()
+    {
+        ChartSeriesOptions? options = null;
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var chartShape = window.Editor.InsertChart(ChartType.ColumnClustered);
+            window.Editor.Select(chartShape.Id);
+
+            var dialog = new ChartSeriesOptionsDialog(window.Editor, initialSeriesIndex: 1);
+            options = dialog.BuildCommitPlanForTests();
+            dialog.Close();
+        });
+
+        if (!ran) return;
+        options.Should().NotBeNull();
+        options!.SeriesIndex.Should().Be(1);
+    }
+
+    [Fact]
     public async Task ChartPointOptionsDialog_can_start_at_hit_point()
     {
         ChartPointOptions? options = null;
