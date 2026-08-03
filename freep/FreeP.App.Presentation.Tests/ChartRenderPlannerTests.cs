@@ -203,6 +203,95 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_EmitsSeriesLinesForAuthoredStackedColumns()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnStacked,
+            SeriesLinesSpecified = true,
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var first = new ChartSeries { Name = "North" };
+        first.Values.AddRange(new double?[] { 10, 20, 15 });
+        var second = new ChartSeries { Name = "South" };
+        second.Values.AddRange(new double?[] { 5, 8, 12 });
+        chart.Series.Add(first);
+        chart.Series.Add(second);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.SeriesLines.Should().HaveCount(4);
+        scene.SeriesLines.Should().OnlyContain(line => line.Start.X < line.End.X);
+        scene.SeriesLines.Should().OnlyContain(line => line.StartPointIndex + 1 == line.EndPointIndex);
+    }
+
+    [Fact]
+    public void BuildScenePlan_UsesAuthoredSeriesLineStroke()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnStacked,
+            SeriesLinesSpecified = true,
+            SeriesLineStyle = new ChartLineStyle
+            {
+                Color = new ThemeAwareColor(SrgbColor.FromRgb(0xC00000)),
+                WidthPt = 2.25,
+                Dash = OutlineDash.Dash,
+            },
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20, 15 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.SeriesLines.Should().NotBeEmpty();
+        scene.SeriesLines.Should().OnlyContain(line =>
+            line.Stroke.Color == SrgbColor.FromRgb(0xC00000)
+            && Math.Abs(line.Stroke.Thickness - 3.0) < 0.001
+            && line.Stroke.Dash == OutlineDash.Dash);
+    }
+
+    [Fact]
+    public void BuildScenePlan_DoesNotEmitGenericSeriesLinesForClusteredCharts()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            SeriesLinesSpecified = true,
+            Categories = { "Q1", "Q2" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.SeriesLines.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildScenePlan_EmitsSeriesLinesForAuthoredStackedBars()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.BarStacked,
+            SeriesLinesSpecified = true,
+            Categories = { "Q1", "Q2", "Q3" },
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20, 15 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.SeriesLines.Should().HaveCount(2);
+        scene.SeriesLines.Should().OnlyContain(line => line.StartPointIndex + 1 == line.EndPointIndex);
+        scene.SeriesLines.Should().OnlyContain(line => line.Start.Y > line.End.Y);
+    }
+
+    [Fact]
     public void BuildScenePlan_EmitsUpDownBarsBetweenFirstTwoLineSeries()
     {
         var chart = new ChartShape
