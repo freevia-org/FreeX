@@ -6,6 +6,13 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class PageSetupDialogPlannerTests
 {
     [Fact]
+    public void PresentationMetrics_Expose_the_shared_Wpf_field_height()
+    {
+        PageSetupDialogPlanner.PresentationMetrics.FieldHeight.Should().Be(24);
+        PageSetupDialogPlanner.PresentationMetrics.AvaloniaTabContentInset.Should().Be(3);
+    }
+
+    [Fact]
     public void PresentationMetrics_DescribeSharedWpfAuthorityGeometryAndValidationPolicy()
     {
         var metrics = PageSetupDialogPlanner.PresentationMetrics;

@@ -226,7 +226,14 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     private static ComboBox Combo(string[] items, int selectedIndex)
     {
-        var combo = new ComboBox { MinWidth = PageSetupDialogPlanner.PresentationMetrics.ComboBoxMinWidth };
+        var metrics = PageSetupDialogPlanner.PresentationMetrics;
+        var combo = new ComboBox
+        {
+            MinWidth = metrics.ComboBoxMinWidth,
+            Height = metrics.FieldHeight,
+            MinHeight = metrics.FieldHeight,
+            MaxHeight = metrics.FieldHeight
+        };
         foreach (var item in items)
             combo.Items.Add(item);
         combo.SelectedIndex = Math.Clamp(selectedIndex, 0, items.Length - 1);
@@ -236,7 +243,10 @@ internal sealed class PageSetupDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private static TextBox NumberBox(string value) => new()
     {
         Text = value,
-        MinWidth = PageSetupDialogPlanner.PresentationMetrics.NumberBoxMinWidth
+        MinWidth = PageSetupDialogPlanner.PresentationMetrics.NumberBoxMinWidth,
+        Height = PageSetupDialogPlanner.PresentationMetrics.FieldHeight,
+        MinHeight = PageSetupDialogPlanner.PresentationMetrics.FieldHeight,
+        MaxHeight = PageSetupDialogPlanner.PresentationMetrics.FieldHeight
     };
 
     private static void AddRow(Grid grid, int row, string label, UIElement field)

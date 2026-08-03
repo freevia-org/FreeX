@@ -47,9 +47,26 @@ public sealed class PageSetupDialogVisualParityTests
                 dialog.GetLogicalDescendants().OfType<TextBox>()
                     .Should().OnlyContain(box => box.MinWidth == metrics.NumberBoxMinWidth);
                 dialog.GetLogicalDescendants().OfType<TextBox>()
+                    .Should().OnlyContain(box =>
+                        box.Height == metrics.FieldHeight
+                        && box.MinHeight == metrics.FieldHeight
+                        && box.MaxHeight == metrics.FieldHeight);
+                dialog.GetLogicalDescendants().OfType<TextBox>()
                     .Should().OnlyContain(box => box.Margin == new Thickness(0, metrics.RowInset, 0, metrics.RowInset));
                 dialog.GetLogicalDescendants().OfType<ComboBox>()
                     .Should().OnlyContain(combo => combo.MinWidth == metrics.ComboBoxMinWidth);
+                dialog.GetLogicalDescendants().OfType<ComboBox>()
+                    .Should().OnlyContain(combo =>
+                        combo.Height == metrics.FieldHeight
+                        && combo.MinHeight == metrics.FieldHeight
+                        && combo.MaxHeight == metrics.FieldHeight);
+
+                var margins = (StackPanel)tabs.Items.OfType<TabItem>().First().Content!;
+                margins.Margin.Should().Be(new Thickness(
+                    metrics.TabContentMargin.Left + metrics.AvaloniaTabContentInset,
+                    metrics.TabContentMargin.Top,
+                    metrics.TabContentMargin.Right + metrics.AvaloniaTabContentInset,
+                    metrics.TabContentMargin.Bottom));
 
                 var actionButtons = dialog.GetLogicalDescendants()
                     .OfType<Button>()

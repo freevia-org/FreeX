@@ -273,15 +273,29 @@ public sealed class PageSetupDialog : FreeWDialogWindow
         editor.Focus();
     }
 
-    private static StackPanel TabPanel() => new()
+    private static StackPanel TabPanel()
     {
-        Margin = ToThickness(PageSetupDialogPlanner.PresentationMetrics.TabContentMargin)
-    };
+        var metrics = PageSetupDialogPlanner.PresentationMetrics;
+        var margin = metrics.TabContentMargin;
+        return new StackPanel
+        {
+            Margin = new Thickness(
+                margin.Left + metrics.AvaloniaTabContentInset,
+                margin.Top,
+                margin.Right + metrics.AvaloniaTabContentInset,
+                margin.Bottom)
+        };
+    }
 
-    private static TextBox NumberBox(string value) => PageLayoutDialogChrome.NumberBox(
-        value,
-        PageSetupDialogPlanner.PresentationMetrics.NumberBoxMinWidth,
-        stretch: true);
+    private static TextBox NumberBox(string value)
+    {
+        var box = PageLayoutDialogChrome.NumberBox(
+            value,
+            PageSetupDialogPlanner.PresentationMetrics.NumberBoxMinWidth,
+            stretch: true);
+        ApplyFieldHeight(box);
+        return box;
+    }
 
     private static ComboBox Combo(IEnumerable<string> values, int selectedIndex)
     {
@@ -289,8 +303,17 @@ public sealed class PageSetupDialog : FreeWDialogWindow
             values,
             selectedIndex,
             PageSetupDialogPlanner.PresentationMetrics.ComboBoxMinWidth);
+        ApplyFieldHeight(combo);
         combo.HorizontalAlignment = HorizontalAlignment.Stretch;
         return combo;
+    }
+
+    private static void ApplyFieldHeight(Control control)
+    {
+        var height = PageSetupDialogPlanner.PresentationMetrics.FieldHeight;
+        control.Height = height;
+        control.MinHeight = height;
+        control.MaxHeight = height;
     }
 
     private static Control PageSetupRow(string label, Control field)

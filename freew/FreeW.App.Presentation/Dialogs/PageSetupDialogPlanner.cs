@@ -30,6 +30,10 @@ public sealed record PageSetupDialogValidationPolicy(
 public sealed record PageSetupDialogPresentationMetrics
 {
     public double WindowWidth { get; init; } = 420;
+    // Both hosts use the compact 24-DIP dialog control metric at the harness DPI.
+    // Keep the value in the shared contract so neither host falls back to its
+    // platform default for this dialog.
+    public double FieldHeight { get; init; } = 24;
     public double RowInset { get; init; } = 4;
     public double LabelFieldSpacing { get; init; } = 8;
     public double LabelColumnWidth { get; init; } = 93;
@@ -44,7 +48,11 @@ public sealed record PageSetupDialogPresentationMetrics
     public PageSetupDialogThickness ActionRowMargin { get; init; } = new(14, 12, 14, 12);
     public PageSetupDialogThickness SecondCheckMargin { get; init; } = new(0, 4, 0, 0);
     public PageSetupDialogThickness TabContentMargin { get; init; } = new(14, 14, 14, 14);
-    public PageSetupDialogThickness TabPaneMargin { get; init; } = new(-12, -2, -12, 0);
+    public PageSetupDialogThickness TabPaneMargin { get; init; } = new(-12, 0, -12, 0);
+    // Avalonia's selected-content template leaves a three-DIP inner edge on each
+    // side after the shared pane compensation is applied. WPF has no equivalent
+    // template inset, so the Avalonia host consumes this shared authority value.
+    public double AvaloniaTabContentInset { get; init; } = 3;
     public IReadOnlyList<string> TabNames { get; init; } = ["Margins", "Paper", "Layout"];
     public PageSetupDialogValidationPolicy Validation { get; init; } =
         new(
