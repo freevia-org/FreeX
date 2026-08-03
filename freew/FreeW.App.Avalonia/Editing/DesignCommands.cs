@@ -83,43 +83,6 @@ internal sealed class DesignCatalogCommand(string label, Action<TextDocument> ap
     }
 }
 
-internal sealed class ApplyTableStyleCommand(int blockIndex, DocumentTableStyle style) : IDocumentCommand
-{
-    private string? _previousStyleId;
-    private TableFormatting? _previousFormatting;
-    private bool _captured;
-    private bool _applied;
-
-    public string Label => "Apply Table Style";
-
-    public void Apply(IDocumentCommandContext context)
-    {
-        if (blockIndex < 0 || blockIndex >= context.Document.Blocks.Count
-            || context.Document.Blocks[blockIndex] is not Table table)
-            return;
-
-        if (!_captured)
-        {
-            _previousStyleId = table.TableStyleId;
-            _previousFormatting = table.Formatting;
-            _captured = true;
-        }
-        table.TableStyleId = style.WordStyleId;
-        table.Formatting = table.Formatting with { Borders = style.Borders };
-        _applied = true;
-    }
-
-    public void Revert(IDocumentCommandContext context)
-    {
-        if (!_applied || blockIndex < 0 || blockIndex >= context.Document.Blocks.Count
-            || context.Document.Blocks[blockIndex] is not Table table || _previousFormatting is null)
-            return;
-        table.TableStyleId = _previousStyleId;
-        table.Formatting = _previousFormatting;
-        _applied = false;
-    }
-}
-
 /// <summary>Reversibly set (or clear) the whole-page background colour (<c>w:background</c>).</summary>
 internal sealed class SetPageColorCommand(string? colorHex) : IDocumentCommand
 {

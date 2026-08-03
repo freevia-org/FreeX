@@ -12462,14 +12462,10 @@ public sealed class DocumentView : RichTextBox
         ArgumentNullException.ThrowIfNull(style);
         CommitToModel();
         var (blockIndex, _, _) = CaretTableLocation();
-        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable table)
+        if (blockIndex < 0 || _model.Blocks[blockIndex] is not ModelTable)
             return;
 
-        table.TableStyleId = style.WordStyleId;
-        // Apply the style's border intent; the tblLook toggles (HeaderRow/BandedRows/etc.) are left
-        // unchanged so the user's Table Style Options selections continue to drive the active regions.
-        table.Formatting = table.Formatting with { Borders = style.Borders };
-        Render();
+        _commands.Execute(new ApplyTableStyleCommand(blockIndex, style));
     }
 
     /// <summary>

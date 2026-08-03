@@ -7,6 +7,36 @@ namespace FreeW.Core.Model.Tests;
 /// </summary>
 public class DocumentTableStyleTests
 {
+    private sealed class CommandContext(TextDocument document) : IDocumentCommandContext
+    {
+        public TextDocument Document => document;
+    }
+
+    [Fact]
+    public void ApplyTableStyleCommand_UndoRedoRestoresStyleAndFormatting()
+    {
+        var document = TextDocument.CreateEmpty();
+        var table = Table.Create(2, 2);
+        table.Formatting = table.Formatting with { HeaderRow = true, BandedRows = true, Borders = false };
+        document.Blocks.Add(table);
+        var originalFormatting = table.Formatting;
+        var style = DocumentTableStyle.FindById("GridTable1Light")!;
+        var bus = new DocumentCommandBus(new CommandContext(document));
+
+        bus.Execute(new ApplyTableStyleCommand(1, style));
+        table.TableStyleId.Should().Be(style.WordStyleId);
+        table.Formatting.Borders.Should().Be(style.Borders);
+
+        bus.Undo().Should().BeTrue();
+        table.TableStyleId.Should().BeNull();
+        table.Formatting.Should().Be(originalFormatting);
+
+        bus.Redo().Should().BeTrue();
+        table.TableStyleId.Should().Be(style.WordStyleId);
+        table.Formatting.HeaderRow.Should().BeTrue();
+        table.Formatting.BandedRows.Should().BeTrue();
+    }
+
     [Fact]
     public void Catalog_IsNonEmpty()
     {

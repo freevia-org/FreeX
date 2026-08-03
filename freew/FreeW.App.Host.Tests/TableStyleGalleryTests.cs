@@ -93,6 +93,16 @@ public sealed class TableStyleGalleryTests
         editor.CommitToModel();
         var table = editor.Model.Blocks.OfType<Table>().First();
         table.TableStyleId.Should().Be("GridTable1Light");
+
+        editor.CanUndo.Should().BeTrue();
+        editor.Undo();
+        table = editor.Model.Blocks.OfType<Table>().First();
+        table.TableStyleId.Should().BeNull();
+        table.Formatting.HeaderRow.Should().BeTrue();
+        table.Formatting.BandedRows.Should().BeTrue();
+
+        editor.Redo();
+        editor.Model.Blocks.OfType<Table>().First().TableStyleId.Should().Be("GridTable1Light");
     }
 
     [StaFact]
