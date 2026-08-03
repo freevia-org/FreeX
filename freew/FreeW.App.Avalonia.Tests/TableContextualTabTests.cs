@@ -712,6 +712,46 @@ public sealed class TableContextualTabTests
         ran.Should().BeTrue("table commands must silently no-op when no table is active");
     }
 
+    [Fact]
+    public async Task Table_layout_commands_are_undoable()
+    {
+        var ran = false;
+        await Session.Dispatch(() =>
+        {
+            var (view, index, table) = MakeTableView();
+            table.Rows[0].HeightPt = 12;
+            table.Rows[1].HeightPt = 24;
+            table.Rows[2].HeightPt = 36;
+            table.ColumnWidthsPt.AddRange([60, 120, 180]);
+            foreach (var row in table.Rows)
+                for (var column = 0; column < row.Cells.Count; column++)
+                    row.Cells[column].WidthPt = table.ColumnWidthsPt[column];
+            view.PlaceCaretInCell(index, row: 0, col: 0, paraIdx: 0, offset: 0);
+
+            view.DistributeTableRows();
+            table.Rows.Should().OnlyContain(row => row.HeightPt == 24);
+            view.Undo();
+            table.Rows.Select(row => row.HeightPt).Should().Equal(12, 24, 36);
+
+            view.PlaceCaretInCell(index, row: 0, col: 0, paraIdx: 0, offset: 0);
+            view.DistributeTableColumns();
+            table.ColumnWidthsPt.Should().Equal(120, 120, 120);
+            view.Undo();
+            table.ColumnWidthsPt.Should().Equal(60, 120, 180);
+
+            view.PlaceCaretInCell(index, row: 0, col: 0, paraIdx: 0, offset: 0);
+            view.SetTableAutoFit(AutoFitMode.Contents);
+            table.AutoFit.Should().Be(AutoFitMode.Contents);
+            table.ColumnWidthsPt.Should().BeEmpty();
+            view.Undo();
+            table.AutoFit.Should().Be(AutoFitMode.Fixed);
+            table.ColumnWidthsPt.Should().Equal(60, 120, 180);
+            ran = true;
+        }, CancellationToken.None);
+
+        ran.Should().BeTrue();
+    }
+
     // ── BY1: Select Table / Row / Column — no infinite loop ──────────────────
 
     /// <summary>

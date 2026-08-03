@@ -1923,10 +1923,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
+            || _model.Blocks[blockIndex] is not ModelTable)
             return;
-        if (TableLayoutOperations.DistributeRows(table))
-            Render();
+        _commands.Execute(new DistributeTableRowsCommand(blockIndex));
+        Render();
     }
 
     /// <summary>
@@ -1939,10 +1939,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
+            || _model.Blocks[blockIndex] is not ModelTable)
             return;
-        if (TableLayoutOperations.DistributeColumns(table))
-            Render();
+        _commands.Execute(new DistributeTableColumnsCommand(blockIndex));
+        Render();
     }
 
     /// <summary>
@@ -1954,10 +1954,10 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
         var (blockIndex, _, _) = CaretTableLocation();
         if (blockIndex < 0 || blockIndex >= _model.Blocks.Count
-            || _model.Blocks[blockIndex] is not ModelTable table)
+            || _model.Blocks[blockIndex] is not ModelTable)
             return;
-        if (TableLayoutOperations.SetAutoFit(table, mode))
-            Render();
+        _commands.Execute(new SetTableAutoFitCommand(blockIndex, mode));
+        Render();
     }
 
     /// <summary>
