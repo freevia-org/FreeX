@@ -134,6 +134,7 @@ public static class FormatCellsDialogAlignmentLayout
     public const double FollowupLabelTopMargin = 8;
     public const double CheckBoxTopMargin = 8;
     public const double FollowupCheckBoxTopMargin = 6;
+    public const double CheckBoxHeight = 16;
     public const double ControlHeight = 24;
 }
 

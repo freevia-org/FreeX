@@ -17378,9 +17378,9 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             CreateFormatCellsVerticalAlignmentChoices(),
             currentVerticalAlignment);
         verticalAlignmentBox.HorizontalAlignment = AvaloniaHorizontalAlignment.Stretch;
-        var wrapTextBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_WrapText"), "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText);
-        var shrinkToFitBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_ShrinkToFit"), "FormatCellsShrinkToFitBox", currentShrinkToFit);
-        var mergeCellsBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_MergeCells"), "FormatCellsMergeCellsBox", currentMergeCells);
+        var wrapTextBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_WrapText"), "FormatCellsWrapTextBox", _session.IsSelectedRangeStartWrapText, FormatCellsDialogAlignmentLayout.CheckBoxHeight);
+        var shrinkToFitBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_ShrinkToFit"), "FormatCellsShrinkToFitBox", currentShrinkToFit, FormatCellsDialogAlignmentLayout.CheckBoxHeight);
+        var mergeCellsBox = CreateFormatCellsCheckBox(UiText.Get("FormatCells_MergeCells"), "FormatCellsMergeCellsBox", currentMergeCells, FormatCellsDialogAlignmentLayout.CheckBoxHeight);
         var indentLevelBox = new TextBox
         {
             Text = currentIndentLevel.ToString(CultureInfo.InvariantCulture),
@@ -18822,7 +18822,7 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
             _ => 1,
         };
 
-    private static CheckBox CreateFormatCellsCheckBox(string label, string automationId, bool isChecked)
+    private static CheckBox CreateFormatCellsCheckBox(string label, string automationId, bool isChecked, double? height = null)
     {
         var checkBox = new CheckBox
         {
@@ -18831,6 +18831,12 @@ public sealed partial class MainWindow : Window, IFormulaPointModeWorkbookWindow
         };
         AutomationProperties.SetAutomationId(checkBox, automationId);
         ApplyDialogCheckBoxChrome(checkBox);
+        if (height is double compactHeight)
+        {
+            checkBox.Height = compactHeight;
+            checkBox.MinHeight = compactHeight;
+            checkBox.MaxHeight = compactHeight;
+        }
         return checkBox;
     }
 

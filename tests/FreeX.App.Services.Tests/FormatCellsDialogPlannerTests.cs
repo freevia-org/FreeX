@@ -17,6 +17,7 @@ public sealed class FormatCellsDialogPlannerTests
         FormatCellsDialogAlignmentLayout.FollowupLabelTopMargin.Should().Be(8);
         FormatCellsDialogAlignmentLayout.CheckBoxTopMargin.Should().Be(8);
         FormatCellsDialogAlignmentLayout.FollowupCheckBoxTopMargin.Should().Be(6);
+        FormatCellsDialogAlignmentLayout.CheckBoxHeight.Should().Be(16);
         FormatCellsDialogAlignmentLayout.ControlHeight.Should().Be(24);
     }
 
