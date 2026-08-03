@@ -321,6 +321,31 @@ public sealed class ChartTests : IDisposable
     }
 
     [Fact]
+    public void ChartSeriesLines_OnNonOfPieChart_RoundTripsAuthoredToken()
+    {
+        var chart = BuildColumnChart();
+        chart.SeriesLinesSpecified = true;
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(ChartNs + "barChart")
+                .Single()
+                .Element(ChartNs + "serLines")
+                .Should().NotBeNull();
+        }
+
+        var reopened = PptxPackageReader.Read(path);
+        var roundTripped = reopened.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart)
+            .Chart!;
+
+        roundTripped.SeriesLinesSpecified.Should().BeTrue();
+        roundTripped.OfPieSeriesLinesSpecified.Should().BeFalse();
+    }
+
+    [Fact]
     public void ChartSeries_DefaultValues()
     {
         var series = new ChartSeries();

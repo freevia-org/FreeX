@@ -410,7 +410,7 @@ internal static class PptxChartWriter
         ChartShape chart, List<XElement> seriesEls, bool isScatterLike,
         int catAxId, int valAxId)
     {
-        return chart.ChartType switch
+        var chartType = chart.ChartType switch
         {
             ChartType.BarClustered or ChartType.BarStacked or ChartType.BarStacked100 =>
                 BuildBarChartEl(chart, seriesEls, isBar: true,  catAxId, valAxId),
@@ -443,6 +443,17 @@ internal static class PptxChartWriter
             _ =>
                 BuildBarChartEl(chart, seriesEls, isBar: false, catAxId, valAxId)
         };
+
+        if (chart.SeriesLinesSpecified && chart.ChartType != ChartType.OfPie)
+        {
+            var lastSeries = chartType.Elements(C + "ser").LastOrDefault();
+            if (lastSeries is not null)
+                lastSeries.AddAfterSelf(new XElement(C + "serLines"));
+            else
+                chartType.AddFirst(new XElement(C + "serLines"));
+        }
+
+        return chartType;
     }
 
     private static XElement BuildFunnelChartEl(ChartShape chart, List<XElement> seriesEls) =>

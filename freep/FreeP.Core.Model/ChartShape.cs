@@ -656,6 +656,13 @@ public sealed class ChartShape
     public bool OfPieSeriesLinesSpecified { get; set; }
 
     /// <summary>
+    /// Whether the source explicitly included a chart-level <c>serLines</c> element.
+    /// The OfPie-specific property is retained for the existing pie-options workflow;
+    /// this broader flag preserves the same authored token on other chart families.
+    /// </summary>
+    public bool SeriesLinesSpecified { get; set; }
+
+    /// <summary>
     /// True when an imported stock chart authors <c>c:hiLowLines</c>. When false,
     /// PowerPoint renders the stock series as ordinary line-and-marker series.
     /// </summary>
