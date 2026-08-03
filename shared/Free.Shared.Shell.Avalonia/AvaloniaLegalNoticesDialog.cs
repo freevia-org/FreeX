@@ -6,6 +6,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -31,16 +32,27 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
     private readonly TabControl _tabControl = new();
     private readonly List<TextBox> _noticeTextBoxes = [];
     private readonly Button _closeButton = new();
+    private readonly string _readOnlyTextHelpText;
+    private readonly string _sectionHelpText;
+    private readonly bool _acceptsTab;
 
     public AvaloniaLegalNoticesDialog(
         string windowTitle,
         IReadOnlyList<(string Title, string Text)> notices,
         string introText,
         string closeButtonContent,
-        string helpText)
+        string helpText,
+        string? readOnlyTextHelpText = null,
+        string? sectionHelpText = null,
+        bool acceptsTab = true,
+        bool enableKeyboardLifecycle = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(windowTitle);
         ArgumentNullException.ThrowIfNull(notices);
+
+        _readOnlyTextHelpText = readOnlyTextHelpText ?? "Read-only legal notice text. Use Ctrl+C to copy selected text.";
+        _sectionHelpText = sectionHelpText ?? "Choose a legal notice section to read and copy.";
+        _acceptsTab = acceptsTab;
 
         Title = windowTitle;
         Width = LegalNoticesDialogMetrics.Width;
@@ -56,6 +68,8 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         AutomationProperties.SetHelpText(this, helpText);
 
         Content = CreateContent(notices, introText, closeButtonContent, helpText);
+        if (enableKeyboardLifecycle)
+            ConfigureKeyboardLifecycle(this, _tabControl, _closeButton);
         Opened += (_, _) =>
         {
             foreach (var textBox in _noticeTextBoxes)
@@ -124,7 +138,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
         AutomationProperties.SetAutomationId(_tabControl, "LegalNoticesSectionTabs");
         AutomationProperties.SetHelpText(
             _tabControl,
-            "Choose a legal notice section to read and copy.");
+            _sectionHelpText);
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(
             _tabControl,
             AvaloniaCompactDialogChrome.WindowsStyle with { ControlHeight = LegalNoticesDialogMetrics.TabControlHeight },
@@ -152,7 +166,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             Text = notice.Text,
             IsReadOnly = true,
             AcceptsReturn = true,
-            AcceptsTab = true,
+            AcceptsTab = _acceptsTab,
             TextWrapping = TextWrapping.Wrap,
             FontFamily = new FontFamily("Consolas"),
             FontSize = LegalNoticesDialogMetrics.TextFontSize,
@@ -167,7 +181,7 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             $"LegalNotices{automationIdSegment}Text");
         AutomationProperties.SetHelpText(
             textBox,
-            "Read-only legal notice text. Use Ctrl+C to copy selected text.");
+            _readOnlyTextHelpText);
 
         textBox.SetValue(
             ScrollViewer.VerticalScrollBarVisibilityProperty,
@@ -183,9 +197,89 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
             $"LegalNotices{automationIdSegment}Tab");
         AutomationProperties.SetHelpText(
             tabItem,
-            "Choose a legal notice section to read and copy.");
+            _sectionHelpText);
         return tabItem;
     }
+
+    /// <summary>Installs the shared Legal Notices Enter, Escape, and focus-cycle contract.</summary>
+    public static void ConfigureKeyboardLifecycle(
+        Window dialog,
+        TabControl tabControl,
+        Button closeButton)
+    {
+        ArgumentNullException.ThrowIfNull(dialog);
+        ArgumentNullException.ThrowIfNull(tabControl);
+        ArgumentNullException.ThrowIfNull(closeButton);
+
+        KeyboardNavigation.SetIsTabStop(closeButton, true);
+        closeButton.Focusable = true;
+
+        dialog.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
+            {
+                if (args.KeyModifiers == KeyModifiers.None && args.Key == Key.Enter)
+                {
+                    args.Handled = true;
+                    closeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, closeButton));
+                    if (dialog.IsVisible)
+                        dialog.Close();
+                    return;
+                }
+
+                if (args.KeyModifiers == KeyModifiers.None && args.Key == Key.Escape)
+                {
+                    args.Handled = true;
+                    dialog.Close();
+                    return;
+                }
+
+                if (args.Key != Key.Tab ||
+                    (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Shift))
+                {
+                    return;
+                }
+
+                var tabStops = GetKeyboardTabStops(tabControl, closeButton);
+                if (tabStops.Count == 0)
+                    return;
+
+                var focused = dialog.FocusManager?.GetFocusedElement() as Control;
+                var currentIndex = focused is null ? -1 : tabStops.IndexOf(focused);
+                var nextIndex = args.KeyModifiers == KeyModifiers.Shift
+                    ? currentIndex <= 0 ? tabStops.Count - 1 : currentIndex - 1
+                    : currentIndex < 0 || currentIndex == tabStops.Count - 1 ? 0 : currentIndex + 1;
+
+                tabStops[nextIndex].Focus();
+                args.Handled = true;
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+    }
+
+    private static List<Control> GetKeyboardTabStops(TabControl tabControl, Button closeButton)
+    {
+        var tabStops = new List<Control>();
+        if (tabControl.SelectedItem is TabItem tabItem &&
+            FindDocumentTextBox(tabItem) is { } textBox &&
+            textBox.IsVisible &&
+            textBox.IsEffectivelyEnabled)
+        {
+            textBox.Focusable = true;
+            KeyboardNavigation.SetIsTabStop(textBox, true);
+            tabStops.Add(textBox);
+        }
+
+        if (closeButton.IsVisible && closeButton.IsEffectivelyEnabled)
+            tabStops.Add(closeButton);
+
+        return tabStops;
+    }
+
+    private static TextBox? FindDocumentTextBox(TabItem tabItem) =>
+        tabItem.Content as TextBox ??
+        (tabItem.Content is ScrollViewer { Content: TextBox wrappedTextBox } ? wrappedTextBox : null) ??
+        tabItem.GetVisualDescendants().OfType<TextBox>().FirstOrDefault();
 
     private static void ApplyReadOnlyDocumentLayout(TextBox textBox)
     {
@@ -257,7 +351,8 @@ public class AvaloniaLegalNoticesDialog : AvaloniaDialogWindow
 
     private void FocusInitialKeyboardTarget()
     {
-        if (_tabControl.SelectedItem is not TabItem { Content: TextBox textBox })
+        if (_tabControl.SelectedItem is not TabItem tabItem ||
+            FindDocumentTextBox(tabItem) is not { } textBox)
         {
             return;
         }

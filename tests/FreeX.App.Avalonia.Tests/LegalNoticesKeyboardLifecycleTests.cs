@@ -1,11 +1,14 @@
 using System.Reflection;
 using System.Threading;
 
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Free.Shared.Shell.Avalonia;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -49,6 +52,36 @@ public sealed class LegalNoticesKeyboardLifecycleTests
                     enterDialog.Close();
                 if (escapeDialog?.IsVisible == true)
                     escapeDialog.Close();
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ProductionDialogUsesSharedLocalizedSurfaceAndKeyboardLifecycle()
+    {
+        await Session.Dispatch(() =>
+        {
+            var owner = new MainWindow([]);
+            LegalNoticesDialog? dialog = null;
+            try
+            {
+                owner.Show();
+                dialog = new LegalNoticesDialog();
+                dialog.Should().BeAssignableTo<AvaloniaLegalNoticesDialog>();
+                AutomationProperties.GetAutomationId(dialog).Should().Be("LegalNoticesDialog");
+
+                var tabs = dialog.GetLogicalDescendants().OfType<TabControl>().Single();
+                tabs.Items.Count.Should().Be(5);
+                var closeButton = dialog.GetLogicalDescendants().OfType<Button>().Single(button =>
+                    AutomationProperties.GetAutomationId(button) == "LegalNoticesCloseButton");
+                closeButton.Content.Should().NotBeNull();
+            }
+            finally
+            {
+                if (dialog?.IsVisible == true)
+                    dialog.Close();
                 if (owner.IsVisible)
                     owner.Close();
             }
