@@ -1431,6 +1431,10 @@ public sealed class SmartArtTests : IDisposable
             presentation.Theme!);
         cache.Applied.Should().BeTrue();
         cache.ShapeCount.Should().Be(3, "the shared hierarchy planner emits two node boxes plus one connector");
+        smartArt.FallbackShapes.Where(s => s.TextBody is not null)
+            .Should().OnlyContain(s => s.Name.StartsWith("SmartArt_Hierarchy1_", StringComparison.Ordinal));
+        smartArt.FallbackShapes.Where(s => s.TextBody is null)
+            .Should().ContainSingle(s => s.Name.StartsWith("SmartArt_Hierarchy1_Connector_", StringComparison.Ordinal));
 
         PptxPackageWriter.Write(presentation, savedPath);
 
@@ -5294,6 +5298,7 @@ public sealed class SmartArtTests : IDisposable
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy, "uniqueId contains 'hierarchy'");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue("hierarchy1 is an admitted live layout");
         sa.Data.Nodes.Should().HaveCount(1, "one root node");
 
         var root = sa.Data.Nodes[0];

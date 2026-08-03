@@ -199,6 +199,9 @@ public static class SmartArtLayoutEngine
         if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy3Layout(data.LayoutUniqueId))
             return LayoutHierarchy3(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (data.Family == SmartArtFamily.Hierarchy && IsHierarchy1Layout(data.LayoutUniqueId))
+            return LayoutHierarchy1(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (data.Family == SmartArtFamily.Hierarchy && IsBasicHierarchyLayout(data.LayoutUniqueId))
             return LayoutBasicHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -3304,6 +3307,25 @@ public static class SmartArtLayoutEngine
         SmartArtData data,
         long fx, long fy, long fcx, long fcy,
         SmartArtStylePlan stylePlan)
+        => LayoutTopDownHierarchy(data, fx, fy, fcx, fcy, stylePlan, "BasicHierarchy");
+
+    /// <summary>
+    /// Hierarchy1 is the admitted native top-down hierarchy layout. Its data contract
+    /// is a forest of root nodes with nested children, not a flat list. Keep that
+    /// structure visible in the shared live plan so edits regenerate the same parent,
+    /// branch, and leaf roles instead of entering the generic hierarchy fallback.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutHierarchy1(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+        => LayoutTopDownHierarchy(data, fx, fy, fcx, fcy, stylePlan, "Hierarchy1");
+
+    private static IReadOnlyList<SlideShape> LayoutTopDownHierarchy(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan,
+        string layoutName)
     {
         var roots = data.Nodes
             .Select(CloneVisibleHierarchyNode)
@@ -3353,6 +3375,7 @@ public static class SmartArtLayoutEngine
                 shapes,
                 stylePlan,
                 ref idCounter,
+                layoutName,
                 parentCenterX: -1,
                 parentBottomY: -1);
             currentX += rootSlotW;
@@ -3381,6 +3404,7 @@ public static class SmartArtLayoutEngine
         List<SlideShape> shapes,
         SmartArtStylePlan stylePlan,
         ref uint idCounter,
+        string layoutName,
         long parentCenterX,
         long parentBottomY)
     {
@@ -3394,16 +3418,16 @@ public static class SmartArtLayoutEngine
                 : BasicHierarchyNodeRole.Branch;
         var nodeStyle = stylePlan.GetNodeStyle(0, node.Level, SmartArtFamily.Hierarchy);
 
-        shapes.Add(MakeBasicHierarchyBox(
+        shapes.Add(MakeTopDownHierarchyBox(
             idCounter++, node.Text, nodeStyle, boxX, levelY, nodeBoxW, boxH, role,
-            levelIndex == 0 ? NodeFontSizeLargePt : NodeFontSizePt));
+            levelIndex == 0 ? NodeFontSizeLargePt : NodeFontSizePt, layoutName));
 
         long boxCenterX = boxX + nodeBoxW / 2;
         long boxBottomY = levelY + boxH;
         if (parentCenterX >= 0 && parentBottomY >= 0)
         {
-            shapes.Add(MakeBasicHierarchyConnector(
-                idCounter++, parentCenterX, parentBottomY, boxCenterX, levelY, stylePlan.Connector));
+            shapes.Add(MakeTopDownHierarchyConnector(
+                idCounter++, parentCenterX, parentBottomY, boxCenterX, levelY, stylePlan.Connector, layoutName));
         }
 
         if (node.Children.Count == 0)
@@ -3431,13 +3455,14 @@ public static class SmartArtLayoutEngine
                 shapes,
                 stylePlan,
                 ref idCounter,
+                layoutName,
                 boxCenterX,
                 boxBottomY);
             childStartX += childSlotW;
         }
     }
 
-    private static SlideShape MakeBasicHierarchyBox(
+    private static SlideShape MakeTopDownHierarchyBox(
         uint id,
         string text,
         SmartArtNodeStyle style,
@@ -3446,23 +3471,25 @@ public static class SmartArtLayoutEngine
         long cx,
         long cy,
         BasicHierarchyNodeRole role,
-        double fontSizePt)
+        double fontSizePt,
+        string layoutName)
     {
         var shape = MakeBox(id, text, style, x, y, cx, cy, fontSizePt);
-        shape.Name = $"SmartArt_BasicHierarchy_{role}_{id}";
+        shape.Name = $"SmartArt_{layoutName}_{role}_{id}";
         return shape;
     }
 
-    private static SlideShape MakeBasicHierarchyConnector(
+    private static SlideShape MakeTopDownHierarchyConnector(
         uint id,
         long x1,
         long y1,
         long x2,
         long y2,
-        SmartArtConnectorStyle style)
+        SmartArtConnectorStyle style,
+        string layoutName)
     {
         var shape = MakeConnector(id, x1, y1, x2, y2, style);
-        shape.Name = $"SmartArt_BasicHierarchy_Connector_{id}";
+        shape.Name = $"SmartArt_{layoutName}_Connector_{id}";
         return shape;
     }
 
@@ -4039,6 +4066,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basichierarchy", StringComparison.Ordinal);
+    }
+
+    private static bool IsHierarchy1Layout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "hierarchy1", StringComparison.Ordinal);
     }
 
     private static bool IsHorizontalHierarchyLayout(string uniqueId)

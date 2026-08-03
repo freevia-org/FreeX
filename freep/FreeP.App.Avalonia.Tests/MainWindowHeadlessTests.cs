@@ -6754,6 +6754,54 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_hierarchy1_shape_composes_shared_dedicated_top_down_tree()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Hierarchy,
+                "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+                ["Company", "Product", "Platform", "Operations"]);
+            var root = shape.SmartArt!.Data!.Nodes[0];
+            var product = shape.SmartArt.Data.Nodes[1];
+            var platform = shape.SmartArt.Data.Nodes[2];
+            var operations = shape.SmartArt.Data.Nodes[3];
+            shape.SmartArt.Data.Nodes.RemoveRange(1, 3);
+            product.Level = 1;
+            platform.Level = 2;
+            operations.Level = 1;
+            root.Children.Add(product);
+            product.Children.Add(platform);
+            root.Children.Add(operations);
+
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 380 and < 390)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(7,
+            "Avalonia consumes the shared hierarchy1 four-box tree and three connector DrawOps");
+        var boxes = liveShapes.Where(op => op.Text is not null).ToArray();
+        boxes.Should().HaveCount(4);
+        boxes.Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Company", "Product", "Platform", "Operations");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3, "hierarchy1 preserves one connector per parent-child relationship");
+        var byText = boxes.ToDictionary(
+            op => op.Text!.Paragraphs.First().Runs.First().Text,
+            StringComparer.Ordinal);
+        byText["Company"].BoundsDip.Y.Should().BeLessThan(byText["Product"].BoundsDip.Y);
+        byText["Product"].BoundsDip.Y.Should().BeLessThan(byText["Platform"].BoundsDip.Y);
+        byText["Operations"].BoundsDip.Y.Should().Be(byText["Product"].BoundsDip.Y);
+    }
+
+    [Fact]
     public async Task SmartArt_org_chart_shape_composes_dedicated_shared_assistant_plan()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];

@@ -80,7 +80,8 @@ public sealed class PptxPackageReaderSourceTests
 
         ExtractMethod(source, "private static bool IsLiveSmartArtLayoutSupported(")
             .Should()
-            .Contain("\"circlearrowprocess\"");
+            .Contain("\"circlearrowprocess\"")
+            .And.Contain("\"hierarchy1\"");
 
         ExtractMethod(source, "private static void TryAttachPictureNodePictures(")
             .Should()
