@@ -1088,11 +1088,16 @@ public static class OmmlParser
         var eqArrPr = el.Element(M + "eqArrPr");
         var rows = new List<MathNode>();
         var alignmentPointIndices = new List<int?>();
+        var alignmentPointColumns = new List<IReadOnlyList<int>>();
         foreach (var eEl in el.Elements(M + "e"))
         {
-            var (row, alignmentPointIndex) = ParseEqArrayRow(eEl, inheritedProperties);
+            var (row, alignmentPointIndicesForRow) = ParseEqArrayRow(eEl, inheritedProperties);
             rows.Add(row);
-            alignmentPointIndices.Add(alignmentPointIndex);
+            alignmentPointColumns.Add(alignmentPointIndicesForRow);
+            alignmentPointIndices.Add(
+                alignmentPointIndicesForRow.Count > 0
+                    ? alignmentPointIndicesForRow[0]
+                    : null);
         }
 
         return new MathNode.EqArray(
@@ -1100,7 +1105,8 @@ public static class OmmlParser
             alignmentPointIndices,
             ParseEqArrayBaseJustification(eqArrPr),
             ParseEqArraySpacingRule(eqArrPr),
-            ParseEqArrayIntValue(eqArrPr, "rSp"));
+            ParseEqArrayIntValue(eqArrPr, "rSp"),
+            alignmentPointColumns: alignmentPointColumns);
     }
 
     private static MathNode.EqArray.EqArrayBaseJustification ParseEqArrayBaseJustification(XElement? eqArrPr)
@@ -1136,26 +1142,26 @@ public static class OmmlParser
             : null;
     }
 
-    private static (MathNode Row, int? AlignmentPointIndex) ParseEqArrayRow(
+    private static (MathNode Row, IReadOnlyList<int> AlignmentPointIndices) ParseEqArrayRow(
         XElement eEl,
         MathNode.MathProperties inheritedProperties)
     {
         var children = new List<MathNode>();
-        int? alignmentPointIndex = null;
+        var alignmentPointIndices = new List<int>();
 
         foreach (var child in eEl.Elements())
         {
             if (IsEquationArrayAlignmentMarker(child))
             {
-                alignmentPointIndex ??= children.Count;
+                alignmentPointIndices.Add(children.Count);
                 continue;
             }
 
             var node = ParseElement(child, inheritedProperties);
             if (node is not null)
             {
-                if (!alignmentPointIndex.HasValue && IsAlignmentPointNode(node))
-                    alignmentPointIndex = children.Count;
+                if (IsAlignmentPointNode(node))
+                    alignmentPointIndices.Add(children.Count);
                 children.Add(node);
             }
         }
@@ -1164,7 +1170,7 @@ public static class OmmlParser
             ? children[0]
             : new MathNode.Row(children);
 
-        return (row, alignmentPointIndex);
+        return (row, alignmentPointIndices);
     }
 
     private static bool IsEquationArrayAlignmentMarker(XElement element) =>

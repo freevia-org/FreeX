@@ -1638,6 +1638,9 @@ public static class MathLayoutEngine
             eqArray.RowSpacing,
             em * 0.20);
 
+        if (eqArray.AlignmentPointColumns.Any(columns => columns.Count > 1))
+            return LayoutEqArrayWithMultipleAlignmentPoints(eqArray, fontFamily, fontSizePt, options, rowGap, em);
+
         if (eqArray.Rows.Count == 0)
             return MakeGlyph("", fontFamily, fontSizePt, false);
 
@@ -1706,6 +1709,146 @@ public static class MathLayoutEngine
         }
 
         return container;
+    }
+
+    private static MathBox LayoutEqArrayWithMultipleAlignmentPoints(
+        MathNode.EqArray eqArray,
+        string fontFamily,
+        double fontSizePt,
+        LayoutOptions options,
+        double rowGap,
+        double em)
+    {
+        if (eqArray.Rows.Count == 0)
+            return MakeGlyph("", fontFamily, fontSizePt, false);
+
+        var rows = new List<MathBox>(eqArray.Rows.Count);
+        var rowColumns = new List<IReadOnlyList<int>>(eqArray.Rows.Count);
+        var rowAsc = new double[eqArray.Rows.Count];
+        var rowDsc = new double[eqArray.Rows.Count];
+        var maxSegmentWidths = new double[eqArray.AlignmentPointColumns
+            .Select(columns => columns.Count)
+            .DefaultIfEmpty()
+            .Max()];
+        double maxTrailingWidth = 0;
+        double maxRowW = 0;
+        double totalH = 0;
+
+        for (var i = 0; i < eqArray.Rows.Count; i++)
+        {
+            var row = eqArray.Rows[i];
+            var rowBox = LayoutNode(row, fontFamily, fontSizePt, options);
+            var columns = eqArray.GetAlignmentPointColumns(i);
+            rows.Add(rowBox);
+            rowColumns.Add(columns);
+            rowAsc[i] = rowBox.Metrics.Ascent;
+            rowDsc[i] = rowBox.Metrics.Descent;
+            maxRowW = Math.Max(maxRowW, rowBox.Metrics.Width);
+            totalH += rowBox.Metrics.Height;
+
+            if (row is MathNode.Row && rowBox is MathBox.Container rowContainer && columns.Count > 0)
+            {
+                var previousIndex = 0;
+                for (var column = 0; column < columns.Count; column++)
+                {
+                    var markerIndex = Math.Clamp(columns[column], previousIndex, rowContainer.Children.Count);
+                    maxSegmentWidths[column] = Math.Max(
+                        maxSegmentWidths[column],
+                        MeasureRowChildren(rowContainer, previousIndex, markerIndex));
+                    previousIndex = markerIndex;
+                }
+
+                maxTrailingWidth = Math.Max(
+                    maxTrailingWidth,
+                    MeasureRowChildren(rowContainer, previousIndex, rowContainer.Children.Count));
+            }
+        }
+
+        totalH += rowGap * Math.Max(0, rows.Count - 1);
+        var alignedWidth = maxSegmentWidths.Sum() + maxTrailingWidth;
+        var totalW = Math.Max(maxRowW, alignedWidth);
+        var alignmentOriginX = (totalW - alignedWidth) / 2.0;
+        var sharedMarkerXs = new double[maxSegmentWidths.Length];
+        var markerX = alignmentOriginX;
+        for (var column = 0; column < sharedMarkerXs.Length; column++)
+        {
+            markerX += maxSegmentWidths[column];
+            sharedMarkerXs[column] = markerX;
+        }
+
+        var ascent = ResolveStackedArrayAscent(
+            ToMathArrayBaseJustification(eqArray.BaseJustification),
+            rowAsc,
+            rowDsc,
+            rowGap,
+            totalH,
+            em);
+
+        var container = new MathBox.Container
+        {
+            Metrics =
+            {
+                Width = totalW,
+                Height = totalH,
+                Ascent = ascent
+            }
+        };
+
+        double y = 0;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var row = eqArray.Rows[i];
+            var rowBox = rows[i];
+            var columns = rowColumns[i];
+            if (row is MathNode.Row && rowBox is MathBox.Container rowContainer && columns.Count > 0)
+            {
+                var previousIndex = 0;
+                double localX = 0;
+                for (var column = 0; column < columns.Count; column++)
+                {
+                    var markerIndex = Math.Clamp(columns[column], previousIndex, rowContainer.Children.Count);
+                    localX = PlaceRowChildren(rowContainer, previousIndex, markerIndex, localX);
+                    localX = Math.Max(localX, sharedMarkerXs[column] - alignmentOriginX);
+                    previousIndex = markerIndex;
+                }
+
+                localX = PlaceRowChildren(rowContainer, previousIndex, rowContainer.Children.Count, localX);
+                rowBox.X = alignmentOriginX;
+                rowBox.Y = y;
+                rowBox.Metrics.Width = Math.Max(rowBox.Metrics.Width, localX);
+            }
+            else
+            {
+                rowBox.X = eqArray.AlignRowsLeft
+                    ? alignmentOriginX
+                    : (totalW - rowBox.Metrics.Width) / 2.0;
+                rowBox.Y = y;
+            }
+
+            container.Children.Add(rowBox);
+            y += rowBox.Metrics.Height + rowGap;
+        }
+
+        return container;
+    }
+
+    private static double MeasureRowChildren(MathBox.Container row, int start, int end)
+    {
+        double width = 0;
+        for (var i = start; i < end; i++)
+            width += row.Children[i].Metrics.Width;
+        return width;
+    }
+
+    private static double PlaceRowChildren(MathBox.Container row, int start, int end, double x)
+    {
+        for (var i = start; i < end; i++)
+        {
+            row.Children[i].X = x;
+            x += row.Children[i].Metrics.Width;
+        }
+
+        return x;
     }
 
     private static double? GetEqArrayAlignmentOffset(MathNode row, MathBox rowBox, int? alignmentPointIndex)

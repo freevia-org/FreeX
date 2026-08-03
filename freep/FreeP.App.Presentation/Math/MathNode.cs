@@ -651,6 +651,14 @@ public abstract class MathNode
         public int? RowSpacing { get; }
 
         /// <summary>
+        /// All authored alignment-point positions for each row. The positions
+        /// are direct-child indices before which the invisible markers occur;
+        /// an empty row entry has no alignment point. This is scoped to the
+        /// nearest authored m:eqArr and does not flatten nested arrays.
+        /// </summary>
+        public IReadOnlyList<IReadOnlyList<int>> AlignmentPointColumns { get; }
+
+        /// <summary>
         /// True only for the equation array synthesized from a multi-equation
         /// m:oMathPara. Its unmarked rows are left-aligned within the group;
         /// authored m:eqArr keeps its existing centered-row default.
@@ -663,7 +671,8 @@ public abstract class MathNode
             EqArrayBaseJustification baseJustification = EqArrayBaseJustification.Center,
             EqArraySpacingRule? rowSpacingRule = null,
             int? rowSpacing = null,
-            bool alignRowsLeft = false)
+            bool alignRowsLeft = false,
+            IReadOnlyList<IReadOnlyList<int>>? alignmentPointColumns = null)
         {
             Rows = rows;
             AlignmentPointIndices = alignmentPointIndices ?? System.Array.Empty<int?>();
@@ -671,12 +680,23 @@ public abstract class MathNode
             RowSpacingRule = rowSpacingRule;
             RowSpacing = rowSpacing;
             AlignRowsLeft = alignRowsLeft;
+            AlignmentPointColumns = alignmentPointColumns
+                ?? AlignmentPointIndices
+                    .Select(index => index.HasValue
+                        ? (IReadOnlyList<int>)new[] { index.Value }
+                        : Array.Empty<int>())
+                    .ToArray();
         }
 
         public int? GetAlignmentPointIndex(int rowIndex) =>
             rowIndex >= 0 && rowIndex < AlignmentPointIndices.Count
                 ? AlignmentPointIndices[rowIndex]
                 : null;
+
+        public IReadOnlyList<int> GetAlignmentPointColumns(int rowIndex) =>
+            rowIndex >= 0 && rowIndex < AlignmentPointColumns.Count
+                ? AlignmentPointColumns[rowIndex]
+                : Array.Empty<int>();
     }
 
     // ── Row (horizontal sequence) ────────────────────────────────────────────

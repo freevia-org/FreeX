@@ -914,6 +914,39 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_EqArray_PreservesMultipleAlignmentColumns()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>=</m:t></m:r><m:aln/><m:r><m:t>1</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>long</m:t></m:r><m:aln/><m:r><m:t>=</m:t></m:r><m:aln/><m:r><m:t>22</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(new[] { 1, 2 }, eqArray.AlignmentPointColumns[0]);
+        Assert.Equal(new[] { 1, 2 }, eqArray.AlignmentPointColumns[1]);
+        Assert.Equal(new int?[] { 1, 1 }, eqArray.AlignmentPointIndices);
+    }
+
+    [Fact]
+    public void Parse_EqArray_NestedAlignmentRemainsScopedToNestedArray()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>outer</m:t></m:r>" +
+            "<m:eqArr><m:e><m:r><m:t>x</m:t></m:r><m:aln/><m:r><m:t>=1</m:t></m:r></m:e></m:eqArr></m:e>" +
+            "<m:e><m:r><m:t>tail</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var outer = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Null(outer.AlignmentPointIndices[0]);
+
+        var outerRow = Assert.IsType<MathNode.Row>(outer.Rows[0]);
+        var inner = Assert.IsType<MathNode.EqArray>(outerRow.Children[1]);
+        Assert.Equal(new[] { 1 }, inner.AlignmentPointColumns[0]);
+    }
+
+    [Fact]
     public void Parse_EqArrayProperties_ReadsBaseJustificationAndRowSpacingMetadata()
     {
         var node = Parse(

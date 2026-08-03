@@ -1079,6 +1079,38 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void EqArray_AlignsMultipleAuthoredAlignmentColumns()
+    {
+        var rows = new MathNode[]
+        {
+            new MathNode.Row(new MathNode[] { Run("a"), Run("eq1"), Run("tail1") }),
+            new MathNode.Row(new MathNode[] { Run("long"), Run("equation"), Run("tail2") })
+        };
+        var eqArray = new MathNode.EqArray(
+            rows,
+            new int?[] { 1, 1 },
+            alignmentPointColumns: new IReadOnlyList<int>[]
+            {
+                new[] { 1, 2 },
+                new[] { 1, 2 }
+            });
+
+        var container = Assert.IsType<MathBox.Container>(
+            MathLayoutEngine.Layout(eqArray, "Cambria Math", FontSizePt).Children[0]);
+        var firstRow = Assert.IsType<MathBox.Container>(container.Children[0]);
+        var secondRow = Assert.IsType<MathBox.Container>(container.Children[1]);
+
+        var firstEqualsX = firstRow.X + firstRow.Children[1].X;
+        var secondEqualsX = secondRow.X + secondRow.Children[1].X;
+        firstEqualsX.Should().BeApproximately(secondEqualsX, 0.01);
+
+        var firstValueX = firstRow.X + firstRow.Children[2].X;
+        var secondValueX = secondRow.X + secondRow.Children[2].X;
+        firstValueX.Should().BeApproximately(secondValueX, 0.01,
+            "multiple authored m:aln points must create shared neutral alignment columns");
+    }
+
+    [Fact]
     public void OMathPara_MultipleEquations_AlignsRunPointsAndLeftAlignsUnmarkedRows()
     {
         var node = ParseOmmlParagraph(

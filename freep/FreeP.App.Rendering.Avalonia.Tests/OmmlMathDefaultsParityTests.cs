@@ -334,6 +334,51 @@ public sealed class OmmlMathDefaultsParityTests
         thrown.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Avalonia_AuthoredEqArrayMultipleAlignmentColumnsUseSharedPlan()
+    {
+        Exception? thrown = null;
+        await Session.Dispatch(() =>
+        {
+            try
+            {
+                var run = ComposeMathRun(
+                    new OmmlMathProperties(),
+                    string.Empty,
+                    "<m:eqArr>" +
+                    "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>eq1</m:t></m:r><m:aln/><m:r><m:t>tail1</m:t></m:r></m:e>" +
+                    "<m:e><m:r><m:t>long</m:t></m:r><m:aln/><m:r><m:t>eq2</m:t></m:r><m:aln/><m:r><m:t>tail2</m:t></m:r></m:e>" +
+                    "</m:eqArr>");
+
+                var glyphs = MathBoxRenderPlanner.Plan(run.MathLayout!, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToArray();
+                glyphs.Single(g => g.Text == "eq1").X.Should().BeApproximately(
+                    glyphs.Single(g => g.Text == "eq2").X,
+                    0.01,
+                    "Avalonia must consume both authored alignment columns from the shared plan");
+                glyphs.Single(g => g.Text == "tail1").X.Should().BeApproximately(
+                    glyphs.Single(g => g.Text == "tail2").X,
+                    0.01,
+                    "Avalonia must preserve the second authored alignment column");
+
+                var bitmap = new RenderTargetBitmap(new PixelSize(320, 140));
+                using DrawingContext drawingContext = bitmap.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(
+                    drawingContext,
+                    new ResolvedParagraph { Runs = new[] { run } },
+                    10,
+                    20);
+            }
+            catch (Exception ex)
+            {
+                thrown = ex;
+            }
+        }, CancellationToken.None);
+
+        thrown.Should().BeNull();
+    }
+
     private static ResolvedRun ComposeMathRun(
         OmmlMathProperties documentDefaults,
         string localProperties,

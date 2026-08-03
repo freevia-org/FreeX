@@ -237,6 +237,38 @@ public sealed class OmmlMathDefaultsParityTests
             20);
     }
 
+    [StaFact]
+    public void Wpf_AuthoredEqArrayMultipleAlignmentColumnsUseSharedPlan()
+    {
+        var run = ComposeMathRun(
+            new OmmlMathProperties(),
+            string.Empty,
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>a</m:t></m:r><m:aln/><m:r><m:t>eq1</m:t></m:r><m:aln/><m:r><m:t>tail1</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>long</m:t></m:r><m:aln/><m:r><m:t>eq2</m:t></m:r><m:aln/><m:r><m:t>tail2</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var glyphs = MathBoxRenderPlanner.Plan(run.MathLayout!, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToArray();
+        glyphs.Single(g => g.Text == "eq1").X.Should().BeApproximately(
+            glyphs.Single(g => g.Text == "eq2").X,
+            0.01,
+            "WPF must consume both authored alignment columns from the shared plan");
+        glyphs.Single(g => g.Text == "tail1").X.Should().BeApproximately(
+            glyphs.Single(g => g.Text == "tail2").X,
+            0.01,
+            "WPF must preserve the second authored alignment column");
+
+        var visual = new DrawingVisual();
+        using var drawingContext = visual.RenderOpen();
+        SlideCanvas.RenderParaWithMath(
+            drawingContext,
+            new ResolvedParagraph { Runs = new[] { run } },
+            10,
+            20);
+    }
+
     private static ResolvedRun ComposeMathRun(
         OmmlMathProperties documentDefaults,
         string localProperties,
