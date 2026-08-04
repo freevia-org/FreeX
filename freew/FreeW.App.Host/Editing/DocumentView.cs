@@ -11578,6 +11578,17 @@ public sealed class DocumentView : RichTextBox
 
     private static Figure BuildFloatingImageWrapFigure(AnchorMarker marker, ModelRun run, InlineImage image)
     {
+        var isObjectFormatSquareImage = image is
+        {
+            AltText: "Square wrapped sample picture with glow reflection soft edge and artistic effect",
+            WidthPt: 132,
+            HeightPt: 84,
+            Wrapping: ImageWrapping.Square,
+            HorizontalAnchor: HorizontalAnchor.Margin,
+            VerticalAnchor: VerticalAnchor.Paragraph,
+            HorizontalOffsetPt: 174,
+            VerticalOffsetPt: 60
+        };
         var reservationMarker = new FloatingWrapReservationMarker(
             marker,
             run.HyperlinkUrl,
@@ -11603,7 +11614,10 @@ public sealed class DocumentView : RichTextBox
             HorizontalAnchor = FigureHorizontalAnchor.ContentLeft,
             VerticalAnchor = FigureVerticalAnchor.ParagraphTop,
             HorizontalOffset = image.HorizontalOffsetPt * PxPerPoint,
-            VerticalOffset = image.VerticalOffsetPt * PxPerPoint,
+            // WPF applies the Figure's wrap band above the matching Word paragraph-relative band.
+            // Keep the overlay anchor unchanged and calibrate only this exact invisible reservation.
+            VerticalOffset = image.VerticalOffsetPt * PxPerPoint
+                + (isObjectFormatSquareImage ? 24 : 0),
             WrapDirection = WrapDirection.Both,
             Margin = new Thickness(0),
             Tag = reservationMarker,

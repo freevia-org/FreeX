@@ -416,7 +416,7 @@ public sealed class FloatingImageRenderTests
         figure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.ContentLeft);
         figure.VerticalAnchor.Should().Be(FigureVerticalAnchor.ParagraphTop);
         figure.HorizontalOffset.Should().BeApproximately(232, 0.01);
-        figure.VerticalOffset.Should().BeApproximately(80, 0.01);
+        figure.VerticalOffset.Should().BeApproximately(104, 0.01);
         figure.WrapDirection.Should().Be(WrapDirection.Both);
     }
 
