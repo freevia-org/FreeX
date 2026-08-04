@@ -6315,6 +6315,9 @@ public static class PptxPackageReader
         var presetSubtype = cTn.Attribute("presetSubtype")?.Value;
         var scaleBehavior = ReadScaleBehavior(
             buildPar.Descendants(P + "animScale").FirstOrDefault());
+        var preservedColorBehaviorXml = buildPar.Descendants(P + "animClr")
+            .FirstOrDefault()
+            ?.ToString(SaveOptions.DisableFormatting);
 
         var repeatInfo = ReadRepeat(cTn);
         var autoReverse = ReadBoolean(cTn.Attribute("autoRev")?.Value);
@@ -6356,6 +6359,7 @@ public static class PptxPackageReader
             WheelSpokeCount = wheelSpokeCount,
             EffectSubtype  = authoredEffectSubtype,
             ScaleBehavior = scaleBehavior,
+            PreservedColorBehaviorXml = preservedColorBehaviorXml,
             TriggerShapeId = triggerShapeId,
             RawPresetClass = knownPreset ? null : presetClass,
             RawPresetId = knownPreset ? null : presetId,

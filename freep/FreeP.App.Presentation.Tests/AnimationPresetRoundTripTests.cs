@@ -242,6 +242,48 @@ public sealed class AnimationPresetRoundTripTests
         cTn.Attribute("presetSubtype")!.Value.Should().Be("authoredPulseVariant");
     }
 
+    [Fact]
+    public void ColorEffectBehaviorSurvivesReadCloneAndWrite()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Shapes.Add(new SlideShape { Id = 7, Kind = SlideShapeKind.AutoShape });
+        presentation.Slides[0].Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 7,
+            Kind = AnimationKind.Emphasis,
+            Preset = AnimationPreset.ChangeColor,
+            PreservedColorBehaviorXml = """
+                <p:animClr xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" clrSpc="rgb">
+                  <p:cBhvr><p:cTn id="77" dur="500" fill="hold"/><p:tgtEl><p:spTgt spid="7"/></p:tgtEl></p:cBhvr>
+                  <p:clrFrom><a:srgbClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="FF0000"/></p:clrFrom>
+                  <p:clrTo><a:srgbClr xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" val="0000FF"/></p:clrTo>
+                </p:animClr>
+                """,
+        });
+
+        using var first = new MemoryStream();
+        PptxPackageWriter.Write(presentation, first);
+        var reloaded = PptxPackageReader.Read(new MemoryStream(first.ToArray()));
+        var animation = reloaded.Slides[0].Animations.Single();
+        animation.Preset.Should().Be(AnimationPreset.ChangeColor);
+        animation.PreservedColorBehaviorXml.Should().Contain("clrFrom");
+        animation.PreservedColorBehaviorXml.Should().Contain("FF0000");
+
+        var clonedAnimation = SlideCloner.CloneSlide(reloaded.Slides[0]).Animations.Single();
+        clonedAnimation.PreservedColorBehaviorXml.Should().Be(animation.PreservedColorBehaviorXml);
+
+        using var second = new MemoryStream();
+        PptxPackageWriter.Write(reloaded, second);
+        using var archive = new ZipArchive(new MemoryStream(second.ToArray()), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("ppt/slides/slide1.xml")!.Open());
+        var slideXml = XDocument.Parse(reader.ReadToEnd());
+        XNamespace p = "http://schemas.openxmlformats.org/presentationml/2006/main";
+        var colorBehavior = slideXml.Descendants(p + "animClr").Single();
+        colorBehavior.Element(p + "clrFrom")!.Element(XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main") + "srgbClr")!
+            .Attribute("val")!.Value.Should().Be("FF0000");
+        colorBehavior.Descendants(p + "cTn").Single().Attribute("id")!.Value.Should().NotBe("77");
+    }
+
     [Theory]
     [InlineData(AnimationPreset.Shrink, 0.25)]
     [InlineData(AnimationPreset.Shrink, 0.5)]
